@@ -9,6 +9,14 @@ contract while keeping one existing project authority. CADAPI-D is a target
 design: the current source still exposes legacy Automation payloads until its
 separate implementation task passes the gates defined below.
 
+RUPA-RK is likewise a target package contract, not a completed production
+cutover. The running viewport is currently a migration hybrid:
+`RealityViewportView` supplies the RealityKit surface and native camera,
+SwiftUI `Canvas` still supplies the grid and world overlays, and the legacy
+identity renderer still supplies part of picking. The RealityKit
+resource/entity/frame designs below describe the completed `RealityView` path;
+capability probes are not package or CAD integration evidence.
+
 Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
@@ -74,7 +82,7 @@ The package design owns:
   concrete semantic CAD vocabulary to the generic compiler.
 - the cross-module separation of exact CAD evaluation, product-selected
   presentation fidelity, generic resource admission, postpublication derived
-  rendering data, and MainActor UI publication;
+  RealityKit scene data, and MainActor UI composition;
 - the rule that Agent control-plane work remains independent of viewport
   preparation and enters the existing workspace/project owners only through
   explicit short suspensions.
@@ -112,7 +120,8 @@ flowchart LR
     Evaluation --> ViewportScene[RupaViewportScene]
     Kit --> ViewportScene
     ViewportScene --> Rendering[RupaRendering]
-    Rendering --> UI
+    Rendering --> RealityViewport["RealityKit scene/resource host"]
+    RealityViewport --> UI
     Kit --> UI["RupaUI"]
     Kit --> AgentProtocol[RupaAgentProtocol]
     Geometry --> AgentProtocol
@@ -154,7 +163,7 @@ flowchart LR
 | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) | child | Plan/executor/buffer contract | Owns Mesh operation and performance semantics. | Package consumers use its public contracts only. |
 | [RupaEvaluation design](Sources/RupaEvaluation/DESIGN.md) | child | Purpose selection and provider-neutral aggregate admission | Produces one complete bounded immutable evaluation. | It neither selects product fidelity nor publishes project state. |
 | [RupaCADIntegration design](Sources/RupaCADIntegration/DESIGN.md) | child | Purpose-configured Swift-CAD adapter and cache separation | Reuses exact B-rep independently from derived Mesh artifacts. | It applies policy but never chooses Product purpose or fidelity. |
-| [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Cancellable bounded plan and viewport scheduling contract | Owns one off-main preparation pass, snapshot-matched cache state, and batched Canvas data. | It consumes immutable snapshots and never becomes a geometry or project authority. |
+| [RupaRendering design](Sources/RupaRendering/DESIGN.md) | child | Cancellable bounded plan, viewport scheduling, and camera-control contract | Owns one off-main preparation pass and one mounted MainActor parallel camera/display state. | It consumes immutable snapshots and never becomes a geometry or project authority. |
 | [RupaViewportScene design](Sources/RupaViewportScene/DESIGN.md) | child | Immutable scene projection and metric-free B-spline overlay reference contract | Builds viewport scene values from validated source/evaluation snapshots. | B-spline reference lookup must not become an implicit topology-metric path. |
 | [RupaCore design](Sources/RupaCore/DESIGN.md) | child | Source identity and asset mutation contract | Owns Product/Authored Mesh source authority. | Scene references are navigation context, not authority. |
 | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) | child | Schema-v3 source/archive and atomic replacement contract | Owns bounded package I/O, source-byte integrity, reuse, and destination replacement staging. | It never owns project publication, current URL, or Agent save routing. |
@@ -224,7 +233,7 @@ records are owned by the four child designs:
 | `RupaCoreTypes` is the dependency floor. | Existing package graph. |
 | `RupaGeometry` does not depend upward on Core, Project, UI, or transport. | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) |
 | `RupaEvaluation` owns provider-neutral aggregate admission and maps each purpose to its ceiling; fidelity stays with the document's modeling settings so both purposes share one evaluation, and Swift-CAD owns only exact evaluation plus generic tessellation limits. | [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md), [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md), [swift-CAD](../swift-CAD/DESIGN.md) |
-| Render-plan preparation is a bounded postpublication derived read; only matching cache state and Canvas calls enter MainActor. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md) |
+| The target RealityKit scene preparation is a bounded postpublication derived read; only one matching scene/frame and native RealityView update enter MainActor after the RUPA-RK migration gates. Current production is the RealityKit-surface/Canvas-overlay/legacy-identity migration hybrid. The target never uses spatial SwiftUI Canvas or a second renderer. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RealityViewport design](Sources/RupaRendering/RealityViewport/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md) |
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaProjectPackage` owns schema-v3 archive I/O, staged validation, and atomic destination replacement, but not project or application lifecycle. | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
@@ -313,7 +322,8 @@ source assets to `RupaCore`, package archive I/O to `RupaProjectPackage`,
 evaluation budgets/results to `RupaEvaluation`, exact/derived CAD cache state
 to `RupaCADIntegration`, project publication to `RupaProject`, observable
 workspace view to `RupaKit`, derived plan task/data to `RupaRendering`, UI state
-to `RupaUI`, request routing/registration leases to the Agent control plane,
+to `RupaUI`, document-lifetime camera/display state to the mounted viewport
+controller, request routing/registration leases to the Agent control plane,
 Agent listener lifetime to `RupaAgentUI`, and benchmark catalog,
 capability-availability/execution-regression baseline evidence, case/oracle,
 and report values to `RupaAgentCADBenchmark`. External request/response buffers
@@ -342,9 +352,19 @@ Application Agent save is a one-way route through the typed coordinator port;
 the package and Agent host cannot mutate archive bytes independently. Package
 staging failures and application prepublication failures preserve their
 respective existing destinations and project publications.
-Evaluator and render-plan ceilings are correctness contracts checked before
-allocation/growth. Only matching cache publication and Canvas calls are
-MainActor-isolated; plan preparation and Agent control-plane work are not.
+Evaluator storage and every application-owned RealityKit input buffer use
+checked count/byte admission before allocation or growth. RealityKit resources
+whose allocator size is opaque are bounded by admitted geometry/resource
+counts, one current plus one candidate lifetime, typed native failure, and
+measured peak memory; the package does not claim an unenforceable exact byte
+ceiling for an SDK-owned collision shape or material program. Only matching
+scene publication and native RealityView updates are MainActor-isolated; scene
+preparation and Agent control-plane work are not. On the macOS 27-or-later
+package baseline, RealityKit native MeshResource/LowLevelMesh, camera, material,
+`ClippingComponent`, projection/ray/hit-test and collision APIs own the native
+scene path. Spatial Canvas and legacy identity GPU readback remain explicit
+migration work; after RK-5 they cannot remain as production fallbacks or
+parallel renderers.
 The T12 benchmark used per-case fresh authorities and fixed serial concurrency
 one during activation. Its completed post-100 integration proved bounded-one
 and bounded-two evidence equivalence, observed MainActor serialization, and
@@ -382,7 +402,7 @@ contracts rather than duplicating their behavioral cases:
 | Project integration | `RupaProject` | T09-C and T09-IV tests for exact coordinates and atomic publication. |
 | Package persistence | `RupaProjectPackage` | Schema-v3 round trips, staged validation, resource/integrity limits, byte reuse, cleanup, and destination-preserving atomic failure tests. |
 | Application use case | `RupaKit` target | T09-C tests for bounded read/preview/commit. |
-| Rendering and UI | `RupaRendering` / `RupaUI` | Off-main preparation, stale cancellation, retained-byte telemetry, single validation pass, batched Canvas calls, and MainActor progress probes. |
+| Rendering and UI | `RupaRendering` / `RealityViewport` / `RupaUI` | Off-main preparation, stale cancellation, retained resource/entity telemetry, one matching RealityKit scene/frame, native camera/material/collision behavior, and MainActor progress probes. |
 | Full package | Integration | T09-IV build/test and actual save/load path. |
 | Agent wire and dispatch | `RupaAgentProtocol` / `RupaAgentRuntime` | T10-B codec, malformed-input, registered-workspace, stale/cancel, and no-retry tests. |
 | Agent liveness | `RupaAgentRuntime` / `RupaAgentUI` / App | Capability/status and immutable reads complete during render preparation; only exact workspace/save operations enter their existing owners. |

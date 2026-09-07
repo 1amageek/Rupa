@@ -25,10 +25,10 @@ struct ViewportPatternArraySourceSelectionIndex {
         layout: ViewportLayout
     ) -> CGPoint? {
         sourceBaseSceneItems(source: source)
-            .map { itemProjectedCenter($0, layout: layout) }
+            .compactMap { itemProjectedCenter($0, layout: layout) }
             .average()
             ?? sourceOutputFallbackSceneItems(source: source)
-            .map { itemProjectedCenter($0, layout: layout) }
+            .compactMap { itemProjectedCenter($0, layout: layout) }
             .average()
     }
 
@@ -108,11 +108,11 @@ struct ViewportPatternArraySourceSelectionIndex {
     private func itemProjectedCenter(
         _ item: ViewportSceneItem,
         layout: ViewportLayout
-    ) -> CGPoint {
+    ) -> CGPoint? {
         if let projection = layout.bodyProjection(for: item) {
             return projection.center
         }
-        return layout.projectedFootprint(item.modelBounds).center
+        return layout.projectedFootprintIfVisible(item.modelBounds)?.center
     }
 
     private func itemModelCenter(_ item: ViewportSceneItem) -> Point3D {

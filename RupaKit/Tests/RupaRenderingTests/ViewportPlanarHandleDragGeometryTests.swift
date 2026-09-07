@@ -10,16 +10,16 @@ import Testing
         localPoint: .origin,
         modelTransform: try planarHandleDragTransform(scale: 2.0, translationX: 0.006)
     )
-    let start = geometry.projectedPoint(layout: layout)
+    let start = try #require(geometry.projectedPoint(layout: layout))
     let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
 
-    let axisDelta = geometry.localDelta(axis: .x, start: start, current: current, layout: layout)
-    let localAxisDelta = geometry.localDelta(
+    let axisDelta = try #require(geometry.localDelta(axis: .x, start: start, current: current, layout: layout))
+    let localAxisDelta = try #require(geometry.localDelta(
         direction: Vector3D(x: 1.0, y: 0.0, z: 0.0),
         start: start,
         current: current,
         layout: layout
-    )
+    ))
     let movedDisplayPoint = geometry.displayPoint(offsetByLocalDelta: axisDelta)
 
     #expect(abs(geometry.displayPoint.x - 0.006) < 1.0e-12)
@@ -36,10 +36,10 @@ import Testing
         localPoint: .origin,
         modelTransform: try planarHandleDragTransform(scale: 2.0, translationX: 0.006)
     )
-    let start = geometry.projectedPoint(layout: layout)
+    let start = try #require(geometry.projectedPoint(layout: layout))
     let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
 
-    let delta = geometry.localPlanarDelta(start: start, current: current, layout: layout)
+    let delta = try #require(geometry.localPlanarDelta(start: start, current: current, layout: layout))
 
     #expect(abs(delta.x - 0.001) < 1.0e-12)
     #expect(abs(delta.y) < 1.0e-12)

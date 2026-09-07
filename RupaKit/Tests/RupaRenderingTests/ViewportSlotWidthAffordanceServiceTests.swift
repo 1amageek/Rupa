@@ -49,7 +49,7 @@ import Testing
         )
     )
 
-    let tip = geometry.projectedTip(layout: layout, widthMeters: 1.6)
+    let tip = try #require(geometry.projectedTip(layout: layout, widthMeters: 1.6))
 
     #expect(abs(geometry.baseModelPoint.x) < 1.0e-12)
     #expect(abs(geometry.baseModelPoint.y - 1.0) < 1.0e-12)

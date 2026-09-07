@@ -30,8 +30,10 @@ struct ViewportPatternArrayCurvePathReplacementPreviewService: Sendable {
                 parameters: document.cadDocument.parameters,
                 cadDocument: document.cadDocument
             )
-            let outputPoints = transforms.prefix(128).map { transform in
-                layout.project(ViewportLayout.transformedPoint(basePoint, by: transform))
+            let outputPoints = transforms.prefix(128).compactMap { transform in
+                layout.projectedPoint(
+                    ViewportLayout.transformedPoint(basePoint, by: transform)
+                )?.point
             }
             guard !outputPoints.isEmpty else {
                 return nil
@@ -68,12 +70,15 @@ struct ViewportPatternArrayCurvePathReplacementPreviewService: Sendable {
                 let sample = try geometry.sample(
                     at: totalLength * Double(index) / Double(sampleCount)
                 )
-                points.append(layout.project(sample.point))
+                guard let projectedPoint = layout.projectedPoint(sample.point)?.point else {
+                    continue
+                }
+                points.append(projectedPoint)
             } catch {
                 return points
             }
         }
-        return points
+        return points.count >= 2 ? points : []
     }
 }
 

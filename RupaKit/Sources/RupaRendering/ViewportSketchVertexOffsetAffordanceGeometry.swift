@@ -25,12 +25,14 @@ struct ViewportSketchVertexOffsetAffordanceGeometry: Equatable {
             x: modelDirection.x / directionLength,
             y: modelDirection.y / directionLength
         )
-        let projectedUnitLength = Self.projectedLength(
+        guard let projectedUnitLength = Self.projectedLength(
             from: baseModelPoint,
             direction: direction,
             distance: 1.0,
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         guard projectedUnitLength > 1.0e-9 else {
             return nil
         }
@@ -44,25 +46,25 @@ struct ViewportSketchVertexOffsetAffordanceGeometry: Equatable {
     func projectedTip(
         layout: ViewportLayout,
         distanceMeters: Double? = nil
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let distance = max(distanceMeters ?? baseDistanceMeters, 1.0e-9)
         let lengthMeters = max(CGFloat(distance), minimumLengthMeters)
-        return layout.project(
+        return layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x * lengthMeters,
                 y: baseModelPoint.y + modelDirection.y * lengthMeters
             )
-        )
+        )?.point
     }
 
     func offsetDistance(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
-        let projectedVector = projectedUnitVector(layout: layout)
-        guard projectedVector.length > 1.0e-9 else {
-            return baseDistanceMeters
+    ) -> Double? {
+        guard let projectedVector = projectedUnitVector(layout: layout),
+              projectedVector.length > 1.0e-9 else {
+            return nil
         }
         let direction = projectedVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
@@ -71,14 +73,16 @@ struct ViewportSketchVertexOffsetAffordanceGeometry: Equatable {
         return max(baseDistanceMeters + modelDistance, 1.0e-9)
     }
 
-    private func projectedUnitVector(layout: ViewportLayout) -> CGVector {
-        let start = layout.project(baseModelPoint)
-        let end = layout.project(
+    private func projectedUnitVector(layout: ViewportLayout) -> CGVector? {
+        guard let start = layout.projectedPoint(baseModelPoint)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x,
                 y: baseModelPoint.y + modelDirection.y
             )
-        )
+        )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
@@ -87,14 +91,16 @@ struct ViewportSketchVertexOffsetAffordanceGeometry: Equatable {
         direction: CGPoint,
         distance: CGFloat,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let start = layout.project(point)
-        let end = layout.project(
+    ) -> CGFloat? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: point.x + direction.x * distance,
                 y: point.y + direction.y * distance
             )
-        )
+        )?.point else {
+            return nil
+        }
         return hypot(end.x - start.x, end.y - start.y)
     }
 }

@@ -49,14 +49,15 @@ import Testing
     )
 
     let candidate = try #require(candidates.first)
-    let start = candidate.geometry.projectedTip()
+    let start = try #require(candidate.geometry.projectedTip())
     let targetAngle = Double.pi * 2.0 / 3.0
-    let current = candidate.geometry.projectedTip(angleRadians: targetAngle)
+    let current = try #require(candidate.geometry.projectedTip(angleRadians: targetAngle))
     #expect(candidates.count == 1)
     #expect(candidate.target.sourceID == source.id)
     #expect(candidate.target.angleMode == .extent)
     #expect(abs(candidate.geometry.baseAngleRadians - Double.pi / 2.0) < 1.0e-12)
-    #expect(abs(candidate.geometry.angleRadians(start: start, current: current) - targetAngle) < 1.0e-9)
+    let angle = try #require(candidate.geometry.angleRadians(start: start, current: current))
+    #expect(abs(angle - targetAngle) < 1.0e-9)
 }
 
 @MainActor
@@ -75,10 +76,9 @@ import Testing
     ))
     let targetAngle = Double.pi * 0.72
 
-    let restoredAngle = geometry.angleRadians(
-        start: geometry.projectedTip(),
-        current: geometry.projectedTip(angleRadians: targetAngle)
-    )
+    let start = try #require(geometry.projectedTip())
+    let current = try #require(geometry.projectedTip(angleRadians: targetAngle))
+    let restoredAngle = try #require(geometry.angleRadians(start: start, current: current))
 
     #expect(abs(restoredAngle - targetAngle) < 1.0e-9)
 }

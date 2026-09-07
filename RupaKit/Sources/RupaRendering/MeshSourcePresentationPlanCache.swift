@@ -45,7 +45,7 @@ final class MeshSourcePresentationPlanCache {
         return plan
     }
 
-    func surface(for scene: UniversalViewportScene) -> ViewportSurfaceRenderer? {
+    func surface(for scene: UniversalViewportScene) -> RealityViewport? {
         guard case let .ready(snapshotID, _, surface) = state,
               snapshotID == scene.snapshotID else { return nil }
         return surface
@@ -99,7 +99,7 @@ final class MeshSourcePresentationPlanCache {
             do {
                 let plan = try await builder(scene)
                 try Task.checkCancellation()
-                let surface = try ViewportSurfaceRenderer(plan: plan)
+                let surface = try await RealityViewport.prepare(plan: plan)
                 try Task.checkCancellation()
                 result = .success(Prepared(plan: plan, surface: surface))
             } catch is CancellationError {
@@ -132,7 +132,7 @@ final class MeshSourcePresentationPlanCache {
 
     private struct Prepared: Sendable {
         let plan: MeshSourcePresentationRenderPlan
-        let surface: ViewportSurfaceRenderer
+        let surface: RealityViewport
     }
 
     private func finish(
@@ -149,9 +149,9 @@ final class MeshSourcePresentationPlanCache {
         }
         guard let result, case let .preparing(current) = state,
               current == snapshotID, self.requestID == requestID else { return }
-        // Publication is now only this state assignment. Construction already
-        // ran off `MainActor`, so the interval the acceptance table charges to
-        // a frame is measured here and nowhere else.
+        // CPU plan preparation ran off MainActor; native resources were awaited
+        // under RealityKit's isolation contract. Publication only installs the
+        // completed owner after both snapshot and request identity checks.
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
             case let .success(prepared):

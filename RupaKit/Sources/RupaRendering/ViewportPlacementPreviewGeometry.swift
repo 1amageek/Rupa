@@ -271,7 +271,7 @@ struct ViewportPlacementPreviewGeometry: Equatable {
             guard localPoint.x.isFinite, localPoint.y.isFinite else {
                 return nil
             }
-            return layout.project(coordinateSystem.point(from: localPoint))
+            return layout.projectedPoint(coordinateSystem.point(from: localPoint))?.point
         }
     }
 }

@@ -20,12 +20,14 @@ struct ViewportSurfaceFrameAxisAffordanceGeometry: Equatable {
             return nil
         }
         let basePoint = modelTransform.viewportTransformedPoint(display.position)
-        let projectedUnitLength = Self.projectedLength(
+        guard let projectedUnitLength = Self.projectedLength(
             from: basePoint,
             direction: transformedDirection,
             distanceMeters: 1.0,
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         guard projectedUnitLength > 1.0e-9 else {
             return nil
         }
@@ -37,19 +39,21 @@ struct ViewportSurfaceFrameAxisAffordanceGeometry: Equatable {
     func projectedTip(
         layout: ViewportLayout,
         distanceMeters: Double? = nil
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let distance = distanceMeters ?? minimumLengthMeters
-        return layout.project(Self.offset(baseModelPoint, direction: modelDirection, distanceMeters: distance))
+        return layout.projectedPoint(
+            Self.offset(baseModelPoint, direction: modelDirection, distanceMeters: distance)
+        )?.point
     }
 
     func dragDistance(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
-        let projectedVector = projectedUnitVector(layout: layout)
-        guard projectedVector.length > 1.0e-9 else {
-            return 0.0
+    ) -> Double? {
+        guard let projectedVector = projectedUnitVector(layout: layout),
+              projectedVector.length > 1.0e-9 else {
+            return nil
         }
         let direction = projectedVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
@@ -57,9 +61,13 @@ struct ViewportSurfaceFrameAxisAffordanceGeometry: Equatable {
         return Double(viewportDistance / projectedVector.length)
     }
 
-    private func projectedUnitVector(layout: ViewportLayout) -> CGVector {
-        let start = layout.project(baseModelPoint)
-        let end = layout.project(Self.offset(baseModelPoint, direction: modelDirection, distanceMeters: 1.0))
+    private func projectedUnitVector(layout: ViewportLayout) -> CGVector? {
+        guard let start = layout.projectedPoint(baseModelPoint)?.point,
+              let end = layout.projectedPoint(
+                  Self.offset(baseModelPoint, direction: modelDirection, distanceMeters: 1.0)
+              )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
@@ -68,9 +76,13 @@ struct ViewportSurfaceFrameAxisAffordanceGeometry: Equatable {
         direction: Vector3D,
         distanceMeters: Double,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let start = layout.project(point)
-        let end = layout.project(offset(point, direction: direction, distanceMeters: distanceMeters))
+    ) -> CGFloat? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
+                  offset(point, direction: direction, distanceMeters: distanceMeters)
+              )?.point else {
+            return nil
+        }
         return hypot(end.x - start.x, end.y - start.y)
     }
 

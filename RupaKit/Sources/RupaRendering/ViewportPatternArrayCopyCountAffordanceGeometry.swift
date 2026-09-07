@@ -25,7 +25,7 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         }
     }
 
-    var handlePoint: CGPoint {
+    var handlePoint: CGPoint? {
         switch self {
         case .linear(let geometry):
             geometry.handlePoint()
@@ -40,7 +40,7 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         }
     }
 
-    func handlePoint(copyCount: Int) -> CGPoint {
+    func handlePoint(copyCount: Int) -> CGPoint? {
         switch self {
         case .linear(let geometry):
             geometry.handlePoint(copyCount: copyCount)
@@ -58,10 +58,7 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
     func guidePoints(copyCount: Int? = nil) -> [CGPoint] {
         switch self {
         case .linear(let geometry):
-            [
-                geometry.baseProjectedPoint,
-                geometry.handlePoint(copyCount: copyCount ?? geometry.baseCopyCount),
-            ]
+            [geometry.baseProjectedPoint, geometry.handlePoint(copyCount: copyCount ?? geometry.baseCopyCount)]
         case .linearDensity(let geometry):
             geometry.guidePoints(copyCount: copyCount ?? geometry.baseCopyCount)
         case .angular(let geometry):
@@ -76,7 +73,7 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
     func copyCount(
         start: CGPoint,
         current: CGPoint
-    ) -> Int {
+    ) -> Int? {
         switch self {
         case .linear(let geometry):
             geometry.copyCount(start: start, current: current)
@@ -308,18 +305,18 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
         self.layout = layout
     }
 
-    var centerProjectedPoint: CGPoint {
-        layout.project(centerModelPoint)
+    var centerProjectedPoint: CGPoint? {
+        layout.projectedPoint(centerModelPoint)?.point
     }
 
-    func handlePoint(copyCount: Int? = nil) -> CGPoint {
+    func handlePoint(copyCount: Int? = nil) -> CGPoint? {
         projectedPoint(angleRadians: stepAngleRadians * Double(max(copyCount ?? baseCopyCount, 1)))
     }
 
     func arcPoints(copyCount: Int) -> [CGPoint] {
         let angle = stepAngleRadians * Double(max(copyCount, 1))
         let segments = max(Int(abs(angle) / (.pi / 18.0)), 12)
-        return (0 ... segments).map { index in
+        return (0 ... segments).compactMap { index in
             projectedPoint(angleRadians: angle * Double(index) / Double(segments))
         }
     }
@@ -337,8 +334,10 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
         return max(baseCopyCount + countDelta, 1)
     }
 
-    private func projectedPoint(angleRadians: Double) -> CGPoint {
-        layout.project(Self.point(centerModelPoint, offsetBy: rotated(radialVector, angleRadians: angleRadians)))
+    private func projectedPoint(angleRadians: Double) -> CGPoint? {
+        layout.projectedPoint(
+            Self.point(centerModelPoint, offsetBy: rotated(radialVector, angleRadians: angleRadians))
+        )?.point
     }
 
     private func rotated(
@@ -357,13 +356,17 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
     }
 
     private func projectedAngleParameter(for point: CGPoint) -> Double? {
-        let center = centerProjectedPoint
+        guard let center = centerProjectedPoint else {
+            return nil
+        }
         let delta = CGVector(dx: point.x - center.x, dy: point.y - center.y)
         guard delta.length > 1.0e-9 else {
             return nil
         }
-        let radialProjection = projectedVector(radialVector)
-        let tangentProjection = projectedVector(axis.cross(radialVector))
+        guard let radialProjection = projectedVector(radialVector),
+              let tangentProjection = projectedVector(axis.cross(radialVector)) else {
+            return nil
+        }
         let determinant = radialProjection.dx * tangentProjection.dy - radialProjection.dy * tangentProjection.dx
         let determinantScale = max(radialProjection.length * tangentProjection.length, 1.0)
         guard abs(determinant) > determinantScale * 1.0e-9 else {
@@ -379,9 +382,13 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
         return atan2(sine, cosine)
     }
 
-    private func projectedVector(_ vector: Vector3D) -> CGVector {
-        let center = centerProjectedPoint
-        let end = layout.project(Self.point(centerModelPoint, offsetBy: vector))
+    private func projectedVector(_ vector: Vector3D) -> CGVector? {
+        guard let center = centerProjectedPoint,
+              let end = layout.projectedPoint(
+                  Self.point(centerModelPoint, offsetBy: vector)
+              )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - center.x, dy: end.y - center.y)
     }
 
@@ -525,8 +532,12 @@ struct ViewportPatternArrayCopyCountAngularDensityGeometry: Equatable {
         self.pointsPerCopy = minimumPointsPerCopy
 
         let endRadialVector = Self.rotated(radialVector, around: normalizedAxis, angleRadians: extentAngleRadians)
-        let endPoint = layout.project(Self.point(center, offsetBy: endRadialVector))
-        let centerPoint = layout.project(center)
+        guard let endPoint = layout.projectedPoint(
+            Self.point(center, offsetBy: endRadialVector)
+        )?.point,
+              let centerPoint = layout.projectedPoint(center)?.point else {
+            return nil
+        }
         let outward = CGVector(dx: endPoint.x - centerPoint.x, dy: endPoint.y - centerPoint.y)
         guard outward.length > 1.0e-9 else {
             return nil
@@ -535,11 +546,13 @@ struct ViewportPatternArrayCopyCountAngularDensityGeometry: Equatable {
             normalizedAxis.cross(endRadialVector),
             by: extentAngleRadians < 0.0 ? -1.0 : 1.0
         )
-        let projectedTangent = Self.projectedVector(
+        guard let projectedTangent = Self.projectedVector(
             tangentVector,
             at: Self.point(center, offsetBy: endRadialVector),
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         guard projectedTangent.length > 1.0e-9 else {
             return nil
         }
@@ -578,15 +591,15 @@ struct ViewportPatternArrayCopyCountAngularDensityGeometry: Equatable {
 
     private func arcPoints(angleRadians: Double) -> [CGPoint] {
         let segments = max(Int(abs(angleRadians) / (.pi / 18.0)), 12)
-        return (0 ... segments).map { index in
-            layout.project(Self.point(
+        return (0 ... segments).compactMap { index in
+            layout.projectedPoint(Self.point(
                 centerModelPoint,
                 offsetBy: Self.rotated(
                     radialVector,
                     around: axis,
                     angleRadians: angleRadians * Double(index) / Double(segments)
                 )
-            ))
+            ))?.point
         }
     }
 
@@ -594,14 +607,16 @@ struct ViewportPatternArrayCopyCountAngularDensityGeometry: Equatable {
         _ vector: Vector3D,
         at origin: Point3D,
         layout: ViewportLayout
-    ) -> CGVector {
+    ) -> CGVector? {
         let end = Point3D(
             x: origin.x + vector.x,
             y: origin.y + vector.y,
             z: origin.z + vector.z
         )
-        let startPoint = layout.project(origin)
-        let endPoint = layout.project(end)
+        guard let startPoint = layout.projectedPoint(origin)?.point,
+              let endPoint = layout.projectedPoint(end)?.point else {
+            return nil
+        }
         return CGVector(dx: endPoint.x - startPoint.x, dy: endPoint.y - startPoint.y)
     }
 
@@ -714,11 +729,13 @@ struct ViewportPatternArrayCopyCountCurveGeometry: Equatable {
         let direction: CGVector
         do {
             let sample = try path.sample(at: distributionLength)
-            let projectedTangent = Self.projectedVector(
+            guard let projectedTangent = Self.projectedVector(
                 sample.tangent,
                 at: sample.point,
                 layout: layout
-            )
+            ) else {
+                return nil
+            }
             if projectedTangent.length > 1.0e-9 {
                 direction = projectedTangent.normalized
             } else if let fallback = Self.fallbackDirection(from: pathPoints) {
@@ -773,14 +790,16 @@ struct ViewportPatternArrayCopyCountCurveGeometry: Equatable {
         _ vector: Vector3D,
         at origin: Point3D,
         layout: ViewportLayout
-    ) -> CGVector {
+    ) -> CGVector? {
         let end = Point3D(
             x: origin.x + vector.x,
             y: origin.y + vector.y,
             z: origin.z + vector.z
         )
-        let startPoint = layout.project(origin)
-        let endPoint = layout.project(end)
+        guard let startPoint = layout.projectedPoint(origin)?.point,
+              let endPoint = layout.projectedPoint(end)?.point else {
+            return nil
+        }
         return CGVector(
             dx: endPoint.x - startPoint.x,
             dy: endPoint.y - startPoint.y

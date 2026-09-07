@@ -277,7 +277,7 @@ public struct ResponsivenessBaselineRunner {
         pass.depthAttachment.texture = depth
         pass.depthAttachment.loadAction = .clear
         pass.depthAttachment.storeAction = .dontCare
-        pass.depthAttachment.clearDepth = 1
+        pass.depthAttachment.clearDepth = 0
         let clock = ContinuousClock()
         let start = clock.now
         let buffer = try surface.makeCommandBuffer()

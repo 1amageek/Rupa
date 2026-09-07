@@ -9,16 +9,59 @@ struct MeshSourcePresentationScreenHitTester {
         at point: CGPoint,
         in plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil,
+        cullBackFaces: Bool = false
     ) -> SceneOccurrenceID? {
-        triangle(at: point, in: plan, layout: layout, sectionGeometryResolver: sectionGeometryResolver)?.occurrenceID
+        triangle(
+            at: point,
+            in: plan,
+            layout: layout,
+            sectionGeometryResolver: sectionGeometryResolver,
+            cullBackFaces: cullBackFaces
+        )?.occurrenceID
+    }
+
+    /// Returns the world point on the front-most visible triangle under the
+    /// pointer. The same triangle/depth/culling path as occurrence picking is
+    /// used, so measurement cannot resolve against geometry that the picker
+    /// would not expose.
+    func worldPoint(
+        at point: CGPoint,
+        in plan: MeshSourcePresentationRenderPlan,
+        layout: ViewportLayout,
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil,
+        cullBackFaces: Bool = false
+    ) -> (point: Point3D, occurrenceID: SceneOccurrenceID)? {
+        guard let triangle = triangle(
+            at: point,
+            in: plan,
+            layout: layout,
+            sectionGeometryResolver: sectionGeometryResolver,
+            cullBackFaces: cullBackFaces
+        ) else {
+            return nil
+        }
+        guard let ray = layout.viewportRay(for: point) else { return nil }
+        let first = point3D(triangle.firstPosition)
+        let second = point3D(triangle.secondPosition)
+        let third = point3D(triangle.thirdPosition)
+        // Screen barycentrics are not world barycentrics under perspective.
+        // Picking already admitted the clipped polygon; intersect its plane.
+        let normal = (second - first).cross(third - first)
+        let denominator = ray.direction.dot(normal)
+        guard denominator.isFinite, denominator != 0 else { return nil }
+        let distance = (first - ray.origin).dot(normal) / denominator
+        let worldPoint = ray.origin + ray.direction * distance
+        guard worldPoint.isFinite, layout.projectedPoint(worldPoint) != nil else { return nil }
+        return (worldPoint, triangle.occurrenceID)
     }
 
     private func triangle(
         at point: CGPoint,
         in plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver?,
+        cullBackFaces: Bool
     ) -> MeshSourcePresentationTriangle? {
         var bestTriangle: MeshSourcePresentationTriangle?
         var bestDepth: Double?
@@ -36,6 +79,9 @@ struct MeshSourcePresentationScreenHitTester {
                     second: point3D(triangle.secondPosition),
                     third: point3D(triangle.thirdPosition)
                 )
+            }
+            guard !cullBackFaces || isFrontFacing(polygon, layout: layout) else {
+                return
             }
             guard let depth = hitDepth(
                 at: point,
@@ -59,10 +105,17 @@ struct MeshSourcePresentationScreenHitTester {
         scene: UniversalViewportScene,
         layout: ViewportLayout,
         tolerance: CGFloat = 8,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil,
+        cullBackFaces: Bool = false
     ) -> ViewportMeshElementHit? {
         guard plan.snapshotID == scene.snapshotID,
-              let triangle = triangle(at: point, in: plan, layout: layout, sectionGeometryResolver: sectionGeometryResolver),
+              let triangle = triangle(
+                  at: point,
+                  in: plan,
+                  layout: layout,
+                  sectionGeometryResolver: sectionGeometryResolver,
+                  cullBackFaces: cullBackFaces
+              ),
               case .authoredMesh(let sourceID) = triangle.sourceReference else { return nil }
         let element: MeshSelectionElement
         switch domain {
@@ -70,7 +123,11 @@ struct MeshSourcePresentationScreenHitTester {
             element = .face(triangle.faceID)
         case .vertex, .edge:
             let ids = [triangle.firstVertexID, triangle.secondVertexID, triangle.thirdVertexID]
-            let points = [triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition].map { layout.project(point3D($0)) }
+            let points = [triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition]
+                .compactMap { layout.projectedPoint(point3D($0))?.point }
+            guard points.count == 3 else {
+                return nil
+            }
             if domain == .vertex {
                 guard let index = (0..<3).min(by: { distanceSquared(point, points[$0]) < distanceSquared(point, points[$1]) }),
                       distanceSquared(point, points[index]) <= tolerance * tolerance else { return nil }
@@ -112,7 +169,8 @@ struct MeshSourcePresentationScreenHitTester {
         intersecting rect: CGRect,
         in plan: MeshSourcePresentationRenderPlan,
         layout: ViewportLayout,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil
+        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil,
+        cullBackFaces: Bool = false
     ) -> [SceneOccurrenceID] {
         let normalizedRect = rect.standardized
         guard normalizedRect.isEmpty == false else {
@@ -137,6 +195,9 @@ struct MeshSourcePresentationScreenHitTester {
                     third: point3D(triangle.thirdPosition)
                 )
             }
+            guard !cullBackFaces || isFrontFacing(polygon, layout: layout) else {
+                return
+            }
             guard polygonIntersects(
                 normalizedRect,
                 polygon: polygon,
@@ -150,18 +211,37 @@ struct MeshSourcePresentationScreenHitTester {
         return occurrenceIDs
     }
 
+    /// Metal uses counter-clockwise front faces in clip space. ViewportLayout
+    /// projects to a y-down AppKit coordinate system, so the equivalent screen
+    /// winding is clockwise (negative signed area).
+    private func isFrontFacing(
+        _ polygon: ViewportTrianglePolygon,
+        layout: ViewportLayout
+    ) -> Bool {
+        let projected = layout.projectedPolygon(polygon.points)
+        guard projected.count >= 3 else { return false }
+        let first = projected[0].point
+        let second = projected[1].point
+        let third = projected[2].point
+        let signedArea = (second.x - first.x) * (third.y - first.y)
+            - (second.y - first.y) * (third.x - first.x)
+        return signedArea < 0
+    }
+
     private func polygonIntersects(
         _ rect: CGRect,
         polygon: ViewportTrianglePolygon,
         layout: ViewportLayout
     ) -> Bool {
-        guard rect.intersects(projectedBounds(of: polygon, layout: layout)) else {
+        let projected = layout.projectedPolygon(polygon.points).map(\.point)
+        guard projected.count >= 3,
+              rect.intersects(projectedBounds(of: projected)) else {
             return false
         }
-        let first = layout.project(polygon.first)
-        let second = layout.project(polygon.second)
-        let third = layout.project(polygon.third)
-        let fourth = polygon.fourth.map(layout.project)
+        let first = projected[0]
+        let second = projected[1]
+        let third = projected[2]
+        let fourth = projected.count > 3 ? projected[3] : nil
 
         if rect.contains(first) || rect.contains(second) || rect.contains(third) {
             return true
@@ -218,7 +298,7 @@ struct MeshSourcePresentationScreenHitTester {
         ) != nil
     }
 
-    private func segmentIntersectsRect(
+    func segmentIntersectsRect(
         _ first: CGPoint,
         _ second: CGPoint,
         rect: CGRect
@@ -290,12 +370,13 @@ struct MeshSourcePresentationScreenHitTester {
         of polygon: ViewportTrianglePolygon,
         layout: ViewportLayout
     ) -> CGRect {
+        projectedBounds(of: layout.projectedPolygon(polygon.points).map(\.point))
+    }
+
+    private func projectedBounds(of points: [CGPoint]) -> CGRect {
         var bounds = CGRect.null
-        bounds = bounds.union(zeroSizeRect(at: layout.project(polygon.first)))
-        bounds = bounds.union(zeroSizeRect(at: layout.project(polygon.second)))
-        bounds = bounds.union(zeroSizeRect(at: layout.project(polygon.third)))
-        if let fourth = polygon.fourth {
-            bounds = bounds.union(zeroSizeRect(at: layout.project(fourth)))
+        for point in points where point.x.isFinite && point.y.isFinite {
+            bounds = bounds.union(zeroSizeRect(at: point))
         }
         return bounds
     }
@@ -309,49 +390,26 @@ struct MeshSourcePresentationScreenHitTester {
         in polygon: ViewportTrianglePolygon,
         layout: ViewportLayout
     ) -> Double? {
-        var bestDepth = triangleHitDepth(
-            at: point,
-            first: polygon.first,
-            second: polygon.second,
-            third: polygon.third,
-            layout: layout
-        )
-        if let fourth = polygon.fourth,
-           let depth = triangleHitDepth(
-               at: point,
-               first: polygon.first,
-               second: polygon.third,
-               third: fourth,
-               layout: layout
-           ),
-           isNearer(depth, than: bestDepth) {
-            bestDepth = depth
+        let projected = layout.projectedPolygon(polygon.points)
+        guard projected.count >= 3 else { return nil }
+        var bestDepth: Double?
+        for index in 1..<(projected.count - 1) {
+            guard let weights = barycentricWeights(
+                for: point,
+                first: projected[0].point,
+                second: projected[index].point,
+                third: projected[index + 1].point
+            ) else {
+                continue
+            }
+            let depth = projected[0].depth * weights.first
+                + projected[index].depth * weights.second
+                + projected[index + 1].depth * weights.third
+            if isNearer(depth, than: bestDepth) {
+                bestDepth = depth
+            }
         }
         return bestDepth
-    }
-
-    private func triangleHitDepth(
-        at point: CGPoint,
-        first: Point3D,
-        second: Point3D,
-        third: Point3D,
-        layout: ViewportLayout
-    ) -> Double? {
-        guard let weights = barycentricWeights(
-            for: point,
-            first: layout.project(first),
-            second: layout.project(second),
-            third: layout.project(third)
-        ) else {
-            return nil
-        }
-        return interpolatedDepth(
-            first: first,
-            second: second,
-            third: third,
-            weights: weights,
-            layout: layout
-        )
     }
 
     private func barycentricWeights(
@@ -383,23 +441,6 @@ struct MeshSourcePresentationScreenHitTester {
             return nil
         }
         return (firstWeight, secondWeight, thirdWeight)
-    }
-
-    private func interpolatedDepth(
-        first: Point3D,
-        second: Point3D,
-        third: Point3D,
-        weights: (first: Double, second: Double, third: Double),
-        layout: ViewportLayout
-    ) -> Double? {
-        guard let firstDepth = layout.projectedDepth(first),
-              let secondDepth = layout.projectedDepth(second),
-              let thirdDepth = layout.projectedDepth(third) else {
-            return nil
-        }
-        return firstDepth * weights.first
-            + secondDepth * weights.second
-            + thirdDepth * weights.third
     }
 
     private func isNearer(_ candidate: Double, than current: Double?) -> Bool {

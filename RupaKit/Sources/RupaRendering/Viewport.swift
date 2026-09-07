@@ -4,7 +4,24 @@ import RupaCore
 import RupaGeometry
 import SwiftUI
 import RupaViewportScene
+import SwiftCAD
 
+/// Lightweight identity for rebuilding the mounted viewport context.
+///
+/// Camera and revision are deliberately excluded: camera mutations are
+/// session state, while this key only tracks inputs that change the geometry
+/// context used by fit commands.
+private struct ViewportControlContextKey: Equatable, Sendable {
+    let viewportID: ViewportInstanceID
+    let presentationSnapshotID: EvaluationSnapshotID?
+    let documentGeneration: DocumentGeneration?
+    let viewportSize: CGSize
+    let ruler: RulerConfiguration
+    let fittingInsets: ViewportLayout.FittingInsets
+    let selectedSceneNodeIDs: [SceneNodeID]
+}
+
+@MainActor
 public struct Viewport: View {
     private static let projectionAnimationDuration: TimeInterval = 0.34
     private static let snapOverlayLogger = Logger(
@@ -22,7 +39,8 @@ public struct Viewport: View {
 
     @State private var activeCanvasDrag: ViewportActiveDrag?
     @State private var activeInteractionDrags = ViewportActiveInteractionDrags()
-    @State private var camera: ViewportCamera = .identity
+    @State private var localControlSession: ViewportControlSession
+    @State private var viewportInstanceID: ViewportInstanceID
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var dragPreviewDocument: DesignDocument?
     @State private var dragPreviewSceneNodeID: SceneNodeID?
@@ -30,15 +48,12 @@ public struct Viewport: View {
     @State private var surfaceFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var hoveredInteractionTarget: ViewportInteractionTarget?
     @State private var pendingInteractionTarget: ViewportInteractionTarget?
-    @State private var orbitBasis: ViewportProjectionBasis?
-    @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     @State private var snapOverlayResult: SnapResolutionResult?
     @State private var snapOverlayFailureDescription: String?
     @State private var placementHighlightState: ViewportPlacementHighlight?
     @State private var placementHighlightFailureDescription: String?
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
-    @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
     @State private var identityHitResolver = ViewportIdentityHitResolver(
@@ -50,9 +65,11 @@ public struct Viewport: View {
     @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
+    private let controlSession: ViewportControlSession?
     private let document: DesignDocument
     private let presentationScene: UniversalViewportScene?
     private let presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
+    private let materialColors: [SceneOccurrenceID: ColorRGBA]
     private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
     private let documentGeneration: DocumentGeneration?
@@ -65,7 +82,6 @@ public struct Viewport: View {
     private let patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest?
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
-    private let displayMode: ViewportDisplayMode
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
@@ -144,7 +160,8 @@ public struct Viewport: View {
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
-    private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
+    private let onCameraFrameChange: ((ViewportCameraFrame?) -> Void)?
+    private let onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
     private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
@@ -152,6 +169,72 @@ public struct Viewport: View {
 
     private var workspaceRuler: RulerConfiguration {
         workspaceRenderState.ruler
+    }
+
+    private var activeControlSession: ViewportControlSession {
+        controlSession ?? localControlSession
+    }
+
+    private var camera: ViewportCamera {
+        get { activeControlSession.camera }
+        nonmutating set { setCamera(newValue) }
+    }
+
+    private var orbitBasis: ViewportProjectionBasis? {
+        get { activeControlSession.orbitBasis }
+        nonmutating set {
+            activeControlSession.setProjectionTransition(
+                activeControlSession.projectionTransition,
+                basis: activeControlSession.basis,
+                orbitBasis: newValue,
+                selectedAxis: selectedAxis
+            )
+        }
+    }
+
+    private var projectionTransition: ViewportProjectionTransition? {
+        get { activeControlSession.projectionTransition }
+        nonmutating set {
+            activeControlSession.setProjectionTransition(
+                newValue,
+                basis: activeControlSession.basis,
+                orbitBasis: orbitBasis,
+                selectedAxis: selectedAxis
+            )
+        }
+    }
+
+    private var selectedAxis: ViewportCoordinateAxis? {
+        get { activeControlSession.selectedAxis }
+        nonmutating set {
+            activeControlSession.setProjectionTransition(
+                activeControlSession.projectionTransition,
+                basis: activeControlSession.basis,
+                orbitBasis: orbitBasis,
+                selectedAxis: newValue
+            )
+        }
+    }
+
+    private var displayMode: ViewportDisplayMode {
+        activeControlSession.displayMode
+    }
+
+    private var shading: ViewportShading {
+        activeControlSession.shading
+    }
+
+    private var isBackfaceCullingActive: Bool {
+        shading.isBackfaceCullingActive(in: displayMode)
+    }
+
+    private var viewportBackground: Color {
+        switch shading.background {
+        case .theme:
+            ViewportTheme.background
+        case .custom(let color):
+            Color(red: color.r, green: color.g, blue: color.b, opacity: color.a)
+        }
     }
 
     private var sceneOverlayState: ViewportSceneOverlayState {
@@ -291,6 +374,8 @@ public struct Viewport: View {
     public init(
         document: DesignDocument,
         displayMode: ViewportDisplayMode = .solid,
+        shading: ViewportShading = .standard,
+        controlSession: ViewportControlSession? = nil,
         presentationScene: UniversalViewportScene? = nil,
         presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID] = [:],
         workspaceRenderState: ViewportWorkspaceRenderState,
@@ -385,12 +470,37 @@ public struct Viewport: View {
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
-        onCameraFrameChange: ((ViewportCameraFrame) -> Void)? = nil,
+        onCameraFrameChange: ((ViewportCameraFrame?) -> Void)? = nil,
+        onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
         onProjectedGridStepChange: ((Double) -> Void)? = nil
     ) {
+        self.controlSession = controlSession
+        self._localControlSession = State(
+            initialValue: ViewportControlSession(
+                displayMode: displayMode,
+                shading: shading
+            )
+        )
+        self._viewportInstanceID = State(
+            initialValue: ViewportInstanceID()
+        )
         self.document = document
         self.presentationScene = presentationScene
         self.presentationSceneNodeIDByOccurrenceID = presentationSceneNodeIDByOccurrenceID
+        // Resolve document-owned colors once per supplied View value, not from
+        // the camera-driven body or the native scene's update callback.
+        var materialColors: [SceneOccurrenceID: ColorRGBA] = [:]
+        if let presentationScene {
+            let library = document.productMetadata.materialLibrary
+            for item in presentationScene.items {
+                guard let nodeID = presentationSceneNodeIDByOccurrenceID[item.id],
+                      let node = document.productMetadata.sceneNodes[nodeID],
+                      let materialID = node.materialID ?? library.defaultMaterialID,
+                      let color = library.materials[materialID]?.baseColor else { continue }
+                materialColors[item.id] = color
+            }
+        }
+        self.materialColors = materialColors
         self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
         self.documentGeneration = documentGeneration
@@ -403,7 +513,6 @@ public struct Viewport: View {
         self.patternArrayCurvePathReplacementPreviewRequest = patternArrayCurvePathReplacementPreviewRequest
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
-        self.displayMode = displayMode
         self.surfaceContinuity = surfaceContinuity
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
@@ -490,6 +599,7 @@ public struct Viewport: View {
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
         self.onCameraFrameChange = onCameraFrameChange
+        self.onCameraFrameRequestResult = onCameraFrameRequestResult
         self.onProjectedGridStepChange = onProjectedGridStepChange
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
@@ -520,6 +630,15 @@ public struct Viewport: View {
                     sceneKey: sceneKey,
                     fittingInsets: fittingChromeLayout.fittingInsets
                 )
+                let controlContextKey = ViewportControlContextKey(
+                    viewportID: viewportInstanceID,
+                    presentationSnapshotID: presentationScene?.snapshotID,
+                    documentGeneration: documentGeneration,
+                    viewportSize: proxy.size,
+                    ruler: workspaceRuler,
+                    fittingInsets: fittingChromeLayout.fittingInsets,
+                    selectedSceneNodeIDs: selection.selectedSceneNodeIDs
+                )
                 let projectedGrid = ViewportProjectedGrid(
                     ruler: workspaceRuler,
                     layout: sceneContext.layout,
@@ -544,6 +663,9 @@ public struct Viewport: View {
                     presentationPlanCache.failure(for: scene) ?? presentationFrameFailure(for: scene)
                 }
                 ZStack {
+                    // FIXME(INCOMPLETE_IMPLEMENTATION): Production grid/axes still use Canvas
+                    // during the RealityKit cutover. RK-3 must move them into the native
+                    // scene before this viewport can be reported as fully migrated.
                     Canvas { context, size in
                         let interval = ViewportResponsivenessSignposts.signposter.beginInterval(
                             "ViewportGridConsumption", id: ViewportResponsivenessSignposts.signposter.makeSignpostID()
@@ -555,15 +677,18 @@ public struct Viewport: View {
                         drawAxes(in: &context, size: size, camera: camera, basis: basis)
                     }
                     if let presentationSurface, let presentationScene {
-                        ViewportSurfaceView(
-                            renderer: presentationSurface,
+                        RealityViewportView(
+                            viewport: presentationSurface,
+                            viewportRevision: activeControlSession.revision,
                             displayMode: displayMode,
+                            shading: shading,
+                            materialColors: materialColors,
                             layout: sceneContext.layout,
                             interaction: presentationInteractionStateResolver,
                             sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,
                             retainedSide: sectionClippingPlan?.retainedSide ?? .front,
                             sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
-                            onDrawResult: { error in
+                            onUpdateResult: { error in
                                 guard presentationPlanCache.surface(for: presentationScene) === presentationSurface else { return }
                                 surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
                             }
@@ -571,6 +696,9 @@ public struct Viewport: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                     }
+                    // FIXME(INCOMPLETE_IMPLEMENTATION): Production CAD overlays/previews
+                    // still use Canvas during RK-2. RK-3 must replace every spatial route
+                    // with native scene entities before the full cutover is complete.
                     Canvas { context, size in
                         let canvasInterval = ViewportResponsivenessSignposts.beginCanvasConsumption()
                         defer { ViewportResponsivenessSignposts.endCanvasConsumption(canvasInterval) }
@@ -584,7 +712,7 @@ public struct Viewport: View {
                         drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
                     }
                 }
-                .background(ViewportTheme.background)
+                .background(viewportBackground)
                 .id(renderInvalidation)
                 .accessibilityIdentifier("CanvasViewport")
                 .accessibilityLabel("Canvas viewport")
@@ -680,11 +808,20 @@ public struct Viewport: View {
                     ViewportAxisTriad(
                         selectedAxis: selectedAxis,
                         basis: basis,
+                        projection: camera.projection,
                         onResetView: {
                             resetViewportCamera(size: proxy.size, basis: basis)
                         },
                         onSelectAxis: { axis in
                             selectProjectionAxis(axis)
+                        },
+                        onSelectProjection: { projection in
+                            do {
+                                try activeControlSession.perform(.setProjection(projection))
+                            } catch {
+                                Logger(subsystem: "RupaRendering", category: "ViewportControlSession")
+                                    .error("Viewport projection failed: \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     )
                     .padding(
@@ -704,6 +841,52 @@ public struct Viewport: View {
                     // on an actual value change and runs after the view update, so this never
                     // mutates SwiftUI state mid-update and cannot form a feedback loop.
                     onProjectedGridStepChange?(newValue)
+                }
+                .onChange(of: activeControlSession.revision) { _, _ in
+                    // Agent and UI commands share the session. Reflect their applied
+                    // state through the existing snapshot callbacks without waiting
+                    // for GPU completion or mutating session state during `body`.
+                    publishProjectionBasis(activeControlSession.basis)
+                    publishCameraFrame(
+                        size: proxy.size,
+                        basis: currentProjectionBasis
+                    )
+                }
+                .onChange(of: controlContextKey) { _, _ in
+                    let context = makeControlMountContext(
+                        viewportID: viewportInstanceID,
+                        size: proxy.size,
+                        sceneContext: sceneContext,
+                        fittingInsets: fittingChromeLayout.fittingInsets
+                    )
+                    activeControlSession.updateContext(context)
+                }
+                .task(id: viewportInstanceID) {
+                    let viewportID = viewportInstanceID
+                    let context = makeControlMountContext(
+                        viewportID: viewportID,
+                        size: proxy.size,
+                        sceneContext: sceneContext,
+                        fittingInsets: fittingChromeLayout.fittingInsets
+                    )
+                    let mountToken = activeControlSession.mount(viewportID: viewportID)
+                    activeControlSession.updateContext(context)
+                    if let projectionRequest {
+                        applyProjectionRequest(projectionRequest)
+                    } else {
+                        publishProjectionBasis(currentProjectionBasis)
+                    }
+                    publishCameraFrame(size: proxy.size, basis: currentProjectionBasis)
+
+                    defer {
+                        activeControlSession.unmount(mountToken)
+                    }
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64.max)
+                    } catch {
+                        // Cancellation is the lifecycle signal; the defer above
+                        // releases only this task's mount token.
+                    }
                 }
             }
             .onChange(of: snapResolutionOptions) { _, _ in
@@ -736,14 +919,6 @@ public struct Viewport: View {
                 previewEvaluationCache.clear()
                 presentationPlanCache.teardown()
                 surfaceFailure = nil
-            }
-            .onAppear {
-                if let projectionRequest {
-                    applyProjectionRequest(projectionRequest)
-                } else {
-                    publishProjectionBasis(currentProjectionBasis)
-                }
-                publishCameraFrame(size: proxy.size, basis: currentProjectionBasis)
             }
             .onChange(of: projectionRequest) { _, nextRequest in
                 if let nextRequest {
@@ -788,14 +963,7 @@ public struct Viewport: View {
         return ZStack {
             ForEach(markers) { marker in
                 Button {
-                    onPick?(
-                        ViewportCanvasTarget(
-                            hit: marker.hit,
-                            modelPoint: marker.modelPoint,
-                            sketchPlane: marker.sketchPlane,
-                            selectionIntent: .replace
-                        )
-                    )
+                    pick(at: marker.point, size: size, selectionIntent: .replace)
                 } label: {
                     Rectangle()
                         .fill(Color.clear)
@@ -820,14 +988,7 @@ public struct Viewport: View {
         return ZStack {
             ForEach(markers) { marker in
                 Button {
-                    onPick?(
-                        ViewportCanvasTarget(
-                            hit: marker.hit,
-                            modelPoint: marker.modelPoint,
-                            sketchPlane: marker.sketchPlane,
-                            selectionIntent: .replace
-                        )
-                    )
+                    pick(at: marker.point, size: size, selectionIntent: .replace)
                 } label: {
                     Rectangle()
                         .fill(Color.clear)
@@ -1041,6 +1202,23 @@ public struct Viewport: View {
         projectionBasis(at: Date())
     }
 
+    private func setCamera(
+        _ nextCamera: ViewportCamera,
+        basis: ViewportProjectionBasis? = nil
+    ) {
+        do {
+            try activeControlSession.applyPresentationState(
+                camera: nextCamera,
+                basis: basis ?? currentProjectionBasis
+            )
+        } catch {
+            Logger(
+                subsystem: "RupaRendering",
+                category: "ViewportControlSession"
+            ).error("Viewport camera mutation failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     private func publishProjectionBasis(_ basis: ViewportProjectionBasis) {
         onProjectionBasisChange?(basis)
     }
@@ -1064,6 +1242,9 @@ public struct Viewport: View {
         guard let projectionTransition else {
             if let orbitBasis {
                 return orbitBasis
+            }
+            if selectedAxis == nil {
+                return activeControlSession.basis
             }
             return targetProjectionBasis(for: selectedAxis)
         }
@@ -1092,16 +1273,23 @@ public struct Viewport: View {
         let resolver = ViewportCameraFrameResolver(
             workspaceVisibleSpanMeters: workspaceRuler.visibleSpanMeters
         )
-        camera = resolver.camera(framing: request) { frameCamera in
-            makeLayout(
-                size: size,
-                camera: frameCamera,
-                basis: request.basis
-            )
+        let nextCamera: ViewportCamera
+        do {
+            nextCamera = try resolver.camera(framing: request) { frameCamera in
+                makeLayout(size: size, camera: frameCamera, basis: request.basis)
+            }
+            try activeControlSession.applyPresentationState(camera: nextCamera, basis: request.basis)
+        } catch {
+            Logger(subsystem: "RupaRendering", category: "ViewportControlSession")
+                .error("Camera framing failed: \(error.localizedDescription, privacy: .public)")
+            onCameraFrameRequestResult?(request.id, .failure(error))
+            return
         }
         activeCanvasDrag = nil
         clearCanvasHover()
+        publishProjectionBasis(request.basis)
         publishCameraFrame(size: size, basis: request.basis)
+        onCameraFrameRequestResult?(request.id, .success(()))
     }
 
     /// A preview document is projected only together with its own evaluation.
@@ -1196,6 +1384,92 @@ public struct Viewport: View {
             geometryBoundsSource: geometryBoundsSource,
             fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
         )
+    }
+
+    private func makeControlMountContext(
+        viewportID: ViewportInstanceID,
+        size: CGSize,
+        sceneContext: ViewportSceneContext,
+        fittingInsets: ViewportLayout.FittingInsets
+    ) -> ViewportControlMountContext {
+        let sceneBounds: GeometryBounds3D?
+        let selectedBounds: GeometryBounds3D?
+        if let presentationScene {
+            sceneBounds = presentationScene.worldBounds
+            let selectedSceneNodeIDs = Set(selection.selectedSceneNodeIDs)
+            let selectedItems = presentationScene.items.filter { item in
+                guard let sceneNodeID = presentationSceneNodeIDByOccurrenceID[item.id] else {
+                    return false
+                }
+                return selectedSceneNodeIDs.contains(sceneNodeID)
+            }
+            selectedBounds = aggregateControlBounds(selectedItems.map(\.worldBounds))
+        } else {
+            sceneBounds = controlBounds(for: sceneContext.scene)
+            selectedBounds = nil
+        }
+        let verticalBounds: ClosedRange<Double>?
+        if let presentationBounds = presentationScene?.worldBounds {
+            verticalBounds = presentationBounds.minimum.y ... presentationBounds.maximum.y
+        } else {
+            verticalBounds = sceneContext.scene.verticalBounds
+        }
+        return ViewportControlMountContext(
+            viewportID: viewportID,
+            viewportSize: size,
+            fittingInsets: fittingInsets,
+            modelBounds: sceneContext.layout.modelBounds,
+            verticalBounds: verticalBounds,
+            ruler: workspaceRuler,
+            sceneBounds: sceneBounds,
+            selectedBounds: selectedBounds
+        )
+    }
+
+    private func controlBounds(for scene: ViewportScene) -> GeometryBounds3D? {
+        guard let modelBounds = scene.modelBounds,
+              let verticalBounds = scene.verticalBounds else {
+            return nil
+        }
+        do {
+            return try GeometryBounds3D(
+                minimum: GeometryPoint3D(
+                    x: Double(modelBounds.minX),
+                    y: verticalBounds.lowerBound,
+                    z: Double(modelBounds.minY)
+                ),
+                maximum: GeometryPoint3D(
+                    x: Double(modelBounds.maxX),
+                    y: verticalBounds.upperBound,
+                    z: Double(modelBounds.maxY)
+                )
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func aggregateControlBounds(
+        _ bounds: [GeometryBounds3D]
+    ) -> GeometryBounds3D? {
+        guard let first = bounds.first else {
+            return nil
+        }
+        var minimum = first.minimum
+        var maximum = first.maximum
+        for bound in bounds.dropFirst() {
+            minimum.x = min(minimum.x, bound.minimum.x)
+            minimum.y = min(minimum.y, bound.minimum.y)
+            minimum.z = min(minimum.z, bound.minimum.z)
+            maximum.x = max(maximum.x, bound.maximum.x)
+            maximum.y = max(maximum.y, bound.maximum.y)
+            maximum.z = max(maximum.z, bound.maximum.z)
+        }
+        do {
+            return try GeometryBounds3D(minimum: minimum, maximum: maximum)
+        } catch {
+            return nil
+        }
     }
 
     private func cachedScene(
@@ -1334,44 +1608,17 @@ public struct Viewport: View {
             camera: camera,
             basis: basis
         )
-        let origin = layout.project(.zero)
-        let basis = layout.basis
-        let planeExtent = hypot(size.width, size.height) * 1.10
-
-        drawAxisLine(
-            from: basis.endpoint(from: origin, axis: .x, length: -planeExtent),
-            to: basis.endpoint(from: origin, axis: .x, length: planeExtent),
-            color: ViewportCoordinateAxis.x.color,
-            label: ViewportCoordinateAxis.x.label,
-            in: &context
-        )
-        drawAxisLine(
-            from: basis.endpoint(from: origin, axis: .z, length: -planeExtent),
-            to: basis.endpoint(from: origin, axis: .z, length: planeExtent),
-            color: ViewportCoordinateAxis.z.color,
-            label: ViewportCoordinateAxis.z.label,
-            in: &context
-        )
-    }
-
-    private func drawAxisLine(
-        from start: CGPoint,
-        to end: CGPoint,
-        color: Color,
-        label: String,
-        in context: inout GraphicsContext
-    ) {
-        var path = Path()
-        path.move(to: start)
-        path.addLine(to: end)
-
-        context.stroke(path, with: .color(color.opacity(0.46)), lineWidth: 1.5)
-        drawAxisLabel(
-            label,
-            at: CGPoint(x: end.x + 12.0, y: end.y - 8.0),
-            color: color,
-            in: &context
-        )
+        guard layout.scale.isFinite, layout.scale > 0 else { return }
+        let extent = Double(hypot(size.width, size.height) * 1.1 / layout.scale)
+            + max(abs(layout.renderOrigin.x), abs(layout.renderOrigin.z))
+        for axis in [ViewportCoordinateAxis.x, .z] {
+            let start = axis == .x ? Point3D(x: -extent, y: 0, z: 0) : Point3D(x: 0, y: 0, z: -extent)
+            let end = axis == .x ? Point3D(x: extent, y: 0, z: 0) : Point3D(x: 0, y: 0, z: extent)
+            context.stroke(projectedPath([start, end], layout: layout), with: .color(axis.color.opacity(0.46)), lineWidth: 1.5)
+            if let labelPoint = layout.projectedPoint(end)?.point {
+                drawAxisLabel(axis.label, at: CGPoint(x: labelPoint.x + 12, y: labelPoint.y - 8), color: axis.color, in: &context)
+            }
+        }
     }
 
     private func drawAxisLabel(
@@ -1429,7 +1676,8 @@ public struct Viewport: View {
             at: point,
             in: plan,
             layout: layout,
-            sectionGeometryResolver: presentationSectionGeometryResolver()
+            sectionGeometryResolver: presentationSectionGeometryResolver(),
+            cullBackFaces: isBackfaceCullingActive
         )
     }
 
@@ -1447,7 +1695,8 @@ public struct Viewport: View {
             intersecting: rect,
             in: plan,
             layout: layout,
-            sectionGeometryResolver: presentationSectionGeometryResolver()
+            sectionGeometryResolver: presentationSectionGeometryResolver(),
+            cullBackFaces: isBackfaceCullingActive
         )
     }
 
@@ -1660,13 +1909,17 @@ public struct Viewport: View {
         if let overlay = meshSelectionOverlay, overlay.snapshotID == presentationScene?.snapshotID {
             var outline = Path()
             for segment in overlay.boundarySegments {
-                outline.move(to: layout.project(Point3D(x: segment.start.x, y: segment.start.y, z: segment.start.z)))
-                outline.addLine(to: layout.project(Point3D(x: segment.end.x, y: segment.end.y, z: segment.end.z)))
+                outline.addPath(projectedPath([
+                    Point3D(x: segment.start.x, y: segment.start.y, z: segment.start.z),
+                    Point3D(x: segment.end.x, y: segment.end.y, z: segment.end.z),
+                ], layout: layout))
             }
             context.stroke(outline, with: .color(.orange), lineWidth: 2)
             var vertices = Path()
             for point in overlay.points {
-                let location = layout.project(Point3D(x: point.position.x, y: point.position.y, z: point.position.z))
+                guard let location = layout.projectedPoint(Point3D(
+                    x: point.position.x, y: point.position.y, z: point.position.z
+                ))?.point else { continue }
                 vertices.addEllipse(in: CGRect(x: location.x - 4, y: location.y - 4, width: 8, height: 8))
             }
             context.fill(vertices, with: .color(.orange))
@@ -2104,8 +2357,7 @@ public struct Viewport: View {
         }
         var intersectionPath = Path()
         for segment in overlay.segments {
-            intersectionPath.move(to: layout.project(segment.start))
-            intersectionPath.addLine(to: layout.project(segment.end))
+            intersectionPath.addPath(projectedPath([segment.start, segment.end], layout: layout))
         }
         context.stroke(
             intersectionPath,
@@ -2125,12 +2377,7 @@ public struct Viewport: View {
         layout: ViewportLayout
     ) {
         for item in items where item.isClosed && item.points.count >= 3 {
-            var path = Path()
-            path.move(to: layout.project(item.points[0]))
-            for point in item.points.dropFirst() {
-                path.addLine(to: layout.project(point))
-            }
-            path.closeSubpath()
+            let path = projectedPath(item.points, layout: layout, closed: true)
             context.fill(
                 path,
                 with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.10))
@@ -2153,8 +2400,7 @@ public struct Viewport: View {
         }
         var hatchPath = Path()
         for item in items {
-            hatchPath.move(to: layout.project(item.start))
-            hatchPath.addLine(to: layout.project(item.end))
+            hatchPath.addPath(projectedPath([item.start, item.end], layout: layout))
         }
         context.stroke(
             hatchPath,
@@ -2168,15 +2414,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        guard let firstCorner = item.corners.first else {
-            return
-        }
-        var planePath = Path()
-        planePath.move(to: layout.project(firstCorner))
-        for corner in item.corners.dropFirst() {
-            planePath.addLine(to: layout.project(corner))
-        }
-        planePath.closeSubpath()
+        let planePath = projectedPath(item.corners, layout: layout, closed: true)
         context.fill(
             planePath,
             with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.055))
@@ -2187,9 +2425,7 @@ public struct Viewport: View {
             style: StrokeStyle(lineWidth: 1.0, lineJoin: .round, dash: [8.0, 5.0])
         )
 
-        var normalPath = Path()
-        normalPath.move(to: layout.project(item.origin))
-        normalPath.addLine(to: layout.project(item.normalEnd))
+        let normalPath = projectedPath([item.origin, item.normalEnd], layout: layout)
         context.stroke(
             normalPath,
             with: .color(ViewportTheme.sectionAnalysisNormal.opacity(0.62)),
@@ -2217,7 +2453,7 @@ public struct Viewport: View {
 
         var drawnPlaneIDs: Set<ConstructionPlaneSourceID> = []
         for target in targets {
-            let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout)
+            guard let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout) else { continue }
             guard drawnPlaneIDs.insert(displayTarget.constructionPlaneID).inserted else {
                 continue
             }
@@ -2233,7 +2469,7 @@ public struct Viewport: View {
         }
 
         for target in targets {
-            let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout)
+            guard let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout) else { continue }
             drawConstructionPlaneHandle(
                 displayTarget,
                 isHighlighted: isConstructionPlaneHandleHighlighted(target),
@@ -2245,7 +2481,7 @@ public struct Viewport: View {
     private func displayedConstructionPlaneHandleTarget(
         _ target: ViewportConstructionPlaneHandleTarget,
         layout: ViewportLayout
-    ) -> ViewportConstructionPlaneHandleTarget {
+    ) -> ViewportConstructionPlaneHandleTarget? {
         guard let activeConstructionPlaneHandleDrag,
               activeConstructionPlaneHandleDrag.target.constructionPlaneID == target.constructionPlaneID,
               let basis = constructionPlaneBasis(
@@ -2269,6 +2505,8 @@ public struct Viewport: View {
             pointOffsetBy(pointOffsetBy(origin, positiveU), positiveV),
             pointOffsetBy(pointOffsetBy(origin, negativeU), positiveV),
         ]
+        guard let projectedOrigin = layout.projectedPoint(origin)?.point,
+              let projectedNormalEnd = layout.projectedPoint(normalEnd)?.point else { return nil }
         return ViewportConstructionPlaneHandleTarget(
             constructionPlaneID: target.constructionPlaneID,
             sceneNodeID: target.sceneNodeID,
@@ -2277,8 +2515,8 @@ public struct Viewport: View {
             normal: basis.normal,
             normalEnd: normalEnd,
             corners: corners,
-            projectedOrigin: layout.project(origin),
-            projectedNormalEnd: layout.project(normalEnd)
+            projectedOrigin: projectedOrigin,
+            projectedNormalEnd: projectedNormalEnd
         )
     }
 
@@ -2302,15 +2540,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        guard let firstCorner = target.corners.first else {
-            return
-        }
-        var path = Path()
-        path.move(to: layout.project(firstCorner))
-        for corner in target.corners.dropFirst() {
-            path.addLine(to: layout.project(corner))
-        }
-        path.closeSubpath()
+        let path = projectedPath(target.corners, layout: layout, closed: true)
         context.fill(
             path,
             with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.045))
@@ -2464,31 +2694,19 @@ public struct Viewport: View {
 
         for anchor in anchors {
             var guidePath = Path()
-            guidePath.move(
-                to: layout.project(
-                    CGPoint(x: minX, y: CGFloat(anchor.point.y))
-                )
-            )
-            guidePath.addLine(
-                to: layout.project(
-                    CGPoint(x: maxX, y: CGFloat(anchor.point.y))
-                )
-            )
-            guidePath.move(
-                to: layout.project(
-                    CGPoint(x: CGFloat(anchor.point.x), y: minY)
-                )
-            )
-            guidePath.addLine(
-                to: layout.project(
-                    CGPoint(x: CGFloat(anchor.point.x), y: maxY)
-                )
-            )
+            guidePath.addPath(projectedPath([
+                Point3D(x: Double(minX), y: 0, z: anchor.point.y),
+                Point3D(x: Double(maxX), y: 0, z: anchor.point.y),
+            ], layout: layout))
+            guidePath.addPath(projectedPath([
+                Point3D(x: anchor.point.x, y: 0, z: Double(minY)),
+                Point3D(x: anchor.point.x, y: 0, z: Double(maxY)),
+            ], layout: layout))
             context.stroke(guidePath, with: .color(lineColor), style: style)
 
-            let projectedAnchor = layout.project(
+            guard let projectedAnchor = layout.projectedPoint(
                 CGPoint(x: CGFloat(anchor.point.x), y: CGFloat(anchor.point.y))
-            )
+            )?.point else { continue }
             let anchorRect = CGRect(
                 x: projectedAnchor.x - 3.0,
                 y: projectedAnchor.y - 3.0,
@@ -2541,7 +2759,7 @@ public struct Viewport: View {
         sketchPlane: SketchPlane,
         layout: ViewportLayout
     ) -> WorkspaceCanvasPlaneInputMapper.Result? {
-        let legacyModelPoint = layout.unproject(viewportPoint)
+        guard let legacyModelPoint = layout.canvasCoordinates(for: viewportPoint) else { return nil }
         do {
             return try WorkspaceCanvasPlaneInputMapper(
                 projectionBasis: layout.basis
@@ -2754,17 +2972,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        guard let first = item.points.first else {
-            return
-        }
-        var path = Path()
-        path.move(to: layout.project(first))
-        for point in item.points.dropFirst() {
-            path.addLine(to: layout.project(point))
-        }
-        if item.isClosed {
-            path.closeSubpath()
-        }
+        let path = projectedPath(item.points, layout: layout, closed: item.isClosed)
         context.stroke(
             path,
             with: .color(surfaceAnalysisBoundaryColor(for: item).opacity(0.78)),
@@ -2789,16 +2997,12 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        let start = layout.project(item.position)
         let endPoint = Point3D(
             x: item.position.x + item.normal.x * item.normalCurvature * scale,
             y: item.position.y + item.normal.y * item.normalCurvature * scale,
             z: item.position.z + item.normal.z * item.normalCurvature * scale
         )
-        let end = layout.project(endPoint)
-        var path = Path()
-        path.move(to: start)
-        path.addLine(to: end)
+        let path = projectedPath([item.position, endPoint], layout: layout)
         context.stroke(
             path,
             with: .color(surfaceAnalysisColor(for: item).opacity(0.48)),
@@ -2861,19 +3065,17 @@ public struct Viewport: View {
             y: direction.y * halfLength,
             z: direction.z * halfLength
         )
-        let start = layout.project(Point3D(
+        let start = Point3D(
             x: position.x - offset.x,
             y: position.y - offset.y,
             z: position.z - offset.z
-        ))
-        let end = layout.project(Point3D(
+        )
+        let end = Point3D(
             x: position.x + offset.x,
             y: position.y + offset.y,
             z: position.z + offset.z
-        ))
-        var path = Path()
-        path.move(to: start)
-        path.addLine(to: end)
+        )
+        let path = projectedPath([start, end], layout: layout)
         context.stroke(
             path,
             with: .color(color.opacity(0.52)),
@@ -2910,13 +3112,8 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        let start = layout.project(item.start)
-        let end = layout.project(item.end)
-        let midpoint = layout.project(item.midpoint)
         let color = surfaceContinuityColor(for: item)
-        var path = Path()
-        path.move(to: start)
-        path.addLine(to: end)
+        let path = projectedPath([item.start, item.end], layout: layout)
         context.stroke(
             path,
             with: .color(color.opacity(0.94)),
@@ -2926,8 +3123,12 @@ public struct Viewport: View {
                 dash: item.requiresCurvatureContinuitySolve ? [6.0, 4.0] : []
             )
         )
-        drawTransformHandle(at: start, style: .vertex, isHighlighted: true, in: &context)
-        drawTransformHandle(at: end, style: .vertex, isHighlighted: true, in: &context)
+        for endpoint in [item.start, item.end] {
+            if let point = layout.projectedPoint(endpoint)?.point {
+                drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
+            }
+        }
+        guard let midpoint = layout.projectedPoint(item.midpoint)?.point else { return }
         drawSurfaceContinuityLabel(
             surfaceContinuityLabel(for: item),
             at: CGPoint(x: midpoint.x, y: midpoint.y - 18.0),
@@ -3061,7 +3262,9 @@ public struct Viewport: View {
             guard isSelected || isHovered else {
                 continue
             }
-            let projectedPoints = region.points.map(layout.project)
+            let projectedPoints = layout.projectedPolygon(region.points.map {
+                Point3D(x: Double($0.x), y: 0, z: Double($0.y))
+            }).map(\.point)
             guard projectedPoints.count >= 3 else {
                 continue
             }
@@ -3117,11 +3320,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             distanceMeters: distanceMeters ?? 0.0
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3279,11 +3482,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             widthMeters: widthMeters
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3355,11 +3558,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             distanceMeters: distanceMeters
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3433,11 +3636,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             distanceMeters: distanceMeters
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3511,11 +3714,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             distanceMeters: distanceMeters
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3589,11 +3792,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(candidate.geometry.baseModelPoint)
-        let end = candidate.geometry.projectedTip(
+        guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return }
+        guard let end = candidate.geometry.projectedTip(
             layout: layout,
             distanceMeters: distanceMeters
-        )
+        ) else { return }
         drawArrow(
             from: start,
             to: end,
@@ -3670,19 +3873,16 @@ public struct Viewport: View {
             }
         }
         for vertex in previewVertices {
-            let original = layout.project(vertex.originalPoint)
             let displayedPoint = showsOriginalComparison ? vertex.originalPoint : vertex.movedPoint
-            let displayed = layout.project(displayedPoint)
             if !showsOriginalComparison {
-                var path = Path()
-                path.move(to: original)
-                path.addLine(to: displayed)
+                let path = projectedPath([vertex.originalPoint, displayedPoint], layout: layout)
                 context.stroke(
                     path,
                     with: .color(color.opacity(0.72)),
                     style: StrokeStyle(lineWidth: 1.8, lineCap: .round, dash: [5.0, 4.0])
                 )
             }
+            guard let displayed = layout.projectedPoint(displayedPoint)?.point else { continue }
             drawTransformHandle(
                 at: displayed,
                 style: .vertex,
@@ -3716,19 +3916,16 @@ public struct Viewport: View {
         let showsOriginalComparison = modifierFlags.containsControl
         let color = ViewportTheme.surfaceEdit
         for vertex in previewVertices {
-            let original = layout.project(vertex.originalPoint)
             let displayedPoint = showsOriginalComparison ? vertex.originalPoint : vertex.movedPoint
-            let displayed = layout.project(displayedPoint)
             if !showsOriginalComparison {
-                var path = Path()
-                path.move(to: original)
-                path.addLine(to: displayed)
+                let path = projectedPath([vertex.originalPoint, displayedPoint], layout: layout)
                 context.stroke(
                     path,
                     with: .color(color.opacity(0.72)),
                     style: StrokeStyle(lineWidth: 1.8, lineCap: .round, dash: [5.0, 4.0])
                 )
             }
+            guard let displayed = layout.projectedPoint(displayedPoint)?.point else { continue }
             drawTransformHandle(
                 at: displayed,
                 style: .vertex,
@@ -3759,11 +3956,9 @@ public struct Viewport: View {
                 continue
             }
 
-            var path = Path()
-            path.move(to: layout.project(mesh.positions[firstIndex]))
-            path.addLine(to: layout.project(mesh.positions[secondIndex]))
-            path.addLine(to: layout.project(mesh.positions[thirdIndex]))
-            path.closeSubpath()
+            let path = projectedPath([
+                mesh.positions[firstIndex], mesh.positions[secondIndex], mesh.positions[thirdIndex],
+            ], layout: layout, closed: true)
             if !showsOriginalComparison {
                 context.fill(path, with: .color(color.opacity(fillOpacity)))
             }
@@ -3856,7 +4051,7 @@ public struct Viewport: View {
                     handle: .point,
                     point: point
                 )
-                let projected = layout.project(displayedPoint)
+                guard let projected = layout.projectedPoint(displayedPoint)?.point else { continue }
                 let rect = CGRect(
                     x: projected.x - 3.0,
                     y: projected.y - 3.0,
@@ -3893,9 +4088,7 @@ public struct Viewport: View {
                     start: displayedStart,
                     end: displayedEnd
                 )
-                var path = Path()
-                path.move(to: layout.project(displayedLine.start))
-                path.addLine(to: layout.project(displayedLine.end))
+                let path = projectedPath([displayedLine.start, displayedLine.end], layout: layout)
                 context.stroke(path, with: .color(strokeColor.opacity(0.92)), lineWidth: strokeWidth)
                 let showsPointDisplay = showsPointDisplay(
                     featureID: item.featureID,
@@ -4165,11 +4358,7 @@ public struct Viewport: View {
                 guard displayedPoints.count >= 2 else {
                     continue
                 }
-                var path = Path()
-                path.move(to: layout.project(displayedPoints[0]))
-                for point in displayedPoints.dropFirst() {
-                    path.addLine(to: layout.project(point))
-                }
+                let path = projectedPath(displayedPoints, layout: layout)
                 context.stroke(path, with: .color(strokeColor.opacity(0.92)), lineWidth: strokeWidth)
                 let curvatureDisplay = curveCurvatureDisplay(
                     featureID: item.featureID,
@@ -4333,8 +4522,9 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
+        guard let projected = layout.projectedPoint(point)?.point else { return }
         drawTransformHandle(
-            at: layout.project(point),
+            at: projected,
             style: .vertex,
             isHighlighted: isSketchCurveHandleHighlighted(
                 featureID: featureID,
@@ -4420,8 +4610,8 @@ public struct Viewport: View {
         color: Color,
         in context: inout GraphicsContext
     ) {
-        let projectedStart = layout.project(start)
-        let projectedEnd = layout.project(end)
+        guard let projectedStart = layout.projectedPoint(start)?.point,
+              let projectedEnd = layout.projectedPoint(end)?.point else { return }
         let midpoint = lineDimensionMidpoint(start: projectedStart, end: projectedEnd)
         let labelPoint = lineDimensionLabelPoint(start: projectedStart, end: projectedEnd)
         drawDimensionLeader(from: midpoint, to: labelPoint, color: color, in: &context)
@@ -4457,8 +4647,8 @@ public struct Viewport: View {
             center: center,
             radiusMeters: radiusMeters
         )
-        let projectedCenter = layout.project(center)
-        let projectedRadius = layout.project(radiusPoint)
+        guard let projectedCenter = layout.projectedPoint(center)?.point,
+              let projectedRadius = layout.projectedPoint(radiusPoint)?.point else { return }
         drawDimensionLeader(from: projectedCenter, to: projectedRadius, color: color, in: &context)
         drawDimensionLabel(
             "R \(formattedViewportLength(radiusMeters))",
@@ -4491,8 +4681,8 @@ public struct Viewport: View {
             startAngleRadians: startAngleRadians,
             endAngleRadians: endAngleRadians
         )
-        let projectedCenter = layout.project(center)
-        let projectedRadius = layout.project(radiusPoint)
+        guard let projectedCenter = layout.projectedPoint(center)?.point,
+              let projectedRadius = layout.projectedPoint(radiusPoint)?.point else { return }
         let labelPoint = arcDimensionLabelPoint(center: projectedCenter, radiusPoint: projectedRadius)
         drawDimensionLeader(from: projectedCenter, to: projectedRadius, color: color, in: &context)
         drawDimensionLeader(from: projectedRadius, to: labelPoint, color: color, in: &context)
@@ -4661,8 +4851,9 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
+        guard let projected = layout.projectedPoint(point)?.point else { return }
         drawTransformHandle(
-            at: layout.project(point),
+            at: projected,
             style: .vertex,
             isHighlighted: isSketchPointHandleHighlighted(
                 featureID: featureID,
@@ -4729,19 +4920,16 @@ public struct Viewport: View {
         guard !controlPoints.isEmpty else {
             return
         }
-        var controlPath = Path()
-        controlPath.move(to: layout.project(controlPoints[0]))
-        for point in controlPoints.dropFirst() {
-            controlPath.addLine(to: layout.project(point))
-        }
+        let controlPath = projectedPath(controlPoints, layout: layout)
         context.stroke(
             controlPath,
             with: .color(color.opacity(0.38)),
             style: StrokeStyle(lineWidth: 1.1, dash: [4.0, 3.0])
         )
         for (index, point) in controlPoints.enumerated() {
+            guard let projected = layout.projectedPoint(point)?.point else { continue }
             drawTransformHandle(
-                at: layout.project(point),
+                at: projected,
                 style: .vertex,
                 isHighlighted: isSplineControlPointHighlighted(
                     featureID: featureID,
@@ -4769,8 +4957,8 @@ public struct Viewport: View {
             return
         }
 
-        var spinePath = Path()
-        var hasSpineStart = false
+        var spinePoints: [CGPoint] = []
+        spinePoints.reserveCapacity(comb.samples.count)
         for sample in comb.samples {
             let samplePoint = CGPoint(
                 x: CGFloat(sample.point.x),
@@ -4780,24 +4968,16 @@ public struct Viewport: View {
                 x: CGFloat(sample.point.x + sample.normal.x * sample.curvature * scale),
                 y: CGFloat(sample.point.y + sample.normal.y * sample.curvature * scale)
             )
-            let projectedPoint = layout.project(samplePoint)
-            let projectedEnd = layout.project(end)
-            var combLine = Path()
-            combLine.move(to: projectedPoint)
-            combLine.addLine(to: projectedEnd)
+            let combLine = projectedPath([samplePoint, end], layout: layout)
             context.stroke(
                 combLine,
                 with: .color(.white.opacity(0.58)),
                 lineWidth: 0.8
             )
 
-            if hasSpineStart {
-                spinePath.addLine(to: projectedEnd)
-            } else {
-                spinePath.move(to: projectedEnd)
-                hasSpineStart = true
-            }
+            spinePoints.append(end)
         }
+        let spinePath = projectedPath(spinePoints, layout: layout)
         context.stroke(
             spinePath,
             with: .color(.red.opacity(0.72)),
@@ -4932,23 +5112,14 @@ public struct Viewport: View {
         layout: ViewportLayout
     ) -> Path {
         let radius = max(CGFloat(radiusMeters), 1.0e-12)
-        var path = Path()
-
-        for index in 0 ... 96 {
+        let points = (0 ... 96).map { index in
             let angle = CGFloat(index) / 96.0 * CGFloat.pi * 2.0
-            let modelPoint = CGPoint(
+            return CGPoint(
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             )
-            let projectedPoint = layout.project(modelPoint)
-            if index == 0 {
-                path.move(to: projectedPoint)
-            } else {
-                path.addLine(to: projectedPoint)
-            }
         }
-        path.closeSubpath()
-        return path
+        return projectedPath(points, layout: layout)
     }
 
     private func projectedArcPath(
@@ -4958,22 +5129,14 @@ public struct Viewport: View {
         endAngleRadians: Double,
         layout: ViewportLayout
     ) -> Path {
-        var path = Path()
-        for (index, projectedPoint) in projectedArcPoints(
-            center: center,
-            radiusMeters: radiusMeters,
-            startAngleRadians: startAngleRadians,
-            endAngleRadians: endAngleRadians,
-            layout: layout,
-            segmentCount: 96
-        ).enumerated() {
-            if index == 0 {
-                path.move(to: projectedPoint)
-            } else {
-                path.addLine(to: projectedPoint)
-            }
+        let span = normalizedArcSpan(startAngle: startAngleRadians, endAngle: endAngleRadians)
+        let points = (0 ... 96).map { index in
+            pointOnSketchCircle(
+                center: center, radiusMeters: radiusMeters,
+                angleRadians: startAngleRadians + span * Double(index) / 96
+            )
         }
-        return path
+        return projectedPath(points, layout: layout)
     }
 
     /// Published surfaces belong exclusively to Metal. Only explicit edited
@@ -5015,12 +5178,21 @@ public struct Viewport: View {
         let fillColor = isSelected
             ? ViewportTheme.selection
             : (isSectionClipped ? ViewportTheme.sectionAnalysisPlane : ViewportTheme.bodySurface)
-        drawProjectedBox(
-            edit.projectedBox(layout: layout),
-            color: fillColor,
-            isHighlighted: isSelected || isHovered || isSectionClipped,
-            fillOpacity: isSelected ? 0.44 : (isSectionClipped ? 0.24 : 0.52),
-            in: &context
+        let corners = edit.worldBoxCorners
+        let faces = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4],
+                     [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]]
+        let fillOpacity = isSelected ? 0.44 : (isSectionClipped ? 0.24 : 0.52)
+        for (index, face) in faces.enumerated() {
+            context.fill(
+                projectedPath(face.map { corners[$0] }, layout: layout, closed: true),
+                with: .color(fillColor.opacity(fillOpacity * (0.72 + Double(index % 3) * 0.11)))
+            )
+        }
+        let highlighted = isSelected || isHovered || isSectionClipped
+        context.stroke(
+            projectedBoxEdges(corners, layout: layout),
+            with: .color((highlighted ? Color.white : Color.black).opacity(highlighted ? 0.58 : 0.42)),
+            lineWidth: highlighted ? 1.35 : 0.85
         )
     }
 
@@ -5039,11 +5211,7 @@ public struct Viewport: View {
             : (isHovered ? ViewportTheme.hover : ViewportTheme.curve)
         let lineWidth: CGFloat = isSelected ? 3.0 : (isHovered ? 2.6 : 1.8)
         for segment in component.segments where segment.points.count >= 2 {
-            var path = Path()
-            path.move(to: layout.project(segment.points[0], in: item))
-            for point in segment.points.dropFirst() {
-                path.addLine(to: layout.project(point, in: item))
-            }
+            let path = projectedPath(segment.points.map { layout.transformedPoint($0, in: item) }, layout: layout)
             context.stroke(
                 path,
                 with: .color(color),
@@ -5108,12 +5276,7 @@ public struct Viewport: View {
                 ]
             }
 
-            var path = Path()
-            path.move(to: layout.project(polygon[0]))
-            for point in polygon.dropFirst() {
-                path.addLine(to: layout.project(point))
-            }
-            path.closeSubpath()
+            let path = projectedPath(polygon, layout: layout, closed: true)
             context.fill(path, with: .color(baseColor.opacity(fillOpacity)))
             context.stroke(path, with: .color(baseColor.opacity(strokeOpacity)), lineWidth: isSelected ? 1.1 : 0.7)
             index += 3
@@ -5379,8 +5542,9 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let polygon = face.points.map { layout.project($0, in: item) }
-        let highlightPath = path(for: polygon)
+        let highlightPath = projectedPath(
+            face.points.map { layout.transformedPoint($0, in: item) }, layout: layout, closed: true
+        )
         context.fill(highlightPath, with: .color(style.color.opacity(style.fillOpacity)))
         context.stroke(
             highlightPath,
@@ -5396,18 +5560,19 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(edge.start, in: item)
-        let end = layout.project(edge.end, in: item)
-        var path = Path()
-        path.move(to: start)
-        path.addLine(to: end)
+        let path = projectedPath(
+            [edge.start, edge.end].map { layout.transformedPoint($0, in: item) }, layout: layout
+        )
         context.stroke(
             path,
             with: .color(style.color.opacity(style.strokeOpacity)),
             lineWidth: style.lineWidth + 1.8
         )
-        drawTransformHandle(at: start, style: .vertex, isHighlighted: true, in: &context)
-        drawTransformHandle(at: end, style: .vertex, isHighlighted: true, in: &context)
+        for endpoint in [edge.start, edge.end] {
+            if let point = layout.projectedPoint(endpoint, in: item)?.point {
+                drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
+            }
+        }
     }
 
     private func drawGeneratedVertexHighlight(
@@ -5417,7 +5582,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(vertex.point, in: item)
+        guard let point = layout.projectedPoint(vertex.point, in: item)?.point else { return }
         drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
         let radius: CGFloat = style == .selected ? 9.0 : 7.0
         let rect = CGRect(
@@ -5463,7 +5628,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let baseSize: CGFloat = display.isBoundary ? 7.0 : 8.6
         let size: CGFloat = if isSelected {
             baseSize + 4.0
@@ -5526,7 +5691,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let size: CGFloat = if isSelected {
             10.0
         } else if isHovered {
@@ -5579,7 +5744,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let radius: CGFloat = if isSelected {
             5.8
         } else if isHovered {
@@ -5646,7 +5811,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let size: CGFloat = if isSelected {
             8.8
         } else if isHovered {
@@ -5702,7 +5867,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let radius: CGFloat = if isSelected {
             4.8
         } else if isHovered {
@@ -5754,7 +5919,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let size: CGFloat = if isSelected {
             8.8
         } else if isHovered {
@@ -5810,7 +5975,7 @@ public struct Viewport: View {
         isHovered: Bool,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(display.point, in: item)
+        guard let point = layout.projectedPoint(display.point, in: item)?.point else { return }
         let radius: CGFloat = if isSelected {
             4.8
         } else if isHovered {
@@ -5861,7 +6026,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let origin = layout.project(display.position, in: item)
+        guard let origin = layout.projectedPoint(display.position, in: item)?.point else { return }
         drawSurfaceFrameAxis(
             origin: origin,
             direction: display.uAxis,
@@ -5991,11 +6156,11 @@ public struct Viewport: View {
         if let distanceMeters {
             let basePoint = item.modelTransform.viewportTransformedPoint(display.position)
             let modelDirection = item.modelTransform.viewportTransformedVector(direction)
-            let projected = layout.project(Point3D(
+            let projected = layout.projectedPoint(Point3D(
                 x: basePoint.x + modelDirection.x * distanceMeters,
                 y: basePoint.y + modelDirection.y * distanceMeters,
                 z: basePoint.z + modelDirection.z * distanceMeters
-            ))
+            ))?.point
             return projected
         }
         let modelScale = Double(max(max(item.modelBounds.width, item.modelBounds.height), 1.0e-6)) * 0.08
@@ -6004,7 +6169,7 @@ public struct Viewport: View {
             y: display.position.y + direction.y * modelScale,
             z: display.position.z + direction.z * modelScale
         )
-        let projected = layout.project(axisPoint, in: item)
+        guard let projected = layout.projectedPoint(axisPoint, in: item)?.point else { return nil }
         let dx = projected.x - origin.x
         let dy = projected.y - origin.y
         let length = hypot(dx, dy)
@@ -6026,9 +6191,9 @@ public struct Viewport: View {
             return
         }
         let geometry = activeSurfaceControlPointDrag.target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         let movedPoint = geometry.displayPoint(offsetByLocalDelta: activeSurfaceControlPointDrag.delta)
-        let end = layout.project(movedPoint)
+        guard let end = layout.projectedPoint(movedPoint)?.point else { return }
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -6046,7 +6211,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = target.geometry.projectedPoint(layout: layout)
+        guard let point = target.geometry.projectedPoint(layout: layout) else { return }
         drawSurfaceControlPointAxisHandles(
             target,
             highlightedMode: target.dragMode,
@@ -6076,9 +6241,9 @@ public struct Viewport: View {
             return
         }
         let geometry = activeSurfaceTrimEndpointDrag.target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         let movedPoint = geometry.displayPoint(offsetByLocalDelta: activeSurfaceTrimEndpointDrag.delta)
-        let end = layout.project(movedPoint)
+        guard let end = layout.projectedPoint(movedPoint)?.point else { return }
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -6175,7 +6340,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = target.geometry.projectedPoint(layout: layout)
+        guard let point = target.geometry.projectedPoint(layout: layout) else { return }
         drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
         let radius: CGFloat = style == .selected ? 9.4 : 7.4
         var path = Path()
@@ -6199,9 +6364,9 @@ public struct Viewport: View {
             return
         }
         let geometry = activeSurfaceTrimControlPointDrag.target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         let movedPoint = geometry.displayPoint(offsetByLocalDelta: activeSurfaceTrimControlPointDrag.delta)
-        let end = layout.project(movedPoint)
+        guard let end = layout.projectedPoint(movedPoint)?.point else { return }
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -6219,7 +6384,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = target.geometry.projectedPoint(layout: layout)
+        guard let point = target.geometry.projectedPoint(layout: layout) else { return }
         drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
         let radius: CGFloat = style == .selected ? 8.8 : 6.8
         let rect = CGRect(
@@ -6252,7 +6417,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext
     ) {
         let geometry = target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         for axis in ViewportCoordinateAxis.allCases {
             guard let end = geometry.axisEndpoint(
                 axis: axis,
@@ -6283,9 +6448,9 @@ public struct Viewport: View {
             return
         }
         let geometry = activePolySplineSurfaceVertexDrag.target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         let movedPoint = geometry.displayPoint(offsetByLocalDelta: activePolySplineSurfaceVertexDrag.delta)
-        let end = layout.project(movedPoint)
+        guard let end = layout.projectedPoint(movedPoint)?.point else { return }
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -6306,7 +6471,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext
     ) {
         let geometry = target.geometry
-        let point = geometry.projectedPoint(layout: layout)
+        guard let point = geometry.projectedPoint(layout: layout) else { return }
         drawPolySplineSurfaceVertexAxisHandles(
             target,
             highlightedMode: target.dragMode,
@@ -6337,7 +6502,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext
     ) {
         let geometry = target.geometry
-        let start = geometry.projectedPoint(layout: layout)
+        guard let start = geometry.projectedPoint(layout: layout) else { return }
         for axis in ViewportCoordinateAxis.allCases {
             guard let end = geometry.axisEndpoint(
                 axis: axis,
@@ -6592,10 +6757,10 @@ public struct Viewport: View {
                   let projection = bodyProjection(for: item, layout: layout) else {
                 return []
             }
-            return ViewportBodyFace.editableCases.map { face in
+            return ViewportBodyFace.editableCases.compactMap { face in
                 let footprint = projection.footprint(for: face)
                 let center = footprint.center
-                let modelPoint = layout.unproject(center)
+                guard let modelPoint = layout.canvasCoordinates(for: center) else { return nil }
                 let hit = ViewportHit(
                     featureID: item.featureID,
                     kind: .body,
@@ -6633,13 +6798,13 @@ public struct Viewport: View {
                   let projection = bodyProjection(for: item, layout: layout) else {
                 return []
             }
-            return ViewportBodyEdge.verticalCases.map { edge in
+            return ViewportBodyEdge.verticalCases.compactMap { edge in
                 let segment = projection.segment(for: edge)
                 let center = CGPoint(
                     x: (segment.start.x + segment.end.x) / 2.0,
                     y: (segment.start.y + segment.end.y) / 2.0
                 )
-                let modelPoint = layout.unproject(center)
+                guard let modelPoint = layout.canvasCoordinates(for: center) else { return nil }
                 let hit = ViewportHit(
                     featureID: item.featureID,
                     kind: .body,
@@ -7081,9 +7246,9 @@ public struct Viewport: View {
             return
         }
         let color = Color.orange
-        let center = candidate.geometry.centerProjectedPoint
-        let start = candidate.geometry.startProjectedPoint
-        let end = candidate.geometry.projectedTip(angleRadians: angleRadians)
+        guard let center = candidate.geometry.centerProjectedPoint,
+              let start = candidate.geometry.startProjectedPoint else { return }
+        guard let end = candidate.geometry.projectedTip(angleRadians: angleRadians) else { return }
         let arcPath = polylinePath(for: points)
         context.stroke(
             arcPath,
@@ -7174,7 +7339,7 @@ public struct Viewport: View {
             with: .color(color.opacity(isHighlighted ? 0.85 : 0.42)),
             style: StrokeStyle(lineWidth: isHighlighted ? 2.2 : 1.4, lineCap: .round, lineJoin: .round, dash: [4.0, 5.0])
         )
-        let handlePoint = candidate.geometry.handlePoint(copyCount: copyCount)
+        guard let handlePoint = candidate.geometry.handlePoint(copyCount: copyCount) else { return }
         drawTransformHandle(
             at: handlePoint,
             style: .vertex,
@@ -7319,13 +7484,13 @@ public struct Viewport: View {
         var drawnSourceIDs: Set<PatternArraySourceID> = []
         for candidate in candidates {
             if drawnSourceIDs.insert(candidate.target.sourceID).inserted {
-                let pathPoints = patternArrayCurvePathPointProjectedPath(
+                let path = patternArrayCurvePathPointProjectedPath(
                     target: candidate.target,
                     layout: layout
                 )
-                if pathPoints.count >= 2 {
+                if !path.isEmpty {
                     context.stroke(
-                        polylinePath(for: pathPoints),
+                        path,
                         with: .color(color.opacity(0.4)),
                         style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [5.0, 4.0])
                     )
@@ -7335,7 +7500,13 @@ public struct Viewport: View {
             let dragPoint = activePatternArrayCurvePathPointDrag?.target.identity == identity
                 ? activePatternArrayCurvePathPointDrag?.point
                 : nil
-            let projectedPoint = dragPoint.map(layout.project) ?? candidate.projectedPoint
+            let projectedPoint: CGPoint
+            if let dragPoint {
+                guard let visible = layout.projectedPoint(dragPoint)?.point else { continue }
+                projectedPoint = visible
+            } else {
+                projectedPoint = candidate.projectedPoint
+            }
             let isHighlighted = hoveredPatternArrayCurvePathPointHandle?.identity == identity
                 || pendingPatternArrayCurvePathPointHandle?.identity == identity
                 || activePatternArrayCurvePathPointDrag?.target.identity == identity
@@ -7361,15 +7532,16 @@ public struct Viewport: View {
     private func patternArrayCurvePathPointProjectedPath(
         target: ViewportPatternArrayCurvePathPointHandleTarget,
         layout: ViewportLayout
-    ) -> [CGPoint] {
-        target.pathPoints.enumerated().map { index, point in
+    ) -> Path {
+        let points = target.pathPoints.enumerated().map { index, point in
             if activePatternArrayCurvePathPointDrag?.target.sourceID == target.sourceID,
                activePatternArrayCurvePathPointDrag?.target.pointIndex == index,
                let activePoint = activePatternArrayCurvePathPointDrag?.point {
-                return layout.project(activePoint)
+                return activePoint
             }
-            return layout.project(point)
+            return point
         }
+        return projectedPath(points, layout: layout)
     }
 
     private func drawPatternArrayOutputModeAffordances(
@@ -7540,7 +7712,11 @@ public struct Viewport: View {
         if let projection = layout.bodyProjection(for: item) {
             return patternArrayBodyOutlinePath(projection)
         }
-        return patternArrayProjectedRectPath(layout.projectedFootprint(item.modelBounds))
+        let bounds = item.modelBounds
+        return projectedPath([
+            CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY),
+            CGPoint(x: bounds.maxX, y: bounds.maxY), CGPoint(x: bounds.minX, y: bounds.maxY),
+        ], layout: layout, closed: true)
     }
 
     private func patternArrayBodyOutlinePath(
@@ -7593,7 +7769,7 @@ public struct Viewport: View {
             if let projection = layout.bodyProjection(for: item) {
                 return projection.center
             }
-            return layout.projectedFootprint(item.modelBounds).center
+            return layout.projectedFootprintIfVisible(item.modelBounds)?.center
         }
         guard !centers.isEmpty else {
             return nil
@@ -7711,11 +7887,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         drawsBoundingBox: Bool
     ) {
-        let projection = edit.projectedBodyProjection(layout: layout)
+        guard let projection = edit.projectedBodyProjection(layout: layout) else { return }
         let bodyBounds = projection.hitBounds
         let modelCenter = edit.centerPoint
-        let center = edit.projectedPoint(modelCenter, layout: layout)
-        let affordanceBasis = edit.projectedAxisBasis(layout: layout)
+        guard let center = edit.projectedPoint(modelCenter, layout: layout),
+              let affordanceBasis = edit.projectedAxisBasis(layout: layout) else { return }
         let radius = max(28.0, min(72.0, min(bodyBounds.width, bodyBounds.height) * 0.38))
 
         if drawsBoundingBox {
@@ -7736,6 +7912,8 @@ public struct Viewport: View {
             rotationRadius: radius
         )
         for axis in ViewportCoordinateAxis.allCases {
+            guard let endLength = edit.modelLength(forViewportLength: endScaleLength, axis: axis, layout: layout),
+                  let centerLength = edit.modelLength(forViewportLength: radius, axis: axis, layout: layout) else { continue }
             drawProjectedMoveArrow(
                 axis: axis,
                 from: modelCenter,
@@ -7753,11 +7931,7 @@ public struct Viewport: View {
             drawTransformCube(
                 at: modelCenter.offset(
                     axis: axis,
-                    amount: edit.modelLength(
-                        forViewportLength: endScaleLength,
-                        axis: axis,
-                        layout: layout
-                    )
+                    amount: endLength
                 ),
                 edit: edit,
                 style: .axisEndScale(axis),
@@ -7772,11 +7946,7 @@ public struct Viewport: View {
             drawProjectedSphere(
                 at: modelCenter.offset(
                     axis: axis,
-                    amount: edit.modelLength(
-                        forViewportLength: radius,
-                        axis: axis,
-                        layout: layout
-                    )
+                    amount: centerLength
                 ),
                 edit: edit,
                 color: axis.color,
@@ -7825,14 +7995,19 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        let box = edit.projectedBox(layout: layout)
-        var path = Path()
-        for edge in box.edges {
-            path.move(to: edge.start)
-            path.addLine(to: edge.end)
-        }
+        let path = projectedBoxEdges(edit.worldBoxCorners, layout: layout)
         context.stroke(path, with: .color(Color.white.opacity(0.70)), lineWidth: 1.3)
         context.stroke(path, with: .color(Color.black.opacity(0.36)), lineWidth: 0.55)
+    }
+
+    private func projectedBoxEdges(_ corners: [Point3D], layout: ViewportLayout) -> Path {
+        var result = Path()
+        for index in 0..<8 {
+            for bit in [1, 2, 4] where index & bit == 0 {
+                result.addPath(projectedPath([corners[index], corners[index | bit]], layout: layout))
+            }
+        }
+        return result
     }
 
     private func drawSketchSelectionAffordance(
@@ -7840,7 +8015,7 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        let footprint = layout.projectedFootprint(item.modelBounds)
+        guard let footprint = layout.projectedFootprintIfVisible(item.modelBounds) else { return }
         drawPlanarSelectionAffordance(
             for: footprint,
             basis: layout.basis,
@@ -7902,12 +8077,13 @@ public struct Viewport: View {
         _ edit: ViewportObjectEditState,
         layout: ViewportLayout
     ) -> [ViewportVertexHandle] {
-        ViewportBodyVertex.allCases.map { vertex in
+        ViewportBodyVertex.allCases.compactMap { vertex in
             let position = edit.position(for: vertex)
+            guard let point = edit.projectedPoint(position, layout: layout) else { return nil }
             return ViewportVertexHandle(
                 vertex: vertex,
                 position: position,
-                point: edit.projectedPoint(position, layout: layout)
+                point: point
             )
         }
     }
@@ -7916,12 +8092,13 @@ public struct Viewport: View {
         _ edit: ViewportObjectEditState,
         layout: ViewportLayout
     ) -> [ViewportFaceHandle] {
-        ViewportBodyFace.editableCases.map { face in
+        ViewportBodyFace.editableCases.compactMap { face in
             let position = edit.position(for: face)
+            guard let point = edit.projectedPoint(position, layout: layout) else { return nil }
             return ViewportFaceHandle(
                 face: face,
                 position: position,
-                point: edit.projectedPoint(position, layout: layout)
+                point: point
             )
         }
     }
@@ -8181,6 +8358,29 @@ public struct Viewport: View {
         return path
     }
 
+    private func projectedPath(
+        _ points: [CGPoint], layout: ViewportLayout, closed: Bool = false
+    ) -> Path {
+        projectedPath(points.map { Point3D(x: Double($0.x), y: 0, z: Double($0.y)) }, layout: layout, closed: closed)
+    }
+
+    private func projectedPath(
+        _ points: [Point3D], layout: ViewportLayout, closed: Bool = false
+    ) -> Path {
+        if closed {
+            return path(for: layout.projectedPolygon(points).map(\.point))
+        }
+        var result = Path()
+        for (start, end) in zip(points, points.dropFirst()) {
+            let segment = layout.projectedPolygon([start, end])
+            guard let first = segment.first,
+                  let last = segment.last(where: { $0.point != first.point }) else { continue }
+            result.move(to: first.point)
+            result.addLine(to: last.point)
+        }
+        return result
+    }
+
     private func polylinePath(for points: [CGPoint]) -> Path {
         var path = Path()
         guard let first = points.first else {
@@ -8358,12 +8558,12 @@ public struct Viewport: View {
         isHighlighted: Bool,
         in context: inout GraphicsContext
     ) {
-        let fullLength = edit.modelLength(forViewportLength: viewportLength, axis: axis, layout: layout)
-        let headLength = edit.modelLength(
+        guard let fullLength = edit.modelLength(forViewportLength: viewportLength, axis: axis, layout: layout),
+              let headLength = edit.modelLength(
             forViewportLength: isHighlighted ? 18.0 : 15.0,
             axis: axis,
             layout: layout
-        )
+        ) else { return }
         let shaftLength = max(fullLength - headLength * 0.7, 0.0)
         let shaftEnd = start.offset(axis: axis, amount: shaftLength)
         let end = start.offset(
@@ -8371,9 +8571,7 @@ public struct Viewport: View {
             amount: fullLength
         )
 
-        var shaft = Path()
-        shaft.move(to: edit.projectedPoint(start, layout: layout))
-        shaft.addLine(to: edit.projectedPoint(shaftEnd, layout: layout))
+        let shaft = projectedPath([edit.worldPoint(start), edit.worldPoint(shaftEnd)], layout: layout)
         context.stroke(
             shaft,
             with: .color(color.opacity(isHighlighted ? 1.0 : 0.95)),
@@ -8413,25 +8611,23 @@ public struct Viewport: View {
                 .offset(axis: perpendicularAxes.first, amount: cos(angle) * baseRadius)
                 .offset(axis: perpendicularAxes.second, amount: sin(angle) * baseRadius)
         }
-        let projectedTip = edit.projectedPoint(tip, layout: layout)
-        let projectedBase = baseVertices.map { edit.projectedPoint($0, layout: layout) }
+        let worldTip = edit.worldPoint(tip)
+        let worldBase = baseVertices.map(edit.worldPoint)
         let sideOpacity = isHighlighted ? 0.88 : 0.76
         for index in 0 ..< segmentCount {
             let nextIndex = (index + 1) % segmentCount
             context.fill(
-                path(for: [projectedTip, projectedBase[index], projectedBase[nextIndex]]),
+                projectedPath([worldTip, worldBase[index], worldBase[nextIndex]], layout: layout, closed: true),
                 with: .color(color.opacity(sideOpacity - Double(index % 3) * 0.05))
             )
         }
         context.fill(
-            path(for: Array(projectedBase.reversed())),
+            projectedPath(Array(worldBase.reversed()), layout: layout, closed: true),
             with: .color(color.opacity(isHighlighted ? 0.62 : 0.48))
         )
         for index in 0 ..< segmentCount {
             let nextIndex = (index + 1) % segmentCount
-            var path = Path()
-            path.move(to: projectedBase[index])
-            path.addLine(to: projectedBase[nextIndex])
+            let path = projectedPath([worldBase[index], worldBase[nextIndex]], layout: layout)
             context.stroke(
                 path,
                 with: .color(Color.black.opacity(isHighlighted ? 0.48 : 0.34)),
@@ -8439,9 +8635,7 @@ public struct Viewport: View {
             )
         }
         for index in stride(from: 0, to: segmentCount, by: 6) {
-            var path = Path()
-            path.move(to: projectedTip)
-            path.addLine(to: projectedBase[index])
+            let path = projectedPath([worldTip, worldBase[index]], layout: layout)
             context.stroke(
                 path,
                 with: .color(Color.black.opacity(isHighlighted ? 0.36 : 0.24)),
@@ -8504,7 +8698,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = edit.projectedPoint(center, layout: layout)
+        guard let point = edit.projectedPoint(center, layout: layout) else { return }
         let diameter: CGFloat = isHighlighted ? 13.5 : 10.5
         let rect = CGRect(
             x: point.x - diameter / 2.0,
@@ -8554,13 +8748,14 @@ public struct Viewport: View {
         layout: ViewportLayout,
         segmentCount: Int = 36
     ) -> [CGPoint] {
-        (0 ..< segmentCount).map { index in
+        let points = (0 ..< segmentCount).map { index in
             let angle = CGFloat(index) / CGFloat(segmentCount) * 2.0 * CGFloat.pi
             let point = center
                 .offset(axis: firstAxis, amount: cos(angle) * radius)
                 .offset(axis: secondAxis, amount: sin(angle) * radius)
-            return edit.projectedPoint(point, layout: layout)
+            return edit.worldPoint(point)
         }
+        return layout.projectedPolygon(points).map(\.point)
     }
 
     private func drawTransformHandle(
@@ -8651,7 +8846,7 @@ public struct Viewport: View {
     }
 
     private func drawTransformCube(
-        _ cube: ViewportProjectedBox,
+        _ cube: ViewportProjectedBox?,
         style: TransformHandleStyle,
         isHighlighted: Bool,
         in context: inout GraphicsContext
@@ -8700,12 +8895,13 @@ public struct Viewport: View {
     }
 
     private func drawProjectedBox(
-        _ box: ViewportProjectedBox,
+        _ box: ViewportProjectedBox?,
         color: Color,
         isHighlighted: Bool,
         fillOpacity: Double,
         in context: inout GraphicsContext
     ) {
+        guard let box else { return }
         for (index, face) in box.faces.enumerated() {
             let opacity = fillOpacity * (0.72 + Double(index % 3) * 0.11)
             context.fill(
@@ -10391,7 +10587,8 @@ public struct Viewport: View {
             }
             for primitive in primitives where primitive.entityID == sketchTarget.entityID {
                 for handle in sketchCurveHandles(for: primitive) {
-                    let distance = point.distance(to: layout.project(handle.point))
+                    guard let projected = layout.projectedPoint(handle.point)?.point else { continue }
+                    let distance = point.distance(to: projected)
                     guard distance <= handleTolerance else {
                         continue
                     }
@@ -10477,8 +10674,8 @@ public struct Viewport: View {
     ) -> [ViewportSketchDimensionCandidate] {
         switch primitive {
         case .line(_, let start, let end):
-            let projectedStart = layout.project(start)
-            let projectedEnd = layout.project(end)
+            guard let projectedStart = layout.projectedPoint(start)?.point,
+                  let projectedEnd = layout.projectedPoint(end)?.point else { return [] }
             let length = hypot(Double(end.x - start.x), Double(end.y - start.y))
             let angle = atan2(Double(end.y - start.y), Double(end.x - start.x))
             let label = "L \(formattedViewportLength(length)) / A \(formattedViewportAngle(angle))"
@@ -10521,7 +10718,9 @@ public struct Viewport: View {
                 ),
             ]
         case .circle(_, let center, let radiusMeters):
-            let radiusPoint = layout.project(circleRadiusHandlePoint(center: center, radiusMeters: radiusMeters))
+            guard let radiusPoint = layout.projectedPoint(
+                circleRadiusHandlePoint(center: center, radiusMeters: radiusMeters)
+            )?.point else { return [] }
             let label = "R \(formattedViewportLength(radiusMeters))"
             let labelPoint = circleDimensionLabelPoint(radiusPoint: radiusPoint)
             return [
@@ -10545,8 +10744,8 @@ public struct Viewport: View {
                 startAngleRadians: startAngle,
                 endAngleRadians: endAngle
             )
-            let projectedCenter = layout.project(center)
-            let projectedRadius = layout.project(radiusPoint)
+            guard let projectedCenter = layout.projectedPoint(center)?.point,
+                  let projectedRadius = layout.projectedPoint(radiusPoint)?.point else { return [] }
             let label = "R \(formattedViewportLength(radiusMeters)) / A \(formattedViewportAngle(span))"
             let labelPoint = arcDimensionLabelPoint(center: projectedCenter, radiusPoint: projectedRadius)
             let labelRect = dimensionLabelRect(for: label, at: labelPoint)
@@ -10676,7 +10875,7 @@ public struct Viewport: View {
             }
             for primitive in primitives where primitive.entityID == sketchTarget.entityID {
                 for handle in sketchPointHandles(for: primitive).reversed() {
-                    let projectedPoint = layout.project(handle.point)
+                    guard let projectedPoint = layout.projectedPoint(handle.point)?.point else { continue }
                     guard point.distance(to: projectedPoint) <= handleTolerance else {
                         continue
                     }
@@ -10771,7 +10970,7 @@ public struct Viewport: View {
                     continue
                 }
                 for index in controlPoints.indices.reversed() {
-                    let projectedPoint = layout.project(controlPoints[index])
+                    guard let projectedPoint = layout.projectedPoint(controlPoints[index])?.point else { continue }
                     guard point.distance(to: projectedPoint) <= handleTolerance else {
                         continue
                     }
@@ -10831,7 +11030,9 @@ public struct Viewport: View {
             }
         }
         for target in polySplineSurfaceVertexHandleTargets(in: scene) {
-            let projectedPoint = target.geometry.projectedPoint(layout: layout)
+            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
+                continue
+            }
             guard point.distance(to: projectedPoint) <= handleTolerance else {
                 continue
             }
@@ -10866,7 +11067,9 @@ public struct Viewport: View {
             }
         }
         for target in surfaceControlPointHandleTargets(in: scene) {
-            let projectedPoint = target.geometry.projectedPoint(layout: layout)
+            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
+                continue
+            }
             guard point.distance(to: projectedPoint) <= handleTolerance else {
                 continue
             }
@@ -10887,7 +11090,9 @@ public struct Viewport: View {
         let handleTolerance: CGFloat = 12.0
         var nearest: (target: ViewportSurfaceTrimEndpointHandleTarget, distance: CGFloat)?
         for target in surfaceTrimEndpointHandleTargets(in: scene) {
-            let projectedPoint = target.geometry.projectedPoint(layout: layout)
+            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= handleTolerance else {
                 continue
@@ -10929,7 +11134,9 @@ public struct Viewport: View {
         let handleTolerance: CGFloat = 12.0
         var nearest: (target: ViewportSurfaceTrimControlPointHandleTarget, distance: CGFloat)?
         for target in surfaceTrimControlPointHandleTargets(in: scene) {
-            let projectedPoint = target.geometry.projectedPoint(layout: layout)
+            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= handleTolerance else {
                 continue
@@ -11034,8 +11241,8 @@ public struct Viewport: View {
         candidate: ViewportPolySplineSurfaceVertexSlideAffordanceCandidate,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let center = layout.project(candidate.geometry.baseModelPoint)
-        let endpoint = candidate.geometry.projectedTip(layout: layout)
+        guard let center = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return nil }
+        guard let endpoint = candidate.geometry.projectedTip(layout: layout) else { return nil }
         let handleGap: CGFloat = 16.0
         let handleTolerance: CGFloat = 8.0
         let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
@@ -11063,8 +11270,8 @@ public struct Viewport: View {
         candidate: ViewportSurfaceControlPointSlideAffordanceCandidate,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let center = layout.project(candidate.geometry.baseModelPoint)
-        let endpoint = candidate.geometry.projectedTip(layout: layout)
+        guard let center = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return nil }
+        guard let endpoint = candidate.geometry.projectedTip(layout: layout) else { return nil }
         let handleGap: CGFloat = 16.0
         let handleTolerance: CGFloat = 8.0
         let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
@@ -11092,8 +11299,8 @@ public struct Viewport: View {
         candidate: ViewportSurfaceFrameAffordanceCandidate,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let center = layout.project(candidate.geometry.baseModelPoint)
-        let endpoint = candidate.geometry.projectedTip(layout: layout)
+        guard let center = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { return nil }
+        guard let endpoint = candidate.geometry.projectedTip(layout: layout) else { return nil }
         let handleGap: CGFloat = 10.0
         let handleTolerance: CGFloat = 8.0
         let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
@@ -11254,7 +11461,9 @@ public struct Viewport: View {
         target: ViewportPolySplineSurfaceVertexHandleTarget,
         layout: ViewportLayout
     ) -> ViewportCoordinateAxis? {
-        let center = target.geometry.projectedPoint(layout: layout)
+        guard let center = target.geometry.projectedPoint(layout: layout) else {
+            return nil
+        }
         var nearest: (axis: ViewportCoordinateAxis, distance: CGFloat)?
         for axis in ViewportCoordinateAxis.allCases {
             guard let endpoint = target.geometry.axisEndpoint(
@@ -11281,7 +11490,9 @@ public struct Viewport: View {
         target: ViewportSurfaceControlPointHandleTarget,
         layout: ViewportLayout
     ) -> ViewportCoordinateAxis? {
-        let center = target.geometry.projectedPoint(layout: layout)
+        guard let center = target.geometry.projectedPoint(layout: layout) else {
+            return nil
+        }
         var nearest: (axis: ViewportCoordinateAxis, distance: CGFloat)?
         for axis in ViewportCoordinateAxis.allCases {
             guard let endpoint = target.geometry.axisEndpoint(
@@ -11309,7 +11520,9 @@ public struct Viewport: View {
         topologyVertices: [ViewportBodyTopology.Vertex],
         layout: ViewportLayout
     ) -> ViewportPolySplineSurfaceVertexLocalAxisHit? {
-        let center = target.geometry.projectedPoint(layout: layout)
+        guard let center = target.geometry.projectedPoint(layout: layout) else {
+            return nil
+        }
         var nearest: (hit: ViewportPolySplineSurfaceVertexLocalAxisHit, distance: CGFloat)?
         for localAxis in ViewportPolySplineSurfaceVertexLocalAxis.allCases {
             guard let direction = polySplineSurfaceVertexLocalDirection(
@@ -11501,8 +11714,8 @@ public struct Viewport: View {
             layout: layout
         )
         for candidate in candidates.reversed() {
-            let start = layout.project(candidate.geometry.baseModelPoint)
-            let end = candidate.geometry.projectedTip(layout: layout)
+            guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { continue }
+            guard let end = candidate.geometry.projectedTip(layout: layout) else { continue }
             let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
             let tipHit = point.distance(to: end) <= 14.0
             if lineHit || tipHit {
@@ -11553,8 +11766,8 @@ public struct Viewport: View {
             layout: layout
         )
         for candidate in candidates.reversed() {
-            let start = layout.project(candidate.geometry.baseModelPoint)
-            let end = candidate.geometry.projectedTip(layout: layout)
+            guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { continue }
+            guard let end = candidate.geometry.projectedTip(layout: layout) else { continue }
             let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
             let tipHit = point.distance(to: end) <= 14.0
             if lineHit || tipHit {
@@ -11646,8 +11859,9 @@ public struct Viewport: View {
         )
         for candidate in candidates.reversed() {
             let arcPoints = candidate.geometry.projectedArcPoints()
+            guard let tip = candidate.geometry.projectedTip() else { continue }
             let arcHit = point.distanceToPolyline(arcPoints) <= 10.0
-            let tipHit = point.distance(to: candidate.geometry.projectedTip()) <= 14.0
+            let tipHit = point.distance(to: tip) <= 14.0
             if arcHit || tipHit {
                 return candidate.target
             }
@@ -11667,7 +11881,8 @@ public struct Viewport: View {
             layout: sceneContext.layout
         )
         for candidate in candidates.reversed() {
-            let handleHit = point.distance(to: candidate.geometry.handlePoint) <= 14.0
+            guard let handlePoint = candidate.geometry.handlePoint else { continue }
+            let handleHit = point.distance(to: handlePoint) <= 14.0
             let guideHit = point.distanceToPolyline(candidate.geometry.guidePoints()) <= 10.0
             if handleHit || guideHit {
                 return candidate.target
@@ -11766,8 +11981,8 @@ public struct Viewport: View {
             layout: layout
         )
         for candidate in candidates.reversed() {
-            let start = layout.project(candidate.geometry.baseModelPoint)
-            let end = candidate.geometry.projectedTip(layout: layout)
+            guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { continue }
+            guard let end = candidate.geometry.projectedTip(layout: layout) else { continue }
             let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
             let tipHit = point.distance(to: end) <= 14.0
             if lineHit || tipHit {
@@ -11792,8 +12007,8 @@ public struct Viewport: View {
             layout: layout
         )
         for candidate in candidates.reversed() {
-            let start = layout.project(candidate.geometry.baseModelPoint)
-            let end = candidate.geometry.projectedTip(layout: layout)
+            guard let start = layout.projectedPoint(candidate.geometry.baseModelPoint)?.point else { continue }
+            guard let end = candidate.geometry.projectedTip(layout: layout) else { continue }
             let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
             let tipHit = point.distance(to: end) <= 14.0
             if lineHit || tipHit {
@@ -11871,10 +12086,10 @@ public struct Viewport: View {
         edit: ViewportObjectEditState,
         layout: ViewportLayout
     ) -> ViewportAffordanceTarget? {
-        let bodyBounds = edit.projectedBodyProjection(layout: layout).hitBounds
+        guard let bodyBounds = edit.projectedBodyProjection(layout: layout)?.hitBounds else { return nil }
         let modelCenter = edit.centerPoint
-        let center = edit.projectedPoint(modelCenter, layout: layout)
-        let affordanceBasis = edit.projectedAxisBasis(layout: layout)
+        guard let center = edit.projectedPoint(modelCenter, layout: layout),
+              let affordanceBasis = edit.projectedAxisBasis(layout: layout) else { return nil }
         let radius = max(28.0, min(72.0, min(bodyBounds.width, bodyBounds.height) * 0.38))
         let axisLength = bodyAffordanceAxisLength(for: radius)
         let endScaleLength = bodyAffordanceEndScaleLength(
@@ -11884,18 +12099,16 @@ public struct Viewport: View {
         let handleTolerance: CGFloat = 10.0
 
         for axis in ViewportCoordinateAxis.allCases {
+            guard let endLength = edit.modelLength(forViewportLength: endScaleLength, axis: axis, layout: layout),
+                  let centerLength = edit.modelLength(forViewportLength: radius, axis: axis, layout: layout) else { continue }
             let endpoint = edit.projectedPoint(
                 modelCenter.offset(
                     axis: axis,
-                    amount: edit.modelLength(
-                        forViewportLength: endScaleLength,
-                        axis: axis,
-                        layout: layout
-                    )
+                    amount: endLength
                 ),
                 layout: layout
             )
-            if point.distance(to: endpoint) <= handleTolerance {
+            if let endpoint, point.distance(to: endpoint) <= handleTolerance {
                 return ViewportAffordanceTarget(
                     featureID: featureID,
                     selectionTarget: selectionTarget,
@@ -11906,15 +12119,11 @@ public struct Viewport: View {
             let centerScalePoint = edit.projectedPoint(
                 modelCenter.offset(
                     axis: axis,
-                    amount: edit.modelLength(
-                        forViewportLength: radius,
-                        axis: axis,
-                        layout: layout
-                    )
+                    amount: centerLength
                 ),
                 layout: layout
             )
-            if point.distance(to: centerScalePoint) <= handleTolerance {
+            if let centerScalePoint, point.distance(to: centerScalePoint) <= handleTolerance {
                 return ViewportAffordanceTarget(
                     featureID: featureID,
                     selectionTarget: selectionTarget,
@@ -11957,18 +12166,15 @@ public struct Viewport: View {
         }
 
         for axis in ViewportCoordinateAxis.allCases {
+            guard let axisModelLength = edit.modelLength(forViewportLength: axisLength, axis: axis, layout: layout) else { continue }
             let endpoint = edit.projectedPoint(
                 modelCenter.offset(
                     axis: axis,
-                    amount: edit.modelLength(
-                        forViewportLength: axisLength,
-                        axis: axis,
-                        layout: layout
-                    )
+                    amount: axisModelLength
                 ),
                 layout: layout
             )
-            if point.distanceToSegment(start: center, end: endpoint) <= 7.0 {
+            if let endpoint, point.distanceToSegment(start: center, end: endpoint) <= 7.0 {
                 return ViewportAffordanceTarget(
                     featureID: featureID,
                     selectionTarget: selectionTarget,
@@ -12195,12 +12401,12 @@ public struct Viewport: View {
         }
 
         if let baseGroupEdit = dragState.baseGroupEdit {
-            let nextGroupEdit = baseGroupEdit.applying(
+            guard let nextGroupEdit = baseGroupEdit.applying(
                 action: target.action,
                 start: dragState.startPoint,
                 current: current,
                 layout: layout
-            )
+            ) else { return }
             for (featureID, baseEdit) in dragState.baseEdits {
                 editedBodies[featureID] = baseEdit.transformedFromGroup(
                     baseGroup: baseGroupEdit,
@@ -12208,12 +12414,13 @@ public struct Viewport: View {
                 )
             }
         } else if let baseEdit = dragState.baseEdits[target.featureID] {
-            editedBodies[target.featureID] = baseEdit.applying(
+            guard let next = baseEdit.applying(
                 action: target.action,
                 start: dragState.startPoint,
                 current: current,
                 layout: layout
-            )
+            ) else { return }
+            editedBodies[target.featureID] = next
         }
     }
 
@@ -12228,8 +12435,8 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let startPoint = layout.unproject(start)
-        let currentPoint = layout.unproject(current)
+        guard let startPoint = layout.canvasCoordinates(for: start),
+              let currentPoint = layout.canvasCoordinates(for: current) else { return }
         activeSplineControlPointDrag = ViewportSplineControlPointDragState(
             target: target,
             startPoint: start,
@@ -12251,7 +12458,13 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+        guard let delta = target.geometry.localPlanarDelta(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         let nearPoint = Point2D(
             x: target.point.x + delta.x,
             y: target.point.y + delta.z
@@ -12268,23 +12481,28 @@ public struct Viewport: View {
             activeBridgeCurveEndpointDrag = nil
             return
         }
-        let projectedPoint = projectedBridgeCurveEndpointPoint(
+        guard let projectedPoint = projectedBridgeCurveEndpointPoint(
             projection.point,
             modelTransform: target.modelTransform,
             layout: layout
-        )
+        ) else {
+            return
+        }
+        guard let projectedTangentTip = ViewportBridgeCurveEndpointAffordanceService.projectedTangentTip(
+            point: projection.point,
+            outgoingTangent: projection.outgoingTangent,
+            modelTransform: target.modelTransform,
+            layout: layout
+        ) else {
+            return
+        }
         activeBridgeCurveEndpointDrag = ViewportBridgeCurveEndpointDragState(
             target: target,
             startPoint: start,
             endpoint: projection.endpoint,
             parameter: projection.parameter,
             projectedPoint: projectedPoint,
-            projectedTangentTip: ViewportBridgeCurveEndpointAffordanceService.projectedTangentTip(
-                point: projection.point,
-                outgoingTangent: projection.outgoingTangent,
-                modelTransform: target.modelTransform,
-                layout: layout
-            )
+            projectedTangentTip: projectedTangentTip
         )
     }
 
@@ -12292,12 +12510,12 @@ public struct Viewport: View {
         _ point: Point2D,
         modelTransform: Transform3D,
         layout: ViewportLayout
-    ) -> CGPoint {
-        layout.project(modelTransform.viewportTransformedPoint(Point3D(
+    ) -> CGPoint? {
+        layout.projectedPoint(modelTransform.viewportTransformedPoint(Point3D(
             x: point.x,
             y: 0.0,
             z: point.y
-        )))
+        )))?.point
     }
 
     private func updateSplineControlPointSlideDrag(
@@ -12311,14 +12529,17 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = target.geometry.slideDistance(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSplineControlPointSlideDrag = ViewportSplineControlPointSlideDragState(
             target: target,
             startPoint: start,
-            distanceMeters: target.geometry.slideDistance(
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12333,14 +12554,17 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = target.geometry.slideDistance(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activePolySplineSurfaceVertexSlideDrag = ViewportPolySplineSurfaceVertexSlideDragState(
             target: target,
             startPoint: start,
-            distanceMeters: target.geometry.slideDistance(
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12355,14 +12579,17 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = target.geometry.slideDistance(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSurfaceControlPointSlideDrag = ViewportSurfaceControlPointSlideDragState(
             target: target,
             startPoint: start,
-            distanceMeters: target.geometry.slideDistance(
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12377,14 +12604,17 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = target.geometry.dragDistance(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSurfaceFrameDrag = ViewportSurfaceFrameDragState(
             target: target,
             startPoint: start,
-            distanceMeters: target.geometry.dragDistance(
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12439,21 +12669,34 @@ public struct Viewport: View {
         let delta: Point3D
         switch target.dragMode {
         case .planar:
-            delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+            guard let value = target.geometry.localPlanarDelta(
+                start: start,
+                current: current,
+                layout: layout
+            ) else {
+                return
+            }
+            delta = value
         case .axis(let axis):
-            delta = target.geometry.localDelta(
+            guard let value = target.geometry.localDelta(
                 axis: axis,
                 start: start,
                 current: current,
                 layout: layout
-            )
+            ) else {
+                return
+            }
+            delta = value
         case .localAxis(_, let direction):
-            delta = target.geometry.localDelta(
+            guard let value = target.geometry.localDelta(
                 direction: direction,
                 start: start,
                 current: current,
                 layout: layout
-            )
+            ) else {
+                return
+            }
+            delta = value
         }
         activePolySplineSurfaceVertexDrag = ViewportPolySplineSurfaceVertexDragState(
             target: target,
@@ -12476,21 +12719,34 @@ public struct Viewport: View {
         let delta: Point3D
         switch target.dragMode {
         case .planar:
-            delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+            guard let value = target.geometry.localPlanarDelta(
+                start: start,
+                current: current,
+                layout: layout
+            ) else {
+                return
+            }
+            delta = value
         case .axis(let axis):
-            delta = target.geometry.localDelta(
+            guard let value = target.geometry.localDelta(
                 axis: axis,
                 start: start,
                 current: current,
                 layout: layout
-            )
+            ) else {
+                return
+            }
+            delta = value
         case .localAxis(_, let direction):
-            delta = target.geometry.localDelta(
+            guard let value = target.geometry.localDelta(
                 direction: direction,
                 start: start,
                 current: current,
                 layout: layout
-            )
+            ) else {
+                return
+            }
+            delta = value
         }
         activeSurfaceControlPointDrag = ViewportSurfaceControlPointDragState(
             target: target,
@@ -12510,7 +12766,13 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+        guard let delta = target.geometry.localPlanarDelta(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSurfaceTrimEndpointDrag = ViewportSurfaceTrimEndpointDragState(
             target: target,
             startPoint: start,
@@ -12529,7 +12791,13 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+        guard let delta = target.geometry.localPlanarDelta(
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSurfaceTrimControlPointDrag = ViewportSurfaceTrimControlPointDragState(
             target: target,
             startPoint: start,
@@ -12548,15 +12816,18 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = regionOffsetDistance(
+            target: target,
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeRegionOffsetDrag = ViewportRegionOffsetDragState(
             target: target,
             startPoint: start,
-            distanceMeters: regionOffsetDistance(
-                target: target,
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12565,7 +12836,7 @@ public struct Viewport: View {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
+    ) -> Double? {
         target.geometry.offsetDistance(
             start: start,
             current: current,
@@ -12612,15 +12883,18 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let widthMeters = slotWidth(
+            target: target,
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSlotWidthDrag = ViewportSlotWidthDragState(
             target: target,
             startPoint: start,
-            widthMeters: slotWidth(
-                target: target,
-                start: start,
-                current: current,
-                layout: layout
-            )
+            widthMeters: widthMeters
         )
     }
 
@@ -12629,7 +12903,7 @@ public struct Viewport: View {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
+    ) -> Double? {
         target.geometry.slotWidth(
             start: start,
             current: current,
@@ -12687,13 +12961,16 @@ public struct Viewport: View {
         start: CGPoint,
         current: CGPoint
     ) {
+        guard let angleRadians = target.geometry.angleRadians(
+            start: start,
+            current: current
+        ) else {
+            return
+        }
         activePatternArrayRadialAngleDrag = ViewportPatternArrayRadialAngleDragState(
             target: target,
             startPoint: start,
-            angleRadians: target.geometry.angleRadians(
-                start: start,
-                current: current
-            )
+            angleRadians: angleRadians
         )
     }
 
@@ -12702,13 +12979,16 @@ public struct Viewport: View {
         start: CGPoint,
         current: CGPoint
     ) {
+        guard let copyCount = target.geometry.copyCount(
+            start: start,
+            current: current
+        ) else {
+            return
+        }
         activePatternArrayCopyCountDrag = ViewportPatternArrayCopyCountDragState(
             target: target,
             startPoint: start,
-            copyCount: target.geometry.copyCount(
-                start: start,
-                current: current
-            )
+            copyCount: copyCount
         )
     }
 
@@ -12735,8 +13015,8 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let startPoint = layout.unproject(start)
-        let currentPoint = layout.unproject(current)
+        guard let startPoint = layout.canvasCoordinates(for: start),
+              let currentPoint = layout.canvasCoordinates(for: current) else { return }
         activePatternArrayCurvePathPointDrag = ViewportPatternArrayCurvePathPointDragState(
             target: target,
             startPoint: start,
@@ -12759,15 +13039,18 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
+        guard let distanceMeters = sketchVertexOffsetDistance(
+            target: target,
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            return
+        }
         activeSketchVertexOffsetDrag = ViewportSketchVertexOffsetDragState(
             target: target,
             startPoint: start,
-            distanceMeters: sketchVertexOffsetDistance(
-                target: target,
-                start: start,
-                current: current,
-                layout: layout
-            )
+            distanceMeters: distanceMeters
         )
     }
 
@@ -12776,7 +13059,7 @@ public struct Viewport: View {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
+    ) -> Double? {
         target.geometry.offsetDistance(
             start: start,
             current: current,
@@ -12795,8 +13078,8 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let startPoint = layout.unproject(start)
-        let currentPoint = layout.unproject(current)
+        guard let startPoint = layout.canvasCoordinates(for: start),
+              let currentPoint = layout.canvasCoordinates(for: current) else { return }
         activeSketchPointHandleDrag = ViewportSketchPointHandleDragState(
             target: target,
             startPoint: start,
@@ -12818,7 +13101,7 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let currentPoint = layout.unproject(current)
+        guard let currentPoint = layout.canvasCoordinates(for: current) else { return }
         let values = sketchCurveHandleValues(
             target: target,
             currentViewportPoint: currentPoint
@@ -12843,8 +13126,8 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let startPoint = layout.unproject(start)
-        let currentPoint = layout.unproject(current)
+        guard let startPoint = layout.canvasCoordinates(for: start),
+              let currentPoint = layout.canvasCoordinates(for: current) else { return }
         let value = sketchDimensionValue(
             target: target,
             startViewportPoint: startPoint,
@@ -13001,17 +13284,26 @@ public struct Viewport: View {
                 let hit = MeshSourcePresentationScreenHitTester().meshElement(
                     at: point, domain: meshSelectionDomain, in: plan,
                     scene: presentationScene, layout: sceneContext.layout,
-                    sectionGeometryResolver: presentationSectionGeometryResolver()
+                    sectionGeometryResolver: presentationSectionGeometryResolver(),
+                    cullBackFaces: isBackfaceCullingActive
                 )
                 onMeshElementPick(hit, selectionIntent)
-                return
+                if hit != nil { return }
             }
             presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
                 at: point,
                 in: plan,
                 layout: sceneContext.layout,
-                sectionGeometryResolver: presentationSectionGeometryResolver()
+                sectionGeometryResolver: presentationSectionGeometryResolver(),
+                cullBackFaces: isBackfaceCullingActive
             )
+            if onMeshElementPick != nil,
+               let occurrenceID = presentationOccurrenceID,
+               let item = presentationScene.items.first(where: { $0.occurrenceID == occurrenceID }),
+               case .authoredMesh = item.sourceReference {
+                // Missing an element in this domain is not a CAD-object selection.
+                return
+            }
             if let occurrenceID = presentationOccurrenceID,
                let onPresentationOccurrencePick {
                 onPresentationOccurrencePick(occurrenceID, selectionIntent)
@@ -14184,11 +14476,11 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let delta = baseEdit.profileCornerDragDelta(
+        guard let delta = baseEdit.profileCornerDragDelta(
             start: activeAffordanceDrag.startPoint,
             current: end,
             layout: layout
-        )
+        ) else { return nil }
         guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 else {
             return nil
         }
@@ -14508,9 +14800,12 @@ public struct Viewport: View {
             startDate: now,
             duration: Self.projectionAnimationDuration
         )
-        selectedAxis = nextSelectedAxis
-        orbitBasis = storesOrbitBasis ? targetBasis : nil
-        projectionTransition = transition
+        activeControlSession.setProjectionTransition(
+            transition,
+            basis: targetBasis,
+            orbitBasis: storesOrbitBasis ? targetBasis : nil,
+            selectedAxis: nextSelectedAxis
+        )
         activeCanvasDrag = nil
         clearCanvasHover()
         publishProjectionBasis(targetBasis)
@@ -14521,7 +14816,14 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) {
-        camera = .identity
+        do {
+            try activeControlSession.perform(.resetCamera)
+        } catch {
+            Logger(
+                subsystem: "RupaRendering",
+                category: "ViewportControlSession"
+            ).error("Viewport reset failed: \(error.localizedDescription, privacy: .public)")
+        }
         activeCanvasDrag = nil
         clearCanvasHover()
         publishCameraFrame(size: size, basis: basis)
@@ -14550,13 +14852,19 @@ public struct Viewport: View {
         by delta: CGSize,
         size: CGSize
     ) {
-        camera = ViewportCamera(
-            zoom: camera.zoom,
-            pan: CGSize(
-                width: camera.pan.width + delta.width,
-                height: camera.pan.height + delta.height
+        do {
+            try activeControlSession.perform(
+                .pan(
+                    deltaXPoints: Double(delta.width),
+                    deltaYPoints: Double(delta.height)
+                )
             )
-        )
+        } catch {
+            Logger(
+                subsystem: "RupaRendering",
+                category: "ViewportControlSession"
+            ).error("Viewport pan failed: \(error.localizedDescription, privacy: .public)")
+        }
         publishCameraFrame(size: size, basis: currentProjectionBasis)
     }
 
@@ -14564,10 +14872,24 @@ public struct Viewport: View {
         by delta: CGSize,
         size: CGSize
     ) {
-        let nextBasis = currentProjectionBasis.orbited(by: delta)
-        selectedAxis = nil
-        orbitBasis = nextBasis
-        projectionTransition = nil
+        let nextBasis: ViewportProjectionBasis
+        do {
+            let yawDeltaDegrees = -Double(delta.width) * 0.008 * 180.0 / .pi
+            let elevationDeltaDegrees = Double(delta.height) * 0.006 * 180.0 / .pi
+            try activeControlSession.perform(
+                .orbit(
+                    yawDeltaDegrees: yawDeltaDegrees,
+                    elevationDeltaDegrees: elevationDeltaDegrees
+                )
+            )
+            nextBasis = activeControlSession.basis
+        } catch {
+            Logger(
+                subsystem: "RupaRendering",
+                category: "ViewportControlSession"
+            ).error("Viewport orbit failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         activeCanvasDrag = nil
         clearCanvasHover()
         publishProjectionBasis(nextBasis)
@@ -14580,30 +14902,13 @@ public struct Viewport: View {
         size: CGSize
     ) {
         let basis = currentProjectionBasis
-        let oldLayout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: basis
-        )
-        let maximumZoom = oldLayout.maximumZoom
-        let anchoredModelPoint = oldLayout.unproject(anchor)
-        let newZoom = min(
-            max(camera.zoom * factor, ViewportCamera.minimumZoom),
-            maximumZoom
-        )
-        var nextCamera = ViewportCamera(
-            zoom: newZoom,
-            pan: camera.pan
-        )
-        let nextLayout = makeLayout(
-            size: size,
-            camera: nextCamera,
-            basis: basis
-        )
-        let projectedAnchor = nextLayout.project(anchoredModelPoint)
-        nextCamera.pan.width += anchor.x - projectedAnchor.x
-        nextCamera.pan.height += anchor.y - projectedAnchor.y
-        camera = nextCamera.clamped(maximumZoom: maximumZoom)
+        do {
+            try activeControlSession.perform(.zoom(factor: Double(factor), anchor: anchor))
+        } catch {
+            Logger(subsystem: "RupaRendering", category: "ViewportControlSession")
+                .error("Viewport zoom failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         publishCameraFrame(size: size, basis: basis)
     }
 }

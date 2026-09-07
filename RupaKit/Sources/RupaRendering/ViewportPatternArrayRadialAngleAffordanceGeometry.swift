@@ -50,22 +50,22 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
         self.layout = layout
     }
 
-    var centerProjectedPoint: CGPoint {
-        layout.project(centerModelPoint)
+    var centerProjectedPoint: CGPoint? {
+        layout.projectedPoint(centerModelPoint)?.point
     }
 
-    var startProjectedPoint: CGPoint {
+    var startProjectedPoint: CGPoint? {
         projectedPoint(angleRadians: 0.0)
     }
 
-    func projectedTip(angleRadians: Double? = nil) -> CGPoint {
+    func projectedTip(angleRadians: Double? = nil) -> CGPoint? {
         projectedPoint(angleRadians: angleRadians ?? baseAngleRadians)
     }
 
     func projectedArcPoints(angleRadians: Double? = nil) -> [CGPoint] {
         let angle = angleRadians ?? baseAngleRadians
         let segments = max(Int(abs(angle) / (.pi / 18.0)), 12)
-        return (0 ... segments).map { index in
+        return (0 ... segments).compactMap { index in
             let ratio = Double(index) / Double(segments)
             return projectedPoint(angleRadians: angle * ratio)
         }
@@ -74,7 +74,7 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
     func angleRadians(
         start: CGPoint,
         current: CGPoint
-    ) -> Double {
+    ) -> Double? {
         if let startAngle = projectedAngleParameter(for: start),
            let currentAngle = projectedAngleParameter(for: current) {
             return Self.normalizedSignedAngleRadians(
@@ -91,8 +91,10 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
     private func screenPolarAngleRadians(
         start: CGPoint,
         current: CGPoint
-    ) -> Double {
-        let center = centerProjectedPoint
+    ) -> Double? {
+        guard let center = centerProjectedPoint else {
+            return nil
+        }
         let startVector = CGVector(dx: start.x - center.x, dy: start.y - center.y)
         let currentVector = CGVector(dx: current.x - center.x, dy: current.y - center.y)
         guard startVector.length > 1.0e-9,
@@ -109,13 +111,17 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
     }
 
     private func projectedAngleParameter(for point: CGPoint) -> Double? {
-        let center = centerProjectedPoint
+        guard let center = centerProjectedPoint else {
+            return nil
+        }
         let delta = CGVector(dx: point.x - center.x, dy: point.y - center.y)
         guard delta.length > 1.0e-9 else {
             return nil
         }
-        let radialProjection = projectedVector(radialVector)
-        let tangentProjection = projectedVector(axis.cross(radialVector))
+        guard let radialProjection = projectedVector(radialVector),
+              let tangentProjection = projectedVector(axis.cross(radialVector)) else {
+            return nil
+        }
         let determinant = radialProjection.dx * tangentProjection.dy - radialProjection.dy * tangentProjection.dx
         let determinantScale = max(radialProjection.length * tangentProjection.length, 1.0)
         guard abs(determinant) > determinantScale * 1.0e-9 else {
@@ -131,9 +137,13 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
         return atan2(sine, cosine)
     }
 
-    private func projectedVector(_ vector: Vector3D) -> CGVector {
-        let center = centerProjectedPoint
-        let end = layout.project(Self.point(centerModelPoint, offsetBy: vector))
+    private func projectedVector(_ vector: Vector3D) -> CGVector? {
+        guard let center = centerProjectedPoint,
+              let end = layout.projectedPoint(
+                  Self.point(centerModelPoint, offsetBy: vector)
+              )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - center.x, dy: end.y - center.y)
     }
 
@@ -151,8 +161,10 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
         return delta
     }
 
-    private func projectedPoint(angleRadians: Double) -> CGPoint {
-        layout.project(Self.point(centerModelPoint, offsetBy: rotated(radialVector, angleRadians: angleRadians)))
+    private func projectedPoint(angleRadians: Double) -> CGPoint? {
+        layout.projectedPoint(
+            Self.point(centerModelPoint, offsetBy: rotated(radialVector, angleRadians: angleRadians))
+        )?.point
     }
 
     private func rotated(

@@ -42,12 +42,18 @@ struct ViewportPlacementFootprint: Equatable, Sendable {
         }
     }
 
-    func projected(in layout: ViewportLayout) -> ViewportProjectedRect {
-        ViewportProjectedRect(
-            bottomLeft: layout.project(bottomLeft),
-            bottomRight: layout.project(bottomRight),
-            topRight: layout.project(topRight),
-            topLeft: layout.project(topLeft)
+    func projected(in layout: ViewportLayout) -> ViewportProjectedRect? {
+        guard let bottomLeft = layout.projectedPoint(bottomLeft)?.point,
+              let bottomRight = layout.projectedPoint(bottomRight)?.point,
+              let topRight = layout.projectedPoint(topRight)?.point,
+              let topLeft = layout.projectedPoint(topLeft)?.point else {
+            return nil
+        }
+        return ViewportProjectedRect(
+            bottomLeft: bottomLeft,
+            bottomRight: bottomRight,
+            topRight: topRight,
+            topLeft: topLeft
         )
     }
 }

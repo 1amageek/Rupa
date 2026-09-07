@@ -9,6 +9,30 @@ import Testing
 @testable import RupaRendering
 
 @Test(.timeLimit(.minutes(1)))
+func measurementSurfaceHitRoundTripsWorldPointsInBothLenses() throws {
+    let source = try screenHitMeshSource()
+    let projectID = ProjectID(rawValue: "measurement.ray")
+    let scene = UniversalViewportScene(
+        snapshotID: EvaluationSnapshotID(projectID: projectID, purpose: .presentation,
+                                        sourceRevision: DocumentTransactionRevision()),
+        projectID: projectID,
+        items: [try screenHitItem(occurrenceID: "measurement.surface", source: source, transform: .identity)]
+    )
+    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
+        let layout = ViewportLayout(
+            modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            size: CGSize(width: 800, height: 600), camera: ViewportCamera(projection: projection),
+            basis: .isometric, verticalBounds: -1...1
+        )
+        let world = Point3D(x: 0.2, y: 0, z: 0.3)
+        let screen = try #require(layout.projectedPoint(world)).point
+        let hit = try #require(MeshSourcePresentationScreenHitTester().worldPoint(at: screen, in: plan, layout: layout))
+        #expect(hit.point.isApproximatelyEqual(to: world, tolerance: 1.0e-9))
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func meshSourcePresentationScreenHitTesterSelectsNearestOverlappingOccurrenceWithoutCopies() throws {
     let source = try screenHitMeshSource()
     let basis = ViewportProjectionBasis.isometric

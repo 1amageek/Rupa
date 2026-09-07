@@ -31,7 +31,8 @@ import Testing
         )
     )
 
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.002) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance - 0.002) < 1.0e-12)
 }
 
 @Test func viewportSplineControlPointSlideAffordanceKeepsSignedNegativeUDistance() throws {
@@ -61,7 +62,8 @@ import Testing
         )
     )
 
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) + 0.001) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance + 0.001) < 1.0e-12)
 }
 
 @Test func viewportSplineControlPointSlideAffordanceNormalIsPerpendicularToPositiveU() throws {

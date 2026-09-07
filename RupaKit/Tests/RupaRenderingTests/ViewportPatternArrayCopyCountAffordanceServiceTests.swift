@@ -53,10 +53,10 @@ import Testing
     #expect(candidates.map(\.target.slot) == [.rectangularFirst, .rectangularSecond])
     #expect(candidates.map(\.geometry.baseCopyCount) == [3, 2])
     let firstCandidate = try #require(candidates.first)
-    #expect(firstCandidate.geometry.copyCount(
-        start: firstCandidate.geometry.handlePoint,
-        current: firstCandidate.geometry.handlePoint(copyCount: 4)
-    ) == 4)
+    let firstStart = try #require(firstCandidate.geometry.handlePoint)
+    let firstCurrent = try #require(firstCandidate.geometry.handlePoint(copyCount: 4))
+    let firstCount = try #require(firstCandidate.geometry.copyCount(start: firstStart, current: firstCurrent))
+    #expect(firstCount == 4)
 }
 
 @MainActor
@@ -109,14 +109,14 @@ import Testing
     #expect(candidates.map(\.geometry.baseCopyCount) == [4, 2])
     let firstCandidate = try #require(candidates.first { $0.target.slot == .rectangularFirst })
     let secondCandidate = try #require(candidates.first { $0.target.slot == .rectangularSecond })
-    #expect(firstCandidate.geometry.copyCount(
-        start: firstCandidate.geometry.handlePoint,
-        current: firstCandidate.geometry.handlePoint(copyCount: 6)
-    ) == 6)
-    #expect(secondCandidate.geometry.copyCount(
-        start: secondCandidate.geometry.handlePoint,
-        current: secondCandidate.geometry.handlePoint(copyCount: 1)
-    ) == 1)
+    let firstStart = try #require(firstCandidate.geometry.handlePoint)
+    let firstCurrent = try #require(firstCandidate.geometry.handlePoint(copyCount: 6))
+    let firstCount = try #require(firstCandidate.geometry.copyCount(start: firstStart, current: firstCurrent))
+    let secondStart = try #require(secondCandidate.geometry.handlePoint)
+    let secondCurrent = try #require(secondCandidate.geometry.handlePoint(copyCount: 1))
+    let secondCount = try #require(secondCandidate.geometry.copyCount(start: secondStart, current: secondCurrent))
+    #expect(firstCount == 6)
+    #expect(secondCount == 1)
     #expect(firstCandidate.geometry.guidePoints().count == 4)
     #expect(secondCandidate.geometry.guidePoints().count == 4)
 }
@@ -174,10 +174,10 @@ import Testing
     let candidate = try #require(candidates.first)
     #expect(candidates.map(\.target.slot) == [.rectangularFirst])
     #expect(candidate.geometry.baseCopyCount == 3)
-    #expect(candidate.geometry.copyCount(
-        start: candidate.geometry.handlePoint,
-        current: candidate.geometry.handlePoint(copyCount: 5)
-    ) == 5)
+    let start = try #require(candidate.geometry.handlePoint)
+    let current = try #require(candidate.geometry.handlePoint(copyCount: 5))
+    let count = try #require(candidate.geometry.copyCount(start: start, current: current))
+    #expect(count == 5)
 }
 
 @MainActor
@@ -231,14 +231,14 @@ import Testing
     #expect(candidates.map(\.geometry.baseCopyCount) == [4, 2])
     let angularCandidate = try #require(candidates.first { $0.target.slot == .radialAngular })
     let radialAxisCandidate = try #require(candidates.first { $0.target.slot == .radialAxis })
-    #expect(angularCandidate.geometry.copyCount(
-        start: angularCandidate.geometry.handlePoint,
-        current: angularCandidate.geometry.handlePoint(copyCount: 5)
-    ) == 5)
-    #expect(radialAxisCandidate.geometry.copyCount(
-        start: radialAxisCandidate.geometry.handlePoint,
-        current: radialAxisCandidate.geometry.handlePoint(copyCount: 3)
-    ) == 3)
+    let angularStart = try #require(angularCandidate.geometry.handlePoint)
+    let angularCurrent = try #require(angularCandidate.geometry.handlePoint(copyCount: 5))
+    let angularCount = try #require(angularCandidate.geometry.copyCount(start: angularStart, current: angularCurrent))
+    let radialStart = try #require(radialAxisCandidate.geometry.handlePoint)
+    let radialCurrent = try #require(radialAxisCandidate.geometry.handlePoint(copyCount: 3))
+    let radialCount = try #require(radialAxisCandidate.geometry.copyCount(start: radialStart, current: radialCurrent))
+    #expect(angularCount == 5)
+    #expect(radialCount == 3)
 }
 
 @MainActor
@@ -295,10 +295,10 @@ import Testing
     let candidate = try #require(candidates.first)
     #expect(candidates.map(\.target.slot) == [.radialAngular])
     #expect(candidate.geometry.baseCopyCount == 4)
-    #expect(candidate.geometry.copyCount(
-        start: candidate.geometry.handlePoint,
-        current: candidate.geometry.handlePoint(copyCount: 6)
-    ) == 6)
+    let start = try #require(candidate.geometry.handlePoint)
+    let current = try #require(candidate.geometry.handlePoint(copyCount: 6))
+    let count = try #require(candidate.geometry.copyCount(start: start, current: current))
+    #expect(count == 6)
 }
 
 @MainActor
@@ -350,14 +350,13 @@ import Testing
     #expect(candidates.map(\.target.slot) == [.curve])
     #expect(candidate.target.sourceID == source.id)
     #expect(candidate.geometry.baseCopyCount == 3)
-    #expect(candidate.geometry.copyCount(
-        start: candidate.geometry.handlePoint,
-        current: candidate.geometry.handlePoint(copyCount: 5)
-    ) == 5)
-    #expect(candidate.geometry.copyCount(
-        start: candidate.geometry.handlePoint,
-        current: candidate.geometry.handlePoint(copyCount: 1)
-    ) == 1)
+    let start = try #require(candidate.geometry.handlePoint)
+    let countFivePoint = try #require(candidate.geometry.handlePoint(copyCount: 5))
+    let countFive = try #require(candidate.geometry.copyCount(start: start, current: countFivePoint))
+    let countOnePoint = try #require(candidate.geometry.handlePoint(copyCount: 1))
+    let countOne = try #require(candidate.geometry.copyCount(start: start, current: countOnePoint))
+    #expect(countFive == 5)
+    #expect(countOne == 1)
     #expect(candidate.geometry.guidePoints().count > 3)
 }
 
@@ -412,14 +411,14 @@ import Testing
     #expect(candidates.map(\.geometry.baseCopyCount) == [3, 2])
     let angularCandidate = try #require(candidates.first { $0.target.slot == .radialAngular })
     let radialAxisCandidate = try #require(candidates.first { $0.target.slot == .radialAxis })
-    #expect(angularCandidate.geometry.copyCount(
-        start: angularCandidate.geometry.handlePoint,
-        current: angularCandidate.geometry.handlePoint(copyCount: 5)
-    ) == 5)
-    #expect(radialAxisCandidate.geometry.copyCount(
-        start: radialAxisCandidate.geometry.handlePoint,
-        current: radialAxisCandidate.geometry.handlePoint(copyCount: 3)
-    ) == 3)
+    let angularStart = try #require(angularCandidate.geometry.handlePoint)
+    let angularCurrent = try #require(angularCandidate.geometry.handlePoint(copyCount: 5))
+    let angularCount = try #require(angularCandidate.geometry.copyCount(start: angularStart, current: angularCurrent))
+    let radialStart = try #require(radialAxisCandidate.geometry.handlePoint)
+    let radialCurrent = try #require(radialAxisCandidate.geometry.handlePoint(copyCount: 3))
+    let radialCount = try #require(radialAxisCandidate.geometry.copyCount(start: radialStart, current: radialCurrent))
+    #expect(angularCount == 5)
+    #expect(radialCount == 3)
     #expect(angularCandidate.geometry.guidePoints().count > 3)
     #expect(radialAxisCandidate.geometry.guidePoints().count == 4)
 }

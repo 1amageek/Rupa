@@ -30,9 +30,12 @@ struct ViewportPatternArrayCurveExtentAffordanceGeometry: Equatable {
             for index in 0 ... sampleCount {
                 let distance = path.totalLength * Double(index) / Double(sampleCount)
                 let point = try path.sample(at: distance).point
+                guard let projectedPoint = layout.projectedPoint(point)?.point else {
+                    return nil
+                }
                 samples.append(Sample(
                     distanceMeters: distance,
-                    projectedPoint: layout.project(point)
+                    projectedPoint: projectedPoint
                 ))
             }
         } catch {

@@ -157,7 +157,7 @@ private func encodeSurfaceLifecycleFrame(
     pass.depthAttachment.texture = depth
     pass.depthAttachment.loadAction = .clear
     pass.depthAttachment.storeAction = .dontCare
-    pass.depthAttachment.clearDepth = 1
+    pass.depthAttachment.clearDepth = 0
 
     let command = try renderer.makeCommandBuffer()
     try renderer.encode(into: command, pass: pass, layout: layout)

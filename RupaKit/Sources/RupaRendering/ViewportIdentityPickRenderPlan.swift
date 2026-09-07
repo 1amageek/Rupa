@@ -197,6 +197,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 estimateCurveDrawItems(
                     item: item,
                     component: component,
+                    layout: layout,
                     index: pickIndex,
                     estimate: &estimate
                 )
@@ -204,6 +205,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 estimateSketchDrawItems(
                     item: item,
                     primitives: primitives,
+                    layout: layout,
                     index: pickIndex,
                     estimate: &estimate
                 )
@@ -236,22 +238,34 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             ) else {
                 continue
             }
-            appendDrawItem(
-                record: record,
-                primitive: .polyline(
-                    points: segment.points.map { layout.project($0, in: item) },
-                    radius: curveRadius,
-                    isClosed: false
-                ),
-                depth: nil,
-                drawItems: &drawItems
-            )
+            for (start, end) in zip(segment.points, segment.points.dropFirst()) {
+                let worldStart = layout.transformedPoint(start, in: item)
+                let worldEnd = layout.transformedPoint(end, in: item)
+                guard let projected = projectedSegmentEndpoints(
+                    start: worldStart,
+                    end: worldEnd,
+                    layout: layout
+                ) else {
+                    continue
+                }
+                appendDrawItem(
+                    record: record,
+                    primitive: .polyline(
+                        points: [projected.first, projected.last],
+                        radius: curveRadius,
+                        isClosed: false
+                    ),
+                    depth: nil,
+                    drawItems: &drawItems
+                )
+            }
         }
     }
 
     private func estimateCurveDrawItems(
         item: ViewportSceneItem,
         component: ViewportCurveComponent,
+        layout: ViewportLayout,
         index: ViewportIdentityPickIndex,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
@@ -263,7 +277,18 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             ) != nil else {
                 continue
             }
-            estimate.appendDrawItem(encodedPointCount: segment.points.count)
+            for (start, end) in zip(segment.points, segment.points.dropFirst()) {
+                let worldStart = layout.transformedPoint(start, in: item)
+                let worldEnd = layout.transformedPoint(end, in: item)
+                guard projectedSegmentEndpoints(
+                    start: worldStart,
+                    end: worldEnd,
+                    layout: layout
+                ) != nil else {
+                    continue
+                }
+                estimate.appendDrawItem(encodedPointCount: 2)
+            }
         }
     }
 
@@ -299,9 +324,13 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             ) else {
                 continue
             }
+            let points = layout.projectedPolygon(region.points.map(sketchWorldPoint)).map(\.point)
+            guard points.count >= 3 else {
+                continue
+            }
             appendDrawItem(
                 record: record,
-                primitive: .polygon(points: region.points.map(layout.project)),
+                primitive: .polygon(points: points),
                 depth: nil,
                 drawItems: &drawItems
             )
@@ -311,6 +340,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     private func estimateSketchDrawItems(
         item: ViewportSceneItem,
         primitives: [ViewportSketchPrimitive],
+        layout: ViewportLayout,
         index: ViewportIdentityPickIndex,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
@@ -318,12 +348,14 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             estimateSketchEntityDrawItem(
                 item: item,
                 primitive: primitive,
+                layout: layout,
                 index: index,
                 estimate: &estimate
             )
             estimateSketchControlPointDrawItems(
                 item: item,
                 primitive: primitive,
+                layout: layout,
                 index: index,
                 estimate: &estimate
             )
@@ -337,7 +369,11 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             ) != nil else {
                 continue
             }
-            estimate.appendDrawItem(encodedPointCount: region.points.count)
+            let points = layout.projectedPolygon(region.points.map(sketchWorldPoint))
+            guard points.count >= 3 else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: points.count)
         }
     }
 
@@ -349,21 +385,23 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
         let geometry = ViewportIdentityPickGeometry.sketchEntity(primitive.entityID)
-        guard let record = record(for: item, geometry: geometry, in: index),
-              let pickPrimitive = sketchPrimitive(primitive, layout: layout) else {
+        guard let record = record(for: item, geometry: geometry, in: index) else {
             return
         }
-        appendDrawItem(
-            record: record,
-            primitive: pickPrimitive,
-            depth: nil,
-            drawItems: &drawItems
-        )
+        for pickPrimitive in sketchPrimitives(primitive, layout: layout) {
+            appendDrawItem(
+                record: record,
+                primitive: pickPrimitive,
+                depth: nil,
+                drawItems: &drawItems
+            )
+        }
     }
 
     private func estimateSketchEntityDrawItem(
         item: ViewportSceneItem,
         primitive: ViewportSketchPrimitive,
+        layout: ViewportLayout,
         index: ViewportIdentityPickIndex,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
@@ -371,9 +409,55 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         guard record(for: item, geometry: geometry, in: index) != nil else {
             return
         }
-        estimate.appendDrawItem(
-            encodedPointCount: sketchPrimitiveEncodedPointCount(primitive)
-        )
+        switch primitive {
+        case .point(_, let point):
+            guard layout.projectedPoint(point) != nil else { return }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        case .line(_, let start, let end):
+            guard projectedSegmentEndpoints(
+                start: sketchWorldPoint(start),
+                end: sketchWorldPoint(end),
+                layout: layout
+            ) != nil else {
+                return
+            }
+            estimate.appendDrawItem(encodedPointCount: 2)
+        case .circle(_, let center, let radiusMeters):
+            let points = circleModelPoints(
+                center: center,
+                radiusMeters: radiusMeters
+            )
+            for _ in 0 ..< projectedPolylineSegmentCount(
+                points: points,
+                layout: layout,
+                isClosed: true
+            ) {
+                estimate.appendDrawItem(encodedPointCount: 2)
+            }
+        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
+            let points = arcModelPoints(
+                center: center,
+                radiusMeters: radiusMeters,
+                startAngleRadians: startAngle,
+                endAngleRadians: endAngle
+            )
+            for _ in 0 ..< projectedPolylineSegmentCount(
+                points: points,
+                layout: layout,
+                isClosed: false
+            ) {
+                estimate.appendDrawItem(encodedPointCount: 2)
+            }
+        case .spline(_, let points, _, _):
+            let projectedSegmentCount = projectedPolylineSegmentCount(
+                points: points.map(sketchWorldPoint),
+                layout: layout,
+                isClosed: false
+            )
+            for _ in 0 ..< projectedSegmentCount {
+                estimate.appendDrawItem(encodedPointCount: 2)
+            }
+        }
     }
 
     private func appendSketchControlPointDrawItems(
@@ -394,10 +478,13 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let center = layout.projectedPoint(controlPoints[controlPointIndex])?.point else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(controlPoints[controlPointIndex]),
+                    center: center,
                     radius: controlPointRadius
                 ),
                 depth: nil,
@@ -409,6 +496,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     private func estimateSketchControlPointDrawItems(
         item: ViewportSceneItem,
         primitive: ViewportSketchPrimitive,
+        layout: ViewportLayout,
         index: ViewportIdentityPickIndex,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
@@ -421,6 +509,9 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 controlPointIndex: controlPointIndex
             )
             guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            guard layout.projectedPoint(controlPoints[controlPointIndex]) != nil else {
                 continue
             }
             estimate.appendDrawItem(encodedPointCount: 1)
@@ -486,6 +577,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             estimateGeneratedTopologyDrawItems(
                 item: item,
                 topology: topology,
+                layout: layout,
                 index: index,
                 estimate: &estimate
             )
@@ -517,13 +609,16 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let projected = layout.projectedPoint(display.point, in: item) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(display.point, in: item),
+                    center: projected.point,
                     radius: controlPointRadius
                 ),
-                depth: layout.projectedDepth(display.point, in: item),
+                depth: projected.depth,
                 drawItems: &drawItems
             )
         }
@@ -532,13 +627,16 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let projected = layout.projectedPoint(display.point, in: item) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(display.point, in: item),
+                    center: projected.point,
                     radius: pointRadius
                 ),
-                depth: layout.projectedDepth(display.point, in: item),
+                depth: projected.depth,
                 drawItems: &drawItems
             )
         }
@@ -547,13 +645,16 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let projected = layout.projectedPoint(display.point, in: item) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(display.point, in: item),
+                    center: projected.point,
                     radius: controlPointRadius
                 ),
-                depth: layout.projectedDepth(display.point, in: item),
+                depth: projected.depth,
                 drawItems: &drawItems
             )
         }
@@ -562,13 +663,16 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let projected = layout.projectedPoint(display.point, in: item) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(display.point, in: item),
+                    center: projected.point,
                     radius: pointRadius
                 ),
-                depth: layout.projectedDepth(display.point, in: item),
+                depth: projected.depth,
                 drawItems: &drawItems
             )
         }
@@ -624,7 +728,8 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         if let topology = component.topology,
            topology.faces.isEmpty == false {
             for face in topology.faces {
-                let points = face.points.map { layout.project($0, in: item) }
+                let worldPoints = face.points.map { layout.transformedPoint($0, in: item) }
+                let points = layout.projectedPolygon(worldPoints).map(\.point)
                 guard points.count >= 3 else {
                     continue
                 }
@@ -676,13 +781,23 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         if let topology = component.topology,
            topology.faces.isEmpty == false {
             for face in topology.faces where face.points.count >= 3 {
-                estimate.appendDrawItem(encodedPointCount: face.points.count)
+                let worldPoints = face.points.map { layout.transformedPoint($0, in: item) }
+                let projectedPoints = layout.projectedPolygon(worldPoints)
+                guard projectedPoints.count >= 3 else {
+                    continue
+                }
+                estimate.appendDrawItem(encodedPointCount: projectedPoints.count)
             }
             return
         }
 
         if let mesh = component.mesh {
-            estimateMeshDrawItems(mesh: mesh, estimate: &estimate)
+            estimateMeshDrawItems(
+                item: item,
+                mesh: mesh,
+                layout: layout,
+                estimate: &estimate
+            )
             return
         }
 
@@ -719,9 +834,15 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 mesh.positions[secondIndex],
                 mesh.positions[thirdIndex],
             ]
+            let worldPoints = points.map { layout.transformedPoint($0, in: item) }
+            let projectedPoints = layout.projectedPolygon(worldPoints).map(\.point)
+            guard projectedPoints.count >= 3 else {
+                index += 3
+                continue
+            }
             appendDrawItem(
                 record: record,
-                primitive: .polygon(points: points.map { layout.project($0, in: item) }),
+                primitive: .polygon(points: projectedPoints),
                 meshStorageIdentity: mesh.storageIdentity,
                 meshPrimitiveIndex: meshPrimitiveIndex,
                 depth: averageDepth(points, item: item, layout: layout),
@@ -732,7 +853,9 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     }
 
     private func estimateMeshDrawItems(
+        item: ViewportSceneItem,
         mesh: ViewportBodyMesh,
+        layout: ViewportLayout,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
         var index = 0
@@ -747,7 +870,18 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 continue
             }
 
-            estimate.appendDrawItem(encodedPointCount: 3)
+            let points = [
+                mesh.positions[firstIndex],
+                mesh.positions[secondIndex],
+                mesh.positions[thirdIndex],
+            ]
+            let worldPoints = points.map { layout.transformedPoint($0, in: item) }
+            let projectedPoints = layout.projectedPolygon(worldPoints)
+            guard projectedPoints.count >= 3 else {
+                index += 3
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: projectedPoints.count)
             index += 3
         }
     }
@@ -765,9 +899,14 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                   face.points.count >= 3 else {
                 continue
             }
+            let worldPoints = face.points.map { layout.transformedPoint($0, in: item) }
+            let points = layout.projectedPolygon(worldPoints).map(\.point)
+            guard points.count >= 3 else {
+                continue
+            }
             appendDrawItem(
                 record: record,
-                primitive: .polygon(points: face.points.map { layout.project($0, in: item) }),
+                primitive: .polygon(points: points),
                 depth: averageDepth(face.points, item: item, layout: layout),
                 drawItems: &drawItems
             )
@@ -778,11 +917,20 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            let worldStart = layout.transformedPoint(edge.start, in: item)
+            let worldEnd = layout.transformedPoint(edge.end, in: item)
+            guard let projected = projectedSegmentEndpoints(
+                start: worldStart,
+                end: worldEnd,
+                layout: layout
+            ) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .segment(
-                    start: layout.project(edge.start, in: item),
-                    end: layout.project(edge.end, in: item),
+                    start: projected.first,
+                    end: projected.last,
                     radius: topologyEdgeRadius
                 ),
                 depth: averageDepth([edge.start, edge.end], item: item, layout: layout),
@@ -795,13 +943,16 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
+            guard let projected = layout.projectedPoint(vertex.point, in: item) else {
+                continue
+            }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(vertex.point, in: item),
+                    center: projected.point,
                     radius: topologyVertexRadius
                 ),
-                depth: layout.projectedDepth(vertex.point, in: item),
+                depth: projected.depth,
                 drawItems: &drawItems
             )
         }
@@ -810,6 +961,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     private func estimateGeneratedTopologyDrawItems(
         item: ViewportSceneItem,
         topology: ViewportBodyTopology,
+        layout: ViewportLayout,
         index: ViewportIdentityPickIndex,
         estimate: inout ViewportIdentityPickRenderPlanEstimate
     ) {
@@ -819,12 +971,26 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                   face.points.count >= 3 else {
                 continue
             }
-            estimate.appendDrawItem(encodedPointCount: face.points.count)
+            let worldPoints = face.points.map { layout.transformedPoint($0, in: item) }
+            let projectedPoints = layout.projectedPolygon(worldPoints)
+            guard projectedPoints.count >= 3 else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: projectedPoints.count)
         }
 
         for edge in topology.edges {
             let geometry = ViewportIdentityPickGeometry.generatedEdge(edge.componentID)
             guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            let worldStart = layout.transformedPoint(edge.start, in: item)
+            let worldEnd = layout.transformedPoint(edge.end, in: item)
+            guard projectedSegmentEndpoints(
+                start: worldStart,
+                end: worldEnd,
+                layout: layout
+            ) != nil else {
                 continue
             }
             estimate.appendDrawItem(encodedPointCount: 2)
@@ -833,6 +999,9 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         for vertex in topology.vertices {
             let geometry = ViewportIdentityPickGeometry.generatedVertex(vertex.componentID)
             guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            guard layout.projectedPoint(vertex.point, in: item) != nil else {
                 continue
             }
             estimate.appendDrawItem(encodedPointCount: 1)
@@ -930,91 +1099,84 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
-    private func sketchPrimitive(
+    private func sketchPrimitives(
         _ primitive: ViewportSketchPrimitive,
         layout: ViewportLayout
-    ) -> ViewportIdentityPickPrimitive? {
+    ) -> [ViewportIdentityPickPrimitive] {
         switch primitive {
         case .point(_, let point):
-            return .point(center: layout.project(point), radius: pointRadius)
+            guard let projected = layout.projectedPoint(point)?.point else {
+                return []
+            }
+            return [.point(center: projected, radius: pointRadius)]
         case .line(_, let start, let end):
-            return .segment(
-                start: layout.project(start),
-                end: layout.project(end),
-                radius: curveRadius
-            )
+            guard let projected = projectedSegmentEndpoints(
+                start: sketchWorldPoint(start),
+                end: sketchWorldPoint(end),
+                layout: layout
+            ) else {
+                return []
+            }
+            return [
+                .segment(
+                    start: projected.first,
+                    end: projected.last,
+                    radius: curveRadius
+                )
+            ]
         case .circle(_, let center, let radiusMeters):
-            return .polyline(
-                points: circlePoints(
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    layout: layout
+            return projectedPolylinePrimitives(
+                points: circleModelPoints(
+                center: center,
+                radiusMeters: radiusMeters
                 ),
+                layout: layout,
                 radius: curveRadius,
                 isClosed: true
             )
         case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
-            return .polyline(
-                points: arcPoints(
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle,
-                    layout: layout
-                ),
-                radius: curveRadius,
-                isClosed: false
-            )
-        case .spline(_, let points, _, _):
-            return .polyline(
-                points: points.map(layout.project),
-                radius: curveRadius,
-                isClosed: false
-            )
-        }
-    }
-
-    private func sketchPrimitiveEncodedPointCount(_ primitive: ViewportSketchPrimitive) -> Int {
-        switch primitive {
-        case .point:
-            return 1
-        case .line:
-            return 2
-        case .circle:
-            return max(circleSampleCount, 8)
-        case .arc(_, _, _, let startAngle, let endAngle):
-            return arcEncodedPointCount(
+            return projectedPolylinePrimitives(
+                points: arcModelPoints(
+                center: center,
+                radiusMeters: radiusMeters,
                 startAngleRadians: startAngle,
                 endAngleRadians: endAngle
+                ),
+                layout: layout,
+                radius: curveRadius,
+                isClosed: false
             )
         case .spline(_, let points, _, _):
-            return points.count
+            return projectedPolylinePrimitives(
+                points: points.map(sketchWorldPoint),
+                layout: layout,
+                radius: curveRadius,
+                isClosed: false
+            )
         }
     }
 
-    private func circlePoints(
+    private func circleModelPoints(
         center: CGPoint,
-        radiusMeters: Double,
-        layout: ViewportLayout
-    ) -> [CGPoint] {
+        radiusMeters: Double
+    ) -> [Point3D] {
         let radius = max(CGFloat(radiusMeters), 1.0e-12)
         let sampleCount = max(circleSampleCount, 8)
         return (0 ..< sampleCount).map { index in
             let angle = CGFloat(index) / CGFloat(sampleCount) * CGFloat.pi * 2.0
-            return layout.project(CGPoint(
+            return sketchWorldPoint(CGPoint(
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             ))
         }
     }
 
-    private func arcPoints(
+    private func arcModelPoints(
         center: CGPoint,
         radiusMeters: Double,
         startAngleRadians: Double,
-        endAngleRadians: Double,
-        layout: ViewportLayout
-    ) -> [CGPoint] {
+        endAngleRadians: Double
+    ) -> [Point3D] {
         let radius = max(CGFloat(radiusMeters), 1.0e-12)
         let span = normalizedArcSpan(
             startAngleRadians: startAngleRadians,
@@ -1027,11 +1189,99 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         return (0 ... sampleCount).map { index in
             let fraction = Double(index) / Double(sampleCount)
             let angle = CGFloat(startAngleRadians + span * fraction)
-            return layout.project(CGPoint(
+            return sketchWorldPoint(CGPoint(
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             ))
         }
+    }
+
+    private func projectedPolylinePrimitives(
+        points: [Point3D],
+        layout: ViewportLayout,
+        radius: CGFloat,
+        isClosed: Bool
+    ) -> [ViewportIdentityPickPrimitive] {
+        var primitives: [ViewportIdentityPickPrimitive] = []
+        forEachProjectedPolylineSegment(
+            points: points,
+            layout: layout,
+            isClosed: isClosed
+        ) { first, last in
+            primitives.append(
+                .polyline(
+                    points: [first, last],
+                    radius: radius,
+                    isClosed: false
+                )
+            )
+        }
+        return primitives
+    }
+
+    private func projectedPolylineSegmentCount(
+        points: [Point3D],
+        layout: ViewportLayout,
+        isClosed: Bool
+    ) -> Int {
+        var count = 0
+        forEachProjectedPolylineSegment(
+            points: points,
+            layout: layout,
+            isClosed: isClosed
+        ) { _, _ in
+            count += 1
+        }
+        return count
+    }
+
+    private func forEachProjectedPolylineSegment(
+        points: [Point3D],
+        layout: ViewportLayout,
+        isClosed: Bool,
+        _ body: (CGPoint, CGPoint) -> Void
+    ) {
+        guard points.count >= 2 else {
+            return
+        }
+        for (start, end) in zip(points, points.dropFirst()) {
+            guard let projected = projectedSegmentEndpoints(
+                start: start,
+                end: end,
+                layout: layout
+            ) else {
+                continue
+            }
+            body(projected.first, projected.last)
+        }
+        guard isClosed,
+              let start = points.last,
+              let end = points.first,
+              let projected = projectedSegmentEndpoints(
+                  start: start,
+                  end: end,
+                  layout: layout
+              ) else {
+            return
+        }
+        body(projected.first, projected.last)
+    }
+
+    private func projectedSegmentEndpoints(
+        start: Point3D,
+        end: Point3D,
+        layout: ViewportLayout
+    ) -> (first: CGPoint, last: CGPoint)? {
+        let projected = layout.projectedPolygon([start, end])
+        guard let first = projected.first,
+              let last = projected.last(where: { $0.point != first.point }) else {
+            return nil
+        }
+        return (first.point, last.point)
+    }
+
+    private func sketchWorldPoint(_ point: CGPoint) -> Point3D {
+        Point3D(x: Double(point.x), y: 0.0, z: Double(point.y))
     }
 
     private func arcEncodedPointCount(
@@ -1112,10 +1362,12 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         item: ViewportSceneItem,
         layout: ViewportLayout
     ) -> Double? {
-        let depths = points.compactMap { layout.projectedDepth($0, in: item) }
-        guard depths.isEmpty == false else {
+        let worldPoints = points.map { layout.transformedPoint($0, in: item) }
+        let projected = layout.projectedPolygon(worldPoints)
+        guard projected.isEmpty == false else {
             return nil
         }
+        let depths = projected.map(\.depth)
         return depths.reduce(0.0, +) / Double(depths.count)
     }
 }

@@ -154,7 +154,10 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
             return hits
         }
         for region in item.sketchRegions {
-            let projectedPoints = region.points.map(layout.project)
+            let projectedPoints = layout.projectedPolygon(region.points.map(sketchWorldPoint)).map(\.point)
+            guard projectedPoints.count >= 3 else {
+                continue
+            }
             let bounds = polygonBounds(projectedPoints)
                 .insetBy(dx: -sketchRegionPadding, dy: -sketchRegionPadding)
             guard !bounds.isNull,
@@ -188,7 +191,10 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         }
         var hits: [ViewportHit] = []
         for (index, controlPoint) in controlPoints.enumerated() {
-            let bounds = pointRect(layout.project(controlPoint), radius: sketchControlPointRadius)
+            guard let projected = layout.projectedPoint(controlPoint)?.point else {
+                continue
+            }
+            let bounds = pointRect(projected, radius: sketchControlPointRadius)
             guard rect.intersects(bounds) else {
                 continue
             }
@@ -220,7 +226,10 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         if selectionHitPolicy.allowsVertexHits {
             for vertex in topology.vertices {
-                let bounds = pointRect(layout.project(vertex.point, in: item), radius: topologyVertexRadius)
+                guard let projected = layout.projectedPoint(vertex.point, in: item)?.point else {
+                    continue
+                }
+                let bounds = pointRect(projected, radius: topologyVertexRadius)
                 guard rect.intersects(bounds) else {
                     continue
                 }
@@ -237,9 +246,18 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         if selectionHitPolicy.allowsEdgeHits {
             for edge in topology.edges {
+                let worldStart = layout.transformedPoint(edge.start, in: item)
+                let worldEnd = layout.transformedPoint(edge.end, in: item)
+                guard let projected = projectedSegmentEndpoints(
+                    start: worldStart,
+                    end: worldEnd,
+                    layout: layout
+                ) else {
+                    continue
+                }
                 let bounds = segmentBounds(
-                    start: layout.project(edge.start, in: item),
-                    end: layout.project(edge.end, in: item)
+                    start: projected.first,
+                    end: projected.last
                 )
                 .insetBy(dx: -topologyEdgePadding, dy: -topologyEdgePadding)
                 guard rect.intersects(bounds) else {
@@ -258,7 +276,12 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         if selectionHitPolicy.allowsFaceHits {
             for face in topology.faces {
-                let bounds = polygonBounds(face.points.map { layout.project($0, in: item) })
+                let worldPoints = face.points.map { layout.transformedPoint($0, in: item) }
+                let projected = layout.projectedPolygon(worldPoints).map(\.point)
+                guard projected.count >= 3 else {
+                    continue
+                }
+                let bounds = polygonBounds(projected)
                 guard !bounds.isNull,
                       rect.intersects(bounds) else {
                     continue
@@ -355,9 +378,14 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         case .curve(let component):
             var bounds = CGRect.null
             for segment in component.segments {
-                for point in segment.points {
-                    let projected = layout.project(point, in: item)
-                    bounds = bounds.union(pointRect(projected, radius: 2.0))
+                let points = segment.points.map { layout.transformedPoint($0, in: item) }
+                forEachProjectedPolylineSegment(
+                    points: points,
+                    layout: layout,
+                    isClosed: false
+                ) { first, last in
+                    bounds = bounds.union(pointRect(first, radius: 2.0))
+                    bounds = bounds.union(pointRect(last, radius: 2.0))
                 }
             }
             return bounds.isNull
@@ -366,7 +394,10 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         case .sketch(let primitives):
             let primitiveBounds = sketchSelectionBounds(primitives, layout: layout)
             if primitiveBounds.isNull {
-                return layout.projectedRect(item.modelBounds).insetBy(dx: -sketchPadding, dy: -sketchPadding)
+                return layout.projectedRectIfVisible(item.modelBounds)?.insetBy(
+                    dx: -sketchPadding,
+                    dy: -sketchPadding
+                )
             }
             return primitiveBounds.insetBy(dx: -sketchPadding, dy: -sketchPadding)
         case .body:
@@ -383,9 +414,14 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         layout: ViewportLayout
     ) -> CGRect? {
         var bounds = CGRect.null
-        for point in segment.points {
-            let projected = layout.project(point, in: item)
-            bounds = bounds.union(pointRect(projected, radius: 2.0))
+        let points = segment.points.map { layout.transformedPoint($0, in: item) }
+        forEachProjectedPolylineSegment(
+            points: points,
+            layout: layout,
+            isClosed: false
+        ) { first, last in
+            bounds = bounds.union(pointRect(first, radius: 2.0))
+            bounds = bounds.union(pointRect(last, radius: 2.0))
         }
         return bounds.isNull
             ? nil
@@ -400,35 +436,54 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         for primitive in primitives {
             switch primitive {
             case .point(_, let point):
-                bounds = bounds.union(pointRect(layout.project(point), radius: 2.0))
+                if let projected = layout.projectedPoint(point)?.point {
+                    bounds = bounds.union(pointRect(projected, radius: 2.0))
+                }
             case .line(_, let start, let end):
-                bounds = bounds.union(pointRect(layout.project(start), radius: 2.0))
-                bounds = bounds.union(pointRect(layout.project(end), radius: 2.0))
+                if let projected = projectedSegmentEndpoints(
+                    start: sketchWorldPoint(start),
+                    end: sketchWorldPoint(end),
+                    layout: layout
+                ) {
+                    bounds = bounds.union(pointRect(projected.first, radius: 2.0))
+                    bounds = bounds.union(pointRect(projected.last, radius: 2.0))
+                }
             case .circle(_, let center, let radiusMeters):
-                let radius = max(CGFloat(radiusMeters), 1.0e-12)
-                for index in 0 ... 32 {
-                    let angle = CGFloat(index) / 32.0 * CGFloat.pi * 2.0
-                    let modelPoint = CGPoint(
-                        x: center.x + cos(angle) * radius,
-                        y: center.y + sin(angle) * radius
-                    )
-                    bounds = bounds.union(pointRect(layout.project(modelPoint), radius: 2.0))
+                forEachProjectedPolylineSegment(
+                    points: circleModelPoints(center: center, radiusMeters: radiusMeters),
+                    layout: layout,
+                    isClosed: true
+                ) { first, last in
+                    bounds = bounds.union(pointRect(first, radius: 2.0))
+                    bounds = bounds.union(pointRect(last, radius: 2.0))
                 }
             case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
-                for modelPoint in arcBoundsPoints(
+                forEachProjectedPolylineSegment(
+                    points: arcModelPoints(
                     center: center,
                     radiusMeters: radiusMeters,
                     startAngleRadians: startAngle,
                     endAngleRadians: endAngle
-                ) {
-                    bounds = bounds.union(pointRect(layout.project(modelPoint), radius: 2.0))
+                    ),
+                    layout: layout,
+                    isClosed: false
+                ) { first, last in
+                    bounds = bounds.union(pointRect(first, radius: 2.0))
+                    bounds = bounds.union(pointRect(last, radius: 2.0))
                 }
             case .spline(_, let points, let controlPoints, _):
-                for modelPoint in points {
-                    bounds = bounds.union(pointRect(layout.project(modelPoint), radius: 2.0))
+                forEachProjectedPolylineSegment(
+                    points: points.map(sketchWorldPoint),
+                    layout: layout,
+                    isClosed: false
+                ) { first, last in
+                    bounds = bounds.union(pointRect(first, radius: 2.0))
+                    bounds = bounds.union(pointRect(last, radius: 2.0))
                 }
                 for modelPoint in controlPoints {
-                    bounds = bounds.union(pointRect(layout.project(modelPoint), radius: 4.0))
+                    if let projected = layout.projectedPoint(modelPoint)?.point {
+                        bounds = bounds.union(pointRect(projected, radius: 4.0))
+                    }
                 }
             }
         }
@@ -453,6 +508,90 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         )
     }
 
+    private func projectedSegmentEndpoints(
+        start: Point3D,
+        end: Point3D,
+        layout: ViewportLayout
+    ) -> (first: CGPoint, last: CGPoint)? {
+        let projected = layout.projectedPolygon([start, end])
+        guard let first = projected.first,
+              let last = projected.last(where: { $0.point != first.point }) else {
+            return nil
+        }
+        return (first.point, last.point)
+    }
+
+    private func sketchWorldPoint(_ point: CGPoint) -> Point3D {
+        Point3D(x: Double(point.x), y: 0.0, z: Double(point.y))
+    }
+
+    private func forEachProjectedPolylineSegment(
+        points: [Point3D],
+        layout: ViewportLayout,
+        isClosed: Bool,
+        _ body: (CGPoint, CGPoint) -> Void
+    ) {
+        guard points.count >= 2 else {
+            return
+        }
+        for (start, end) in zip(points, points.dropFirst()) {
+            guard let projected = projectedSegmentEndpoints(
+                start: start,
+                end: end,
+                layout: layout
+            ) else {
+                continue
+            }
+            body(projected.first, projected.last)
+        }
+        guard isClosed,
+              let start = points.last,
+              let end = points.first,
+              let projected = projectedSegmentEndpoints(
+                  start: start,
+                  end: end,
+                  layout: layout
+              ) else {
+            return
+        }
+        body(projected.first, projected.last)
+    }
+
+    private func circleModelPoints(
+        center: CGPoint,
+        radiusMeters: Double
+    ) -> [Point3D] {
+        let radius = max(CGFloat(radiusMeters), 1.0e-12)
+        let sampleCount = 48
+        return (0 ..< sampleCount).map { index in
+            let angle = CGFloat(index) / CGFloat(sampleCount) * CGFloat.pi * 2.0
+            return sketchWorldPoint(
+                pointOnCircle(center: center, radius: radius, angle: angle)
+            )
+        }
+    }
+
+    private func arcModelPoints(
+        center: CGPoint,
+        radiusMeters: Double,
+        startAngleRadians: Double,
+        endAngleRadians: Double
+    ) -> [Point3D] {
+        let radius = max(CGFloat(radiusMeters), 1.0e-12)
+        let span = normalizedArcSpan(
+            startAngleRadians: startAngleRadians,
+            endAngleRadians: endAngleRadians
+        )
+        let sampleCount = max(Int(ceil(abs(span) / (Double.pi / 24.0))), 2)
+        return (0 ... sampleCount).map { index in
+            let fraction = Double(index) / Double(sampleCount)
+            let angle = CGFloat(startAngleRadians + span * fraction)
+            return sketchWorldPoint(
+                pointOnCircle(center: center, radius: radius, angle: angle)
+            )
+        }
+    }
+
     private func segmentBounds(start: CGPoint, end: CGPoint) -> CGRect {
         CGRect(
             x: min(start.x, end.x),
@@ -470,48 +609,11 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         return bounds
     }
 
-    private func arcBoundsPoints(
-        center: CGPoint,
-        radiusMeters: Double,
-        startAngleRadians: Double,
-        endAngleRadians: Double
-    ) -> [CGPoint] {
-        let radius = max(CGFloat(radiusMeters), 1.0e-12)
-        let start = CGFloat(startAngleRadians)
-        let span = normalizedArcSpan(
-            startAngleRadians: startAngleRadians,
-            endAngleRadians: endAngleRadians
-        )
-        var points: [CGPoint] = [
-            pointOnCircle(center: center, radius: radius, angle: start),
-            pointOnCircle(center: center, radius: radius, angle: start + CGFloat(span)),
-        ]
-        for quadrant in 0 ..< 4 {
-            let angle = CGFloat(quadrant) * CGFloat.pi / 2.0
-            if angleIsOnArc(angle, start: start, span: CGFloat(span)) {
-                points.append(pointOnCircle(center: center, radius: radius, angle: angle))
-            }
-        }
-        return points
-    }
-
     private func pointOnCircle(center: CGPoint, radius: CGFloat, angle: CGFloat) -> CGPoint {
         CGPoint(
             x: center.x + cos(angle) * radius,
             y: center.y + sin(angle) * radius
         )
-    }
-
-    private func angleIsOnArc(_ angle: CGFloat, start: CGFloat, span: CGFloat) -> Bool {
-        let fullCircle = CGFloat.pi * 2.0
-        var relative = angle - start
-        while relative < 0.0 {
-            relative += fullCircle
-        }
-        while relative > fullCircle {
-            relative -= fullCircle
-        }
-        return relative <= span + 1.0e-9
     }
 
     private func normalizedArcSpan(

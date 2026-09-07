@@ -8,11 +8,19 @@ the [RupaKit package design](../../DESIGN.md) and has no child component
 designs.
 
 The module projects an already validated `DesignDocument` and its complete,
-resource-admitted evaluation into viewport items, bounds, transforms, and
-optional surface overlays. The same projection accepts either a published
-state or an explicitly supplied source-preview candidate. It does not own CAD
-or Mesh source authority, project publication, package I/O, render-plan
-triangulation, presentation fidelity, or render-task lifecycle.
+resource-admitted evaluation into engine-neutral viewport items, bounds,
+transforms, and spatial overlay descriptors. The same projection accepts
+either a published state or an explicitly supplied source-preview candidate.
+It does not own CAD or Mesh source authority, project publication, package I/O,
+RealityKit entities/resources/materials, presentation fidelity, or render-task
+lifecycle.
+
+RUPA-RK status: the downstream viewport is currently a migration hybrid.
+`RealityViewportView` owns the RealityKit surface and native camera, while
+SwiftUI `Canvas` still presents spatial overlays and legacy identity rendering
+still supplies part of picking. This module remains engine-neutral and does not
+claim ownership of that native integration; the complete downstream scene is
+target behavior until RK-2 through RK-5 and RK-IV complete.
 
 ## Responsibilities and Boundaries
 
@@ -21,8 +29,18 @@ The module owns:
 - immutable viewport scene values and identity-bearing scene items;
 - source/evaluation-aware scene construction and overlay projection;
 - stable B-spline patch-face references used by knot and span overlays;
-- bounded, synchronous scene projection without retessellation or render-plan
-  preparation.
+- camera lens values, homogeneous world-to-clip projection, visible-point
+  projection, and viewport-ray/plane unprojection;
+- bounded, synchronous scene projection without retessellation or RealityKit
+  resource/entity preparation.
+
+`UniversalViewportScene.snapshotID` is the source/evaluation identity carried
+into the rendering boundary. `RupaViewportScene` remains independent of
+RealityKit and never creates an `Entity`, `MeshResource`, `Material`, collision
+shape, camera component, or SwiftUI view. The downstream frame descriptor adds
+the mounted viewport revision and overlay revision; those values are not
+inferred from array contents. The RealityKit host may publish a frame only when
+all three identities match the scene/resource graph it presents.
 
 The module consumes validated Core source and evaluation contracts. It delegates
 Mesh triangulation to `RupaGeometry` through the downstream render plan and
@@ -36,7 +54,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 | [package design](../../DESIGN.md) | parent | Package dependency direction | Places scene projection between project evaluation and rendering. | This module is not a source or project authority. |
 | [RupaCore design](../RupaCore/DESIGN.md) | depends on | Validated `DesignDocument`, Product metadata, and source identity | Supplies CAD source and retained scene navigation. | Scene references remain navigation/presentation values. |
 | [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Complete purpose-selected bounded evaluation | Supplies immutable admitted presentation results. | Scene projection cannot widen limits or select a different fidelity. |
-| [RupaRendering design](../RupaRendering/DESIGN.md) | used by | Immutable `ViewportScene` and snapshot identity | Consumes scene items for render-plan construction. | Rendering must not make overlay lookup a metric path. |
+| [RupaRendering design](../RupaRendering/DESIGN.md) | used by | Immutable scene, `snapshotID`, camera semantics, and overlay values | Converts scene values into one matching RealityKit resource/entity frame. | Rendering must not make overlay lookup a metric path or turn RealityKit IDs into CAD authority. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | coordinates with | Bounded source-order Mesh traversal | Owns render-time geometry triangulation. | Do not duplicate its topology or buffer-index logic here. |
 | [Swift-CAD package](../../../swift-CAD/DESIGN.md) | depends on | Exact CAD document, topology reference, and evaluated value types | Supplies the CAD value types this module reads directly through its declared `SwiftCAD` dependency. | Scene projection never tessellates, evaluates, or selects kernel limits. |
 | [RupaViewportScene tests](../../Tests/RupaViewportSceneTests) | verification owner | Scene projection and overlay behavior | Proves exact overlay references and build responsiveness. | Type existence is not runtime evidence. |
@@ -51,7 +69,12 @@ flowchart LR
     Builder --> Scene["Immutable ViewportScene"]
     Builder --> Overlay["Knot/span surface overlays"]
     Overlay --> Identity["One identity-only topology snapshot\nonly for B-spline surfaces"]
-    Scene --> Rendering["RupaRendering"]
+    Scene --> Frame["Engine-neutral frame values\nsnapshotID + spatial descriptors"]
+    Frame --> Rendering["RupaRendering / RealityViewport"]
+    Camera["ViewportCamera\nparallel or perspective lens"] --> Layout["ViewportLayout\none homogeneous projection"]
+    Basis["ViewportProjectionBasis\norientation only"] --> Layout
+    Layout --> Screen["visible projected point + reversed depth"]
+    Layout --> Ray["viewport ray + plane intersection"]
     Metrics["Face area / edge length metrics"] -. "explicit inspection only" .-> Inspection["Topology / measurement API"]
 ```
 
@@ -62,6 +85,101 @@ metrics. The resulting map is passed to both overlay projections, so both
 directions share the same immutable lookup result.
 
 ## Contracts and Invariants
+
+### World-space navigation focus
+
+`ViewportCamera.focus` is the optional world-space navigation target. An absent
+focus requests initial framing from the layout bounds; the mounted camera owner
+resolves and retains it before navigation. `ViewportLayout.renderOrigin` remains
+the numerical coordinate origin, never the authority for an explicit focus.
+Projection rows, CPU projection, depth, and view rays use the same camera focus.
+The fitting-rectangle center looks at that focus when the screen offset is zero.
+
+Existing screen-offset camera inputs remain representable, but the mounted
+camera owner converts navigation offsets to a world-space focus on the current
+view plane and clears the offset. This is camera translation, not geometry or
+construction-plane mutation. Non-finite focus or an unresolvable view-plane
+intersection cannot be published as a successful navigation result.
+
+Offset-focus projection/ray round trips and the Rendering target's mounted
+RealityKit project/composed-ray/native-raycast tests prove that changing the navigation target
+does not change mesh origins or make CPU and presented projection disagree. The Rendering design owns
+the state transitions; this module owns their projection math.
+
+`ViewportLayout.FittingInsets.fittingRect(in:)` is the shared viewport fitting
+rectangle for layout and camera fit. Rendering uses this public geometry value
+instead of duplicating chrome inset normalization. Camera-fit tests verify that
+projected geometry stays within the same rectangle used by the actual native
+RealityKit camera layout.
+
+`ViewportProjectionBasis` owns a finite rigid camera orientation, not an
+arbitrary two-dimensional projection. Its screen-horizontal and screen-vertical
+directions form an orthonormal right-handed frame with the view normal. The
+axis-front presets are true CAD axis views: the two displayed-plane axes retain
+unit pixel scale and the depth axis has no artificial `0.18` screen component.
+An orientation transition follows the shortest quaternion rotation between its
+exact rigid endpoints; component-wise interpolation that creates skew or scale
+is not a valid camera basis. Built-in basis constructors guarantee this
+contract. An externally supplied non-finite, degenerate, non-orthogonal, or
+non-unit frame is refused at the throwing camera-state boundary and cannot be
+silently normalized or published.
+
+`ViewportCamera` owns the independent `ViewportCameraProjection`: `.parallel`
+or `.perspective(fieldOfViewRadians:)`, with `.parallel` as the default. A
+perspective field of view must be finite and strictly between zero and pi.
+`ViewportCameraProjection.standardPerspective` is the single lower-owned UI/API
+default; callers and design documents do not repeat its operational field-of-
+view value. Changing lens mode preserves the rigid basis, pan, zoom, focus, and
+target-plane pixel scale; it does not change source, selection, display mode, or
+shading.
+
+`ViewportLayout` is the engine-neutral fallback math owner for off-scene
+projection descriptors and exact CPU tolerance calculations. The live
+RealityKit path uses the mounted native camera component and
+`RealityViewCameraContent.project(_:)` as presentation authority. Its view ray
+is composed by the
+[RealityViewport mounted-camera query contract](../RupaRendering/RealityViewport/DESIGN.md#contracts-and-invariants)
+from native project samples and the same camera transform; raw mounted
+`ray(through:)`, `unproject`, and `hitTest` are not a second authority.
+`ViewportLayout` must agree with this contract and may not create a second live
+camera. Both lens modes use a symmetric native lens. The layout supplies the
+full-viewport vertical span required to derive RealityKit's built-in vertical
+field of view; RealityKit's orthographic scale is the corresponding vertical
+half-extent. A fitting center displaced from the viewport center is represented
+by a finite translation of the camera in its rigid right/up plane so the focus
+projects to the fitting center; it is never encoded as lens skew, an off-center
+projection term, root translation, or geometry mutation.
+This translation preserves target-plane placement and pixel scale. Perspective
+objects away from the target plane follow native pinhole parallax;
+compatibility with the former all-depth constant screen shift is not an
+invariant.
+
+When a native query is unavailable for a bounded CPU-only operation, the layout
+produces one Double-precision homogeneous projection relative to the retained
+render origin using the same rigid frame, symmetric lens, and camera-plane
+translation. Perspective uses an infinite far plane and reversed depth: the
+clear value is zero, a greater value is nearer, and the near boundary is
+`w >= 1.0e-6`. Its eye distance is
+`fittingRect.height / (2 * targetPlanePixelsPerMeter *
+tan(requestedVerticalFOV / 2))`. The native camera separately converts that
+fitting-height request into a full-viewport vertical FOV, so the target plane
+has no size jump when the lens is toggled. Parallel projection
+preserves target-plane screen placement and also reports greater depth as
+nearer. Float conversion for native RealityKit
+resources occurs only after finite/range validation and local-origin conversion.
+
+The old total `ViewportLayout.project -> CGPoint` assumption is not valid for a
+perspective camera. Runtime consumers migrate to an optional visible projection:
+a point strictly below the near boundary returns no screen point. Point overlays
+omit that point; line and polygon owners clip crossing primitives against the
+layout's near plane before projecting their retained portion. No consumer may
+mirror a behind-eye point, clamp a homogeneous denominator, substitute NaN, or
+silently reuse the parallel formula. A viewport point uses RealityViewport's
+native-project-derived ray when mounted; off-scene layout resolution uses the
+same world-ray contract. Grid and spatial overlay descriptors intersect that
+ray with the requested plane and return `nil` when the ray is parallel to that
+plane or the intersection is non-finite. They contain world geometry and
+provenance, never a Canvas `Path` or raster texture.
 
 Scene placement follows the [Core matrix contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
 The shared transform utility is the only legacy overlay point/vector/composition
@@ -104,6 +222,15 @@ agree on the same row-major source values.
     `.suppliedOnly`, so kernel evaluation can never re-enter that caller's
     thread through scene construction. `.evaluateOnDemand` remains the default
     for callers that hold no evaluation authority.
+11. Native RealityKit projection, the mounted composed native collision query,
+    and any bounded CPU fallback consume the same camera focus, basis, lens, near-plane, and
+    local-origin semantics. A primitive crossing the perspective near plane is
+    clipped to the same retained polygon before CPU tolerance testing; no
+    fallback may mirror behind-camera geometry or create a second live camera.
+12. Grid generation and spatial overlay descriptors use the mounted RealityKit
+    project-derived camera query when available. Off-scene construction uses the same layout
+    projection and ray/plane contract and does not retain the former affine
+    direction/determinant implementation.
 
 ## Runtime Flows
 
@@ -113,7 +240,7 @@ sequenceDiagram
     participant B as ViewportSceneBuilder
     participant T as TopologySnapshotService
     participant O as Knot/span overlay projection
-    participant R as Render plan
+    participant R as Engine-neutral scene/frame values
     B->>D: identify B-spline surface features
     alt no B-spline feature
         B->>O: pass empty reference map
@@ -122,14 +249,14 @@ sequenceDiagram
         T-->>B: stable face references only
         B->>O: share one reference map with knot and span paths
     end
-    B-->>R: immutable scene snapshot
+    B-->>R: immutable scene snapshot + stable provenance
 ```
 
 The builder then resolves evaluated body snapshots and normal scene items using
-the existing generation/evaluation inputs. The downstream renderer consumes the
-finished immutable scene and owns cancellable render-plan preparation. A
-preview scene is discarded by its caller when the preview is cancelled, stale,
-or replaced; the builder never retains it.
+the existing generation/evaluation inputs. `RupaRendering/RealityViewport`
+consumes the finished immutable scene and owns cancellable RealityKit resource
+and entity preparation. A preview scene is discarded by its caller when the
+preview is cancelled, stale, or replaced; the builder never retains it.
 
 ## State, Ownership, and Lifecycle
 
@@ -153,6 +280,11 @@ operation. Evaluation resource limits remain owned by `RupaEvaluation`; render
 preparation limits and cancellation remain owned by `RupaRendering`. A required
 scene item is never dropped to make projection appear successful.
 
+Invalid field of view, non-finite or unrepresentable projection coefficients,
+points outside the perspective near half-space, and ray/plane degeneracy are
+explicit projection failures. They never become mirrored geometry, default
+parallel projection, or a fabricated canvas point.
+
 ## Verification and Change Impact
 
 | Invariant | Evidence |
@@ -163,6 +295,11 @@ scene item is never dropped to make projection appear successful.
 | Geometry and stable references remain unchanged | Existing B-spline knot/span exact tests and scene snapshot identity checks remain green. |
 | Bounded input authority | Boundary tests prove only evaluation-admitted Mesh enters the scene and that projection never retessellates, truncates, or selects fidelity. A source-preview test proves the candidate document/source/evaluation produce the same scene geometry and visibility without a project snapshot. |
 | Explicit evaluation policy | A `.suppliedOnly` build with no matching supplied evaluation performs zero evaluations; the same input under `.evaluateOnDemand` evaluates, proving the policy is observable rather than declarative. |
+| Rigid camera orientation | True axis-front endpoint tests prove zero projected depth-axis component and unit displayed-plane scale; quaternion-transition tests prove exact endpoints, shortest continuous rotation, orthonormality throughout, and typed refusal of invalid externally supplied frames. |
+| Parallel/perspective projection | Exact target-plane continuity and off-center fitting placement, native perspective parallax, optional behind-near projection, finite coefficient, off-scene point/ray/plane round trips, and Rendering-owned mounted native-project/composed-ray round trips. No test requires the removed all-depth lens-shift behavior. |
+| Shared clipping and depth | Near-crossing triangle/segment fixtures prove retained clipping and CPU screen/depth results; RealityKit GPU projection/depth parity is owned by RupaRendering. |
+| Grid projection | Parallel and perspective grid fixtures use the RealityViewport native-project-derived ray contract when mounted and the layout ray/plane contract off-scene, rejecting a parallel intersection without a second live camera. |
+| Frame identity | Rendering tests prove `snapshotID`, viewport revision, and overlay revision cannot be mixed in one displayed or hit-testable scene. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 
 Changes to source/evaluation identity or overlay reference contracts require

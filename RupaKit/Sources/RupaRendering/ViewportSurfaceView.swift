@@ -3,11 +3,14 @@ import MetalKit
 import RupaCore
 import RupaViewportScene
 import SwiftUI
+import SwiftCAD
 
 /// Native surface-only layer. Canvas and the input surface retain UI ownership.
 struct ViewportSurfaceView: NSViewRepresentable {
     let renderer: ViewportSurfaceRenderer
     var displayMode: ViewportDisplayMode = .solid
+    var shading: ViewportShading = .standard
+    var materialColorForOccurrence: (SceneOccurrenceID) -> ColorRGBA? = { _ in nil }
     let layout: ViewportLayout
     let interaction: MeshSourcePresentationInteractionStateResolver
     let sectionPlane: SectionAnalysisResult.Plane?
@@ -43,7 +46,7 @@ struct ViewportSurfaceView: NSViewRepresentable {
             colorPixelFormat = .bgra8Unorm
             depthStencilPixelFormat = .depth32Float
             clearColor = MTLClearColorMake(0, 0, 0, 0)
-            clearDepth = 1
+            clearDepth = 0
             isPaused = true
             enableSetNeedsDisplay = true
             autoResizeDrawable = false
@@ -103,6 +106,8 @@ struct ViewportSurfaceView: NSViewRepresentable {
                 try input.renderer.encode(
                     into: commandBuffer, pass: pass, layout: input.layout,
                     displayMode: input.displayMode,
+                    shading: input.shading,
+                    materialColorForOccurrence: input.materialColorForOccurrence,
                     state: { input.interaction.state(for: $0) },
                     sectionPlane: input.sectionPlane, retainedSide: input.retainedSide,
                     sectionTolerance: input.sectionTolerance

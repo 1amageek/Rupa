@@ -27,12 +27,14 @@ struct ViewportSplineControlPointSlideAffordanceGeometry: Equatable {
         }
         let directionVector = Self.directionVector(positiveU: positiveU, direction: direction)
         let center = Self.averagePoint(uniqueIndexes.map { controlPoints[$0] })
-        let projectedUnitLength = Self.projectedLength(
+        guard let projectedUnitLength = Self.projectedLength(
             from: center,
             direction: directionVector,
             distance: 1.0,
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         guard projectedUnitLength > 1.0e-9 else {
             return nil
         }
@@ -44,25 +46,25 @@ struct ViewportSplineControlPointSlideAffordanceGeometry: Equatable {
     func projectedTip(
         layout: ViewportLayout,
         distanceMeters: Double? = nil
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let distance = CGFloat(distanceMeters ?? 0.0)
         let length = abs(distance) > 1.0e-12 ? distance : minimumLengthMeters
-        return layout.project(
+        return layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x * length,
                 y: baseModelPoint.y + modelDirection.y * length
             )
-        )
+        )?.point
     }
 
     func slideDistance(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
-        let projectedVector = projectedUnitVector(layout: layout)
-        guard projectedVector.length > 1.0e-9 else {
-            return 0.0
+    ) -> Double? {
+        guard let projectedVector = projectedUnitVector(layout: layout),
+              projectedVector.length > 1.0e-9 else {
+            return nil
         }
         let direction = projectedVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
@@ -98,14 +100,16 @@ struct ViewportSplineControlPointSlideAffordanceGeometry: Equatable {
         return updatedControlPoints
     }
 
-    private func projectedUnitVector(layout: ViewportLayout) -> CGVector {
-        let start = layout.project(baseModelPoint)
-        let end = layout.project(
+    private func projectedUnitVector(layout: ViewportLayout) -> CGVector? {
+        guard let start = layout.projectedPoint(baseModelPoint)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x,
                 y: baseModelPoint.y + modelDirection.y
             )
-        )
+        )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
@@ -197,14 +201,16 @@ struct ViewportSplineControlPointSlideAffordanceGeometry: Equatable {
         direction: CGPoint,
         distance: CGFloat,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let start = layout.project(point)
-        let end = layout.project(
+    ) -> CGFloat? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: point.x + direction.x * distance,
                 y: point.y + direction.y * distance
             )
-        )
+        )?.point else {
+            return nil
+        }
         return hypot(end.x - start.x, end.y - start.y)
     }
 

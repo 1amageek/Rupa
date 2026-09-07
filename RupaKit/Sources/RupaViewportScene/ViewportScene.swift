@@ -721,24 +721,60 @@ public struct ViewportFaceSurfacePointResolver: Sendable {
         layout: ViewportLayout,
         tolerance: CGFloat = 1.0e-6
     ) -> Point3D? {
-        guard face.points.count >= 3 else {
+        guard face.points.count >= 3,
+              viewportPoint.x.isFinite,
+              viewportPoint.y.isFinite,
+              let ray = layout.viewportRay(for: viewportPoint) else {
             return nil
         }
-        let projectedPoints = face.points.map { layout.project($0) }
-        let origin2D = projectedPoints[0]
-        let origin3D = face.points[0]
-        for index in 1 ..< projectedPoints.count - 1 {
+        let origin = face.points[0]
+        for index in 1 ..< face.points.count - 1 {
+            guard let edges = normalizedTriangleEdges(
+                a: origin,
+                b: face.points[index],
+                c: face.points[index + 1]
+            ) else {
+                continue
+            }
+            let first = edges.first
+            let second = edges.second
+            let rawNormal = first.cross(second)
+            guard rawNormal.isFinite, rawNormal.length > 1.0e-12 else {
+                continue
+            }
+            let normal: Vector3D
+            do {
+                normal = try rawNormal.normalized(tolerance: 1.0e-12)
+            } catch {
+                continue
+            }
+            let denominator = ray.direction.dot(normal)
+            guard denominator.isFinite, abs(denominator) > 1.0e-12 else {
+                continue
+            }
+            let distance = (origin - ray.origin).dot(normal) / denominator
+            guard distance.isFinite else {
+                continue
+            }
+            let candidate = ray.origin + ray.direction * distance
+            guard candidate.isFinite else {
+                continue
+            }
+            if case .perspective = layout.projection,
+               (distance < 0.0 || layout.projectedPoint(candidate) == nil) {
+                continue
+            }
             guard let weights = barycentricWeights(
-                point: viewportPoint,
-                a: origin2D,
-                b: projectedPoints[index],
-                c: projectedPoints[index + 1],
+                point: candidate,
+                a: origin,
+                b: face.points[index],
+                c: face.points[index + 1],
                 tolerance: tolerance
             ) else {
                 continue
             }
             return weightedPoint(
-                origin3D,
+                origin,
                 face.points[index],
                 face.points[index + 1],
                 weights: weights
@@ -747,32 +783,107 @@ public struct ViewportFaceSurfacePointResolver: Sendable {
         return nil
     }
 
-    private func barycentricWeights(
-        point: CGPoint,
-        a: CGPoint,
-        b: CGPoint,
-        c: CGPoint,
-        tolerance: CGFloat
-    ) -> (a: Double, b: Double, c: Double)? {
-        let denominator = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
-        guard abs(denominator) > tolerance else {
+    private func normalizedTriangleEdges(
+        a: Point3D,
+        b: Point3D,
+        c: Point3D
+    ) -> (first: Vector3D, second: Vector3D, scale: Double)? {
+        let first = vector(from: a, to: b)
+        let second = vector(from: a, to: c)
+        let third = vector(from: b, to: c)
+        let scale = max(first.length, second.length, third.length)
+        guard first.isFinite,
+              second.isFinite,
+              third.isFinite,
+              scale.isFinite,
+              scale > 0.0 else {
             return nil
         }
-        let aWeight = ((b.y - c.y) * (point.x - c.x) + (c.x - b.x) * (point.y - c.y)) / denominator
-        let bWeight = ((c.y - a.y) * (point.x - c.x) + (a.x - c.x) * (point.y - c.y)) / denominator
-        let cWeight = 1.0 - aWeight - bWeight
-        guard aWeight >= -tolerance,
-              bWeight >= -tolerance,
-              cWeight >= -tolerance,
-              aWeight <= 1.0 + tolerance,
-              bWeight <= 1.0 + tolerance,
-              cWeight <= 1.0 + tolerance else {
+        let inverseScale = 1.0 / scale
+        guard inverseScale.isFinite else {
+            return nil
+        }
+        let normalizedFirst = scaled(first, by: inverseScale)
+        let normalizedSecond = scaled(second, by: inverseScale)
+        guard normalizedFirst.isFinite, normalizedSecond.isFinite else {
             return nil
         }
         return (
-            a: Double(aWeight),
-            b: Double(bWeight),
-            c: Double(cWeight)
+            first: normalizedFirst,
+            second: normalizedSecond,
+            scale: scale
+        )
+    }
+
+    private func barycentricWeights(
+        point: Point3D,
+        a: Point3D,
+        b: Point3D,
+        c: Point3D,
+        tolerance: CGFloat
+    ) -> (a: Double, b: Double, c: Double)? {
+        guard let edges = normalizedTriangleEdges(a: a, b: b, c: c) else {
+            return nil
+        }
+        let first = edges.first
+        let second = edges.second
+        let relative = scaled(
+            vector(from: a, to: point),
+            by: 1.0 / edges.scale
+        )
+        let normal = first.cross(second)
+        let denominator = normal.dot(normal)
+        let toleranceValue = max(Double(tolerance), 1.0e-9)
+        guard first.isFinite, second.isFinite, relative.isFinite,
+              normal.isFinite, denominator.isFinite,
+              normal.length > 1.0e-12,
+              denominator > 0.0 else {
+            return nil
+        }
+        let planeDistance = abs(relative.dot(normal))
+        let planeScale = max(normal.length * max(relative.length, 1.0), 1.0e-12)
+        guard planeDistance.isFinite,
+              planeDistance <= toleranceValue * planeScale else {
+            return nil
+        }
+        let bWeight = (
+            second.dot(second) * relative.dot(first)
+                - first.dot(second) * relative.dot(second)
+        ) / denominator
+        let cWeight = (
+            first.dot(first) * relative.dot(second)
+                - first.dot(second) * relative.dot(first)
+        ) / denominator
+        let aWeight = 1.0 - bWeight - cWeight
+        guard aWeight.isFinite, bWeight.isFinite, cWeight.isFinite,
+              aWeight >= -toleranceValue,
+              bWeight >= -toleranceValue,
+              cWeight >= -toleranceValue,
+              aWeight <= 1.0 + toleranceValue,
+              bWeight <= 1.0 + toleranceValue,
+              cWeight <= 1.0 + toleranceValue else {
+            return nil
+        }
+        return (
+            a: aWeight,
+            b: bWeight,
+            c: cWeight
+        )
+    }
+
+    private func scaled(_ vector: Vector3D, by factor: Double) -> Vector3D {
+        Vector3D(
+            x: vector.x * factor,
+            y: vector.y * factor,
+            z: vector.z * factor
+        )
+    }
+
+    private func vector(from start: Point3D, to end: Point3D) -> Vector3D {
+        Vector3D(
+            x: end.x - start.x,
+            y: end.y - start.y,
+            z: end.z - start.z
         )
     }
 
@@ -1461,7 +1572,10 @@ public struct ViewportLayout: Equatable {
 
         public static let zero = FittingInsets()
 
-        fileprivate func fittingRect(in size: CGSize) -> CGRect {
+        /// Returns the drawable rectangle after applying bounded chrome insets.
+        /// Camera fit and rendering use this same rectangle so control-plane
+        /// fit commands do not maintain a second inset normalization policy.
+        public func fittingRect(in size: CGSize) -> CGRect {
             let resolvedLeading = min(leading, max(size.width - 1.0, 0.0))
             let resolvedTrailing = min(trailing, max(size.width - resolvedLeading - 1.0, 0.0))
             let resolvedTop = min(top, max(size.height - 1.0, 0.0))
@@ -1486,12 +1600,16 @@ public struct ViewportLayout: Equatable {
     public var viewportSize: CGSize
     public var modelBounds: CGRect
     public var renderOrigin: Point3D
+    /// World-space navigation target; `renderOrigin` remains precision-only.
+    public var focus: Point3D
     public var scale: CGFloat
     public var fittingCenter: CGPoint
     public var center: CGPoint
     public var basis: ViewportProjectionBasis
+    public var projection: ViewportCameraProjection
     public var maximumZoom: CGFloat
     public var fittingInsets: FittingInsets
+    public var verticalBounds: ClosedRange<Double>?
 
     public init?(
         scene: ViewportScene,
@@ -1527,6 +1645,8 @@ public struct ViewportLayout: Equatable {
         let modelWidth = max(modelBounds.width, 1.0e-9)
         let modelHeight = max(modelBounds.height, 1.0e-9)
         let clampedCamera = camera.clamped(maximumZoom: maximumZoom)
+        let renderOrigin = Self.renderOrigin(modelBounds: modelBounds, verticalBounds: verticalBounds)
+        let resolvedFocus = clampedCamera.focus ?? renderOrigin
         let projectedBounds = Self.projectedBounds(
             width: modelWidth,
             height: modelHeight,
@@ -1537,7 +1657,8 @@ public struct ViewportLayout: Equatable {
 
         self.viewportSize = size
         self.modelBounds = modelBounds
-        self.renderOrigin = Self.renderOrigin(modelBounds: modelBounds, verticalBounds: verticalBounds)
+        self.renderOrigin = renderOrigin
+        self.focus = resolvedFocus
         self.scale = min(
             fittingRect.width / max(projectedBounds.width, 1.0e-9),
             fittingRect.height / max(projectedBounds.height, 1.0e-9)
@@ -1548,29 +1669,224 @@ public struct ViewportLayout: Equatable {
             y: fittingCenter.y + clampedCamera.pan.height
         )
         self.basis = basis
+        self.projection = clampedCamera.projection
         self.maximumZoom = max(maximumZoom, ViewportCamera.minimumZoom)
         self.fittingInsets = fittingInsets
+        self.verticalBounds = verticalBounds
     }
 
     public func project(_ point: CGPoint) -> CGPoint {
-        let x = CGFloat(Double(point.x) - renderOrigin.x) - modelCenterOffsetX
-        let y = CGFloat(Double(point.y) - renderOrigin.z) - modelCenterOffsetZ
-        return CGPoint(
-            x: center.x + (basis.xDirection.dx * x + basis.zDirection.dx * y) * scale,
-            y: center.y + (basis.xDirection.dy * x + basis.zDirection.dy * y) * scale
+        // This planar convenience uses the retained reference elevation.
+        project(Point3D(x: Double(point.x), y: renderOrigin.y, z: Double(point.y)))
+    }
+
+    public func projectedPoint(_ point: CGPoint) -> ViewportProjectedPoint? {
+        projectedPoint(Point3D(x: Double(point.x), y: 0.0, z: Double(point.y)))
+    }
+
+    /// Projects a point known to be inside the visible half-space.
+    ///
+    /// Fallible callers must use `projectedPoint(_:)`; this total convenience
+    /// intentionally fails at the ownership boundary instead of manufacturing
+    /// a mirrored, clamped, or non-finite screen point.
+    public func project(_ point: Point3D) -> CGPoint {
+        guard let projected = projectedPoint(point) else {
+            preconditionFailure("Viewport point is outside the visible projection half-space.")
+        }
+        return projected.point
+    }
+
+    /// Projects a world point after homogeneous near-plane admission.
+    ///
+    /// A point behind a perspective camera is intentionally rejected instead
+    /// of being mirrored or clamped into the viewport.
+    public func projectedPoint(_ point: Point3D) -> ViewportProjectedPoint? {
+        guard point.isFinite,
+              let rows = projectionRows(relativeTo: renderOrigin),
+              rows.isFinite else {
+            return nil
+        }
+        let homogeneous = rows.evaluate(Point3D(
+            x: point.x - renderOrigin.x,
+            y: point.y - renderOrigin.y,
+            z: point.z - renderOrigin.z
+        ))
+        return projectedPoint(homogeneous)
+    }
+
+    private func projectedPoint(_ homogeneous: ViewportHomogeneousPoint) -> ViewportProjectedPoint? {
+        guard homogeneous.isFinite,
+              homogeneous.w >= Self.minimumPerspectiveW else {
+            return nil
+        }
+        let inverseW = 1.0 / homogeneous.w
+        let ndcX = homogeneous.x * inverseW
+        let ndcY = homogeneous.y * inverseW
+        let depth = homogeneous.depth * inverseW
+        guard ndcX.isFinite, ndcY.isFinite, depth.isFinite else {
+            return nil
+        }
+        let x = (ndcX + 1.0) * Double(viewportSize.width) * 0.5
+        let y = (1.0 - ndcY) * Double(viewportSize.height) * 0.5
+        guard x.isFinite, y.isFinite else {
+            return nil
+        }
+        return ViewportProjectedPoint(
+            point: CGPoint(x: x, y: y),
+            depth: depth,
+            w: homogeneous.w
         )
     }
 
-    public func project(_ point: Point3D) -> CGPoint {
-        let x = CGFloat(point.x - renderOrigin.x) - modelCenterOffsetX
-        let y = CGFloat(point.y - renderOrigin.y)
-        let z = CGFloat(point.z - renderOrigin.z) - modelCenterOffsetZ
-        return CGPoint(
-            x: center.x
-                + (basis.xDirection.dx * x + basis.yDirection.dx * y + basis.zDirection.dx * z) * scale,
-            y: center.y
-                + (basis.xDirection.dy * x + basis.yDirection.dy * y + basis.zDirection.dy * z) * scale
+    public func projectedPolygon(_ points: [Point3D]) -> [ViewportProjectedPoint] {
+        guard points.count > 1,
+              let rows = projectionRows(relativeTo: renderOrigin), rows.isFinite else { return [] }
+        var result: [ViewportProjectedPoint] = []
+        result.reserveCapacity(points.count + 1)
+        for index in points.indices {
+            let first = points[index] - renderOrigin
+            let second = points[(index + 1) % points.count] - renderOrigin
+            let start = rows.evaluate(Point3D(x: first.x, y: first.y, z: first.z))
+            let end = rows.evaluate(Point3D(x: second.x, y: second.y, z: second.z))
+            guard start.isFinite, end.isFinite else { return [] }
+            let startInside = start.w >= Self.minimumPerspectiveW
+            let endInside = end.w >= Self.minimumPerspectiveW
+            if startInside != endInside {
+                let fraction = (Self.minimumPerspectiveW - start.w) / (end.w - start.w)
+                // Clip in homogeneous space: reprojecting a world-space
+                // intersection can round its w back outside the near plane.
+                let intersection = ViewportHomogeneousPoint(
+                    x: start.x + (end.x - start.x) * fraction,
+                    y: start.y + (end.y - start.y) * fraction,
+                    depth: start.depth + (end.depth - start.depth) * fraction,
+                    w: Self.minimumPerspectiveW
+                )
+                guard let projected = projectedPoint(intersection) else { return [] }
+                result.append(projected)
+            }
+            if endInside {
+                guard let projected = projectedPoint(end) else { return [] }
+                result.append(projected)
+            }
+        }
+        return result
+    }
+
+    /// Returns the projection rows for mesh positions relative to `origin`.
+    /// The returned rows may be copied directly into a GPU uniform buffer.
+    public func projectionRows(relativeTo origin: Point3D = .origin) -> ViewportProjectionRows? {
+        guard basis.isRigidOrientation,
+              viewportSize.width.isFinite, viewportSize.height.isFinite,
+              viewportSize.width > 0.0, viewportSize.height > 0.0,
+              scale.isFinite, scale > 0.0,
+              let viewNormal = basis.viewNormal,
+              viewNormal.isFinite,
+              origin.isFinite,
+              renderOrigin.isFinite,
+              focus.isFinite,
+              projection.isValid else {
+            return nil
+        }
+        let width = Double(viewportSize.width)
+        let height = Double(viewportSize.height)
+        let clipX = 2.0 * Double(center.x) / width - 1.0
+        let clipY = 1.0 - 2.0 * Double(center.y) / height
+        let horizontal = Vector3D(
+            x: Double(basis.xDirection.dx),
+            y: Double(basis.yDirection.dx),
+            z: Double(basis.zDirection.dx)
         )
+        let verticalDown = Vector3D(
+            x: Double(basis.xDirection.dy),
+            y: Double(basis.yDirection.dy),
+            z: Double(basis.zDirection.dy)
+        )
+        guard horizontal.isFinite, verticalDown.isFinite,
+              clipX.isFinite, clipY.isFinite else {
+            return nil
+        }
+
+        let worldOffset = origin - renderOrigin
+        let focusOffset = focus - renderOrigin
+        switch projection {
+        case .parallel:
+            let xScale = 2.0 * Double(scale) / width
+            let yScale = -2.0 * Double(scale) / height
+            let depthExtent = maxDepthExtent(using: viewNormal)
+            let rows = ViewportProjectionRows(
+                x: Self.row(
+                    coefficient: horizontal * xScale,
+                    constant: clipX,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                ),
+                y: Self.row(
+                    coefficient: verticalDown * yScale,
+                    constant: clipY,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                ),
+                depth: Self.row(
+                    coefficient: viewNormal / (2.0 * depthExtent),
+                    constant: 0.5,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                ),
+                w: ViewportProjectionRow(x: 0.0, y: 0.0, z: 0.0, constant: 1.0)
+            )
+            return rows.isFinite ? rows : nil
+        case .perspective(let fieldOfViewRadians):
+            let tangent = tan(fieldOfViewRadians * 0.5)
+            let fittingHeight = Double(fittingInsets.fittingRect(in: viewportSize).height)
+            let cameraDistance = fittingHeight / (2.0 * Double(scale) * tangent)
+            // The depth row is the homogeneous near-plane plane. Keeping its
+            // value equal to the CPU admission threshold makes Metal's
+            // built-in z <= w clip reject exactly the same points as picking.
+            let nearClip = Self.minimumPerspectiveW
+            let xFocal = 2.0 * Double(scale) * cameraDistance / width
+            let yFocal = 2.0 * Double(scale) * cameraDistance / height
+            guard tangent.isFinite, tangent > 0.0,
+                  fittingHeight.isFinite, fittingHeight > 0.0,
+                  cameraDistance.isFinite, cameraDistance > nearClip,
+                  nearClip.isFinite, xFocal.isFinite, yFocal.isFinite else {
+                return nil
+            }
+            let worldW = ViewportProjectionRow(
+                x: -viewNormal.x,
+                y: -viewNormal.y,
+                z: -viewNormal.z,
+                constant: cameraDistance
+            )
+            // Translate the camera in its focus plane. Multiplying the screen
+            // offset by worldW would instead create an off-axis lens and erase
+            // the depth-dependent parallax of a native pinhole camera.
+            let xCoefficient = horizontal * xFocal
+            let yCoefficient = verticalDown * (-yFocal)
+            let xConstant = clipX * worldW.constant
+            let yConstant = clipY * worldW.constant
+            let rows = ViewportProjectionRows(
+                x: Self.row(
+                    coefficient: xCoefficient,
+                    constant: xConstant,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                ),
+                y: Self.row(
+                    coefficient: yCoefficient,
+                    constant: yConstant,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                ),
+                depth: ViewportProjectionRow(x: 0.0, y: 0.0, z: 0.0, constant: nearClip),
+                w: Self.row(
+                    coefficient: Vector3D(x: worldW.x, y: worldW.y, z: worldW.z),
+                    constant: worldW.constant,
+                    centeredAt: focusOffset,
+                    translatedBy: worldOffset
+                )
+            )
+            return rows.isFinite ? rows : nil
+        }
     }
 
     public func project(_ point: CGPoint, in item: ViewportSceneItem) -> CGPoint {
@@ -1581,8 +1897,25 @@ public struct ViewportLayout: Equatable {
         return project(transformedPoint)
     }
 
+    public func projectedPoint(
+        _ point: CGPoint,
+        in item: ViewportSceneItem
+    ) -> ViewportProjectedPoint? {
+        projectedPoint(
+            Point3D(x: Double(point.x), y: 0.0, z: Double(point.y)),
+            in: item
+        )
+    }
+
     public func project(_ point: Point3D, in item: ViewportSceneItem) -> CGPoint {
         project(transformedPoint(point, in: item))
+    }
+
+    public func projectedPoint(
+        _ point: Point3D,
+        in item: ViewportSceneItem
+    ) -> ViewportProjectedPoint? {
+        projectedPoint(transformedPoint(point, in: item))
     }
 
     public func transformedPoint(_ point: Point3D, in item: ViewportSceneItem) -> Point3D {
@@ -1594,46 +1927,149 @@ public struct ViewportLayout: Equatable {
     }
 
     public func projectedDepth(_ point: Point3D) -> Double? {
-        guard let viewNormal = basis.viewNormal else {
-            return nil
+        switch projection {
+        case .parallel:
+            guard let viewNormal = basis.viewNormal else { return nil }
+            return (point.x - focus.x) * viewNormal.x
+                + (point.y - focus.y) * viewNormal.y
+                + (point.z - focus.z) * viewNormal.z
+        case .perspective:
+            return projectedPoint(point)?.depth
         }
-        return (point.x - renderOrigin.x) * viewNormal.x
-            + (point.y - renderOrigin.y) * viewNormal.y
-            + (point.z - renderOrigin.z) * viewNormal.z
     }
 
     public func unproject(_ point: CGPoint) -> CGPoint {
-        let viewportX = (point.x - center.x) / scale
-        let viewportY = (point.y - center.y) / scale
-        let determinant = basis.xDirection.dx * basis.zDirection.dy - basis.zDirection.dx * basis.xDirection.dy
-        let modelX = (viewportX * basis.zDirection.dy - basis.zDirection.dx * viewportY) / determinant
-        let modelY = (basis.xDirection.dx * viewportY - viewportX * basis.xDirection.dy) / determinant
-        return CGPoint(
-            x: CGFloat(renderOrigin.x) + modelCenterOffsetX + modelX,
-            y: CGFloat(renderOrigin.z) + modelCenterOffsetZ + modelY
-        )
+        if projection == .parallel {
+            // Solve the reference plane locally before adding the world focus.
+            let elevation = CGFloat(focus.y - renderOrigin.y)
+            let x = (point.x - center.x) / scale + basis.yDirection.dx * elevation
+            let y = (point.y - center.y) / scale + basis.yDirection.dy * elevation
+            let determinant = basis.xDirection.dx * basis.zDirection.dy
+                - basis.zDirection.dx * basis.xDirection.dy
+            precondition(abs(determinant) > 1.0e-12, "Reference canvas plane is edge-on.")
+            return CGPoint(
+                x: focus.x + Double((x * basis.zDirection.dy - basis.zDirection.dx * y) / determinant),
+                y: focus.z + Double((basis.xDirection.dx * y - x * basis.xDirection.dy) / determinant)
+            )
+        }
+        guard let world = unproject(
+            point, planeOrigin: renderOrigin, normal: Vector3D(x: 0, y: 1, z: 0)
+        ) else {
+            preconditionFailure("Viewport point cannot be unprojected onto the reference canvas plane.")
+        }
+        return CGPoint(x: world.x, y: world.z)
+    }
+
+    /// Unprojects a screen point through the active camera onto the displayed
+    /// canvas plane. Perspective callers must use this fallible contract;
+    /// parallel affine math is never used as a failure fallback.
+    public func canvasCoordinates(for point: CGPoint) -> CGPoint? {
+        let plane = ViewportCanvasPlane.displayed(for: basis)
+        guard let worldPoint = unproject(point, onto: plane) else {
+            return nil
+        }
+        let coordinates = plane.coordinates(of: worldPoint)
+        guard coordinates.x.isFinite, coordinates.y.isFinite else {
+            return nil
+        }
+        return coordinates
     }
 
     public func unproject(
         _ point: CGPoint,
         onto canvasPlane: ViewportCanvasPlane
     ) -> Point3D? {
-        let origin = project(Point3D.origin)
-        let firstDirection = basis.direction(for: canvasPlane.firstAxis)
-        let secondDirection = basis.direction(for: canvasPlane.secondAxis)
-        let viewportX = (point.x - origin.x) / scale
-        let viewportY = (point.y - origin.y) / scale
-        let determinant = firstDirection.dx * secondDirection.dy - secondDirection.dx * firstDirection.dy
-        guard abs(determinant) > 1.0e-9 else {
+        guard let normal = canvasPlane.normal else { return nil }
+        return unproject(point, planeOrigin: canvasPlane.worldPoint(first: 0, second: 0), normal: normal)
+    }
+
+    private func unproject(_ point: CGPoint, planeOrigin: Point3D, normal: Vector3D) -> Point3D? {
+        guard let ray = viewportRay(for: point) else { return nil }
+        let denominator = ray.direction.dot(normal)
+        guard denominator.isFinite, abs(denominator) > 1.0e-12 else {
             return nil
         }
-        let first = (viewportX * secondDirection.dy - secondDirection.dx * viewportY) / determinant
-        let second = (firstDirection.dx * viewportY - viewportX * firstDirection.dy) / determinant
-        return canvasPlane.worldPoint(
-            first: Double(first),
-            second: Double(second)
-        )
+        let distance = (planeOrigin - ray.origin).dot(normal) / denominator
+        guard distance.isFinite, projection == .parallel || distance >= 0.0 else {
+            return nil
+        }
+        let worldPoint = ray.origin + ray.direction * distance
+        guard worldPoint.isFinite else {
+            return nil
+        }
+        return worldPoint
     }
+
+    /// Resolves navigation on the view plane through the camera focus, not a
+    /// construction plane whose intersection may jump or disappear while orbiting.
+    public func worldPointOnFocusPlane(for point: CGPoint) -> Point3D? {
+        guard let normal = basis.viewNormal else { return nil }
+        return unproject(point, planeOrigin: focus, normal: normal)
+    }
+
+    public func viewportRay(for point: CGPoint) -> ViewportWorldRay? {
+        guard point.x.isFinite, point.y.isFinite,
+              let viewNormal = basis.viewNormal,
+              let horizontal = screenHorizontal,
+              let verticalDown = screenVerticalDown,
+              projectionRows(relativeTo: renderOrigin)?.isFinite == true,
+              viewNormal.isFinite else {
+            return nil
+        }
+        let dualHorizontal = verticalDown.cross(viewNormal)
+        let dualVertical = viewNormal.cross(horizontal)
+        let dualNormal = horizontal.cross(verticalDown)
+        let determinant = horizontal.dot(dualHorizontal)
+        guard determinant.isFinite, abs(determinant) > 1.0e-12 else { return nil }
+        switch projection {
+        case .parallel:
+            let viewportX = Double((point.x - center.x) / scale)
+            let viewportY = Double((point.y - center.y) / scale)
+            let anchor = focus + (dualHorizontal * viewportX + dualVertical * viewportY) / determinant
+            return ViewportWorldRay(origin: anchor, direction: viewNormal)
+        case .perspective:
+            guard let cameraDistance = perspectiveCameraDistance else {
+                return nil
+            }
+            let viewportCenter = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+            let ndcX = 2.0 * Double(point.x - viewportCenter.x) / Double(viewportSize.width)
+            let ndcY = -2.0 * Double(point.y - viewportCenter.y) / Double(viewportSize.height)
+            let xFocal = 2.0 * Double(scale) * cameraDistance / Double(viewportSize.width)
+            let yFocal = 2.0 * Double(scale) * cameraDistance / Double(viewportSize.height)
+            guard xFocal.isFinite, yFocal.isFinite,
+                  abs(xFocal) > 1.0e-12, abs(yFocal) > 1.0e-12,
+                  ndcX.isFinite, ndcY.isFinite else {
+                return nil
+            }
+            // Use the same symmetric lens and translated camera origin as
+            // projectionRows; the fitting center is not a lens principal point.
+            let direction = (
+                dualHorizontal * (ndcX / xFocal)
+                + dualVertical * (-ndcY / yFocal)
+                - dualNormal
+            ) / determinant
+            let normalizedDirection: Vector3D
+            do {
+                normalizedDirection = try direction.normalized(tolerance: 1.0e-12)
+            } catch {
+                return nil
+            }
+            let cameraOrigin = focus + viewNormal * cameraDistance
+                + horizontal * Double((viewportCenter.x - center.x) / scale)
+                + verticalDown * Double((viewportCenter.y - center.y) / scale)
+            return ViewportWorldRay(origin: cameraOrigin, direction: normalizedDirection)
+        }
+    }
+
+    public var visibleHeightMeters: Double {
+        let height = Double(fittingInsets.fittingRect(in: viewportSize).height)
+        guard height.isFinite, height > 0.0,
+              scale.isFinite, scale > 0.0 else {
+            preconditionFailure("Viewport layout has no finite visible height.")
+        }
+        return height / Double(scale)
+    }
+
 
     public func displayedCanvasWorldPoint(for viewportPoint: CGPoint) -> Point3D? {
         unproject(
@@ -1643,16 +2079,41 @@ public struct ViewportLayout: Equatable {
     }
 
     public func projectedFootprint(_ itemBounds: CGRect) -> ViewportProjectedRect {
-        ViewportProjectedRect(
-            bottomLeft: project(CGPoint(x: itemBounds.minX, y: itemBounds.minY)),
-            bottomRight: project(CGPoint(x: itemBounds.maxX, y: itemBounds.minY)),
-            topRight: project(CGPoint(x: itemBounds.maxX, y: itemBounds.maxY)),
-            topLeft: project(CGPoint(x: itemBounds.minX, y: itemBounds.maxY))
+        guard let footprint = projectedFootprintIfVisible(itemBounds) else {
+            preconditionFailure("Viewport footprint is outside the visible projection half-space.")
+        }
+        return footprint
+    }
+
+    /// Projects all four corners of a model-space rectangle, retaining the
+    /// rectangle only when every corner is visible to the active camera.
+    /// Perspective consumers use this fallible path instead of manufacturing
+    /// a screen-space footprint for a near-clipped body.
+    public func projectedFootprintIfVisible(_ itemBounds: CGRect) -> ViewportProjectedRect? {
+        let points = [
+            Point3D(x: Double(itemBounds.minX), y: 0.0, z: Double(itemBounds.minY)),
+            Point3D(x: Double(itemBounds.maxX), y: 0.0, z: Double(itemBounds.minY)),
+            Point3D(x: Double(itemBounds.maxX), y: 0.0, z: Double(itemBounds.maxY)),
+            Point3D(x: Double(itemBounds.minX), y: 0.0, z: Double(itemBounds.maxY)),
+        ]
+        let projected = points.compactMap(projectedPoint)
+        guard projected.count == points.count else {
+            return nil
+        }
+        return ViewportProjectedRect(
+            bottomLeft: projected[0].point,
+            bottomRight: projected[1].point,
+            topRight: projected[2].point,
+            topLeft: projected[3].point
         )
     }
 
     public func projectedRect(_ itemBounds: CGRect) -> CGRect {
         projectedFootprint(itemBounds).bounds
+    }
+
+    public func projectedRectIfVisible(_ itemBounds: CGRect) -> CGRect? {
+        projectedFootprintIfVisible(itemBounds)?.bounds
     }
 
     public static func transformedPoint(
@@ -1667,7 +2128,9 @@ public struct ViewportLayout: Equatable {
             return nil
         }
 
-        let footprint = projectedFootprint(item.modelBounds)
+        guard let footprint = projectedFootprintIfVisible(item.modelBounds) else {
+            return nil
+        }
         let depthOffset = max(12.0, min(54.0, CGFloat(component.sizeYMeters) * scale * 0.85))
         let offset = CGSize(
             width: basis.yDirection.dx * depthOffset,
@@ -1677,6 +2140,95 @@ public struct ViewportLayout: Equatable {
             frontFootprint: footprint,
             backFootprint: footprint.offsetBy(dx: offset.width, dy: offset.height),
             offset: offset
+        )
+    }
+
+    public static let minimumPerspectiveW = 1.0e-6
+
+    private var screenHorizontal: Vector3D? {
+        let vector = Vector3D(
+            x: Double(basis.xDirection.dx),
+            y: Double(basis.yDirection.dx),
+            z: Double(basis.zDirection.dx)
+        )
+        return vector.isFinite ? vector : nil
+    }
+
+    private var screenVerticalDown: Vector3D? {
+        let vector = Vector3D(
+            x: Double(basis.xDirection.dy),
+            y: Double(basis.yDirection.dy),
+            z: Double(basis.zDirection.dy)
+        )
+        return vector.isFinite ? vector : nil
+    }
+
+    private var perspectiveCameraDistance: Double? {
+        guard case .perspective(let fieldOfViewRadians) = projection,
+              fieldOfViewRadians.isFinite,
+              fieldOfViewRadians > 0.0,
+              fieldOfViewRadians < .pi,
+              scale.isFinite, scale > 0.0 else {
+            return nil
+        }
+        let height = Double(fittingInsets.fittingRect(in: viewportSize).height)
+        let tangent = tan(fieldOfViewRadians * 0.5)
+        let distance = height / (2.0 * Double(scale) * tangent)
+        guard distance.isFinite, distance > Self.minimumPerspectiveW else {
+            return nil
+        }
+        return distance
+    }
+
+    private func maxDepthExtent(using viewNormal: Vector3D) -> Double {
+        var maximum = 0.0
+        let xValues = [modelBounds.minX, modelBounds.maxX]
+        let zValues = [modelBounds.minY, modelBounds.maxY]
+        let yValues = verticalBoundsForDepth
+        for x in xValues {
+            for y in yValues {
+                for z in zValues {
+                    let delta = Point3D(x: Double(x), y: y, z: Double(z)) - focus
+                    maximum = max(maximum, abs(delta.dot(viewNormal)))
+                }
+            }
+        }
+        if maximum.isFinite, maximum > 1.0e-9 {
+            return maximum
+        }
+        let verticalHeight = verticalBounds.map { $0.upperBound - $0.lowerBound } ?? 0.0
+        return max(verticalHeight.isFinite ? verticalHeight : 0.0, 1.0e-9)
+    }
+
+    private var verticalBoundsForDepth: [Double] {
+        guard let vertical = verticalBounds,
+              vertical.lowerBound.isFinite,
+              vertical.upperBound.isFinite,
+              vertical.lowerBound <= vertical.upperBound else {
+            return [renderOrigin.y]
+        }
+        return [vertical.lowerBound, vertical.upperBound]
+    }
+
+    private static func row(
+        coefficient: Vector3D,
+        constant: Double,
+        centeredAt centerOffset: Vector3D,
+        translatedBy worldOffset: Vector3D
+    ) -> ViewportProjectionRow {
+        ViewportProjectionRow(
+            x: coefficient.x,
+            y: coefficient.y,
+            z: coefficient.z,
+            constant: constant + coefficient.dot(worldOffset - centerOffset)
+        )
+    }
+
+    private static func interpolate(_ start: Point3D, _ end: Point3D, _ fraction: Double) -> Point3D {
+        Point3D(
+            x: start.x + (end.x - start.x) * fraction,
+            y: start.y + (end.y - start.y) * fraction,
+            z: start.z + (end.z - start.z) * fraction
         )
     }
 
@@ -1724,14 +2276,6 @@ public struct ViewportLayout: Equatable {
             return 0.0
         }
         return CGFloat(height)
-    }
-
-    private var modelCenterOffsetX: CGFloat {
-        CGFloat(Double(modelBounds.midX) - renderOrigin.x)
-    }
-
-    private var modelCenterOffsetZ: CGFloat {
-        CGFloat(Double(modelBounds.midY) - renderOrigin.z)
     }
 
     private static func renderOrigin(
@@ -1820,8 +2364,10 @@ public struct ViewportModelCoordinateMapper {
         )
     }
 
-    public func modelPoint(for viewportPoint: CGPoint) -> Point2D {
-        let point = layout.unproject(viewportPoint)
+    public func modelPoint(for viewportPoint: CGPoint) -> Point2D? {
+        guard let point = layout.canvasCoordinates(for: viewportPoint) else {
+            return nil
+        }
         return Point2D(
             x: Double(point.x),
             y: Double(point.y)
@@ -1841,10 +2387,14 @@ public struct ViewportModelCoordinateMapper {
         endWorldPoint: Point3D? = nil,
         startViewRayAnchorWorldPoint: Point3D? = nil,
         endViewRayAnchorWorldPoint: Point3D? = nil
-    ) -> ViewportModelDrag {
-        ViewportModelDrag(
-            start: modelPoint(for: start),
-            end: modelPoint(for: end),
+    ) -> ViewportModelDrag? {
+        guard let startPoint = modelPoint(for: start),
+              let endPoint = modelPoint(for: end) else {
+            return nil
+        }
+        return ViewportModelDrag(
+            start: startPoint,
+            end: endPoint,
             sketchPlane: sketchPlane,
             modifierFlags: modifierFlags,
             startWorldPoint: startWorldPoint,
@@ -2099,7 +2649,10 @@ public struct ViewportBodyTopologyHitTester {
     ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
         var bestVertex: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for vertex in topology.vertices {
-            let distance = point.distance(to: layout.project(vertex.point, in: item))
+            guard let projected = layout.projectedPoint(vertex.point, in: item)?.point else {
+                continue
+            }
+            let distance = point.distance(to: projected)
             guard distance <= tolerance else {
                 continue
             }
@@ -2124,8 +2677,10 @@ public struct ViewportBodyTopologyHitTester {
     ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
         var bestEdge: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for edge in topology.edges {
-            let projectedStart = layout.project(edge.start, in: item)
-            let projectedEnd = layout.project(edge.end, in: item)
+            guard let projectedStart = layout.projectedPoint(edge.start, in: item)?.point,
+                  let projectedEnd = layout.projectedPoint(edge.end, in: item)?.point else {
+                continue
+            }
             let distance = point.distanceToSegment(start: projectedStart, end: projectedEnd)
             guard distance <= tolerance else {
                 continue
@@ -2159,7 +2714,10 @@ public struct ViewportBodyTopologyHitTester {
     ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
         var bestFace: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for face in topology.faces {
-            let polygon = face.points.map { layout.project($0, in: item) }
+            let polygon = face.points.compactMap { layout.projectedPoint($0, in: item)?.point }
+            guard polygon.count == face.points.count else {
+                continue
+            }
             guard contains(point, in: polygon, tolerance: tolerance) else {
                 continue
             }
@@ -3041,9 +3599,13 @@ public struct ViewportHitTester {
         for segment in component.segments {
             guard segment.points.count >= 2 else { continue }
             for index in 0..<(segment.points.count - 1) {
+                guard let start = layout.projectedPoint(segment.points[index], in: item)?.point,
+                      let end = layout.projectedPoint(segment.points[index + 1], in: item)?.point else {
+                    continue
+                }
                 let distance = point.distanceToSegment(
-                    start: layout.project(segment.points[index], in: item),
-                    end: layout.project(segment.points[index + 1], in: item)
+                    start: start,
+                    end: end
                 )
                 if bestHit.map({ distance < $0.score }) ?? true {
                     bestHit = (segment, distance)
@@ -3065,7 +3627,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 10.0)
         for display in component.surfaceControlPointDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3092,7 +3656,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 10.0)
         for display in component.surfaceTrimEndpointDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3119,7 +3685,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 8.0)
         for display in component.surfaceTrimKnotDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3146,7 +3714,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 8.0)
         for display in component.surfaceTrimSpanDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3173,7 +3743,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 8.0)
         for display in component.surfaceKnotDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3200,7 +3772,9 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 8.0)
         for display in component.surfaceSpanDisplays {
-            let projectedPoint = layout.project(display.point, in: item)
+            guard let projectedPoint = layout.projectedPoint(display.point, in: item)?.point else {
+                continue
+            }
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {
                 continue
@@ -3384,13 +3958,26 @@ public struct ViewportHitTester {
             let controlPointIndex: Int?
             switch primitive {
             case .point(_, let modelPoint):
-                distance = point.distance(to: layout.project(modelPoint))
+                guard let projected = layout.projectedPoint(modelPoint)?.point else {
+                    distance = nil
+                    pointHandle = nil
+                    controlPointIndex = nil
+                    break
+                }
+                distance = point.distance(to: projected)
                 pointHandle = .point
                 controlPointIndex = nil
             case .line(_, let start, let end):
+                guard let projectedStart = layout.projectedPoint(start)?.point,
+                      let projectedEnd = layout.projectedPoint(end)?.point else {
+                    distance = nil
+                    pointHandle = nil
+                    controlPointIndex = nil
+                    break
+                }
                 let curveDistance = point.distanceToSegment(
-                    start: layout.project(start),
-                    end: layout.project(end)
+                    start: projectedStart,
+                    end: projectedEnd
                 )
                 let handles: [(handle: SketchEntityPointHandle, point: CGPoint)] = [
                     (handle: .lineStart, point: start),
@@ -3583,7 +4170,10 @@ public struct ViewportHitTester {
     ) -> (handle: SketchEntityPointHandle, distance: CGFloat)? {
         var bestHit: (handle: SketchEntityPointHandle, distance: CGFloat)?
         for handle in handles {
-            let distance = point.distance(to: layout.project(handle.point))
+            guard let projected = layout.projectedPoint(handle.point)?.point else {
+                continue
+            }
+            let distance = point.distance(to: projected)
             guard distance <= tolerance else {
                 continue
             }
@@ -3605,7 +4195,10 @@ public struct ViewportHitTester {
     ) -> (index: Int, distance: CGFloat)? {
         var bestHit: (index: Int, distance: CGFloat)?
         for (index, controlPoint) in controlPoints.enumerated() {
-            let distance = point.distance(to: layout.project(controlPoint))
+            guard let projected = layout.projectedPoint(controlPoint)?.point else {
+                continue
+            }
+            let distance = point.distance(to: projected)
             guard distance <= tolerance else {
                 continue
             }
@@ -3636,7 +4229,10 @@ public struct ViewportHitTester {
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             )
-            let projectedPoint = layout.project(modelPoint)
+            guard let projectedPoint = layout.projectedPoint(modelPoint)?.point else {
+                previousPoint = nil
+                continue
+            }
             if let previousPoint {
                 bestDistance = min(
                     bestDistance,
@@ -3695,7 +4291,10 @@ public struct ViewportHitTester {
         var bestDistance = CGFloat.greatestFiniteMagnitude
         var previousPoint: CGPoint?
         for modelPoint in points {
-            let projectedPoint = layout.project(modelPoint)
+            guard let projectedPoint = layout.projectedPoint(modelPoint)?.point else {
+                previousPoint = nil
+                continue
+            }
             if let previousPoint {
                 bestDistance = min(
                     bestDistance,
@@ -3748,7 +4347,7 @@ private struct ViewportSketchPlaneProjection {
         guard localPoint.x.isFinite, localPoint.y.isFinite else {
             return nil
         }
-        return layout.project(coordinateSystem.point(from: localPoint))
+        return layout.projectedPoint(coordinateSystem.point(from: localPoint))?.point
     }
 }
 

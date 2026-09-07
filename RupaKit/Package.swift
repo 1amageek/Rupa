@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "RupaKit",
     platforms: [
-        .macOS("26.0"),
+        .macOS("27.0"),
     ],
     products: [
         .library(
@@ -331,7 +331,10 @@ let package = Package(
                 "RupaViewportScene",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md"]
+            exclude: ["DESIGN.md"],
+            resources: [
+                .process("RealityViewport/Resources"),
+            ]
         ),
         .target(
             name: "RupaViewportScene",
@@ -859,6 +862,7 @@ let package = Package(
                 "RupaCore",
                 "RupaKit",
                 "RupaRendering",
+                "RupaResponsivenessBaseline",
                 "RupaViewportScene",
             ]
         ),

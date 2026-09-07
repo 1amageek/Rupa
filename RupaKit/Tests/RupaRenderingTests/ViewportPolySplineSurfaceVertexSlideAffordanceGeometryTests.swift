@@ -30,7 +30,8 @@ import Testing
     let start = layout.project(geometry.baseModelPoint)
     let current = layout.project(Point3D(x: 0.0, y: 0.0, z: 0.002))
 
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.002) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance - 0.002) < 1.0e-12)
 }
 
 @Test func viewportPolySplineSurfaceVertexSlideAffordanceKeepsSignedNegativeUDistance() throws {
@@ -59,7 +60,8 @@ import Testing
     let start = layout.project(geometry.baseModelPoint)
     let current = layout.project(Point3D(x: 0.005, y: 0.0, z: 0.0))
 
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) + 0.001) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance + 0.001) < 1.0e-12)
 }
 
 @Test func viewportPolySplineSurfaceVertexSlideAffordanceNormalUsesPatchHullCrossProduct() throws {
@@ -131,7 +133,8 @@ import Testing
         )
     )
 
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.001) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance - 0.001) < 1.0e-12)
     #expect(abs(preview.originalPoint.x - 0.002) < 1.0e-12)
     #expect(abs(preview.originalPoint.z - 0.002) < 1.0e-12)
     #expect(abs(preview.movedPoint.x - 0.002) < 1.0e-12)
@@ -171,12 +174,13 @@ import Testing
 
     let start = layout.project(geometry.baseModelPoint)
     let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
-    let tip = geometry.projectedTip(layout: layout, distanceMeters: 0.001)
+    let tip = try #require(geometry.projectedTip(layout: layout, distanceMeters: 0.001))
     let expectedTip = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
 
     #expect(abs(geometry.baseModelPoint.x - 0.006) < 1.0e-12)
     #expect(abs(geometry.modelDirection.x - 2.0) < 1.0e-12)
-    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.001) < 1.0e-12)
+    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
+    #expect(abs(distance - 0.001) < 1.0e-12)
     #expect(abs(tip.x - expectedTip.x) < 1.0e-9)
     #expect(abs(tip.y - expectedTip.y) < 1.0e-9)
 }

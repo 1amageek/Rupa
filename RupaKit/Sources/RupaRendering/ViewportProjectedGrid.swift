@@ -391,11 +391,24 @@ public struct ViewportProjectedGrid: Equatable {
         for index in minSecondIndex ... maxSecondIndex {
             let second = CGFloat(index) * step
             let isMajor = index.isMultiple(of: majorEvery)
+            guard let start = project(
+                first: modelBounds.minX,
+                second: second,
+                layout: layout,
+                plane: plane
+            ), let end = project(
+                first: modelBounds.maxX,
+                second: second,
+                layout: layout,
+                plane: plane
+            ) else {
+                continue
+            }
             lines.append(
                 Line(
                     axis: plane.firstAxis,
-                    start: project(first: modelBounds.minX, second: second, layout: layout, plane: plane),
-                    end: project(first: modelBounds.maxX, second: second, layout: layout, plane: plane),
+                    start: start,
+                    end: end,
                     isMajor: isMajor,
                     isOrigin: index == 0
                 )
@@ -405,11 +418,24 @@ public struct ViewportProjectedGrid: Equatable {
         for index in minFirstIndex ... maxFirstIndex {
             let first = CGFloat(index) * step
             let isMajor = index.isMultiple(of: majorEvery)
+            guard let start = project(
+                first: first,
+                second: modelBounds.minY,
+                layout: layout,
+                plane: plane
+            ), let end = project(
+                first: first,
+                second: modelBounds.maxY,
+                layout: layout,
+                plane: plane
+            ) else {
+                continue
+            }
             lines.append(
                 Line(
                     axis: plane.secondAxis,
-                    start: project(first: first, second: modelBounds.minY, layout: layout, plane: plane),
-                    end: project(first: first, second: modelBounds.maxY, layout: layout, plane: plane),
+                    start: start,
+                    end: end,
                     isMajor: isMajor,
                     isOrigin: index == 0
                 )
@@ -455,8 +481,8 @@ public struct ViewportProjectedGrid: Equatable {
             guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
                 continue
             }
-            let basePosition = project(first: value, second: 0.0, layout: layout, plane: plane)
-            guard visibleRect.contains(basePosition) else {
+            guard let basePosition = project(first: value, second: 0.0, layout: layout, plane: plane),
+                  visibleRect.contains(basePosition) else {
                 continue
             }
             let position = offsetLabelPosition(basePosition, axis: plane.firstAxis, layout: layout)
@@ -481,8 +507,8 @@ public struct ViewportProjectedGrid: Equatable {
             guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
                 continue
             }
-            let basePosition = project(first: 0.0, second: value, layout: layout, plane: plane)
-            guard visibleRect.contains(basePosition) else {
+            guard let basePosition = project(first: 0.0, second: value, layout: layout, plane: plane),
+                  visibleRect.contains(basePosition) else {
                 continue
             }
             let position = offsetLabelPosition(basePosition, axis: plane.secondAxis, layout: layout)
@@ -681,14 +707,10 @@ public struct ViewportProjectedGrid: Equatable {
         second: CGFloat,
         layout: ViewportLayout,
         plane: ViewportCanvasPlane
-    ) -> CGPoint {
-        let origin = layout.project(.zero)
-        let firstDirection = layout.basis.direction(for: plane.firstAxis)
-        let secondDirection = layout.basis.direction(for: plane.secondAxis)
-        return CGPoint(
-            x: origin.x + (firstDirection.dx * first + secondDirection.dx * second) * layout.scale,
-            y: origin.y + (firstDirection.dy * first + secondDirection.dy * second) * layout.scale
-        )
+    ) -> CGPoint? {
+        layout.projectedPoint(
+            plane.worldPoint(first: Double(first), second: Double(second))
+        )?.point
     }
 
     private static func unproject(
@@ -696,18 +718,9 @@ public struct ViewportProjectedGrid: Equatable {
         layout: ViewportLayout,
         plane: ViewportCanvasPlane
     ) -> CGPoint? {
-        let origin = layout.project(.zero)
-        let firstDirection = layout.basis.direction(for: plane.firstAxis)
-        let secondDirection = layout.basis.direction(for: plane.secondAxis)
-        let viewportX = (point.x - origin.x) / layout.scale
-        let viewportY = (point.y - origin.y) / layout.scale
-        let determinant = firstDirection.dx * secondDirection.dy - secondDirection.dx * firstDirection.dy
-        guard abs(determinant) > 1.0e-9 else {
+        guard let worldPoint = layout.unproject(point, onto: plane) else {
             return nil
         }
-        return CGPoint(
-            x: (viewportX * secondDirection.dy - secondDirection.dx * viewportY) / determinant,
-            y: (firstDirection.dx * viewportY - viewportX * firstDirection.dy) / determinant
-        )
+        return plane.coordinates(of: worldPoint)
     }
 }

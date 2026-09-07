@@ -1,4 +1,9 @@
+import AppKit
 import Foundation
+import CoreGraphics
+import Metal
+import RealityKit
+import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
 import RupaGeometry
@@ -6,7 +11,213 @@ import RupaProjectModel
 import RupaViewportScene
 import Synchronization
 import Testing
+import SwiftCAD
+import SwiftUI
+import simd
 @testable import RupaRendering
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativeMaterialColorChangesWithoutGeometryReplacement() async throws {
+    let scene = try planCacheScene(suffix: "material-update")
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: scene))
+    defer { cache.teardown() }
+    let renderer = try RealityRenderer()
+    renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
+    renderer.cameraSettings.isToneMappingEnabled = false
+    renderer.entities.append(viewport.root)
+    renderer.activeCamera = viewport.camera
+    let layout = ViewportLayout(modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                size: CGSize(width: 96, height: 96), camera: .init(zoom: 0.6),
+                                basis: .axisFront(.z), verticalBounds: 0...0)
+    try viewport.applyCamera(layout: layout, revision: 1)
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
+                                                              width: 96, height: 96, mipmapped: false)
+    descriptor.storageMode = .shared
+    descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+    let sample = try #require(layout.projectedPoint(Point3D(x: 0.25, y: 0.25, z: 0))).point
+    let sampleX = Int(sample.x.rounded())
+    let sampleY = Int(sample.y.rounded())
+    try #require((0..<96).contains(sampleX) && (0..<96).contains(sampleY))
+    let interaction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil
+    )
+    func apply(_ color: ColorRGBA?) throws {
+        try viewport.applyAppearance(displayMode: .solid, shading: .init(style: .flat, solidColor: .material),
+                                     materialColors: color.map { [scene.items[0].id: $0] } ?? [:], interaction: interaction,
+                                     sectionPlane: nil, retainedSide: .front, sectionTolerance: 0)
+    }
+    func renderedPixel() async throws -> [UInt8] {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                             onComplete: { _ in continuation.resume() })
+            } catch { continuation.resume(throwing: error) }
+        }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        texture.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(sampleX, sampleY, 1, 1), mipmapLevel: 0)
+        return pixel
+    }
+    var originalMesh: MeshResource?
+    for (color, channel) in [(ColorRGBA(r: 1, g: 0, b: 0, a: 1), 2),
+                             (ColorRGBA(r: 0, g: 0, b: 1, a: 1), 0)] {
+        try apply(color)
+        let pixel = try await renderedPixel()
+        #expect(pixel[channel] > 200 && pixel[2 - channel] < 20, "Material-only update rendered BGRA \(pixel)")
+        let nativeScene = try #require(viewport.root.scene)
+        let hit = try #require(nativeScene.raycast(origin: [0.5, 0.5, 2], direction: [0, 0, -1], length: 3).first)
+        let mesh = try #require(hit.entity.components[ModelComponent.self]?.mesh)
+        if let originalMesh { #expect(mesh === originalMesh) } else { originalMesh = mesh }
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try apply(ColorRGBA(r: .nan, g: 0, b: 0, a: 1))
+    }
+    let preserved = try await renderedPixel()
+    #expect(preserved[0] > 200 && preserved[2] < 20, "Failed appearance update changed BGRA \(preserved)")
+    let nativeScene = try #require(viewport.root.scene)
+    let hit = try #require(nativeScene.raycast(origin: [0.5, 0.5, 2], direction: [0, 0, -1], length: 3).first)
+    #expect(hit.entity.components[ModelComponent.self]?.mesh === originalMesh)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
+    _ = NSApplication.shared
+    let scene = try planCacheScene(suffix: "mounted-camera")
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: scene))
+    defer { viewport.unbind(); cache.teardown() }
+    let size = CGSize(width: 512, height: 384)
+    let world = Point3D(x: 0.2, y: 0.3, z: 0)
+    var reportedError: MeshSourcePresentationRenderError?
+    let interaction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+        previewSceneNodeIDs: [], hoveredSceneNodeID: nil
+    )
+    func view(_ layout: ViewportLayout, revision: UInt64) -> some View {
+        RealityViewportView(
+            viewport: viewport, viewportRevision: revision, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:],
+            layout: layout, interaction: interaction, sectionPlane: nil,
+            retainedSide: .front, sectionTolerance: 0,
+            onUpdateResult: { reportedError = $0 }
+        ).frame(width: size.width, height: size.height)
+    }
+    var layout = ViewportLayout(
+        modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1), size: size,
+        camera: .init(zoom: 0.6), basis: .axisFront(.z), verticalBounds: 0...1
+    )
+    let controller = NSHostingController(rootView: view(layout, revision: 1))
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+
+    func entities(_ entity: Entity) -> [ObjectIdentifier] {
+        [ObjectIdentifier(entity)] + entity.children.flatMap { entities($0) }
+    }
+    let originalEntities = entities(viewport.root)
+    var revision: UInt64 = 0
+    for projection in [ViewportCameraProjection.standardPerspective, .parallel] {
+        for offset in [false, true] {
+            for basis in [ViewportProjectionBasis.axisFront(.z),
+                          .interpolated(from: .isometric, to: .axisFront(.z), progress: 0.5)] {
+                revision += 1
+                layout = ViewportLayout(
+                    modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1), size: size,
+                    camera: .init(zoom: 0.6, pan: offset ? CGSize(width: 17, height: -11) : .zero,
+                                  projection: projection),
+                    basis: basis, verticalBounds: 0...1,
+                    fittingInsets: offset ? .init(top: 20, leading: 45, bottom: 70, trailing: 10) : .zero
+                )
+                let expected = try #require(layout.projectedPoint(world)).point
+                controller.rootView = view(layout, revision: revision)
+                let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+                var matched = false
+                var lastHitPosition: Point3D?
+                // This observes native query convergence after a real SwiftUI
+                // mount/update, not a GPU-presented-frame acknowledgement.
+                while ContinuousClock.now < deadline {
+                    controller.view.layoutSubtreeIfNeeded()
+                    if let error = reportedError { throw error }
+                    if viewport.appliedViewportRevision == revision,
+                       let actual = viewport.project(world),
+                       hypot(actual.x - expected.x, actual.y - expected.y) < 0.1,
+                       let hit = viewport.hitTest(actual, revision: revision).first {
+                        let position = Point3D(
+                            x: Double(hit.position.x) + viewport.renderOrigin.x,
+                            y: Double(hit.position.y) + viewport.renderOrigin.y,
+                            z: Double(hit.position.z) + viewport.renderOrigin.z
+                        )
+                        lastHitPosition = position
+                        guard position.isApproximatelyEqual(to: world, tolerance: 1e-4) else {
+                            try await Task.sleep(for: .milliseconds(10))
+                            continue
+                        }
+                        let triangle = try #require(viewport.triangle(for: hit))
+                        #expect(triangle.occurrenceID.rawValue == "occurrence.plan-cache.mounted-camera")
+                        #expect(viewport.hitTest(actual, revision: revision - 1).isEmpty)
+                        matched = true
+                        break
+                    }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                try #require(matched, "Mounted query mismatch: revision=\(revision), expected=\(expected), actual=\(String(describing: viewport.project(world))), applied=\(String(describing: viewport.appliedViewportRevision)), lastHit=\(String(describing: lastHitPosition))")
+                #expect(viewport.hitTest(CGPoint(x: CGFloat.nan, y: 0), revision: revision).isEmpty)
+                #expect(viewport.hitTest(CGPoint(x: -1_000, y: -1_000), revision: revision).isEmpty)
+                let nativeWorld = SIMD3<Float>(Float(world.x - viewport.renderOrigin.x),
+                                              Float(world.y - viewport.renderOrigin.y),
+                                              Float(world.z - viewport.renderOrigin.z))
+                let depth = -viewport.camera.convert(position: nativeWorld, from: nil).z
+                // Change only the native clipping interval: geometry remains
+                // intersectable, but input must exclude the invisible surface.
+                if let original = viewport.camera.components[OrthographicCameraComponent.self] {
+                    var clipped = original
+                    clipped.near = depth * 1.1
+                    clipped.far = depth * 2
+                    viewport.camera.components.set(clipped)
+                    #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    clipped.near = depth * 0.1
+                    clipped.far = depth * 0.9
+                    viewport.camera.components.set(clipped)
+                    #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    viewport.camera.components.set(original)
+                } else if let original = viewport.camera.components[PerspectiveCameraComponent.self] {
+                    var clipped = original
+                    clipped.near = depth * 1.1
+                    clipped.far = depth * 2
+                    viewport.camera.components.set(clipped)
+                    #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    clipped.near = depth * 0.1
+                    clipped.far = depth * 0.9
+                    viewport.camera.components.set(clipped)
+                    #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    viewport.camera.components.set(original)
+                }
+                #expect(entities(viewport.root) == originalEntities)
+            }
+        }
+    }
+    window.contentViewController = nil
+    window.close()
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while viewport.appliedViewportRevision != nil, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(viewport.appliedViewportRevision == nil)
+    #expect(viewport.project(world) == nil)
+    #expect(viewport.hitTest(.zero, revision: revision).isEmpty)
+}
 
 // MARK: - Off-actor preparation
 
@@ -273,6 +484,241 @@ func planCacheTeardownReturnsToIdleAndDiscardsALaterCompletion() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func nativePresentationCachePreservesProjectionAndSourceFaceIdentity() async throws {
+    let scene = try planCacheScene(suffix: "native-camera")
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: scene))
+    let renderer = try RealityRenderer()
+    renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
+    renderer.cameraSettings.isToneMappingEnabled = false
+    renderer.entities.append(viewport.root)
+    renderer.activeCamera = viewport.camera
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 512, height: 384, mipmapped: false)
+    descriptor.storageMode = .shared
+    descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+    for projection in [ViewportCameraProjection.parallel, .perspective(fieldOfViewRadians: .pi / 3)] {
+        var camera = ViewportCamera.identity
+        camera.projection = projection
+        camera.zoom = 0.6
+        let layout = ViewportLayout(modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                                    size: CGSize(width: 512, height: 384), camera: camera,
+                                    basis: .isometric, verticalBounds: 0...0,
+                                    fittingInsets: .init(top: 20, leading: 45, bottom: 70, trailing: 10))
+        try viewport.applyCamera(layout: layout, revision: 7)
+        #expect(viewport.camera.components[ProjectiveTransformCameraComponent.self] == nil)
+        switch projection {
+        case .parallel:
+            #expect(viewport.camera.components[OrthographicCameraComponent.self] != nil)
+            #expect(viewport.camera.components[PerspectiveCameraComponent.self] == nil)
+        case .perspective:
+            #expect(viewport.camera.components[PerspectiveCameraComponent.self] != nil)
+            #expect(viewport.camera.components[OrthographicCameraComponent.self] == nil)
+        }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                             onComplete: { _ in continuation.resume() })
+            } catch { continuation.resume(throwing: error) }
+        }
+        let screenPoint = try #require(layout.projectedPoint(Point3D(x: 0.25, y: 0.25, z: 0)))
+        let x = Int(screenPoint.point.x.rounded())
+        let y = Int(screenPoint.point.y.rounded())
+        try #require((0..<512).contains(x) && (0..<384).contains(y))
+        var pixel = [UInt8](repeating: 0, count: 4)
+        texture.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(x, y, 1, 1), mipmapLevel: 0)
+        if !(pixel[0] > 20 && pixel[1] > 20 && pixel[2] > 20) {
+            var pixels = [UInt8](repeating: 0, count: 512 * 384 * 4)
+            texture.getBytes(&pixels, bytesPerRow: 512 * 4, from: MTLRegionMake2D(0, 0, 512, 384), mipmapLevel: 0)
+            var bounds = CGRect.null
+            for row in 0..<384 {
+                for column in 0..<512 where pixels[(row * 512 + column) * 4] > 20 {
+                    bounds = bounds.union(CGRect(x: column, y: row, width: 1, height: 1))
+                }
+            }
+            Issue.record("Native camera \(projection), sample=(\(x),\(y)), BGRA=\(pixel), rendered bounds=\(bounds), scale=\(layout.scale)")
+        }
+        #expect(viewport.appliedViewportRevision == 7)
+    }
+    let section = SectionAnalysisResult.Plane(sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
+                                               origin: Point3D(x: 0.5, y: 0, z: 0),
+                                               normal: Vector3D(x: 1, y: 0, z: 0),
+                                               u: Vector3D(x: 0, y: 1, z: 0), v: Vector3D(x: 0, y: 0, z: 1))
+    for side: SectionAnalysisRetainedSide? in [.front, .behind, nil] {
+        try viewport.applySection(plane: side == nil ? nil : section, side: side ?? .front, tolerance: 0)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                             onComplete: { _ in continuation.resume() })
+            } catch { continuation.resume(throwing: error) }
+        }
+        let layout = try #require(viewport.appliedLayout)
+        for pointX in [0.25, 0.75] {
+            let projected = try #require(layout.projectedPoint(Point3D(x: pointX, y: 0.5, z: 0)))
+            let x = Int(projected.point.x.rounded())
+            let y = Int(projected.point.y.rounded())
+            try #require((0..<512).contains(x) && (0..<384).contains(y))
+            var pixel = [UInt8](repeating: 0, count: 4)
+            texture.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(x, y, 1, 1), mipmapLevel: 0)
+            let visible = side == nil || (side == .front ? pointX > 0.5 : pointX < 0.5)
+            #expect((pixel[0] > 20) == visible, "Section \(String(describing: side)), x=\(pointX), BGRA=\(pixel)")
+            let scene = try #require(viewport.root.scene)
+            let hits = scene.raycast(origin: [Float(pointX), 0.5, 2], direction: [0, 0, -1], length: 5)
+            #expect(!hits.isEmpty)
+            #expect(!viewport.retainedHits(hits, rayDirection: [0, 0, -1]).isEmpty == visible)
+        }
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try viewport.applySection(plane: section, side: .front, tolerance: .nan)
+    }
+    let originalBounds = viewport.root.visualBounds(relativeTo: viewport.root)
+    var distantPlane = section
+    distantPlane.origin = Point3D(x: 1e20, y: 0, z: 0)
+    try viewport.applySection(plane: distantPlane, side: .behind, tolerance: 0)
+    #expect(viewport.root.visualBounds(relativeTo: viewport.root) == originalBounds)
+    let nativeScene = try #require(viewport.root.scene)
+    for location in [SIMD3<Float>(0.2, 0.1, 2), SIMD3<Float>(0.8, 0.9, 2)] {
+        let hit = try #require(nativeScene.raycast(origin: location, direction: [0, 0, -1], length: 5).first)
+        let triangle = try #require(viewport.triangle(for: hit))
+        #expect(triangle.occurrenceID.rawValue == "occurrence.plan-cache.native-camera")
+        let a = triangle.firstPosition
+        let b = triangle.secondPosition
+        let c = triangle.thirdPosition
+        let point = SIMD2<Double>(Double(hit.position.x), Double(hit.position.y))
+        let signs = [(a, b), (b, c), (c, a)].map { start, end in
+            (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x)
+        }
+        #expect(signs.allSatisfy { $0 >= -0.00001 } || signs.allSatisfy { $0 <= 0.00001 })
+    }
+    viewport.unbind()
+    #expect(viewport.appliedViewportRevision == nil)
+    #expect(viewport.hitTest(.zero, revision: 7).isEmpty)
+    cache.teardown()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativePresentationBackfaceVisibilityMatchesCollision() async throws {
+    _ = NSApplication.shared
+    let scene = try planCacheScene(suffix: "native-backface")
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: scene))
+    let renderer = try RealityRenderer()
+    renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
+    renderer.cameraSettings.isToneMappingEnabled = false
+    renderer.entities.append(viewport.root)
+    renderer.activeCamera = viewport.camera
+
+    var lens = OrthographicCameraComponent()
+    lens.near = 0.01
+    lens.far = 100
+    lens.scale = 1
+    viewport.camera.components.set(lens)
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let textureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: .bgra8Unorm,
+        width: 128,
+        height: 128,
+        mipmapped: false
+    )
+    textureDescriptor.storageMode = .shared
+    textureDescriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    let texture = try #require(device.makeTexture(descriptor: textureDescriptor))
+    let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+    let interaction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:],
+        selectedSceneNodeIDs: [],
+        previewSceneNodeIDs: [],
+        hoveredSceneNodeID: nil
+    )
+    let nativeScene = try #require(viewport.root.scene)
+
+    let sourceTriangleCount = try #require(cache.plan(for: scene)).triangleCount
+    for (back, culling) in [(false, false), (true, false), (false, true), (true, true)] {
+        let eye: SIMD3<Float> = back ? [0.5, 0.5, -3] : [0.5, 0.5, 3]
+        viewport.camera.look(at: [0.5, 0.5, 0], from: eye, relativeTo: nil)
+        try viewport.applyAppearance(
+            displayMode: .solid,
+            shading: ViewportShading(style: .flat, isBackfaceCullingEnabled: culling),
+            materialColors: [:],
+            interaction: interaction,
+            sectionPlane: nil,
+            retainedSide: .front,
+            sectionTolerance: 0
+        )
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try renderer.updateAndRender(
+                    deltaTime: 1 / 60,
+                    cameraOutput: output,
+                    onComplete: { _ in continuation.resume() }
+                )
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+
+        var pixels = [UInt8](repeating: 0, count: 128 * 128 * 4)
+        texture.getBytes(
+            &pixels,
+            bytesPerRow: 128 * 4,
+            from: MTLRegionMake2D(0, 0, 128, 128),
+            mipmapLevel: 0
+        )
+        let center = (64 * 128 + 64) * 4
+        let rendered = pixels[center..<center + 3].contains { $0 > 8 }
+        #expect(rendered == !(back && culling), "Unexpected native material visibility.")
+        let origin: SIMD3<Float> = back ? [0.2, 0.1, -2] : [0.2, 0.1, 2]
+        let direction: SIMD3<Float> = back ? [0, 0, 1] : [0, 0, -1]
+        let rawHits = nativeScene.raycast(origin: origin, direction: direction, length: 5)
+        #expect(!rawHits.isEmpty, "Native raycast missed the quad from \(back ? "back" : "front").")
+        let retainedHits = viewport.retainedHits(rawHits, rayDirection: direction)
+        for hit in rawHits {
+            let faceIndex = try #require(hit.triangleHit).faceIndex
+            #expect(back
+                    ? (sourceTriangleCount..<(2 * sourceTriangleCount)).contains(faceIndex)
+                    : (0..<sourceTriangleCount).contains(faceIndex))
+            let triangle = try #require(viewport.triangle(for: hit))
+            #expect(triangle.occurrenceID.rawValue == "occurrence.plan-cache.native-backface")
+            let a = triangle.firstPosition
+            let b = triangle.secondPosition
+            let c = triangle.thirdPosition
+            let point = SIMD2<Double>(Double(hit.position.x), Double(hit.position.y))
+            let signs = [(a, b), (b, c), (c, a)].map { start, end in
+                (end.x - start.x) * (point.y - start.y) - (end.y - start.y) * (point.x - start.x)
+            }
+            #expect(signs.allSatisfy { $0 >= -0.00001 } || signs.allSatisfy { $0 <= 0.00001 })
+        }
+        #expect(
+            (!retainedHits.isEmpty) == rendered,
+            "Backface state mismatch: back=\(back), culling=\(culling), rendered=\(rendered), retained=\(!retainedHits.isEmpty)"
+        )
+    }
+
+    viewport.unbind()
+    cache.teardown()
+}
+
+@Test
+func nativeCollisionFaceMappingRejectsInvalidIndices() {
+    #expect(RealityViewport.sourceTriangleIndex(for: 0, triangleCount: 2) == 0)
+    #expect(RealityViewport.sourceTriangleIndex(for: 1, triangleCount: 2) == 1)
+    #expect(RealityViewport.sourceTriangleIndex(for: 2, triangleCount: 2) == 0)
+    #expect(RealityViewport.sourceTriangleIndex(for: 3, triangleCount: 2) == 1)
+    #expect(RealityViewport.sourceTriangleIndex(for: 4, triangleCount: 2) == nil)
+    #expect(RealityViewport.sourceTriangleIndex(for: -1, triangleCount: 2) == nil)
+    #expect(RealityViewport.sourceTriangleIndex(for: 0, triangleCount: 0) == nil)
+    #expect(RealityViewport.sourceTriangleIndex(for: Int.max, triangleCount: 2) == nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func planCacheCoalescesAndRejectsFailureFromARestartedSnapshot() async throws {
     let scene = try planCacheScene(suffix: "restart")
     let skipped = try planCacheScene(suffix: "skipped")
@@ -304,6 +750,92 @@ func planCacheCoalescesAndRejectsFailureFromARestartedSnapshot() async throws {
     #expect(cache.plan(for: scene) != nil)
     #expect(cache.surface(for: scene) != nil)
     #expect(started.withLock { $0 } == 2)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCacheReleasesNativeSurfaceAndRootOnReplacementAndTeardown() async throws {
+    let firstScene = try planCacheScene(suffix: "release-first")
+    let secondScene = try planCacheScene(suffix: "release-second")
+    let cache = MeshSourcePresentationPlanCache()
+
+    cache.prepare(for: firstScene)
+    try await settlePlanCache(cache)
+    weak var replacedViewport: RealityViewport?
+    weak var replacedRoot: Entity?
+    do {
+        let surface = try #require(cache.surface(for: firstScene))
+        replacedViewport = surface
+        replacedRoot = surface.root
+    }
+
+    cache.prepare(for: secondScene)
+    #expect(cache.surface(for: firstScene) == nil)
+    #expect(cache.surface(for: secondScene) == nil)
+    try await settlePlanCache(cache)
+    let replacementDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while (replacedViewport != nil || replacedRoot != nil), ContinuousClock.now < replacementDeadline {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    #expect(replacedViewport == nil)
+    #expect(replacedRoot == nil)
+
+    weak var tornDownViewport: RealityViewport?
+    weak var tornDownRoot: Entity?
+    do {
+        let surface = try #require(cache.surface(for: secondScene))
+        tornDownViewport = surface
+        tornDownRoot = surface.root
+    }
+    cache.teardown()
+    guard case .idle = cache.state else {
+        Issue.record("Teardown must release the native surface and return the cache to idle.")
+        return
+    }
+    #expect(cache.surface(for: secondScene) == nil)
+    let teardownDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while (tornDownViewport != nil || tornDownRoot != nil), ContinuousClock.now < teardownDeadline {
+        try await Task.sleep(for: .milliseconds(1))
+    }
+    #expect(tornDownViewport == nil)
+    #expect(tornDownRoot == nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCachePublishesNativePrecisionFailureAndRecoversWithTheNextScene() async throws {
+    let tinyTransform = try GeometryTransform3D(values: [
+        1e-100, 0, 0, 0,
+        0, 1e-100, 0, 0,
+        0, 0, 1e-100, 0,
+        0, 0, 0, 1,
+    ])
+    let invalidScene = try planCacheScene(
+        suffix: "native-precision-invalid",
+        transform: tinyTransform
+    )
+
+    // The CPU plan and source triangulation remain valid; native Float
+    // precision is the boundary that must report the typed failure.
+    let cpuPlan = try MeshSourcePresentationRenderPlan(scene: invalidScene)
+    #expect(cpuPlan.triangleCount == 2)
+    #expect(cpuPlan.positionCount == 4)
+
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: invalidScene)
+    try await settlePlanCacheFailure(cache)
+    let failure = try #require(cache.failure(for: invalidScene))
+    #expect(failure.code == .invalidTransform)
+    #expect(cache.plan(for: invalidScene) == nil)
+    #expect(cache.surface(for: invalidScene) == nil)
+
+    let validScene = try planCacheScene(suffix: "native-precision-recovery")
+    cache.prepare(for: validScene)
+    try await settlePlanCache(cache)
+    #expect(cache.failure(for: validScene) == nil)
+    #expect(cache.plan(for: validScene) != nil)
+    #expect(cache.surface(for: validScene) != nil)
+    cache.teardown()
 }
 
 /// Parks each build until the test opens its key, so staleness, cancellation,
@@ -374,11 +906,12 @@ private func settlePlanCache(
 private func settlePlanCacheFailure(
     _ cache: MeshSourcePresentationPlanCache
 ) async throws {
-    for _ in 0..<10_000 {
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while ContinuousClock.now < deadline {
         if case .failed = cache.state {
             return
         }
-        await Task.yield()
+        try await Task.sleep(for: .milliseconds(1))
     }
     throw MeshSourcePresentationRenderError(
         code: .failed,
@@ -386,7 +919,10 @@ private func settlePlanCacheFailure(
     )
 }
 
-private func planCacheScene(suffix: String) throws -> UniversalViewportScene {
+private func planCacheScene(
+    suffix: String,
+    transform: GeometryTransform3D = .identity
+) throws -> UniversalViewportScene {
     let projectID = ProjectID(rawValue: "project.plan-cache.\(suffix)")
     let sourceID = GeometrySourceID(rawValue: "mesh.plan-cache.\(suffix)")
     let definitionID = ObjectDefinitionID(rawValue: "object.plan-cache.\(suffix)")
@@ -405,12 +941,6 @@ private func planCacheScene(suffix: String) throws -> UniversalViewportScene {
     _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
     let source = try builder.build()
 
-    let transform = try GeometryTransform3D(values: [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
-    ])
     let project = try ProjectSourceModel(
         id: projectID,
         name: "Plan cache",

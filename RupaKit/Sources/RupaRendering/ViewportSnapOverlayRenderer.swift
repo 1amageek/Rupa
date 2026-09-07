@@ -69,10 +69,12 @@ struct ViewportSnapOverlayRenderer {
             return nil
         }
 
-        let projectedPoint = layout.project(CGPoint(
+        guard let projectedPoint = layout.projectedPoint(CGPoint(
             x: result.resolvedPoint.x,
             y: result.resolvedPoint.y
-        ))
+        ))?.point else {
+            return nil
+        }
         let markerRect = CGRect(
             x: projectedPoint.x - 4.0,
             y: projectedPoint.y - 4.0,

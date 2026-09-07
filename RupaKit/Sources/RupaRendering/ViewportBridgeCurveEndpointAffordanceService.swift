@@ -78,13 +78,15 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             return nil
         }
         let localPoint = CGPoint(x: handle.point.x, y: handle.point.y)
-        let projectedPoint = layout.project(localPoint, in: item)
-        let projectedTangentTip = Self.projectedTangentTip(
+        guard let projectedPoint = layout.projectedPoint(localPoint, in: item)?.point,
+              let projectedTangentTip = Self.projectedTangentTip(
             point: handle.point,
             outgoingTangent: handle.outgoingTangent,
             modelTransform: item.modelTransform,
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         let target = ViewportBridgeCurveEndpointHandleTarget(
             sourceID: handle.sourceID,
             featureID: handle.featureID,
@@ -110,7 +112,7 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
         modelTransform: Transform3D,
         layout: ViewportLayout,
         viewportLength: CGFloat = tangentGuideViewportLength
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let geometry = ViewportPlanarHandleDragGeometry(
             localPoint: Point3D(x: point.x, y: 0.0, z: point.y),
             modelTransform: modelTransform
@@ -137,7 +139,9 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             y: 0.0,
             z: point.y + outgoingTangent.y * fallbackLengthMeters
         )
-        return layout.project(modelTransform.viewportTransformedPoint(localTip))
+        return layout.projectedPoint(
+            modelTransform.viewportTransformedPoint(localTip)
+        )?.point
     }
 }
 

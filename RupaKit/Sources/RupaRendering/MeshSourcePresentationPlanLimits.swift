@@ -7,12 +7,15 @@ import Foundation
 /// storage is reserved rather than discovered after it has grown. A caller may
 /// lower any dimension; no caller may widen `hardMaximum`.
 ///
-/// Native Release measurements use the 12-body/6,284-segment dense fixture
+/// The pre-RealityKit Release baseline used the 12-body/6,284-segment dense fixture
 /// and the 512-body/16-segment fixture. Each ceiling is the successful maximum
 /// for that dimension plus 25%: 512 items, 150,840 positions, 301,632 triangles,
 /// and 17,978,528 working bytes before headroom. The byte ceiling also remains
 /// below 2.5% of the supported 8-GiB memory floor. These are admission bounds,
-/// not a claim that offscreen measurements prove whole-application acceptance.
+/// not a claim that RealityKit admits the same fixture or that offscreen
+/// measurements prove whole-application acceptance. The plan now charges native
+/// adapter inputs against these unchanged ceilings; opaque SDK allocations need
+/// separate peak-memory evidence.
 /// Raising a ceiling requires new boundary and signed-App performance evidence.
 public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// The module ceiling. No caller may exceed any of these values.

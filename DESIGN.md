@@ -19,9 +19,27 @@ general transport/LLM integration.
 RUPA-RESP-D is the target design for correcting the current rainbow-spinner
 failure: valid multi-body CAD can generate excessive presentation Mesh, render
 preparation and duplicate validation currently execute synchronously from
-MainActor-bound UI state, Canvas draws per triangle, and the Agent controller
-is globally MainActor-isolated. This phase changes design contracts only; it
-does not claim the production implementation or live App has been fixed.
+MainActor-bound UI state, spatial world drawing is split between Canvas and a
+surface renderer, and the Agent controller is globally MainActor-isolated.
+This phase changes design contracts only; it does not claim the production
+implementation or live App has been fixed.
+
+RUPA-RK is the target native viewport cutover layered on that responsiveness
+target; it is not current production until RK-2 through RK-5 and RK-IV pass.
+Until then, production world rendering is a migration hybrid:
+`RealityViewportView` supplies the RealityKit surface and native camera, two
+SwiftUI `Canvas` passes still draw the grid/axes and world overlays/previews,
+and the legacy identity renderer remains part of picking. The target makes
+RealityKit the only world-rendering backend: CAD and Mesh source, evaluation,
+history, stable identities, and project publication remain Rupa authority,
+while RealityKit owns only the mounted presentation scene, native camera,
+materials, spatial resources, collision queries, and frame display.
+macOS-27-or-later `RealityView` is the target live host, and
+native `ClippingComponent` owns section-plane clipping;
+`RealityRenderer` capability probes are offscreen evidence only and do not
+prove CAD integration. Existing Metal pipelines, `MTKView`/`CAMetalLayer`,
+identity GPU readback, and spatial SwiftUI `Canvas` drawing are migration
+targets, not a completed fallback or parallel production backend.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module
@@ -61,8 +79,16 @@ mutation, evaluation, and save authority.
 
 The system also owns the separation between exact CAD/source authority,
 purpose-selected bounded presentation evaluation, postpublication derived
-render data, MainActor UI publication, and Agent control-plane orchestration.
+render data, one coherent RealityKit scene/frame publication, MainActor UI
+composition, and Agent control-plane orchestration.
 Crossing one boundary never transfers another boundary's authority.
+The system also owns the RealityKit frame-consistency rule: world geometry,
+grid/axes, curves/sketches, selection, measurement/rulers, section/analysis,
+snap/reference guides, previews, and editing gizmos are spatial children of
+one scene root. A displayed or hit-testable frame is valid only when its
+`snapshotID`, mounted viewport revision, overlay revision, camera state, and
+prepared resource/entity graph agree. SwiftUI retains only non-spatial chrome,
+errors/status, menus, inspector/toolbars, and screen-only marquee selection.
 
 For CAD source mutation, the system additionally owns one-vocabulary/two-form
 composition: `capability.invoke` makes a simple operation simple, while
@@ -124,7 +150,7 @@ flowchart LR
         Project --> Mesh["Authored Mesh source"]
         Project --> Eval["Presentation evaluation"]
         Eval --> Scene["UniversalViewportScene"]
-        Scene --> Render["Existing Mesh renderer triangles"]
+        Scene --> Render["RealityKit scene root\nMeshResource/entities/materials/collision"]
         App["Application file lifecycle"] --> Project
     end
     subgraph CADAPI["CADAPI-D target contract"]
@@ -160,7 +186,7 @@ flowchart LR
         Exact["Exact CAD / source\nProjectController authority"] --> Bounded["Purpose-selected bounded\npresentation evaluation"]
         Bounded --> Published["Atomic published scene"]
         Published --> Derived["Cancellable off-main\nderived render plan"]
-        Derived --> Main["Matching MainActor state\nand batched Canvas"]
+        Derived --> Main["Matching RealityKit frame\nplus SwiftUI chrome"]
         Control["Agent control plane"] -->|short exact workspace hop only| WorkspaceAuthority
     end
     Runtime -. "observed by T11-R" .-> Sources
@@ -268,13 +294,18 @@ flowchart LR
     Swift-CAD owns only generic checked tessellation limits and RupaEvaluation
     owns cumulative provider-neutral admission. Limit, overflow, cancellation,
     or malformed-result failure publishes no partial evaluation.
-21. Render-plan preparation begins only after project publication and is a
+21. RealityKit scene preparation begins only after project publication and is a
     cancellable derived read. It may retain bounded transformed positions,
-    indices, provenance, and batch metadata, but owns no source, project,
-    representation-selection, or rollback authority.
-22. Only snapshot-matching render state and Canvas calls run on MainActor.
-    Construction validates and transforms once off-main; consumption performs
-    no duplicate full traversal and no fill/stroke per triangle.
+    indices, source-face provenance, native `MeshResource`/collision resources,
+    spatial overlay descriptors, and entity metadata, but owns no source,
+    project, representation-selection, or rollback authority.
+22. Only one matching RealityKit frame may be displayed or hit-tested. Its
+    `snapshotID`, mounted viewport revision, overlay revision, camera state, and
+    prepared scene root are published atomically from the viewport's point of
+    view. Preparation validates and transforms once off-main where the native
+    API permits; RealityKit resource/entity updates are bounded MainActor work
+    and never perform duplicate full traversal. No spatial world geometry is
+    drawn through SwiftUI `Canvas` or a second renderer.
 23. Agent capability/status, lease, semantic compilation, immutable projection,
     and encoding run on a control plane independent of rendering. Runtime uses
     only the existing registered workspace/application ports for exact reads,
@@ -299,7 +330,7 @@ sequenceDiagram
     participant C as ApplicationProjectCoordinator
     participant W as ProjectWorkspace
     participant P as ProjectController
-    participant V as Presentation renderer
+    participant V as RealityKit viewport host
     A->>H: capability.invoke or program.execute
     H->>R: dispatch semantic CAD intent
     R->>F: original semantic form + exact planning view
@@ -317,7 +348,7 @@ sequenceDiagram
     H->>C: route lifecycle intent outside AgentRuntime
     C->>W: application-coordinated save
     W->>P: atomic package save
-    P->>V: presentation evaluation -> scene -> real triangles
+    P->>V: presentation evaluation -> immutable scene -> RealityKit frame
     V-->>V: deterministic acceptance PNG
 ```
 
@@ -385,8 +416,8 @@ prepared-plan bindings are invocation-local. Persistent source identities begin
 only inside staged project authority and are returned through a typed committed
 receipt; a dry run never returns persistent identity claims.
 Presentation evaluation budgets are invocation-local and become one immutable
-published snapshot only on success. The viewport cache owns one derived task
-and matching bounded plan; Agent Runtime owns only control-plane configuration,
+published snapshot only on success. The viewport owns one derived task and one
+matching bounded RealityKit scene/resource graph; Agent Runtime owns only control-plane configuration,
 registration leases, and request-local immutable values. None is an additional
 project view or source owner.
 
@@ -401,8 +432,8 @@ oracle/total-wall timing and action/command/read/entity bounds selected from
 measured serial reference runs; it does not guess success counts or concurrency
 speedup. Activation remains at concurrency 1 until all 100 gates pass.
 Historical MainActor/project-actor serialization is recorded as an observed
-constraint, not the target isolation contract. Render preparation and Agent
-control-plane work must be independent; exact workspace UI publication and
+constraint, not the target isolation contract. RealityKit scene preparation and
+Agent control-plane work must be independent; exact workspace UI publication and
 project-actor ordering remain intact. A capability or
 environment mismatch is an explicit baseline drift; an oracle or infrastructure
 failure invalidates the run without updating the execution-regression baseline.
@@ -421,6 +452,11 @@ Unknown operation/version, invalid type/unit/reference, duplicate or missing
 symbol, cycle, ineligible route/effect, limit, stale coordinate, cancellation,
 lowering, source, evaluation, projection, and dispatch-uncertain failures remain
 typed at their respective owners and never select raw graph or file fallback.
+RealityKit native `MeshResource`/`LowLevelMesh`, camera components, materials,
+projection/ray/hit-test queries, and collision resources are the production
+viewport primitives. A custom Metal pipeline, drawable/command encoder,
+synchronous GPU readback, or spatial Canvas texture path is a typed design
+violation, not a performance fallback.
 
 ## Verification and Change Impact
 
@@ -430,7 +466,7 @@ typed at their respective owners and never select raw graph or file fallback.
 | Make Editable authority | Project/RupaKit tests for exact snapshot, CAD/modeling retention, presentation switch, provenance, zero-copy handoff, stale/cancel rollback, and one history entry. |
 | Agent routing | Runtime tests proving each request reaches the registered workspace use case and preserves typed stale/cancel/no-retry failures. |
 | Presentation limits | Swift-CAD/RupaEvaluation/RupaKit tests prove checked budget-before-allocation, purpose selection, exact-B-rep preservation, aggregate provider limits, cancellation, and no partial publication. |
-| Derived rendering | Rendering/UI tests prove one off-main preparation/validation pass, stale cancellation, retained-byte bounds, matching render/picking, batched Canvas calls, and MainActor progress. |
+| Derived rendering | Rendering/UI tests prove one off-main preparation/validation pass, stale cancellation, retained resource/entity bounds, one matching RealityKit scene/frame for render and hit-test, native camera/material/collision behavior, and MainActor progress. |
 | Agent liveness and authority | Runtime/AgentUI/App tests prove capability/status and immutable reads progress during render preparation, while mutation/save still use the registered workspace/controller and no direct CAD/Mesh/render/package/persistence dependency exists. |
 | Actual responsiveness | The signed Rupa App multi-body run proves visible matching geometry, interactive UI/run loop, bounded memory, live API response, exact source coordinates, and no fallback. |
 | CADAPI-D simple form | Later codec/runtime/actual-CLI evidence must prove one primitive is one `capability.invoke`, with no program wrapper, caller UUID, or presentation payload. |

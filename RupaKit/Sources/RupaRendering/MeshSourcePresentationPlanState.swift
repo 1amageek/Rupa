@@ -15,7 +15,7 @@ enum MeshSourcePresentationPlanState {
     case preparing(snapshotID: EvaluationSnapshotID)
     /// The build for `snapshotID` completed and its plan is the only plan the
     /// cache exposes.
-    case ready(snapshotID: EvaluationSnapshotID, plan: MeshSourcePresentationRenderPlan, surface: ViewportSurfaceRenderer)
+    case ready(snapshotID: EvaluationSnapshotID, plan: MeshSourcePresentationRenderPlan, surface: RealityViewport)
     /// The build for `snapshotID` failed. The failure is exposed so it can be
     /// distinguished on screen from a scene that is still preparing.
     case failed(snapshotID: EvaluationSnapshotID, error: MeshSourcePresentationRenderError)

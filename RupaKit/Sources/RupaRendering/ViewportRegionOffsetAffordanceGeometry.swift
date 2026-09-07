@@ -15,14 +15,16 @@ struct ViewportRegionOffsetAffordanceGeometry: Equatable {
             return nil
         }
         let center = Self.polygonCentroid(points)
-        let basePoint = Self.basePoint(points: points, center: center, layout: layout)
+        guard let basePoint = Self.basePoint(points: points, center: center, layout: layout),
+              let projectedUnitLength = Self.projectedLength(
+                  from: basePoint,
+                  direction: Self.normalizedDirection(from: center, to: basePoint),
+                  distance: 1.0,
+                  layout: layout
+              ) else {
+            return nil
+        }
         let direction = Self.normalizedDirection(from: center, to: basePoint)
-        let projectedUnitLength = Self.projectedLength(
-            from: basePoint,
-            direction: direction,
-            distance: 1.0,
-            layout: layout
-        )
         self.baseModelPoint = basePoint
         self.modelDirection = direction
         self.baseLengthMeters = viewportLength / max(projectedUnitLength, 1.0e-9)
@@ -31,33 +33,35 @@ struct ViewportRegionOffsetAffordanceGeometry: Equatable {
     func projectedTip(
         layout: ViewportLayout,
         distanceMeters: Double = 0.0
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let visualLength = baseLengthMeters + CGFloat(distanceMeters)
-        return layout.project(
+        return layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x * visualLength,
                 y: baseModelPoint.y + modelDirection.y * visualLength
             )
-        )
+        )?.point
     }
 
     func offsetDistance(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
+    ) -> Double? {
         let unitEnd = CGPoint(
             x: baseModelPoint.x + modelDirection.x,
             y: baseModelPoint.y + modelDirection.y
         )
-        let startProjected = layout.project(baseModelPoint)
-        let unitProjected = layout.project(unitEnd)
+        guard let startProjected = layout.projectedPoint(baseModelPoint)?.point,
+              let unitProjected = layout.projectedPoint(unitEnd)?.point else {
+            return nil
+        }
         let projectedVector = CGVector(
             dx: unitProjected.x - startProjected.x,
             dy: unitProjected.y - startProjected.y
         )
         guard projectedVector.length > 1.0e-9 else {
-            return 0.0
+            return nil
         }
         let direction = projectedVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
@@ -69,15 +73,28 @@ struct ViewportRegionOffsetAffordanceGeometry: Equatable {
         points: [CGPoint],
         center: CGPoint,
         layout: ViewportLayout
-    ) -> CGPoint {
-        points.max { lhs, rhs in
-            let lhsProjected = layout.project(lhs)
-            let rhsProjected = layout.project(rhs)
-            if abs(lhsProjected.x - rhsProjected.x) > 1.0e-6 {
-                return lhsProjected.x < rhsProjected.x
+    ) -> CGPoint? {
+        var best: (point: CGPoint, projected: CGPoint)?
+        for point in points {
+            guard let projected = layout.projectedPoint(point)?.point else {
+                continue
             }
-            return pointDistance(lhs, center) < pointDistance(rhs, center)
-        } ?? center
+            guard let current = best else {
+                best = (point, projected)
+                continue
+            }
+            if abs(current.projected.x - projected.x) > 1.0e-6 {
+                if projected.x > current.projected.x {
+                    best = (point, projected)
+                }
+            } else if pointDistance(point, center) > pointDistance(current.point, center) {
+                best = (point, projected)
+            }
+        }
+        if let best {
+            return best.point
+        }
+        return layout.projectedPoint(center) == nil ? nil : center
     }
 
     private static func polygonCentroid(_ points: [CGPoint]) -> CGPoint {
@@ -140,14 +157,16 @@ struct ViewportRegionOffsetAffordanceGeometry: Equatable {
         direction: CGPoint,
         distance: CGFloat,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let start = layout.project(point)
-        let end = layout.project(
+    ) -> CGFloat? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: point.x + direction.x * distance,
                 y: point.y + direction.y * distance
             )
-        )
+        )?.point else {
+            return nil
+        }
         return pointDistance(start, end)
     }
 

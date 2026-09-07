@@ -84,8 +84,9 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
               let localAxisDirection = axisDirection(for: extrude, document: document),
               let localDistanceMeters = resolvedLengthMeters(extrude.distance, document: document),
               let transform = outputTransform(for: output, localAxisDirection: localAxisDirection),
+              let baseProjectedPoint = baseProjectedPoint(for: item, layout: layout),
               let geometry = ViewportPatternArrayLinearAxisAffordanceGeometry(
-                  baseProjectedPoint: baseProjectedPoint(for: item, layout: layout),
+                  baseProjectedPoint: baseProjectedPoint,
                   axisDirection: transform.axisDirection,
                   distanceMeters: localDistanceMeters * transform.axisScale,
                   layout: layout,
@@ -183,13 +184,13 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
     private func baseProjectedPoint(
         for item: ViewportSceneItem,
         layout: ViewportLayout
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let point = Point3D(
             x: Double(item.modelBounds.midX),
             y: bodyCenterY(for: item),
             z: Double(item.modelBounds.midY)
         )
-        return layout.project(point)
+        return layout.projectedPoint(point)?.point
     }
 
     private func bodyCenterY(for item: ViewportSceneItem) -> Double {

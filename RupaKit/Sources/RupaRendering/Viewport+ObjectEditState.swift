@@ -193,9 +193,9 @@ struct ViewportObjectEditState: Equatable {
         normalize()
     }
 
-    func projectedBodyProjection(layout: ViewportLayout) -> ViewportBodyProjection {
-        let frontFootprint = projectedFootprint(y: yMin, layout: layout)
-        let backFootprint = projectedFootprint(y: yMax, layout: layout)
+    func projectedBodyProjection(layout: ViewportLayout) -> ViewportBodyProjection? {
+        guard let frontFootprint = projectedFootprint(y: yMin, layout: layout),
+              let backFootprint = projectedFootprint(y: yMax, layout: layout) else { return nil }
         return ViewportBodyProjection(
             frontFootprint: frontFootprint,
             backFootprint: backFootprint,
@@ -211,27 +211,31 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> ViewportObjectEditState {
+    ) -> ViewportObjectEditState? {
         var next = self
         switch action {
         case .translate(let axis):
-            next.translate(axis, by: dragAmount(axis: axis, start: start, current: current, layout: layout))
+            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
+            next.translate(axis, by: amount)
         case .oneSidedScale(let axis):
-            next.resizePositive(axis, by: dragAmount(axis: axis, start: start, current: current, layout: layout))
+            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
+            next.resizePositive(axis, by: amount)
         case .centerScale(let axis):
-            next.resizeFromCenter(axis, by: dragAmount(axis: axis, start: start, current: current, layout: layout))
+            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
+            next.resizeFromCenter(axis, by: amount)
         case .rotate(let axis):
-            next.rotate(axis, by: rotationAmount(axis: axis, start: start, current: current, layout: layout))
+            guard let amount = rotationAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
+            next.rotate(axis, by: amount)
         case .vertexMove(let vertex):
-            next.moveVertex(vertex, start: start, current: current, layout: layout)
+            guard next.moveVertex(vertex, start: start, current: current, layout: layout) else { return nil }
         case .profileCornerMove(_, let vertex):
-            next.moveProfileCorner(vertex, start: start, current: current, layout: layout)
+            guard next.moveProfileCorner(vertex, start: start, current: current, layout: layout) else { return nil }
         case .profileFaceMove(_, let face):
-            next.moveFace(face, start: start, current: current, layout: layout)
+            guard next.moveFace(face, start: start, current: current, layout: layout) else { return nil }
         case .profileEdgeChamfer, .profileEdgeFillet:
             break
         case .faceMove(let face):
-            next.moveFace(face, start: start, current: current, layout: layout)
+            guard next.moveFace(face, start: start, current: current, layout: layout) else { return nil }
         }
         next.normalize()
         return next
@@ -341,142 +345,116 @@ struct ViewportObjectEditState: Equatable {
     func projectedPoint(
         _ point: ViewportModelPoint3D,
         layout: ViewportLayout
-    ) -> CGPoint {
+    ) -> CGPoint? {
         projectedPoint(x: point.x, y: point.y, z: point.z, layout: layout)
     }
 
-    func projectedAxisBasis(layout: ViewportLayout) -> ViewportProjectionBasis {
-        ViewportProjectionBasis(
+    func projectedAxisBasis(layout: ViewportLayout) -> ViewportProjectionBasis? {
+        guard let x = projectedAxisDirection(.x, layout: layout),
+              let y = projectedAxisDirection(.y, layout: layout),
+              let z = projectedAxisDirection(.z, layout: layout) else { return nil }
+        return ViewportProjectionBasis(
             mode: .orbit,
-            xDirection: projectedAxisDirection(.x, layout: layout),
-            yDirection: projectedAxisDirection(.y, layout: layout),
-            zDirection: projectedAxisDirection(.z, layout: layout)
+            xDirection: x,
+            yDirection: y,
+            zDirection: z
         )
     }
 
     func projectedAxisDirection(
         _ axis: ViewportCoordinateAxis,
         layout: ViewportLayout
-    ) -> CGVector {
-        projectedAxisVector(axis, layout: layout).normalized
+    ) -> CGVector? {
+        projectedAxisVector(axis, layout: layout)?.normalized
     }
 
     func modelLength(
         forViewportLength length: CGFloat,
         axis: ViewportCoordinateAxis,
         layout: ViewportLayout
-    ) -> CGFloat {
-        length / max(projectedAxisVector(axis, layout: layout).length, 1.0e-9)
+    ) -> CGFloat? {
+        guard let vector = projectedAxisVector(axis, layout: layout), vector.length > 1.0e-9 else { return nil }
+        let result = length / vector.length
+        return result.isFinite ? result : nil
     }
 
     func projectedCube(
-        center: ViewportModelPoint3D,
-        sideLength: CGFloat,
-        layout: ViewportLayout
-    ) -> ViewportProjectedBox {
-        let halfSide = sideLength / 2.0
+        center: ViewportModelPoint3D, sideLength: CGFloat, layout: ViewportLayout
+    ) -> ViewportProjectedBox? {
+        let half = sideLength / 2
+        return projectedBox(
+            minimum: ViewportModelPoint3D(x: center.x - half, y: center.y - half, z: center.z - half),
+            maximum: ViewportModelPoint3D(x: center.x + half, y: center.y + half, z: center.z + half),
+            layout: layout
+        )
+    }
+
+    func projectedBox(layout: ViewportLayout) -> ViewportProjectedBox? {
+        projectedBox(
+            minimum: ViewportModelPoint3D(x: xMin, y: yMin, z: zMin),
+            maximum: ViewportModelPoint3D(x: xMax, y: yMax, z: zMax),
+            layout: layout
+        )
+    }
+
+    private func projectedBox(
+        minimum: ViewportModelPoint3D, maximum: ViewportModelPoint3D, layout: ViewportLayout
+    ) -> ViewportProjectedBox? {
+        var points: [CGPoint] = []
+        points.reserveCapacity(8)
+        for index in 0..<8 {
+            guard let point = projectedPoint(
+                x: index & 1 == 0 ? minimum.x : maximum.x,
+                y: index & 2 == 0 ? minimum.y : maximum.y,
+                z: index & 4 == 0 ? minimum.z : maximum.z,
+                layout: layout
+            ) else { return nil }
+            points.append(point)
+        }
         return ViewportProjectedBox(
-            minXMinYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x - halfSide, y: center.y - halfSide, z: center.z - halfSide),
-                layout: layout
-            ),
-            maxXMinYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x + halfSide, y: center.y - halfSide, z: center.z - halfSide),
-                layout: layout
-            ),
-            minXMaxYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x - halfSide, y: center.y + halfSide, z: center.z - halfSide),
-                layout: layout
-            ),
-            maxXMaxYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x + halfSide, y: center.y + halfSide, z: center.z - halfSide),
-                layout: layout
-            ),
-            minXMinYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x - halfSide, y: center.y - halfSide, z: center.z + halfSide),
-                layout: layout
-            ),
-            maxXMinYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x + halfSide, y: center.y - halfSide, z: center.z + halfSide),
-                layout: layout
-            ),
-            minXMaxYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x - halfSide, y: center.y + halfSide, z: center.z + halfSide),
-                layout: layout
-            ),
-            maxXMaxYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: center.x + halfSide, y: center.y + halfSide, z: center.z + halfSide),
-                layout: layout
-            )
+            minXMinYMinZ: points[0], maxXMinYMinZ: points[1],
+            minXMaxYMinZ: points[2], maxXMaxYMinZ: points[3],
+            minXMinYMaxZ: points[4], maxXMinYMaxZ: points[5],
+            minXMaxYMaxZ: points[6], maxXMaxYMaxZ: points[7]
         )
     }
 
-    func projectedBox(layout: ViewportLayout) -> ViewportProjectedBox {
-        ViewportProjectedBox(
-            minXMinYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: xMin, y: yMin, z: zMin),
-                layout: layout
-            ),
-            maxXMinYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: xMax, y: yMin, z: zMin),
-                layout: layout
-            ),
-            minXMaxYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: xMin, y: yMax, z: zMin),
-                layout: layout
-            ),
-            maxXMaxYMinZ: projectedPoint(
-                ViewportModelPoint3D(x: xMax, y: yMax, z: zMin),
-                layout: layout
-            ),
-            minXMinYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: xMin, y: yMin, z: zMax),
-                layout: layout
-            ),
-            maxXMinYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: xMax, y: yMin, z: zMax),
-                layout: layout
-            ),
-            minXMaxYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: xMin, y: yMax, z: zMax),
-                layout: layout
-            ),
-            maxXMaxYMaxZ: projectedPoint(
-                ViewportModelPoint3D(x: xMax, y: yMax, z: zMax),
-                layout: layout
-            )
+    private func projectedFootprint(y: CGFloat, layout: ViewportLayout) -> ViewportProjectedRect? {
+        guard let bottomLeft = projectedPoint(x: xMin, y: y, z: zMin, layout: layout),
+              let bottomRight = projectedPoint(x: xMax, y: y, z: zMin, layout: layout),
+              let topRight = projectedPoint(x: xMax, y: y, z: zMax, layout: layout),
+              let topLeft = projectedPoint(x: xMin, y: y, z: zMax, layout: layout) else { return nil }
+        return ViewportProjectedRect(
+            bottomLeft: bottomLeft, bottomRight: bottomRight, topRight: topRight, topLeft: topLeft
         )
     }
 
-    private func projectedFootprint(y: CGFloat, layout: ViewportLayout) -> ViewportProjectedRect {
-        ViewportProjectedRect(
-            bottomLeft: projectedPoint(x: xMin, y: y, z: zMin, layout: layout),
-            bottomRight: projectedPoint(x: xMax, y: y, z: zMin, layout: layout),
-            topRight: projectedPoint(x: xMax, y: y, z: zMax, layout: layout),
-            topLeft: projectedPoint(x: xMin, y: y, z: zMax, layout: layout)
-        )
+    func worldPoint(_ point: ViewportModelPoint3D) -> Point3D {
+        let rotated = rotatedPoint(x: point.x, y: point.y, z: point.z)
+        return Point3D(x: Double(rotated.x), y: Double(rotated.y), z: Double(rotated.z))
+    }
+
+    var worldBoxCorners: [Point3D] {
+        (0..<8).map { index in
+            worldPoint(ViewportModelPoint3D(
+                x: index & 1 == 0 ? xMin : xMax,
+                y: index & 2 == 0 ? yMin : yMax,
+                z: index & 4 == 0 ? zMin : zMax
+            ))
+        }
     }
 
     private func projectedPoint(
-        x: CGFloat,
-        y: CGFloat,
-        z: CGFloat,
-        layout: ViewportLayout
-    ) -> CGPoint {
-        let rotated = rotatedPoint(x: x, y: y, z: z)
-        let base = layout.project(CGPoint(x: rotated.x, y: rotated.z))
-        return CGPoint(
-            x: base.x + layout.basis.yDirection.dx * rotated.y * layout.scale,
-            y: base.y + layout.basis.yDirection.dy * rotated.y * layout.scale
-        )
+        x: CGFloat, y: CGFloat, z: CGFloat, layout: ViewportLayout
+    ) -> CGPoint? {
+        layout.projectedPoint(worldPoint(ViewportModelPoint3D(x: x, y: y, z: z)))?.point
     }
 
     private func projectedAxisVector(
-        _ axis: ViewportCoordinateAxis,
-        layout: ViewportLayout
-    ) -> CGVector {
-        let start = projectedPoint(centerPoint, layout: layout)
-        let end = projectedPoint(centerPoint.offset(axis: axis, amount: 1.0), layout: layout)
+        _ axis: ViewportCoordinateAxis, layout: ViewportLayout
+    ) -> CGVector? {
+        guard let start = projectedPoint(centerPoint, layout: layout),
+              let end = projectedPoint(centerPoint.offset(axis: axis, amount: 1), layout: layout) else { return nil }
         return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
@@ -538,21 +516,29 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) {
+    ) -> Bool {
+        let axis: ViewportCoordinateAxis
+        switch face {
+        case .front, .back: axis = .y
+        case .top, .bottom: axis = .z
+        case .left, .right, .side: axis = .x
+        }
+        guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return false }
         switch face {
         case .front:
-            yMin += dragAmount(axis: .y, start: start, current: current, layout: layout)
+            yMin += amount
         case .back:
-            yMax += dragAmount(axis: .y, start: start, current: current, layout: layout)
+            yMax += amount
         case .top:
-            zMax += dragAmount(axis: .z, start: start, current: current, layout: layout)
+            zMax += amount
         case .bottom:
-            zMin += dragAmount(axis: .z, start: start, current: current, layout: layout)
+            zMin += amount
         case .left:
-            xMin += dragAmount(axis: .x, start: start, current: current, layout: layout)
+            xMin += amount
         case .right, .side:
-            xMax += dragAmount(axis: .x, start: start, current: current, layout: layout)
+            xMax += amount
         }
+        return true
     }
 
     private mutating func moveVertex(
@@ -560,10 +546,10 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) {
-        let xAmount = dragAmount(axis: .x, start: start, current: current, layout: layout)
-        let yAmount = dragAmount(axis: .y, start: start, current: current, layout: layout)
-        let zAmount = dragAmount(axis: .z, start: start, current: current, layout: layout)
+    ) -> Bool {
+        guard let xAmount = dragAmount(axis: .x, start: start, current: current, layout: layout),
+              let yAmount = dragAmount(axis: .y, start: start, current: current, layout: layout),
+              let zAmount = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return false }
         if vertex.usesMinX {
             xMin += xAmount
         } else {
@@ -579,6 +565,7 @@ struct ViewportObjectEditState: Equatable {
         } else {
             zMax += zAmount
         }
+        return true
     }
 
     private mutating func moveProfileCorner(
@@ -586,8 +573,8 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) {
-        let delta = profileCornerDragDelta(start: start, current: current, layout: layout)
+    ) -> Bool {
+        guard let delta = profileCornerDragDelta(start: start, current: current, layout: layout) else { return false }
         if vertex.usesMinX {
             xMin += delta.x
         } else {
@@ -598,31 +585,26 @@ struct ViewportObjectEditState: Equatable {
         } else {
             zMax += delta.y
         }
+        return true
     }
 
     func profileCornerDragDelta(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> (x: CGFloat, y: CGFloat) {
+    ) -> (x: CGFloat, y: CGFloat)? {
         // Solve the 2x2 system delta = a * vx + b * vz instead of projecting
         // the screen delta onto each axis independently: the projected x/z
         // axes are not orthogonal on screen in isometric views, so independent
         // projections cross-bleed (dragging along the x grid direction also
         // moved the corner in z) and the corner drifted off the cursor.
-        let xVector = projectedAxisVector(.x, layout: layout)
-        let zVector = projectedAxisVector(.z, layout: layout)
+        guard let xVector = projectedAxisVector(.x, layout: layout),
+              let zVector = projectedAxisVector(.z, layout: layout) else { return nil }
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
         let determinant = xVector.dx * zVector.dy - xVector.dy * zVector.dx
         let degenerateDeterminant = 1.0e-6 * xVector.length * zVector.length
         guard abs(determinant) > degenerateDeterminant else {
-            // Edge-on view: the axes project to near-parallel screen
-            // directions and the planar system has no unique solution; keep
-            // the independent projections there.
-            return (
-                x: dragAmount(axis: .x, start: start, current: current, layout: layout),
-                y: dragAmount(axis: .z, start: start, current: current, layout: layout)
-            )
+            return nil
         }
         let xAmount = (delta.dx * zVector.dy - delta.dy * zVector.dx) / determinant
         let zAmount = (xVector.dx * delta.dy - xVector.dy * delta.dx) / determinant
@@ -635,9 +617,9 @@ struct ViewportObjectEditState: Equatable {
         current: CGPoint,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout)
-        let yDelta = dragAmount(axis: .y, start: start, current: current, layout: layout)
-        let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout)
+        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
+              let yDelta = dragAmount(axis: .y, start: start, current: current, layout: layout),
+              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
         guard let distance = ViewportProfileFaceDragMapping.distance(
             for: face,
             xDelta: Double(xDelta),
@@ -655,8 +637,8 @@ struct ViewportObjectEditState: Equatable {
         current: CGPoint,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout)
-        let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout)
+        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
+              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
         guard let distance = ViewportProfileEdgeChamferMapping.distance(
             for: edge,
             xDelta: Double(xDelta),
@@ -673,8 +655,8 @@ struct ViewportObjectEditState: Equatable {
         current: CGPoint,
         layout: ViewportLayout
     ) -> CGFloat? {
-        let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout)
-        let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout)
+        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
+              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
         guard let radius = ViewportProfileEdgeFilletMapping.radius(
             for: edge,
             xDelta: Double(xDelta),
@@ -690,11 +672,12 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let axisVector = projectedAxisVector(axis, layout: layout)
+    ) -> CGFloat? {
+        guard let axisVector = projectedAxisVector(axis, layout: layout), axisVector.length > 1.0e-9 else { return nil }
         let direction = axisVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
-        return (delta.dx * direction.dx + delta.dy * direction.dy) / max(axisVector.length, 1.0e-9)
+        let amount = (delta.dx * direction.dx + delta.dy * direction.dy) / axisVector.length
+        return amount.isFinite ? amount : nil
     }
 
     private func rotationAmount(
@@ -702,9 +685,9 @@ struct ViewportObjectEditState: Equatable {
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let center = projectedPoint(centerPoint, layout: layout)
-        let plane = rotationPlaneDirections(for: axis, layout: layout)
+    ) -> CGFloat? {
+        guard let center = projectedPoint(centerPoint, layout: layout),
+              let plane = rotationPlaneDirections(for: axis, layout: layout) else { return nil }
         let startAngle = rotationPlaneAngle(for: start, center: center, plane: plane)
         let currentAngle = rotationPlaneAngle(for: current, center: center, plane: plane)
         return normalizedRotationDelta(from: startAngle, to: currentAngle)
@@ -713,14 +696,17 @@ struct ViewportObjectEditState: Equatable {
     private func rotationPlaneDirections(
         for axis: ViewportCoordinateAxis,
         layout: ViewportLayout
-    ) -> (first: CGVector, second: CGVector) {
+    ) -> (first: CGVector, second: CGVector)? {
+        guard let x = projectedAxisDirection(.x, layout: layout),
+              let y = projectedAxisDirection(.y, layout: layout),
+              let z = projectedAxisDirection(.z, layout: layout) else { return nil }
         switch axis {
         case .x:
-            (projectedAxisDirection(.y, layout: layout), projectedAxisDirection(.z, layout: layout))
+            return (y, z)
         case .y:
-            (projectedAxisDirection(.z, layout: layout), projectedAxisDirection(.x, layout: layout))
+            return (z, x)
         case .z:
-            (projectedAxisDirection(.x, layout: layout), projectedAxisDirection(.y, layout: layout))
+            return (x, y)
         }
     }
 

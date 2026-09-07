@@ -118,6 +118,207 @@ import Testing
     }
 }
 
+@Test func viewportIdentityPlanAndRectangleSelectionClipNearCrossingSegmentsWithoutBridgingGaps() throws {
+    let basis = ViewportProjectionBasis(
+        mode: .orbit,
+        xDirection: CGVector(dx: 1.0, dy: 0.0),
+        yDirection: CGVector(dx: 0.0, dy: -1.0),
+        zDirection: .zero
+    )
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 256.0, height: 256.0),
+        camera: ViewportCamera(projection: .standardPerspective),
+        basis: basis,
+        verticalBounds: -1.0...1.0
+    )
+    let cameraRay = try #require(layout.viewportRay(for: layout.fittingCenter))
+    let cameraDistance = cameraRay.origin.z - layout.renderOrigin.z
+    let xFocal = 2.0 * Double(layout.scale) * cameraDistance / Double(layout.viewportSize.width)
+    let yFocal = 2.0 * Double(layout.scale) * cameraDistance / Double(layout.viewportSize.height)
+    let nearW = ViewportLayout.minimumPerspectiveW * 0.5
+
+    func worldPoint(ndcX: Double, ndcY: Double, cameraW: Double) -> Point3D {
+        Point3D(
+            x: ndcX * cameraW / xFocal,
+            y: ndcY * cameraW / yFocal,
+            z: cameraRay.origin.z - cameraW
+        )
+    }
+
+    func sketchPoint(ndcX: Double, cameraW: Double) -> CGPoint {
+        let point = worldPoint(ndcX: ndcX, ndcY: 0.0, cameraW: cameraW)
+        return CGPoint(x: point.x, y: point.z)
+    }
+
+    func worldSketchPoint(_ point: CGPoint) -> Point3D {
+        Point3D(x: Double(point.x), y: 0.0, z: Double(point.y))
+    }
+
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        generatedTopologyTestSubshapeID("feature:near-crossing:face")
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        generatedTopologyTestSubshapeID("feature:near-crossing:edge")
+    )
+    let facePoints = [
+        worldPoint(ndcX: -0.65, ndcY: -0.65, cameraW: 0.6),
+        worldPoint(ndcX: 0.65, ndcY: -0.65, cameraW: 0.6),
+        worldPoint(ndcX: 0.0, ndcY: 0.5, cameraW: nearW),
+    ]
+    let edgePoints = (
+        worldPoint(ndcX: -0.65, ndcY: 0.0, cameraW: 0.6),
+        worldPoint(ndcX: 0.65, ndcY: 0.0, cameraW: nearW)
+    )
+    let topology = ViewportBodyTopology(
+        faces: [ViewportBodyTopology.Face(componentID: faceComponentID, points: facePoints)],
+        edges: [ViewportBodyTopology.Edge(
+            componentID: edgeComponentID,
+            start: edgePoints.0,
+            end: edgePoints.1
+        )]
+    )
+    let bodyFeatureID = FeatureID()
+    let body = ViewportSceneItem(
+        id: "near-crossing-body",
+        featureID: bodyFeatureID,
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        kind: .body(component: ViewportBodyComponent(
+            sizeXMeters: 2.0,
+            sizeYMeters: 2.0,
+            sizeZMeters: 2.0,
+            yMinMeters: -1.0,
+            yMaxMeters: 1.0,
+            topology: topology
+        ))
+    )
+
+    let splineEntityID = SketchEntityID()
+    let lineEntityID = SketchEntityID()
+    let circleEntityID = SketchEntityID()
+    let arcEntityID = SketchEntityID()
+    let splineFeatureID = FeatureID()
+    let nearCircleCenter = CGPoint(x: 0.0, y: cameraRay.origin.z - 0.06)
+    let nearCircleRadius = 0.12
+    let spline = ViewportSceneItem(
+        id: "near-crossing-spline",
+        featureID: splineFeatureID,
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        kind: .sketch(primitives: [
+            .line(
+                entityID: lineEntityID,
+                start: sketchPoint(ndcX: -0.65, cameraW: 0.6),
+                end: sketchPoint(ndcX: 0.0, cameraW: nearW)
+            ),
+            .spline(
+                entityID: splineEntityID,
+                points: [
+                    sketchPoint(ndcX: -0.65, cameraW: 0.6),
+                    sketchPoint(ndcX: 0.0, cameraW: nearW),
+                    sketchPoint(ndcX: 0.65, cameraW: 0.6),
+                ],
+                controlPoints: [],
+                sketchPlane: .xy
+            ),
+            .circle(
+                entityID: circleEntityID,
+                center: nearCircleCenter,
+                radiusMeters: nearCircleRadius
+            ),
+            .arc(
+                entityID: arcEntityID,
+                center: nearCircleCenter,
+                radiusMeters: nearCircleRadius,
+                startAngleRadians: 0.0,
+                endAngleRadians: .pi
+            ),
+        ])
+    )
+    let scene = ViewportScene(items: [body, spline])
+    let builder = ViewportIdentityPickRenderPlanBuilder()
+    let plan = builder.build(scene: scene, layout: layout)
+    let estimate = builder.estimate(scene: scene, layout: layout)
+    #expect(estimate.drawItemCount == plan.drawItems.count)
+    #expect(estimate.encodedPointCount == plan.encodedPointCount)
+
+    let faceItem = try #require(plan.drawItems.first {
+        $0.geometry == .generatedFace(faceComponentID)
+    })
+    if case .polygon(let points) = faceItem.primitive {
+        #expect(points.count == 4)
+    } else {
+        Issue.record("Expected the near-crossing face to be retained as a clipped polygon.")
+    }
+
+    let edgeItem = try #require(plan.drawItems.first {
+        $0.geometry == .generatedEdge(edgeComponentID)
+    })
+    if case .segment(let start, let end, _) = edgeItem.primitive {
+        #expect(start != end)
+        #expect(start.x.isFinite && start.y.isFinite)
+        #expect(end.x.isFinite && end.y.isFinite)
+    } else {
+        Issue.record("Expected the near-crossing edge to be retained as a clipped segment.")
+    }
+
+    let splineItems = plan.drawItems.filter {
+        $0.geometry == .sketchEntity(splineEntityID)
+    }
+    #expect(splineItems.count == 2)
+    #expect(splineItems.allSatisfy {
+        if case .polyline(let points, _, let isClosed) = $0.primitive {
+            return points.count == 2 && !isClosed
+        }
+        return false
+    })
+
+    for entityID in [circleEntityID, arcEntityID] {
+        let sampledItems = plan.drawItems.filter {
+            $0.geometry == .sketchEntity(entityID)
+        }
+        #expect(sampledItems.count >= 2)
+        #expect(sampledItems.allSatisfy {
+            if case .polyline(let points, _, let isClosed) = $0.primitive {
+                return points.count == 2 && !isClosed
+            }
+            return false
+        })
+    }
+
+    let edgeProjection = layout.projectedPolygon([edgePoints.0, edgePoints.1])
+    let edgeAnchor = try #require(edgeProjection.first?.point)
+    let selectionRect = CGRect(x: edgeAnchor.x - 1.0, y: edgeAnchor.y - 1.0, width: 2.0, height: 2.0)
+    let rectangleHits = ViewportSelectionRectangleHitTester().hits(
+        in: selectionRect,
+        scene: ViewportScene(items: [body]),
+        layout: layout,
+        selectionHitPolicy: .edge
+    )
+    #expect(rectangleHits.contains {
+        $0.selectionComponent == .edge(edgeComponentID)
+    })
+
+    let lineStart = sketchPoint(ndcX: -0.65, cameraW: 0.6)
+    let lineEnd = sketchPoint(ndcX: 0.0, cameraW: nearW)
+    let lineClipAnchor = try #require(
+        layout.projectedPolygon([worldSketchPoint(lineStart), worldSketchPoint(lineEnd)])
+            .first?.point
+    )
+    let lineSelectionRect = CGRect(
+        x: lineClipAnchor.x - 1.0,
+        y: lineClipAnchor.y - 1.0,
+        width: 2.0,
+        height: 2.0
+    )
+    let lineRectangleHits = ViewportSelectionRectangleHitTester().hits(
+        in: lineSelectionRect,
+        scene: ViewportScene(items: [spline]),
+        layout: layout,
+        selectionHitPolicy: .sketchEntity
+    )
+    #expect(lineRectangleHits.contains { $0.sketchEntityID == lineEntityID })
+}
+
 @Test func viewportIdentityBufferRendererReportsRenderReadbackMetrics() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)

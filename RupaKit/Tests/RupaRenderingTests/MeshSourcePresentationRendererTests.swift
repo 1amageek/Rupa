@@ -1,12 +1,15 @@
 import Foundation
 import CoreGraphics
 import Metal
+import RealityKit
 import Synchronization
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
+import RupaResponsivenessBaseline
 import RupaViewportScene
+import SwiftCAD
 import Testing
 @testable import RupaRendering
 @testable import RupaGeometry
@@ -27,7 +30,7 @@ func presentationPlanBoundaryIndicesExcludeTriangulationDiagonals() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func presentationPlanBoundaryAdmissionChargesSixIndicesAndCombinedPages() throws {
+func presentationPlanAdmissionIncludesNativeAdapterInputBuffers() throws {
     let triangleSource = try presentationTriangleSource()
     let (triangleScene, _) = try presentationScene(
         source: triangleSource,
@@ -46,8 +49,10 @@ func presentationPlanBoundaryAdmissionChargesSixIndicesAndCombinedPages() throws
     )
     let pointPlan = try MeshSourcePresentationRenderPlan(scene: pointScene)
     let expectedTriangleAndBoundaryBytes =
-        3 * 3 * MemoryLayout<UInt32>.stride
+        2 * 3 * MemoryLayout<UInt32>.stride
+        + 6 * MemoryLayout<UInt32>.stride
         + MemoryLayout<MeshFaceID>.stride
+        + MemoryLayout<SIMD3<Float>>.stride
         + 6 * MemoryLayout<UInt32>.stride
     #expect(
         trianglePlan.retainedByteCount - pointPlan.retainedByteCount
@@ -57,9 +62,8 @@ func presentationPlanBoundaryAdmissionChargesSixIndicesAndCombinedPages() throws
     let expectedPositionBytes = 3 * (
         MemoryLayout<GeometryPoint3D>.stride
             + MemoryLayout<MeshVertexID>.stride
-            + 16
+            + MemoryLayout<SIMD3<Float>>.stride
     )
-    let expectedCombinedPageBytes = 64 * 1024
     let expectedItemBytes =
         MemoryLayout<MeshSourcePresentationRenderPlan.Occurrence>.stride + 128
     let emptyScene = UniversalViewportScene(
@@ -71,7 +75,7 @@ func presentationPlanBoundaryAdmissionChargesSixIndicesAndCombinedPages() throws
     let emptyPlan = try MeshSourcePresentationRenderPlan(scene: emptyScene)
     #expect(
         pointPlan.retainedByteCount - emptyPlan.retainedByteCount
-            == expectedItemBytes + expectedCombinedPageBytes + expectedPositionBytes
+            == expectedItemBytes + expectedPositionBytes
     )
 
     let limits = MeshSourcePresentationPlanLimits(
@@ -88,7 +92,7 @@ func presentationPlanBoundaryAdmissionChargesSixIndicesAndCombinedPages() throws
 }
 
 @Test(.timeLimit(.minutes(1)))
-func presentationPlanMemoryCeilingIncludesScratchAndGPUStorage() throws {
+func presentationPlanMemoryCeilingIncludesScratchAndAdapterInputs() throws {
     #expect(MeshSourcePresentationPlanLimits.hardMaximum.maxRetainedByteCount <= (8 * 1024 * 1024 * 1024) / 40)
     let (scene, _) = try presentationScene(
         references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))], transforms: [.identity]
@@ -245,6 +249,55 @@ func viewportSurfaceGPUWireframeOmitsTheQuadTriangulationDiagonal() async throws
     }
     #expect(boundaryPixelCount > 0)
     #expect(center.alpha == 0)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUWireframeKeepsSlopedBoundariesContinuous() async throws {
+    // Vary both the depth slope and subpixel position: a flat, pixel-aligned
+    // face cannot expose line/triangle rasterization self-occlusion.
+    for slope in [-0.9, -0.3, 0.3, 0.9] {
+        var builder = MeshSourceBuilder(identity: GeometrySourceID(rawValue: "mesh.sloped-wire"))
+        let points = [(-0.6, -0.5), (0.6, -0.5), (0.6, 0.5), (-0.6, 0.5)]
+        let vertices = try points.map { x, y in
+            try builder.addVertex(GeometryPoint3D(x: x, y: y, z: slope * (x + y)))
+        }
+        _ = try builder.addFace(vertexIDs: vertices)
+        let source = try builder.build()
+        let (scene, _) = try presentationScene(
+            source: source, references: [.authoredMesh(source.identity)], transforms: [.identity]
+        )
+        let renderer = try ViewportSurfaceRenderer(plan: MeshSourcePresentationRenderPlan(scene: scene))
+        for offset in [0.2, 0.5, 0.8] {
+            var layout = surfaceTestLayout()
+            layout = ViewportLayout(
+                modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+                size: CGSize(width: 128, height: 128),
+                camera: ViewportCamera(pan: CGSize(width: offset, height: offset)),
+                basis: layout.basis, verticalBounds: -1...1
+            )
+            let pixels = try await surfacePixels(renderer, layout: layout, displayMode: .wireframe)
+            for edge in points.indices {
+                let first = points[edge]
+                let last = points[(edge + 1) % points.count]
+                let a = layout.project(Point3D(x: first.0, y: first.1, z: slope * (first.0 + first.1)))
+                let b = layout.project(Point3D(x: last.0, y: last.1, z: slope * (last.0 + last.1)))
+                let length = Int(max(abs(b.x - a.x), abs(b.y - a.y)))
+                var missing = 0
+                for step in 2..<(length - 2) {
+                    let t = Double(step) / Double(length)
+                    let x = Int(floor(a.x + (b.x - a.x) * t))
+                    let y = Int(floor(a.y + (b.y - a.y) * t))
+                    let covered = (-1...1).contains { dy in
+                        (-1...1).contains { dx in
+                            surfacePixel(pixels, x: x + dx, y: y + dy).alpha > 0
+                        }
+                    }
+                    if !covered { missing += 1 }
+                }
+                #expect(missing == 0, "slope=\(slope), offset=\(offset), edge=\(edge), missing=\(missing)")
+            }
+        }
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -424,6 +477,316 @@ func viewportSurfaceGPURejectsAnIncompleteRenderPassBeforeEncoding() throws {
     }
 }
 
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUFitsOffsetGeometryUsingTheSharedCameraLayout() async throws {
+    let reference = GeometrySourceReference.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))
+    let (scene, _) = try presentationScene(
+        references: [reference], transforms: [translationTransform(x: 10, y: 10, z: 0)]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    let basis = surfaceTestLayout().basis
+    let modelBounds = CGRect(x: -20, y: -20, width: 40, height: 40)
+    let size = CGSize(width: 128, height: 128)
+    let insets = ViewportLayout.FittingInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
+    let before = ViewportLayout(
+        modelBounds: modelBounds, size: size, basis: basis,
+        verticalBounds: -20...20, fittingInsets: insets
+    )
+    let beforePixels = try await surfacePixels(renderer, layout: before)
+    #expect(surfacePixel(beforePixels, x: 64, y: 64).alpha == 0)
+    for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
+        let camera = try ViewportControlBoundsSolver.camera(
+            for: scene.worldBounds, sceneModelBounds: modelBounds, verticalBounds: -20...20,
+            basis: basis, size: size, fittingInsets: insets, maximumZoom: before.maximumZoom,
+            projection: projection
+        )
+        let fitted = ViewportLayout(
+            modelBounds: modelBounds, size: size, camera: camera, basis: basis,
+            verticalBounds: -20...20, fittingInsets: insets
+        )
+        let pixels = try await surfacePixels(renderer, layout: fitted)
+        #expect(surfacePixel(pixels, x: 64, y: 64).alpha == 255)
+        #expect(surfacePixel(pixels, x: 4, y: 4).alpha == 0)
+        #expect(camera.focus != fitted.renderOrigin)
+        #expect(MeshSourcePresentationScreenHitTester().occurrenceID(
+            at: fitted.fittingCenter, in: plan, layout: fitted) == scene.items.first?.id)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUAppliesShadingWithoutChangingTheGeometryPlan() async throws {
+    var builder = MeshSourceBuilder(identity: "mesh.shading-plane")
+    let vertices = try [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)].map { x, y in
+        try builder.addVertex(GeometryPoint3D(x: x, y: y, z: 0.24 * x - 0.35 * y))
+    }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let (scene, _) = try presentationScene(
+        source: source,
+        references: [.authoredMesh(source.identity)],
+        transforms: [.identity]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    let layout = surfaceTestLayout()
+    let baseColor = ColorRGBA(r: 0.68, g: 0.32, b: 0.18, a: 1)
+    let studio = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(
+            style: .studio,
+            studioRotationDegrees: 0,
+            isSpecularEnabled: true,
+            solidColor: .single(baseColor)
+        )
+    )
+    let flat = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(
+            style: .flat,
+            studioRotationDegrees: 0,
+            isSpecularEnabled: true,
+            solidColor: .single(baseColor)
+        )
+    )
+    let flatWithoutLight = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(
+            style: .flat,
+            studioRotationDegrees: 180,
+            isSpecularEnabled: false,
+            solidColor: .single(baseColor)
+        )
+    )
+    let studioRotated = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(
+            style: .studio,
+            studioRotationDegrees: 123,
+            isSpecularEnabled: true,
+            solidColor: .single(baseColor)
+        )
+    )
+    let studioWithoutSpecular = try await surfacePixels(
+        renderer, layout: layout,
+        shading: ViewportShading(style: .studio, isSpecularEnabled: false, solidColor: .single(baseColor))
+    )
+    let matCap = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(style: .matCap, solidColor: .single(baseColor))
+    )
+    let flatPixel = surfacePixel(flat, x: 64, y: 64)
+    let matCapPixel = surfacePixel(matCap, x: 64, y: 64)
+    #expect(flatPixel.alpha == 255)
+    #expect(abs(Int(flatPixel.red) - 173) <= 8)
+    #expect(abs(Int(flatPixel.green) - 82) <= 8)
+    #expect(abs(Int(flatPixel.blue) - 46) <= 8)
+    #expect(flat == flatWithoutLight, "Flat shading must ignore studio light rotation and specular settings.")
+    #expect(matCapPixel.alpha == 255)
+    #expect(
+        matCapPixel.red != flatPixel.red
+            || matCapPixel.green != flatPixel.green
+            || matCapPixel.blue != flatPixel.blue
+    )
+    #expect(studio != studioRotated, "Studio light rotation must affect pixels on the same geometry.")
+    #expect(studio != studioWithoutSpecular, "Specular lighting must independently affect pixels.")
+    #expect(studio != flat)
+    #expect(studio != matCap)
+
+    let materialColor = ColorRGBA(r: 0.16, g: 0.78, b: 0.24, a: 1)
+    let material = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: ViewportShading(style: .flat, solidColor: .material),
+        materialColorForOccurrence: { _ in materialColor }
+    )
+    let materialPixel = surfacePixel(material, x: 64, y: 64)
+    #expect(materialPixel.green > materialPixel.red)
+    #expect(materialPixel.green > materialPixel.blue)
+
+    let randomShading = ViewportShading(style: .flat, solidColor: .random)
+    let randomFirst = try await surfacePixels(renderer, layout: layout, shading: randomShading)
+    let randomSecond = try await surfacePixels(renderer, layout: layout, shading: randomShading)
+    #expect(randomFirst == randomSecond, "Random solid color must be stable for one occurrence identity.")
+
+    let wireTheme = try await surfacePixels(
+        renderer,
+        layout: layout,
+        displayMode: .solidWithEdges,
+        shading: ViewportShading(style: .flat, solidColor: .single(baseColor), wireColor: .theme)
+    )
+    let wireObject = try await surfacePixels(
+        renderer,
+        layout: layout,
+        displayMode: .solidWithEdges,
+        shading: ViewportShading(style: .flat, solidColor: .single(baseColor), wireColor: .object)
+    )
+    let wireDifferenceCount = zip(wireTheme, wireObject)
+        .reduce(into: 0) { count, pair in count += pair.0 == pair.1 ? 0 : 1 }
+    #expect(wireDifferenceCount > 0, "Wire color selection must affect source-face boundary pixels.")
+    #expect(plan.snapshotID == renderer.snapshotID)
+    #expect(renderer.triangleCount == plan.triangleCount)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUUsesTheSameBackfaceRuleAsScreenPicking() async throws {
+    let reversed = try presentationQuadSource(reversed: true)
+    let (scene, _) = try presentationScene(
+        source: reversed,
+        references: [.authoredMesh(reversed.identity)],
+        transforms: [translationTransform(x: -0.5, y: -0.5, z: 0)]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    let layout = surfaceTestLayout()
+    let shading = ViewportShading(isBackfaceCullingEnabled: true)
+    let pixels = try await surfacePixels(renderer, layout: layout, shading: shading)
+    let picked = MeshSourcePresentationScreenHitTester().occurrenceID(
+        at: CGPoint(x: 64, y: 64),
+        in: plan,
+        layout: layout,
+        cullBackFaces: true
+    )
+    #expect(surfacePixel(pixels, x: 64, y: 64).alpha == 0)
+    #expect(picked == nil)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func viewportSurfaceGPUPerspectiveClipsNearCrossingTriangleAndAgreesWithPicking() async throws {
+    let basis = surfaceTestLayout().basis
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+        size: CGSize(width: 128, height: 128),
+        camera: ViewportCamera(projection: .standardPerspective),
+        basis: basis,
+        verticalBounds: -1...1
+    )
+    #expect(layout.projection == .standardPerspective)
+
+    let cameraRay = try #require(layout.viewportRay(for: layout.fittingCenter))
+    let cameraDistance = cameraRay.origin.z - layout.renderOrigin.z
+    let xFocal = 2.0 * Double(layout.scale) * cameraDistance / Double(layout.viewportSize.width)
+    let yFocal = 2.0 * Double(layout.scale) * cameraDistance / Double(layout.viewportSize.height)
+    #expect(cameraDistance.isFinite)
+    #expect(xFocal.isFinite)
+    #expect(yFocal.isFinite)
+
+    func worldPoint(ndcX: Double, ndcY: Double, cameraW: Double) -> Point3D {
+        Point3D(
+            x: ndcX * cameraW / xFocal,
+            y: ndcY * cameraW / yFocal,
+            z: cameraRay.origin.z - cameraW
+        )
+    }
+
+    let sourcePoints = [
+        worldPoint(ndcX: -0.65, ndcY: -0.65, cameraW: 0.6),
+        worldPoint(ndcX: 0.65, ndcY: -0.65, cameraW: 0.6),
+        worldPoint(
+            ndcX: 0.0,
+            ndcY: 0.5,
+            cameraW: ViewportLayout.minimumPerspectiveW * 0.5
+        ),
+    ]
+    #expect(layout.projectedPoint(sourcePoints[2]) == nil)
+    let projectedClippedPoints = layout.projectedPolygon(sourcePoints)
+    #expect(projectedClippedPoints.count == 4)
+    #expect(projectedClippedPoints.allSatisfy { $0.w >= ViewportLayout.minimumPerspectiveW })
+
+    let projectedNearPoints = try sourcePoints.prefix(2).map {
+        try #require(layout.projectedPoint($0)).point
+    }
+    let farPoints = sourcePoints.map { point in
+        Point3D(x: point.x, y: point.y, z: point.z - 0.4)
+    }
+    let projectedFarPoints = try farPoints.prefix(2).map {
+        try #require(layout.projectedPoint($0)).point
+    }
+    let nearWidth = projectedNearPoints[0].distance(to: projectedNearPoints[1])
+    let farWidth = projectedFarPoints[0].distance(to: projectedFarPoints[1])
+    #expect(nearWidth > farWidth * 1.25)
+
+    let screenCenter = projectedClippedPoints.reduce(CGPoint.zero) { partial, point in
+        CGPoint(x: partial.x + point.point.x, y: partial.y + point.point.y)
+    }
+    let screenPoint = CGPoint(
+        x: screenCenter.x / CGFloat(projectedClippedPoints.count),
+        y: screenCenter.y / CGFloat(projectedClippedPoints.count)
+    )
+    let pixelX = min(max(Int(screenPoint.x.rounded()), 0), 127)
+    let pixelY = min(max(Int(screenPoint.y.rounded()), 0), 127)
+
+    let sourceID = GeometrySourceID(rawValue: "mesh.perspective-near-crossing")
+    var builder = MeshSourceBuilder(identity: sourceID)
+    let vertices = try sourcePoints.map {
+        try builder.addVertex(GeometryPoint3D(x: $0.x, y: $0.y, z: $0.z))
+    }
+    _ = try builder.addFace(vertexIDs: vertices)
+    let source = try builder.build()
+    let (scene, _) = try presentationScene(
+        source: source,
+        references: [.authoredMesh(sourceID), .authoredMesh(sourceID)],
+        transforms: [.identity, try translationTransform(x: 0, y: 0, z: -0.4)]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let nearID = SceneOccurrenceID(rawValue: "occurrence.presentation-render.0")
+    let farID = SceneOccurrenceID(rawValue: "occurrence.presentation-render.1")
+    let red = ColorRGBA(r: 1, g: 0, b: 0, a: 1)
+    let green = ColorRGBA(r: 0, g: 1, b: 0, a: 1)
+    let shading = ViewportShading(style: .flat, solidColor: .material)
+    let colorForOccurrence: (SceneOccurrenceID) -> ColorRGBA? = { occurrenceID in
+        occurrenceID == nearID ? red : occurrenceID == farID ? green : nil
+    }
+
+    let renderer = try ViewportSurfaceRenderer(plan: plan)
+    let pixels = try await surfacePixels(
+        renderer,
+        layout: layout,
+        shading: shading,
+        materialColorForOccurrence: colorForOccurrence
+    )
+    let pixel = surfacePixel(pixels, x: pixelX, y: pixelY)
+    #expect(pixel.alpha == 255)
+    #expect(pixel.red > 220)
+    #expect(pixel.green < 32)
+    let picked = MeshSourcePresentationScreenHitTester().occurrenceID(
+        at: screenPoint,
+        in: plan,
+        layout: layout
+    )
+    #expect(picked == nearID)
+
+    let reversedScene = UniversalViewportScene(
+        snapshotID: scene.snapshotID,
+        projectID: scene.projectID,
+        items: Array(scene.items.reversed()),
+        copyTelemetry: scene.copyTelemetry
+    )
+    let reversedPlan = try MeshSourcePresentationRenderPlan(scene: reversedScene)
+    let reversedPixels = try await surfacePixels(
+        ViewportSurfaceRenderer(plan: reversedPlan),
+        layout: layout,
+        shading: shading,
+        materialColorForOccurrence: colorForOccurrence
+    )
+    let reversedPixel = surfacePixel(reversedPixels, x: pixelX, y: pixelY)
+    #expect(reversedPixel.alpha == 255)
+    #expect(reversedPixel.red > 220)
+    #expect(reversedPixel.green < 32)
+    #expect(
+        MeshSourcePresentationScreenHitTester().occurrenceID(
+            at: screenPoint,
+            in: reversedPlan,
+            layout: layout
+        ) == nearID
+    )
+}
+
 private func surfaceTestLayout(basis: ViewportProjectionBasis? = nil) -> ViewportLayout {
     ViewportLayout(
         modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
@@ -439,6 +802,8 @@ private func surfaceTestLayout(basis: ViewportProjectionBasis? = nil) -> Viewpor
 private func surfacePixels(
     _ renderer: ViewportSurfaceRenderer, layout: ViewportLayout,
     displayMode: ViewportDisplayMode = .solid,
+    shading: ViewportShading = .standard,
+    materialColorForOccurrence: (SceneOccurrenceID) -> ColorRGBA? = { _ in nil },
     selected: SceneOccurrenceID? = nil, section: SectionAnalysisResult.Plane? = nil
 ) async throws -> [UInt8] {
     let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(
@@ -461,11 +826,13 @@ private func surfacePixels(
     pass.depthAttachment.texture = depth
     pass.depthAttachment.loadAction = .clear
     pass.depthAttachment.storeAction = .dontCare
-    pass.depthAttachment.clearDepth = 1
+    pass.depthAttachment.clearDepth = 0
     let command = try renderer.makeCommandBuffer()
     try renderer.encode(
         into: command, pass: pass, layout: layout,
         displayMode: displayMode,
+        shading: shading,
+        materialColorForOccurrence: materialColorForOccurrence,
         state: { $0 == selected ? .selected : .normal }, sectionPlane: section
     )
     await withCheckedContinuation { continuation in
@@ -898,6 +1265,334 @@ func meshSourcePresentationRenderPlanUsesBoundedSourceOrderForHighSegmentCylinde
     #expect(emittedCount == 4 * segmentCount - 4)
 }
 
+@Test(.timeLimit(.minutes(2)))
+func realityViewportPreparesDenseSingleOccurrenceUpload() async throws {
+    let segmentCount = 6_284
+    let cylinderCount = 4
+    let source = try presentationHighSegmentCylinderSource(segmentCount: segmentCount, cylinderCount: cylinderCount)
+    let sourceReference = GeometrySourceReference.authoredMesh(source.identity)
+    let scene = try presentationScene(
+        source: source,
+        references: [sourceReference],
+        transforms: [.identity]
+    ).scene
+
+    // Plan construction is deliberately detached from the MainActor. Only
+    // RealityKit native resource construction is allowed to cross back to the
+    // RealityViewport MainActor owner.
+    let plan = try await Task.detached(priority: .userInitiated) {
+        try MeshSourcePresentationRenderPlan(scene: scene)
+    }.value
+
+    let expectedPositionCount = cylinderCount * 2 * segmentCount
+    let expectedTriangleCount = cylinderCount * (4 * segmentCount - 4)
+    #expect(plan.itemCount == 1)
+    #expect(source.vertexIDs.count == expectedPositionCount)
+    #expect(source.faceIDs.count == cylinderCount * (segmentCount + 2))
+    #expect(plan.positionCount == expectedPositionCount)
+    #expect(plan.triangleCount == expectedTriangleCount)
+    #expect(plan.positionCount <= MeshSourcePresentationPlanLimits.standard.maxPositionCount)
+    #expect(plan.triangleCount <= MeshSourcePresentationPlanLimits.standard.maxTriangleCount)
+    #expect(plan.workingByteCount <= MeshSourcePresentationPlanLimits.standard.maxRetainedByteCount)
+
+    print(
+        "RealityViewport dense fixture: "
+            + "cylinders=\(cylinderCount), segments=\(segmentCount), "
+            + "items=\(plan.itemCount), positions=\(plan.positionCount), "
+            + "triangles=\(plan.triangleCount), retainedBytes=\(plan.retainedByteCount), "
+            + "workingBytes=\(plan.workingByteCount), "
+            + "processNativePeakBytes=unmeasured(separate signed-App gate)"
+    )
+
+    let overBudgetSource = try presentationHighSegmentCylinderSource(segmentCount: segmentCount, cylinderCount: 12)
+    let overBudgetScene = try presentationScene(
+        source: overBudgetSource,
+        references: [.authoredMesh(overBudgetSource.identity)],
+        transforms: [.identity]
+    ).scene
+    var overBudgetError: MeshSourcePresentationRenderError?
+    do {
+        _ = try MeshSourcePresentationRenderPlan(scene: overBudgetScene)
+    } catch let error as MeshSourcePresentationRenderError {
+        overBudgetError = error
+    }
+    #expect(overBudgetError?.code == .resourceExhausted)
+
+    let viewport = try await RealityViewport.prepare(plan: plan)
+    let halfFrameBudget = Duration.microseconds(8_333)
+    let uploadDuration = await viewport.maximumNativeUploadDuration
+    print(
+        "RealityViewport native LowLevelMesh upload: "
+            + "duration=\(uploadDuration), budget=\(halfFrameBudget), "
+            + "deviceSpecific=true"
+    )
+    #expect(
+        uploadDuration <= halfFrameBudget,
+        "Native LowLevelMesh upload exceeded the device-specific 60 Hz half-frame budget."
+    )
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func realityViewportSharesTranslatedResourcesWithoutSharingOccurrenceIdentity() async throws {
+    let source = try presentationQuadSource()
+    let reference = GeometrySourceReference.authoredMesh(source.identity)
+    let shear = try GeometryTransform3D(values: [
+        1, 1, 0, 6,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    ])
+    let scene = try presentationScene(
+        source: source, references: [reference, reference, reference, reference],
+        transforms: [.identity, translationTransform(x: 2, y: 0, z: 0), shear,
+                     translationTransform(x: 0, y: 0, z: 1)]
+    ).scene
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    let viewport = try await RealityViewport.prepare(plan: plan)
+    let renderer = try RealityRenderer()
+    renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
+    renderer.cameraSettings.isToneMappingEnabled = false
+    renderer.entities.append(viewport.root)
+    renderer.activeCamera = viewport.camera
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0, y: 0, width: 8, height: 1), size: CGSize(width: 640, height: 128),
+        camera: .init(zoom: 0.8), basis: .axisFront(.z), verticalBounds: 0...1
+    )
+    try viewport.applyCamera(layout: layout, revision: 1)
+    let colors = [ColorRGBA(r: 1, g: 0, b: 0, a: 1), ColorRGBA(r: 0, g: 0, b: 1, a: 1),
+                  ColorRGBA(r: 0, g: 1, b: 0, a: 1), ColorRGBA(r: 1, g: 0, b: 0, a: 1)]
+    var materialColors: [SceneOccurrenceID: ColorRGBA] = [:]
+    for index in scene.items.indices { materialColors[scene.items[index].id] = colors[index] }
+    try viewport.applyAppearance(
+        displayMode: .solidWithEdges, shading: .init(style: .flat, solidColor: .material),
+        materialColors: materialColors,
+        interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+                           previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+        sectionPlane: nil, retainedSide: .front, sectionTolerance: 0
+    )
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: .bgra8Unorm, width: 640, height: 128, mipmapped: false
+    )
+    descriptor.storageMode = .shared
+    descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+    func render() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                             onComplete: { _ in continuation.resume() })
+            } catch { continuation.resume(throwing: error) }
+        }
+    }
+    try await render()
+    let nativeScene = try #require(viewport.root.scene)
+    var surfaces: [Entity] = []
+    var meshes: [MeshResource] = []
+    var shapes: [ShapeResource] = []
+    for (index, x) in [Float(0.25), 2.25, 6.5].enumerated() {
+        let hit = try #require(nativeScene.raycast(origin: [x, 0.25, 0.5], direction: [0, 0, -1], length: 1).first)
+        let triangle = try #require(viewport.triangle(for: hit))
+        #expect(triangle.occurrenceID == scene.items[index].id)
+        #expect(triangle.faceID == source.faceIDs[0])
+        #expect(abs(hit.position.x - x) < 0.0001)
+        surfaces.append(hit.entity)
+        meshes.append(try #require(hit.entity.components[ModelComponent.self]?.mesh))
+        shapes.append(try #require(hit.entity.components[CollisionComponent.self]?.shapes.first))
+        let projected = try #require(layout.projectedPoint(Point3D(x: Double(x), y: 0.25, z: 0))).point
+        let pixelX = Int(projected.x.rounded()), pixelY = Int(projected.y.rounded())
+        try #require((0..<640).contains(pixelX) && (0..<128).contains(pixelY))
+        var pixel = [UInt8](repeating: 0, count: 4)
+        texture.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(pixelX, pixelY, 1, 1), mipmapLevel: 0)
+        let expectedChannel = [2, 0, 1][index]
+        #expect(pixel[expectedChannel] > 200, "Distinct occurrence material rendered BGRA \(pixel)")
+        for channel in 0..<3 where channel != expectedChannel {
+            #expect(Int(pixel[expectedChannel]) - Int(pixel[channel]) > 100)
+        }
+    }
+    #expect(surfaces[0] !== surfaces[1])
+    #expect(meshes[0] === meshes[1])
+    #expect(shapes[0] == shapes[1])
+    #expect(meshes[0] !== meshes[2])
+    #expect(shapes[0] != shapes[2])
+    let parent = try #require(surfaces[0].parent)
+    let lineMeshes = parent.children.compactMap { entity -> MeshResource? in
+        guard entity.components[CollisionComponent.self] == nil else { return nil }
+        return entity.components[ModelComponent.self]?.mesh
+    }
+    #expect(lineMeshes.count == 4)
+    #expect(Set(lineMeshes.map(ObjectIdentifier.init)).count == 2)
+    let section = SectionAnalysisResult.Plane(
+        sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
+        origin: Point3D(x: 1.5, y: 0, z: 0), normal: Vector3D(x: 1, y: 0, z: 0),
+        u: Vector3D(x: 0, y: 1, z: 0), v: Vector3D(x: 0, y: 0, z: 1)
+    )
+    try viewport.applySection(plane: section, side: .front, tolerance: 0)
+    let clipper = try #require(parent.parent)
+    #expect(clipper.position == .zero && parent.position == .zero)
+    #expect(clipper.scale == .one && parent.scale == .one)
+    try await render()
+    for (index, x) in [Float(0.25), 2.25].enumerated() {
+        let hits = nativeScene.raycast(origin: [x, 0.25, 2], direction: [0, 0, -1], length: 3)
+        #expect(viewport.retainedHits(hits, rayDirection: [0, 0, -1]).isEmpty == (index == 0))
+        let projected = try #require(layout.projectedPoint(Point3D(x: Double(x), y: 0.25, z: 0))).point
+        var pixel = [UInt8](repeating: 0, count: 4)
+        texture.getBytes(&pixel, bytesPerRow: 4,
+                         from: MTLRegionMake2D(Int(projected.x.rounded()), Int(projected.y.rounded()), 1, 1), mipmapLevel: 0)
+        #expect(index == 0 ? pixel[2] < 20 : pixel[0] > 200)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func realityViewportRefusesGroupingBeyondTheCallerByteLimit() async throws {
+    let reference = GeometrySourceReference.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))
+    let scene = try presentationScene(references: Array(repeating: reference, count: 16),
+                                      transforms: Array(repeating: .identity, count: 16)).scene
+    let standard = try MeshSourcePresentationRenderPlan(scene: scene)
+    let limits = MeshSourcePresentationPlanLimits(
+        maxItemCount: 16, maxPositionCount: standard.positionCount,
+        maxTriangleCount: standard.triangleCount, maxRetainedByteCount: standard.workingByteCount
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene, planLimits: limits)
+    do {
+        _ = try await RealityViewport.prepare(plan: plan)
+        Issue.record("Native grouping must respect the caller's lowered byte ceiling.")
+    } catch let error as MeshSourcePresentationRenderError {
+        #expect(error.code == .resourceExhausted)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func realityViewportPreparesMaximumAdmittedNativeLineUpload() async throws {
+    let hardMaximum = MeshSourcePresentationPlanLimits.hardMaximum
+    let itemBytes = MemoryLayout<MeshSourcePresentationRenderPlan.Occurrence>.stride + 128
+    let positionBytesPerVertex = MemoryLayout<GeometryPoint3D>.stride
+        + MemoryLayout<MeshVertexID>.stride
+        + MemoryLayout<SIMD3<Float>>.stride
+    let retainedBytesPerTriangle = 4 * 3 * MemoryLayout<UInt32>.stride
+        + MemoryLayout<MeshFaceID>.stride
+        + MemoryLayout<SIMD3<Float>>.stride
+        + 6 * MemoryLayout<UInt32>.stride
+    let lineBytesPerVertex = MemoryLayout<SIMD3<Float>>.stride
+    let lineBytesPerTriangle = 6 * MemoryLayout<UInt32>.stride
+    let minimumIndexScratch = try MeshSourceTriangulationIndex.storageReservation(vertexCount: 3)
+    let minimumFaceScratch = 3 * 256 + minimumIndexScratch
+    let fixedWorkingBytes = itemBytes + minimumFaceScratch
+
+    // Enumerate the complete admitted position range. The largest native line
+    // payload is selected from the actual plan charge, not from a sample-size
+    // fixture or an assumed allocator limit.
+    var maximum: (positionCount: Int, triangleCount: Int, lineBytes: Int)?
+    for positionCount in 3...hardMaximum.maxPositionCount {
+        let triangulationReservation = try MeshSourceTriangulationIndex.storageReservation(
+            vertexCount: positionCount
+        )
+        let fixedBytes = fixedWorkingBytes + positionBytesPerVertex * positionCount
+            + triangulationReservation
+        guard fixedBytes < hardMaximum.maxRetainedByteCount else { continue }
+        let byteLimitedTriangles = (hardMaximum.maxRetainedByteCount - fixedBytes)
+            / retainedBytesPerTriangle
+        let triangleCount = min(hardMaximum.maxTriangleCount, byteLimitedTriangles)
+        guard triangleCount > 0 else { continue }
+        let lineBytes = lineBytesPerVertex * positionCount
+            + lineBytesPerTriangle * triangleCount
+        if maximum == nil || lineBytes > maximum!.lineBytes {
+            maximum = (positionCount, triangleCount, lineBytes)
+        }
+    }
+    let selected = try #require(maximum)
+    #expect(selected.positionCount == 4)
+    #expect(selected.triangleCount == 234_073)
+    #expect(selected.lineBytes == 5_617_816)
+
+    func makeRepeatedTriangleSource(triangleCount: Int) throws -> MeshSource {
+        var builder = MeshSourceBuilder(identity: "mesh.presentation-maximum-line-upload")
+        try builder.reserveCapacity(vertexCount: 4, faceCount: triangleCount, cornerCount: triangleCount * 3)
+        let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+        let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+        let third = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+        _ = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 1))
+        for _ in 0..<triangleCount {
+            _ = try builder.addTriangle(first, second, third)
+        }
+        return try builder.build()
+    }
+
+    let source = try makeRepeatedTriangleSource(triangleCount: selected.triangleCount)
+    let fixture = try presentationScene(
+        source: source,
+        references: [.authoredMesh(source.identity)],
+        transforms: [.identity]
+    )
+    let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
+    let triangulationReservation = try MeshSourceTriangulationIndex.storageReservation(
+        vertexCount: selected.positionCount
+    )
+    let expectedRetainedBytes = itemBytes
+        + positionBytesPerVertex * selected.positionCount
+        + retainedBytesPerTriangle * selected.triangleCount
+    let expectedWorkingBytes = expectedRetainedBytes
+        + triangulationReservation + minimumFaceScratch
+    #expect(plan.positionCount == selected.positionCount)
+    #expect(plan.triangleCount == selected.triangleCount)
+    #expect(plan.boundaryIndexCount == selected.triangleCount * 6)
+    #expect(plan.retainedByteCount == expectedRetainedBytes)
+    #expect(plan.workingByteCount == expectedWorkingBytes)
+    #expect(plan.retainedByteCount == 22_471_584)
+    #expect(plan.workingByteCount == 22_473_120)
+
+    do {
+        let overBudgetSource = try makeRepeatedTriangleSource(triangleCount: selected.triangleCount + 1)
+        let overBudgetScene = try presentationScene(
+            source: overBudgetSource,
+            references: [.authoredMesh(overBudgetSource.identity)],
+            transforms: [.identity]
+        ).scene
+        var overBudgetError: MeshSourcePresentationRenderError?
+        do {
+            _ = try MeshSourcePresentationRenderPlan(scene: overBudgetScene)
+        } catch let error as MeshSourcePresentationRenderError {
+            overBudgetError = error
+        }
+        #expect(overBudgetError?.code == .resourceExhausted)
+    }
+
+    let baselineBytes = try ResponsivenessFootprintProbe.physicalFootprintBytes()
+    // One millisecond is the established measurement resolution; sampled
+    // process footprint is evidence for this run, not an opaque SDK bound.
+    let sampler = ResponsivenessFootprintPeakSampler(intervalSeconds: 0.001)
+    sampler.start()
+    let viewport: RealityViewport
+    do {
+        viewport = try await RealityViewport.prepare(plan: plan)
+    } catch {
+        await sampler.stop()
+        throw error
+    }
+    await sampler.stop()
+    let retainedBytes = try ResponsivenessFootprintProbe.physicalFootprintBytes()
+    let peak = try sampler.peakBytes()
+    let baselineSigned = try #require(Int64(exactly: baselineBytes))
+    let retainedSigned = try #require(Int64(exactly: retainedBytes))
+    let peakSigned = try #require(Int64(exactly: peak.bytes))
+    let signedRetainedDelta = retainedSigned - baselineSigned
+    let signedPeakDelta = peakSigned - baselineSigned
+    let uploadDuration = await viewport.maximumNativeUploadDuration
+    let halfFrameBudget = Duration.microseconds(8_333)
+    print("""
+        RealityViewport maximum native line upload:
+        P=\(plan.positionCount), T=\(plan.triangleCount), boundaryIndices=\(plan.boundaryIndexCount)
+        lineBytes=\(selected.lineBytes), retained=\(plan.retainedByteCount), working=\(plan.workingByteCount)
+        upload=\(uploadDuration), baselineFootprint=\(baselineBytes), peakFootprint=\(peak.bytes)
+        retainedFootprint=\(retainedBytes), signedPeakDelta=\(signedPeakDelta)
+        signedRetainedDelta=\(signedRetainedDelta), samples=\(peak.sampleCount)
+        samplingIntervalSeconds=0.001, opaqueNativeAllocation=unmeasured
+        """)
+    #expect(uploadDuration <= halfFrameBudget)
+}
+
 @Test(.timeLimit(.minutes(1)))
 func meshSourcePresentationRenderPlanReportsConcaveBudgetFailureWithoutPartialPlan() throws {
     let source = try presentationConcaveSource()
@@ -1103,54 +1798,51 @@ func presentationPlanCancellationStopsAnInFlightLargeBuild() async throws {
     #expect(latency < .milliseconds(100), "Actual worker exit must meet the cancellation budget: \(latency).")
 }
 
-private func presentationHighSegmentCylinderSource(segmentCount: Int) throws -> MeshSource {
+private func presentationHighSegmentCylinderSource(
+    segmentCount: Int,
+    cylinderCount: Int = 1
+) throws -> MeshSource {
     let radius = 0.035
     let length = 0.45
-    let centerX = 10.0
-    let centerY = -7.0
     var builder = MeshSourceBuilder(identity: "mesh.presentation-high-segment-cylinder")
     try builder.reserveCapacity(
-        vertexCount: 2 * segmentCount,
-        faceCount: segmentCount + 2,
-        cornerCount: 6 * segmentCount
+        vertexCount: cylinderCount * 2 * segmentCount,
+        faceCount: cylinderCount * (segmentCount + 2),
+        cornerCount: cylinderCount * 6 * segmentCount
     )
-    var bottomVertices: [MeshVertexID] = []
-    bottomVertices.reserveCapacity(segmentCount)
-    var topVertices: [MeshVertexID] = []
-    topVertices.reserveCapacity(segmentCount)
-    for index in 0..<segmentCount {
-        let angle = 2.0 * Double.pi * Double(index) / Double(segmentCount)
-        let x = centerX + radius * cos(angle)
-        let y = centerY + radius * sin(angle)
-        bottomVertices.append(
-            try builder.addVertex(
-                GeometryPoint3D(
-                    x: x,
-                    y: y,
-                    z: 0
+    for cylinderIndex in 0..<cylinderCount {
+        let centerX = 10.0 + Double(cylinderIndex % 4) * 0.20
+        let centerY = -7.0 + Double(cylinderIndex / 4) * 0.20
+        var bottomVertices: [MeshVertexID] = []
+        bottomVertices.reserveCapacity(segmentCount)
+        var topVertices: [MeshVertexID] = []
+        topVertices.reserveCapacity(segmentCount)
+        for index in 0..<segmentCount {
+            let angle = 2.0 * Double.pi * Double(index) / Double(segmentCount)
+            let x = centerX + radius * cos(angle)
+            let y = centerY + radius * sin(angle)
+            bottomVertices.append(
+                try builder.addVertex(
+                    GeometryPoint3D(x: x, y: y, z: 0)
                 )
             )
-        )
-        topVertices.append(
-            try builder.addVertex(
-                GeometryPoint3D(
-                    x: x,
-                    y: y,
-                    z: length
+            topVertices.append(
+                try builder.addVertex(
+                    GeometryPoint3D(x: x, y: y, z: length)
                 )
             )
-        )
-    }
-    _ = try builder.addFace(vertexIDs: bottomVertices.reversed())
-    _ = try builder.addFace(vertexIDs: topVertices)
-    for index in 0..<segmentCount {
-        let nextIndex = (index + 1) % segmentCount
-        _ = try builder.addFace(vertexIDs: [
-            bottomVertices[index],
-            bottomVertices[nextIndex],
-            topVertices[nextIndex],
-            topVertices[index],
-        ])
+        }
+        _ = try builder.addFace(vertexIDs: bottomVertices.reversed())
+        _ = try builder.addFace(vertexIDs: topVertices)
+        for index in 0..<segmentCount {
+            let nextIndex = (index + 1) % segmentCount
+            _ = try builder.addFace(vertexIDs: [
+                bottomVertices[index],
+                bottomVertices[nextIndex],
+                topVertices[nextIndex],
+                topVertices[index],
+            ])
+        }
     }
     return try builder.build()
 }

@@ -1,15 +1,22 @@
 import CoreGraphics
+import RupaCore
 
 public struct ViewportCamera: Equatable, Sendable {
     public var zoom: CGFloat
     public var pan: CGSize
+    public var projection: ViewportCameraProjection
+    public var focus: Point3D?
 
     public init(
         zoom: CGFloat = 1.0,
-        pan: CGSize = .zero
+        pan: CGSize = .zero,
+        projection: ViewportCameraProjection = .parallel,
+        focus: Point3D? = nil
     ) {
         self.zoom = max(zoom, Self.minimumZoom)
         self.pan = pan
+        self.projection = projection
+        self.focus = focus
     }
 
     public static let minimumZoom: CGFloat = 0.04
@@ -22,7 +29,9 @@ public struct ViewportCamera: Equatable, Sendable {
         let resolvedMaximumZoom = max(maximumZoom, Self.minimumZoom)
         return ViewportCamera(
             zoom: min(max(zoom, Self.minimumZoom), resolvedMaximumZoom),
-            pan: pan
+            pan: pan,
+            projection: projection,
+            focus: focus
         )
     }
 }

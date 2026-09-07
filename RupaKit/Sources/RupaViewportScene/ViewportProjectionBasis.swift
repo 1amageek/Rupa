@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import simd
 
 public enum ViewportProjectionMode: Equatable, Sendable {
     case isometric
@@ -34,12 +35,11 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
     }
 
     public static func axisFront(_ axis: ViewportCoordinateAxis) -> ViewportProjectionBasis {
-        let depth: CGFloat = 0.18
         switch axis {
         case .x:
             return ViewportProjectionBasis(
                 mode: .axisFront(.x),
-                xDirection: CGVector(dx: 0.0, dy: depth),
+                xDirection: CGVector(dx: 0.0, dy: 0.0),
                 yDirection: CGVector(dx: 0.0, dy: -1.0),
                 zDirection: CGVector(dx: -1.0, dy: 0.0)
             )
@@ -47,7 +47,7 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
             return ViewportProjectionBasis(
                 mode: .axisFront(.y),
                 xDirection: CGVector(dx: 1.0, dy: 0.0),
-                yDirection: CGVector(dx: 0.0, dy: depth),
+                yDirection: CGVector(dx: 0.0, dy: 0.0),
                 zDirection: CGVector(dx: 0.0, dy: 1.0)
             )
         case .z:
@@ -55,7 +55,7 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
                 mode: .axisFront(.z),
                 xDirection: CGVector(dx: 1.0, dy: 0.0),
                 yDirection: CGVector(dx: 0.0, dy: -1.0),
-                zDirection: CGVector(dx: 0.0, dy: depth)
+                zDirection: CGVector(dx: 0.0, dy: 0.0)
             )
         }
     }
@@ -65,24 +65,61 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
         to end: ViewportProjectionBasis,
         progress: CGFloat
     ) -> ViewportProjectionBasis {
-        let clampedProgress = min(max(progress, 0.0), 1.0)
-        return ViewportProjectionBasis(
-            mode: clampedProgress >= 1.0 ? end.mode : start.mode,
-            xDirection: CGVector.interpolate(
-                from: start.xDirection,
-                to: end.xDirection,
-                progress: clampedProgress
-            ),
-            yDirection: CGVector.interpolate(
-                from: start.yDirection,
-                to: end.yDirection,
-                progress: clampedProgress
-            ),
-            zDirection: CGVector.interpolate(
-                from: start.zDirection,
-                to: end.zDirection,
-                progress: clampedProgress
+        guard progress.isFinite else {
+            // Keep non-finite input observable as an invalid basis so the
+            // layout boundary rejects it instead of publishing the start view.
+            return ViewportProjectionBasis(
+                mode: start.mode,
+                xDirection: CGVector.interpolate(
+                    from: start.xDirection,
+                    to: end.xDirection,
+                    progress: progress
+                ),
+                yDirection: CGVector.interpolate(
+                    from: start.yDirection,
+                    to: end.yDirection,
+                    progress: progress
+                ),
+                zDirection: CGVector.interpolate(
+                    from: start.zDirection,
+                    to: end.zDirection,
+                    progress: progress
+                )
             )
+        }
+        let clampedProgress = min(max(progress, 0.0), 1.0)
+        guard clampedProgress > 0.0, clampedProgress < 1.0 else {
+            return clampedProgress >= 1.0 ? end : start
+        }
+
+        guard start.isRigidOrientation, end.isRigidOrientation else {
+            // Preserve invalid endpoint data so the layout boundary can refuse
+            // it. Invalid camera input must not be silently normalized into a
+            // publishable rigid basis.
+            return start.isRigidOrientation ? end : start
+        }
+        guard let startOrientation = start.orientation,
+              var endOrientation = end.orientation else {
+            return start.isRigidOrientation ? end : start
+        }
+
+        // Quaternion signs identify the same rotation. Align the endpoints
+        // before slerp so the transition always takes the shortest arc.
+        let quaternionDot = startOrientation.real * endOrientation.real
+            + simd_dot(startOrientation.imag, endOrientation.imag)
+        if quaternionDot < 0.0 {
+            endOrientation = simd_quatd(
+                real: -endOrientation.real,
+                imag: -endOrientation.imag
+            )
+        }
+        let orientation = simd_slerp(startOrientation, endOrientation, Double(clampedProgress))
+        let matrix = simd_double3x3(orientation)
+        return ViewportProjectionBasis(
+            mode: start.mode,
+            xDirection: CGVector(dx: matrix.columns.0.x, dy: -matrix.columns.1.x),
+            yDirection: CGVector(dx: matrix.columns.0.y, dy: -matrix.columns.1.y),
+            zDirection: CGVector(dx: matrix.columns.0.z, dy: -matrix.columns.1.z)
         )
     }
 
@@ -155,6 +192,39 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
         }
     }
 
+    /// Whether the projected screen axes form a finite unit rigid frame.
+    ///
+    /// Invalid externally supplied frames remain observable here so the layout
+    /// owner can reject them instead of silently repairing camera state.
+    public var isRigidOrientation: Bool {
+        let horizontal = SIMD3<Double>(
+            Double(xDirection.dx),
+            Double(yDirection.dx),
+            Double(zDirection.dx)
+        )
+        let vertical = SIMD3<Double>(
+            Double(xDirection.dy),
+            Double(yDirection.dy),
+            Double(zDirection.dy)
+        )
+        guard Self.isFinite(horizontal), Self.isFinite(vertical) else {
+            return false
+        }
+        let horizontalLength = simd_length(horizontal)
+        let verticalLength = simd_length(vertical)
+        let normal = simd_cross(vertical, horizontal)
+        let normalLength = simd_length(normal)
+        guard horizontalLength.isFinite,
+              verticalLength.isFinite,
+              normalLength.isFinite else {
+            return false
+        }
+        return abs(horizontalLength - 1.0) <= Self.rigidTolerance
+            && abs(verticalLength - 1.0) <= Self.rigidTolerance
+            && abs(simd_dot(horizontal, vertical)) <= Self.rigidTolerance
+            && abs(normalLength - 1.0) <= Self.rigidTolerance
+    }
+
     public var orbitYawRadians: CGFloat {
         let yaw = atan2(-zDirection.dx, xDirection.dx)
         guard yaw.isFinite else {
@@ -193,6 +263,29 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
     private static let maximumOrbitElevation: CGFloat = 1.42
     private static let orbitYawSensitivity: CGFloat = 0.008
     private static let orbitElevationSensitivity: CGFloat = 0.006
+    private static let rigidTolerance = 1.0e-10
+
+    private var orientation: simd_quatd? {
+        guard isRigidOrientation else { return nil }
+        let horizontal = SIMD3<Double>(
+            Double(xDirection.dx),
+            Double(yDirection.dx),
+            Double(zDirection.dx)
+        )
+        let vertical = SIMD3<Double>(
+            Double(xDirection.dy),
+            Double(yDirection.dy),
+            Double(zDirection.dy)
+        )
+        let right = horizontal
+        let up = -vertical
+        let forward = simd_cross(right, up)
+        return simd_quatd(simd_double3x3(columns: (right, up, forward)))
+    }
+
+    private static func isFinite(_ vector: SIMD3<Double>) -> Bool {
+        vector.x.isFinite && vector.y.isFinite && vector.z.isFinite
+    }
 
     private static func viewBasis(
         mode: ViewportProjectionMode,
@@ -271,6 +364,41 @@ public struct ViewportCanvasPlane: Equatable, Sendable {
         point.set(value: first, for: firstAxis)
         point.set(value: second, for: secondAxis)
         return point
+    }
+
+    public func direction(for axis: ViewportCoordinateAxis) -> Vector3D {
+        switch axis {
+        case .x:
+            .unitX
+        case .y:
+            .unitY
+        case .z:
+            .unitZ
+        }
+    }
+
+    public var normal: Vector3D? {
+        try? direction(for: firstAxis)
+            .cross(direction(for: secondAxis))
+            .normalized(tolerance: 1.0e-12)
+    }
+
+    public func coordinates(of point: Point3D) -> CGPoint {
+        CGPoint(
+            x: CGFloat(value(of: point, for: firstAxis)),
+            y: CGFloat(value(of: point, for: secondAxis))
+        )
+    }
+
+    private func value(of point: Point3D, for axis: ViewportCoordinateAxis) -> Double {
+        switch axis {
+        case .x:
+            point.x
+        case .y:
+            point.y
+        case .z:
+            point.z
+        }
     }
 }
 

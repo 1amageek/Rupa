@@ -6,10 +6,25 @@ import RupaCoreTypes
 import RupaGeometry
 import RupaViewportScene
 import simd
+import SwiftCAD
 
 /// Immutable native surface resources shared by the viewport and GPU checks.
 /// Build off MainActor; encoding visits occurrences, never individual triangles.
 public final class ViewportSurfaceRenderer: Sendable {
+    /// Metal texture handles are not statically Sendable. This owner is
+    /// immutable after construction: the texture is initialized once before
+    /// publication, no writable CPU alias escapes, and render encoders bind it
+    /// only for shader reads. The pipeline retains this owner for its lifetime
+    /// and command buffers retain the texture handle through GPU completion,
+    /// matching the immutable geometry owner below.
+    private final class ImmutableTexture: @unchecked Sendable {
+        let texture: any MTLTexture
+
+        init(texture: any MTLTexture) {
+            self.texture = texture
+        }
+    }
+
     private struct Pipeline: Sendable {
         let device: any MTLDevice
         let queue: any MTLCommandQueue
@@ -17,6 +32,7 @@ public final class ViewportSurfaceRenderer: Sendable {
         let lineState: any MTLRenderPipelineState
         let depthOnlyState: any MTLRenderPipelineState
         let depth: any MTLDepthStencilState
+        let matCapTexture: ImmutableTexture
 
         init() throws {
             guard let device = MTLCreateSystemDefaultDevice(),
@@ -53,17 +69,69 @@ public final class ViewportSurfaceRenderer: Sendable {
                 throw Self.failure(.gpuFailure, "Metal surface pipeline creation failed: \(error.localizedDescription)")
             }
             let depthDescriptor = MTLDepthStencilDescriptor()
-            depthDescriptor.depthCompareFunction = .less
+            depthDescriptor.depthCompareFunction = .greater
             depthDescriptor.isDepthWriteEnabled = true
             guard let depth = device.makeDepthStencilState(descriptor: depthDescriptor) else {
                 throw Self.failure(.gpuFailure, "Metal could not create depth testing state.")
             }
+            let matCapTexture = try Self.makeMatCapTexture(device: device)
             self.device = device
             self.queue = queue
             self.state = state
             self.lineState = lineState
             self.depthOnlyState = depthOnlyState
             self.depth = depth
+            self.matCapTexture = matCapTexture
+        }
+
+        private static func makeMatCapTexture(device: any MTLDevice) throws -> ImmutableTexture {
+            let width = 32
+            let height = 32
+            let byteCount = ViewportSurfaceRenderer.matCapTextureByteCount
+            guard byteCount == width * height * 4,
+                  byteCount <= ViewportSurfaceRenderer.maximumAttachmentByteCount else {
+                throw Self.failure(.resourceExhausted, "The built-in MatCap texture exceeds its fixed resource budget.")
+            }
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+                pixelFormat: .rgba8Unorm,
+                width: width,
+                height: height,
+                mipmapped: false
+            )
+            descriptor.usage = [.shaderRead]
+            descriptor.storageMode = .shared
+            guard let texture = device.makeTexture(descriptor: descriptor) else {
+                throw Self.failure(.gpuFailure, "Metal could not allocate the built-in MatCap texture.")
+            }
+            texture.label = "Rupa built-in MatCap"
+            var pixels = [UInt8](repeating: 0, count: byteCount)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let nx = (Float(x) + 0.5) / Float(width) * 2 - 1
+                    let ny = (Float(y) + 0.5) / Float(height) * 2 - 1
+                    let radiusSquared = nx * nx + ny * ny
+                    let offset = (y * width + x) * 4
+                    guard radiusSquared <= 1 else {
+                        pixels[offset + 3] = 0
+                        continue
+                    }
+                    let nz = sqrt(max(0, 1 - radiusSquared))
+                    let highlight = max(0, 0.35 * nx - 0.28 * ny + 0.76 * nz)
+                    pixels[offset] = UInt8(clamping: Int(28 + 138 * highlight))
+                    pixels[offset + 1] = UInt8(clamping: Int(42 + 156 * highlight))
+                    pixels[offset + 2] = UInt8(clamping: Int(58 + 178 * highlight))
+                    pixels[offset + 3] = 255
+                }
+            }
+            pixels.withUnsafeBytes { bytes in
+                texture.replace(
+                    region: MTLRegionMake2D(0, 0, width, height),
+                    mipmapLevel: 0,
+                    withBytes: bytes.baseAddress!,
+                    bytesPerRow: width * 4
+                )
+            }
+            return ImmutableTexture(texture: texture)
         }
 
         private static func failure(
@@ -120,6 +188,7 @@ public final class ViewportSurfaceRenderer: Sendable {
     /// Two drawable color buffers and one depth attachment fit this separate
     /// 2.5%-of-8-GiB frame budget. App evidence includes it in pipeline memory.
     public static let maximumAttachmentByteCount = (8 * 1024 * 1024 * 1024) / 40
+    public static let matCapTextureByteCount = 32 * 32 * 4
 
     public static func attachmentByteCount(width: Int, height: Int) throws -> Int {
         guard width > 0, height > 0 else {
@@ -249,11 +318,18 @@ public final class ViewportSurfaceRenderer: Sendable {
         pass: MTLRenderPassDescriptor,
         layout: ViewportLayout,
         displayMode: ViewportDisplayMode = .solid,
+        shading: ViewportShading = .standard,
+        materialColorForOccurrence: (SceneOccurrenceID) -> ColorRGBA? = { _ in nil },
         state: (SceneOccurrenceID) -> MeshSourcePresentationVisualState = { _ in .normal },
         sectionPlane: SectionAnalysisResult.Plane? = nil,
         retainedSide: SectionAnalysisRetainedSide = .front,
         sectionTolerance: Double = 0
     ) throws {
+        do {
+            try shading.validate()
+        } catch let error as ViewportShadingError {
+            throw Self.failure(.invalidLimit, error.localizedDescription)
+        }
         guard let target = pass.colorAttachments[0].texture,
               target.pixelFormat == .bgra8Unorm, target.sampleCount == 1,
               let depth = pass.depthAttachment.texture,
@@ -269,18 +345,38 @@ public final class ViewportSurfaceRenderer: Sendable {
         guard let geometry else { return }
         var uniforms = try makeUniforms(
             layout: layout, sectionPlane: sectionPlane,
-            retainedSide: retainedSide, sectionTolerance: sectionTolerance
+            retainedSide: retainedSide, sectionTolerance: sectionTolerance,
+            shading: shading
         )
         uniforms.options.x = displayMode == .normals ? 1 : 0
+        uniforms.options.z = shading.style.shaderValue
+        uniforms.options.w = shading.isSpecularEnabled ? 1 : 0
         encoder.setRenderPipelineState(displayMode == .wireframe ? pipeline.depthOnlyState : pipeline.state)
         encoder.setDepthStencilState(pipeline.depth)
-        encoder.setCullMode(.none)
+        let drawsBoundaries = displayMode == .solidWithEdges || displayMode == .wireframe
+        if drawsBoundaries {
+            // Line and triangle samples differ within a pixel. Offset the triangle
+            // raster depth away by its slope, not just a ULP at each line vertex.
+            // Reversed Z requires negative bias; hidden surfaces still write depth.
+            encoder.setDepthBias(-1, slopeScale: -1, clamp: 0)
+        }
+        let cullBackFaces = shading.isBackfaceCullingActive(in: displayMode)
+        encoder.setCullMode(cullBackFaces ? .back : .none)
         encoder.setFrontFacing(.counterClockwise)
         encoder.setVertexBuffer(geometry.positions, offset: 0, index: 0)
         encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
+        encoder.setFragmentTexture(pipeline.matCapTexture.texture, index: 0)
         for draw in draws {
+            let materialColor = materialColorForOccurrence(draw.occurrenceID)
+            let objectColor = shading.resolvedColor(
+                for: draw.occurrenceID,
+                materialColor: materialColor
+            )
             switch state(draw.occurrenceID) {
-            case .normal: uniforms.color = SIMD4<Float>(0.64, 0.69, 0.73, 1)
+            case .normal:
+                uniforms.color = displayMode == .wireframe
+                    ? shading.resolvedWireColor(for: draw.occurrenceID, objectColor: objectColor)
+                    : objectColor
             case .hovered: uniforms.color = SIMD4<Float>(0.24, 0.88, 0.82, 1)
             case .selected: uniforms.color = SIMD4<Float>(0.14, 0.66, 0.95, 1)
             }
@@ -291,8 +387,8 @@ public final class ViewportSurfaceRenderer: Sendable {
                 instanceCount: 1, baseVertex: draw.baseVertex, baseInstance: 0
             )
         }
-        if (displayMode == .solidWithEdges || displayMode == .wireframe),
-           let boundaries = geometry.boundaryIndices {
+        if drawsBoundaries, let boundaries = geometry.boundaryIndices {
+            encoder.setDepthBias(0, slopeScale: 0, clamp: 0)
             encoder.setRenderPipelineState(pipeline.lineState)
             // A one-ULP offset applies only to the line pass. Strict depth writes retain
             // first-occurrence ownership for coincident lines; all surfaces
@@ -301,8 +397,16 @@ public final class ViewportSurfaceRenderer: Sendable {
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
             for draw in draws where draw.boundaryIndexCount > 0 {
                 switch state(draw.occurrenceID) {
-                case .normal: uniforms.color = displayMode == .wireframe
-                    ? SIMD4<Float>(0.48, 0.56, 0.64, 1) : SIMD4<Float>(0.08, 0.12, 0.17, 1)
+                case .normal:
+                    let materialColor = materialColorForOccurrence(draw.occurrenceID)
+                    let objectColor = shading.resolvedColor(
+                        for: draw.occurrenceID,
+                        materialColor: materialColor
+                    )
+                    uniforms.color = shading.resolvedWireColor(
+                        for: draw.occurrenceID,
+                        objectColor: objectColor
+                    )
                 case .hovered: uniforms.color = SIMD4<Float>(0.24, 0.88, 0.82, 1)
                 case .selected: uniforms.color = SIMD4<Float>(0.14, 0.66, 0.95, 1)
                 }
@@ -320,6 +424,7 @@ public final class ViewportSurfaceRenderer: Sendable {
         var x: SIMD4<Float>
         var y: SIMD4<Float>
         var depth: SIMD4<Float>
+        var w: SIMD4<Float>
         var view: SIMD4<Float>
         var light: SIMD4<Float>
         var clip: SIMD4<Float>
@@ -329,20 +434,23 @@ public final class ViewportSurfaceRenderer: Sendable {
 
     private func makeUniforms(
         layout: ViewportLayout, sectionPlane: SectionAnalysisResult.Plane?,
-        retainedSide: SectionAnalysisRetainedSide, sectionTolerance: Double
+        retainedSide: SectionAnalysisRetainedSide, sectionTolerance: Double,
+        shading: ViewportShading
     ) throws -> Uniforms {
         guard layout.viewportSize.width > 0, layout.viewportSize.height > 0,
               let normal = layout.basis.viewNormal else {
             throw Self.failure(.invalidTransform, "Surface projection is singular.")
         }
-        let center = layout.project(origin)
-        let xScale = Double(2 * layout.scale / layout.viewportSize.width)
-        let yScale = Double(-2 * layout.scale / layout.viewportSize.height)
+        guard let rows = layout.projectionRows(relativeTo: origin), rows.isFinite else {
+            throw Self.failure(.invalidTransform, "Surface projection contains invalid homogeneous rows.")
+        }
         let basis = layout.basis
         let right = SIMD3<Float>(Float(basis.xDirection.dx), Float(basis.yDirection.dx), Float(basis.zDirection.dx))
         let up = SIMD3<Float>(-Float(basis.xDirection.dy), -Float(basis.yDirection.dy), -Float(basis.zDirection.dy))
         let view = SIMD3<Float>(Float(normal.x), Float(normal.y), Float(normal.z))
-        let light = simd_normalize(-0.45 * right + 0.65 * up + 0.75 * view)
+        let baseLight = simd_normalize(-0.45 * right + 0.65 * up + 0.75 * view)
+        let radians = Float(shading.studioRotationDegrees * .pi / 180.0)
+        let light = Self.rotate(baseLight, around: view, radians: radians)
         var clip = SIMD4<Float>(0, 0, 0, 1)
         if let sectionPlane {
             let sign = retainedSide == .front ? 1.0 : -1.0
@@ -353,18 +461,33 @@ public final class ViewportSurfaceRenderer: Sendable {
             clip = SIMD4<Float>(Float(n.x * sign), Float(n.y * sign), Float(n.z * sign), Float(distance * sign + max(sectionTolerance, 0)))
         }
         let values = Uniforms(
-            x: SIMD4<Float>(right * Float(xScale), Float(2 * center.x / layout.viewportSize.width - 1)),
-            y: SIMD4<Float>(-up * Float(yScale), Float(1 - 2 * center.y / layout.viewportSize.height)),
-            depth: SIMD4<Float>(-view * Float(0.5 / radius), 0.5),
+            x: Self.vector(rows.x),
+            y: Self.vector(rows.y),
+            depth: Self.vector(rows.depth),
+            w: Self.vector(rows.w),
             view: SIMD4<Float>(view, 0), light: SIMD4<Float>(light, 0),
             clip: clip, color: SIMD4<Float>(repeating: 1)
         )
-        for vector in [values.x, values.y, values.depth, values.view, values.light, values.clip] {
+        for vector in [values.x, values.y, values.depth, values.w, values.view, values.light, values.clip] {
             guard (0..<4).allSatisfy({ vector[$0].isFinite }) else {
                 throw Self.failure(.invalidTransform, "Surface projection contains an unrepresentable value.")
             }
         }
         return values
+    }
+
+    private static func vector(_ row: ViewportProjectionRow) -> SIMD4<Float> {
+        SIMD4<Float>(Float(row.x), Float(row.y), Float(row.z), Float(row.constant))
+    }
+
+    private static func rotate(
+        _ vector: SIMD3<Float>, around axis: SIMD3<Float>, radians: Float
+    ) -> SIMD3<Float> {
+        let cosine = cos(radians)
+        let sine = sin(radians)
+        let projection = axis * simd_dot(axis, vector)
+        let perpendicular = simd_cross(axis, vector)
+        return simd_normalize(vector * cosine + perpendicular * sine + projection * (1 - cosine))
     }
 
     private static func product(_ lhs: Int, _ rhs: Int) throws -> Int {
@@ -382,20 +505,22 @@ public final class ViewportSurfaceRenderer: Sendable {
     private static let shader = """
         #include <metal_stdlib>
         using namespace metal;
-        struct Uniforms { float4 x, y, depth, view, light, clip, color, options; };
+        struct Uniforms { float4 x, y, depth, w, view, light, clip, color, options; };
         struct SurfaceVertex { float4 position [[position]]; float3 local; };
         vertex SurfaceVertex surfaceVertex(uint id [[vertex_id]],
             const device float4* positions [[buffer(0)]], constant Uniforms& u [[buffer(1)]]) {
             float4 p = positions[id];
             float depth = dot(p, u.depth);
-            if (u.options.y > 0.5) depth = nextafter(depth, 0.0f);
-            return { float4(dot(p, u.x), dot(p, u.y), depth, 1), p.xyz };
+            float w = dot(p, u.w);
+            if (u.options.y > 0.5) depth = nextafter(depth, INFINITY);
+            return { float4(dot(p, u.x), dot(p, u.y), depth, w), p.xyz };
         }
         fragment float4 surfaceLineFragment(SurfaceVertex p [[stage_in]], constant Uniforms& u [[buffer(1)]]) {
             if (dot(float4(p.local, 1), u.clip) < 0) discard_fragment();
             return u.color;
         }
-        fragment float4 surfaceFragment(SurfaceVertex p [[stage_in]], bool front [[front_facing]], constant Uniforms& u [[buffer(1)]]) {
+        constexpr sampler matCapSampler(filter::linear, address::clamp_to_edge);
+        fragment float4 surfaceFragment(SurfaceVertex p [[stage_in]], bool front [[front_facing]], constant Uniforms& u [[buffer(1)]], texture2d<float> matCap [[texture(0)]]) {
             if (dot(float4(p.local, 1), u.clip) < 0) discard_fragment();
             float3 derivative = cross(dfdx(p.local), dfdy(p.local));
             float lengthSquared = dot(derivative, derivative);
@@ -405,9 +530,24 @@ public final class ViewportSurfaceRenderer: Sendable {
                 float3 sourceNormal = front ? normal : -normal;
                 return float4(sourceNormal * 0.5 + 0.5, 1);
             }
+            if (u.options.z > 1.5) {
+                return float4(u.color.rgb, 1.0);
+            }
+            if (u.options.z > 0.5) {
+                float3 viewNormal = float3(
+                    dot(normal, normalize(u.x.xyz)),
+                    dot(normal, normalize(-u.y.xyz)),
+                    dot(normal, normalize(u.view.xyz))
+                );
+                float2 uv = clamp(viewNormal.xy * 0.5 + 0.5, 0.0, 1.0);
+                float3 matCapColor = matCap.sample(matCapSampler, uv).rgb;
+                return float4(clamp(matCapColor * u.color.rgb, 0.0, 1.0), 1.0);
+            }
             float diffuse = max(dot(normal, u.light.xyz), 0.0);
             float3 halfVector = normalize(u.light.xyz + u.view.xyz);
-            float specular = 0.16 * pow(max(dot(normal, halfVector), 0.0), 36.0);
+            float specular = u.options.w > 0.5
+                ? 0.16 * pow(max(dot(normal, halfVector), 0.0), 36.0)
+                : 0.0;
             float rim = mix(0.72, 1.0, smoothstep(0.0, 0.24, dot(normal, u.view.xyz)));
             float3 color = u.color.rgb * (0.24 + 0.76 * diffuse) * rim + specular;
             return float4(clamp(color, 0.0, 1.0), 1.0);

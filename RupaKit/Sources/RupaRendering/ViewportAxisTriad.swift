@@ -7,48 +7,47 @@ struct ViewportAxisTriad: View {
 
     var selectedAxis: ViewportCoordinateAxis?
     var basis: ViewportProjectionBasis = .isometric
+    var projection: ViewportCameraProjection = .parallel
     var onResetView: () -> Void
     var onSelectAxis: (ViewportCoordinateAxis?) -> Void
+    var onSelectProjection: (ViewportCameraProjection) -> Void
 
     var body: some View {
-        HStack(spacing: 6.0) {
-            iconButton(
-                systemName: "arrow.counterclockwise",
-                accessibilityIdentifier: "CanvasAxisTriad.Reset",
-                accessibilityLabel: "Reset viewport"
-            ) {
-                onResetView()
-            }
-
-            ZStack {
-                Canvas { context, size in
-                    drawAxisDisk(in: &context, size: size)
+        Group {
+            HStack(spacing: 6.0) {
+                iconButton(
+                    systemName: "arrow.counterclockwise",
+                    accessibilityIdentifier: "CanvasAxisTriad.Reset",
+                    accessibilityLabel: "Reset pan and zoom"
+                ) {
+                    onResetView()
                 }
 
-                GeometryReader { proxy in
-                    centerButton(at: axisCenter(size: proxy.size))
+                ZStack {
+                    Canvas { context, size in
+                        drawAxisDisk(in: &context, size: size)
+                    }
 
-                    ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
-                        axisButton(
-                            axis,
-                            at: axisNodePoint(axis, size: proxy.size)
-                        )
+                    GeometryReader { proxy in
+                        centerButton(at: axisCenter(size: proxy.size))
+
+                        ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
+                            axisButton(
+                                axis,
+                                at: axisNodePoint(axis, size: proxy.size)
+                            )
+                        }
                     }
                 }
-            }
-            .frame(width: 36.0, height: 36.0)
-            .accessibilityIdentifier("CanvasAxisTriad")
-            .accessibilityLabel("Canvas 3D axes")
-            .accessibilityValue(accessibilityValue)
+                .frame(width: 36.0, height: 36.0)
+                .background(.primary.opacity(0.08), in: .circle)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("CanvasAxisTriad")
+                .accessibilityLabel("Canvas 3D axes")
+                .accessibilityValue(accessibilityValue)
 
-            projectionIndicator
-
-            compactTextButton(
-                title: "Iso",
-                accessibilityIdentifier: "CanvasAxisTriad.IsometricButton",
-                accessibilityLabel: "Isometric view"
-            ) {
-                onSelectAxis(nil)
+                orientationMenu
+                projectionPicker
             }
         }
         .padding(.horizontal, 7.0)
@@ -78,72 +77,81 @@ struct ViewportAxisTriad: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 12.0, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.88))
+                .foregroundStyle(.primary)
                 .frame(width: 30.0, height: 30.0)
-                .contentShape(Capsule())
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.34))
-        )
+        .background(.primary.opacity(0.08), in: .circle)
+        .help(accessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
         .accessibilityLabel(accessibilityLabel)
     }
 
-    private func compactTextButton(
-        title: String,
-        accessibilityIdentifier: String,
-        accessibilityLabel: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 10.0, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.86))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(width: 38.0, height: 30.0)
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.34))
-        )
-        .accessibilityIdentifier(accessibilityIdentifier)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var projectionIndicator: some View {
-        HStack(spacing: 0.0) {
+    private var orientationMenu: some View {
+        Menu {
+            Button("Isometric") { onSelectAxis(nil) }
+            ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
+                Button("\(axis.label) Front") { onSelectAxis(axis) }
+            }
+        } label: {
             Text(projectionTitle)
                 .font(.system(size: 10.0, weight: .medium))
-                .foregroundStyle(.white.opacity(0.88))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-                .frame(width: 74.0, height: 28.0)
-                .background(
-                    Capsule()
-                        .fill(.white.opacity(0.14))
-                )
-
-            Text("Persp")
-                .font(.system(size: 10.0, weight: .medium))
-                .foregroundStyle(.white.opacity(0.54))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(width: 54.0, height: 28.0)
         }
-        .padding(2.0)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.34))
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityIdentifier("CanvasProjectionIndicator")
-        .accessibilityLabel("Canvas projection mode")
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .frame(width: 84.0, height: 30.0)
+        .help("View orientation")
+        .accessibilityIdentifier("CanvasAxisTriad.Orientation")
+        .accessibilityLabel("View orientation")
         .accessibilityValue(projectionTitle)
+    }
+
+    private var projectionPicker: some View {
+        HStack(spacing: 2.0) {
+            projectionButton("Ortho", perspective: false)
+            projectionButton("Persp", perspective: true)
+        }
+        .frame(width: 104.0)
+        .background(.primary.opacity(0.08), in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("CanvasAxisTriad.Projection")
+        .accessibilityLabel("Projection")
+    }
+
+    private func projectionButton(_ title: String, perspective: Bool) -> some View {
+        let isSelected = (projection != .parallel) == perspective
+        return Button {
+            selectProjection(perspective: perspective)
+        } label: {
+            HStack(spacing: 2.0) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 7.0, weight: .bold))
+                    .opacity(isSelected ? 1.0 : 0.0)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 10.0, weight: .medium))
+            }
+            .frame(maxWidth: .infinity, minHeight: 30.0)
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .background(isSelected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 7.0))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(perspective ? "Perspective projection" : "Orthographic projection")
+        .accessibilityIdentifier("CanvasAxisTriad.Projection.\(title)")
+        .accessibilityLabel(perspective ? "Perspective projection" : "Orthographic projection")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    func selectProjection(perspective: Bool) {
+        guard perspective != (projection != .parallel) else { return }
+        onSelectProjection(perspective ? .standardPerspective : .parallel)
     }
 
     private var projectionTitle: String {
@@ -209,17 +217,6 @@ struct ViewportAxisTriad: View {
     }
 
     private func drawAxisDisk(in context: inout GraphicsContext, size: CGSize) {
-        let diskRect = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
-        context.fill(
-            Path(ellipseIn: diskRect),
-            with: .color(.black.opacity(0.30))
-        )
-        context.stroke(
-            Path(ellipseIn: diskRect),
-            with: .color(.white.opacity(0.10)),
-            lineWidth: 1.0
-        )
-
         let center = axisCenter(size: size)
         var axes = [
             AxisNode(axis: .x, color: ViewportCoordinateAxis.x.color, end: axisNodePoint(.x, size: size), radius: 3.3),
@@ -230,7 +227,7 @@ struct ViewportAxisTriad: View {
             axes.append(
                 AxisNode(
                     axis: nil,
-                    color: .white.opacity(0.28),
+                    color: .primary.opacity(0.28),
                     end: negativeAxisNodePoint(axis, size: size),
                     radius: 3.0
                 )
@@ -259,7 +256,7 @@ struct ViewportAxisTriad: View {
             drawNode(
                 at: center,
                 radius: 3.4,
-                color: .white.opacity(0.34),
+                color: .primary.opacity(0.34),
                 in: &context
             )
         }

@@ -26,15 +26,24 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
             x: modelDirection.x / directionLength,
             y: modelDirection.y / directionLength
         )
-        if Self.shouldFlipDirection(from: baseModelPoint, direction: direction, layout: layout) {
+        guard let shouldFlip = Self.shouldFlipDirection(
+            from: baseModelPoint,
+            direction: direction,
+            layout: layout
+        ) else {
+            return nil
+        }
+        if shouldFlip {
             direction = CGPoint(x: -direction.x, y: -direction.y)
         }
-        let projectedUnitLength = Self.projectedLength(
+        guard let projectedUnitLength = Self.projectedLength(
             from: baseModelPoint,
             direction: direction,
             distance: 1.0,
             layout: layout
-        )
+        ) else {
+            return nil
+        }
         guard projectedUnitLength > 1.0e-9 else {
             return nil
         }
@@ -74,25 +83,25 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
     func projectedTip(
         layout: ViewportLayout,
         widthMeters: Double? = nil
-    ) -> CGPoint {
+    ) -> CGPoint? {
         let width = max(widthMeters ?? baseWidthMeters, 1.0e-9)
         let lengthMeters = max(CGFloat(width) * 0.5, minimumLengthMeters)
-        return layout.project(
+        return layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x * lengthMeters,
                 y: baseModelPoint.y + modelDirection.y * lengthMeters
             )
-        )
+        )?.point
     }
 
     func slotWidth(
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
-    ) -> Double {
-        let projectedVector = projectedUnitVector(layout: layout)
-        guard projectedVector.length > 1.0e-9 else {
-            return baseWidthMeters
+    ) -> Double? {
+        guard let projectedVector = projectedUnitVector(layout: layout),
+              projectedVector.length > 1.0e-9 else {
+            return nil
         }
         let direction = projectedVector.normalized
         let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
@@ -101,14 +110,16 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
         return max(baseWidthMeters + modelDistance * 2.0, 1.0e-9)
     }
 
-    private func projectedUnitVector(layout: ViewportLayout) -> CGVector {
-        let start = layout.project(baseModelPoint)
-        let end = layout.project(
+    private func projectedUnitVector(layout: ViewportLayout) -> CGVector? {
+        guard let start = layout.projectedPoint(baseModelPoint)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: baseModelPoint.x + modelDirection.x,
                 y: baseModelPoint.y + modelDirection.y
             )
-        )
+        )?.point else {
+            return nil
+        }
         return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
@@ -116,14 +127,16 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
         from point: CGPoint,
         direction: CGPoint,
         layout: ViewportLayout
-    ) -> Bool {
-        let start = layout.project(point)
-        let end = layout.project(
+    ) -> Bool? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: point.x + direction.x,
                 y: point.y + direction.y
             )
-        )
+        )?.point else {
+            return nil
+        }
         let vector = CGVector(dx: end.x - start.x, dy: end.y - start.y)
         if abs(vector.dx) > 1.0e-9 {
             return vector.dx < 0.0
@@ -136,14 +149,16 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
         direction: CGPoint,
         distance: CGFloat,
         layout: ViewportLayout
-    ) -> CGFloat {
-        let start = layout.project(point)
-        let end = layout.project(
+    ) -> CGFloat? {
+        guard let start = layout.projectedPoint(point)?.point,
+              let end = layout.projectedPoint(
             CGPoint(
                 x: point.x + direction.x * distance,
                 y: point.y + direction.y * distance
             )
-        )
+        )?.point else {
+            return nil
+        }
         return hypot(end.x - start.x, end.y - start.y)
     }
 }

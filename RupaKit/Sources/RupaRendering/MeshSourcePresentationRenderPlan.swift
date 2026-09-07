@@ -12,8 +12,9 @@ import RupaViewportScene
 /// never copied: the plan retains the source vertex-ID buffer for picking
 /// provenance and allocates only the transformed positions, the triangle
 /// indices, boundary corner indices, and per-triangle face identities. The
-/// renderer derives one immutable GPU boundary-index buffer from the retained
-/// corner provenance during off-main preparation. All such costs are charged
+/// native adapter derives Float positions, face normals, and boundary indices
+/// from that provenance. Their input-buffer costs are admitted here before
+/// either plan construction or native preparation allocates them. All such costs are charged
 /// against `MeshSourcePresentationPlanLimits` before any storage is reserved
 /// or grown.
 public struct MeshSourcePresentationRenderPlan: Sendable {
@@ -29,10 +30,14 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     /// Number of UInt32 indices in the source-face boundary line buffer.
     /// Boundary pairs are counted twice, once for each endpoint.
     public let boundaryIndexCount: Int
-    /// Bytes of derived storage the plan holds, as charged during construction.
+    /// Admitted plan storage plus native-adapter input buffers. RealityKit's
+    /// opaque internal allocations are not included in this byte count.
     public let retainedByteCount: Int
     /// Upper-bound admission for retained geometry plus temporary index/face work.
     public let workingByteCount: Int
+    /// Caller-validated retained-byte ceiling available to native preparation.
+    /// RealityKit's opaque allocations are still count-bounded separately.
+    let nativePreparationByteLimit: Int
     public let telemetry: MeshSourcePresentationRenderTelemetry
     let occurrences: [Occurrence]
 
@@ -103,10 +108,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
         mutating func chargeItems(_ count: Int) throws {
             itemCount = try Self.sum(itemCount, count)
             try Self.admit(itemCount, limits.maxItemCount, named: "item")
-            // Array headers and per-occurrence CPU/GPU draw metadata. The two
-            // combined Metal buffers additionally reserve one native page each.
+            // Occurrence records, adapter entry/lookup references, and metadata
+            // allowance. Native SDK allocations have a separate count/lifetime
+            // contract; this is not a byte estimate of its opaque allocator.
             try chargeBytes(try Self.product(count, MemoryLayout<Occurrence>.stride + 128))
-            if count > 0 { try chargeBytes(64 * 1024) }
         }
 
         mutating func chargePositions(_ count: Int) throws {
@@ -118,7 +123,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
             )
             try chargeBytes(try Self.product(
                 count,
-                Self.positionStride + MemoryLayout<MeshVertexID>.stride + 16
+                Self.positionStride + MemoryLayout<MeshVertexID>.stride + MemoryLayout<SIMD3<Float>>.stride
             ))
         }
 
@@ -130,16 +135,20 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 Self.indexStride
             )
             let faceBytes = try Self.product(count, Self.faceIDStride)
-            // The immutable GPU index buffer is a necessary output-boundary
-            // copy; CPU indices and provenance remain the picking authority.
-            // Boundary provenance adds one CPU corner index per triangle side.
-            try chargeBytes(try Self.sum(try Self.product(indexBytes, 3), faceBytes))
+            // Plan vertex indices and corner provenance remain CPU-owned.
+            // Native preparation additionally owns one Float normal per face;
+            // face-rate expansion inside MeshResource is SDK-owned, not ours.
+            let normalBytes = try Self.product(count, MemoryLayout<SIMD3<Float>>.stride)
+            // Collision-only input has original and reversed winding (6 indices
+            // per source triangle); visual topology remains unchanged.
+            try chargeBytes(try Self.sum(try Self.sum(try Self.product(indexBytes, 4), faceBytes), normalBytes))
         }
 
         mutating func chargeBoundaryIndices(_ count: Int) throws {
             let indexBytes = try Self.product(count, Self.indexStride)
-            // The renderer derives the line indices from boundaryCornerIndices
-            // once off MainActor and retains only the immutable Metal buffer.
+            // Native preparation derives this input array off MainActor before
+            // the SDK-required scoped LowLevelMesh upload. Charging every
+            // occurrence is conservative even though preparation is sequential.
             try chargeBytes(indexBytes)
         }
 
@@ -202,6 +211,7 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     ) throws {
         try Task.checkCancellation()
         try planLimits.validate()
+        self.nativePreparationByteLimit = planLimits.maxRetainedByteCount
         do {
             try limits.validate()
         } catch {

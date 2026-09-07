@@ -2021,7 +2021,7 @@ func viewportSceneProjectedArcPoints(
         startAngleRadians: startAngleRadians,
         endAngleRadians: endAngleRadians,
         segmentCount: segmentCount
-    ).map { layout.project($0) }
+    ).compactMap { layout.projectedPoint($0)?.point }
 }
 
 func viewportSceneArcSamplePoints(

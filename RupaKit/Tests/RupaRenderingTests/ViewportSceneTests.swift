@@ -815,6 +815,193 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
     #expect(abs(resolved.z - expected.z) < 1.0e-12)
 }
 
+@Test func viewportFaceSurfacePointResolverUsesPerspectiveFaceRaysAndRetainsNearHits() throws {
+    let componentID = SelectionComponentID.generatedTopology(
+        generatedTopologyTestSubshapeID("feature:body:subshape:test:face:perspective")
+    )
+    let basis = ViewportProjectionBasis(
+        mode: .orbit,
+        xDirection: CGVector(dx: 1.0, dy: 0.0),
+        yDirection: CGVector(dx: 0.0, dy: -1.0),
+        zDirection: .zero
+    )
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0),
+        camera: ViewportCamera(
+            zoom: 1.25,
+            pan: CGSize(width: 21.0, height: -17.0),
+            projection: .standardPerspective
+        ),
+        basis: basis,
+        verticalBounds: -1.0...1.0
+    )
+    let resolver = ViewportFaceSurfacePointResolver()
+
+    let depthDifferingFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: -0.6, y: -0.5, z: -0.12),
+            Point3D(x: 0.6, y: -0.5, z: 0.12),
+            Point3D(x: 0.6, y: 0.5, z: 0.12),
+            Point3D(x: -0.6, y: 0.5, z: -0.12),
+        ]
+    )
+    let expected = Point3D(x: 0.18, y: 0.11, z: 0.036)
+    let viewportPoint = try #require(layout.projectedPoint(expected)?.point)
+    let resolved = try #require(
+        resolver.worldPoint(
+            for: viewportPoint,
+            face: depthDifferingFace,
+            layout: layout
+        )
+    )
+    #expect(abs(resolved.x - expected.x) < 1.0e-9)
+    #expect(abs(resolved.y - expected.y) < 1.0e-9)
+    #expect(abs(resolved.z - expected.z) < 1.0e-9)
+
+    let nonCoplanarFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: -0.6, y: -0.5, z: -0.12),
+            Point3D(x: 0.6, y: -0.5, z: 0.12),
+            Point3D(x: 0.6, y: 0.5, z: 0.30),
+            Point3D(x: -0.6, y: 0.5, z: -0.08),
+        ]
+    )
+    let secondTriangleExpected = Point3D(x: 0.0, y: 0.3, z: 0.102)
+    let secondTriangleViewportPoint = try #require(
+        layout.projectedPoint(secondTriangleExpected)?.point
+    )
+    let secondTriangleResolved = try #require(
+        resolver.worldPoint(
+            for: secondTriangleViewportPoint,
+            face: nonCoplanarFace,
+            layout: layout
+        )
+    )
+    #expect(
+        max(
+            abs(secondTriangleResolved.x - secondTriangleExpected.x),
+            abs(secondTriangleResolved.y - secondTriangleExpected.y),
+            abs(secondTriangleResolved.z - secondTriangleExpected.z)
+        ) < 1.0e-9
+    )
+
+    let smallFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: 0.1, y: -0.1, z: 0.0),
+            Point3D(x: 0.1001, y: -0.1, z: 0.0),
+            Point3D(x: 0.1, y: -0.0999, z: 0.0),
+        ]
+    )
+    let smallExpected = Point3D(x: 0.10002, y: -0.09997, z: 0.0)
+    let smallViewportPoint = try #require(layout.projectedPoint(smallExpected)?.point)
+    let smallResolved = try #require(
+        resolver.worldPoint(
+            for: smallViewportPoint,
+            face: smallFace,
+            layout: layout
+        )
+    )
+    #expect(
+        max(
+            abs(smallResolved.x - smallExpected.x),
+            abs(smallResolved.y - smallExpected.y),
+            abs(smallResolved.z - smallExpected.z)
+        ) < 1.0e-9
+    )
+
+    let cameraOrigin = try #require(layout.viewportRay(for: layout.fittingCenter)?.origin)
+    let nearW = ViewportLayout.minimumPerspectiveW * 0.5
+    let farW = 0.8
+    let nearPoint = Point3D(
+        x: cameraOrigin.x,
+        y: cameraOrigin.y,
+        z: cameraOrigin.z - nearW
+    )
+    let farLeft = Point3D(
+        x: cameraOrigin.x - 0.2,
+        y: cameraOrigin.y - 0.4,
+        z: cameraOrigin.z - farW
+    )
+    let farRight = Point3D(
+        x: cameraOrigin.x + 0.2,
+        y: cameraOrigin.y - 0.4,
+        z: cameraOrigin.z - farW
+    )
+    let nearCrossingFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [nearPoint, farLeft, farRight]
+    )
+    #expect(layout.projectedPoint(nearPoint) == nil)
+    let nearParameter = 2.0e-5
+    let nearWRetained = nearW + (farW - nearW) * nearParameter
+    let nearExpected = Point3D(
+        x: cameraOrigin.x,
+        y: cameraOrigin.y - 0.4 * nearParameter,
+        z: cameraOrigin.z - nearWRetained
+    )
+    let nearViewportPoint = try #require(layout.projectedPoint(nearExpected)?.point)
+    let nearResolved = try #require(
+        resolver.worldPoint(
+            for: nearViewportPoint,
+            face: nearCrossingFace,
+            layout: layout
+        )
+    )
+    #expect(abs(nearResolved.x - nearExpected.x) < 1.0e-8)
+    #expect(abs(nearResolved.y - nearExpected.y) < 1.0e-8)
+    #expect(abs(nearResolved.z - nearExpected.z) < 1.0e-8)
+
+    let outsideParameter = 1.5
+    let outsideW = nearW + (farW - nearW) * outsideParameter
+    let outsidePoint = Point3D(
+        x: cameraOrigin.x,
+        y: cameraOrigin.y - 0.4 * outsideParameter,
+        z: cameraOrigin.z - outsideW
+    )
+    let outsideViewportPoint = try #require(layout.projectedPoint(outsidePoint)?.point)
+    #expect(
+        resolver.worldPoint(
+            for: outsideViewportPoint,
+            face: nearCrossingFace,
+            layout: layout
+        ) == nil
+    )
+
+    let parallelFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: 0.0, y: -0.4, z: -0.4),
+            Point3D(x: 0.0, y: 0.4, z: -0.4),
+            Point3D(x: 0.0, y: 0.4, z: 0.4),
+        ]
+    )
+    #expect(resolver.worldPoint(for: layout.fittingCenter, face: parallelFace, layout: layout) == nil)
+
+    let behindFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: -0.4, y: -0.4, z: cameraOrigin.z + 0.5),
+            Point3D(x: 0.4, y: -0.4, z: cameraOrigin.z + 0.5),
+            Point3D(x: 0.0, y: 0.4, z: cameraOrigin.z + 0.5),
+        ]
+    )
+    #expect(resolver.worldPoint(for: layout.fittingCenter, face: behindFace, layout: layout) == nil)
+
+    let degenerateFace = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: -0.4, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.4, y: 0.0, z: 0.0),
+        ]
+    )
+    #expect(resolver.worldPoint(for: layout.fittingCenter, face: degenerateFace, layout: layout) == nil)
+}
+
 @MainActor
 @Test func viewportSurfaceContinuityOverlayShowsSelectedSurfaceObjectAdjacency() async throws {
     var document = DesignDocument.empty()
@@ -3093,13 +3280,15 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         )
     )
 
-    let start = geometry.projectedTip(layout: layout)
-    let outwardEnd = geometry.projectedTip(layout: layout, distanceMeters: 0.25)
-    let inwardEnd = geometry.projectedTip(layout: layout, distanceMeters: -0.125)
+    let start = try #require(geometry.projectedTip(layout: layout))
+    let outwardEnd = try #require(geometry.projectedTip(layout: layout, distanceMeters: 0.25))
+    let inwardEnd = try #require(geometry.projectedTip(layout: layout, distanceMeters: -0.125))
 
     #expect(geometry.modelDirection.x > 0.0)
-    #expect(abs(geometry.offsetDistance(start: start, current: outwardEnd, layout: layout) - 0.25) < 1.0e-12)
-    #expect(abs(geometry.offsetDistance(start: start, current: inwardEnd, layout: layout) + 0.125) < 1.0e-12)
+    let outwardDistance = try #require(geometry.offsetDistance(start: start, current: outwardEnd, layout: layout))
+    let inwardDistance = try #require(geometry.offsetDistance(start: start, current: inwardEnd, layout: layout))
+    #expect(abs(outwardDistance - 0.25) < 1.0e-12)
+    #expect(abs(inwardDistance + 0.125) < 1.0e-12)
 }
 
 @Test func viewportEdgeOffsetAffordanceMapsArrowDragToPositiveDistance() throws {
@@ -3150,13 +3339,15 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         )
     )
 
-    let start = geometry.projectedTip(layout: layout)
-    let widerEnd = geometry.projectedTip(layout: layout, widthMeters: 1.4)
-    let narrowerEnd = geometry.projectedTip(layout: layout, widthMeters: 0.8)
+    let start = try #require(geometry.projectedTip(layout: layout))
+    let widerEnd = try #require(geometry.projectedTip(layout: layout, widthMeters: 1.4))
+    let narrowerEnd = try #require(geometry.projectedTip(layout: layout, widthMeters: 0.8))
 
     #expect(abs(geometry.modelDirection.x) < 1.0e-12)
-    #expect(abs(geometry.slotWidth(start: start, current: widerEnd, layout: layout) - 1.4) < 1.0e-12)
-    #expect(abs(geometry.slotWidth(start: start, current: narrowerEnd, layout: layout) - 0.8) < 1.0e-12)
+    let widerWidth = try #require(geometry.slotWidth(start: start, current: widerEnd, layout: layout))
+    let narrowerWidth = try #require(geometry.slotWidth(start: start, current: narrowerEnd, layout: layout))
+    #expect(abs(widerWidth - 1.4) < 1.0e-12)
+    #expect(abs(narrowerWidth - 0.8) < 1.0e-12)
 }
 
 @Test func viewportSketchVertexOffsetAffordanceMapsArrowDragToPositiveDistance() throws {
@@ -3173,16 +3364,18 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         )
     )
 
-    let start = geometry.projectedTip(layout: layout)
-    let fartherEnd = geometry.projectedTip(layout: layout, distanceMeters: 1.25)
-    let nearerEnd = geometry.projectedTip(layout: layout, distanceMeters: 0.75)
+    let start = try #require(geometry.projectedTip(layout: layout))
+    let fartherEnd = try #require(geometry.projectedTip(layout: layout, distanceMeters: 1.25))
+    let nearerEnd = try #require(geometry.projectedTip(layout: layout, distanceMeters: 0.75))
 
     #expect(abs(geometry.modelDirection.x - 1.0) < 1.0e-12)
-    #expect(abs(geometry.offsetDistance(start: start, current: fartherEnd, layout: layout) - 1.25) < 1.0e-12)
-    #expect(abs(geometry.offsetDistance(start: start, current: nearerEnd, layout: layout) - 0.75) < 1.0e-12)
+    let fartherDistance = try #require(geometry.offsetDistance(start: start, current: fartherEnd, layout: layout))
+    let nearerDistance = try #require(geometry.offsetDistance(start: start, current: nearerEnd, layout: layout))
+    #expect(abs(fartherDistance - 1.25) < 1.0e-12)
+    #expect(abs(nearerDistance - 0.75) < 1.0e-12)
 }
 
-@Test func viewportModelCoordinateMapperProvidesEmptyDocumentDragPlane() {
+@Test func viewportModelCoordinateMapperProvidesEmptyDocumentDragPlane() throws {
     let document = DesignDocument.empty()
     let ruler = RulerConfiguration.standard(for: .micrometer)
     let mapper = ViewportModelCoordinateMapper(
@@ -3190,11 +3383,13 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         ruler: ruler,
         size: CGSize(width: 800.0, height: 600.0)
     )
-    let centerPoint = mapper.modelPoint(for: CGPoint(x: 400.0, y: 300.0))
-    let drag = mapper.modelDrag(
+    let centerPoint = try #require(
+        mapper.modelPoint(for: CGPoint(x: 400.0, y: 300.0))
+    )
+    let drag = try #require(mapper.modelDrag(
         from: CGPoint(x: 360.0, y: 320.0),
         to: CGPoint(x: 440.0, y: 280.0)
-    )
+    ))
     let expectedSpan = max(
         ruler.visibleSpanMeters,
         ruler.majorTickMeters * 20.0,
@@ -3414,7 +3609,7 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         ruler: session.workspaceState.ruler,
         size: size
     )
-    let modelPoint = initialMapper.modelPoint(for: clickPoint)
+    let modelPoint = try #require(initialMapper.modelPoint(for: clickPoint))
 
     session.selectTool(.sketch)
     _ = session.activateSelectedToolFromCanvas(
@@ -3443,10 +3638,10 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
         ruler: .standard(for: .millimeter),
         size: CGSize(width: 800.0, height: 600.0)
     )
-    let drag = mapper.modelDrag(
+    let drag = try #require(mapper.modelDrag(
         from: CGPoint(x: 320.0, y: 360.0),
         to: CGPoint(x: 500.0, y: 280.0)
-    )
+    ))
     let placeholder = try #require(
         ViewportCanvasDragPlaceholder(
             drag: drag,

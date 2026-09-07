@@ -144,6 +144,10 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
             pointOffsetBy(pointOffsetBy(coordinateSystem.origin, positiveU), positiveV),
             pointOffsetBy(pointOffsetBy(coordinateSystem.origin, negativeU), positiveV),
         ]
+        guard let projectedOrigin = layout.projectedPoint(coordinateSystem.origin)?.point,
+              let projectedNormalEnd = layout.projectedPoint(normalEnd)?.point else {
+            return nil
+        }
 
         return ViewportConstructionPlaneHandlePlane(
             constructionPlaneID: constructionPlaneID,
@@ -152,8 +156,8 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
             normal: coordinateSystem.normal,
             normalEnd: normalEnd,
             corners: corners,
-            projectedOrigin: layout.project(coordinateSystem.origin),
-            projectedNormalEnd: layout.project(normalEnd)
+            projectedOrigin: projectedOrigin,
+            projectedNormalEnd: projectedNormalEnd
         )
     }
 
@@ -234,12 +238,9 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
         guard let viewNormal = layout.basis.viewNormal else {
             return nil
         }
-        let footprint = layout.unproject(point)
-        let rayOrigin = Point3D(
-            x: Double(footprint.x),
-            y: 0.0,
-            z: Double(footprint.y)
-        )
+        guard let rayOrigin = layout.displayedCanvasWorldPoint(for: point) else {
+            return nil
+        }
         let denominator = viewNormal.dot(viewNormal)
         guard denominator.isFinite,
               denominator > tolerance else {

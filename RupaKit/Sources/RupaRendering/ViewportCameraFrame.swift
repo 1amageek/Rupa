@@ -34,18 +34,26 @@ public struct ViewportCameraFrameRequest: Equatable, Sendable {
     public var target: Point3D
     public var visibleHeightMeters: Double
     public var basis: ViewportProjectionBasis
+    public var projection: ViewportCameraProjection
 
     public init(
         id: UUID = UUID(),
         target: Point3D,
         visibleHeightMeters: Double,
-        basis: ViewportProjectionBasis
+        basis: ViewportProjectionBasis,
+        projection: ViewportCameraProjection = .parallel
     ) {
         self.id = id
         self.target = target
         self.visibleHeightMeters = ViewportCameraFrame.normalizedVisibleHeightMeters(visibleHeightMeters)
         self.basis = basis
+        self.projection = projection
     }
+}
+
+public enum ViewportCameraFrameError: Error, Equatable, Sendable {
+    case invalidTarget
+    case targetOutsideVisibleHalfSpace
 }
 
 public struct ViewportCameraFrameResolver: Sendable {
@@ -60,29 +68,40 @@ public struct ViewportCameraFrameResolver: Sendable {
     public func camera(
         framing request: ViewportCameraFrameRequest,
         layoutForCamera: (ViewportCamera) -> ViewportLayout
-    ) -> ViewportCamera {
+    ) throws -> ViewportCamera {
+        guard request.target.isFinite,
+              request.visibleHeightMeters.isFinite,
+              request.visibleHeightMeters > ViewportCameraFrame.minimumVisibleHeightMeters,
+              request.projection.isValid else {
+            throw ViewportCameraFrameError.invalidTarget
+        }
         let identityLayout = layoutForCamera(.identity)
         let maximumZoom = identityLayout.maximumZoom
-        let requestedZoom = CGFloat(workspaceVisibleSpanMeters / request.visibleHeightMeters)
-        var nextCamera = ViewportCamera(zoom: requestedZoom).clamped(maximumZoom: maximumZoom)
-        let projectedTarget = layoutForCamera(nextCamera).project(request.target)
-        nextCamera.pan.width += identityLayout.fittingCenter.x - projectedTarget.x
-        nextCamera.pan.height += identityLayout.fittingCenter.y - projectedTarget.y
+        let requestedZoom = CGFloat(identityLayout.visibleHeightMeters / request.visibleHeightMeters)
+        let nextCamera = ViewportCamera(
+            zoom: requestedZoom,
+            projection: request.projection,
+            focus: request.target
+        ).clamped(maximumZoom: maximumZoom)
+        let targetLayout = layoutForCamera(nextCamera)
+        guard targetLayout.projectedPoint(request.target) != nil else {
+            throw ViewportCameraFrameError.targetOutsideVisibleHalfSpace
+        }
         return nextCamera.clamped(maximumZoom: maximumZoom)
     }
 
     public func frame(
         for camera: ViewportCamera,
         in layout: ViewportLayout
-    ) -> ViewportCameraFrame {
-        let center = layout.unproject(layout.fittingCenter)
-        let visibleHeightMeters = workspaceVisibleSpanMeters / Double(max(camera.zoom, ViewportCamera.minimumZoom))
+    ) -> ViewportCameraFrame? {
+        guard let target = camera.pan == .zero
+                ? layout.focus : layout.worldPointOnFocusPlane(for: layout.fittingCenter),
+              target.isFinite else {
+            return nil
+        }
+        let visibleHeightMeters = layout.visibleHeightMeters
         return ViewportCameraFrame(
-            target: Point3D(
-                x: Double(center.x),
-                y: layout.renderOrigin.y,
-                z: Double(center.y)
-            ),
+            target: target,
             visibleHeightMeters: visibleHeightMeters,
             camera: camera
         )
