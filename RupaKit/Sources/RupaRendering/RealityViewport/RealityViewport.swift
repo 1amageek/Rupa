@@ -161,6 +161,7 @@ final class RealityViewport {
             }
         }
         prepared.fixedBounds = prepared.bounds
+        try prepared.validateSurfaceCompleteness()
         try Task.checkCancellation()
         return prepared
     }
@@ -242,6 +243,24 @@ final class RealityViewport {
                 lines = nil
             }
             entries.append((surface, lines))
+        }
+    }
+
+    /// Validated once before publication. Only this owner may mutate surface
+    /// descendants; the exposed root is reserved for host mount/unmount.
+    func validateSurfaceCompleteness() throws {
+        let count = surfaceResources?.plan.occurrences.count ?? 0
+        guard entries.count == count, occurrenceByEntity.count == count else {
+            throw Self.queryFailure("The prepared surface entries do not match source provenance.")
+        }
+        for (index, entry) in entries.enumerated() {
+            try Task.checkCancellation()
+            guard entry.surface.parent === geometryRoot,
+                  occurrenceByEntity[ObjectIdentifier(entry.surface)] == index,
+                  let collision = entry.surface.components[CollisionComponent.self],
+                  !collision.shapes.isEmpty else {
+                throw Self.queryFailure("The prepared surface is missing collision data or source provenance.")
+            }
         }
     }
 
@@ -687,6 +706,46 @@ final class RealityViewport {
         return plan.occurrences[occurrence].triangle(at: sourceFace)
     }
 
+    /// Queries the exact mounted native surface frame. A nil result is a valid
+    /// miss after the native ray and all visibility/provenance filters run;
+    /// readiness, camera, conversion, and provenance failures remain typed.
+    func surfaceHit(at point: CGPoint, revision: UInt64) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        guard point.x.isFinite, point.y.isFinite else {
+            throw Self.queryFailure("The native surface query point is not finite.")
+        }
+        guard appliedViewportRevision == revision else {
+            throw Self.queryFailure("The native surface query uses a stale camera revision.")
+        }
+        guard root.isEnabled, clipper.isEnabled, content != nil else {
+            throw Self.queryFailure("The native surface query is unavailable for the mounted frame.")
+        }
+        guard root.scene != nil else {
+            throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
+        }
+        guard !entries.isEmpty else { return nil }
+        guard geometryRoot.isEnabled else { return nil }
+
+        let query = try nativeHits(at: point)
+        let hits = query.hits
+        guard !hits.isEmpty else { return nil }
+        for hit in hits where triangle(for: hit) == nil {
+            throw Self.queryFailure("The native collision hit has no prepared surface provenance.")
+        }
+        guard let hit = retainedHits(hits, rayDirection: query.rayDirection).first,
+              let triangle = triangle(for: hit) else {
+            return nil
+        }
+        let worldPoint = Point3D(
+            x: Double(hit.position.x) + renderOrigin.x,
+            y: Double(hit.position.y) + renderOrigin.y,
+            z: Double(hit.position.z) + renderOrigin.z
+        )
+        guard worldPoint.x.isFinite, worldPoint.y.isFinite, worldPoint.z.isFinite else {
+            throw Self.queryFailure("The native collision point cannot be represented in CAD world space.")
+        }
+        return (triangle: triangle, point: worldPoint)
+    }
+
     /// Collision winding copies never create a new editable CAD face.
     nonisolated static func sourceTriangleIndex(for face: Int, triangleCount: Int) -> Int? {
         guard triangleCount > 0, face >= 0 else { return nil }
@@ -701,16 +760,42 @@ final class RealityViewport {
     }
 
     func hitTest(_ point: CGPoint, revision: UInt64) -> [CollisionCastHit] {
-        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled, geometryRoot.isEnabled,
-              let scene = root.scene, let ray = cameraRay(through: point) else { return [] }
+        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled, geometryRoot.isEnabled else {
+            return []
+        }
+        do {
+            let query = try nativeHits(at: point)
+            return retainedHits(query.hits, rayDirection: query.rayDirection)
+        } catch {
+            // This legacy adapter retains its historical empty-result refusal
+            // contract. The throwing surface query above is the RK-4 authority.
+            return []
+        }
+    }
+
+    private func nativeHits(at point: CGPoint) throws -> (hits: [CollisionCastHit], rayDirection: SIMD3<Float>) {
+        guard let scene = root.scene else {
+            throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
+        }
+        guard let ray = cameraRay(through: point) else {
+            throw Self.queryFailure("The mounted native camera cannot resolve a finite surface ray.")
+        }
         var hits = scene.raycast(origin: ray.origin, direction: ray.direction, length: ray.length, query: .all)
-        hits.removeAll { hit in
-            guard hit.distance.isFinite, hit.distance >= 0 else { return true }
+        try hits.removeAll { hit in
+            guard hit.distance.isFinite, hit.distance >= 0 else {
+                throw Self.queryFailure("The native collision query returned a non-finite distance.")
+            }
+            guard hit.position.x.isFinite, hit.position.y.isFinite, hit.position.z.isFinite else {
+                throw Self.queryFailure("The native collision query returned a non-finite position.")
+            }
             let depth = -camera.convert(position: hit.position, from: nil).z
+            guard depth.isFinite else {
+                throw Self.queryFailure("The native collision query returned a non-finite camera depth.")
+            }
             return !(depth >= ray.near && depth <= ray.far)
         }
         hits.sort { $0.distance < $1.distance }
-        return retainedHits(hits, rayDirection: ray.direction)
+        return (hits: hits, rayDirection: ray.direction)
     }
 
     /// Mounted macOS 27 inverse queries do not round-trip native projection.
@@ -873,5 +958,9 @@ final class RealityViewport {
 
     private nonisolated static func failure(_ message: String) -> MeshSourcePresentationRenderError {
         .init(code: .invalidTransform, message: message)
+    }
+
+    private nonisolated static func queryFailure(_ message: String) -> MeshSourcePresentationRenderError {
+        .init(code: .failed, message: message)
     }
 }

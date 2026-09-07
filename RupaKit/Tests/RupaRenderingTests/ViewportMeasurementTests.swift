@@ -6,6 +6,152 @@ import RupaViewportScene
 import SwiftCAD
 import Testing
 
+#if canImport(AppKit)
+import AppKit
+import SwiftUI
+
+@MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [ViewportCameraProjection.parallel, .standardPerspective], [false, true])
+func viewportSurfaceInputUsesNativeFrame(projection: ViewportCameraProjection, measuring: Bool) async throws {
+    _ = NSApplication.shared
+    let document = DesignDocument.empty()
+    let scene = try planCacheScene(suffix: "surface-input", projectID: document.projectID)
+    let occurrence = try #require(scene.items.first?.occurrenceID)
+    let control = ViewportControlSession(camera: .init(projection: projection), basis: .axisFront(.z))
+    let size = CGSize(width: 800, height: 600)
+    var state = ViewportMeasurementState()
+    var picked: [SceneOccurrenceID] = []
+    var hovered: SceneOccurrenceID?
+    var legacyPicks = 0
+    var legacyHoverHits = 0
+    let viewport = Viewport(
+        document: document,
+        sourceIdentity: .presentation(scene.snapshotID),
+        controlSession: control,
+        presentationScene: scene,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
+        objectSelectionIndex: .init(document: document, selection: .empty),
+        measurementToolActive: measuring,
+        measurementConstructionPlane: .xy,
+        allowsObjectAffordances: false,
+        selectedPresentationHasExactCADContext: false,
+        onPresentationOccurrencePick: { id, _ in picked.append(id) },
+        onPresentationOccurrenceHover: { hovered = $0 },
+        onPick: { _ in legacyPicks += 1 },
+        onHover: { if $0 != nil { legacyHoverHits += 1 } },
+        onMeasurementStateChange: { state = $0 }
+    ).frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: viewport)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+    let start = CGPoint(x: 390, y: 280)
+    let end = CGPoint(x: 430, y: 300)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while (measuring ? state.start == nil : picked.isEmpty), ContinuousClock.now < deadline {
+        measurementInput(in: controller.view)?.onPick?(start, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let input = try #require(measurementInput(in: controller.view))
+    if measuring {
+        let accepted = try #require(state.start)
+        #expect(accepted.source == .presentation(occurrenceID: occurrence))
+        #expect(abs(accepted.point.z) < 1e-6)
+        let endDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while state.end == nil, ContinuousClock.now < endDeadline {
+            input.onPick?(end, size, .replace)
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(try #require(state.end).source == .presentation(occurrenceID: occurrence))
+        #expect(try #require(state.distanceMeters) > 0)
+    } else {
+        #expect(picked == [occurrence])
+        let hoverDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while hovered == nil, ContinuousClock.now < hoverDeadline {
+            input.onHover?(start, size)
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(hovered == occurrence)
+        _ = try control.perform(.pan(deltaXPoints: 17, deltaYPoints: 9))
+        input.onPick?(start, size, .replace)
+        input.onHover?(start, size)
+        #expect(picked == [occurrence])
+        #expect(hovered == nil)
+    }
+    #expect(legacyPicks == 0)
+    #expect(legacyHoverHits == 0)
+}
+
+@MainActor
+private func measurementInput(in view: NSView) -> ViewportInputSurface.InputView? {
+    if let input = view as? ViewportInputSurface.InputView { return input }
+    for child in view.subviews {
+        if let result = measurementInput(in: child) { return result }
+    }
+    return nil
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func viewportMeasurementInputRequiresMatchingNativeFrame() async throws {
+    _ = NSApplication.shared
+    let document = DesignDocument.empty()
+    let control = ViewportControlSession(basis: .axisFront(.z))
+    let size = CGSize(width: 800, height: 600)
+    var state = ViewportMeasurementState()
+    let viewport = Viewport(
+        document: document,
+        sourceIdentity: .document(id: document.id, generation: DocumentGeneration(1)),
+        controlSession: control,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
+        objectSelectionIndex: .init(document: document, selection: .empty),
+        measurementToolActive: true,
+        measurementConstructionPlane: .xy,
+        selectedPresentationHasExactCADContext: false,
+        onMeasurementStateChange: { state = $0 }
+    ).frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: viewport)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+    let start = CGPoint(x: 390, y: 280)
+    let end = CGPoint(x: 450, y: 300)
+    let readyDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while state.start == nil, ContinuousClock.now < readyDeadline {
+        measurementInput(in: controller.view)?.onPick?(start, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let inputView = try #require(measurementInput(in: controller.view))
+    let acceptedStart = try #require(state.start)
+    #expect(acceptedStart.source == .constructionPlane(.xy))
+
+    // Mutate the camera and invoke the production input callback before the
+    // native host can apply the new revision on its next update.
+    _ = try control.perform(.pan(deltaXPoints: 17, deltaYPoints: 9))
+    inputView.onPick?(end, size, .replace)
+    #expect(state.phase == .anchored)
+    #expect(state.start == acceptedStart)
+    #expect(state.end == nil)
+    #expect(state.status?.contains("displayed surface is unavailable") == true)
+
+    let resumedDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while state.end == nil, ContinuousClock.now < resumedDeadline {
+        try await Task.sleep(for: .milliseconds(20))
+        measurementInput(in: controller.view)?.onPick?(end, size, .replace)
+    }
+    let acceptedEnd = try #require(state.end)
+    #expect(state.phase == .completed)
+    #expect(acceptedEnd.source == .constructionPlane(.xy))
+    #expect(try #require(state.distanceMeters) > 0)
+}
+#endif
+
 @Test
 func viewportMeasurementRefusalAndResetClearPreview() {
     var session = ViewportMeasurementSession()

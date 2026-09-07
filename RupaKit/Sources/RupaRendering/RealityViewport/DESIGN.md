@@ -423,8 +423,21 @@ of screen-baked dashes.
    is requested only for admitted geometry/resource counts. RealityKit does not
    expose its collision allocator byte size or promise that generation is
    interruptible; cancellation is checked after its await and stale output is
-   discarded. Missing shape or `triangleHit.faceIndex` mapping is an explicit
-   miss/failure, never a legacy identity-renderer fallback.
+   discarded. `attachSurfaces` is the sole owner that creates surface entities,
+   assigns their collision components, and records occurrence provenance. Before
+   publication it validates that every planned occurrence has exactly one
+   attached surface entry, a nonempty native collision component, and a matching
+   provenance entry; any loss is a typed preparation failure and no ready frame
+   is published. The exposed root is a mount/unmount capability only:
+   production hosts may add or remove that root from `RealityView` content but
+   may not mutate its descendants or components. Surface entries and collision
+   components are immutable after publication, so pointer queries rely on this
+   established guarantee instead of scanning all occurrences on every event.
+   A raycast with no hit in a validated ready frame remains a valid miss;
+   missing `triangleHit.faceIndex` or provenance on a returned hit is a typed
+   query failure, never a legacy identity-renderer fallback. Any future owner
+   that mutates native descendants must first add owner-mediated invalidation
+   and revalidation rather than weakening loss to a miss.
 5. Native built-in materials are selected first. `CustomMaterial` is used only
    for a documented MatCap or signed-normal requirement that native built-ins
    cannot express. Section-plane clipping is owned by native
@@ -508,6 +521,21 @@ of screen-baked dashes.
    No CPU CAD projection, CPU triangle intersection, raw native-ray fallback,
    or unbounded ray length is allowed. Results are valid only for the currently
    displayed frame tuple and the prepared bounds/provenance of that tuple.
+
+   RK-4 first exposes the surface subset as one throwing internal query whose
+   successful value is the nearest optional ordered result:
+   the occurrence and source-triangle provenance already owned by the prepared
+   surface, plus the native collision position translated by this owner's
+   `renderOrigin` into the CAD world point. The caller supplies the matching
+   mounted camera revision, and the cache supplies only the exact-ready frame;
+   a display-only retained surface has no query authority. A ready native query
+   with no retained collision is the only valid `nil` miss. Preparing, stale or
+   missing readiness, an unapplied camera revision, collision/provenance loss,
+   or a nonfinite world conversion throws the existing typed render failure, so
+   Measure cannot reinterpret unavailable presentation as a construction-plane
+   or snap hit. Neither outcome invokes the CPU screen-hit tester or legacy
+   identity renderer. Spatial-handle collision and rectangle
+   selection remain later RK-4 seams and do not weaken this surface contract.
 
    Production camera presentation uses
    RealityKit's built-in `PerspectiveCameraComponent` or

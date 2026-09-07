@@ -155,11 +155,75 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     #expect(cache.displaySurface(for: planCacheIdentity(nil, overlayRevision: 5)) == nil)
     try await settlePlanCache(cache)
     let empty = try #require(cache.surface(for: planCacheIdentity(nil, overlayRevision: 5)))
+    let emptyIdentity = planCacheIdentity(nil, overlayRevision: 5)
     #expect(empty.snapshotID == nil)
     #expect(empty.root.children.contains { $0 === empty.camera })
     #expect(started.withLock { $0 } == 2)
+
+    // The exact-ready surface is not queryable until its native root is mounted.
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: .zero, for: emptyIdentity, revision: 5)
+    }
+
+    let emptySize = CGSize(width: 512, height: 384)
+    let emptyLayout = ViewportLayout(
+        modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1), size: emptySize,
+        camera: .init(zoom: 0.6), basis: .axisFront(.z), verticalBounds: 0...1
+    )
+    let emptyInteraction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+        previewSceneNodeIDs: [], hoveredSceneNodeID: nil
+    )
+    var emptyMountError: MeshSourcePresentationRenderError?
+    let emptyController = NSHostingController(
+        rootView: RealityViewportView(
+            viewport: empty, viewportRevision: 5, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:], layout: emptyLayout,
+            interaction: emptyInteraction, sectionPlane: nil, retainedSide: .front,
+            sectionTolerance: 0,
+            onUpdateResult: { emptyMountError = $0 }
+        ).frame(width: emptySize.width, height: emptySize.height)
+    )
+    let emptyWindow = NSWindow(
+        contentRect: CGRect(origin: .zero, size: emptySize), styleMask: [.titled],
+        backing: .buffered, defer: false
+    )
+    emptyWindow.isReleasedWhenClosed = false
+    emptyWindow.contentViewController = emptyController
+    emptyWindow.orderFront(nil)
+    defer {
+        emptyWindow.contentViewController = nil
+        emptyWindow.close()
+    }
+    let emptyDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while ContinuousClock.now < emptyDeadline,
+          (empty.appliedViewportRevision != 5 || empty.root.scene == nil) {
+        emptyController.view.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(emptyMountError == nil)
+    #expect(empty.appliedViewportRevision == 5)
+    #expect(empty.root.scene != nil)
+    let mountedEmptyMiss = try cache.surfaceHit(
+        at: CGPoint(x: emptySize.width / 2, y: emptySize.height / 2),
+        for: emptyIdentity, revision: 5
+    )
+    #expect(mountedEmptyMiss == nil)
+
+    emptyWindow.contentViewController = nil
+    emptyWindow.close()
     cache.teardown()
     #expect(!empty.root.isEnabled)
+
+    // Idle and preparing states are unavailable rather than legitimate misses.
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: .zero, for: emptyIdentity, revision: 5)
+    }
+    cache.prepare(request(nil, revision: 6))
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: .zero, for: planCacheIdentity(nil, overlayRevision: 6), revision: 5)
+    }
+    cache.teardown()
 }
 
 @MainActor
@@ -273,10 +337,34 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     _ = NSApplication.shared
     let scene = try planCacheScene(suffix: "mounted-camera")
     let cache = MeshSourcePresentationPlanCache()
+    let identity = planCacheIdentity(scene)
     cache.prepare(for: scene)
     try await settlePlanCache(cache)
     let viewport = try #require(cache.surface(for: scene))
     defer { viewport.unbind(); cache.teardown() }
+
+    func firstCollisionSurface(in entity: Entity) -> ModelEntity? {
+        if let model = entity as? ModelEntity,
+           model.components[CollisionComponent.self] != nil {
+            return model
+        }
+        for child in entity.children {
+            if let surface = firstCollisionSurface(in: child) {
+                return surface
+            }
+        }
+        return nil
+    }
+    try viewport.validateSurfaceCompleteness()
+    let collisionSurface = try #require(firstCollisionSurface(in: viewport.root))
+    let savedCollision = try #require(collisionSurface.components[CollisionComponent.self])
+    collisionSurface.components.remove(CollisionComponent.self)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try viewport.validateSurfaceCompleteness()
+    }
+    collisionSurface.components.set(savedCollision)
+    try viewport.validateSurfaceCompleteness()
+
     let size = CGSize(width: 512, height: 384)
     let world = Point3D(x: 0.2, y: 0.3, z: 0)
     var reportedError: MeshSourcePresentationRenderError?
@@ -348,6 +436,10 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
                         }
                         let triangle = try #require(viewport.triangle(for: hit))
                         #expect(triangle.occurrenceID.rawValue == "occurrence.plan-cache.mounted-camera")
+                        let surfaceHit = try #require(try cache.surfaceHit(at: actual, for: identity, revision: revision))
+                        #expect(surfaceHit.triangle.occurrenceID == triangle.occurrenceID)
+                        #expect(surfaceHit.triangle.faceID == triangle.faceID)
+                        #expect(surfaceHit.point.isApproximatelyEqual(to: world, tolerance: 1e-4))
                         #expect(viewport.hitTest(actual, revision: revision - 1).isEmpty)
                         matched = true
                         break
@@ -369,10 +461,14 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
                     clipped.far = depth * 2
                     viewport.camera.components.set(clipped)
                     #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    let clippedSurfaceHit = try cache.surfaceHit(at: expected, for: identity, revision: revision)
+                    #expect(clippedSurfaceHit == nil)
                     clipped.near = depth * 0.1
                     clipped.far = depth * 0.9
                     viewport.camera.components.set(clipped)
                     #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    let clippedSurfaceHitAfterFar = try cache.surfaceHit(at: expected, for: identity, revision: revision)
+                    #expect(clippedSurfaceHitAfterFar == nil)
                     viewport.camera.components.set(original)
                 } else if let original = viewport.camera.components[PerspectiveCameraComponent.self] {
                     var clipped = original
@@ -380,15 +476,34 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
                     clipped.far = depth * 2
                     viewport.camera.components.set(clipped)
                     #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    let clippedSurfaceHit = try cache.surfaceHit(at: expected, for: identity, revision: revision)
+                    #expect(clippedSurfaceHit == nil)
                     clipped.near = depth * 0.1
                     clipped.far = depth * 0.9
                     viewport.camera.components.set(clipped)
                     #expect(viewport.hitTest(expected, revision: revision).isEmpty)
+                    let clippedSurfaceHitAfterFar = try cache.surfaceHit(at: expected, for: identity, revision: revision)
+                    #expect(clippedSurfaceHitAfterFar == nil)
                     viewport.camera.components.set(original)
                 }
+                let restoredSurfaceHit = try #require(
+                    try cache.surfaceHit(at: expected, for: identity, revision: revision)
+                )
+                #expect(restoredSurfaceHit.point.isApproximatelyEqual(to: world, tolerance: 1e-4))
                 #expect(entities(viewport.root) == originalEntities)
             }
         }
+    }
+    let miss = try cache.surfaceHit(at: CGPoint(x: -1_000, y: -1_000), for: identity, revision: revision)
+    #expect(miss == nil)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: identity, revision: revision - 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: planCacheIdentity(scene, overlayRevision: 99), revision: revision)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: CGPoint(x: CGFloat.nan, y: 0), for: identity, revision: revision)
     }
     window.contentViewController = nil
     window.close()
@@ -399,6 +514,112 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     #expect(viewport.appliedViewportRevision == nil)
     #expect(viewport.project(world) == nil)
     #expect(viewport.hitTest(.zero, revision: revision).isEmpty)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [false, true])
+func nativeSurfaceHitChoosesNearestOverlappingSurfaceAndRestoresWorldOrigin(
+    perspective: Bool
+) async throws {
+    _ = NSApplication.shared
+    let nearTransform = try GeometryTransform3D(values: [
+        1, 0, 0, 10,
+        0, 1, 0, 20,
+        0, 0, 1, 30,
+        0, 0, 0, 1,
+    ])
+    let farTransform = try GeometryTransform3D(values: [
+        1, 0, 0, 10,
+        0, 1, 0, 20,
+        0, 0, 1, 29,
+        0, 0, 0, 1,
+    ])
+    let baseScene = try planCacheScene(suffix: "overlapping-surfaces", transform: nearTransform)
+    let nearItem = try #require(baseScene.items.first)
+    let farOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.plan-cache.overlapping-surfaces.far")
+    let farItem = UniversalViewportSceneItem(
+        id: farOccurrenceID,
+        definitionID: nearItem.definitionID,
+        displayName: "Far overlapping surface",
+        representationID: nearItem.representationID,
+        reference: nearItem.reference,
+        mesh: nearItem.mesh,
+        copyTelemetry: nearItem.copyTelemetry,
+        worldTransform: farTransform,
+        worldBounds: try nearItem.mesh.bounds().transformed(by: farTransform)
+    )
+    let scene = UniversalViewportScene(
+        snapshotID: baseScene.snapshotID,
+        projectID: baseScene.projectID,
+        items: [nearItem, farItem],
+        copyTelemetry: baseScene.copyTelemetry
+    )
+    let cache = MeshSourcePresentationPlanCache()
+    let identity = planCacheIdentity(scene)
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let plan = try #require(cache.plan(for: scene))
+    #expect(plan.itemCount == 2)
+    let viewport = try #require(cache.surface(for: scene))
+    defer { viewport.unbind(); cache.teardown() }
+    #expect(viewport.renderOrigin == Point3D(x: 10, y: 20, z: 30))
+    try viewport.validateSurfaceCompleteness()
+
+    let size = CGSize(width: 512, height: 384)
+    let camera = ViewportCamera(
+        zoom: 0.6,
+        projection: perspective ? .standardPerspective : .parallel
+    )
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 10, y: 29, width: 1, height: 2),
+        size: size,
+        camera: camera,
+        basis: .axisFront(.z),
+        verticalBounds: 20...21
+    )
+    let nearPoint = Point3D(x: 10.2, y: 20.3, z: 30)
+    let expected = try #require(layout.projectedPoint(nearPoint)).point
+    var reportedError: MeshSourcePresentationRenderError?
+    let interaction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+        previewSceneNodeIDs: [], hoveredSceneNodeID: nil
+    )
+    let controller = NSHostingController(
+        rootView: RealityViewportView(
+            viewport: viewport, viewportRevision: 1, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            interaction: interaction, sectionPlane: nil, retainedSide: .front,
+            sectionTolerance: 0,
+            onUpdateResult: { reportedError = $0 }
+        ).frame(width: size.width, height: size.height)
+    )
+    let window = NSWindow(
+        contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
+        backing: .buffered, defer: false
+    )
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    var actual: CGPoint?
+    while ContinuousClock.now < deadline {
+        controller.view.layoutSubtreeIfNeeded()
+        if let reportedError { throw reportedError }
+        if viewport.appliedViewportRevision == 1,
+           let projected = viewport.project(nearPoint),
+           hypot(projected.x - expected.x, projected.y - expected.y) <= 1 {
+            actual = projected
+            break
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let queryPoint = try #require(actual)
+    let hit = try #require(try cache.surfaceHit(at: queryPoint, for: identity, revision: 1))
+    #expect(hit.triangle.occurrenceID.rawValue == "occurrence.plan-cache.overlapping-surfaces")
+    #expect(hit.point.isApproximatelyEqual(to: nearPoint, tolerance: 1e-4))
+    #expect(hit.point.z > 29.5)
 }
 
 // MARK: - Off-actor preparation
@@ -1172,17 +1393,13 @@ private func settlePlanCacheFailure(
     )
 }
 
-private func planCacheScene(
+func planCacheScene(
     suffix: String,
+    projectID: ProjectID? = nil,
     transform: GeometryTransform3D = .identity
 ) throws -> UniversalViewportScene {
-    let projectID = ProjectID(rawValue: "project.plan-cache.\(suffix)")
+    let projectID = projectID ?? ProjectID(rawValue: "project.plan-cache.\(suffix)")
     let sourceID = GeometrySourceID(rawValue: "mesh.plan-cache.\(suffix)")
-    let definitionID = ObjectDefinitionID(rawValue: "object.plan-cache.\(suffix)")
-    let representationID = GeometryRepresentationID(
-        rawValue: "representation.plan-cache.\(suffix)"
-    )
-    let occurrenceID = SceneOccurrenceID(rawValue: "occurrence.plan-cache.\(suffix)")
     let reference = GeometrySourceReference.authoredMesh(sourceID)
 
     var builder = MeshSourceBuilder(identity: sourceID)
@@ -1193,6 +1410,10 @@ private func planCacheScene(
     let fourth = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
     _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
     let source = try builder.build()
+
+    let definitionID = ObjectDefinitionID(rawValue: "object.plan-cache.\(suffix)")
+    let representationID = GeometryRepresentationID(rawValue: "representation.plan-cache.\(suffix)")
+    let occurrenceID = SceneOccurrenceID(rawValue: "occurrence.plan-cache.\(suffix)")
 
     let project = try ProjectSourceModel(
         id: projectID,
@@ -1219,7 +1440,10 @@ private func planCacheScene(
             )
         ],
         occurrences: [
-            occurrenceID: SceneOccurrence(id: occurrenceID, definitionID: definitionID)
+            occurrenceID: SceneOccurrence(
+                id: occurrenceID,
+                definitionID: definitionID
+            )
         ],
         rootOccurrenceIDs: [occurrenceID]
     )

@@ -8,11 +8,11 @@ Parent: [RupaRendering](../DESIGN.md). Children: none. It produces immutable
 world-space and bounded spatial descriptors consumed by the native
 `RealityViewport`; it does not define another renderer or input system.
 
-RUPA-RK status: native RealityKit rulers and spatial line/text entities are a
-target-only child design until RK-3 and RK-IV complete. Current production
-computes CPU projection descriptors and presents them through SwiftUI `Canvas`
-above the RealityKit surface; this component does not claim native line/text
-integration.
+Production uses the RK-3 native RealityKit rulers and spatial line/text
+entities in the same matching frame as surfaces, grid, and camera. CPU layout
+values remain bounded inputs to native entity placement; SwiftUI does not draw
+these world-space measurements through `Canvas`. RK-IV owns final integrated
+acceptance rather than activation of a second renderer.
 
 ## Responsibilities and Boundaries
 
@@ -75,9 +75,9 @@ any phase --tool exit / Escape / snapshot replacement--> idle
 
 1. Hover and click call the same endpoint resolver with their own current screen
    coordinate. A click recomputes its endpoint and never commits the last hover.
-2. Measure input is routed before pending object-affordance handling and before a
-   missing presentation plan can return from ordinary picking. It therefore works
-   in an empty scene when an effective plane is resolvable.
+2. Measure input is routed before pending object-affordance handling. It works
+   in a ready empty frame when the matching mounted camera can resolve an
+   effective plane; absence of surface geometry is not frame unavailability.
 3. Resolution order is explicit: a selected snap candidate with a world point;
    a planar snap candidate reconstructed on the same effective plane; the nearest
    visible point on matching ready presentation geometry; then intersection of
@@ -90,8 +90,12 @@ any phase --tool exit / Escape / snapshot replacement--> idle
 5. The displayed value is the finite Euclidean distance between the two accepted
    `Point3D` values in model metres, formatted through the current ruler display
    unit. Screen length and projected-plane distance never replace it.
-6. An unavailable/nonmatching presentation plan may remove the geometry-hit
-   option but must not block valid plane input. An unresolved/parallel plane ray,
+6. Endpoint resolution requires the exact-ready presentation identity and its
+   matching applied mounted-camera revision. Within that ready frame, a valid
+   native surface miss removes only the geometry-hit option and may continue to
+   an explicitly selected effective plane. An unavailable, preparing, stale, or
+   nonmatching frame publishes `.presentationUnavailable` and cannot authorize
+   a snap, geometry, or plane endpoint. An unresolved/parallel plane ray,
    nonfinite endpoint, snap failure without another explicit source, or a
    degenerate completed segment leaves the phase unchanged and publishes a
    visible refusal.
@@ -181,8 +185,10 @@ entities.
 
 Focused component tests must prove both lenses use the current mounted
 native-project-derived ray,
-matching ready geometry wins only when actually hit, plan-unavailable empty-space
-plane input succeeds, unresolved depth refuses, snap kind/label/source survive,
+matching ready geometry wins only when actually hit, empty-space plane input
+succeeds in an exact-ready empty frame, unavailable/preparing/
+stale/nonmatching frames publish `.presentationUnavailable` without accepting a
+snap or plane endpoint, unresolved depth refuses, snap kind/label/source survive,
 click recomputation rejects stale hover, Euclidean world distance is projection
 independent, and cancellation/snapshot replacement clear state. Geometry tests
 must prove three labeled world-bounds axes, ambiguous occurrence refusal, bounded

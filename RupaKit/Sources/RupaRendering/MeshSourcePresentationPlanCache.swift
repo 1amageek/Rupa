@@ -52,6 +52,29 @@ final class MeshSourcePresentationPlanCache {
         return surface
     }
 
+    /// Queries only the exact-ready surface for `identity`. A retained
+    /// display-only surface is intentionally not a query authority.
+    func surfaceHit(
+        at point: CGPoint,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        switch state {
+        case let .ready(current, _, surface) where current == identity:
+            return try surface.surfaceHit(at: point, revision: revision)
+        case let .failed(current, error) where current == identity:
+            throw error
+        case .idle:
+            throw queryFailure("The native surface query is unavailable before preparation.")
+        case .preparing:
+            throw queryFailure("The native surface query is unavailable while preparation is in progress.")
+        case .ready:
+            throw queryFailure("The native surface query uses a stale preparation identity.")
+        case .failed:
+            throw queryFailure("The native surface query uses a stale failed preparation identity.")
+        }
+    }
+
     /// Retains a complete display during an overlay-only replacement. This is
     /// not a query authority: handles and CAD queries still require exact readiness.
     func displaySurface(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
@@ -260,5 +283,9 @@ final class MeshSourcePresentationPlanCache {
                 state = .failed(identity: identity, error: error)
             }
         }
+    }
+
+    private func queryFailure(_ message: String) -> MeshSourcePresentationRenderError {
+        MeshSourcePresentationRenderError(code: .failed, message: message)
     }
 }

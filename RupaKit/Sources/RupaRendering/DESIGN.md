@@ -353,6 +353,18 @@ independent tessellator is never an alternative implementation.
    RealityKit SDK changes.
    Missing collision or `triangleHit.faceIndex` mapping is an explicit miss or
    typed failure; legacy GPU identity rendering is not a fallback.
+   RK-4 connects this contract in three serial seams. First, surface pointer
+   selection and measurement consume one throwing native query whose nearest
+   optional result contains
+   occurrence/source-triangle provenance and the child-owned CAD world point;
+   both require the exact-ready preparation identity and matching mounted camera
+   revision. Only a ready query with no retained hit is a miss; unavailable or
+   stale presentation is a typed failure and cannot fall through to another
+   semantic target. Second, spatial and legacy affordances resolve native entities
+   through the already prepared frame-local handle table. Third, rectangle
+   selection uses only the bounded exception in invariant 8. Completing the
+   first seam does not make a retained display surface authoritative and does
+   not complete RK-4.
 8. Edge/vertex tolerance, rectangle selection, and any operation for which
    RealityKit has no equivalent may use the same prepared geometry and native
    camera projection as a bounded CPU query. This exception preserves CAD

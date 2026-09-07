@@ -41,6 +41,7 @@ enum ViewportMeasurementResolutionFailure: Error, Equatable, Sendable {
     case viewRayParallelToPlane
     case pointBehindPerspectiveCamera
     case nonFiniteEndpoint
+    case presentationUnavailable(String)
     case snapFailed(String)
 
     var message: String {
@@ -55,6 +56,8 @@ enum ViewportMeasurementResolutionFailure: Error, Equatable, Sendable {
             "The selected point is behind the perspective camera."
         case .nonFiniteEndpoint:
             "The selected measurement point is not finite."
+        case .presentationUnavailable(let message):
+            "The displayed surface is unavailable: \(message)"
         case .snapFailed(let message):
             "Snap failed: \(message)"
         }

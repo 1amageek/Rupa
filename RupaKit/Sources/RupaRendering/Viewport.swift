@@ -1782,22 +1782,18 @@ public struct Viewport: View {
         }
     }
 
-    private func presentationOccurrenceID(
-        at point: CGPoint,
-        layout: ViewportLayout
-    ) -> SceneOccurrenceID? {
-        guard let presentationScene else {
-            return nil
+    private func presentationSurfaceHit(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        let identity = try presentationPreparation.get()
+        guard identity.snapshotID == presentationScene?.snapshotID else {
+            throw MeshSourcePresentationRenderError(code: .failed, message: "The surface query belongs to a different presentation snapshot.")
         }
-        guard let plan = currentPresentationPlan(for: presentationScene) else {
-            return nil
-        }
-        return MeshSourcePresentationScreenHitTester().occurrenceID(
+        if let failure = presentationFrameFailure(for: identity) { throw failure }
+        return try presentationPlanCache.surfaceHit(
             at: point,
-            in: plan,
-            layout: layout,
-            sectionGeometryResolver: presentationSectionGeometryResolver(),
-            cullBackFaces: isBackfaceCullingActive
+            for: identity,
+            revision: activeControlSession.revision
         )
     }
 
@@ -1879,6 +1875,17 @@ public struct Viewport: View {
             basis: currentProjectionBasis
         )
         let layout = sceneContext.layout
+        let presentationHit: ViewportMeasurementPresentationHit?
+        do {
+            presentationHit = try presentationSurfaceHit(at: point).map {
+                ViewportMeasurementPresentationHit(point: $0.point, occurrenceID: $0.triangle.occurrenceID)
+            }
+        } catch {
+            return ViewportMeasurementResolution(
+                endpoint: nil,
+                failure: .presentationUnavailable(error.localizedDescription)
+            )
+        }
         let effectivePlane = activeMeasurementPlane
         let snapQueryPoint = measurementSnapQueryPoint(
             at: point,
@@ -1892,23 +1899,6 @@ public struct Viewport: View {
             options: snapResolutionOptions,
             modifierFlags: modifierFlags
         )
-        let presentationHit: ViewportMeasurementPresentationHit?
-        if let presentationScene,
-           let plan = currentPresentationPlan(for: presentationScene),
-           let hit = MeshSourcePresentationScreenHitTester().worldPoint(
-               at: point,
-               in: plan,
-               layout: layout,
-               sectionGeometryResolver: presentationSectionGeometryResolver(),
-               cullBackFaces: isBackfaceCullingActive
-           ) {
-            presentationHit = ViewportMeasurementPresentationHit(
-                point: hit.point,
-                occurrenceID: hit.occurrenceID
-            )
-        } else {
-            presentationHit = nil
-        }
         return ViewportMeasurementResolver().resolve(
             at: point,
             layout: layout,
@@ -13755,11 +13745,20 @@ public struct Viewport: View {
         )
         var presentationOccurrenceID: SceneOccurrenceID?
         if let presentationScene {
+            do {
+                presentationOccurrenceID = try presentationSurfaceHit(at: point)?.triangle.occurrenceID
+            } catch {
+                // An unavailable frame cannot authorize selection or an edit.
+                return
+            }
             guard let plan = currentPresentationPlan(for: presentationScene) else {
                 // A scene that is still preparing, or one whose plan failed,
                 // picks nothing rather than blocking on a synchronous build.
                 return
             }
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Mesh element picking still uses
+            // the CPU domain resolver on this production path until RK-4.2;
+            // native face/edge/vertex parity is required before migration completion.
             if let onMeshElementPick {
                 let hit = MeshSourcePresentationScreenHitTester().meshElement(
                     at: point, domain: meshSelectionDomain, in: plan,
@@ -13770,13 +13769,6 @@ public struct Viewport: View {
                 onMeshElementPick(hit, selectionIntent)
                 if hit != nil { return }
             }
-            presentationOccurrenceID = MeshSourcePresentationScreenHitTester().occurrenceID(
-                at: point,
-                in: plan,
-                layout: sceneContext.layout,
-                sectionGeometryResolver: presentationSectionGeometryResolver(),
-                cullBackFaces: isBackfaceCullingActive
-            )
             if onMeshElementPick != nil,
                let occurrenceID = presentationOccurrenceID,
                let item = presentationScene.items.first(where: { $0.occurrenceID == occurrenceID }),
@@ -15191,10 +15183,13 @@ public struct Viewport: View {
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
         )
-        let presentationOccurrenceID = presentationOccurrenceID(
-            at: point,
-            layout: mapper.layout
-        )
+        let presentationOccurrenceID: SceneOccurrenceID?
+        do {
+            presentationOccurrenceID = try presentationSurfaceHit(at: point)?.triangle.occurrenceID
+        } catch {
+            clearCanvasHover()
+            return
+        }
         let hit = presentationFilteredLegacyHit(
             viewportHit(
                 point: point,
