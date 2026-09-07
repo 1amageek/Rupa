@@ -191,6 +191,11 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
 
     private func operationRows(for operation: FeatureOperation) -> [WorkspaceInspectorTextRow] {
         switch operation {
+        case .importedBRep(let source):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Imported CAD"),
+                WorkspaceInspectorTextRow(title: "Bodies", value: "\(source.model.bodies.count)"),
+            ]
         case .sketch:
             return [WorkspaceInspectorTextRow(title: "Operation", value: "Sketch")]
         case .extrude(let extrude):

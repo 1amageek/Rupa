@@ -1,4 +1,6 @@
 import AppKit
+import CADCore
+import CADIR
 import Foundation
 import RupaAgentProtocol
 import RupaAgentRuntime
@@ -15,6 +17,72 @@ import RupaViewportScene
 import Synchronization
 import Testing
 @testable import Rupa
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationGeometryExchangeUsesTransientFileAccessWithoutReplacingProjectAssociation() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let input = directory.appendingPathComponent("triangle.obj")
+        try Data("# unit millimeter\nv 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\n".utf8).write(to: input)
+        let output = directory.appendingPathComponent("triangle.stl")
+        let projectURL = directory.appendingPathComponent("design.rupa")
+        let opener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            securityScopedAccessOpener: opener,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        await coordinator.save(to: projectURL)
+        #expect(coordinator.failure == nil)
+        let initial = try #require(coordinator.snapshot)
+        await coordinator.importGeometry(from: input, format: .obj, unitForUnmarkedData: nil)
+        #expect(coordinator.failure == nil)
+        #expect(coordinator.snapshot?.document.document.authoredMeshAssets.count == 1)
+        #expect(coordinator.currentFileURL == projectURL)
+        #expect(!opener.activeProjectURLs.contains(input))
+        await coordinator.exportGeometry(to: output, format: .stl, unit: .millimeter)
+        #expect(coordinator.failure == nil)
+        #expect(try Data(contentsOf: output).count > 84)
+        #expect(coordinator.currentFileURL == projectURL)
+        #expect(!opener.activeProjectURLs.contains(output))
+        #expect(opener.openedProjectURLs.contains(input))
+        #expect(opener.openedProjectURLs.contains(output))
+        await coordinator.undo()
+        #expect(coordinator.snapshot?.document.document.authoredMeshAssets == initial.document.document.authoredMeshAssets)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func applicationGeometryExchangeReportsTypedFailuresWithoutMutationOrFileLoss() async throws {
+    try await withApplicationProjectTemporaryDirectory { directory in
+        let input = directory.appendingPathComponent("invalid.obj")
+        try Data("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n".utf8).write(to: input)
+        let opener = ApplicationSecurityScopedAccessOpenerProbe()
+        let coordinator = ApplicationProjectCoordinator(
+            workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
+            securityScopedAccessOpener: opener,
+            launchArguments: []
+        )
+        await coordinator.launch()
+        let initial = try #require(coordinator.snapshot)
+        await coordinator.importGeometry(from: input, format: .obj, unitForUnmarkedData: nil)
+        #expect(coordinator.failure?.kind == .importGeometry)
+        #expect(coordinator.snapshot?.publicationSequence == initial.publicationSequence)
+        #expect(opener.activeProjectURLs.isEmpty)
+        let output = directory.appendingPathComponent("existing.stl")
+        let original = Data("Keep existing output".utf8)
+        try original.write(to: output)
+        await coordinator.exportGeometry(to: output, format: .stl, unit: .meter)
+        #expect(coordinator.failure?.kind == .exportGeometry)
+        #expect(try Data(contentsOf: output) == original)
+        #expect(opener.activeProjectURLs.isEmpty)
+        #expect(coordinator.operation == nil)
+    }
+}
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
@@ -242,19 +310,23 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
 
         let staleGeneration = session.authority.documentGeneration
         let mutationResponse = try await applicationAgentResponse(
-            .execute(
+            .setParameterExpression(
                 sessionID: session.id,
-                command: .renameDocument(name: "Agent API Bicycle"),
+                name: "agentLength",
+                expression: "25 mm",
+                kind: .length,
+                defaults: nil,
                 expectedGeneration: session.authority.documentGeneration
             ),
             using: router
         )
-        guard case .command(let mutation) = mutationResponse else {
-            Issue.record("Expected the semantic request to reach the registered workspace.")
+        guard case .parameterExpression(let mutation) = mutationResponse else {
+            Issue.record("Expected the parameter request to reach the registered workspace.")
             return
         }
         #expect(mutation.didMutate)
-        #expect(workspace.view?.projectName == "Agent API Bicycle")
+        let parameters = try #require(workspace.view).document.document.cadDocument.parameters.parameters
+        #expect(parameters.values.contains { $0.name == "agentLength" })
         #expect(try Data(contentsOf: packageURL) == bytesBeforeMutation)
 
         guard case .failure(let wrongSession) = try await applicationAgentResponse(
@@ -310,7 +382,7 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
 
         let reloadedWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
         let reloaded = try await reloadedWorkspace.load(from: packageURL)
-        #expect(reloaded.projectName == "Agent API Bicycle")
+        #expect(reloaded.document.document.cadDocument.parameters.parameters == parameters)
 
         guard case .failure(let directSaveFailure) = try await applicationAgentResponse(
             .save(

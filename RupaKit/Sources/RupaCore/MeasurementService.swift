@@ -950,6 +950,13 @@ public struct MeasurementService {
                     sourceFeatureID: unjoin.target.featureID,
                     operationName: "Unjoin Body"
                 )
+            case .importedBRep:
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: featureID,
+                    operationName: "Imported CAD"
+                )
             case .primitive:
                 try measureEvaluatedBodyOperationCase(
                     node: node,

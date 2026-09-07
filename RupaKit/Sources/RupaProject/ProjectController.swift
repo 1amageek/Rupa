@@ -2113,7 +2113,7 @@ private struct StagedCommandResults: Sendable {
     var didMutateAuthoredMesh: Bool {
         geometrySourceCommandResults.contains { result in
             switch result {
-            case .authoredMeshEdit, .makeEditable:
+            case .authoredMeshEdit, .importedAuthoredMesh, .makeEditable:
                 return result.didMutate
             case .representationSelection:
                 return false

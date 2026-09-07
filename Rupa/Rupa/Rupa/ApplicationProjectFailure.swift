@@ -13,6 +13,8 @@ struct ApplicationProjectFailure: Error, Equatable, LocalizedError, Sendable {
         case save
         case undo
         case redo
+        case importGeometry
+        case exportGeometry
         case agentRegistration
         case viewRecovery
     }

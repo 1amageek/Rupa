@@ -138,6 +138,15 @@ sequenceDiagram
 
 ## State, Ownership, and Lifecycle
 
+Geometry import/export panels are owned by `ApplicationProjectCommands`.
+The coordinator keeps a separate invocation-local security scope alive until
+the Workspace operation finishes, including cancellation and cleanup; it never
+replaces the current .rupa file association. Import appends through the
+[GeometryExchange use case](../../../RupaKit/Sources/RupaKit/GeometryExchange/DESIGN.md)
+and the same operation sequencer as other UI/API mutations. The panel offers an
+explicit unit for unmarked STL/OBJ data; automatic mode requires file metadata.
+Postcommit projection failure uses the existing recovery/no-retry contract.
+
 `ApplicationRoot` owns process composition. `ApplicationLifecycleDelegate`
 owns launch, pre-launch URL buffering, Agent-host startup, and process
 shutdown ordering. `ApplicationProjectCoordinator` owns current URL and

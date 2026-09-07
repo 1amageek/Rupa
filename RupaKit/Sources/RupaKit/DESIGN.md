@@ -17,7 +17,9 @@ The module depends on `RupaCore`, `RupaCoreTypes`, `RupaGeometry`,
 `RupaProject`, `RupaProjectModel`, `RupaEvaluation`, `RupaAutomation`, and
 existing integration targets as declared by `Package.swift`.
 
-Parent: [RupaKit package design](../../DESIGN.md). Children: none.
+Parent: [RupaKit package design](../../DESIGN.md).
+Child: [GeometryExchange](GeometryExchange/DESIGN.md), which adapts native file
+geometry to the existing project transaction boundary.
 
 ## Responsibilities and Boundaries
 

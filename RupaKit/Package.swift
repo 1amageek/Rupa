@@ -180,7 +180,7 @@ let package = Package(
                 "RupaViewportScene",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md"]
+            exclude: ["DESIGN.md", "GeometryExchange/DESIGN.md"]
         ),
         .target(
             name: "RupaCore",

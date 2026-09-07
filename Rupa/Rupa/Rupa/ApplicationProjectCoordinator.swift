@@ -22,6 +22,8 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         case save
         case undo
         case redo
+        case importGeometry
+        case exportGeometry
     }
 
     private(set) var lifecycle: Lifecycle
@@ -269,6 +271,57 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
     func startUndo() {
         startTask(.undo) {
             await self.undo()
+        }
+    }
+
+    func startImportGeometry(from url: URL, format: ProjectGeometryFileFormat, unitForUnmarkedData: LengthDisplayUnit?) {
+        startTask(.importGeometry) {
+            await self.importGeometry(from: url, format: format, unitForUnmarkedData: unitForUnmarkedData)
+        }
+    }
+
+    func startExportGeometry(to url: URL, format: ProjectGeometryFileFormat, unit: LengthDisplayUnit) {
+        startTask(.exportGeometry) {
+            await self.exportGeometry(to: url, format: format, unit: unit)
+        }
+    }
+
+    func exportGeometry(to url: URL, format: ProjectGeometryFileFormat, unit: LengthDisplayUnit) async {
+        await sequence(.exportGeometry) {
+            guard self.begin(.exportGeometry), let workspace = self.workspace else { return }
+            defer { self.endOperation() }
+            let access = self.securityScopedAccessOpener.open(url)
+            defer { withExtendedLifetime(access) {} }
+            do {
+                try await workspace.exportGeometry(to: url, format: format, unit: unit)
+                self.failure = nil
+            } catch is CancellationError {
+                self.failure = nil
+            } catch {
+                self.report(kind: .exportGeometry, error: error)
+            }
+        }
+    }
+
+    func importGeometry(from url: URL, format: ProjectGeometryFileFormat, unitForUnmarkedData: LengthDisplayUnit?) async {
+        await sequence(.importGeometry) {
+            guard self.begin(.importGeometry), let workspace = self.workspace else { return }
+            defer { self.endOperation() }
+            let access = self.securityScopedAccessOpener.open(url)
+            defer { withExtendedLifetime(access) {} }
+            do {
+                _ = try await workspace.importGeometry(
+                    from: url, format: format, unitForUnmarkedData: unitForUnmarkedData,
+                    operationGuard: Self.cancellationGuard
+                )
+                self.failure = nil
+            } catch let error as ProjectWorkspacePostCommitError {
+                await self.handleCommittedHistoryFailure(error, kind: .importGeometry)
+            } catch is CancellationError {
+                self.failure = nil
+            } catch {
+                self.report(kind: .importGeometry, error: error)
+            }
         }
     }
 
@@ -1092,6 +1145,10 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
             .undo
         case .redo:
             .redo
+        case .importGeometry:
+            .importGeometry
+        case .exportGeometry:
+            .exportGeometry
         }
     }
 

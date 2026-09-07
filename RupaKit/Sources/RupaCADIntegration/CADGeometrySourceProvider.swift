@@ -17,11 +17,6 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         let publication: CADDocumentEvaluationCache.Publication
     }
 
-    private struct MaterializedMeshSource {
-        let source: MeshSource
-        let copyTelemetry: GeometryCopyTelemetry
-    }
-
     public static let identifier = GeometrySourceReference.cadProviderID
     public let providerID = Self.identifier
     private let resolver: any CADGeometrySourceResolving
@@ -241,7 +236,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         meshSourcesByBodyID.reserveCapacity(outputs.count)
         for output in outputs {
             try Task.checkCancellation()
-            guard let bodyID = resolveBodyID(
+            guard let bodyID = CADGeometryExchange.resolvedBodyID(
                 outputID: output.outputID,
                 in: evaluatedDocument
             ) else {
@@ -274,11 +269,28 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 meshSource = cached.source
                 copyTelemetry = GeometryCopyTelemetry()
             } else {
-                let materialized = try makeMeshSource(
-                    sourceID: source.sourceID,
-                    bodyID: bodyID,
-                    mesh: mesh
-                )
+                let materialized: CADMeshSourceMaterialization
+                do {
+                    materialized = try CADMeshSourceConverter.makeMeshSource(
+                        identity: GeometrySourceID(
+                            rawValue: "cad.\(source.sourceID).\(bodyID.description)"
+                        ),
+                        mesh: mesh
+                    )
+                } catch let error as CADMeshSourceConversionError {
+                    switch error {
+                    case .unsupportedMaterial:
+                        throw CADIntegrationError(
+                            code: .unsupportedFidelity,
+                            message: "CAD material identity cannot be represented by the universal geometry contract."
+                        )
+                    case .invalidMesh(let message):
+                        throw CADIntegrationError(
+                            code: .invalidMesh,
+                            message: message
+                        )
+                    }
+                }
                 meshSource = materialized.source
                 copyTelemetry = materialized.copyTelemetry
                 meshSourcesByBodyID[bodyID] = CADDocumentEvaluationCache.CachedMeshSource(
@@ -411,141 +423,4 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         )
     }
 
-    private func resolveBodyID(
-        outputID: String,
-        in evaluatedDocument: EvaluatedDocument
-    ) -> BodyID? {
-        guard let uuid = UUID(uuidString: outputID) else {
-            return nil
-        }
-        let directBodyID = BodyID(uuid)
-        if evaluatedDocument.meshes[directBodyID] != nil {
-            return directBodyID
-        }
-
-        let featureID = FeatureID(uuid)
-        let bodyIDs = evaluatedDocument.subshapes.entries.compactMap {
-            entry -> BodyID? in
-            let (subshapeID, reference) = entry
-            guard subshapeID.featureID == featureID,
-                  case .body(let bodyID) = reference else {
-                return nil
-            }
-            return bodyID
-        }
-        let uniqueBodyIDs = Set(bodyIDs)
-        guard uniqueBodyIDs.count == 1 else {
-            return nil
-        }
-        return uniqueBodyIDs.first
-    }
-
-    private func makeMeshSource(
-        sourceID: String,
-        bodyID: BodyID,
-        mesh: Mesh
-    ) throws -> MaterializedMeshSource {
-        try Task.checkCancellation()
-        do {
-            // Universal editable topology owns stable element IDs, so this adapter
-            // materializes Swift-CAD arrays once. The cache reuses the result while
-            // the immutable evaluated mesh remains identical.
-            var builder = MeshSourceBuilder(
-                identity: GeometrySourceID(
-                    rawValue: "cad.\(sourceID).\(bodyID.description)"
-                )
-            )
-            try builder.reserveCapacity(
-                vertexCount: mesh.positions.count,
-                faceCount: mesh.indices.count / 3,
-                cornerCount: mesh.indices.count
-            )
-            var vertices: [MeshVertexID] = []
-            vertices.reserveCapacity(mesh.positions.count)
-            for (index, position) in mesh.positions.enumerated() {
-                if index.isMultiple(of: 1_024) {
-                    try Task.checkCancellation()
-                }
-                vertices.append(
-                    try builder.addVertex(
-                        GeometryPoint3D(x: position.x, y: position.y, z: position.z)
-                    )
-                )
-            }
-            for triangleStart in stride(from: 0, to: mesh.indices.count, by: 3) {
-                if triangleStart.isMultiple(of: 3 * 1_024) {
-                    try Task.checkCancellation()
-                }
-                _ = try builder.addTriangle(
-                    vertices[Int(mesh.indices[triangleStart])],
-                    vertices[Int(mesh.indices[triangleStart + 1])],
-                    vertices[Int(mesh.indices[triangleStart + 2])]
-                )
-            }
-            if !mesh.normals.isEmpty {
-                try builder.setAttribute(
-                    GeometryAttributeLayer(
-                        descriptor: GeometryAttributeDescriptor(
-                            id: "cad.normal",
-                            name: "CAD Normal",
-                            domain: .vertex,
-                            valueType: .vector3,
-                            interpolation: .linear
-                        ),
-                        values: .vector3(GeometryBuffer(try mesh.normals.map {
-                            try Task.checkCancellation()
-                            return GeometryPoint3D(x: $0.x, y: $0.y, z: $0.z)
-                        }))
-                    )
-                )
-            }
-            if !mesh.textureCoordinates.isEmpty {
-                try builder.setAttribute(
-                    GeometryAttributeLayer(
-                        descriptor: GeometryAttributeDescriptor(
-                            id: "cad.uv",
-                            name: "CAD UV",
-                            domain: .vertex,
-                            valueType: .vector2,
-                            interpolation: .linear
-                        ),
-                        values: .vector2(GeometryBuffer(try mesh.textureCoordinates.map {
-                            try Task.checkCancellation()
-                            return GeometryVector2D(x: $0.x, y: $0.y)
-                        }))
-                    )
-                )
-            }
-            if !mesh.vertexColors.isEmpty {
-                try builder.setAttribute(
-                    GeometryAttributeLayer(
-                        descriptor: GeometryAttributeDescriptor(
-                            id: "cad.color",
-                            name: "CAD Vertex Color",
-                            domain: .vertex,
-                            valueType: .vector4,
-                            interpolation: .linear
-                        ),
-                        values: .vector4(GeometryBuffer(try mesh.vertexColors.map {
-                            try Task.checkCancellation()
-                            return GeometryVector4D(x: $0.r, y: $0.g, z: $0.b, w: $0.a)
-                        }))
-                    )
-                )
-            }
-            var copyTelemetry = GeometryCopyTelemetry()
-            let source = try builder.build(telemetry: &copyTelemetry)
-            return MaterializedMeshSource(
-                source: source,
-                copyTelemetry: copyTelemetry
-            )
-        } catch let error as CancellationError {
-            throw error
-        } catch {
-            throw CADIntegrationError(
-                code: .invalidMesh,
-                message: "CAD body mesh could not be converted without loss: \(error)"
-            )
-        }
-    }
 }

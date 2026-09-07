@@ -65,7 +65,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return try remappedCurveOffsetOperation(operation)
         case .curveTrim:
             return try remappedCurveTrimOperation(operation)
-        case .primitive, .patchSurface, .bridgeSurface:
+        case .importedBRep, .primitive, .patchSurface, .bridgeSurface:
             return operation
         case .faceOffset:
             return try remappedFaceOffsetOperation(operation)

@@ -28,6 +28,12 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                 to: document,
                 objectRegistry: objectRegistry
             )
+        case .importAuthoredMesh(let imported):
+            return try apply(
+                imported,
+                to: document,
+                objectRegistry: objectRegistry
+            )
         case .makeCADRepresentationEditable(let makeEditable):
             return try apply(
                 makeEditable,
@@ -41,6 +47,108 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
                 objectRegistry: objectRegistry
             )
         }
+    }
+
+    private func apply(
+        _ command: ImportAuthoredMeshCommand,
+        to document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> GeometrySourceCommandApplication {
+        try command.validate()
+        guard let rootSceneNodeID = document.productMetadata.rootSceneNodeIDs.first,
+              var rootSceneNode = document.productMetadata.sceneNodes[rootSceneNodeID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Imported Authored Mesh requires an existing Product scene root."
+            )
+        }
+
+        let sourceID = Self.unusedSourceID(in: document)
+        let representationID = Self.unusedRepresentationID(in: document)
+        let sceneNodeID = Self.unusedSceneNodeID(in: document)
+        let authoredSource = try command.source.reidentified(as: sourceID)
+        let asset = try AuthoredMeshAsset(
+            source: authoredSource,
+            provenance: command.provenance
+        )
+        let representation = GeometryRepresentation(
+            id: representationID,
+            source: .authoredMesh(sourceID)
+        )
+        let object = ObjectDescriptor(
+            category: .body,
+            geometryRole: .mesh,
+            geometryRepresentations: GeometryRepresentationSet(
+                representations: [representationID: representation],
+                selection: GeometryRepresentationSelection(
+                    modeling: representationID,
+                    presentation: representationID
+                )
+            )
+        )
+        let sceneNode = SceneNode(
+            id: sceneNodeID,
+            name: command.name,
+            reference: .authoredMesh(sourceID),
+            object: object
+        )
+
+        rootSceneNode.childIDs.append(sceneNodeID)
+        var staged = document
+        staged.authoredMeshAssets[sourceID] = asset
+        staged.productMetadata.sceneNodes[sceneNodeID] = sceneNode
+        staged.productMetadata.sceneNodes[rootSceneNodeID] = rootSceneNode
+        _ = try staged.validate(objectRegistry: objectRegistry)
+
+        guard case let .imported(importIdentity) = command.provenance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Imported Authored Mesh provenance changed during staging."
+            )
+        }
+        return GeometrySourceCommandApplication(
+            document: staged,
+            result: .importedAuthoredMesh(
+                GeometrySourceCommandResult.ImportedAuthoredMesh(
+                    sourceID: sourceID,
+                    sceneNodeID: sceneNodeID,
+                    representationID: representationID,
+                    sourceContentIdentity: asset.contentIdentity,
+                    importContentIdentity: importIdentity,
+                    name: command.name
+                )
+            )
+        )
+    }
+
+    private static func unusedSourceID(in document: DesignDocument) -> GeometrySourceID {
+        var candidate = GeometrySourceID()
+        while document.authoredMeshAssets[candidate] != nil {
+            candidate = GeometrySourceID()
+        }
+        return candidate
+    }
+
+    private static func unusedSceneNodeID(in document: DesignDocument) -> SceneNodeID {
+        var candidate = SceneNodeID()
+        while document.productMetadata.sceneNodes[candidate] != nil {
+            candidate = SceneNodeID()
+        }
+        return candidate
+    }
+
+    private static func unusedRepresentationID(in document: DesignDocument) -> GeometryRepresentationID {
+        var existing = Set<GeometryRepresentationID>()
+        for node in document.productMetadata.sceneNodes.values {
+            if let object = node.object {
+                existing.formUnion(object.geometryRepresentations.representations.keys)
+            }
+        }
+        var candidate = GeometryRepresentationID()
+        while existing.contains(candidate) {
+            candidate = GeometryRepresentationID()
+        }
+        return candidate
     }
 
     private func apply(

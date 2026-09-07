@@ -2,6 +2,7 @@ import RupaCoreTypes
 
 public enum GeometrySourceCommand: Codable, Equatable, Sendable {
     case editAuthoredMesh(AuthoredMeshEditCommand)
+    case importAuthoredMesh(ImportAuthoredMeshCommand)
     case makeCADRepresentationEditable(MakeCADRepresentationEditableCommand)
     case selectRepresentation(GeometryRepresentationSelectionCommand)
 
@@ -9,6 +10,8 @@ public enum GeometrySourceCommand: Codable, Equatable, Sendable {
         switch self {
         case .editAuthoredMesh:
             "editAuthoredMesh"
+        case .importAuthoredMesh:
+            "importAuthoredMesh"
         case .makeCADRepresentationEditable:
             "makeCADRepresentationEditable"
         case .selectRepresentation:
@@ -20,7 +23,7 @@ public enum GeometrySourceCommand: Codable, Equatable, Sendable {
         switch self {
         case .makeCADRepresentationEditable(let command):
             command.evaluationSnapshotID.sourceRevision
-        case .editAuthoredMesh, .selectRepresentation:
+        case .editAuthoredMesh, .importAuthoredMesh, .selectRepresentation:
             nil
         }
     }

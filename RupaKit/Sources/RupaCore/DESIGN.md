@@ -41,6 +41,11 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
   without evaluating or copying CAD/Mesh geometry.
 - effective scene-node visibility resolved from the Product root hierarchy;
   a hidden ancestor suppresses every descendant without deleting its source.
+- atomic publication of an imported Authored Mesh through a geometry-source
+  command. The command receives an already validated `MeshSource` and its
+  sanitized content provenance; Core allocates the Product source,
+  representation, and Scene identities and validates the complete staged
+  document. Core does not read files or parse exchange formats.
 
 It does not own semantic CAD operation descriptors, Agent schemas, Mesh
 algorithms, plan execution internals, project package I/O, project revision
@@ -107,6 +112,14 @@ flowchart TD
     Execution --> Asset["Asset replacement preserving provenance"]
     Asset --> Validate["Full DesignDocument validation"]
     Validate --> Application["Staged Core application"]
+```
+
+```mermaid
+flowchart LR
+    Exchange["Format adapter\nvalidated MeshSource + fingerprint"] --> Import["ImportAuthoredMeshCommand"]
+    Import --> Core["Core identity allocation + document validation"]
+    Core --> Project["ProjectSourceTransaction"]
+    Project --> Publication["Project-owned atomic publication"]
 ```
 
 An Authored Mesh asset may be referenced by multiple Product Objects or
@@ -243,6 +256,24 @@ single history entry remain owned by `withSourceCommandGroup`.
     node's `isVisible` value. Hidden nodes and descendants remain retained source
     and navigation identities; presentation consumers omit them without deleting
     CAD features, representations, or Authored Mesh assets.
+
+### Imported Authored Mesh contract
+
+1. File access and format parsing remain outside Core. The import adapter must
+   provide a validated `MeshSource`, an `AuthoredMeshProvenance.imported`
+   identity, and a display name; the identity contains only a qualified format
+   domain and content fingerprint, never an absolute path.
+2. `ImportAuthoredMeshCommand` allocates one source ID, representation ID, and
+   scene-node ID inside the staged Core document. It creates one body/mesh
+   Product object whose modeling and presentation selections point at the same
+   retained Authored Mesh representation.
+3. The command rejects duplicate identities, missing root hierarchy, invalid
+   imported provenance, or a document that fails complete validation. It never
+   mutates the caller's document on failure and never publishes directly.
+4. `ProjectSourceTransaction` runs the command through the existing geometry
+   command applier. Project remains the owner of revision checks, evaluation,
+   undo/redo, package encoding, and publication; a failed or cancelled import
+   therefore produces no partial source or Product state.
 
 ### Feature history command contract
 

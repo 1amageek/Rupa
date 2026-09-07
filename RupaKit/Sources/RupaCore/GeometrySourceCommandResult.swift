@@ -84,7 +84,33 @@ public enum GeometrySourceCommandResult: Equatable, Sendable {
         }
     }
 
+    public struct ImportedAuthoredMesh: Equatable, Sendable {
+        public let sourceID: GeometrySourceID
+        public let sceneNodeID: SceneNodeID
+        public let representationID: GeometryRepresentationID
+        public let sourceContentIdentity: ContentIdentity
+        public let importContentIdentity: ContentIdentity
+        public let name: String
+
+        public init(
+            sourceID: GeometrySourceID,
+            sceneNodeID: SceneNodeID,
+            representationID: GeometryRepresentationID,
+            sourceContentIdentity: ContentIdentity,
+            importContentIdentity: ContentIdentity,
+            name: String
+        ) {
+            self.sourceID = sourceID
+            self.sceneNodeID = sceneNodeID
+            self.representationID = representationID
+            self.sourceContentIdentity = sourceContentIdentity
+            self.importContentIdentity = importContentIdentity
+            self.name = name
+        }
+    }
+
     case authoredMeshEdit(AuthoredMeshEdit)
+    case importedAuthoredMesh(ImportedAuthoredMesh)
     case makeEditable(MakeEditable)
     case representationSelection(RepresentationSelection)
 
@@ -92,6 +118,8 @@ public enum GeometrySourceCommandResult: Equatable, Sendable {
         switch self {
         case .authoredMeshEdit(let result):
             result.didMutate
+        case .importedAuthoredMesh:
+            true
         case .makeEditable:
             true
         case .representationSelection(let result):
@@ -103,6 +131,8 @@ public enum GeometrySourceCommandResult: Equatable, Sendable {
         switch self {
         case .authoredMeshEdit(let result):
             result.copyTelemetry
+        case .importedAuthoredMesh:
+            GeometryCopyTelemetry()
         case .makeEditable(let result):
             result.copyTelemetry
         case .representationSelection:

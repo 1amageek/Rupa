@@ -322,7 +322,7 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
-            case .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
+            case .importedBRep, .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
                  .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
                  .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
                  .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch,
