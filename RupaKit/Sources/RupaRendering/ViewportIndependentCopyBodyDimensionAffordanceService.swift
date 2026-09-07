@@ -225,7 +225,7 @@ struct ViewportIndependentCopyBodyDimensionHandleTarget: Equatable {
     }
 }
 
-struct ViewportIndependentCopyBodyDimensionHandleIdentity: Equatable {
+struct ViewportIndependentCopyBodyDimensionHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
     var outputIndex: Int
     var featureID: FeatureID

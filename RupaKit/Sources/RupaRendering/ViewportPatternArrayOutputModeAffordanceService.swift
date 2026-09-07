@@ -115,6 +115,6 @@ struct ViewportPatternArrayOutputModeHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayOutputModeHandleIdentity: Equatable {
+struct ViewportPatternArrayOutputModeHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
 }

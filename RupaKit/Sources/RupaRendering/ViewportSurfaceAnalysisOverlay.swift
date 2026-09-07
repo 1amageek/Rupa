@@ -111,6 +111,18 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         document: DesignDocument,
         options: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions()
     ) -> ViewportSurfaceAnalysisOverlay {
+        build(result: result, selection: selection, document: document, options: options,
+              checkpoint: { _, _, _ in })
+    }
+
+    static func build(
+        result: SurfaceAnalysisResult?,
+        selection: SelectionModel,
+        document: DesignDocument,
+        options: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> ViewportSurfaceAnalysisOverlay {
+        try checkpoint(0, 0, 0)
         guard options.showsAnyOverlay else {
             return ViewportSurfaceAnalysisOverlay()
         }
@@ -118,8 +130,8 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
             return ViewportSurfaceAnalysisOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologySubshapeIDStrings(in: selection.selectedTargets)
-        let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
+        let selectedGeneratedNames = try generatedTopologySubshapeIDStrings(in: selection.selectedTargets, checkpoint: checkpoint)
+        let selectedFeatureIDs = try selectedBodyFeatureIDs(in: selection.selectedTargets, document: document, checkpoint: checkpoint)
         guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceAnalysisOverlay()
         }
@@ -127,19 +139,18 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         var items: [Item] = []
         var principalItems: [PrincipalDirectionItem] = []
         var boundaryOverlayItems: [BoundaryItem] = []
-        for face in result.faces where shouldShow(
-            face,
-            selectedGeneratedNames: selectedGeneratedNames,
-            selectedFeatureIDs: selectedFeatureIDs
-        ) {
+        for face in result.faces {
+            try checkpoint(0, 0, 1)
+            guard try shouldShow(face, selectedGeneratedNames: selectedGeneratedNames,
+                                 selectedFeatureIDs: selectedFeatureIDs, checkpoint: checkpoint) else { continue }
             if options.showsTrimBoundaries {
-                boundaryOverlayItems.append(contentsOf: boundaryItems(for: face))
+                boundaryOverlayItems.append(contentsOf: try boundaryItems(for: face, checkpoint: checkpoint))
             }
             if options.showsCurvatureCombs {
-                items.append(contentsOf: overlayItems(for: face))
+                items.append(contentsOf: try overlayItems(for: face, checkpoint: checkpoint))
             }
             if options.showsPrincipalDirections {
-                principalItems.append(contentsOf: principalDirectionItems(for: face))
+                principalItems.append(contentsOf: try principalDirectionItems(for: face, checkpoint: checkpoint))
             }
         }
         return ViewportSurfaceAnalysisOverlay(
@@ -151,9 +162,12 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
 
     private static func selectedBodyFeatureIDs(
         in targets: [SelectionTarget],
-        document: DesignDocument
-    ) -> Set<String> {
-        Set(targets.compactMap { target in
+        document: DesignDocument,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Set<String> {
+        try checkpoint(0, 0, targets.count)
+        return Set(try targets.compactMap { target in
+            try checkpoint(0, 0, 0)
             guard target.component == .object,
                   let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
                   reference.kind == .body else {
@@ -164,10 +178,12 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     }
 
     private static func generatedTopologySubshapeIDStrings(
-        in targets: [SelectionTarget]
-    ) -> Set<String> {
+        in targets: [SelectionTarget],
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Set<String> {
         var names = Set<String>()
         for target in targets {
+            try checkpoint(0, 0, 1)
             switch target.component {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
@@ -184,8 +200,9 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     private static func shouldShow(
         _ face: SurfaceAnalysisResult.FaceAnalysis,
         selectedGeneratedNames: Set<String>,
-        selectedFeatureIDs: Set<String>
-    ) -> Bool {
+        selectedFeatureIDs: Set<String>,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Bool {
         if let sourceFeatureID = face.sourceFeatureID,
            selectedFeatureIDs.contains(sourceFeatureID) {
             return true
@@ -193,17 +210,26 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
         guard selectedGeneratedNames.isEmpty == false else {
             return false
         }
-        if face.faceSubshapeIDs.contains(where: { selectedGeneratedNames.contains($0) }) {
+        if try face.faceSubshapeIDs.contains(where: {
+            try checkpoint(0, 0, 1)
+            return selectedGeneratedNames.contains($0)
+        }) {
             return true
         }
-        return face.edgePersistentNames.contains { selectedGeneratedNames.contains($0) }
+        return try face.edgePersistentNames.contains {
+            try checkpoint(0, 0, 1)
+            return selectedGeneratedNames.contains($0)
+        }
     }
 
     private static func overlayItems(
-        for face: SurfaceAnalysisResult.FaceAnalysis
-    ) -> [Item] {
-        face.curvatureCombs.enumerated().map { index, comb in
-            Item(
+        for face: SurfaceAnalysisResult.FaceAnalysis,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [Item] {
+        try checkpoint(face.curvatureCombs.count, 0, 0)
+        return try face.curvatureCombs.enumerated().map { index, comb in
+            try checkpoint(0, 2, 1)
+            return Item(
                 id: "\(face.faceID):\(comb.direction.rawValue):\(index)",
                 faceID: face.faceID,
                 faceSubshapeID: face.faceSubshapeIDs.first,
@@ -225,10 +251,13 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     }
 
     private static func principalDirectionItems(
-        for face: SurfaceAnalysisResult.FaceAnalysis
-    ) -> [PrincipalDirectionItem] {
-        face.samples.enumerated().map { index, sample in
-            PrincipalDirectionItem(
+        for face: SurfaceAnalysisResult.FaceAnalysis,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [PrincipalDirectionItem] {
+        try checkpoint(face.samples.count, 0, 0)
+        return try face.samples.enumerated().map { index, sample in
+            try checkpoint(1, 4, 1)
+            return PrincipalDirectionItem(
                 id: "\(face.faceID):principal:\(index)",
                 faceID: face.faceID,
                 faceSubshapeID: face.faceSubshapeIDs.first,
@@ -254,17 +283,22 @@ public struct ViewportSurfaceAnalysisOverlay: Equatable {
     }
 
     private static func boundaryItems(
-        for face: SurfaceAnalysisResult.FaceAnalysis
-    ) -> [BoundaryItem] {
-        face.trimBoundaries.map { boundary in
-            BoundaryItem(
+        for face: SurfaceAnalysisResult.FaceAnalysis,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [BoundaryItem] {
+        try checkpoint(face.trimBoundaries.count, 0, 0)
+        return try face.trimBoundaries.map { boundary in
+            try checkpoint(0, boundary.points.count, 1)
+            if boundary.isClosed { try checkpoint(0, 1, 0) }
+            return BoundaryItem(
                 id: "\(face.faceID):trim:\(boundary.loopID)",
                 faceID: face.faceID,
                 faceSubshapeID: face.faceSubshapeIDs.first,
                 loopID: boundary.loopID,
                 role: boundary.role,
-                points: boundary.points.map { point in
-                    Point3D(x: point.x, y: point.y, z: point.z)
+                points: try boundary.points.map { point in
+                    try checkpoint(0, 0, 1)
+                    return Point3D(x: point.x, y: point.y, z: point.z)
                 },
                 isClosed: boundary.isClosed
             )

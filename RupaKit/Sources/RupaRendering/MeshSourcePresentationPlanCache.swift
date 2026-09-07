@@ -2,9 +2,9 @@ import Foundation
 import Observation
 import RupaCoreTypes
 import RupaViewportScene
+import SwiftCAD
 
-/// Prepares one presentation render plan per scene identity off `MainActor`
-/// and publishes the outcome back on `MainActor` as an observable state.
+/// Prepares one complete native frame off-scene and publishes only matching output.
 ///
 /// The cache owns exactly one build at a time. Preparing a different scene
 /// cancels the actual worker and retains only the newest pending request until
@@ -23,7 +23,8 @@ final class MeshSourcePresentationPlanCache {
     @ObservationIgnored private let builder: Builder
     @ObservationIgnored private var buildTask: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
-    @ObservationIgnored private var pendingRequest: (scene: UniversalViewportScene, id: UUID)?
+    @ObservationIgnored private var pendingRequest: (request: RealityViewportPreparationRequest, id: UUID)?
+    @ObservationIgnored private var current: Prepared?
 
     init(
         builder: @escaping Builder = { scene in
@@ -38,70 +39,151 @@ final class MeshSourcePresentationPlanCache {
     /// The plan for `scene`, or `nil` while the cache is idle, preparing, or
     /// holding a result that belongs to a different scene identity.
     func plan(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderPlan? {
-        guard case let .ready(snapshotID, plan, _) = state,
-              snapshotID == scene.snapshotID else {
+        guard case let .ready(identity, plan, _) = state,
+              identity.snapshotID == scene.snapshotID else {
             return nil
         }
         return plan
     }
 
-    func surface(for scene: UniversalViewportScene) -> RealityViewport? {
-        guard case let .ready(snapshotID, _, surface) = state,
-              snapshotID == scene.snapshotID else { return nil }
+    func surface(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
+        guard case let .ready(current, _, surface) = state,
+              current == identity else { return nil }
         return surface
     }
 
-    /// The failure recorded for `scene`, or `nil` when the current state is not
+    /// Retains a complete display during an overlay-only replacement. This is
+    /// not a query authority: handles and CAD queries still require exact readiness.
+    func displaySurface(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
+        guard let current, current.identity.scene == identity.scene,
+              current.identity.snapshotID == identity.snapshotID else { return nil }
+        return current.surface
+    }
+
+    func handleIdentity(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialHandleIdentity? {
+        guard case let .ready(readyIdentity, _, surface) = state, readyIdentity == identity,
+              let current, current.surface === surface,
+              Int(index) < current.handleIdentities.count else { return nil }
+        return current.handleIdentities[Int(index)]
+    }
+
+    /// The failure recorded for this identity, or `nil` when the current state is not
     /// a failure that belongs to this scene identity.
-    func failure(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderError? {
-        guard case let .failed(snapshotID, error) = state,
-              snapshotID == scene.snapshotID else {
+    func failure(for identity: RealityViewportPreparationRequest.Identity) -> MeshSourcePresentationRenderError? {
+        guard case let .failed(current, error) = state,
+              current == identity else {
             return nil
         }
         return error
     }
 
     /// Whether a build for this scene identity is still in flight.
-    func isPreparing(_ scene: UniversalViewportScene) -> Bool {
-        guard case let .preparing(snapshotID) = state else {
+    func isPreparing(_ identity: RealityViewportPreparationRequest.Identity) -> Bool {
+        guard case let .preparing(current) = state else {
             return false
         }
-        return snapshotID == scene.snapshotID
+        return current == identity
     }
 
-    /// Starts a build for `scene` unless the cache already describes that scene
+    /// Starts a build unless the cache already describes that complete frame
     /// identity. Must not be called from a SwiftUI `body`: it publishes
     /// `preparing` synchronously and mutating observable state during a view
     /// update is undefined behavior.
-    func prepare(for scene: UniversalViewportScene) {
-        let snapshotID = scene.snapshotID
-        guard state.snapshotID != snapshotID else {
+    func prepare(_ request: RealityViewportPreparationRequest) {
+        guard state.identity != request.identity else {
             return
         }
         buildTask?.cancel()
         let requestID = UUID()
         self.requestID = requestID
-        state = .preparing(snapshotID: snapshotID)
+        if displaySurface(for: request.identity) == nil {
+            current?.surface.invalidateCamera()
+            current = nil
+        }
+        state = .preparing(identity: request.identity)
         if buildTask != nil {
-            pendingRequest = (scene, requestID)
+            pendingRequest = (request, requestID)
         } else {
-            start(scene, requestID: requestID)
+            start(request, requestID: requestID)
         }
     }
 
-    private func start(_ scene: UniversalViewportScene, requestID: UUID) {
-        let snapshotID = scene.snapshotID
+    /// Captures the source-owned overlay builder synchronously on the caller's
+    /// actor, then submits the complete request only while that task remains
+    /// live.  A cancelled view task cannot prepare or reject a newer identity.
+    func prepare(
+        identity: RealityViewportPreparationRequest.Identity,
+        scene: UniversalViewportScene?,
+        fallbackOrigin: Point3D,
+        capture: () throws -> (@Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output)
+    ) {
+        guard !Task.isCancelled else { return }
+        do {
+            let spatialOverlay = try capture()
+            try Task.checkCancellation()
+            let request = RealityViewportPreparationRequest(
+                identity: identity,
+                scene: scene,
+                fallbackOrigin: fallbackOrigin,
+                spatialOverlay: spatialOverlay
+            )
+            guard !Task.isCancelled else { return }
+            prepare(request)
+        } catch is CancellationError {
+            // Cancellation is a lifecycle signal, not a render failure.
+        } catch let error as MeshSourcePresentationRenderError {
+            guard !Task.isCancelled else { return }
+            reject(identity, error: error)
+        } catch {
+            guard !Task.isCancelled else { return }
+            reject(
+                identity,
+                error: MeshSourcePresentationRenderError(
+                    code: .failed,
+                    message: error.localizedDescription
+                )
+            )
+        }
+    }
+
+    private func start(_ request: RealityViewportPreparationRequest, requestID: UUID) {
         let builder = self.builder
+        let reusable = current
         // The construction runs inside this detached task, so cancelling the
         // stored handle is what the plan's own cancellation checks observe.
         buildTask = Task.detached(priority: .userInitiated) { [weak self] in
             let result: Result<Prepared, MeshSourcePresentationRenderError>?
             do {
-                let plan = try await builder(scene)
+                guard request.identity.snapshotID == request.scene?.snapshotID, request.fallbackOrigin.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid("Native preparation identity or fallback origin does not match its inputs.")
+                }
+                let plan: MeshSourcePresentationRenderPlan?
+                if let scene = request.scene {
+                    if let retained = reusable?.plan, retained.snapshotID == scene.snapshotID {
+                        plan = retained
+                    } else {
+                        plan = try await builder(scene)
+                    }
+                } else { plan = nil }
                 try Task.checkCancellation()
-                let surface = try await RealityViewport.prepare(plan: plan)
+                guard plan?.snapshotID == request.identity.snapshotID else {
+                    throw RealityViewportSpatialBatch.invalid("Prepared surface plan belongs to a different snapshot.")
+                }
+                let first = plan?.occurrences.first?.positions.first
+                let origin = first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? request.fallbackOrigin
+                let overlay = try request.spatialOverlay(origin, plan?.retainedByteCount ?? 0)
+                let spatial = overlay.spatialBatch
+                guard spatial.handleCount == overlay.handleIdentities.count,
+                      spatial.retainedSemanticByteCount == (try ViewportSpatialHandleIdentity.retainedByteCount(for: overlay.handleIdentities, limits: spatial.limits)) else {
+                    throw RealityViewportSpatialBatch.invalid("Native handles and semantic identity table do not match.")
+                }
+                guard spatial.renderOrigin == origin else {
+                    throw RealityViewportSpatialBatch.invalid("Spatial geometry does not use the selected native render origin.")
+                }
                 try Task.checkCancellation()
-                result = .success(Prepared(plan: plan, surface: surface))
+                let surface = try await RealityViewport.prepare(plan: plan, spatialBatch: spatial, reusing: reusable?.surface)
+                try Task.checkCancellation()
+                result = .success(Prepared(identity: request.identity, plan: plan, surface: surface, handleIdentities: overlay.handleIdentities))
             } catch is CancellationError {
                 // A cancelled build publishes nothing at all. Identity would
                 // discard it anyway, but a cancellation is not a failure and is
@@ -117,7 +199,7 @@ final class MeshSourcePresentationPlanCache {
                     )
                 )
             }
-            await self?.finish(result: result, snapshotID: snapshotID, requestID: requestID)
+            await self?.finish(result: result, identity: request.identity, requestID: requestID)
         }
     }
 
@@ -127,37 +209,55 @@ final class MeshSourcePresentationPlanCache {
         buildTask?.cancel()
         pendingRequest = nil
         requestID = nil
+        current?.surface.invalidateCamera()
+        current = nil
         state = .idle
     }
 
+    /// Rejects a failed main-actor capture through the same publication owner.
+    /// An in-flight worker cannot subsequently publish over this failure.
+    func reject(_ identity: RealityViewportPreparationRequest.Identity, error: MeshSourcePresentationRenderError) {
+        buildTask?.cancel()
+        pendingRequest = nil
+        requestID = nil
+        if displaySurface(for: identity) == nil {
+            current?.surface.invalidateCamera()
+            current = nil
+        }
+        state = .failed(identity: identity, error: error)
+    }
+
     private struct Prepared: Sendable {
-        let plan: MeshSourcePresentationRenderPlan
+        let identity: RealityViewportPreparationRequest.Identity
+        let plan: MeshSourcePresentationRenderPlan?
         let surface: RealityViewport
+        let handleIdentities: [ViewportSpatialHandleIdentity]
     }
 
     private func finish(
         result: Result<Prepared, MeshSourcePresentationRenderError>?,
-        snapshotID: EvaluationSnapshotID,
+        identity: RealityViewportPreparationRequest.Identity,
         requestID: UUID
     ) {
         buildTask = nil
         defer {
             if let next = pendingRequest {
                 pendingRequest = nil
-                start(next.scene, requestID: next.id)
+                start(next.request, requestID: next.id)
             }
         }
         guard let result, case let .preparing(current) = state,
-              current == snapshotID, self.requestID == requestID else { return }
+              current == identity, self.requestID == requestID else { return }
         // CPU plan preparation ran off MainActor; native resources were awaited
         // under RealityKit's isolation contract. Publication only installs the
         // completed owner after both snapshot and request identity checks.
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
             case let .success(prepared):
-                state = .ready(snapshotID: snapshotID, plan: prepared.plan, surface: prepared.surface)
+                self.current = prepared
+                state = .ready(identity: identity, plan: prepared.plan, surface: prepared.surface)
             case let .failure(error):
-                state = .failed(snapshotID: snapshotID, error: error)
+                state = .failed(identity: identity, error: error)
             }
         }
     }

@@ -17,7 +17,6 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
             content()
                 .zIndex(0)
         }
-        .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
         .overlay(alignment: .topTrailing) {
             topBar()
                 .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
@@ -48,6 +47,10 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("WorkspaceCanvasArea")
+        .accessibilityLabel("Workspace canvas area")
+        .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
         .onPreferenceChange(ViewportContextPanelHeightPreferenceKey.self) { height in
             onContextPanelHeightChange(WorkspaceCanvasOverlayGeometry.normalizedHeight(height))
         }

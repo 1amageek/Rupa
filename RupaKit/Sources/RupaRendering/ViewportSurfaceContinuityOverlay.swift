@@ -50,25 +50,40 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
         selection: SelectionModel,
         document: DesignDocument
     ) -> ViewportSurfaceContinuityOverlay {
+        build(result: result, scene: scene, selection: selection, document: document,
+              checkpoint: { _, _, _ in })
+    }
+
+    static func build(
+        result: RupaCore.SurfaceContinuityResult?,
+        scene: ViewportScene,
+        selection: SelectionModel,
+        document: DesignDocument,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> ViewportSurfaceContinuityOverlay {
+        try checkpoint(0, 0, 0)
         guard let result, result.adjacencies.isEmpty == false else {
             return ViewportSurfaceContinuityOverlay()
         }
 
-        let selectedGeneratedNames = generatedTopologySubshapeIDStrings(in: selection.selectedTargets)
-        let selectedFeatureIDs = selectedBodyFeatureIDs(in: selection.selectedTargets, document: document)
+        let selectedGeneratedNames = try generatedTopologySubshapeIDStrings(in: selection.selectedTargets, checkpoint: checkpoint)
+        let selectedFeatureIDs = try selectedBodyFeatureIDs(in: selection.selectedTargets, document: document, checkpoint: checkpoint)
         guard selectedGeneratedNames.isEmpty == false || selectedFeatureIDs.isEmpty == false else {
             return ViewportSurfaceContinuityOverlay()
         }
 
-        let edgeLookup = edgeLookup(in: scene, selectedFeatureIDs: selectedFeatureIDs)
-        let items = result.adjacencies.compactMap { adjacency -> Item? in
-            guard shouldShow(adjacency, selectedGeneratedNames: selectedGeneratedNames) else {
-                return nil
+        let edgeLookup = try edgeLookup(in: scene, selectedFeatureIDs: selectedFeatureIDs, checkpoint: checkpoint)
+        var items: [Item] = []
+        for adjacency in result.adjacencies {
+            try checkpoint(0, 0, 1)
+            guard try shouldShow(adjacency, selectedGeneratedNames: selectedGeneratedNames, checkpoint: checkpoint) else {
+                continue
             }
-            guard let edge = resolvedEdge(for: adjacency, edgeLookup: edgeLookup) else {
-                return nil
+            guard let edge = try resolvedEdge(for: adjacency, edgeLookup: edgeLookup, checkpoint: checkpoint) else {
+                continue
             }
-            return Item(
+            try checkpoint(2, 3, 0)
+            items.append(Item(
                 id: "\(adjacency.edgeID):\(edge.persistentName)",
                 start: edge.start,
                 end: edge.end,
@@ -76,16 +91,19 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
                 continuity: adjacency.continuity,
                 requiresCurvatureContinuitySolve: adjacency.requiresCurvatureContinuitySolve,
                 normalAngle: adjacency.normalAngle
-            )
+            ))
         }
         return ViewportSurfaceContinuityOverlay(items: items)
     }
 
     private static func selectedBodyFeatureIDs(
         in targets: [SelectionTarget],
-        document: DesignDocument
-    ) -> Set<FeatureID> {
-        Set(targets.compactMap { target in
+        document: DesignDocument,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Set<FeatureID> {
+        try checkpoint(0, 0, targets.count)
+        return Set(try targets.compactMap { target in
+            try checkpoint(0, 0, 0)
             guard target.component == .object,
                   let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
                   reference.kind == .body else {
@@ -96,10 +114,12 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
     }
 
     private static func generatedTopologySubshapeIDStrings(
-        in targets: [SelectionTarget]
-    ) -> Set<String> {
+        in targets: [SelectionTarget],
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Set<String> {
         var names = Set<String>()
         for target in targets {
+            try checkpoint(0, 0, 1)
             switch target.component {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
@@ -115,19 +135,23 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
 
     private static func edgeLookup(
         in scene: ViewportScene,
-        selectedFeatureIDs: Set<FeatureID>
-    ) -> [String: EdgeRecord] {
+        selectedFeatureIDs: Set<FeatureID>,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [String: EdgeRecord] {
         var result: [String: EdgeRecord] = [:]
         for item in scene.items {
+            try checkpoint(0, 0, 1)
             guard selectedFeatureIDs.isEmpty || selectedFeatureIDs.contains(item.featureID),
                   case .body(let component) = item.kind,
                   let topology = component.topology else {
                 continue
             }
             for edge in topology.edges {
+                try checkpoint(0, 0, 1)
                 guard let subshapeID = edge.componentID.generatedTopologySubshapeID else {
                     continue
                 }
+                try checkpoint(0, 2, 0)
                 let subshapeIDString = GeneratedSubshapeIdentity.string(for: subshapeID)
                 result[subshapeIDString] = EdgeRecord(
                     persistentName: subshapeIDString,
@@ -141,8 +165,9 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
 
     private static func shouldShow(
         _ adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
-        selectedGeneratedNames: Set<String>
-    ) -> Bool {
+        selectedGeneratedNames: Set<String>,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Bool {
         guard selectedGeneratedNames.isEmpty == false else {
             return true
         }
@@ -154,14 +179,19 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
            selectedGeneratedNames.contains(secondFacePersistentName) {
             return true
         }
-        return adjacency.edgePersistentNames.contains { selectedGeneratedNames.contains($0) }
+        return try adjacency.edgePersistentNames.contains {
+            try checkpoint(0, 0, 1)
+            return selectedGeneratedNames.contains($0)
+        }
     }
 
     private static func resolvedEdge(
         for adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
-        edgeLookup: [String: EdgeRecord]
-    ) -> EdgeRecord? {
+        edgeLookup: [String: EdgeRecord],
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> EdgeRecord? {
         for persistentName in adjacency.edgePersistentNames {
+            try checkpoint(0, 0, 1)
             if let edge = edgeLookup[persistentName] {
                 return edge
             }

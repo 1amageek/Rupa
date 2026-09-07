@@ -178,7 +178,7 @@ struct ViewportBridgeCurveEndpointHandleTarget: Equatable {
     }
 }
 
-struct ViewportBridgeCurveEndpointHandleIdentity: Equatable {
+struct ViewportBridgeCurveEndpointHandleIdentity: Equatable, Sendable {
     var sourceID: BridgeCurveSourceID
     var role: BridgeCurveEndpointHandleRole
 }

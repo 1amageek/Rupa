@@ -354,6 +354,22 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
         )
     }
 
+    static func localDirection(
+        featureID: FeatureID,
+        patchID: Int,
+        direction: PolySplineSurfaceVertexSlideDirection,
+        topologyVertices: [ViewportBodyTopology.Vertex],
+        patches: [FeatureID: [ViewportPolySplinePatchDescriptor]]
+    ) -> Vector3D? {
+        slideDirection(
+            featureID: featureID,
+            patchID: patchID,
+            direction: direction,
+            pointsByRole: pointsByRole(in: topologyVertices),
+            patches: patches
+        )
+    }
+
     private func projectedUnitVector(layout: ViewportLayout) -> CGVector? {
         guard let start = layout.projectedPoint(baseModelPoint)?.point,
               let end = layout.projectedPoint(

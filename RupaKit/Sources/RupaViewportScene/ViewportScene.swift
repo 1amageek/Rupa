@@ -71,7 +71,7 @@ public extension ViewportBodyVertex {
     }
 }
 
-public enum ViewportSketchPrimitive: Equatable {
+public enum ViewportSketchPrimitive: Equatable, Sendable {
     case point(entityID: SketchEntityID, point: CGPoint)
     case line(entityID: SketchEntityID, start: CGPoint, end: CGPoint)
     case circle(entityID: SketchEntityID, center: CGPoint, radiusMeters: Double)
@@ -114,7 +114,7 @@ public struct ViewportSketchRegion: Equatable, Sendable {
     }
 }
 
-public enum ViewportSceneItemKind: Equatable {
+public enum ViewportSceneItemKind: Equatable, Sendable {
     case sketch(primitives: [ViewportSketchPrimitive])
     case body(component: ViewportBodyComponent)
     case curve(component: ViewportCurveComponent)
@@ -170,7 +170,7 @@ public struct ViewportCurveComponent: Equatable, Sendable {
 
 }
 
-public struct ViewportBodyComponent: Equatable {
+public struct ViewportBodyComponent: Equatable, Sendable {
     public var bodyID: String?
     public var subshapeID: String?
     public var typeID: ObjectTypeID?
@@ -463,7 +463,7 @@ public struct ViewportSurfaceFrameDisplay: Equatable, Sendable {
     }
 }
 
-public struct ViewportBodyTopology: Equatable {
+public struct ViewportBodyTopology: Equatable, Sendable {
     public var faces: [Face]
     public var edges: [Edge]
     public var vertices: [Vertex]
@@ -478,7 +478,7 @@ public struct ViewportBodyTopology: Equatable {
         self.vertices = vertices
     }
 
-    public struct Face: Equatable {
+    public struct Face: Equatable, Sendable {
         public var componentID: SelectionComponentID
         public var points: [Point3D]
 
@@ -488,7 +488,7 @@ public struct ViewportBodyTopology: Equatable {
         }
     }
 
-    public struct Edge: Equatable {
+    public struct Edge: Equatable, Sendable {
         public var componentID: SelectionComponentID
         public var start: Point3D
         public var end: Point3D
@@ -500,7 +500,7 @@ public struct ViewportBodyTopology: Equatable {
         }
     }
 
-    public struct Vertex: Equatable {
+    public struct Vertex: Equatable, Sendable {
         public var componentID: SelectionComponentID
         public var point: Point3D
 
@@ -553,7 +553,7 @@ public struct ViewportBodyTopologyHit: Equatable, Sendable {
     }
 }
 
-public struct ViewportCylinderComponent: Equatable {
+public struct ViewportCylinderComponent: Equatable, Sendable {
     public var topRadiusMeters: Double
     public var bottomRadiusMeters: Double
     public var sideSegments: Int
@@ -587,7 +587,7 @@ public struct ViewportCylinderComponent: Equatable {
     }
 }
 
-public struct ViewportSceneItem: Equatable, Identifiable {
+public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
     public var id: String
     public var featureID: FeatureID
     public var sceneNodeID: SceneNodeID?
@@ -621,7 +621,7 @@ public struct ViewportSceneItem: Equatable, Identifiable {
     }
 }
 
-public struct ViewportScene: Equatable {
+public struct ViewportScene: Equatable, Sendable {
     public var items: [ViewportSceneItem]
 
     public init(items: [ViewportSceneItem]) {

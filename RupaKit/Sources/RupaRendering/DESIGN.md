@@ -63,7 +63,7 @@ build geometry, create a second camera, or retain a second presentation scene.
 flowchart LR
     Snapshot["Published or staged snapshot\nsource/evaluation authority"] --> Scene["UniversalViewportScene\nengine-neutral values"]
     Scene --> Prepare["Bounded cancellable preparation\nmesh + provenance + overlays"]
-    Session["ViewportControlSession\ncamera + mode + shading + revision"] --> Frame["RealityViewportFrameDescriptor\nsnapshotID + viewportRevision + overlayRevision"]
+    Session["ViewportControlSession\ncamera + mode + shading + revision"] --> Frame["RealityViewportFrameDescriptor\nsource key + optional snapshotID\n+ viewportRevision + overlayRevision"]
     Prepare --> Frame
     Frame --> Host["RealityViewport\nRealityView host"]
     Host --> Root["One RealityKit scene root"]
@@ -75,14 +75,148 @@ flowchart LR
     UI["SwiftUI chrome\ntoolbars / inspector / menu / marquee"] --> Session
 ```
 
-The shared seam is an immutable `RealityViewportFrameDescriptor` value. It
-contains the `UniversalViewportScene` and its `snapshotID`, the mounted
-`ViewportControlSession` revision and camera snapshot, an explicit
-`overlayRevision`, and bounded engine-neutral spatial descriptors. It contains
+The shared seam is an immutable `RealityViewportFrameDescriptor` value. The
+public `Viewport` initializer requires one real `ViewportSourceIdentity`: a
+document ID plus `DocumentGeneration`, or an existing presentation
+`EvaluationSnapshotID`. `Viewport` combines it with an active drag-preview
+revision and the existing scene-key inputs to form its internal
+`ViewportSceneSnapshotKey`; the preparation identity also contains an explicit
+producer-owned `overlayRevision`. It never synthesizes a project or evaluation
+identity for an empty or sketch-only scene. The mounted frame also
+contains the `ViewportControlSession` revision and camera snapshot plus bounded
+engine-neutral spatial descriptors. It contains
 no `Entity`, `MeshResource`, `RealityViewCameraContent`, `MTLBuffer`, or
 `MTLRenderCommandEncoder`; native objects are created and owned only inside
 `RealityViewport`. A frame is publishable only when all identity fields still
 match the request that produced its resources.
+
+The overlay revision advances whenever an input not already represented by
+`ViewportSceneSnapshotKey` can change a world or camera-relative descriptor,
+including selection, hover, active preview/affordance, snap, reference, and
+measurement state. It does not advance for a camera-only change. The producer
+passes only raw checked-`Sendable` immutable source and interaction captures to
+the cache worker;
+`ViewportScene` and its transitive value members acquire checked `Sendable`
+conformance rather than crossing the boundary through unchecked isolation.
+Main-actor capture does not call
+`ViewportPatternArrayPreviewService.previews`, surface-analysis overlay build,
+section-analysis overlay build, hatch conversion, or their output sorting and
+array traversal. The existing producer worker invokes those pure builders once
+for a changed source/overlay identity before it emits the complete batch; it
+does not add another authority, cache, or worker lane.
+The original pure builder algorithms are shared with a nonescaping `rethrows`
+checkpoint `(items, positions, visits)`. Legacy nonthrowing wrappers supply an
+explicit no-op checkpoint; the native worker supplies cooperative cancellation
+and checked local admission. Output items/positions are charged only after the
+existing selection predicate admits their source; raw traversal visits are
+charged separately against the existing position/work ceiling. Checkpoints run
+before owned allocation, append, and hierarchy/analysis/hatch visits. A stopped
+worker propagates `CancellationError`, never partial or empty success. Native
+section preparation admits the complete source and all derived hatches rather
+than using the legacy UI's visible-prefix limits.
+The revision does not repeat within one mounted viewport lifetime; exhaustion
+is an explicit failure rather than wraparound to a possibly retained identity.
+
+`ViewportSpatialOverlayChangeKey` is the internal `Equatable` invalidation seam
+owned by the semantic producer. It is made synchronously from immutable values
+already held by `Viewport`; constructing it never calls a scene builder,
+analysis builder, pattern service, geometry sampler, projection helper, or
+native API. It compares exact values rather than a collision-prone digest. The
+key contains only inputs whose change can alter the producer output:
+
+| Key group | Exact inputs |
+|---|---|
+| Interaction | `SelectionModel`, selection-drag preview targets, Mesh selection overlay, edited-body state, and resolved active/hovered/pending interaction and creation-drag values |
+| Derived presentation | Pattern replacement request, surface analysis plus its display options, surface continuity, section analysis, snap result and exact snap options, placement highlight, and measurement state plus its active/automatic flags and explicit construction plane |
+| Policy | Display unit, creation-drag axis constraint, descriptor-affecting affordance visibility and numeric parameters, and a bounded set of booleans recording whether each descriptor-producing interaction route is available; closures themselves are neither retained nor compared |
+
+Document, evaluation, scene, workspace-overlay, section-clipping, object-definition,
+and drag-preview-document topology remain represented by
+`ViewportSceneSnapshotKey`; the change key does not duplicate or sample them.
+Camera transform/projection, control basis, viewport size, grid frame, and chrome
+exclusions are also absent because their bounded updates are owned by the native
+camera frame. This exclusion is valid only when every non-grid plane preview
+already carries an explicit `SketchPlane` and resolved world values. A creation
+drag must therefore resolve its screen points and plane at input time before it
+enters the semantic key/snapshot; a producer may not read the current control
+basis later or add basis to the key as a substitute. The grid frame also supplies
+the current visible-cell scale to the fixed-capacity native placement preview
+when its explicit policy requests `.visibleCell`; this does not recapture the
+source snapshot or advance the overlay revision. That preview is exactly one
+optional `RealityViewportSpatialBatch.GridPlacement`: its resolved world center,
+finite orthonormal plane axes, annotation presentation, and optional explicit
+width and height, where a `nil` axis alone requests the current native grid
+frame's `minorStepMeters`. Preparation admits and creates one native unit
+rectangle with four vertices and eight line indices. After all grid-frame and
+aggregate-admission checks succeed, the native owner atomically publishes the
+grid and updates only that entity's translation, orientation, and per-axis
+scale; it neither rewrites topology nor starts preparation work. Invalid or
+over-budget input preserves the preceding complete grid-plus-placement frame.
+Fully explicit rectangles, workspace-default rectangles, and non-rectangle
+placement previews remain immutable producer-owned world meshes.
+
+One `@MainActor`, non-`Observable` revision holder is retained by `Viewport`
+through `@State`. It owns only the last exact change key and one monotonic
+`UInt64`. `revision(for:)` returns the current value for an equal key and advances
+once before cache lookup for a changed key; returning to an earlier key still
+gets a new revision. Overflow is a typed failure, never wraparound. This
+synchronous comparison makes the new preparation identity visible in the same
+body evaluation. The exact-ready `surface(for:)` and handle-table queries cannot
+grant the previous overlay identity CAD authority while the new task is waiting.
+A separate display-only cache query may retain the preceding complete surface
+only when the scene key and optional real snapshot ID are unchanged and only
+the overlay revision differs. Render origin is derived from those admitted
+source/layout inputs rather than being a second cache-authority coordinate;
+warm synchronous native reuse still requires the mounted and requested origins
+to be equal. The `.task(id:)` that captures the immutable raw
+producer input and starts its semantic build is attached inside the geometry
+scope and runs only for a changed source or overlay identity. Pan, orbit, zoom,
+projection transition,
+resize, grid-step, and chrome-only body updates neither capture that snapshot
+nor invoke its worker. No new protocol, observable owner, generic cache, or
+second preparation lane is introduced.
+
+The held `ViewportActiveInteractionDrags` value supplies exact active target and
+semantic-value equality; it is not reconstructed by camera updates. Hover and
+pending targets compare their spatial identities. Screen-only marquee points
+are excluded; entering or leaving a drag can still hide the automatic ruler.
+Capture failures call the existing preparation cache's `reject` entry point,
+which cancels its worker and pending request and publishes the typed failure for
+that identity. A same-scene/snapshot overlay failure may retain the previous
+complete display without CAD authority; any source/snapshot mismatch withdraws
+it. A late worker cannot overwrite either result.
+
+The public initializer has no generation-less mutable-document mode. The main
+workspace passes its document ID and `DocumentGeneration`; the modeling-preview
+caller passes its payload's real presentation `EvaluationSnapshotID`. Direct
+callers must likewise provide the identity owned by their source lifecycle, so
+omitting that coordinate is unrepresentable at compile time. Equal identity is
+a caller guarantee of equal source/path topology; repository production callers
+meet it through the document store generation or immutable preview snapshot.
+Preparation rejects a document-ID mismatch and a presentation identity that
+does not equal the supplied scene's snapshot/project identity before selecting
+a published native frame. Cancelled view tasks cannot capture, prepare, or reject
+a replacement frame. The native grid's resolved readout supplies the HUD and
+snap-step notification; SwiftUI does not build a second projected grid.
+The complete viewport, including semantic overlays, is an explicit accessibility
+container. Hiding native rendering internals does not hide the canvas or its
+nonspatial controls from assistive technology.
+The viewport root consumes the full rectangle allocated by its parent in both
+axes before overlays are composed. Empty, preparing, ready, and failed states
+therefore give native content, input, chrome, and accessibility the same nonzero
+rectangle. `RenderInvalidation` remains part of the scene/preparation identity;
+it does not recreate the SwiftUI native-host and control subtree through `.id`.
+`ViewportWorkspaceRenderState.revision` remains workspace-view state and is not
+reinterpreted as document source identity. This removes the snapshot cache's
+legacy `nil`/uncached-rebuild path from native preparation without fabricating a
+generation, evaluation ID, content hash, or request token.
+The former optional `documentGeneration` initializer input and stored property
+are removed. When the source case is `.document`, `ViewportControlContextKey`,
+`ViewportSceneSnapshotKey`, and `ViewportSceneBuilder` all derive the same
+generation from `ViewportSourceIdentity`; a second generation coordinate cannot
+disagree with the preparation identity. The main `RupaUI` caller therefore
+passes only `.document(id:generation:)`, while the preview caller passes only
+`.presentation(_:)`.
 
 RealityKit owns the presentation operations it already provides:
 
@@ -111,17 +245,64 @@ independent tessellator is never an alternative implementation.
 
 ### Source, frame, and provenance
 
-1. `UniversalViewportScene.snapshotID` is the source/evaluation identity. A
-   frame also carries one mounted viewport revision and one overlay revision.
-   Scene resources, spatial overlays, camera, render state, and hit-test map
-   are all derived from that exact tuple.
-2. The displayed RealityKit scene and the hit-test scene are the same root and
-   same frame. A preparing, failed, cancelled, stale, or mismatched request
-   cannot replace the current frame and cannot acquire picking authority.
+1. Required `ViewportSourceIdentity` plus any active drag-preview revision and
+   the existing scene-key inputs form the source/path-topology identity;
+   `UniversalViewportScene.snapshotID` additionally identifies a real optional
+   presentation scene. A frame also carries one mounted viewport revision and
+   one overlay revision. Scene resources, spatial overlays, camera, render
+   state, and hit-test map are all derived from that exact tuple. A missing
+   presentation scene means no surface resources, not a synthetic snapshot.
+   Document-generation and real presentation-snapshot sources are accepted; no
+   generation-less document, duplicate generation input, or workspace-revision
+   fallback is accepted.
+2. An exact-ready RealityKit scene and its hit-test scene are the same root and
+   same frame. During same-source/snapshot overlay-only preparation or failure,
+   the preceding complete root may remain visible and camera-navigable, but it
+   cannot resolve CAD hits, handles, drags, selection mutations, or provenance
+   for the requested identity. A source/snapshot change, teardown, or
+   mismatched request exposes neither the prior display nor its authority.
 3. Entity names, hierarchy, UUIDs, `MeshResource` identity, and collision
    shape identity are implementation details. Stable occurrence, definition,
    representation, source, face, edge, vertex, sketch, and handle IDs remain
    in the snapshot-owned provenance map.
+   Every interactive spatial descriptor produced in RK-3 carries a checked
+   frame-local `UInt32` index into an immutable checked-`Sendable` table of the
+   existing stable CAD handle identities. All native entities that form one
+   handle retain that same index; a noninteractive descriptor has no handle
+   index. The `RealityViewport` child validates the index, groups interactive
+   world geometry no more coarsely than attachment plus index, and returns the
+   index without interpreting the table entry. The host resolves it only while
+   the complete frame tuple and its table still match. The index and native
+   Entity are lookup coordinates, never CAD identity or authority. The
+   parent value is a named `(spatialBatch, handleIdentities)` result. The closed
+   `ViewportSpatialHandleIdentity: Equatable, Sendable` enum corresponds
+   one-to-one with `ViewportInteractionTarget` and contains only stable
+   source/selection addresses and semantic handle roles; it contains no screen
+   point, derived geometry, native object, name, or UUID. The five surface
+   handle cases that currently contain `SelectionReference` project it to the
+   exhaustive reference-case discriminator, `SubshapeID`, and the applicable
+   parameter, UV, index, or trim address. They never retain or traverse
+   `StableSubshapeReference.geometrySignature`; the matching frame tuple, not a
+   copied CAD geometry tree, owns the validity of that presentation address.
+   For poly-spline-surface vertices and surface control points, the identity
+   augments the existing target identity with one shared semantic role:
+   `.planar`, `.axis(ViewportCoordinateAxis)`, or
+   `.localAxis(ViewportPolySplineSurfaceVertexLocalAxis)`. The local direction
+   vector remains derived geometry and is not part of identity; distinct roles
+   never share one handle index.
+   The cache retains the immutable table beside its private prepared frame,
+   while the native batch receives only `handleCount`, the table's checked
+   application-owned `retainedSemanticByteCount`, and optional indices. A synchronous cache lookup
+   returns a table entry only when both the prepared frame identity and index
+   match; the observable ready-state payload does not become a second owner.
+   Non-handle callers use the exact empty defaults: no table entries,
+   `handleCount == 0`, `retainedSemanticByteCount == 0`, and
+   `handleIndex == nil`.
+   The current projected CPU handle providers remain a temporary
+   pre-RK-4 input path, not future identity authority: RK-4 must consume this
+   prepared mapping and must not rerun producer candidate traversal to infer a
+   handle from a native hit. Bounded native-camera projection remains permitted
+   only for the tolerance cases in invariant 8.
 4. The frame descriptor contains no source mutation or project publication
    authority. A preview frame is discarded on cancel/stale replacement and
    never enters history, undo, persistence, or source selection.
@@ -204,14 +385,30 @@ independent tessellator is never an alternative implementation.
     measurement/ruler lines and labels, section/analysis, snap/reference
     guides, pattern/drag previews, construction planes, and edit/feature
     handles are RealityKit entities under the same scene root and frame token.
-    World-known line/triangle geometry uses native RealityKit topology. Labels
-    use native text extrusion and billboarding. Screen-only marquee selection,
-    toolbar, inspector, menu, status, and error presentation remain SwiftUI.
+    World-known line/triangle geometry uses native RealityKit topology. Non-grid
+    labels use native text extrusion and billboarding; camera-derived numeric
+    grid labels use the bounded `TextComponent` exception in the child contract.
+    Screen-only marquee selection, toolbar, inspector, menu, status, and error
+    presentation remain SwiftUI.
+    Coverage is proved per enabled route reachable from the production
+    `drawModel`, not by the presence of a coarse `ViewportSpatialOverlayFamily`
+    flag. In particular, `.transform`, `.pattern`, or `.sketch` is incomplete
+    when it contains only an object outline, a generic topology marker, or a
+    sampled curve but omits that route's dimension, guide, handle, hover/active
+    state, or active world preview.
 12. The prepared graph distinguishes static world resources from bounded
     view-dependent annotation placement. Camera changes update native camera
     transforms immediately and may update bounded label/annotation transforms;
     they never rebuild the world MeshResource graph, retessellate CAD, or rerun
-    source traversal. A view-dependent `Path` is converted through native
+    source formatting or traversal. The optional selected-bounds ruler group
+    retains only immutable occurrence bounds and three preformatted axis labels;
+    the existing
+    measurement layout recomputes collision-free placement from the mounted
+    native project closure and current chrome safe/exclusion rectangles, then
+    synchronously updates at most three fixed-capacity line meshes and labels.
+    An unplaceable axis is explicitly disabled. Its resources and every camera
+    point remain charged to the same aggregate item/position/byte admission. A
+    view-dependent `Path` is converted through native
     `MeshResource(extruding:extrusionOptions:)` and cached by stable geometry and
     style when possible. Native path/text generation is an overlay-revision
     operation, not a camera-frame operation; the measured Path64 case takes
@@ -219,17 +416,71 @@ independent tessellator is never an alternative implementation.
     checked after the native await before publication; the contract does not
     claim that RealityKit interrupts the native generation itself. Canvas
     rasterization and custom path tessellation are never used.
+    Affordance source resolution is camera-independent. The semantic producer
+    supplies the CAD-owned world base anchor, a finite world `toward` point for
+    each source-owned direction, the actual parameter-value guide/preview in
+    world coordinates, and preformatted labels. The native owner uses the
+    existing directed `CameraPoint`, `CameraLine`, and `CameraPath` placement to
+    keep arrows, markers, and labels usable at constant point size; navigation
+    may move those presentation entities but cannot choose new CAD source or
+    recapture the semantic snapshot. For a planar closed-region offset, the
+    deterministic base anchor is the source vertex with greatest squared
+    plane-local distance from the polygon centroid, with source order breaking
+    an exact tie; the outward `toward` direction is centroid to that vertex.
+    Degenerate source direction is an explicit disabled/typed-failure result,
+    never a camera-derived fallback. Other edge, slot, spline, surface, pattern,
+    and transform handles use the direction and anchor defined by their CAD
+    target. Exact legacy screen-side choice and pixel stroke decoration are not
+    source semantics.
+    Grid presentation is the source-independent camera-frame exception defined
+    by the [RealityViewport component](RealityViewport/DESIGN.md):
+    `ViewportProjectedGrid` remains the sole owner of adaptive/fixed spacing,
+    the 360-line budget, signed unit formatting, label separation, scale
+    readout, and chrome exclusion. `Viewport` derives its bounded native grid
+    frame only from the current ruler, native-parity layout, viewport size, and
+    chrome rectangles; it does not capture that frame in the immutable
+    world-source batch or traverse scene/CAD state when pan, orbit, zoom, or
+    size changes. Updating the finite coordinate strings is grid presentation
+    formatting, not source formatting, and occurs only when that grid frame
+    changes. All other camera updates retain the no-formatting guarantee.
 
 ### Lifecycle, cancellation, and bounds
 
 13. Preparation owns at most one active worker and one newest pending request.
     Replacement and teardown cancel the actual worker, wait for its cooperative
-    exit, and reject every stale completion by request identity and snapshot
-    tuple. No empty, stale, alternate-backend, or coarser success is published.
+    exit, and reject every stale completion by the complete preparation
+    identity. The same worker prepares the optional surface and required
+    spatial resources; it does not start a second overlay allocation lane. No
+    empty, stale, alternate-backend, or coarser success is published. A scene
+    with no surface may still publish its required camera and nonempty native
+    spatial presentation.
+    An overlay-only replacement with the same scene key and optional real snapshot reuses
+    the immutable surface plan, material programs, visual/line `MeshResource`,
+    and `ShapeResource`; it creates only the matching frame Entity hierarchy and
+    provenance attachment plus changed spatial resources. Reuse is owned inside
+    this cache/native owner, not by a second surface cache or worker.
+    Overlay-only preparation does not invalidate or disable that current root.
+    An already-mounted root with unchanged camera layout/revision attempts its
+    bounded spatial update synchronously and uses the existing engine-frame
+    readiness subscription only when native projection is genuinely unavailable.
+    Candidate publication must replace the retained display without an empty
+    rendered frame; exact-ready identity and handle authority advance only with
+    that complete replacement. Typed failure keeps display continuity but grants
+    no authority to the old overlay.
 14. Count admission precedes every mesh, collision, line, text, material, and
-    Entity request. Byte admission covers every application-owned retained and
-    scratch buffer before allocation or growth, including six owned UInt32
-    collision indices per source triangle for the original/reversed pair.
+   Entity request. Byte admission covers every application-owned retained and
+   scratch buffer before allocation or growth, including six owned UInt32
+   collision indices per source triangle for the original/reversed pair.
+   Before publication, the producer computes one overflow-checked conservative
+   retained charge for the complete handle-identity table, including its enum
+   and array element storage, nested selection/index arrays, normalized
+   selection-address storage, and variable-length identifier UTF-8 bytes. This
+   calculation consumes only the normalized presentation identities and never
+   walks or estimates CAD geometry signatures. The native batch adds that
+   `retainedSemanticByteCount` once to the same aggregate retained-byte
+   admission as the surface and spatial descriptors; it neither inspects the
+   semantic entries nor treats `handleCount` alone as their memory charge.
+   The cache retains the table only with the matching admitted prepared frame.
     The engine-neutral plan retains its caller-validated byte limit for native
     preparation. Before exact-payload grouping allocates storage, the native
     boundary adds the plan's retained bytes to a conservative checked
@@ -272,9 +523,9 @@ independent tessellator is never an alternative implementation.
 ## Runtime Flows
 
 ```text
-snapshot/evaluation change
+source/path-topology or overlay change
   -> cancel old request
-  -> off-main bounded scene/resource descriptor preparation
+  -> off-main bounded optional-surface and spatial descriptor preparation
   -> invoke declared-isolation native resource generation where supported
   -> perform SDK-required scoped LowLevelMesh copies on MainActor within the
      measured publication budget
@@ -282,9 +533,15 @@ snapshot/evaluation change
   -> atomically publish one descriptor/resource/entity tuple
   -> RealityView displays and hit-tests that same tuple
 
-camera or overlay change
-  -> session/overlay revision increments
-  -> update native camera or rebuild only the affected bounded spatial entities
+camera change
+  -> session revision increments
+  -> install native camera; withhold incomplete world presentation
+  -> native frame applies bounded camera-relative placements, then enables presentation
+  -> do not rebuild native resources or traverse source
+
+overlay change
+  -> overlay revision increments
+  -> rebuild the one complete candidate through the existing worker
   -> coalesce to newest frame identity
   -> never show new grid with old surface or pick old geometry with new camera
 ```
@@ -298,17 +555,22 @@ claims that RealityKit has completed a GPU frame.
 
 `ViewportControlSession` owns camera, projection, display mode, shading,
 mount identity, and its monotonic revision for one document/window lifetime.
-The derived presentation cache owns the active task, newest pending request,
-engine-neutral descriptors, and matching failure. `RealityViewport` owns the
-native scene root, camera entity, materials, mesh/collision/text resources, and
-their release. It does not retain the project snapshot beyond the immutable
-frame values needed for current hit-test provenance.
+The derived presentation cache owns the active task, newest value-only pending
+request, engine-neutral descriptors, and matching failure. It retains at most
+one current native owner and one candidate being prepared. `RealityViewport`
+owns the native scene root, permanent camera entity, optional surface record,
+spatial resources, and their release. It does not retain the project snapshot
+beyond the immutable frame values needed for current hit-test provenance.
 
 `RupaUI` mounts exactly one host for the document lifetime and destroys it on
 matching unmount. A replacement document creates a new frame identity and root;
 late callbacks cannot clear or mutate a replacement host. `RealityRenderer`
 offscreen fixtures own their own root and never share mutable native objects with
 the live `RealityView`.
+
+The child [mounted camera readiness contract](RealityViewport/DESIGN.md#mounted-camera-readiness)
+owns the native-frame subscription and projection-readiness transition. A
+SwiftUI state update alone does not establish a displayed spatial frame.
 
 ## Failure, Concurrency, and Constraints
 
@@ -332,12 +594,12 @@ tests and native GPU measurements.
 
 | Invariant | Required evidence |
 |---|---|
-| Frame identity and atomic swap | CPU lifecycle tests reject stale/cancelled `(snapshotID, viewportRevision, overlayRevision)` combinations; native test proves surface, spatial overlays, camera, and hit-test map swap together. |
+| Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible while exact-ready CAD hit and handle lookup remain unavailable for the requested identity. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |
 | Native camera | macOS 27-or-later mounted tests retain the raw native inverse-query counterexamples, then exercise documented native orthographic/symmetric-perspective lens forms, centered and off-center fit/pan framing, native render/project parity, child-owned composed-ray/project round trips, fit, orbit, pan, zoom, saved views, invalid/stale explicit-miss paths, and no geometry rebuild on camera changes. Lens skew or an unsupported projective component is rejected. |
 | Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. |
-| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity. |
+| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 

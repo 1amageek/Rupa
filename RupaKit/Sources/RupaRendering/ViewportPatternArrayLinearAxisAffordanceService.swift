@@ -157,7 +157,7 @@ struct ViewportPatternArrayLinearAxisHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayLinearAxisHandleIdentity: Equatable {
+struct ViewportPatternArrayLinearAxisHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
     var axisSlot: ViewportPatternArrayLinearAxisSlot
 }

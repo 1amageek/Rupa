@@ -175,7 +175,7 @@ private struct ProjectMainViewContent: View {
     @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
-    @State private var viewportCameraFrame: ViewportCameraFrame
+    @State private var viewportCameraFrame: ViewportCameraFrame?
     @State private var viewportCameraFrameRequest: ViewportCameraFrameRequest?
     @State private var viewportProjectedGridStepMeters: Double?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
@@ -285,11 +285,7 @@ private struct ProjectMainViewContent: View {
         self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
-        self._viewportCameraFrame = State(initialValue: ViewportCameraFrame(
-            target: .origin,
-            visibleHeightMeters: ruler.visibleSpanMeters,
-            camera: .identity
-        ))
+        self._viewportCameraFrame = State(initialValue: nil)
         self._viewportCameraFrameRequest = State(initialValue: nil)
         self._viewportProjectedGridStepMeters = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
@@ -1561,6 +1557,7 @@ private struct ProjectMainViewContent: View {
                 if let payload = modelingPreview.payload {
                     Viewport(
                         document: payload.document,
+                        sourceIdentity: .presentation(payload.presentationScene.snapshotID),
                         displayMode: viewportDisplayMode,
                         presentationScene: payload.presentationScene,
                         presentationSceneNodeIDByOccurrenceID: payload.presentationSceneNodeIDByOccurrenceID,
@@ -1639,6 +1636,7 @@ private struct ProjectMainViewContent: View {
         let scaleFitPromptState = workspaceScaleFitPromptState
         return Viewport(
             document: snapshot.document.document,
+            sourceIdentity: .document(id: snapshot.document.document.id, generation: snapshot.documentGeneration),
             displayMode: viewportDisplayMode,
             presentationScene: snapshot.viewport,
             presentationSceneNodeIDByOccurrenceID: snapshot.sceneNodeIDByOccurrenceID,
@@ -1653,7 +1651,6 @@ private struct ProjectMainViewContent: View {
                 )
             ),
             currentEvaluation: snapshot.cadInteraction,
-            documentGeneration: snapshot.documentGeneration,
             objectRegistry: objectRegistry,
             renderInvalidation: snapshot.evaluationSnapshot.renderInvalidation,
             selection: displaySelection,
@@ -4830,7 +4827,10 @@ private struct ProjectMainViewContent: View {
 
     private func createSavedViewFromCurrentViewport() {
         let projectionBasis = viewportProjectionBasis
-        let cameraFrame = viewportCameraFrame
+        guard let cameraFrame = viewportCameraFrame else {
+            reportToolStatus("The current camera cannot be captured. Reframe the view and try again.", severity: .warning)
+            return
+        }
         submitSource(name: "createSavedView") { current in
             let savedView = savedViewBuilder.makeSavedView(
                 name: savedViewBuilder.nextSavedViewName(in: current.document.document),
@@ -4851,7 +4851,10 @@ private struct ProjectMainViewContent: View {
     private func updateSavedViewFromCurrentViewport(_ savedView: SavedView) {
         let savedViewID = savedView.id
         let projectionBasis = viewportProjectionBasis
-        let cameraFrame = viewportCameraFrame
+        guard let cameraFrame = viewportCameraFrame else {
+            reportToolStatus("The current camera cannot be captured. Reframe the view and try again.", severity: .warning)
+            return
+        }
         submitSource(name: "updateSavedView") { current in
             guard let currentSavedView = current.document.document.productMetadata.savedViews[savedViewID] else {
                 throw EditorError(

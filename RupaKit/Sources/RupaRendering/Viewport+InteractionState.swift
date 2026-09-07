@@ -8,6 +8,9 @@ struct ViewportActiveDrag: Equatable {
     var currentLocation: CGPoint
     var kind: Kind
     var sketchPlane: SketchPlane? = nil
+    // Resolved at the input event boundary so native overlay preparation never
+    // has to reinterpret screen coordinates with a later camera state.
+    var modelDrag: ViewportModelDrag? = nil
 
     enum Kind: Equatable {
         case creation(ViewportCanvasDragPreviewKind)
@@ -115,7 +118,7 @@ struct ViewportConstructionPlaneHandleTarget: Equatable {
     }
 }
 
-struct ViewportConstructionPlaneHandleIdentity: Equatable {
+struct ViewportConstructionPlaneHandleIdentity: Equatable, Sendable {
     var constructionPlaneID: ConstructionPlaneSourceID
     var sceneNodeID: SceneNodeID
     var handle: ViewportConstructionPlaneHandleKind
@@ -294,7 +297,7 @@ struct ViewportSketchCurveHandleTarget: Equatable {
     }
 }
 
-struct ViewportSketchCurveHandleIdentity: Equatable {
+struct ViewportSketchCurveHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var handle: ViewportSketchCurveHandleKind
@@ -341,7 +344,7 @@ struct ViewportSketchDimensionTarget: Equatable {
     }
 }
 
-struct ViewportSketchDimensionIdentity: Equatable {
+struct ViewportSketchDimensionIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var kind: SketchEntityDimensionKind
@@ -369,7 +372,7 @@ struct ViewportSketchPointHandleTarget: Equatable {
     }
 }
 
-struct ViewportSketchPointHandleIdentity: Equatable {
+struct ViewportSketchPointHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var handle: SketchEntityPointHandle
@@ -391,7 +394,7 @@ struct ViewportSplineControlPointHandleTarget: Equatable {
     }
 }
 
-struct ViewportSplineControlPointIdentity: Equatable, Hashable {
+struct ViewportSplineControlPointIdentity: Equatable, Hashable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var controlPointIndex: Int
@@ -432,7 +435,7 @@ struct ViewportSplineControlPointSlideHandleTarget: Equatable {
     }
 }
 
-struct ViewportSplineControlPointSlideHandleIdentity: Equatable {
+struct ViewportSplineControlPointSlideHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var controlPointIndexes: [Int]
@@ -467,7 +470,7 @@ struct ViewportPolySplineSurfaceVertexSlideHandleTarget: Equatable {
     }
 }
 
-struct ViewportPolySplineSurfaceVertexSlideHandleIdentity: Equatable {
+struct ViewportPolySplineSurfaceVertexSlideHandleIdentity: Equatable, Sendable {
     var targets: [SelectionTarget]
     var direction: PolySplineSurfaceVertexSlideDirection
 }
@@ -485,7 +488,7 @@ struct ViewportSurfaceControlPointSlideHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceControlPointSlideHandleIdentity: Equatable {
+struct ViewportSurfaceControlPointSlideHandleIdentity: Equatable, Sendable {
     var targets: [SelectionReference]
     var direction: PolySplineSurfaceVertexSlideDirection
 }
@@ -506,7 +509,7 @@ struct ViewportSurfaceFrameHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceFrameHandleIdentity: Equatable {
+struct ViewportSurfaceFrameHandleIdentity: Equatable, Sendable {
     var targets: [SelectionReference]
     var displayID: SurfaceFrameDisplayID
     var axis: ViewportSurfaceFrameAxis
@@ -547,7 +550,7 @@ struct ViewportSurfaceControlPointHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceControlPointHandleIdentity: Equatable {
+struct ViewportSurfaceControlPointHandleIdentity: Equatable, Sendable {
     var target: SelectionReference
 }
 
@@ -574,7 +577,7 @@ struct ViewportSurfaceTrimEndpointHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceTrimEndpointHandleIdentity: Equatable {
+struct ViewportSurfaceTrimEndpointHandleIdentity: Equatable, Sendable {
     var target: SelectionReference
     var endpoint: SurfaceTrimEndpoint
 }
@@ -605,7 +608,7 @@ struct ViewportSurfaceTrimControlPointHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceTrimControlPointHandleIdentity: Equatable {
+struct ViewportSurfaceTrimControlPointHandleIdentity: Equatable, Sendable {
     var target: SelectionReference
     var controlPointIndex: Int
 }
@@ -704,7 +707,7 @@ struct ViewportRegionOffsetHandleTarget: Equatable {
     }
 }
 
-struct ViewportRegionOffsetHandleIdentity: Equatable {
+struct ViewportRegionOffsetHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var componentID: SelectionComponentID
 }
@@ -728,7 +731,7 @@ struct ViewportEdgeOffsetHandleTarget: Equatable {
     }
 }
 
-struct ViewportEdgeOffsetHandleIdentity: Equatable {
+struct ViewportEdgeOffsetHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var edge: ViewportBodyEdge
 }
@@ -752,7 +755,7 @@ struct ViewportSlotWidthHandleTarget: Equatable {
     }
 }
 
-struct ViewportSlotWidthHandleIdentity: Equatable {
+struct ViewportSlotWidthHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
 }
@@ -778,13 +781,13 @@ struct ViewportSketchVertexOffsetHandleTarget: Equatable {
     }
 }
 
-struct ViewportSketchVertexOffsetHandleIdentity: Equatable {
+struct ViewportSketchVertexOffsetHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var handle: SketchEntityPointHandle
 }
 
-struct ViewportAffordanceTarget: Equatable {
+struct ViewportAffordanceTarget: Equatable, Sendable {
     var featureID: FeatureID
     var selectionTarget: SelectionTarget?
     var action: ViewportAffordanceAction
@@ -830,7 +833,7 @@ enum ViewportInteractionTarget: Equatable {
     case affordance(ViewportAffordanceTarget)
 }
 
-enum ViewportAffordanceAction: Equatable {
+enum ViewportAffordanceAction: Equatable, Sendable {
     case translate(ViewportCoordinateAxis)
     case oneSidedScale(ViewportCoordinateAxis)
     case centerScale(ViewportCoordinateAxis)

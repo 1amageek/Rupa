@@ -103,6 +103,6 @@ struct ViewportPatternArrayRadialAngleHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayRadialAngleHandleIdentity: Equatable {
+struct ViewportPatternArrayRadialAngleHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
 }

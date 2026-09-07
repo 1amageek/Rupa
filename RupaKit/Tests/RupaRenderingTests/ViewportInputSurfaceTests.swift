@@ -6,6 +6,30 @@ import Testing
 @Suite
 struct ViewportInputSurfaceTests {
     @Test
+    func mouseMovementPublishesCurrentMeasurementPreviewPoint() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var locations: [CGPoint?] = []
+        view.onHover = { point, _ in locations.append(point) }
+        view.mouseMoved(with: try mouseEvent(type: .mouseMoved, location: CGPoint(x: 30, y: 40)))
+        view.mouseMoved(with: try mouseEvent(type: .mouseMoved, location: CGPoint(x: 70, y: 60)))
+        #expect(locations.count == 2)
+        #expect(locations[0] != locations[1])
+        #expect(locations.allSatisfy { $0 != nil })
+    }
+
+    @Test
+    func cancelRoutesToActiveToolWithoutPicking() {
+        let view = ViewportInputSurface.InputView()
+        var cancelled = false
+        var picked = false
+        view.onCancel = { cancelled = true; return true }
+        view.onPick = { _, _, _ in picked = true }
+        view.cancelOperation(nil)
+        #expect(cancelled)
+        #expect(!picked)
+    }
+
+    @Test
     func primaryDragCommitsBeforePreviewClear() throws {
         let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
         var events: [String] = []

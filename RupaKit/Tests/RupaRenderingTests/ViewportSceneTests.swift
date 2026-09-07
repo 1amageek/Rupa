@@ -41,6 +41,21 @@ private let viewportSceneSnapshotTestDocumentID = DocumentID()
     #expect(buildCount == 2)
 }
 
+@Test func viewportSceneSnapshotCacheSeparatesPresentationSourceRevisions() {
+    let cache = ViewportSceneSnapshotCache()
+    let projectID = ProjectID(rawValue: "project.scene-key-preview")
+    let first = EvaluationSnapshotID(projectID: projectID, purpose: .presentation, sourceRevision: DocumentTransactionRevision(1))
+    let second = EvaluationSnapshotID(projectID: projectID, purpose: .presentation, sourceRevision: DocumentTransactionRevision(2))
+    var buildCount = 0
+    for snapshot in [first, second, first] {
+        _ = cache.scene(for: viewportSceneSnapshotTestKey(source: .presentation(snapshot))) {
+            buildCount += 1
+            return ViewportScene(items: [])
+        }
+    }
+    #expect(buildCount == 2)
+}
+
 @Test func viewportSceneSnapshotCacheRebuildsWhenWorkspaceRevisionChanges() {
     let cache = ViewportSceneSnapshotCache()
     let source = ViewportSceneSnapshotKey.Source.document(

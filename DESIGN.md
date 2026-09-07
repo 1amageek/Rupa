@@ -300,12 +300,16 @@ flowchart LR
     spatial overlay descriptors, and entity metadata, but owns no source,
     project, representation-selection, or rollback authority.
 22. Only one matching RealityKit frame may be displayed or hit-tested. Its
+    required source/path-topology identity, optional real presentation
     `snapshotID`, mounted viewport revision, overlay revision, camera state, and
     prepared scene root are published atomically from the viewport's point of
-    view. Preparation validates and transforms once off-main where the native
-    API permits; RealityKit resource/entity updates are bounded MainActor work
-    and never perform duplicate full traversal. No spatial world geometry is
-    drawn through SwiftUI `Canvas` or a second renderer.
+    view; an empty or sketch-only scene never receives a fabricated project or
+    evaluation identity. Preparation validates and transforms once off-main
+    where the native API permits; RealityKit resource/entity updates are bounded
+    MainActor work and never perform duplicate full traversal. An overlay-only
+    replacement reuses matching immutable source-native resources within the
+    same owner/cache lifetime. No spatial world geometry is drawn through
+    SwiftUI `Canvas` or a second renderer.
 23. Agent capability/status, lease, semantic compilation, immutable projection,
     and encoding run on a control plane independent of rendering. Runtime uses
     only the existing registered workspace/application ports for exact reads,

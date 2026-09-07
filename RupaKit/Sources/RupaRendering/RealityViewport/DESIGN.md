@@ -4,11 +4,10 @@
 
 `RealityViewport` is the `RupaRendering` child that owns the native RealityKit
 surface, camera, materials, collision resources, and stable-ID lookup metadata
-for one mounted viewport. Production currently mounts this scene through
-`RealityViewportView`, but SwiftUI `Canvas` still supplies the grid and world
-overlays and the legacy identity renderer remains an active picking route.
-The RUPA-RK target extends the same scene root to all spatial overlays and
-removes those remaining routes in RK-3 through RK-5 and RK-IV.
+for one mounted viewport. Production mounts surfaces, grid, and world overlays
+through `RealityViewportView`. The legacy identity renderer remains an active
+picking route until RK-4; RK-5 removes the obsolete backend and RK-IV verifies
+the complete cutover.
 `RealityRenderer` remains offscreen GPU evidence and does not by itself prove
 the complete production cutover.
 
@@ -52,15 +51,17 @@ owners.
 
 ```mermaid
 flowchart LR
-    Frame["RealityViewportFrameDescriptor"] --> Build["Bounded resource/entity preparation"]
+    Frame["Preparation identity + checked-Sendable inputs"] --> Build["One bounded resource/entity worker"]
     Colors["Immutable occurrence material colors"] --> Appearance["Validated appearance value"]
     Build --> Root["One Entity scene root"]
     Camera["Native ortho/perspective component"] --> Root
-    Root --> Surface["MeshResource + ModelComponent"]
-    Root --> Lines["native LowLevelMesh line/triangle topology"]
-    Root --> Labels["extruded text/path + BillboardComponent"]
+    Root --> Clip["ClippingComponent root"]
+    Clip --> Surface["optional surface resources"]
+    Clip --> Sectioned["section-following spatial entities"]
+    Root --> World["unclipped world spatial entities"]
+    Sectioned --> Lines["native LowLevelMesh line/triangle topology"]
+    World --> Labels["extruded text/path + BillboardComponent"]
     Root --> Collision["static mesh collision + provenance map"]
-    Root --> Clip["ClippingComponent section hierarchy"]
     Root --> View["RealityView"]
     Appearance --> Root
     View --> Query["native project samples\ncomposed ray + Scene.raycast"]
@@ -79,6 +80,47 @@ A post-await frame-identity check is
 required before any candidate is published. Native objects do not cross into
 detached preparation tasks.
 
+### Mounted camera readiness
+
+`RealityView`'s make/state-update closure installs the camera and appearance;
+it does not guarantee that native screen projection is already available.
+The existing `RealityViewportView.Mount` retains one `SceneEvents.Update`
+subscription and one newest spatial-update closure. That engine callback runs
+the admitted spatial placement after native scene initialization, at most once
+per frame while pending, and clears the work after success or a terminal error.
+Idle frames perform only the pending-work check. This is not another render
+loop, timer, worker, or source-state owner.
+
+```text
+SwiftUI state -> camera/appearance installation -> newest pending placement
+RealityKit frame -> native projection available -> publish spatial frame
+                 -> projection unavailable -> hide world, keep camera active
+unmount/replacement -> cancel subscription and pending work -> withdraw root
+```
+
+While projection is unavailable, the clipper and unclipped spatial root are
+disabled together, including picking, but their common root and camera remain
+enabled so native initialization can finish. The typed internal projection
+unavailability is reported through the existing visible failure/status seam;
+it is never an empty successful frame. Other invalid input/resource failures
+retain their terminal failure contract. MainActor owns the subscription,
+pending closure, entity mutations, and coalesced status callback. Detach cancels
+the subscription before removing content and drops the pending closure.
+This cold-mount rule does not hide an already-mounted complete presentation on
+an unchanged camera layout/revision. A warm update first uses the existing
+native content synchronously; it defers and withholds presentation only if that
+attempt reports projection unavailable. Replacing a same-source overlay must be
+verified to publish without an intervening empty native frame.
+Each Mount identifies its binding by its own object identity. Rebinding the
+same native viewport transfers that identity with the content; an old Mount
+cannot unbind, place, or report status for the replacement binding. This is
+required because SwiftUI may create the replacement before the old view's
+`onDisappear` runs. Direct native capability fixtures use an unowned binding;
+they do not stand in for production Mount lifetime tests.
+Production-host tests must mount `RealityViewportView` itself without manually
+calling `applyCamera` or `updateSpatialCamera`; delayed test-only camera setup
+is not evidence for this lifecycle.
+
 The parent Rendering owner supplies one immutable
 `[SceneOccurrenceID: ColorRGBA]` value containing material values resolved from
 exactly the provided visible `presentationScene.items`. The
@@ -87,26 +129,278 @@ SwiftUI/native boundary. It retains the value using Swift copy-on-write and
 includes it in appearance identity, so changing a material color with unchanged
 shading, selection, and section state cannot hit the old appearance cache.
 
-`RealityViewportFrameDescriptor` is design notation for the matching values,
-not a required new public API, protocol, or factory. The minimal target seam is
-`RealityViewport.prepare(plan:) async throws -> @MainActor RealityViewport`,
-mounted by `RealityViewportView`; the existing presentation cache retains
-request and snapshot publication identity, while `ViewportControlSession`
-retains the viewport revision.
+`RealityViewportFrameDescriptor` is design notation, not a required public API,
+protocol, or factory. Atomic production preparation uses two internal values:
+
+- `RealityViewportPreparationIdentity: Equatable, Sendable` contains the
+  internal `ViewportSceneSnapshotKey` derived from the parent Rendering
+  contract's required `ViewportSourceIdentity` and any active drag-preview
+  revision, an optional real presentation
+  `EvaluationSnapshotID`, and the producer-owned overlay revision. It contains
+  no camera revision and never fabricates a project or evaluation identity.
+- `RealityViewportPreparationRequest: Sendable` contains that identity, the
+  optional `UniversalViewportScene`, a finite fallback render origin, and an
+  `@Sendable` spatial-batch builder. The builder captures only checked-`Sendable`
+  immutable producer values and accepts the one selected render origin plus the
+  exact retained surface-byte charge; it does not capture `Viewport`, project
+  authority, mutable UI state, or native objects.
+
+The component accepts only the parent-validated required source identity. The
+corresponding production cache call and every cache fixture pass it explicitly;
+the cache neither substitutes workspace revision nor manufactures a generation,
+content hash, or per-body request token. It also receives no independent
+`documentGeneration`; every document-generation consumer derives that value
+from the parent source identity before the preparation request is constructed.
+
+The existing presentation cache remains the sole asynchronous owner. Its one
+worker constructs an optional surface plan, selects one render origin (the
+first admitted surface position or the request fallback), invokes the batch
+builder with the surface charge, prepares both native resource families, and
+publishes one complete `RealityViewport` only after request-identity recheck.
+A same-identity restart remains distinguishable by the cache's private request
+UUID. The cache may retain one current native owner and one preparing candidate;
+only the newest additional pending request is retained, as engine-neutral
+values, until the active worker exits.
+
+`RealityViewport` stores the surface plan, material programs, immutable
+visual/line `MeshResource` and `ShapeResource` values together in one optional
+private `SurfaceResources` record. Frame Entities, mutable appearance, bounds,
+and provenance attachment remain owned by each `RealityViewport`. `nil` means
+no surface exists; camera, spatial resources, and the scene root still exist.
+An empty non-optional surface plan also produces no `SurfaceResources`, while
+its real snapshot identity remains in the preparation identity. Appearance and
+hit-test operations treat a missing surface as an explicit empty-surface
+result, not a failed camera or fallback. A ready `RealityViewportView` mounts
+without requiring a surface or presentation scene.
+
+For an overlay-only request with the same scene key and optional real snapshot,
+the cache
+borrows the current immutable `SurfaceResources` under the native owner and the
+candidate shares those resource identities while constructing distinct frame
+Entities and provenance attachment. It does not rerun surface-plan traversal,
+custom-material program generation, mesh upload, or collision generation. The
+shared record remains retained by the current/candidate ownership pair and is
+released when neither owns it. A source-snapshot change never reuses it. This is
+reuse inside the existing cache lifecycle, not an additional cache or
+allocation lane; native objects never become producer input or leave their
+declared isolation.
+While that candidate is preparing, the current complete root remains enabled
+as display-only continuity. Its old spatial entities may remain visible, but
+their native handle indices have no CAD meaning without the cache's exact-ready
+identity table, and no CAD input path may query them. A typed overlay failure
+keeps that display-only root and reports the failure. Source/snapshot
+replacement and teardown still withdraw it immediately.
+
+The spatial-overlay seam remains internal to this component. An immutable
+`RealityViewportSpatialBatch` carries finite world polylines, indexed triangles,
+planar native paths with world transforms, world-anchored text, and bounded
+camera-relative markers. `RealityViewportSpatialResources.prepare(batch:)`
+receives polygon fills as planar paths, including concave boundaries; RealityKit
+owns tessellation. Open section contours remain unfilled and unclosed, matching
+the section owner's segment representation. No triangle-fan fill may substitute
+for an arbitrary source polygon. Preparation validates the complete batch before native allocation, then asynchronously
+creates an off-scene Entity root and immutable lookup metadata. Positions and
+triangles use the existing plan ceilings; every native part, path, text item,
+and marker consumes the existing item ceiling; and application-owned overlay
+storage plus the retained surface charge must fit the aggregate retained-byte
+ceiling. Exceeding any count or checked byte sum throws the existing typed
+resource-exhaustion failure. Prefix truncation, omitted geometry, and empty
+success are not admission strategies. Native SDK allocations remain opaque and
+are bounded only by admitted resource counts plus measured platform evidence.
+Every camera-relative anchor placement also consumes the item ceiling; packing
+multiple points into one camera-line or marker array cannot bypass the per-frame
+work bound.
+Interactive top-level descriptors carry an optional frame-local `UInt32`
+`handleIndex`. The parent producer owns the immutable typed CAD identity table;
+this component accepts its count, validates every index before allocation, and
+never interprets the table's entries. World meshes are grouped by attachment and
+handle index, so distinct handles cannot lose their provenance through batching.
+All native fragments of a handle resolve to the same index through a frame-owned
+Entity lookup. Noninteractive fragments have no index. The host may use a returned
+index only with the matching prepared frame and identity table. Lookup storage
+and grouping scratch storage consume the existing aggregate byte admission.
+Native collision/query wiring remains the RK-4 gate; retaining this metadata
+alone does not make a handle pickable.
+The internal camera-relative offset is either a fixed point-space translation or
+a direction-relative value containing one immutable world `toward` point plus
+finite parallel and perpendicular point distances. `CameraPoint`, label, and
+camera-path descriptors use this one value contract. A direction-relative
+placement resolves the normalized screen direction from the projected anchor to
+the projected `toward` point, then applies its parallel distance on that axis and
+its perpendicular distance on the counterclockwise normal. `BillboardComponent`
+continues to own camera facing, but Entity orientation is not a substitute for
+this calculation: under perspective, a world or camera-local direction alone
+does not contain the depth division that determines the projected direction.
+Arrow wings use direction-relative `CameraPoint` values in an admitted
+fixed-capacity camera line; this contract adds no renderer, tessellator, or
+per-frame geometry resource.
+
+One finite frame-local camera-plane projection map is derived per mounted camera
+update from three bounded `RealityViewCameraContent.project` samples at a
+validated sample depth. Orthographic placement uses that affine map directly;
+symmetric-perspective placement applies the exact `sampleDepth / -localZ` scale
+for each finite camera-local anchor or `toward` point before evaluating the same
+map. This is the only supported native lens pair, and it preserves native
+projection authority without repeating three project calls per annotation. The
+map is shared by every admitted fixed and direction-relative placement in that
+update and is not stored across camera frames. Per-placement work is limited to
+camera-local conversion and bounded affine arithmetic; it performs no native
+resource creation, source traversal, or await. A behind-camera, non-finite,
+unprojectable, or screen-degenerate anchor/toward pair disables the affected
+descriptor for that update, clears any mutable line position used by it, and
+never reuses a stale transform or falls back to a fixed direction. Each
+direction-relative `toward` point consumes one additional item and position, and
+its concrete descriptor storage is included in the checked retained-byte sum.
+
+Grid geometry is camera-owned bounded presentation rather than immutable
+world-source topology. The static producer does not materialize grid lines or
+scale-label strings into the retained spatial batch. On each changed grid
+frame, the native resource owner supplies its mounted camera projection and
+the ruler, basis, size, and chrome exclusions to `ViewportProjectedGrid`.
+The resolved frame contains the grid plane, finite world coverage bounds,
+minor and major steps, and the complete chrome-visible label list.
+The frame contains no scene item, CAD source,
+project authority, or native object. It is validated in full before the current
+grid is mutated; an invalid or over-budget frame preserves the previous complete
+grid and returns the existing typed failure rather than retaining frozen
+coverage, dropping labels, or publishing a partial update.
+Grid-only failure is a recoverable component status, returned separately from
+camera/section failures. `RealityViewportView` keeps the native frame enabled and
+reports it through the dedicated grid-status receiver; the receiver is required
+when grid rendering is enabled. It must not enter `Viewport.surfaceFailure`,
+which controls surface readiness and picking. The existing mount owns one
+coalesced notification task for both statuses and the successfully resolved
+scale readout, and cancels it on detach. Readout changes participate in equality
+so zoom and pan update HUD and snap-step consumers without rebuilding a second
+grid in SwiftUI. Recoverable grid failure retains the readout with the previous
+complete grid and reports the failure separately; hiding the grid clears it. A valid
+view with no forward grid-plane intersection explicitly disables only the grid;
+a partially visible plane retains the bounded partial-coverage rule.
+The resource owner reuses the frame-local native `CameraProjection` to project
+and place that grid. It does not call the surface-bounds-dependent
+`RealityViewport.cameraRay`, fabricate geometry or bounds for an empty scene,
+or introduce a second camera or projection model.
+
+`RealityViewportSpatialResources` owns one native line `LowLevelMesh` with fixed
+capacity for the existing maximum 360 segments: 720 positions and 720 UInt32
+indices. Minor, major, and origin segments are reordered into three stable
+material parts; a grid-frame update changes only admitted vertex data, part
+ranges, and bounds, preserving the `LowLevelMesh`, `MeshResource`, materials,
+Entity, scene attachment, and frame identity. Segment count, positions, fixed
+buffer bytes, and per-frame work consume the existing aggregate ceilings even
+though one native mesh groups them. No procedural `CustomMaterial` exception is
+introduced because native line topology already expresses the bounded grid.
+
+Scale labels use a camera-owned native annotation subroot and RealityKit
+`TextComponent`, whose supported contract dynamically manages its plane,
+material, mesh component, and backing resolution for changed attributed text.
+The component owner keeps a bounded high-water pool of label Entities, reuses
+slots, clears and disables unused text, and grows the pool only after checked
+item/application-byte admission. A frame either updates every visible label or
+fails as a whole; pool exhaustion is never hidden by truncation. The existing
+formatter and Core Text sizing produce the complete attributed string and canvas
+size, while `TextComponent` alone renders it; there is no glyph atlas, custom
+text renderer, `MeshResource` text extrusion, or asynchronous preparation lane.
+The labels remain in the same RealityKit frame and are placed on its finite
+camera-relative annotation plane, preserving constant point size and
+annotation-over-content semantics without depending on material depth controls
+that `TextComponent` does not expose. SDK-managed text backing bytes remain
+opaque: Rupa charges its retained strings, slot records, and Entity references,
+bounds native item count, and measures the target runtime instead of claiming an
+exact engine allocation. Text reassignment and bounded pool growth are the only
+grid-specific exception to camera-update resource immutability; no other label,
+path, surface, or source resource may use it.
+The batch may additionally hold one optional selected-bounds ruler group: one
+immutable occurrence `GeometryBounds3D` plus up to three preformatted axis
+labels. Preparation creates at most three cached text resources and three
+fixed-capacity line meshes, one per eligible axis; each line mesh has six
+positions for its two extension segments and one dimension segment. The group
+wrapper is not an admission shortcut: every label and line resource consumes an
+item, every one of the six camera-relative line positions also consumes the
+item and position ceilings, and the group record, labels/UTF-8 storage, camera
+points, native input buffers, and resource metadata consume the existing
+checked aggregate retained-byte ceiling. A disabled axis retains its admitted
+fixed-capacity resource for later camera updates and does not refund admission.
+Line and triangle `LowLevelMesh` resources group material-indexed parts during
+preparation; native path/text extrusion and the shared marker primitive are
+also created only there. A camera update may synchronously change finite
+fixed-capacity buffers or transforms owned by the prepared result. Apart from
+the explicit bounded grid `TextComponent` update above, it never creates a
+resource or starts asynchronous preparation.
+The matching `RealityViewportView` update supplies the current safe rectangle
+and `ViewportCanvasChromeLayout` exclusion rectangles. Their count consumes the
+same per-frame item-work ceiling before layout; overflow disables the ruler
+group explicitly rather than truncating exclusions. The native project closure
+is evaluated only by the existing `ViewportMeasurementBoundsRulerLayout` over
+one bounds box and its fixed edge candidates. The update changes the three
+fixed-capacity line buffers, label transforms, and per-axis enabled state only;
+it performs no text/mesh generation, formatting, await, or source traversal.
+
+Every spatial descriptor also declares an attachment independent of its depth
+policy. `.sectionedGeometry` attaches model-derived geometry, highlights, and
+their annotations below the same clipping root as the optional surface;
+`.world` attaches grid, axes, construction/reference/placement guides, the
+section-plane visualization, and other intentionally uncut world annotations
+as a sibling. The producer chooses attachment from feature meaning; depth,
+color, draw order, or descriptor kind never implies it. Native preparation
+returns both roots as one `RealityViewportSpatialResources` owner, and the
+viewport attaches them once before publication. Camera-relative placement may
+update entities in either root but cannot reparent them during a camera update.
+For a sectioned camera-relative descriptor, the containment bounds are not
+frozen at preparation scale. After bounded camera placement, `RealityViewport`
+queries `sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false)`,
+unions it with the immutable surface and fixed sectioned-overlay bounds, and
+synchronously reapplies the same section. Only the five non-cut containment
+faces expand; the authored cut plane and retained half-space remain unchanged.
+The query runs only when such descriptors exist, covers at most the admitted
+640 placements, and performs no source traversal or resource generation.
+
+A world-anchored camera-facing two-dimensional path, including a rounded
+rectangle, ring, arrow, or equivalent annotation shape, is converted once per
+path-topology revision through native `Path.strokedPath` and RealityKit
+extrusion, then reused with `BillboardComponent` and fixed transforms for
+constant-pixel presentation. A minimum-length CAD handle uses the same
+native-projected anchor-to-target displacement for its shaft, tip glyph, and
+label, clamped to its declared minimum pixel length. The bounded camera update
+resolves this placement; source generation never reads camera scale.
+Label alignment is a local child transform derived
+from the generated glyph bounds; its background and border use the same
+camera-facing path descriptor rather than a separate screen renderer. Every
+spatial descriptor declares its native depth read/write policy as either scene
+depth or annotation-over-content, so ordering is not inferred from draw order.
+Native path tessellation remains engine-owned opaque allocation: admitted
+descriptor/resource counts and platform measurements bound it, but Rupa does
+not claim an exact tessellation byte size.
+
+World polylines use native RealityKit line topology and its native width. CAD
+state is distinguished by semantic color and depth plus existing fill, marker,
+or label cues; Canvas pixel widths, halos, caps, and joins are not recreated and
+their absence never makes the CAD operation unsupported. A planar
+section/construction/reference dash is supplied as an already dashed and
+stroked native path at topology preparation time, without a general-purpose
+stroke-style renderer. A genuinely three-dimensional guide remains native
+world-line geometry and uses its semantic marker, color, fill, or label instead
+of screen-baked dashes.
 
 ## Contracts and Invariants
 
-1. Exactly one frame identity tuple `(snapshotID, viewportRevision,
-   overlayRevision)` owns the root, camera, spatial overlay resources,
-   collision shapes, and hit-test lookup. A partial tuple cannot be displayed
-   or queried.
+1. Exactly one frame identity tuple `(required source identity and derived
+   ViewportSceneSnapshotKey, optional real snapshotID, viewportRevision,
+   overlayRevision)` owns the root, camera,
+   spatial overlay resources, optional collision shapes, and optional hit-test
+   lookup. A partial tuple cannot be displayed or queried. Absence of surface
+   resources never prevents a matching native camera/spatial root from mounting.
 2. A newer matching camera revision updates the native camera transform or
    component immediately. It may synchronously update only bounded,
-   fixed-capacity camera-relative buffer or primitive transforms. It must not
-   rebuild world scene geometry or the provenance map, generate resources, or
-   mutate cached label/path `MeshResource` values. Cached text/path resources
-   are immutable and reused. A newer overlay revision rebuilds only its bounded
-   spatial entities while retaining the matching source scene.
+   fixed-capacity camera-relative buffer or primitive transforms and, when a
+   sectioned camera-relative descriptor exists, recompute the native sectioned
+   visual-bounds union and its five containment faces. It may also apply the
+   bounded dynamic-grid contract above. Outside that explicit `TextComponent`
+   exception, it must not rebuild world scene geometry or the provenance map,
+   generate resources, or mutate cached label/path `MeshResource` values.
+   Cached non-grid text/path resources are immutable and reused. A newer overlay
+   revision rebuilds only its bounded spatial entities while retaining the
+   matching source scene.
 3. `MeshResource` is shared only when occurrence provenance remains recoverable.
    Otherwise each occurrence receives its own Entity while reusing immutable
    resource data. `MeshInstancesComponent` is allowed only after a focused
@@ -236,7 +530,21 @@ retains the viewport revision.
    scene depth extent, its eye is two `E` in front of the viewport-center point
    on the focus plane and its near/far distances are `E` and `3E`. These values
    preserve the existing admitted near/depth interval without a custom
-   projection matrix. Camera
+   projection matrix. When the spatial batch contains an admitted native grid,
+   the orthographic clip extent additionally includes every finite intersection
+   between that grid plane and the four viewport-corner rays resolved by the
+   existing canonical `ViewportLayout.unproject` before native camera setup.
+   The resulting depth interval is the outward Float-precision rounding of the
+   union of those intersections and the admitted source extent. Only the native
+   camera depth translation and near/far planes may expand: the center ray,
+   plane normal, native camera entity, screen projection, lens scale,
+   orientation, and source authority remain unchanged. Spatial resources expose
+   the bounded grid-admission predicate as an internal computed value; they do
+   not introduce another camera, frustum, timer, resource-preparation lane, or
+   source traversal. A batch without a grid retains the existing source extent,
+   while edge-on or nonintersecting grid planes use the existing explicit grid
+   visibility result. This preparation performs exactly four projection queries
+   and creates no camera-frame resources. Camera
    revision updates do not regenerate geometry resources. Native render/project
    parity and composed-ray/project round trips must cover centered and
    off-center orthographic and perspective cases, true axis-front endpoints,
@@ -248,17 +556,36 @@ retains the viewport revision.
    exposed; stale geometry is never displayed or queried as current. Cancellation
    releases candidate resources and publishes no empty root. Teardown releases
    the root and rejects all late callbacks.
+9. Surface and spatial preparation share one cancellation lineage and one
+   aggregate admission. A failure in the optional surface plan, spatial batch
+   builder, either native resource path, attachment, or final assembly publishes
+   none of the candidate. No independent overlay cache, worker, root
+   publication, or asynchronous allocation lane is permitted.
 
 ## Runtime Flows
 
 ```text
-matching frame descriptor
+matching preparation request
   -> validate bounds/provenance
-  -> prepare native mesh/material/collision/text resources
-  -> construct candidate root and camera
+  -> prepare optional surface plan and select one render origin
+  -> build the admitted spatial batch with exact retained surface charge
+  -> prepare native surface/spatial resources in the same worker
+  -> attach sectioned and world roots and construct the permanent camera
   -> install one content/root tuple
   -> native project samples on that tuple
   -> bounded composed ray and Scene.raycast on that tuple
+
+matching camera update with sectioned camera-relative descriptors
+  -> update admitted placement transforms
+  -> query native sectioned visual bounds
+  -> union immutable surface and fixed sectioned-overlay bounds
+  -> reapply unchanged cut plane with expanded containment faces
+
+changed native grid frame
+  -> validate complete line, label, item, position, and retained-byte admission
+  -> update one fixed-capacity world-line buffer and three stable material parts
+  -> reuse or grow the bounded TextComponent label pool as one atomic frame
+  -> keep preparation identity, native root, surface, and non-grid resources unchanged
 
 replacement or unmount
   -> cancel candidate
@@ -270,8 +597,9 @@ replacement or unmount
 
 ## State, Ownership, and Lifecycle
 
-The host owns the candidate and current root for one mount. The frame descriptor
-owns immutable provenance values; the host owns native resources. The camera
+The host owns the candidate and current root for one mount. The preparation
+request owns immutable source/overlay values until completion; the host owns
+native resources. The camera
 session remains owned by `ViewportControlSession`, not by RealityKit entities.
 The current root is display- and pick-eligible only while it matches the
 authoritative mounted frame tuple; a retained mismatched root is detached,
@@ -309,6 +637,15 @@ and collision indices are already admitted, and grouping retains them through
 copy-on-write references. The grouping dictionary is discarded before native
 resource creation; SDK resource allocations remain count-bounded and opaque.
 
+The optional surface record and spatial batch consume one shared count/byte
+admission. An empty or absent surface contributes no invented resource charge,
+while all actual plan-retained bytes are passed into spatial admission before
+its first allocation. At most one current native owner and one candidate may be
+retained; the newest pending request contains no native resource. When current
+and candidate share one `SurfaceResources` record, its immutable application
+buffers and native resource identities are charged once rather than presented
+as two independent allocations.
+
 The maximum single native line-upload fixture is derived from the current
 hard plan limits rather than selected from a representative model. For one
 occurrence, let `P` be the admitted position count, `T` the triangulated
@@ -333,7 +670,7 @@ One more triangle for the selected position count must be refused because its
 Adding occurrences cannot increase one upload interval because it adds
 occurrence charges and splits native line resources.
 
-That fixture measures the actual `RealityViewport.prepare(plan:)` path and the
+That fixture measures the actual `RealityViewport.prepare` surface path and the
 maximum `NativeLineUpload` interval against 8.333 ms on the tested Apple GPU.
 `ResponsivenessFootprintProbe` and
 `ResponsivenessFootprintPeakSampler` also record the current test process's
@@ -348,10 +685,15 @@ latency for every allocator arrangement.
 |---|---|
 | Native resource path | Apple GPU probe/test covers triangles, line topology, text/path extrusion, material assignment, and macOS-27-or-later `ClippingComponent` hierarchy. Purely translated exact-equal payloads use the same visual/collision/line resource identities through distinct entities and retain distinct occurrence/face hit provenance; a changed shear or other non-equal native payload does not share. A same-shading material-map replacement changes the actual native output; invalid replacement reports failure without partial mutation; a camera-only revision leaves appearance resources unchanged and performs no material-resolution callback or scene traversal. |
 | Native camera/input | Mounted macOS 27 tests retain the raw inverse-query counterexamples, then cover documented orthographic/symmetric-perspective lens forms; centered/off-center fit/pan render/project parity; three-point affine explicit miss; composed-ray/project round trips; near/far filtering; bounded `Scene.raycast`; true axis-front endpoints; rigid quaternion-transition frames; and invalid-frame or stale-tuple miss. Apple-GPU front/back quad tests prove the one-sided visual-mesh collision counterexample, then compare rendered visibility with ordered native `.all` results from the collision-only original/reversed mesh for material culling on/off, both normalized face ranges, out-of-range refusal, and exact source provenance. |
-| Frame identity | Replacement, cancellation, overlay-only update, camera-only update, and unmount tests reject mixed roots and stale lookup. A default-cache lifecycle test uses actual native preparation, then scene replacement and teardown with no external mount owner; weak `RealityViewport` and root references prove that application owners withdraw and release each completed native owner. Native SDK deallocation may be deferred, so this is not GPU allocator-reclamation evidence. |
+| Frame identity | Compile coverage proves every public and production `Viewport` caller supplies document-generation or real presentation-snapshot identity. Replacement, cancellation, overlay-only update, camera-only update, and unmount tests reject mixed roots and stale lookup. Same-snapshot/different-overlay replacement is distinct and retains identical surface plan/material/visual/line/collision resource identities; camera-only revision reuses all resource identities; rapid replacement retains one worker plus the newest pending value. A default-cache lifecycle test uses actual native preparation, then scene replacement and teardown with no external mount owner; weak `RealityViewport`, shared surface record, and root references prove that application owners withdraw and release each completed native owner. Native SDK deallocation may be deferred, so this is not GPU allocator-reclamation evidence. |
+| Overlay display continuity | A delayed same-scene/snapshot overlay fixture proves the mounted root, camera, source surface, and native grid remain enabled through preparation and typed failure while exact-ready surface, CAD hit, and handle-table lookup for the requested identity remain unavailable. Warm-host Ortho/Persp tests prove successful publication has no empty rendered frame; source/snapshot replacement still withdraws the old root. |
+| Empty and optional surface | Nil-surface and real empty-snapshot fixtures mount one native root and camera in Ortho and Persp, display grid/axis/measurement spatial entities, return an explicit surface miss, and contain no fabricated project/evaluation identity. |
+| Spatial attachment | Apple-GPU section fixtures prove `.sectionedGeometry` follows the surface clip while `.world` grid/section-plane/reference entities remain uncut; both retain their declared depth policy and update through the same mounted camera. Ortho/Persp zoom fixtures move a sectioned camera-relative label/marker beyond the prepared surface bounds, prove the native visual-bounds union expands only the five containment faces, preserves the cut half-space, and reuses every geometry/text/path resource identity. |
+| Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed and direction-relative `CameraPoint`, label, and camera-path placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, degenerate or behind-camera pairs become explicitly disabled without stale positions, camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
+| Native dynamic grid | Fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare the complete native line classes, signed formatted labels, separation, and chrome exclusion with `ViewportProjectedGrid`. The same line `LowLevelMesh`, three material parts, surface resources, and non-grid spatial resources retain identity while world coverage and `TextComponent` values change. Invalid and combined line/label/item/position/byte boundaries preserve the previous grid and report typed failure without label truncation. Apple-GPU evidence confirms TextComponent visibility, constant point size, and annotation ordering; a maximum admitted grid plus camera-relative update remains within 8.333 ms and performs no scene/CAD traversal or application-owned asynchronous resource generation. |
 | Provenance | Face/edge/vertex/occurrence mappings survive entity/resource reuse; missing mapping is an explicit miss. |
 | Failure and bounds | Owned-buffer count/byte admission, native resource-count bounds, opaque native resource/collision failure, measured peak memory, cancellation, and root-preservation tests pass without empty success. A lowered caller byte limit that admits the CPU plan but not checked grouping metadata fails with `.resourceExhausted` before grouping allocation. A finite `1e-100` world scale must pass the Double CPU plan, fail only when native Float preparation collapses its surface with `.invalidTransform`, publish no surface, and allow the next valid snapshot to recover to ready. The maximum single-upload fixture and its boundary refusal are recomputed after grouping admission is added rather than preserving old hard-coded counts. Current-process footprint evidence reports baseline/peak/retained/signed delta and sample count without being promoted to signed-App or exact opaque-allocation proof. |
-| MainActor copy budget | The derived 5,617,816-byte maximum single line payload is passed through actual `RealityViewport.prepare(plan:)`; its SDK-required `LowLevelMesh` construction and scoped buffer copy signpost is at most 8.333 ms on the tested Apple GPU. |
+| MainActor copy budget | The derived 5,617,816-byte maximum single line payload is passed through the actual `RealityViewport.prepare` surface path; its SDK-required `LowLevelMesh` construction and scoped buffer copy signpost is at most 8.333 ms on the tested Apple GPU. |
 | Backend cutover | Production target has no custom Metal pipeline, identity renderer, spatial Canvas, or second scene/camera route. |
 
 The current development toolchain requires

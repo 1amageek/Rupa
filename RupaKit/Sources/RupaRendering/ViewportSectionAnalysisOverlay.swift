@@ -135,14 +135,30 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         maximumVisibleContours: Int = 128,
         maximumVisibleHatches: Int = 512
     ) -> ViewportSectionAnalysisOverlay {
+        build(result: result, ruler: ruler, maximumVisibleSegments: maximumVisibleSegments,
+              maximumVisibleContours: maximumVisibleContours, maximumVisibleHatches: maximumVisibleHatches,
+              checkpoint: { _, _, _ in })
+    }
+
+    static func build(
+        result: SectionAnalysisResult?,
+        ruler: RulerConfiguration,
+        maximumVisibleSegments: Int,
+        maximumVisibleContours: Int,
+        maximumVisibleHatches: Int,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> ViewportSectionAnalysisOverlay {
+        try checkpoint(0, 0, 0)
         guard let result else {
             return ViewportSectionAnalysisOverlay()
         }
         let ruler = ruler.normalizedForWorkspaceScale()
         let visibleLimit = max(0, maximumVisibleSegments)
         let visibleSegments = result.intersectionSegments.prefix(visibleLimit)
-        let segmentItems = visibleSegments.enumerated().map { index, segment in
-            SegmentItem(
+        try checkpoint(visibleSegments.count, 0, 0)
+        let segmentItems = try visibleSegments.enumerated().map { index, segment in
+            try checkpoint(0, 2, 1)
+            return SegmentItem(
                 id: "\(segment.bodyID):section:\(index)",
                 bodyID: segment.bodyID,
                 start: segment.start,
@@ -150,8 +166,15 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
             )
         }
         let visibleContourLimit = max(0, maximumVisibleContours)
-        let contourItems = result.intersectionContours.prefix(visibleContourLimit).map { contour in
-            ContourItem(
+        let visibleContours = result.intersectionContours.prefix(visibleContourLimit)
+        try checkpoint(visibleContours.count, 0, 0)
+        let contourItems = try visibleContours.map { contour in
+            try checkpoint(1, contour.points.count, 1)
+            try checkpoint(0, contour.points2D.count, 0)
+            if contour.isClosed && contour.points.count >= 3 {
+                try checkpoint(0, (contour.points.count - 2) * 3 + 1, 0)
+            }
+            return ContourItem(
                 id: contour.id,
                 bodyID: contour.bodyID,
                 points: contour.points,
@@ -160,16 +183,19 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
                 signedAreaSquareMeters: contour.signedAreaSquareMeters
             )
         }
-        let hatchItems = hatches(
+        let hatchItems = try hatches(
             for: contourItems,
             plane: result.plane,
             ruler: ruler,
             tolerance: result.toleranceMeters,
-            maximumVisibleHatches: maximumVisibleHatches
+            maximumVisibleHatches: maximumVisibleHatches,
+            checkpoint: checkpoint
         )
-        let planeItem = planeItem(
+        try checkpoint(3, 12, 0)
+        let planeItem = try planeItem(
             for: result,
-            ruler: ruler
+            ruler: ruler,
+            checkpoint: checkpoint
         )
         return ViewportSectionAnalysisOverlay(
             plane: planeItem,
@@ -186,11 +212,13 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
 
     private static func planeItem(
         for result: SectionAnalysisResult,
-        ruler: RulerConfiguration
-    ) -> PlaneItem {
-        let halfExtent = planeHalfExtentMeters(
+        ruler: RulerConfiguration,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> PlaneItem {
+        let halfExtent = try planeHalfExtentMeters(
             result: result,
-            ruler: ruler
+            ruler: ruler,
+            checkpoint: checkpoint
         )
         let plane = result.plane
         let origin = plane.origin
@@ -258,21 +286,23 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         plane: SectionAnalysisResult.Plane,
         ruler: RulerConfiguration,
         tolerance: Double,
-        maximumVisibleHatches: Int
-    ) -> [HatchItem] {
+        maximumVisibleHatches: Int,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [HatchItem] {
         var items: [HatchItem] = []
-        items.reserveCapacity(max(0, maximumVisibleHatches))
         for contour in contours where contour.isClosed && contour.points2D.count >= 3 {
+            try checkpoint(0, 0, 1)
             let remaining = maximumVisibleHatches - items.count
             guard remaining > 0 else {
                 break
             }
-            items.append(contentsOf: hatches(
+            items.append(contentsOf: try hatches(
                 for: contour,
                 plane: plane,
                 ruler: ruler,
                 tolerance: tolerance,
-                maximumCount: remaining
+                maximumCount: remaining,
+                checkpoint: checkpoint
             ))
         }
         return items
@@ -283,9 +313,10 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         plane: SectionAnalysisResult.Plane,
         ruler: RulerConfiguration,
         tolerance: Double,
-        maximumCount: Int
-    ) -> [HatchItem] {
-        guard let bounds = bounds(for: contour.points2D), maximumCount > 0 else {
+        maximumCount: Int,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [HatchItem] {
+        guard let bounds = try bounds(for: contour.points2D, checkpoint: checkpoint), maximumCount > 0 else {
             return []
         }
         let width = max(bounds.maxX - bounds.minX, tolerance)
@@ -295,8 +326,8 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
             tolerance * 16.0,
             min(max(ruler.majorTickMeters * 0.2, ruler.minorTickMeters), span / 10.0)
         )
-        let estimatedLineCount = Int(ceil(height / step)) + 1
-        if estimatedLineCount > maximumCount {
+        let estimatedLineCount = ceil(height / step) + 1
+        if estimatedLineCount > Double(maximumCount) {
             step = max(height / Double(maximumCount), tolerance * 16.0)
         }
 
@@ -304,16 +335,20 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         var y = ceil(bounds.minY / step) * step
         var hatchIndex = 0
         while y <= bounds.maxY && hatches.count < maximumCount {
-            let intersections = scanlineIntersections(
+            try checkpoint(0, 0, 1)
+            let intersections = try scanlineIntersections(
                 y: y,
                 polygon: contour.points2D,
-                tolerance: tolerance
+                tolerance: tolerance,
+                checkpoint: checkpoint
             )
             var pairIndex = 0
             while pairIndex + 1 < intersections.count && hatches.count < maximumCount {
                 let startX = intersections[pairIndex]
                 let endX = intersections[pairIndex + 1]
+                try checkpoint(0, 0, 1)
                 if endX - startX > tolerance {
+                    try checkpoint(1, 2, 0)
                     hatches.append(HatchItem(
                         id: "\(contour.id):hatch:\(hatchIndex)",
                         contourID: contour.id,
@@ -330,15 +365,17 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
     }
 
     private static func bounds(
-        for points: [Point2D]
-    ) -> (minX: Double, maxX: Double, minY: Double, maxY: Double)? {
+        for points: [Point2D],
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> (minX: Double, maxX: Double, minY: Double, maxY: Double)? {
         guard let first = points.first else {
             return nil
         }
-        return points.dropFirst().reduce(
+        return try points.dropFirst().reduce(
             (minX: first.x, maxX: first.x, minY: first.y, maxY: first.y)
         ) { result, point in
-            (
+            try checkpoint(0, 0, 1)
+            return (
                 minX: min(result.minX, point.x),
                 maxX: max(result.maxX, point.x),
                 minY: min(result.minY, point.y),
@@ -350,13 +387,15 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
     private static func scanlineIntersections(
         y: Double,
         polygon: [Point2D],
-        tolerance: Double
-    ) -> [Double] {
+        tolerance: Double,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> [Double] {
         guard polygon.count >= 3 else {
             return []
         }
         var intersections: [Double] = []
         for index in polygon.indices {
+            try checkpoint(0, 0, 1)
             let start = polygon[index]
             let end = polygon[(index + 1) % polygon.count]
             let crosses = (start.y <= y && end.y > y) || (end.y <= y && start.y > y)
@@ -371,9 +410,13 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
             guard t.isFinite else {
                 continue
             }
+            try checkpoint(0, 1, 0)
             intersections.append(start.x + (end.x - start.x) * t)
         }
-        return intersections.sorted()
+        return try intersections.sorted {
+            try checkpoint(0, 0, 1)
+            return $0 < $1
+        }
     }
 
     private static func point(
@@ -390,15 +433,17 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
 
     private static func planeHalfExtentMeters(
         result: SectionAnalysisResult,
-        ruler: RulerConfiguration
-    ) -> Double {
+        ruler: RulerConfiguration,
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) rethrows -> Double {
         let minimumVisibleExtent = max(
             ruler.majorTickMeters * 2.0,
             ruler.visibleSpanMeters * 0.04,
             result.toleranceMeters * 64.0
         )
-        let segmentExtent = result.intersectionSegments.reduce(0.0) { extent, segment in
-            max(
+        let segmentExtent = try result.intersectionSegments.reduce(0.0) { extent, segment in
+            try checkpoint(0, 0, 1)
+            return max(
                 extent,
                 abs(segment.start2D.x),
                 abs(segment.start2D.y),

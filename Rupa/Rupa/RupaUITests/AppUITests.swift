@@ -456,4 +456,151 @@ final class AppUITests: XCTestCase {
             _ = launchApp()
         }
     }
+    @MainActor
+    func testNativeViewportMountsEmptyAndPopulatedFramesAcrossProjectionChanges() throws {
+        let app = launchApp()
+        let canvas = app.descendants(matching: .any)["CanvasViewport"]
+        let grid = app.descendants(matching: .any)["CanvasCoordinateGrid"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+        // This marker receives its readout only after the mounted native grid
+        // successfully updates. An empty document must mount that same path.
+        XCTAssertTrue(grid.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.descendants(matching: .any)["CanvasPresentationFailure"].exists)
+
+        app.buttons["CanvasTool.solid"].click()
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.50)).click()
+        XCTAssertTrue(app.outlines.staticTexts["Box"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["CanvasTool.select"].click()
+        XCTAssertTrue(grid.waitForExistence(timeout: 8))
+
+        for projection in ["Ortho", "Persp", "Ortho"] {
+            let button = app.buttons["CanvasAxisTriad.Projection.\(projection)"]
+            XCTAssertTrue(button.waitForExistence(timeout: 3))
+            button.click()
+            XCTAssertEqual(button.value as? String, "Selected")
+            XCTAssertTrue(grid.waitForExistence(timeout: 8))
+            XCTAssertFalse(app.descendants(matching: .any)["CanvasPresentationFailure"].exists)
+        }
+    }
+
+    @MainActor
+    func testCanvasFrameAndAxisTriadRemainStableAcrossEmptyBoxAndHoverUpdates() throws {
+        let app = launchApp()
+        let canvas = app.descendants(matching: .any)["CanvasViewport"]
+        let canvasArea = app.descendants(matching: .any)["WorkspaceCanvasArea"]
+        let axisTriad = app.descendants(matching: .any)["CanvasAxisTriad"]
+        let grid = app.descendants(matching: .any)["CanvasCoordinateGrid"]
+        let inspectorButton = app.buttons["WorkspaceCommand.inspector"]
+
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+        XCTAssertTrue(canvasArea.waitForExistence(timeout: 8))
+        XCTAssertTrue(axisTriad.waitForExistence(timeout: 8))
+        XCTAssertTrue(grid.waitForExistence(timeout: 8))
+        XCTAssertTrue(inspectorButton.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.descendants(matching: .any)["CanvasPresentationFailure"].exists)
+
+        let assertCanvasLayout: (CGRect, CGRect) -> Void = { canvasFrame, axisFrame in
+            XCTAssertGreaterThan(canvasFrame.width, 0)
+            XCTAssertGreaterThan(canvasFrame.height, 0)
+            XCTAssertGreaterThan(axisFrame.width, 0)
+            XCTAssertGreaterThan(axisFrame.height, 0)
+            XCTAssertGreaterThanOrEqual(axisFrame.minX, canvasFrame.minX)
+            XCTAssertLessThanOrEqual(axisFrame.maxX, canvasFrame.maxX)
+            XCTAssertGreaterThanOrEqual(axisFrame.minY, canvasFrame.minY)
+            XCTAssertLessThanOrEqual(axisFrame.maxY, canvasFrame.maxY)
+            XCTAssertGreaterThan(axisFrame.midY, canvasFrame.midY)
+        }
+        let assertCanvasFillsArea: (CGRect, CGRect) -> Void = { canvasFrame, areaFrame in
+            XCTAssertEqual(canvasFrame.minX, areaFrame.minX, accuracy: 1.0)
+            XCTAssertEqual(canvasFrame.minY, areaFrame.minY, accuracy: 1.0)
+            XCTAssertEqual(canvasFrame.width, areaFrame.width, accuracy: 1.0)
+            XCTAssertEqual(canvasFrame.height, areaFrame.height, accuracy: 1.0)
+        }
+
+        let emptyCanvasFrame = canvas.frame
+        let emptyCanvasAreaFrame = canvasArea.frame
+        let emptyAxisFrame = axisTriad.frame
+        assertCanvasLayout(emptyCanvasFrame, emptyAxisFrame)
+        assertCanvasFillsArea(emptyCanvasFrame, emptyCanvasAreaFrame)
+
+        inspectorButton.hover()
+        canvas.hover()
+        let emptyHoverCanvasFrame = canvas.frame
+        let emptyHoverCanvasAreaFrame = canvasArea.frame
+        let emptyHoverAxisFrame = axisTriad.frame
+        assertCanvasLayout(emptyHoverCanvasFrame, emptyHoverAxisFrame)
+        assertCanvasFillsArea(emptyHoverCanvasFrame, emptyHoverCanvasAreaFrame)
+        XCTAssertEqual(emptyHoverCanvasFrame.width, emptyCanvasFrame.width, accuracy: 1.0)
+        XCTAssertEqual(emptyHoverCanvasFrame.height, emptyCanvasFrame.height, accuracy: 1.0)
+        XCTAssertEqual(emptyHoverAxisFrame.minX, emptyAxisFrame.minX, accuracy: 1.0)
+        XCTAssertEqual(emptyHoverAxisFrame.minY, emptyAxisFrame.minY, accuracy: 1.0)
+
+        let solidTool = app.buttons["CanvasTool.solid"]
+        XCTAssertTrue(solidTool.waitForExistence(timeout: 3))
+        solidTool.click()
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.50)).click()
+
+        let box = app.outlines.staticTexts["Box"].firstMatch
+        XCTAssertTrue(box.waitForExistence(timeout: 5))
+        XCTAssertTrue(grid.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.descendants(matching: .any)["CanvasPresentationFailure"].exists)
+
+        app.buttons["CanvasTool.select"].click()
+        let boxCanvasFrame = canvas.frame
+        let boxCanvasAreaFrame = canvasArea.frame
+        let boxAxisFrame = axisTriad.frame
+        assertCanvasLayout(boxCanvasFrame, boxAxisFrame)
+        assertCanvasFillsArea(boxCanvasFrame, boxCanvasAreaFrame)
+        XCTAssertEqual(boxCanvasFrame.width, emptyCanvasFrame.width, accuracy: 1.0)
+        // Selection may reserve space for the context panel. Hover alone must
+        // preserve the resulting placement, not the empty-document placement.
+        inspectorButton.hover()
+        canvas.hover()
+        let boxHoverCanvasFrame = canvas.frame
+        let boxHoverCanvasAreaFrame = canvasArea.frame
+        let boxHoverAxisFrame = axisTriad.frame
+        assertCanvasLayout(boxHoverCanvasFrame, boxHoverAxisFrame)
+        assertCanvasFillsArea(boxHoverCanvasFrame, boxHoverCanvasAreaFrame)
+        XCTAssertEqual(boxHoverCanvasFrame.width, boxCanvasFrame.width, accuracy: 1.0)
+        XCTAssertEqual(boxHoverCanvasFrame.height, boxCanvasFrame.height, accuracy: 1.0)
+        XCTAssertEqual(boxHoverAxisFrame.minX, boxAxisFrame.minX, accuracy: 1.0)
+        XCTAssertEqual(boxHoverAxisFrame.minY, boxAxisFrame.minY, accuracy: 1.0)
+        XCTAssertFalse(app.descendants(matching: .any)["CanvasPresentationFailure"].exists)
+
+        let canvasAreaBeforeInspectorToggle = canvasArea.frame
+        let inspectorWidthChange = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                abs(canvasArea.frame.width - canvasAreaBeforeInspectorToggle.width) > 1.0
+            },
+            object: canvasArea
+        )
+        inspectorButton.click()
+        XCTAssertEqual(XCTWaiter.wait(for: [inspectorWidthChange], timeout: 3), .completed)
+        let inspectorCanvasFrame = canvas.frame
+        let inspectorCanvasAreaFrame = canvasArea.frame
+        let inspectorAxisFrame = axisTriad.frame
+        assertCanvasLayout(inspectorCanvasFrame, inspectorAxisFrame)
+        assertCanvasFillsArea(inspectorCanvasFrame, inspectorCanvasAreaFrame)
+        XCTAssertGreaterThan(
+            abs(inspectorCanvasAreaFrame.width - canvasAreaBeforeInspectorToggle.width),
+            1.0
+        )
+
+        let restoredWidth = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                abs(canvasArea.frame.width - canvasAreaBeforeInspectorToggle.width) <= 1.0
+            },
+            object: canvasArea
+        )
+        inspectorButton.click()
+        XCTAssertEqual(XCTWaiter.wait(for: [restoredWidth], timeout: 3), .completed)
+        let restoredCanvasFrame = canvas.frame
+        let restoredCanvasAreaFrame = canvasArea.frame
+        let restoredAxisFrame = axisTriad.frame
+        assertCanvasLayout(restoredCanvasFrame, restoredAxisFrame)
+        assertCanvasFillsArea(restoredCanvasFrame, restoredCanvasAreaFrame)
+        XCTAssertEqual(restoredAxisFrame.minX, boxHoverAxisFrame.minX, accuracy: 1.0)
+        XCTAssertEqual(restoredAxisFrame.minY, boxHoverAxisFrame.minY, accuracy: 1.0)
+    }
+
 }

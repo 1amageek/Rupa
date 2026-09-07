@@ -18,9 +18,11 @@ integration.
 
 The component owns measurement endpoint resolution, endpoint snap provenance,
 the idle/anchored/completed interaction state, Euclidean world-space distance,
-and bounded screen-space ruler placement descriptors. It projects one selected
-occurrence's evaluated world bounds into at most three World X/Y/Z native
-RealityKit rulers.
+and bounded screen-space ruler placement descriptors. It receives the mounted
+native camera's synchronous project closure and projects one selected
+occurrence's immutable evaluated world bounds into at most three World X/Y/Z
+native RealityKit rulers. Formatting occurs before camera updates; the layout
+receives the three already formatted axis labels.
 
 It does not own source selection, CAD measurement semantics, persistent
 `MeasurementAnnotation`, document mutation, Undo, camera state, snap policy,
@@ -51,7 +53,8 @@ flowchart LR
     Snap["Existing SnapResolver + provenance"] --> Resolve
     Resolve --> State["idle / anchored / completed"]
     State --> Distance["3D Euclidean distance"]
-    Selection["Exactly one occurrence + world bounds"] --> Placement
+    Selection["Exactly one occurrence + world bounds\n+ preformatted X/Y/Z labels"] --> Placement
+    Camera["Mounted RealityKit camera\nproject closure"] --> Placement
     Distance --> Placement["Bounded projected ruler placement"]
     Exclusions["Viewport safe rect + chrome exclusions"] --> Placement
     Placement --> Spatial["RealityKit line/text entities"]
@@ -107,8 +110,12 @@ presentation snapshot. If a scene-node selection expands to multiple occurrences
 and no current clicked occurrence disambiguates it, no ruler is shown.
 
 The component labels the values `World bounds` and uses the occurrence's existing
-evaluated `worldBounds`. At most one ruler for each finite nonzero World X, Y and
-Z extent is drawn. Camera projection determines only ruler positions. It does not
+evaluated `worldBounds`. The producer formats at most one label for each finite
+nonzero World X, Y and Z extent before native preparation. On each matching
+camera update, `ViewportMeasurementBoundsRulerLayout` consumes those immutable
+bounds and labels plus a synchronous closure backed by
+`RealityViewCameraContent.project`; it no longer consumes a prepare-time
+`ViewportLayout`. Camera projection determines only ruler positions. It does not
 turn the axis-aligned bounds into exact edge length, area, volume, local size, or
 screen-space size.
 
@@ -117,9 +124,12 @@ edges and outside label slots. It selects the first candidate whose label and
 dimension line remain within the viewport safe rectangle and do not intersect
 the projected object rectangle, viewport chrome exclusions, or an already accepted
 label. Extension leaders may touch only their own projected endpoints. If no
-candidate is valid, that ruler is omitted rather than obscuring a control or the
-model; its world-bounds value remains available in the transient status. The
-candidate count is constant and independent of scene size.
+candidate is valid, that axis is returned as explicitly disabled rather than
+silently omitted or allowed to obscure a control or the model; its world-bounds
+value remains available in the transient status. The candidate count is
+constant and independent of scene size. The safe rectangle and exclusion
+rectangles are the current values owned by `ViewportCanvasChromeLayout`, passed
+to the camera update rather than retained as source or native resource state.
 
 All measurement entities are noninteractive and excluded from hit testing. They
 cannot consume selection, camera, tool, or context-panel input. Camera changes
@@ -133,7 +143,10 @@ The measurement component never creates a second camera or spatial scene root.
 Measure hover/click -> current native camera resolution -> existing snap policy
   -> accept explicit world endpoint -> preview/complete -> build spatial descriptors
 object selection -> exact occurrence validation -> evaluated world bounds
-  -> bounded collision placement -> native RealityKit ruler entities
+  -> format three axis labels once -> prepare one optional native ruler group
+matching camera/chrome update -> native project closure + safe/excluded rects
+  -> existing bounded collision placement -> enable accepted axes
+  -> disable unplaceable axes -> update fixed-capacity native ruler entities
 snapshot/tool/selection replacement -> invalidate incompatible transient state
 ```
 
@@ -151,11 +164,12 @@ No task, cache, retained geometry buffer, or external owner is introduced.
 Resolution uses the mounted
 [RealityViewport camera query](../RealityViewport/DESIGN.md#contracts-and-invariants)
 once for the current pointer event; it does not add a second presentation scan, traverse
-or validate source geometry, build a resource graph, evaluate CAD, or perform
-I/O. A bounded CPU fallback is allowed only when RealityKit has no equivalent
-query and consumes the same prepared provenance/camera semantics. Placement is
-constant work over one selected occurrence, three axes, and a fixed candidate
-set. Existing asynchronous frame publication remains its sole owner.
+or validate source geometry, build a resource graph, evaluate CAD, format text,
+or perform I/O. A bounded CPU fallback is allowed only when RealityKit has no
+equivalent query and consumes the same prepared provenance/camera semantics.
+Placement is constant work over one selected occurrence, three axes, a fixed
+candidate set, and a chrome-exclusion count admitted by the parent per-frame
+work ceiling. Existing asynchronous frame publication remains its sole owner.
 
 Failure is a typed/value result consumed by `Viewport`; it is never reported as a
 zero distance or empty success. Stale frame identity, missing occurrence,
@@ -172,8 +186,10 @@ plane input succeeds, unresolved depth refuses, snap kind/label/source survive,
 click recomputation rejects stale hover, Euclidean world distance is projection
 independent, and cancellation/snapshot replacement clear state. Geometry tests
 must prove three labeled world-bounds axes, ambiguous occurrence refusal, bounded
-collision avoidance/omission, native line/text descriptors, and noninteractive
-spatial entities.
+collision avoidance with explicit disabled axes, native line/text descriptors,
+and noninteractive spatial entities. Ortho and Persp tests orbit after resource
+preparation, change safe/excluded rectangles, and prove placement is recomputed
+from native projection without changing labels or native resource identities.
 
 RupaUI tests own Measure activation/status/tool-exit wiring and the absence of
 source/selection/Undo mutations. A signed App test owns two clicks and live hover

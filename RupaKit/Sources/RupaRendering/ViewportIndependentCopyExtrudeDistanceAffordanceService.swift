@@ -225,7 +225,7 @@ struct ViewportIndependentCopyExtrudeDistanceHandleTarget: Equatable {
     }
 }
 
-struct ViewportIndependentCopyExtrudeDistanceHandleIdentity: Equatable {
+struct ViewportIndependentCopyExtrudeDistanceHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
     var outputIndex: Int
     var featureID: FeatureID

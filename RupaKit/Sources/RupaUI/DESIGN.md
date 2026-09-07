@@ -7,14 +7,17 @@ to the App-owned `ProjectWorkspace`. It is a child of the
 [RupaKit package design](../../DESIGN.md). Its CAD operation draft component is
 [Modeling](Modeling/DESIGN.md).
 
-The renderer prepares snapshot-bound plans asynchronously and uses the native
-Metal surface path. Source tests and builds are distinct from signed-App live
-acceptance; the latter must be recorded for the integrated application.
+Production prepares snapshot-bound RealityKit frame values asynchronously and
+mounts surfaces and world-space overlays in one native `RealityView`. SwiftUI
+owns only nonspatial chrome and the screen-space selection marquee. Legacy
+identity picking remains until RK-4, and RK-5/RK-IV own its removal and final
+integrated acceptance. Source tests and builds remain distinct from signed-App
+live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
 The module owns workspace presentation, viewport/UI interaction, visible
-project-title projection, and observation of the existing render-plan cache.
+project-title projection, and observation of the RealityKit frame cache.
 It does not own project source, package persistence, file URLs, application
 process authority, Agent transport, geometry preparation, or a second mutable
 document model.
@@ -26,7 +29,7 @@ document model.
 | [RupaKit package](../../DESIGN.md) | parent | module dependency and authority direction | Places UI above the workspace snapshot. | UI must not bypass the workspace. |
 | [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | used by | application file lifecycle and composition | Supplies the App-owned workspace and file activation. | File names are not project-title authority. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | `ProjectWorkspace` and `ProjectViewSnapshot` | Publishes the exact view consumed by `MainView`. | Snapshot coordinates remain immutable evidence. |
-| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched asynchronous render-plan state | Supplies bounded ready data or typed preparation failure. | UI never builds or repairs geometry. |
+| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state | Supplies a bounded ready frame or typed preparation failure. | UI never builds geometry, creates native resources, or repairs a failed frame. |
 | [Modeling](Modeling/DESIGN.md) | child | Local CAD operation drafts and native parameter controls | Converts explicit selection and input into existing commands. | A draft is neither a source document nor an evaluated preview. |
 
 ## Architecture
@@ -36,9 +39,9 @@ flowchart LR
     Snapshot["ProjectViewSnapshot"] --> Main["MainView"]
     Main --> Title["snapshot.projectName"]
     Main --> Viewport["Viewport presentation"]
-    Viewport --> Cache["Existing plan cache"]
+    Viewport --> Cache["RealityKit frame cache"]
     Cache --> State["idle / preparing / ready / failed"]
-    State --> Canvas["Existing Canvas"]
+    State --> Canvas["Native RealityView + nonspatial chrome"]
     Main --> Workspace["ProjectWorkspace intent APIs"]
     Workspace --> Controller["ProjectController"]
 ```
@@ -97,6 +100,10 @@ No old column-major compatibility controls or layout-detection path remain.
     status, but it does not become a source or evaluation command surface.
     Wireframe and normals describe the source face presentation rather than
     exact B-rep geometry; normals use RGB direction encoding.
+
+The viewport root fills its parent-allocated rectangle in every preparation
+state. Native content, input, and chrome share that coordinate space; padding
+is inside the allocation, never a competing child width or height.
 
 ## Runtime Flows
 

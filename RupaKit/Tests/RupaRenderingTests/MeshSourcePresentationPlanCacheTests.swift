@@ -16,6 +16,188 @@ import SwiftUI
 import simd
 @testable import RupaRendering
 
+private let planCacheDocumentID = DocumentID()
+
+private func planCacheIdentity(_ scene: UniversalViewportScene?, overlayRevision: UInt64 = 0) -> RealityViewportPreparationRequest.Identity {
+    .init(scene: ViewportSceneSnapshotKey(
+        source: .document(id: planCacheDocumentID, generation: DocumentGeneration(1)),
+        currentEvaluationGeneration: nil, evaluationCacheGeneration: nil,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
+        renderInvalidation: RenderInvalidation(), sectionClippingPlan: nil, objectDefinitions: []),
+          snapshotID: scene?.snapshotID, overlayRevision: overlayRevision)
+}
+
+private extension MeshSourcePresentationPlanCache {
+    func prepare(for scene: UniversalViewportScene) {
+        prepare(.init(identity: planCacheIdentity(scene), scene: scene, fallbackOrigin: .origin,
+                      spatialOverlay: { origin, charge in
+            (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [])
+        }))
+    }
+    func surface(for scene: UniversalViewportScene) -> RealityViewport? { surface(for: planCacheIdentity(scene)) }
+    func failure(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderError? { failure(for: planCacheIdentity(scene)) }
+    func isPreparing(_ scene: UniversalViewportScene) -> Bool { isPreparing(planCacheIdentity(scene)) }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
+    let cache = MeshSourcePresentationPlanCache()
+    let firstHandle = ViewportSpatialHandleIdentity.affordance(.init(featureID: FeatureID(), action: .translate(.x)))
+    let secondHandle = ViewportSpatialHandleIdentity.affordance(.init(featureID: FeatureID(), action: .rotate(.y)))
+    let first = planCacheIdentity(nil, overlayRevision: 101)
+    let second = planCacheIdentity(nil, overlayRevision: 102)
+    func request(_ identity: RealityViewportPreparationRequest.Identity,
+                 handle: ViewportSpatialHandleIdentity) -> RealityViewportPreparationRequest {
+        .init(identity: identity, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
+            let input = ViewportSpatialOverlayInput(
+                markers: [.init(family: .transform,
+                                value: .init(shape: .box, anchor: .origin, diameterPoints: 8,
+                                             color: [1, 0, 0, 1], handleIndex: 0))],
+                handleIdentities: [handle], renderOrigin: origin,
+                retainedSurfaceByteCount: charge, topologyRevision: identity.overlayRevision)
+            return try ViewportSpatialOverlayProducer.makeBuilder(from: input)(origin, charge)
+        })
+    }
+    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    cache.prepare(request(first, handle: firstHandle))
+    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    try await settlePlanCache(cache)
+    #expect(cache.handleIdentity(at: 0, for: first) == firstHandle)
+    let prepared = try #require(cache.surface(for: first))
+    func nativeHandleIndex(_ entity: Entity) -> UInt32? {
+        if let index = prepared.spatialHandleIndex(for: entity) { return index }
+        for child in entity.children {
+            if let index = nativeHandleIndex(child) { return index }
+        }
+        return nil
+    }
+    let nativeIndex = try #require(nativeHandleIndex(prepared.root))
+    #expect(cache.handleIdentity(at: nativeIndex, for: first) == firstHandle)
+    #expect(cache.handleIdentity(at: 1, for: first) == nil)
+    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    cache.prepare(request(second, handle: secondHandle))
+    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    try await settlePlanCache(cache)
+    #expect(cache.handleIdentity(at: 0, for: second) == secondHandle)
+    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    cache.teardown()
+    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+
+    // A mismatched native count must fail before any handle gains authority.
+    cache.prepare(.init(identity: first, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
+        (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [firstHandle])
+    }))
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: first)?.code == .invalidSceneItem)
+    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    cache.teardown()
+
+    cache.prepare(.init(identity: second, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
+        (try RealityViewportSpatialBatch(handleCount: 1, renderOrigin: origin, retainedSurfaceByteCount: charge), [secondHandle])
+    }))
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: second)?.code == .invalidSceneItem)
+    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    cache.teardown()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async throws {
+    let scene = try planCacheScene(suffix: "overlay-revision")
+    let gate = PlanBuildGate()
+    let started = Mutex(0)
+    let cache = MeshSourcePresentationPlanCache { scene in
+        let index = started.withLock { $0 += 1; return $0 }
+        await gate.arrive(String(index))
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    func request(_ scene: UniversalViewportScene?, revision: UInt64) -> RealityViewportPreparationRequest {
+        .init(identity: planCacheIdentity(scene, overlayRevision: revision), scene: scene, fallbackOrigin: .origin,
+              spatialOverlay: { origin, charge in
+            (try RealityViewportSpatialBatch(
+                meshes: [.init(positions: [.origin, .init(x: 1, y: 0, z: 0)], indices: [0, 1],
+                                topology: .lines, color: [0, 1, 0, 1])],
+                renderOrigin: origin, retainedSurfaceByteCount: charge), [])
+        })
+    }
+    cache.prepare(request(scene, revision: 1))
+    await gate.waitForArrival("1")
+    cache.prepare(request(scene, revision: 2))
+    cache.prepare(request(scene, revision: 3))
+    await gate.open("1")
+    await gate.waitForArrival("2")
+    #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 1)) == nil)
+    #expect(cache.isPreparing(planCacheIdentity(scene, overlayRevision: 3)))
+    await gate.open("2")
+    try await settlePlanCache(cache)
+    let ready = try #require(cache.surface(for: planCacheIdentity(scene, overlayRevision: 3)))
+    cache.prepare(request(scene, revision: 4))
+    #expect(ready.root.isEnabled, "An overlay-only preparation must not blank the displayed scene.")
+    #expect(cache.displaySurface(for: planCacheIdentity(scene, overlayRevision: 4)) === ready)
+    #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4)) == nil,
+            "The displayed previous frame must not acquire the pending frame's query authority.")
+    try await settlePlanCache(cache)
+    #expect(started.withLock { $0 } == 2, "Overlay-only replacement rebuilt the surface plan.")
+    #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 3)) == nil)
+    #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4))?.maximumNativeUploadDuration == .zero)
+    let replacement = try #require(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4)))
+    let rejected = planCacheIdentity(scene, overlayRevision: 5)
+    cache.reject(rejected, error: .init(code: .failed, message: "Rejected overlay fixture."))
+    #expect(cache.displaySurface(for: rejected) === replacement)
+    #expect(replacement.root.isEnabled)
+    #expect(cache.surface(for: rejected) == nil)
+    #expect(cache.failure(for: rejected) != nil)
+    cache.prepare(request(nil, revision: 5))
+    #expect(!replacement.root.isEnabled)
+    #expect(cache.displaySurface(for: planCacheIdentity(nil, overlayRevision: 5)) == nil)
+    try await settlePlanCache(cache)
+    let empty = try #require(cache.surface(for: planCacheIdentity(nil, overlayRevision: 5)))
+    #expect(empty.snapshotID == nil)
+    #expect(empty.root.children.contains { $0 === empty.camera })
+    #expect(started.withLock { $0 } == 2)
+    cache.teardown()
+    #expect(!empty.root.isEnabled)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func overlayReplacementSharesSurfaceAssetsButNotEntities() async throws {
+    let scene = try planCacheScene(suffix: "overlay-assets")
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
+    func batch(_ color: SIMD4<Float>) throws -> RealityViewportSpatialBatch {
+        try RealityViewportSpatialBatch(markers: [.init(shape: .box, anchor: .origin, diameterPoints: 8, color: color)],
+                                        renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
+    }
+    let first = try await RealityViewport.prepare(plan: plan, spatialBatch: batch([1, 0, 0, 1]), reusing: nil)
+    let second = try await RealityViewport.prepare(plan: plan, spatialBatch: batch([0, 1, 0, 1]), reusing: first)
+    func surfaces(_ root: Entity) -> [Entity] {
+        (root.components[CollisionComponent.self] == nil ? [] : [root]) + root.children.flatMap { surfaces($0) }
+    }
+    let a = try #require(surfaces(first.root).first)
+    let b = try #require(surfaces(second.root).first)
+    #expect(a !== b)
+    #expect(a.components[ModelComponent.self]?.mesh === b.components[ModelComponent.self]?.mesh)
+    // Component access exposes ShapeResource's native value-equality contract,
+    // not a stable Swift wrapper reference (the existing instance test uses it too).
+    #expect(a.components[CollisionComponent.self]?.shapes.first == b.components[CollisionComponent.self]?.shapes.first)
+    #expect(second.maximumNativeUploadDuration == .zero)
+    b.position.x += 2
+    #expect(a.position != b.position)
+    let wrongCharge = try RealityViewportSpatialBatch(renderOrigin: .origin, retainedSurfaceByteCount: 0)
+    await #expect(throws: MeshSourcePresentationRenderError.self) {
+        try await RealityViewport.prepare(plan: plan, spatialBatch: wrongCharge, reusing: first)
+    }
+    let fullItemBudget = try RealityViewportSpatialBatch(
+        markers: Array(repeating: .init(shape: .box, anchor: .origin, diameterPoints: 8, color: [1, 1, 1, 1]), count: 640),
+        renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
+    await #expect(throws: MeshSourcePresentationRenderError.self) {
+        try await RealityViewport.prepare(plan: plan, spatialBatch: fullItemBudget, reusing: first)
+    }
+}
+
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func nativeMaterialColorChangesWithoutGeometryReplacement() async throws {
@@ -263,7 +445,7 @@ func planPreparationDoesNotCompleteOnTheCallingActor() async throws {
         Issue.record("Plan preparation must not complete on the calling actor.")
         return
     }
-    #expect(snapshotID == scene.snapshotID)
+    #expect(snapshotID.snapshotID == scene.snapshotID)
     #expect(cache.plan(for: scene) == nil)
     #expect(cache.failure(for: scene) == nil)
 
@@ -840,6 +1022,77 @@ func planCachePublishesNativePrecisionFailureAndRecoversWithTheNextScene() async
 
 /// Parks each build until the test opens its key, so staleness, cancellation,
 /// and teardown are decided by the test rather than by construction timing.
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCacheCaptureRejectionWithdrawsPendingAndRejectsLateWorker() async throws {
+    let scene = try planCacheScene(suffix: "capture-rejection")
+    let gate = PlanBuildGate()
+    let cache = MeshSourcePresentationPlanCache { _ in
+        await gate.arrive("started")
+        throw MeshSourcePresentationRenderError(code: .failed, message: "Late abandoned worker.")
+    }
+    cache.prepare(for: scene)
+    await gate.waitForArrival("started")
+    let rejected = planCacheIdentity(nil, overlayRevision: 201)
+    let failure = MeshSourcePresentationRenderError(code: .invalidSceneItem, message: "Invalid overlay capture.")
+    cache.reject(rejected, error: failure)
+    #expect(cache.failure(for: rejected) == failure)
+    #expect(cache.surface(for: rejected) == nil)
+    #expect(cache.surface(for: scene) == nil)
+    let next = planCacheIdentity(nil, overlayRevision: 202)
+    cache.prepare(.init(identity: next, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
+        (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [])
+    }))
+    await gate.open("started")
+    try await settlePlanCache(cache)
+    #expect(cache.surface(for: next) != nil)
+    #expect(cache.failure(for: rejected) == nil)
+    #expect(cache.surface(for: rejected) == nil)
+    cache.teardown()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCacheCancelledCaptureCannotPrepareOrRejectNewerIdentity() async throws {
+    let scene = try planCacheScene(suffix: "cancelled-capture-order")
+    let gate = PlanBuildGate()
+    let cache = MeshSourcePresentationPlanCache { scene in
+        await gate.arrive("B")
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    cache.prepare(for: scene)
+    await gate.waitForArrival("B")
+
+    let cancelledIdentity = planCacheIdentity(nil, overlayRevision: 302)
+    let captureCount = Mutex(0)
+    let cancelledTask = Task { @MainActor in
+        await Task.yield()
+        cache.prepare(
+            identity: cancelledIdentity,
+            scene: nil,
+            fallbackOrigin: .origin
+        ) {
+            captureCount.withLock { $0 += 1 }
+            throw MeshSourcePresentationRenderError(
+                code: .failed,
+                message: "A cancelled capture must not reject the newer preparation."
+            )
+        }
+    }
+    cancelledTask.cancel()
+    await cancelledTask.value
+
+    #expect(captureCount.withLock { $0 } == 0)
+    #expect(cache.isPreparing(scene))
+    #expect(cache.failure(for: cancelledIdentity) == nil)
+
+    await gate.open("B")
+    try await settlePlanCache(cache)
+    #expect(cache.surface(for: scene) != nil)
+    #expect(cache.failure(for: scene) == nil)
+    cache.teardown()
+}
+
 private actor PlanBuildGate {
     private var openedKeys: Set<String> = []
     private var arrivedKeys: Set<String> = []

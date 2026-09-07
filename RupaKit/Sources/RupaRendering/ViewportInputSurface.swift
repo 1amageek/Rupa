@@ -26,6 +26,7 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onSecondaryClick: (CGPoint, CGSize) -> Void
     var onShiftScroll: (ViewportScrollDirection) -> Bool
     var onShiftTap: (CGPoint, CGSize) -> Bool
+    var onCancel: () -> Bool = { false }
     var inputExclusionRects: [CGRect] = []
 
     func makeNSView(context: Context) -> InputView {
@@ -48,6 +49,7 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onSecondaryClick = onSecondaryClick
         nsView.onShiftScroll = onShiftScroll
         nsView.onShiftTap = onShiftTap
+        nsView.onCancel = onCancel
         nsView.inputExclusionRects = inputExclusionRects
     }
 }
@@ -66,6 +68,7 @@ extension ViewportInputSurface {
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
+        var onCancel: (() -> Bool)?
         var inputExclusionRects: [CGRect] = [] {
             didSet {
                 guard oldValue != inputExclusionRects else {
@@ -91,6 +94,10 @@ extension ViewportInputSurface {
 
         override var acceptsFirstResponder: Bool {
             true
+        }
+
+        override func cancelOperation(_ sender: Any?) {
+            if onCancel?() != true { super.cancelOperation(sender) }
         }
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool {

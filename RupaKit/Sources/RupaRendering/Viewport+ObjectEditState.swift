@@ -32,7 +32,7 @@ struct ViewportModelPoint3D: Equatable {
     }
 }
 
-struct ViewportModelVector3D: Equatable {
+struct ViewportModelVector3D: Equatable, Sendable {
     var x: CGFloat
     var y: CGFloat
     var z: CGFloat
@@ -50,7 +50,7 @@ struct ViewportModelVector3D: Equatable {
     }
 }
 
-struct ViewportObjectOrientation: Equatable {
+struct ViewportObjectOrientation: Equatable, Sendable {
     var xAxis: ViewportModelVector3D
     var yAxis: ViewportModelVector3D
     var zAxis: ViewportModelVector3D
@@ -145,7 +145,7 @@ struct ViewportProjectedBox {
     }
 }
 
-struct ViewportObjectEditState: Equatable {
+struct ViewportObjectEditState: Equatable, Sendable {
     var xMin: CGFloat
     var xMax: CGFloat
     var yMin: CGFloat

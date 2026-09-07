@@ -1,9 +1,10 @@
 import RupaCore
 import SwiftCAD
 
-struct ViewportSceneSnapshotKey: Equatable {
-    enum Source: Equatable {
+struct ViewportSceneSnapshotKey: Equatable, Sendable {
+    enum Source: Equatable, Sendable {
         case document(id: DocumentID, generation: DocumentGeneration)
+        case presentation(EvaluationSnapshotID)
         case dragPreview(documentID: DocumentID, revision: UInt64)
     }
 

@@ -89,6 +89,6 @@ struct ViewportPatternArrayCurveExtentHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayCurveExtentHandleIdentity: Equatable {
+struct ViewportPatternArrayCurveExtentHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
 }

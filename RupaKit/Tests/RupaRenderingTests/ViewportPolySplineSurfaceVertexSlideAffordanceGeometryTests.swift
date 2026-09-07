@@ -139,6 +139,16 @@ import Testing
     #expect(abs(preview.originalPoint.z - 0.002) < 1.0e-12)
     #expect(abs(preview.movedPoint.x - 0.002) < 1.0e-12)
     #expect(abs(preview.movedPoint.z - 0.003) < 1.0e-12)
+    let rawDirection = try #require(ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
+        featureID: featureID, patchID: input.patchID, direction: .positiveU,
+        topologyVertices: topologyVertices,
+        patches: polySplineSurfaceVertexSlidePatches(featureID: featureID)
+    ))
+    #expect(rawDirection == geometry.modelDirection)
+    #expect(ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
+        featureID: featureID, patchID: input.patchID, direction: .positiveU,
+        topologyVertices: [], patches: [:]
+    ) == nil)
     #expect(abs(normalGeometry.modelDirection.x) < 1.0e-12)
     #expect(abs(normalGeometry.modelDirection.y + 1.0) < 1.0e-12)
     #expect(abs(normalGeometry.modelDirection.z) < 1.0e-12)

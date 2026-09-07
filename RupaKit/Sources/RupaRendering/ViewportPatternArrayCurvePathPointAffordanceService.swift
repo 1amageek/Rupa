@@ -78,7 +78,7 @@ struct ViewportPatternArrayCurvePathPointHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayCurvePathPointHandleIdentity: Equatable {
+struct ViewportPatternArrayCurvePathPointHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
     var pointIndex: Int
 }

@@ -56,23 +56,28 @@ public struct Viewport: View {
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
+    @State private var measurementSession = ViewportMeasurementSession()
+    @State private var automaticMeasurementSummary: String?
     @State private var identityHitResolver = ViewportIdentityHitResolver(
         renderBudget: .deviceCalibrated()
     )
     @State private var previewEvaluationCache = ViewportPreviewEvaluationCache()
     @State private var presentationPlanCache = MeshSourcePresentationPlanCache()
+    @State private var overlayRevision = ViewportSpatialOverlayRevision()
+    @State private var gridFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
+    @State private var nativeGridReadout: (rendererID: ObjectIdentifier, value: ViewportProjectedGrid.ScaleReadout)?
     @State private var presentationSectionGeometryCache = MeshSourcePresentationSectionGeometryCache()
     @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
     private let controlSession: ViewportControlSession?
     private let document: DesignDocument
+    private let sourceIdentity: ViewportSourceIdentity
     private let presentationScene: UniversalViewportScene?
     private let presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
     private let materialColors: [SceneOccurrenceID: ColorRGBA]
     private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
-    private let documentGeneration: DocumentGeneration?
     private let evaluationCache: EvaluatedDocumentCache?
     private let objectRegistry: ObjectTypeRegistry
     private let renderInvalidation: RenderInvalidation
@@ -104,6 +109,9 @@ public struct Viewport: View {
     private let cameraResetSignal: Int
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
+    private let measurementToolActive: Bool
+    private let showsAutomaticMeasurement: Bool
+    private let measurementConstructionPlane: SketchPlane?
     private let allowsSelectionRectangle: Bool
     private let allowsObjectAffordances: Bool
     private let slotWidthMeters: Double
@@ -163,6 +171,7 @@ public struct Viewport: View {
     private let onCameraFrameChange: ((ViewportCameraFrame?) -> Void)?
     private let onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
+    private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
     private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
     private let selectedPresentationHasExactCADContext: Bool
@@ -373,6 +382,7 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        sourceIdentity: ViewportSourceIdentity,
         displayMode: ViewportDisplayMode = .solid,
         shading: ViewportShading = .standard,
         controlSession: ViewportControlSession? = nil,
@@ -380,7 +390,6 @@ public struct Viewport: View {
         presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID] = [:],
         workspaceRenderState: ViewportWorkspaceRenderState,
         currentEvaluation: DocumentEvaluationContext? = nil,
-        documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
@@ -413,6 +422,9 @@ public struct Viewport: View {
         cameraResetSignal: Int = 0,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
+        measurementToolActive: Bool = false,
+        showsAutomaticMeasurement: Bool = false,
+        measurementConstructionPlane: SketchPlane? = nil,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
         meshSelectionDomain: GeometryAttributeDomain = .face,
@@ -472,8 +484,9 @@ public struct Viewport: View {
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
         onCameraFrameChange: ((ViewportCameraFrame?) -> Void)? = nil,
         onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
-        onProjectedGridStepChange: ((Double) -> Void)? = nil
-    ) {
+        onProjectedGridStepChange: ((Double) -> Void)? = nil,
+        onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil
+        ) {
         self.controlSession = controlSession
         self._localControlSession = State(
             initialValue: ViewportControlSession(
@@ -485,6 +498,7 @@ public struct Viewport: View {
             initialValue: ViewportInstanceID()
         )
         self.document = document
+        self.sourceIdentity = sourceIdentity
         self.presentationScene = presentationScene
         self.presentationSceneNodeIDByOccurrenceID = presentationSceneNodeIDByOccurrenceID
         // Resolve document-owned colors once per supplied View value, not from
@@ -503,7 +517,6 @@ public struct Viewport: View {
         self.materialColors = materialColors
         self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
-        self.documentGeneration = documentGeneration
         self.evaluationCache = evaluationCache
         self.objectRegistry = objectRegistry
         self.renderInvalidation = renderInvalidation
@@ -539,6 +552,9 @@ public struct Viewport: View {
         self.cameraResetSignal = cameraResetSignal
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
+        self.measurementToolActive = measurementToolActive
+        self.showsAutomaticMeasurement = showsAutomaticMeasurement
+        self.measurementConstructionPlane = measurementConstructionPlane
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
         self.meshSelectionDomain = meshSelectionDomain
@@ -601,6 +617,7 @@ public struct Viewport: View {
         self.onCameraFrameChange = onCameraFrameChange
         self.onCameraFrameRequestResult = onCameraFrameRequestResult
         self.onProjectedGridStepChange = onProjectedGridStepChange
+        self.onMeasurementStateChange = onMeasurementStateChange
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
             sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
@@ -612,7 +629,13 @@ public struct Viewport: View {
             || selectedPresentationHasExactCADContext
     }
 
+    @ViewBuilder
     public var body: some View {
+        if let failure = sourceValidationFailure {
+            presentationFailureOverlay(error: failure, previewFailureMessage: nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(viewportBackground)
+        } else {
         // Read in `body` itself so the transient preview evaluation reaching
         // `ready` invalidates this view even when no other state changes.
         let sceneKey = sceneSnapshotKey(usesDragPreviewDocument: true)
@@ -633,50 +656,35 @@ public struct Viewport: View {
                 let controlContextKey = ViewportControlContextKey(
                     viewportID: viewportInstanceID,
                     presentationSnapshotID: presentationScene?.snapshotID,
-                    documentGeneration: documentGeneration,
+                    documentGeneration: sceneDocumentGeneration,
                     viewportSize: proxy.size,
                     ruler: workspaceRuler,
                     fittingInsets: fittingChromeLayout.fittingInsets,
                     selectedSceneNodeIDs: selection.selectedSceneNodeIDs
                 )
-                let projectedGrid = ViewportProjectedGrid(
-                    ruler: workspaceRuler,
-                    layout: sceneContext.layout,
-                    size: proxy.size,
-                    visualSpacingMode: gridVisualSpacingMode
-                )
+                let preparation = presentationPreparation
+                let preparationIdentity: RealityViewportPreparationRequest.Identity? = if case .success(let identity) = preparation { identity } else { nil }
+                let presentationSurface = preparationIdentity.flatMap { presentationPlanCache.displaySurface(for: $0) }
+                let gridReadout = presentationSurface.flatMap {
+                    nativeGridReadout?.rendererID == ObjectIdentifier($0) ? nativeGridReadout?.value : nil
+                }
                 let chromeLayout = ViewportCanvasChromeLayout(
                     viewportSize: proxy.size,
                     bottomReservedHeight: bottomChromeReservedHeight,
                     additionalExclusions: canvasOverlayExclusions,
-                    viewportBadgeWidth: estimatedViewportBadgeWidth(
-                        scaleReadout: projectedGrid.scaleReadout
-                    )
+                    viewportBadgeWidth: gridReadout.map { estimatedViewportBadgeWidth(scaleReadout: $0) } ?? 0
                 )
                 // The body only reads the published state. Preparation is
                 // started from the scene-identity task below, because starting
                 // it here would mutate observable state during a view update.
-                let presentationSurface = presentationScene.flatMap { scene in
-                    presentationPlanCache.surface(for: scene)
-                }
-                let presentationFailure = presentationScene.flatMap { scene in
-                    presentationPlanCache.failure(for: scene) ?? presentationFrameFailure(for: scene)
+                let presentationFailure: MeshSourcePresentationRenderError? = switch preparation {
+                case .failure(let error): error
+                case .success(let identity):
+                    presentationPlanCache.failure(for: identity) ?? presentationFrameFailure(for: identity)
+                        ?? presentationSurface.flatMap { gridFailure?.rendererID == ObjectIdentifier($0) ? gridFailure?.error : nil }
                 }
                 ZStack {
-                    // FIXME(INCOMPLETE_IMPLEMENTATION): Production grid/axes still use Canvas
-                    // during the RealityKit cutover. RK-3 must move them into the native
-                    // scene before this viewport can be reported as fully migrated.
-                    Canvas { context, size in
-                        let interval = ViewportResponsivenessSignposts.signposter.beginInterval(
-                            "ViewportGridConsumption", id: ViewportResponsivenessSignposts.signposter.makeSignpostID()
-                        )
-                        defer {
-                            ViewportResponsivenessSignposts.signposter.endInterval("ViewportGridConsumption", interval)
-                        }
-                        ViewportGridRenderer.draw(projectedGrid, chromeLayout: chromeLayout, in: &context)
-                        drawAxes(in: &context, size: size, camera: camera, basis: basis)
-                    }
-                    if let presentationSurface, let presentationScene {
+                    if let presentationSurface, let preparationIdentity {
                         RealityViewportView(
                             viewport: presentationSurface,
                             viewportRevision: activeControlSession.revision,
@@ -688,40 +696,30 @@ public struct Viewport: View {
                             sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,
                             retainedSide: sectionClippingPlan?.retainedSide ?? .front,
                             sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
+                            excludedRects: chromeLayout.inputExclusionRects,
+                            gridRuler: workspaceRuler,
+                            gridSpacing: gridVisualSpacingMode,
+                            onGridUpdateResult: { error, readout in
+                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                                gridFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
+                                nativeGridReadout = readout.map { (ObjectIdentifier(presentationSurface), $0) }
+                            },
                             onUpdateResult: { error in
-                                guard presentationPlanCache.surface(for: presentationScene) === presentationSurface else { return }
+                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
                                 surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
                             }
                         )
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                     }
-                    // FIXME(INCOMPLETE_IMPLEMENTATION): Production CAD overlays/previews
-                    // still use Canvas during RK-2. RK-3 must replace every spatial route
-                    // with native scene entities before the full cutover is complete.
-                    Canvas { context, size in
-                        let canvasInterval = ViewportResponsivenessSignposts.beginCanvasConsumption()
-                        defer { ViewportResponsivenessSignposts.endCanvasConsumption(canvasInterval) }
-                        drawModel(
-                            in: &context,
-                            sceneContext: sceneContext,
-                            chromeLayout: chromeLayout,
-                            placementCellSideMeters: projectedGrid.minorStepMeters,
-                            drawsLegacyBodies: presentationScene == nil
-                        )
-                        drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
-                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(viewportBackground)
-                .id(renderInvalidation)
-                .accessibilityIdentifier("CanvasViewport")
-                .accessibilityLabel("Canvas viewport")
                 .contentShape(Rectangle())
                 .overlay(alignment: .topLeading) {
-                    viewportBadgeOverlay(
-                        scaleReadout: projectedGrid.scaleReadout,
-                        chromeLayout: chromeLayout
-                    )
+                    if let gridReadout {
+                        viewportBadgeOverlay(scaleReadout: gridReadout, chromeLayout: chromeLayout)
+                    }
                 }
                 .overlay(alignment: .topTrailing) {
                     presentationFailureOverlay(
@@ -730,16 +728,16 @@ public struct Viewport: View {
                     )
                 }
                 .overlay {
-                    canvasDragPlaceholderOverlay(basis: basis)
+                    canvasDragPlaceholderOverlay
                 }
                 .overlay {
                     selectionAffordanceAccessibilityMarker
                 }
                 .overlay {
-                    constructionPlaneHandleAccessibilityMarkers(layout: projectedGrid.layout)
+                    constructionPlaneHandleAccessibilityMarkers(layout: sceneContext.layout)
                 }
                 .overlay {
-                    gridAccessibilityMarkers(readout: projectedGrid.scaleReadout)
+                    if let gridReadout { gridAccessibilityMarkers(readout: gridReadout) }
                 }
                 .overlay {
                     ViewportInputSurface(
@@ -794,6 +792,11 @@ public struct Viewport: View {
                         onShiftTap: { point, size in
                             captureReferenceLineAnchor(at: point, size: size)
                         },
+                        onCancel: {
+                            guard measurementToolActive else { return false }
+                            resetMeasurement()
+                            return true
+                        },
                         inputExclusionRects: chromeLayout.inputExclusionRects
                     )
                     .accessibilityHidden(true)
@@ -835,12 +838,35 @@ public struct Viewport: View {
                         }
                     }
                 }
-                .frame(width: proxy.size.width, height: proxy.size.height)
-                .onChange(of: projectedGrid.minorStepMeters, initial: true) { _, newValue in
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("CanvasViewport")
+                .accessibilityLabel("Canvas viewport")
+                .task(id: preparation) {
+                    guard !Task.isCancelled else { return }
+                    surfaceFailure = nil
+                    gridFailure = nil
+                    guard case .success(let identity) = preparation else {
+                        presentationPlanCache.teardown()
+                        return
+                    }
+                    presentationPlanCache.prepare(
+                        identity: identity, scene: presentationScene,
+                        fallbackOrigin: sceneContext.layout.renderOrigin
+                    ) {
+                        try makeSpatialOverlaySemanticBuilder(
+                            scene: sceneContext.scene,
+                            modelBounds: sceneContext.layout.modelBounds,
+                            renderOrigin: sceneContext.layout.renderOrigin,
+                            topologyRevision: identity.overlayRevision,
+                            drawsLegacyBodies: presentationScene == nil
+                        )
+                    }
+                }
+                .onChange(of: gridReadout?.minorStep.meters, initial: true) { _, newValue in
                     // Report the resolved visible grid cell (meters). `.onChange` fires only
                     // on an actual value change and runs after the view update, so this never
                     // mutates SwiftUI state mid-update and cannot form a feedback loop.
-                    onProjectedGridStepChange?(newValue)
+                    if let newValue { onProjectedGridStepChange?(newValue) }
                 }
                 .onChange(of: activeControlSession.revision) { _, _ in
                     // Agent and UI commands share the session. Reflect their applied
@@ -893,6 +919,26 @@ public struct Viewport: View {
                 refreshSnapOverlayResolution(size: proxy.size)
                 refreshPlacementHighlight(size: proxy.size)
             }
+            .onChange(of: measurementToolActive) { _, isActive in
+                if !isActive {
+                    resetMeasurement()
+                }
+            }
+            .onChange(of: automaticMeasurementReadout(size: proxy.size), initial: true) { _, summary in
+                automaticMeasurementSummary = summary
+                publishMeasurementState()
+            }
+            .onChange(of: measurementConstructionPlane) { _, _ in
+                if measurementToolActive {
+                    resetMeasurement()
+                }
+            }
+            .onChange(of: presentationScene?.snapshotID) { _, _ in
+                resetMeasurement()
+            }
+            .onChange(of: selection.selectedSceneNodeIDs) { _, _ in
+                resetMeasurement()
+            }
             .onChange(of: canvasPlacementPreviewKind) { _, _ in
                 refreshPlacementHighlight(size: proxy.size)
             }
@@ -902,23 +948,19 @@ public struct Viewport: View {
             .onChange(of: hoverClearSignal) { _, _ in
                 clearCanvasHover()
             }
-            .onChange(of: documentGeneration) { _, _ in
+            .onChange(of: sourceIdentity) { _, _ in
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution(size: proxy.size)
                 refreshPlacementHighlight(size: proxy.size)
-            }
-            .task(id: presentationScene?.snapshotID) {
-                surfaceFailure = nil
-                guard let presentationScene else {
-                    presentationPlanCache.teardown()
-                    return
-                }
-                presentationPlanCache.prepare(for: presentationScene)
+                resetMeasurement()
             }
             .onDisappear {
                 previewEvaluationCache.clear()
                 presentationPlanCache.teardown()
                 surfaceFailure = nil
+                gridFailure = nil
+                nativeGridReadout = nil
+                resetMeasurement()
             }
             .onChange(of: projectionRequest) { _, nextRequest in
                 if let nextRequest {
@@ -930,6 +972,7 @@ public struct Viewport: View {
                     applyCameraFrameRequest(nextRequest, size: proxy.size)
                 }
             }
+        }
         }
     }
 
@@ -1005,26 +1048,15 @@ public struct Viewport: View {
         }
     }
 
-    @ViewBuilder private func canvasDragPlaceholderOverlay(
-        basis: ViewportProjectionBasis
-    ) -> some View {
+    @ViewBuilder private var canvasDragPlaceholderOverlay: some View {
         if let activeCanvasDrag {
             ZStack {
-                Canvas { context, size in
-                    switch activeCanvasDrag.kind {
-                    case .creation(let previewKind):
-                        drawCanvasDragPreview(
-                            activeCanvasDrag,
-                            previewKind: previewKind,
-                            in: &context,
-                            size: size,
-                            basis: basis
-                        )
-                    case .selection:
+                if case .selection = activeCanvasDrag.kind {
+                    Canvas { context, _ in
                         drawSelectionDragRectangle(activeCanvasDrag, in: &context)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Rectangle()
                     .fill(Color.clear)
@@ -1297,7 +1329,7 @@ public struct Viewport: View {
     /// projecting the published document and its published evaluation.
     private var rendersDragPreviewDocument: Bool {
         dragPreviewDocument != nil
-            && documentGeneration != nil
+            && sceneDocumentGeneration != nil
             && previewEvaluationCache.isReady(for: dragPreviewRevision)
     }
 
@@ -1338,7 +1370,12 @@ public struct Viewport: View {
     /// under the published generation, so both scenes carry that one generation.
     /// This is what lets a supplied preview evaluation match its document.
     private var sceneDocumentGeneration: DocumentGeneration? {
-        documentGeneration
+        switch sourceIdentity {
+        case .document(_, let generation):
+            generation
+        case .presentation:
+            nil
+        }
     }
 
     private func sceneCurrentEvaluation(
@@ -1509,7 +1546,7 @@ public struct Viewport: View {
 
     private func sceneSnapshotKey(
         usesDragPreviewDocument: Bool
-    ) -> ViewportSceneSnapshotKey? {
+    ) -> ViewportSceneSnapshotKey {
         let source: ViewportSceneSnapshotKey.Source
         if usesDragPreviewDocument,
            rendersDragPreviewDocument {
@@ -1517,13 +1554,13 @@ public struct Viewport: View {
                 documentID: sceneDocument(usesDragPreviewDocument: true).id,
                 revision: dragPreviewRevision
             )
-        } else if let generation = sceneDocumentGeneration {
-            source = .document(
-                id: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument).id,
-                generation: generation
-            )
         } else {
-            return nil
+            switch sourceIdentity {
+            case .document(let id, let generation):
+                source = .document(id: id, generation: generation)
+            case .presentation(let snapshotID):
+                source = .presentation(snapshotID)
+            }
         }
 
         return ViewportSceneSnapshotKey(
@@ -1539,6 +1576,91 @@ public struct Viewport: View {
             sectionClippingPlan: sectionClippingPlan,
             objectDefinitions: sceneObjectDefinitions
         )
+    }
+
+    func makeSpatialOverlayChangeKey() throws -> ViewportSpatialOverlayChangeKey {
+        var key = ViewportSpatialOverlayChangeKey()
+        key.selection = selection
+        key.selectionPreview = selectionDragPreviewTargets
+        key.meshSelection = meshSelectionOverlay
+        key.editedBodies = editedBodies
+        key.activeDrags = activeInteractionDrags
+        key.hoveredHandle = try hoveredInteractionTarget?.spatialIdentity
+        key.pendingHandle = try pendingInteractionTarget?.spatialIdentity
+        key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
+        if let drag = activeCanvasDrag, case .creation(let kind) = drag.kind {
+            key.creation = .init(kind: kind, drag: drag.modelDrag, plane: drag.sketchPlane)
+        }
+        key.hasCanvasDrag = activeCanvasDrag != nil
+        key.modifierControl = modifierFlags.containsControl
+        key.patternReplacement = patternArrayCurvePathReplacementPreviewRequest
+        key.surfaceAnalysis = surfaceAnalysis
+        key.surfaceAnalysisOptions = surfaceAnalysisOptions
+        key.surfaceContinuity = surfaceContinuity
+        key.sectionAnalysis = sectionAnalysis
+        key.snap = snapOverlayResult
+        key.snapOptions = snapResolutionOptions
+        key.placement = placementHighlightState
+        key.measurement = measurementSession.state
+        key.measurementToolActive = measurementToolActive
+        key.showsAutomaticMeasurement = showsAutomaticMeasurement
+        key.measurementPlane = measurementConstructionPlane
+        key.displayUnit = workspaceRuler.displayUnit
+        key.axisConstraint = canvasDragAxisConstraint
+        key.allowsObjectAffordances = allowsObjectAffordances
+        key.showsConstructionPlaneHover = showsConstructionPlaneHover
+        key.slotWidthMeters = slotWidthMeters
+        key.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
+        key.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
+        // Fixed route bits avoid an array allocation on every camera frame.
+        if onRegionOffsetDrag != nil { key.availableRoutes |= 1 << 0 }
+        if onEdgeOffsetDrag != nil { key.availableRoutes |= 1 << 1 }
+        if onSlotWidthDrag != nil { key.availableRoutes |= 1 << 2 }
+        if onSketchVertexOffsetDrag != nil { key.availableRoutes |= 1 << 3 }
+        if onSplineControlPointSlideDrag != nil { key.availableRoutes |= 1 << 4 }
+        if onPolySplineSurfaceVertexDrag != nil { key.availableRoutes |= 1 << 5 }
+        if onSurfaceControlPointDrag != nil { key.availableRoutes |= 1 << 6 }
+        if onSurfaceTrimEndpointDrag != nil { key.availableRoutes |= 1 << 7 }
+        if onSurfaceTrimControlPointDrag != nil { key.availableRoutes |= 1 << 8 }
+        if onPolySplineSurfaceVertexSlideDrag != nil { key.availableRoutes |= 1 << 9 }
+        if onSurfaceControlPointSlideDrag != nil { key.availableRoutes |= 1 << 10 }
+        if onSurfaceFrameDrag != nil { key.availableRoutes |= 1 << 11 }
+        if onConstructionPlaneHandleDrag != nil { key.availableRoutes |= 1 << 12 }
+        if onEdgeFilletDrag != nil { key.availableRoutes |= 1 << 13 }
+        if onPatternArrayLinearAxisDrag != nil { key.availableRoutes |= 1 << 14 }
+        if onIndependentCopyExtrudeDistanceDrag != nil { key.availableRoutes |= 1 << 15 }
+        if onIndependentCopyBodyDimensionDrag != nil { key.availableRoutes |= 1 << 16 }
+        if onPatternArrayRadialAngleDrag != nil { key.availableRoutes |= 1 << 17 }
+        if onPatternArrayCopyCountDrag != nil { key.availableRoutes |= 1 << 18 }
+        if onPatternArrayCurveExtentDrag != nil { key.availableRoutes |= 1 << 19 }
+        if onPatternArrayCurvePathPointDrag != nil { key.availableRoutes |= 1 << 20 }
+        if onPatternArrayOutputModeChange != nil { key.availableRoutes |= 1 << 21 }
+        return key
+    }
+
+    var sourceValidationFailure: MeshSourcePresentationRenderError? {
+        do {
+            try sourceIdentity.validate(document: document, presentationScene: presentationScene)
+            return nil
+        } catch {
+            return (error as? MeshSourcePresentationRenderError)
+                ?? .init(code: .failed, message: error.localizedDescription)
+        }
+    }
+
+    private var presentationPreparation: Result<RealityViewportPreparationRequest.Identity, MeshSourcePresentationRenderError> {
+        do {
+            try sourceIdentity.validate(document: document, presentationScene: presentationScene)
+            let revision = try overlayRevision.revision(for: makeSpatialOverlayChangeKey())
+            return .success(.init(
+                scene: sceneSnapshotKey(usesDragPreviewDocument: true),
+                snapshotID: presentationScene?.snapshotID,
+                overlayRevision: revision
+            ))
+        } catch {
+            return .failure((error as? MeshSourcePresentationRenderError)
+                ?? .init(code: .failed, message: error.localizedDescription))
+        }
     }
 
     private func sceneApplyingSectionClipping(_ scene: ViewportScene) -> ViewportScene {
@@ -1645,14 +1767,12 @@ public struct Viewport: View {
             return nil
         }
         let sceneKey = sceneKey ?? sceneSnapshotKey(usesDragPreviewDocument: true)
-        let cacheKey = sceneKey.map {
-            MeshSourcePresentationSectionGeometryCache.Key(
-                presentationSnapshotID: presentationScene.snapshotID,
-                sceneSnapshotKey: $0,
-                plane: sectionAnalysis?.plane,
-                toleranceMeters: sectionAnalysis?.toleranceMeters
-            )
-        }
+        let cacheKey = MeshSourcePresentationSectionGeometryCache.Key(
+            presentationSnapshotID: presentationScene.snapshotID,
+            sceneSnapshotKey: sceneKey,
+            plane: sectionAnalysis?.plane,
+            toleranceMeters: sectionAnalysis?.toleranceMeters
+        )
         return presentationSectionGeometryCache.resolver(for: cacheKey) {
             MeshSourcePresentationSectionGeometryResolver(
                 sectionPlan: sectionClippingPlan,
@@ -1715,15 +1835,171 @@ public struct Viewport: View {
         )
     }
 
-    private func presentationFrameFailure(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderError? {
-        guard let renderer = presentationPlanCache.surface(for: scene),
+    private func presentationFrameFailure(
+        for identity: RealityViewportPreparationRequest.Identity
+    ) -> MeshSourcePresentationRenderError? {
+        guard let renderer = presentationPlanCache.surface(for: identity),
               surfaceFailure?.rendererID == ObjectIdentifier(renderer) else { return nil }
         return surfaceFailure?.error
     }
 
     private func currentPresentationPlan(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderPlan? {
-        guard presentationFrameFailure(for: scene) == nil else { return nil }
+        guard case .success(let identity) = presentationPreparation,
+              scene.snapshotID == identity.snapshotID,
+              presentationPlanCache.surface(for: identity) != nil,
+              presentationFrameFailure(for: identity) == nil else { return nil }
         return presentationPlanCache.plan(for: scene)
+    }
+
+    private var activeMeasurementPlane: SketchPlane? {
+        measurementConstructionPlane ?? snapResolutionOptions?.constructionPlane
+    }
+
+    private func resetMeasurement() {
+        guard measurementSession.state != ViewportMeasurementState() else {
+            return
+        }
+        measurementSession.reset()
+        publishMeasurementState()
+    }
+
+    private func publishMeasurementState() {
+        var state = measurementSession.state
+        state.boundsSummary = automaticMeasurementSummary
+        onMeasurementStateChange?(state)
+    }
+
+    private func measurementEndpoint(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportMeasurementResolution {
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let layout = sceneContext.layout
+        let effectivePlane = activeMeasurementPlane
+        let snapQueryPoint = measurementSnapQueryPoint(
+            at: point,
+            layout: layout,
+            effectivePlane: effectivePlane
+        )
+        let snap = ViewportSnapResolutionService().resolution(
+            for: snapQueryPoint.map { ViewportSnapQuery(point: $0) },
+            document: document,
+            ruler: workspaceRuler,
+            options: snapResolutionOptions,
+            modifierFlags: modifierFlags
+        )
+        let presentationHit: ViewportMeasurementPresentationHit?
+        if let presentationScene,
+           let plan = currentPresentationPlan(for: presentationScene),
+           let hit = MeshSourcePresentationScreenHitTester().worldPoint(
+               at: point,
+               in: plan,
+               layout: layout,
+               sectionGeometryResolver: presentationSectionGeometryResolver(),
+               cullBackFaces: isBackfaceCullingActive
+           ) {
+            presentationHit = ViewportMeasurementPresentationHit(
+                point: hit.point,
+                occurrenceID: hit.occurrenceID
+            )
+        } else {
+            presentationHit = nil
+        }
+        return ViewportMeasurementResolver().resolve(
+            at: point,
+            layout: layout,
+            effectivePlane: effectivePlane,
+            snap: snap,
+            presentationHit: presentationHit
+        )
+    }
+
+    private func measurementSnapQueryPoint(
+        at point: CGPoint,
+        layout: ViewportLayout,
+        effectivePlane: SketchPlane?
+    ) -> Point2D? {
+        guard let effectivePlane, let ray = layout.viewportRay(for: point) else { return nil }
+        do {
+            let coordinateSystem = try SketchPlaneCoordinateSystem(plane: effectivePlane)
+            let denominator = ray.direction.dot(coordinateSystem.normal)
+            guard denominator.isFinite, abs(denominator) > 1.0e-12 else {
+                return nil
+            }
+            let distance = (coordinateSystem.origin - ray.origin).dot(coordinateSystem.normal)
+                / denominator
+            guard distance.isFinite else { return nil }
+            let worldPoint = ray.origin + ray.direction * distance
+            guard worldPoint.isFinite, layout.projectedPoint(worldPoint) != nil else { return nil }
+            return coordinateSystem.project(worldPoint).point
+        } catch {
+            // The endpoint resolver reports the invalid plane; do not query
+            // snapping in a different coordinate system.
+            return nil
+        }
+    }
+
+    private func handleMeasurementClick(
+        at point: CGPoint,
+        size: CGSize
+    ) {
+        let resolution = measurementEndpoint(at: point, size: size)
+        if let endpoint = resolution.endpoint {
+            measurementSession.click(endpoint)
+        } else {
+            measurementSession.refuse(
+                resolution.failure ?? .viewRayUnavailable
+            )
+        }
+        measurementSession.warn(resolution.warning)
+        publishMeasurementState()
+    }
+
+    private func handleMeasurementHover(
+        at point: CGPoint,
+        size: CGSize
+    ) {
+        guard measurementSession.state.phase == .anchored else {
+            return
+        }
+        let resolution = measurementEndpoint(at: point, size: size)
+        measurementSession.hover(resolution.endpoint)
+        if resolution.endpoint == nil {
+            measurementSession.refuse(
+                resolution.failure ?? .viewRayUnavailable
+            )
+        }
+        measurementSession.warn(resolution.warning)
+        publishMeasurementState()
+    }
+
+    private func automaticMeasurementReadout(size: CGSize) -> String? {
+        guard showsAutomaticMeasurement, activeCanvasDrag == nil, pendingInteractionTarget == nil,
+              let occurrence = selectedMeasurementOccurrence() else { return nil }
+        let layout = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).layout
+        let chrome = ViewportCanvasChromeLayout(
+            viewportSize: size, bottomReservedHeight: bottomChromeReservedHeight,
+            additionalExclusions: canvasOverlayExclusions,
+            viewportBadgeWidth: nativeGridReadout.map { estimatedViewportBadgeWidth(scaleReadout: $0.value) } ?? 0
+        )
+        let rulers = ViewportMeasurementBoundsRulerLayout().rulers(
+            for: occurrence.worldBounds, layout: layout, displayUnit: workspaceRuler.displayUnit,
+            safeRect: layout.fittingInsets.fittingRect(in: size), excludedRects: chrome.inputExclusionRects
+        )
+        let bounds = occurrence.worldBounds
+        let values: [(ViewportMeasurementRulerAxis, Double)] = [
+            (.x, bounds.maximum.x - bounds.minimum.x),
+            (.y, bounds.maximum.y - bounds.minimum.y),
+            (.z, bounds.maximum.z - bounds.minimum.z)
+        ]
+        return "World bounds: " + values.map { axis, value in
+            let omitted = value > 0 && !rulers.contains(where: { $0.axis == axis })
+            return "\(axis.title) \(formattedViewportLength(value))\(omitted ? " (ruler hidden)" : "")"
+        }.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -1795,10 +2071,6 @@ public struct Viewport: View {
             in: scene,
             selectedFeatureIDs: selectedTargetFeatureIDs
         )
-        let showsConstructionHighlight = showsConstructionPlaneHover
-            && hoveredAffordance == nil
-            && pendingAffordance == nil
-            && activeAffordanceDrag == nil
         let constructionHit = showsConstructionHighlight ? hoveredCanvasHit : nil
         let sectionDisplayPlan = sectionClippingPlan.map {
             ViewportSectionClippingPlan(
@@ -2322,6 +2594,159 @@ public struct Viewport: View {
                 layout: layout
             )
         }
+
+        drawMeasurementOverlays(
+            in: &context,
+            layout: layout,
+            chromeLayout: chromeLayout
+        )
+    }
+
+    private func drawMeasurementOverlays(
+        in context: inout GraphicsContext,
+        layout: ViewportLayout,
+        chromeLayout: ViewportCanvasChromeLayout
+    ) {
+        if measurementToolActive {
+            guard let start = measurementSession.state.start,
+                  let startProjection = layout.projectedPoint(start.point)?.point else {
+                return
+            }
+            context.fill(
+                Path(ellipseIn: CGRect(
+                    x: startProjection.x - 4.0,
+                    y: startProjection.y - 4.0,
+                    width: 8.0,
+                    height: 8.0
+                )),
+                with: .color(.cyan)
+            )
+            guard let end = measurementSession.state.visibleEnd,
+                  let endProjection = layout.projectedPoint(end.point)?.point else { return }
+            var path = Path()
+            path.move(to: startProjection)
+            path.addLine(to: endProjection)
+            context.stroke(
+                path,
+                with: .color(.cyan.opacity(0.92)),
+                style: StrokeStyle(lineWidth: 2.0, lineCap: .round)
+            )
+            context.fill(
+                Path(ellipseIn: CGRect(
+                    x: endProjection.x - 4.0,
+                    y: endProjection.y - 4.0,
+                    width: 8.0,
+                    height: 8.0
+                )),
+                with: .color(.cyan)
+            )
+            if let distanceMeters = measurementDistanceMeters(start: start.point, end: end.point) {
+                let midpoint = CGPoint(
+                    x: (startProjection.x + endProjection.x) * 0.5,
+                    y: (startProjection.y + endProjection.y) * 0.5
+                )
+                let length = hypot(
+                    endProjection.x - startProjection.x,
+                    endProjection.y - startProjection.y
+                )
+                let normal = length > 1.0e-6
+                    ? CGPoint(
+                        x: -(endProjection.y - startProjection.y) / length,
+                        y: (endProjection.x - startProjection.x) / length
+                    )
+                    : CGPoint(x: 0.0, y: -1.0)
+                drawMeasurementLabel(
+                    formattedViewportLength(distanceMeters),
+                    at: CGPoint(
+                        x: midpoint.x + normal.x * 14.0,
+                        y: midpoint.y + normal.y * 14.0
+                    ),
+                    in: &context
+                )
+            }
+            return
+        }
+
+        guard showsAutomaticMeasurement,
+              activeCanvasDrag == nil,
+              pendingInteractionTarget == nil,
+              let occurrence = selectedMeasurementOccurrence() else {
+            return
+        }
+        let safeRect = layout.fittingInsets.fittingRect(in: layout.viewportSize)
+        let rulers = ViewportMeasurementBoundsRulerLayout().rulers(
+            for: occurrence.worldBounds,
+            layout: layout,
+            displayUnit: workspaceRuler.displayUnit,
+            safeRect: safeRect,
+            excludedRects: chromeLayout.inputExclusionRects
+        )
+        for ruler in rulers {
+            var path = Path()
+            path.move(to: ruler.extensionStart)
+            path.addLine(to: ruler.dimensionStart)
+            path.move(to: ruler.extensionEnd)
+            path.addLine(to: ruler.dimensionEnd)
+            path.move(to: ruler.dimensionStart)
+            path.addLine(to: ruler.dimensionEnd)
+            context.stroke(
+                path,
+                with: .color(.orange.opacity(0.88)),
+                style: StrokeStyle(lineWidth: 1.25, lineCap: .round)
+            )
+            drawMeasurementLabel(
+                ruler.label,
+                at: CGPoint(x: ruler.labelRect.midX, y: ruler.labelRect.midY),
+                in: &context
+            )
+        }
+    }
+
+    private func drawMeasurementLabel(
+        _ label: String,
+        at point: CGPoint,
+        in context: inout GraphicsContext
+    ) {
+        let rect = CGRect(
+            x: point.x - max(26.0, CGFloat(label.count) * 3.2 + 7.0),
+            y: point.y - 10.0,
+            width: max(52.0, CGFloat(label.count) * 6.4 + 14.0),
+            height: 20.0
+        )
+        context.fill(
+            Path(roundedRect: rect, cornerRadius: 5.0),
+            with: .color(Color.black.opacity(0.70))
+        )
+        context.draw(
+            Text(label)
+                .font(.system(size: 10.0, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.white.opacity(0.96)),
+            at: point
+        )
+    }
+
+    private func measurementDistanceMeters(
+        start: Point3D,
+        end: Point3D
+    ) -> Double? {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let dz = end.z - start.z
+        let distance = sqrt(dx * dx + dy * dy + dz * dz)
+        return distance.isFinite ? distance : nil
+    }
+
+    private func selectedMeasurementOccurrence() -> UniversalViewportSceneItem? {
+        guard let presentationScene else { return nil }
+        guard selection.selectedSceneNodeIDs.count == 1,
+              let selectedID = selection.selectedSceneNodeIDs.first else { return nil }
+        var match: UniversalViewportSceneItem?
+        for item in presentationScene.items
+        where presentationSceneNodeIDByOccurrenceID[item.occurrenceID] == selectedID {
+            guard match == nil else { return nil }
+            match = item
+        }
+        return match
     }
 
     private func drawSectionAnalysisOverlay(
@@ -10319,11 +10744,57 @@ public struct Viewport: View {
         }
 
         publishSelectionDragPreview(hits: [])
+        let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
+        let inputMapper = makeCoordinateMapper(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
         activeCanvasDrag = ViewportActiveDrag(
             startLocation: start,
             currentLocation: current,
             kind: .creation(canvasDragPreviewKind),
-            sketchPlane: canvasDragSketchPlane(for: hoveredCanvasHit)
+            sketchPlane: sketchPlane,
+            modelDrag: semanticCanvasModelDrag(
+                from: start,
+                to: current,
+                mapper: inputMapper,
+                sketchPlane: sketchPlane
+            )
+        )
+    }
+
+    /// Resolves the creation gesture at the input boundary.  The resulting
+    /// world points and view-ray anchors remain stable when the camera changes
+    /// before the RealityKit preparation worker consumes the snapshot.
+    private func semanticCanvasModelDrag(
+        from start: CGPoint,
+        to end: CGPoint,
+        mapper: ViewportModelCoordinateMapper,
+        sketchPlane: SketchPlane
+    ) -> ViewportModelDrag? {
+        guard let startInput = canvasInput(
+            for: start,
+            exactWorldPoint: nil,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        ), let endInput = canvasInput(
+            for: end,
+            exactWorldPoint: nil,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        ) else {
+            return nil
+        }
+        return ViewportModelDrag(
+            start: startInput.point,
+            end: endInput.point,
+            sketchPlane: sketchPlane,
+            modifierFlags: modifierFlags,
+            startWorldPoint: startInput.worldPoint,
+            endWorldPoint: endInput.worldPoint,
+            startViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: start),
+            endViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: end)
         )
     }
 
@@ -10347,7 +10818,7 @@ public struct Viewport: View {
         dragPreviewDocument = previewDocument
         dragPreviewSceneNodeID = target.sceneNodeID
         advanceDragPreviewRevision()
-        guard let documentGeneration else {
+        guard let documentGeneration = sceneDocumentGeneration else {
             previewEvaluationCache.clear()
             return
         }
@@ -10369,6 +10840,11 @@ public struct Viewport: View {
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
+        if measurementToolActive {
+            clearPendingCanvasInteractionTargets()
+            activeCanvasDrag = nil
+            return
+        }
         guard let target = resolvedInteractionTarget(at: point, size: size) else {
             clearPendingCanvasInteractionTargets()
             return
@@ -13264,6 +13740,10 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
+        if measurementToolActive {
+            handleMeasurementClick(at: point, size: size)
+            return
+        }
         if let pendingInteractionTarget {
             finishPendingInteractionClick(pendingInteractionTarget)
             return
@@ -13426,6 +13906,10 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
+        if measurementToolActive {
+            activeCanvasDrag = nil
+            return
+        }
         if finishInteractionDragIfNeeded(end: end, size: size) {
             return
         }
@@ -14683,6 +15167,10 @@ public struct Viewport: View {
     }
 
     private func hover(at point: CGPoint, size: CGSize) {
+        if measurementToolActive {
+            handleMeasurementHover(at: point, size: size)
+            return
+        }
         let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
@@ -14760,6 +15248,10 @@ public struct Viewport: View {
         clearHoverInteractionTargets()
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
+        if measurementToolActive {
+            measurementSession.hover(nil)
+            publishMeasurementState()
+        }
         clearHoverCallbacks()
     }
 
@@ -15347,4 +15839,459 @@ private extension Viewport {
             return target
         }
     }
+}
+
+extension Viewport {
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The production mount now consumes this
+    // complete producer, but mounted App parity and native pointer routing are
+    // not yet verified. Do not report the RealityKit migration complete before
+    // RK-3.2 mount tests, RK-4 input cutover, and RK-IV App verification pass.
+    /// Captures the source and interaction values required by native spatial
+    /// overlays while this viewport is isolated to the main actor.  The
+    /// returned builder owns only checked-Sendable values and may be retained
+    /// by the RealityKit preparation worker; camera-only updates must not call
+    /// this method again.
+    func makeSpatialOverlaySemanticBuilder(
+        scene: ViewportScene,
+        modelBounds: CGRect,
+        renderOrigin: Point3D,
+        topologyRevision: UInt64,
+        drawsLegacyBodies: Bool
+    ) throws -> @Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output {
+        let snapshot = try makeSpatialOverlaySemanticSnapshot(
+            scene: scene,
+            modelBounds: modelBounds,
+            renderOrigin: renderOrigin,
+            drawsLegacyBodies: drawsLegacyBodies
+        )
+        return ViewportSpatialOverlayProducer.makeBuilder(
+            from: snapshot,
+            topologyRevision: topologyRevision
+        )
+    }
+
+    /// Materializes the immutable producer input from world-owned values.
+    /// Camera size, projection basis and grid spacing are deliberately absent:
+    /// no camera-only update may recapture this source snapshot.
+    func makeSpatialOverlaySemanticSnapshot(
+        scene: ViewportScene,
+        modelBounds: CGRect,
+        renderOrigin: Point3D,
+        drawsLegacyBodies: Bool
+    ) throws -> ViewportSpatialOverlaySemanticSnapshot {
+        guard renderOrigin.isFinite,
+              modelBounds.origin.x.isFinite,
+              modelBounds.origin.y.isFinite,
+              modelBounds.width.isFinite,
+              modelBounds.height.isFinite,
+              modelBounds.width >= 0,
+              modelBounds.height >= 0 else {
+            throw RealityViewportSpatialBatch.invalid("Spatial overlay world bounds are invalid.")
+        }
+
+        var measurement: ViewportSpatialOverlaySemanticSnapshot.Measurement?
+        if measurementToolActive,
+           let start = measurementSession.state.start,
+           let end = measurementSession.state.visibleEnd {
+            guard start.point.isFinite, end.point.isFinite,
+                  let distance = measurementDistanceMeters(start: start.point, end: end.point),
+                  distance > 1.0e-12 else {
+                throw RealityViewportSpatialBatch.invalid("Measurement endpoints are invalid.")
+            }
+            measurement = .init(
+                start: start.point,
+                end: end.point,
+                label: formattedViewportLength(distance),
+                boundsRuler: nil
+            )
+        }
+
+        if showsAutomaticMeasurement,
+           activeCanvasDrag == nil,
+           pendingInteractionTarget == nil,
+           let occurrence = selectedMeasurementOccurrence() {
+            let input = ViewportMeasurementBoundsRulerInput(
+                bounds: occurrence.worldBounds,
+                labels: ViewportMeasurementBoundsRulerLayout().preformattedLabels(
+                    for: occurrence.worldBounds,
+                    displayUnit: workspaceRuler.displayUnit
+                )
+            )
+            if let current = measurement {
+                measurement = .init(
+                    start: current.start,
+                    end: current.end,
+                    label: current.label,
+                    boundsRuler: input
+                )
+            } else {
+                // The ruler is a native resource group even when no two-point
+                // measurement is active, so retain it in the same snapshot.
+                measurement = .init(
+                    start: nil,
+                    end: nil,
+                    label: nil,
+                    boundsRuler: input
+                )
+            }
+        }
+
+        let selectedSketchRegions = selectedSketchRegionTargets().map {
+            ViewportSpatialOverlaySemanticSnapshot.Interaction.SketchRegion(
+                featureID: $0.featureID,
+                componentID: $0.componentID
+            )
+        }
+        let previewSketchRegions = sketchRegionSelectionTargets(in: selectionDragPreviewTargets).map {
+            ViewportSpatialOverlaySemanticSnapshot.Interaction.SketchRegion(
+                featureID: $0.featureID,
+                componentID: $0.componentID
+            )
+        }
+        let hoveredSketchRegion = hoveredSketchRegionTarget().map {
+            ViewportSpatialOverlaySemanticSnapshot.Interaction.SketchRegion(
+                featureID: $0.featureID,
+                componentID: $0.componentID
+            )
+        }
+        let interaction = ViewportSpatialOverlaySemanticSnapshot.Interaction(
+            selectedFeatureIDs: selectedTargetFeatureIDs(),
+            selectedSceneNodeIDs: Set(selection.selectedSceneNodeIDs),
+            hoveredFeatureIDs: hoveredFeatureIDs(),
+            hoveredSceneNodeIDs: hoveredSceneNodeIDs(),
+            selectedTargets: selection.selectedTargets,
+            previewTargets: selectionDragPreviewTargets,
+            objectSelectionTargets: objectSelectionTargets(),
+            previewObjectSelectionTargets: objectSelectionTargets(in: selectionDragPreviewTargets),
+            selectedReferences: selection.selectedReferences,
+            hoveredReference: selection.hoveredReference,
+            hoveredTarget: selection.hoveredTarget,
+            selectedSketchEntities: selectedSketchEntityTargets(),
+            previewSketchEntities: sketchEntitySelectionTargets(in: selectionDragPreviewTargets),
+            hoveredSketchEntity: hoveredSketchEntityTarget(),
+            selectedSketchRegions: selectedSketchRegions,
+            previewSketchRegions: previewSketchRegions,
+            hoveredSketchRegion: hoveredSketchRegion
+        )
+
+        let meshSelection = try semanticMeshSelectionSnapshot()
+        let patternRoute = onPatternArrayLinearAxisDrag != nil
+            || onIndependentCopyExtrudeDistanceDrag != nil
+            || onIndependentCopyBodyDimensionDrag != nil
+            || onPatternArrayRadialAngleDrag != nil
+            || onPatternArrayCopyCountDrag != nil
+            || onPatternArrayCurveExtentDrag != nil
+            || onPatternArrayCurvePathPointDrag != nil
+            || onPatternArrayOutputModeChange != nil
+            || patternArrayCurvePathReplacementPreviewRequest != nil
+        let patternSource: ViewportSpatialOverlaySemanticSnapshot.PatternSource? =
+            patternRoute || !document.productMetadata.patternArrays.isEmpty
+                ? .init(
+                    document: document,
+                    scene: scene,
+                    selection: selection,
+                    ruler: workspaceRuler,
+                    hasRoute: patternRoute,
+                    replacementRequest: patternArrayCurvePathReplacementPreviewRequest,
+                    activeHandleIdentities: [
+                        activePatternArrayLinearAxisDrag.map { .patternArrayLinearAxis($0.target.identity) },
+                        activePatternArrayRadialAngleDrag.map { .patternArrayRadialAngle($0.target.identity) },
+                        activePatternArrayCopyCountDrag.map { .patternArrayCopyCount($0.target.identity) },
+                        activePatternArrayCurveExtentDrag.map { .patternArrayCurveExtent($0.target.identity) },
+                        activePatternArrayCurvePathPointDrag.map { .patternArrayCurvePathPoint($0.target.identity) },
+                        activeIndependentCopyExtrudeDistanceDrag.map { .independentCopyExtrudeDistance($0.target.identity) },
+                        activeIndependentCopyBodyDimensionDrag.map { .independentCopyBodyDimension($0.target.identity) },
+                    ].compactMap { $0 },
+                    hoveredHandleIdentities: try hoveredInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+                    pendingHandleIdentities: try pendingInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+                    activeLinearAxis: activePatternArrayLinearAxisDrag.map {
+                        .init(sourceID: $0.target.sourceID, axisSlot: $0.target.axisSlot, distance: $0.distanceMeters)
+                    },
+                    activeRadialAngle: activePatternArrayRadialAngleDrag.map {
+                        .init(sourceID: $0.target.sourceID, angleRadians: $0.angleRadians)
+                    },
+                    activeCopyCount: activePatternArrayCopyCountDrag.map {
+                        .init(sourceID: $0.target.sourceID, slot: $0.target.slot, copyCount: $0.copyCount)
+                    },
+                    activeCurveExtent: activePatternArrayCurveExtentDrag.map {
+                        .init(sourceID: $0.target.sourceID, extent: .distance($0.distanceMeters))
+                    },
+                    activeCurvePathPoint: activePatternArrayCurvePathPointDrag.map {
+                        .init(sourceID: $0.target.sourceID, pointIndex: $0.target.pointIndex, point: $0.point)
+                    },
+                    activeIndependentCopyExtrude: activeIndependentCopyExtrudeDistanceDrag.map {
+                        .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
+                              outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
+                              distance: $0.distanceMeters / $0.target.valueScale)
+                    },
+                    activeIndependentCopyDimension: activeIndependentCopyBodyDimensionDrag.map {
+                        .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
+                              outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
+                              kind: $0.target.kind, value: $0.valueMeters / $0.target.valueScale)
+                    },
+                    linearAxisRouteEnabled: onPatternArrayLinearAxisDrag != nil,
+                    radialAngleRouteEnabled: onPatternArrayRadialAngleDrag != nil,
+                    copyCountRouteEnabled: onPatternArrayCopyCountDrag != nil,
+                    curveExtentRouteEnabled: onPatternArrayCurveExtentDrag != nil,
+                    curvePathPointRouteEnabled: onPatternArrayCurvePathPointDrag != nil,
+                    outputModeRouteEnabled: onPatternArrayOutputModeChange != nil,
+                    independentCopyExtrudeRouteEnabled: onIndependentCopyExtrudeDistanceDrag != nil,
+                    independentCopyDimensionRouteEnabled: onIndependentCopyBodyDimensionDrag != nil
+                )
+                : nil
+        let analysisSource: ViewportSpatialOverlaySemanticSnapshot.AnalysisSource? =
+            surfaceAnalysis != nil || surfaceContinuity != nil
+                ? .init(
+                    result: surfaceAnalysis,
+                    continuity: surfaceContinuity,
+                    scene: scene,
+                    selection: selection,
+                    document: document,
+                    options: surfaceAnalysisOptions
+                )
+                : nil
+        let sectionSource: ViewportSpatialOverlaySemanticSnapshot.SectionSource? =
+            sectionAnalysis.map {
+                .init(result: $0, ruler: workspaceRuler)
+            }
+        let world = ViewportSpatialOverlaySemanticSnapshot.WorldContext(
+            modelBounds: modelBounds
+        )
+        let snapReference: ViewportSpatialOverlaySemanticSnapshot.SnapReference? = {
+            let anchors = snapResolutionOptions?.referenceLineAnchors ?? []
+            guard snapOverlayResult != nil || !anchors.isEmpty else { return nil }
+            return .init(
+                result: snapOverlayResult,
+                referenceLineAnchors: anchors,
+                modelBounds: modelBounds,
+                context: activeCanvasDrag.map {
+                    if case .creation = $0.kind { return .creationDrag }
+                    return .passiveHover
+                } ?? .passiveHover
+            )
+        }()
+        let placement = placementHighlightState.map {
+            ViewportSpatialOverlaySemanticSnapshot.Placement(
+                highlight: $0,
+                defaults: WorkspaceScaleDefaults(ruler: workspaceRuler)
+            )
+        }
+        let dragPreview = try makeSemanticDragPreview()
+        return ViewportSpatialOverlaySemanticSnapshot(
+            scene: scene,
+            interaction: interaction,
+            meshSelection: meshSelection,
+            sketchCurveSource: try makeSemanticSketchCurveSource(scene: scene),
+            surfaceTransformSource: try makeSemanticSurfaceTransformSource(scene: scene),
+            patternSource: patternSource,
+            analysisSource: analysisSource,
+            sectionSource: sectionSource,
+            editedBodies: editedBodies,
+            world: world,
+            snapReference: snapReference,
+            placement: placement,
+            dragPreview: dragPreview,
+            includesGrid: true,
+            measurement: measurement,
+            drawsLegacyBodies: drawsLegacyBodies,
+            drawsDragPreviewBodies: rendersDragPreviewDocument
+        )
+    }
+
+    private func makeSemanticSketchCurveSource(
+        scene: ViewportScene
+    ) throws -> ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.RawInput {
+        typealias Route = ViewportSpatialOverlayProducer.SketchCurveAffordanceRoute
+        typealias Override = ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.ActiveOverride
+        var routes: Set<Route> = [
+            .lineDimension, .circleDimension, .arcDimension, .curvePointControl,
+            .splineControl, .curvatureComb, .bridgeCurveEndpoint,
+        ]
+        if onRegionOffsetDrag != nil { routes.insert(.regionOffset) }
+        if onEdgeOffsetDrag != nil { routes.insert(.edgeOffset) }
+        if onSlotWidthDrag != nil { routes.insert(.slotWidth) }
+        if onSketchVertexOffsetDrag != nil { routes.insert(.sketchVertexOffset) }
+        if onSplineControlPointSlideDrag != nil { routes.insert(.splineSlide) }
+        var overrides: [Override] = []
+        if let drag = activeSketchCurveHandleDrag {
+            overrides.append(.init(identity: .sketchCurveHandle(drag.target.identity),
+                                   radiusMeters: drag.radiusMeters,
+                                   startAngleRadians: drag.startAngleRadians,
+                                   endAngleRadians: drag.endAngleRadians))
+        }
+        if let drag = activeSketchDimensionDrag {
+            overrides.append(.init(identity: .sketchDimension(drag.target.identity), value: drag.value))
+        }
+        if let drag = activeSketchPointHandleDrag {
+            overrides.append(.init(identity: .sketchPointHandle(drag.target.identity),
+                                   deltaX: drag.viewportDelta.x, deltaY: drag.viewportDelta.y))
+        }
+        if let drag = activeSplineControlPointDrag {
+            overrides.append(.init(identity: .splineControlPoint(drag.target.identity),
+                                   deltaX: drag.viewportDelta.x, deltaY: drag.viewportDelta.y))
+        }
+        if let drag = activeRegionOffsetDrag {
+            overrides.append(.init(identity: .regionOffset(drag.target.identity), distanceMeters: drag.distanceMeters))
+        }
+        if let drag = activeEdgeOffsetDrag {
+            overrides.append(.init(identity: .edgeOffset(drag.target.identity), distanceMeters: drag.distanceMeters))
+        }
+        if let drag = activeSlotWidthDrag {
+            overrides.append(.init(identity: .slotWidth(drag.target.identity), widthMeters: drag.widthMeters))
+        }
+        if let drag = activeSketchVertexOffsetDrag {
+            overrides.append(.init(identity: .sketchVertexOffset(drag.target.identity), distanceMeters: drag.distanceMeters))
+        }
+        if let drag = activeSplineControlPointSlideDrag {
+            overrides.append(.init(identity: .splineControlPointSlide(drag.target.identity),
+                                   distanceMeters: drag.distanceMeters))
+        }
+        if let drag = activeBridgeCurveEndpointDrag {
+            overrides.append(.init(identity: .bridgeCurveEndpoint(drag.target.identity),
+                                   bridgeEndpoint: drag.endpoint, bridgeParameter: drag.parameter))
+        }
+        return .init(
+            document: document, scene: scene, selection: selection,
+            interaction: .init(
+                active: overrides.map { .init(identity: $0.identity, state: $0.state) },
+                hovered: try hoveredInteractionTarget?.spatialIdentity,
+                pending: try pendingInteractionTarget?.spatialIdentity
+            ),
+            overlayState: sceneOverlayState,
+            ruler: workspaceRuler, enabledRoutes: routes, activeOverrides: overrides,
+            includeSelectedBridgeEndpoints: true,
+            slotWidthMeters: slotWidthMeters,
+            sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
+            edgeOffsetDistanceMeters: edgeOffsetDistanceMeters
+        )
+    }
+
+    private var showsConstructionHighlight: Bool {
+        showsConstructionPlaneHover && hoveredAffordance == nil
+            && pendingAffordance == nil && activeAffordanceDrag == nil
+    }
+
+    private func makeSemanticSurfaceTransformSource(
+        scene: ViewportScene
+    ) throws -> ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput {
+        typealias Route = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceRoute
+        typealias Active = ViewportSpatialOverlayProducer.SurfaceTransformActiveValue
+        var routes: Set<Route> = [
+            .surfaceControlPoint, .surfaceTrimEndpoint, .surfaceTrimControlPoint,
+            .surfaceKnot, .surfaceSpan, .surfaceTrimKnot, .surfaceTrimSpan, .surfaceFrame,
+            .constructionFace,
+        ]
+        var interactive: Set<Route> = []
+        if onPolySplineSurfaceVertexDrag != nil {
+            interactive.insert(.polySplineSurfaceVertex)
+            routes.insert(.activePolySplineSurfaceVertexPreview)
+        }
+        if onSurfaceControlPointDrag != nil {
+            interactive.insert(.surfaceControlPoint)
+            routes.insert(.activeSurfaceControlPointPreview)
+        }
+        if onSurfaceTrimEndpointDrag != nil { interactive.insert(.surfaceTrimEndpoint) }
+        if onSurfaceTrimControlPointDrag != nil { interactive.insert(.surfaceTrimControlPoint) }
+        if onPolySplineSurfaceVertexSlideDrag != nil { interactive.insert(.polySplineSurfaceVertexSlide) }
+        if onSurfaceControlPointSlideDrag != nil { interactive.insert(.surfaceControlPointSlide) }
+        if onSurfaceFrameDrag != nil { interactive.insert(.surfaceFrame) }
+        if onConstructionPlaneHandleDrag != nil { interactive.insert(.constructionPlane) }
+        if allowsObjectAffordances {
+            interactive.formUnion([.bodyTransform, .sketchTransform])
+        }
+        if onEdgeFilletDrag != nil { interactive.insert(.edgeFillet) }
+        routes.formUnion(interactive)
+        var active: [Active] = []
+        let comparison = modifierFlags.containsControl
+        if let drag = activeAffordanceDrag {
+            active.append(.init(identity: .affordance(drag.target)))
+        }
+        if let drag = activePolySplineSurfaceVertexDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.polySplineSurfaceVertex(drag.target).spatialIdentity,
+                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z),
+                                showsOriginalComparison: comparison))
+        }
+        if let drag = activeSurfaceControlPointDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.surfaceControlPoint(drag.target).spatialIdentity,
+                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z),
+                                showsOriginalComparison: comparison))
+        }
+        if let drag = activeSurfaceTrimEndpointDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.surfaceTrimEndpoint(drag.target).spatialIdentity,
+                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z)))
+        }
+        if let drag = activeSurfaceTrimControlPointDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.surfaceTrimControlPoint(drag.target).spatialIdentity,
+                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z)))
+        }
+        if let drag = activePolySplineSurfaceVertexSlideDrag {
+            active.append(.init(identity: .polySplineSurfaceVertexSlide(drag.target.identity),
+                                distance: drag.distanceMeters, showsOriginalComparison: comparison))
+        }
+        if let drag = activeSurfaceControlPointSlideDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.surfaceControlPointSlide(drag.target).spatialIdentity,
+                                distance: drag.distanceMeters, showsOriginalComparison: comparison))
+        }
+        if let drag = activeSurfaceFrameDrag {
+            active.append(.init(identity: try ViewportInteractionTarget.surfaceFrame(drag.target).spatialIdentity,
+                                distance: drag.distanceMeters))
+        }
+        if let drag = activeConstructionPlaneHandleDrag {
+            active.append(.init(identity: .constructionPlane(drag.target.identity),
+                                origin: drag.origin, normal: drag.normal))
+        }
+        let constructionFace: SelectionTarget?
+        if showsConstructionHighlight, let hit = hoveredCanvasHit,
+           let nodeID = hit.sceneNodeID, let face = hit.bodyFace {
+            let component: SelectionComponentID = switch face {
+            case .front: .bodyFaceFront
+            case .back: .bodyFaceBack
+            case .top: .bodyFaceTop
+            case .bottom: .bodyFaceBottom
+            case .left: .bodyFaceLeft
+            case .right: .bodyFaceRight
+            case .side: .bodyFaceSide
+            }
+            constructionFace = .init(sceneNodeID: nodeID, component: hit.selectionComponent ?? .face(component))
+        } else {
+            constructionFace = nil
+        }
+        return .init(
+            document: document, scene: scene, selection: selection, editedBodies: editedBodies,
+            ruler: workspaceRuler, enabledRoutes: routes, interactiveRoutes: interactive,
+            activeValues: active,
+            hoveredHandleIdentities: try hoveredInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+            pendingHandleIdentities: try pendingInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+            modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
+        )
+    }
+
+    private func makeSemanticDragPreview() throws -> ViewportSpatialOverlaySemanticSnapshot.DragPreview? {
+        guard let activeCanvasDrag,
+              case .creation(let kind) = activeCanvasDrag.kind,
+              let drag = activeCanvasDrag.modelDrag else {
+            return nil
+        }
+        return .init(
+            kind: kind,
+            drag: drag,
+            document: document,
+            ruler: workspaceRuler,
+            snapOptions: snapResolutionOptions,
+            axisConstraint: canvasDragAxisConstraint
+        )
+    }
+
+    private func semanticMeshSelectionSnapshot() throws -> ViewportMeshSelectionOverlay? {
+        guard let overlay = meshSelectionOverlay else {
+            return nil
+        }
+        guard overlay.snapshotID == presentationScene?.snapshotID else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Mesh selection overlay belongs to a stale presentation snapshot."
+            )
+        }
+        return overlay
+    }
+
 }

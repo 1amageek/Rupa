@@ -327,7 +327,7 @@ struct ViewportPatternArrayCopyCountHandleTarget: Equatable {
     }
 }
 
-struct ViewportPatternArrayCopyCountHandleIdentity: Equatable {
+struct ViewportPatternArrayCopyCountHandleIdentity: Equatable, Sendable {
     var sourceID: PatternArraySourceID
     var slot: ViewportPatternArrayCopyCountSlot
 }

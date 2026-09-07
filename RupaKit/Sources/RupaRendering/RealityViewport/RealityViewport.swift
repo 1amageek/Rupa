@@ -13,22 +13,25 @@ import simd
 final class RealityViewport {
     let root = Entity()
     let camera = Entity()
-    let snapshotID: EvaluationSnapshotID
+    let snapshotID: EvaluationSnapshotID?
     let renderOrigin: Point3D
     private(set) var appliedViewportRevision: UInt64?
     private(set) var appliedLayout: ViewportLayout?
     private(set) var maximumNativeUploadDuration: Duration = .zero
-    private let plan: MeshSourcePresentationRenderPlan
-    private let materials: RealityViewportMaterial
+    private var surfaceResources: SurfaceResources?
+    private var spatialResources: RealityViewportSpatialResources?
     private let lighting = Entity()
     private let clipper = Entity()
     private let geometryRoot = Entity()
     private var bounds = BoundingBox()
+    private var fixedBounds = BoundingBox()
     private var entries: [(surface: ModelEntity, lines: ModelEntity?)] = []
     private var occurrenceByEntity: [ObjectIdentifier: Int] = [:]
     private var content: RealityViewCameraContent?
+    private var bindingOwner: ObjectIdentifier?
     private var appearance: Appearance?
     private var section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)?
+    private var requestedSection: (plane: SectionAnalysisResult.Plane, side: SectionAnalysisRetainedSide, tolerance: Double)?
 
     private struct Appearance: Equatable {
         let mode: ViewportDisplayMode
@@ -85,11 +88,18 @@ final class RealityViewport {
         let lines: MeshResource?
     }
 
-    private init(plan: MeshSourcePresentationRenderPlan, origin: Point3D) async throws {
-        self.plan = plan
-        snapshotID = plan.snapshotID
+    /// Immutable assets may outlive a frame; entities and appearance never do.
+    private struct SurfaceResources {
+        let plan: MeshSourcePresentationRenderPlan
+        let materials: RealityViewportMaterial
+        let resources: [NativeResourceReference]
+        let instances: [GeometryInstanceRecord]
+        let bounds: BoundingBox
+    }
+
+    private init(snapshotID: EvaluationSnapshotID?, origin: Point3D) {
+        self.snapshotID = snapshotID
         renderOrigin = origin
-        materials = try await RealityViewportMaterial()
         root.addChild(camera)
         root.addChild(clipper)
         clipper.addChild(geometryRoot)
@@ -103,21 +113,71 @@ final class RealityViewport {
     }
 
     static func prepare(plan: MeshSourcePresentationRenderPlan) async throws -> RealityViewport {
+        try await prepare(plan: plan, spatialBatch: nil, reusing: nil)
+    }
+
+    /// Frame-local provenance only. The host must still match its preparation
+    /// identity before resolving a CAD operation from this index.
+    func spatialHandleIndex(for entity: Entity) -> UInt32? {
+        spatialResources?.handleIndex(for: entity)
+    }
+
+    /// The scale readout published by the current native grid frame. It is
+    /// cleared when the grid is hidden or its update fails, so callers never
+    /// display a value from an older camera frame.
+    var gridScaleReadout: ViewportProjectedGrid.ScaleReadout? {
+        spatialResources?.scaleReadout
+    }
+
+    static func prepare(
+        plan: MeshSourcePresentationRenderPlan?,
+        spatialBatch: RealityViewportSpatialBatch?,
+        reusing previous: RealityViewport?
+    ) async throws -> RealityViewport {
         try Task.checkCancellation()
+        try spatialBatch?.validate(surfacePlan: plan)
+        let first = plan?.occurrences.first?.positions.first
+        let origin = spatialBatch?.renderOrigin
+            ?? first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? .origin
+        let prepared = RealityViewport(snapshotID: plan?.snapshotID, origin: origin)
+        if let plan, !plan.occurrences.isEmpty {
+            if previous?.snapshotID == plan.snapshotID, previous?.renderOrigin == origin,
+               let resources = previous?.surfaceResources {
+                prepared.surfaceResources = resources
+            } else {
+                prepared.surfaceResources = try await prepared.prepareSurface(
+                    plan: plan, retainedByteCount: spatialBatch?.admittedByteCount ?? plan.retainedByteCount)
+            }
+            try prepared.attachSurfaces()
+        }
+        if let spatialBatch {
+            let spatial = try await RealityViewportSpatialResources.prepare(batch: spatialBatch, surfacePlan: plan)
+            try Task.checkCancellation()
+            prepared.spatialResources = spatial
+            prepared.root.addChild(spatial.root)
+            prepared.geometryRoot.addChild(spatial.sectionedRoot)
+            if !spatial.sectionedRoot.children.isEmpty {
+                prepared.bounds.formUnion(spatial.sectionedRoot.visualBounds(relativeTo: prepared.root, excludeInactive: false))
+            }
+        }
+        prepared.fixedBounds = prepared.bounds
+        try Task.checkCancellation()
+        return prepared
+    }
+
+    private func prepareSurface(plan: MeshSourcePresentationRenderPlan, retainedByteCount: Int) async throws -> SurfaceResources {
         // The plan admits all owned Float position, face-normal, boundary, and collision
         // input arrays before this first native allocation. SDK-owned mesh,
         // collision, and program memory is bounded by admitted geometry/resource
         // counts and one candidate, not an invented exact native byte estimate.
-        let first = plan.occurrences.first?.positions.first
-        let origin = first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? .origin
-        let grouping = try await geometryGroups(
+        let grouping = try await Self.geometryGroups(
             occurrences: plan.occurrences,
-            origin: origin,
-            retainedByteCount: plan.retainedByteCount,
+            origin: renderOrigin,
+            retainedByteCount: retainedByteCount,
             nativePreparationByteLimit: plan.nativePreparationByteLimit
         )
         try Task.checkCancellation()
-        let prepared = try await RealityViewport(plan: plan, origin: origin)
+        let materials = try await RealityViewportMaterial()
         var nativeResources: [NativeResourceReference] = []
         nativeResources.reserveCapacity(grouping.groups.count)
         for (groupIndex, group) in grouping.groups.enumerated() {
@@ -141,39 +201,48 @@ final class RealityViewport {
             try Task.checkCancellation()
             let collision = try await ShapeResource.generateStaticMesh(from: collisionMesh)
             try Task.checkCancellation()
-            let lines = try await prepared.makeLineResource(group.geometry)
+            let lines = try await makeLineResource(group.geometry)
             try Task.checkCancellation()
             nativeResources.append(NativeResourceReference(visual: mesh, collision: collision, lines: lines))
         }
 
-        for (index, occurrence) in plan.occurrences.enumerated() {
+        var bounds = BoundingBox()
+        for instance in grouping.instances {
             try Task.checkCancellation()
-            let instance = grouping.instances[index]
             let group = grouping.groups[instance.groupIndex]
-            let resources = nativeResources[instance.groupIndex]
-            let surface = ModelEntity(mesh: resources.visual, materials: [UnlitMaterial(color: .gray)])
-            surface.position = instance.translation
-            surface.components.set(CollisionComponent(shapes: [resources.collision]))
-            prepared.geometryRoot.addChild(surface)
             let minimum = group.geometry.minimum + instance.translation
             let maximum = group.geometry.maximum + instance.translation
             guard (0..<3).allSatisfy({ minimum[$0].isFinite && maximum[$0].isFinite }) else {
                 throw Self.failure("Native geometry bounds exceed Float precision.")
             }
-            prepared.bounds.formUnion(BoundingBox(min: minimum, max: maximum))
-            prepared.occurrenceByEntity[ObjectIdentifier(surface)] = index
+            bounds.formUnion(BoundingBox(min: minimum, max: maximum))
+        }
+        return SurfaceResources(plan: plan, materials: materials, resources: nativeResources,
+                                instances: grouping.instances, bounds: bounds)
+    }
+
+    private func attachSurfaces() throws {
+        guard let surfaceResources else { return }
+        bounds = surfaceResources.bounds
+        for (index, instance) in surfaceResources.instances.enumerated() {
+            try Task.checkCancellation()
+            let resources = surfaceResources.resources[instance.groupIndex]
+            let surface = ModelEntity(mesh: resources.visual, materials: [UnlitMaterial(color: .gray)])
+            surface.position = instance.translation
+            surface.components.set(CollisionComponent(shapes: [resources.collision]))
+            geometryRoot.addChild(surface)
+            occurrenceByEntity[ObjectIdentifier(surface)] = index
             let lines: ModelEntity?
             if let lineResource = resources.lines {
                 let entity = ModelEntity(mesh: lineResource, materials: [UnlitMaterial(color: .gray)])
                 entity.position = instance.translation
-                prepared.geometryRoot.addChild(entity)
+                geometryRoot.addChild(entity)
                 lines = entity
             } else {
                 lines = nil
             }
-            prepared.entries.append((surface, lines))
+            entries.append((surface, lines))
         }
-        return prepared
     }
 
     @concurrent
@@ -360,7 +429,41 @@ final class RealityViewport {
         switch layout.projection {
         case .parallel:
             let depth = SIMD3<Double>(rows.depth.x, rows.depth.y, rows.depth.z)
-            let extent = 0.5 / simd_length(depth)
+            var extent = 0.5 / simd_length(depth)
+            guard extent.isFinite, extent > 0 else {
+                throw Self.failure("The orthographic camera depth extent exceeds native precision.")
+            }
+            let hasGrid = spatialResources?.hasGrid == true
+            if hasGrid {
+                let plane = ViewportCanvasPlane.displayed(for: layout.basis)
+                let corners = [
+                    CGPoint.zero,
+                    CGPoint(x: layout.viewportSize.width, y: 0),
+                    CGPoint(x: 0, y: layout.viewportSize.height),
+                    CGPoint(x: layout.viewportSize.width, y: layout.viewportSize.height)
+                ]
+                for corner in corners {
+                    guard let point = layout.unproject(corner, onto: plane),
+                          point.x.isFinite, point.y.isFinite, point.z.isFinite else {
+                        continue
+                    }
+                    let relative = SIMD3<Double>(
+                        point.x - centerRay.origin.x,
+                        point.y - centerRay.origin.y,
+                        point.z - centerRay.origin.z
+                    )
+                    let distance = abs(simd_dot(relative, forward))
+                    guard distance.isFinite else {
+                        throw Self.failure("The native grid depth extent exceeds finite precision.")
+                    }
+                    extent = max(extent, distance)
+                }
+                let nativeExtent = Float(extent).nextUp
+                guard nativeExtent.isFinite, nativeExtent > 0 else {
+                    throw Self.failure("The orthographic camera depth extent exceeds native precision.")
+                }
+                extent = Double(nativeExtent)
+            }
             eye += forward * (2 * extent)
             var component = OrthographicCameraComponent()
             component.near = Float(extent)
@@ -418,7 +521,8 @@ final class RealityViewport {
             try RealityViewportMaterial.validate(color: color, field: "occurrence material color")
         }
         var prepared: [(any RealityKit.Material, UnlitMaterial)] = []
-        for occurrence in plan.occurrences {
+        if let surfaceResources {
+          for occurrence in surfaceResources.plan.occurrences {
             var color = shading.resolvedColor(for: occurrence.occurrenceID, materialColor: materialColors[occurrence.occurrenceID])
             switch interaction.state(for: occurrence.occurrenceID) {
             case .normal: break
@@ -426,8 +530,9 @@ final class RealityViewport {
             case .hovered: color = SIMD4<Float>(0.36, 0.77, 0.98, 1)
             }
             let wire = shading.resolvedWireColor(for: occurrence.occurrenceID, objectColor: color)
-            prepared.append((try materials.surface(displayMode: displayMode, shading: shading, color: Self.color(color)),
-                             materials.line(color: Self.color(wire))))
+            prepared.append((try surfaceResources.materials.surface(displayMode: displayMode, shading: shading, color: Self.color(color)),
+                             surfaceResources.materials.line(color: Self.color(wire))))
+          }
         }
         try applySection(plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)
         for (index, entry) in entries.enumerated() {
@@ -441,7 +546,12 @@ final class RealityViewport {
 
     /// One native clipping volume owns the cut for both surfaces and boundary lines.
     func applySection(plane: SectionAnalysisResult.Plane?, side: SectionAnalysisRetainedSide, tolerance: Double) throws {
-        guard let plane, !entries.isEmpty else {
+        try updateSection(plane: plane, side: side, tolerance: tolerance)
+        requestedSection = plane.map { ($0, side, tolerance) }
+    }
+
+    private func updateSection(plane: SectionAnalysisResult.Plane?, side: SectionAnalysisRetainedSide, tolerance: Double) throws {
+        guard let plane, !geometryRoot.children.isEmpty else {
             section = nil
             clipper.components.remove(ClippingComponent.self)
             clipper.transform = .identity
@@ -479,7 +589,7 @@ final class RealityViewport {
         // A distant plane must not move an entirely retained scene through a
         // large native transform and lose its local floating-point precision.
         if minimum.z >= cut {
-            try applySection(plane: nil, side: side, tolerance: tolerance)
+            try updateSection(plane: nil, side: side, tolerance: tolerance)
             return
         }
         if maximum.z < cut {
@@ -518,10 +628,40 @@ final class RealityViewport {
         section = (z, offset, tolerance)
     }
 
-    func bind(_ content: RealityViewCameraContent) { self.content = content }
+    func bind(_ content: RealityViewCameraContent, owner: ObjectIdentifier? = nil) {
+        self.content = content
+        bindingOwner = owner
+    }
 
-    func unbind() {
+    func isBound(to owner: ObjectIdentifier) -> Bool {
+        content != nil && bindingOwner == owner
+    }
+
+    @discardableResult
+    func updateSpatialCamera(safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
+                             gridRuler: RulerConfiguration? = nil,
+                             gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
+        guard let content, let appliedLayout, appliedViewportRevision != nil else { return nil }
+        let gridError = try spatialResources?.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: excludedRects,
+                                           gridRuler: gridRuler, gridBasis: appliedLayout.basis,
+                                           gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing)
+        if let spatialResources, spatialResources.hasSectionedCameraGeometry {
+            bounds = fixedBounds
+            bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
+            if let requestedSection {
+                try updateSection(plane: requestedSection.plane, side: requestedSection.side, tolerance: requestedSection.tolerance)
+            }
+        }
+        return gridError
+    }
+
+    func unbind(owner: ObjectIdentifier? = nil) {
+        guard bindingOwner == owner else { return }
+        // A RealityView root has no Entity parent. Withdraw it from its actual
+        // scene owner before releasing the content and camera query lifetime.
+        content?.remove(root)
         content = nil
+        bindingOwner = nil
         appliedLayout = nil
         appliedViewportRevision = nil
         appearance = nil
@@ -534,8 +674,15 @@ final class RealityViewport {
         root.isEnabled = false
     }
 
+    /// Keep the native camera active while withholding an incomplete spatial frame.
+    func setPresentationEnabled(_ enabled: Bool) {
+        clipper.isEnabled = enabled
+        spatialResources?.root.isEnabled = enabled
+    }
+
     func triangle(for hit: CollisionCastHit) -> MeshSourcePresentationTriangle? {
-        guard let occurrence = occurrenceByEntity[ObjectIdentifier(hit.entity)], let face = hit.triangleHit?.faceIndex,
+        guard let plan = surfaceResources?.plan,
+              let occurrence = occurrenceByEntity[ObjectIdentifier(hit.entity)], let face = hit.triangleHit?.faceIndex,
               let sourceFace = Self.sourceTriangleIndex(for: face, triangleCount: plan.occurrences[occurrence].triangleCount) else { return nil }
         return plan.occurrences[occurrence].triangle(at: sourceFace)
     }
@@ -549,12 +696,12 @@ final class RealityViewport {
     }
 
     func project(_ point: Point3D) -> CGPoint? {
-        guard appliedViewportRevision != nil else { return nil }
+        guard appliedViewportRevision != nil, root.isEnabled, clipper.isEnabled else { return nil }
         return content?.project(point: [Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y), Float(point.z - renderOrigin.z)], to: .local)
     }
 
     func hitTest(_ point: CGPoint, revision: UInt64) -> [CollisionCastHit] {
-        guard appliedViewportRevision == revision, root.isEnabled, geometryRoot.isEnabled,
+        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled, geometryRoot.isEnabled,
               let scene = root.scene, let ray = cameraRay(through: point) else { return [] }
         var hits = scene.raycast(origin: ray.origin, direction: ray.direction, length: ray.length, query: .all)
         hits.removeAll { hit in
