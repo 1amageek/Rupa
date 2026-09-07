@@ -142,6 +142,7 @@ struct RealityViewportSpatialBatch: Sendable {
     let cameraPaths: [CameraPath]
     let boundsRulers: BoundsRulers?
     let includesGrid: Bool
+    let includesAxes: Bool
     let gridPlacement: GridPlacement?
     let handleCount: Int
     let renderOrigin: Point3D
@@ -158,6 +159,7 @@ struct RealityViewportSpatialBatch: Sendable {
         markers: [Marker] = [], cameraLines: [CameraLine] = [], cameraPaths: [CameraPath] = [],
         boundsRulers: BoundsRulers? = nil,
         includesGrid: Bool = false,
+        includesAxes: Bool = false,
         gridPlacement: GridPlacement? = nil,
         handleCount: Int = 0,
         retainedSemanticByteCount: Int = 0,
@@ -230,6 +232,18 @@ struct RealityViewportSpatialBatch: Sendable {
             try charge(capacity, stride: MemoryLayout<SIMD3<Float>>.stride + MemoryLayout<UInt32>.stride)
             try charge(3, stride: MemoryLayout<LowLevelMesh.Part>.stride + MemoryLayout<UnlitMaterial>.stride)
             try charge(1, stride: MemoryLayout<(ModelEntity, LowLevelMesh)>.stride)
+        }
+        if includesAxes {
+            // Three fixed two-vertex native line resources and three native
+            // TextComponent label entities are admitted before allocation.
+            for _ in 0..<6 { try item() }
+            try positions(6)
+            try charge(3, stride: MemoryLayout<LowLevelMesh.Part>.stride
+                       + MemoryLayout<UnlitMaterial>.stride
+                       + MemoryLayout<(ModelEntity, LowLevelMesh)>.stride)
+            try charge(6, stride: MemoryLayout<SIMD3<Float>>.stride + MemoryLayout<UInt32>.stride)
+            try charge(3, stride: MemoryLayout<Entity>.stride + MemoryLayout<TextComponent>.stride)
+            try charge(3, stride: MemoryLayout<String>.stride)
         }
         if let placement = gridPlacement {
             guard includesGrid, placement.widthMeters == nil || placement.heightMeters == nil,
@@ -456,6 +470,7 @@ struct RealityViewportSpatialBatch: Sendable {
         self.cameraPaths = cameraPaths
         self.boundsRulers = boundsRulers
         self.includesGrid = includesGrid
+        self.includesAxes = includesAxes
         self.gridPlacement = gridPlacement
         self.handleCount = handleCount
         self.renderOrigin = renderOrigin

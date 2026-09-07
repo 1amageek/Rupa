@@ -402,6 +402,11 @@ independent tessellator is never an alternative implementation.
     grid labels use the bounded `TextComponent` exception in the child contract.
     Screen-only marquee selection, toolbar, inspector, menu, status, and error
     presentation remain SwiftUI.
+    XYZ reference axes are not producer-sized world lines. The
+    [`RealityViewport`](RealityViewport/DESIGN.md) camera owner retains their
+    fixed native resources and clips all three mathematical CAD-origin axes to
+    the currently applied native frustum on each camera frame, independently of
+    source bounds and grid visibility.
     Coverage is proved per enabled route reachable from the production
     `drawModel`, not by the presence of a coarse `ViewportSpatialOverlayFamily`
     flag. In particular, `.transform`, `.pattern`, or `.sketch` is incomplete

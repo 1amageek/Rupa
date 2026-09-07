@@ -599,6 +599,11 @@ func semanticSnapshotBuilderEmitsSelectionPatternAnalysisAndSectionFamilies() th
         topologyRevision: 4
     )
     #expect(input.activeFamilies.contains(.meshSelection))
+    #expect(input.includesAxes)
+    #expect(!input.meshes.contains { $0.family == .axes })
+    #expect(!input.labels.contains { $0.family == .axes })
+    let nativeBatch = try ViewportSpatialOverlayProducer.makeBatch(from: input)
+    #expect(nativeBatch.includesAxes)
     #expect(input.activeFamilies.contains(.pattern))
     #expect(input.activeFamilies.contains(.analysis))
     #expect(input.activeFamilies.contains(.section))

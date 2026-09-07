@@ -131,6 +131,7 @@ struct ViewportSpatialOverlayInput: Sendable {
     /// Requests the native camera-owned grid frame. Grid geometry and labels
     /// are intentionally not materialized in this immutable source batch.
     let includesGrid: Bool
+    let includesAxes: Bool
     let renderOrigin: Point3D
     let retainedSurfaceByteCount: Int
     let topologyRevision: UInt64
@@ -147,6 +148,7 @@ struct ViewportSpatialOverlayInput: Sendable {
         boundsRuler: ViewportMeasurementBoundsRulerInput? = nil,
         gridPlacement: RealityViewportSpatialBatch.GridPlacement? = nil,
         includesGrid: Bool = false,
+        includesAxes: Bool = false,
         renderOrigin: Point3D,
         retainedSurfaceByteCount: Int,
         topologyRevision: UInt64
@@ -162,6 +164,7 @@ struct ViewportSpatialOverlayInput: Sendable {
         self.boundsRuler = boundsRuler
         self.gridPlacement = gridPlacement
         self.includesGrid = includesGrid
+        self.includesAxes = includesAxes
         self.renderOrigin = renderOrigin
         self.retainedSurfaceByteCount = retainedSurfaceByteCount
         self.topologyRevision = topologyRevision
@@ -183,6 +186,7 @@ struct ViewportSpatialOverlayInput: Sendable {
             boundsRuler: boundsRuler,
             gridPlacement: gridPlacement,
             includesGrid: includesGrid,
+            includesAxes: includesAxes,
             renderOrigin: renderOrigin,
             retainedSurfaceByteCount: retainedSurfaceByteCount,
             topologyRevision: topologyRevision
@@ -575,12 +579,7 @@ enum ViewportSpatialOverlayProducer {
             meshes: &meshes,
             activeFamilies: &activeFamilies
         )
-        try appendAxes(
-            snapshot,
-            meshes: &meshes,
-            labels: &labels,
-            activeFamilies: &activeFamilies
-        )
+        activeFamilies.insert(.axes)
         try appendMeasurement(
             snapshot,
             meshes: &meshes,
@@ -627,6 +626,7 @@ enum ViewportSpatialOverlayProducer {
             boundsRuler: boundsRuler,
             gridPlacement: gridPlacement,
             includesGrid: snapshot.includesGrid,
+            includesAxes: true,
             renderOrigin: renderOrigin,
             retainedSurfaceByteCount: retainedSurfaceByteCount,
             topologyRevision: topologyRevision
@@ -666,6 +666,7 @@ enum ViewportSpatialOverlayProducer {
             || !input.cameraLines.isEmpty
             || !input.cameraPaths.isEmpty
             || input.gridPlacement != nil
+            || input.includesAxes
         let hasBoundsRuler = input.boundsRuler != nil
         guard hasDescriptor || hasBoundsRuler || input.activeFamilies.isEmpty else {
             throw RealityViewportSpatialBatch.invalid(
@@ -693,6 +694,7 @@ enum ViewportSpatialOverlayProducer {
             cameraPaths: input.cameraPaths.map(\.value),
             boundsRulers: boundsRulers,
             includesGrid: input.includesGrid,
+            includesAxes: input.includesAxes,
             gridPlacement: input.gridPlacement,
             handleCount: input.handleIdentities.count,
             retainedSemanticByteCount: try ViewportSpatialHandleIdentity.retainedByteCount(for: input.handleIdentities, limits: limits),
@@ -1460,53 +1462,6 @@ enum ViewportSpatialOverlayProducer {
             ))
         }
         activeFamilies.insert(.section)
-    }
-
-    private static func appendAxes(
-        _ snapshot: ViewportSpatialOverlaySemanticSnapshot,
-        meshes: inout [ViewportSpatialOverlayInput.Mesh],
-        labels: inout [ViewportSpatialOverlayInput.Label],
-        activeFamilies: inout Set<ViewportSpatialOverlayFamily>
-    ) throws {
-        let bounds = snapshot.world.modelBounds
-        let extent = max(1.0, max(
-            max(abs(bounds.minX), abs(bounds.maxX)),
-            max(abs(bounds.minY), abs(bounds.maxY))
-        )) * 1.25
-        guard extent.isFinite, extent > 0 else {
-            throw RealityViewportSpatialBatch.invalid("Axis extent is invalid.")
-        }
-        let xStart = Point3D(x: -extent, y: 0, z: 0)
-        let xEnd = Point3D(x: extent, y: 0, z: 0)
-        let zStart = Point3D(x: 0, y: 0, z: -extent)
-        let zEnd = Point3D(x: 0, y: 0, z: extent)
-        meshes.append(.init(
-            family: .axes,
-            value: try line(
-                [xStart, xEnd], color: SIMD4<Float>(0.86, 0.25, 0.27, 0.72), depth: .annotation
-            )
-        ))
-        meshes.append(.init(
-            family: .axes,
-            value: try line(
-                [zStart, zEnd], color: SIMD4<Float>(0.24, 0.48, 0.95, 0.72), depth: .annotation
-            )
-        ))
-        labels.append(.init(
-            family: .axes,
-            value: try label(
-                "X", anchor: xEnd, offset: CGPoint(x: 12, y: -8),
-                color: SIMD4<Float>(0.86, 0.25, 0.27, 0.86), heightPoints: 11
-            )
-        ))
-        labels.append(.init(
-            family: .axes,
-            value: try label(
-                "Z", anchor: zEnd, offset: CGPoint(x: 12, y: -8),
-                color: SIMD4<Float>(0.24, 0.48, 0.95, 0.86), heightPoints: 11
-            )
-        ))
-        activeFamilies.insert(.axes)
     }
 
     private static func appendMeasurement(
@@ -2302,6 +2257,7 @@ enum ViewportSpatialOverlayProducer {
         in input: ViewportSpatialOverlayInput
     ) -> [ViewportSpatialOverlayFamily: Int] {
         var result: [ViewportSpatialOverlayFamily: Int] = [:]
+        if input.includesAxes { result[.axes] = 3 }
         for descriptor in input.meshes { result[descriptor.family, default: 0] += 1 }
         for descriptor in input.paths { result[descriptor.family, default: 0] += 1 }
         for descriptor in input.labels { result[descriptor.family, default: 0] += 1 }

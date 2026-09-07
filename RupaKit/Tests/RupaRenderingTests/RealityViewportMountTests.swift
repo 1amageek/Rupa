@@ -1,4 +1,5 @@
 import AppKit
+import Metal
 import RealityKit
 import RupaCore
 import RupaViewportScene
@@ -10,6 +11,157 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct RealityViewportMountTests {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func referenceAxesFollowMountedCameraWithoutGrid(perspective: Bool) async throws {
+        _ = NSApplication.shared
+        let renderOrigin = Point3D(x: 0.003, y: 0.002, z: -0.001)
+        let batch = try RealityViewportSpatialBatch(includesAxes: true,
+            renderOrigin: renderOrigin, retainedSurfaceByteCount: 0)
+        #expect(!batch.includesGrid && batch.meshes.isEmpty && batch.handleCount == 0)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try RealityViewportSpatialBatch(includesAxes: true, renderOrigin: .origin, retainedSurfaceByteCount: 0,
+                limits: .init(maxItemCount: batch.itemCount - 1, maxPositionCount: 100,
+                    maxTriangleCount: 100, maxRetainedByteCount: batch.admittedByteCount))
+        }
+        let viewport = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: nil)
+        var reportedError: MeshSourcePresentationRenderError?
+        var size = CGSize(width: 512, height: 384)
+        func view(_ basis: ViewportProjectionBasis, zoom: CGFloat, revision: UInt64) -> some View {
+            RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
+                shading: .init(style: .flat), materialColors: [:],
+                layout: .init(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
+                    camera: .init(zoom: zoom, pan: revision == 2 ? CGSize(width: 35, height: -20) : .zero,
+                        projection: perspective ? .standardPerspective : .parallel),
+                    basis: basis, verticalBounds: -0.01...0.01),
+                interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+                sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+                onUpdateResult: { reportedError = $0 }).frame(width: size.width, height: size.height)
+        }
+        let controller = NSHostingController(rootView: view(.axisFront(.z), zoom: 0.05, revision: 1))
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer { viewport.unbind(); window.contentViewController = nil; window.close() }
+        let axes = try ["X", "Y", "Z"].map { name in
+            try #require(viewport.root.findEntity(named: "Reference Axis \(name)") as? ModelEntity)
+        }
+        let meshes = try axes.map { try #require($0.model?.mesh) }
+        for (frame, zoom) in [CGFloat(0.05), 1, 30].enumerated() {
+            let basis: ViewportProjectionBasis = frame == 0 ? .axisFront(.z) : frame == 1 ? .axisFront(.x) : .isometric
+            let revision = UInt64(frame + 1)
+            if frame > 0 {
+                size = frame == 1 ? CGSize(width: 640, height: 240) : CGSize(width: 512, height: 384)
+                window.setContentSize(size)
+                controller.rootView = view(basis, zoom: zoom, revision: revision)
+            }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+            while viewport.appliedViewportRevision != revision || viewport.project(.origin) == nil
+                    || axes.filter({ $0.isEnabledInHierarchy }).count < 2 {
+                try #require(ContinuousClock.now < deadline, "Native reference axes never became visible.")
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(reportedError == nil)
+            #expect(viewport.gridScaleReadout == nil)
+            if frame == 0 { #expect(!axes[2].isEnabled) }
+            if frame == 1 && !perspective { #expect(!axes[0].isEnabled) }
+            let origin = try #require(viewport.project(.origin))
+            for (index, axis) in axes.enumerated() {
+                #expect(axis.model?.mesh === meshes[index])
+                #expect(axis.components[CollisionComponent.self] == nil)
+                guard axis.isEnabled else { continue }
+                let mesh = try #require(axis.model?.mesh.lowLevelMesh)
+                var first = SIMD3<Float>.zero, last = SIMD3<Float>.zero
+                mesh.withUnsafeBytes(bufferIndex: 0) { bytes in
+                    let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                    first = vertices[0]; last = vertices[1]
+                }
+                let a = try #require(viewport.project(.init(x: Double(first.x) + renderOrigin.x,
+                    y: Double(first.y) + renderOrigin.y, z: Double(first.z) + renderOrigin.z)))
+                let b = try #require(viewport.project(.init(x: Double(last.x) + renderOrigin.x,
+                    y: Double(last.y) + renderOrigin.y, z: Double(last.z) + renderOrigin.z)))
+                let length = hypot(b.x - a.x, b.y - a.y)
+                #expect(length > 0.001, "frame \(frame), axis \(index): \(a) -> \(b)")
+                let distance = abs((b.x - a.x) * (origin.y - a.y) - (b.y - a.y) * (origin.x - a.x)) / length
+                #expect(distance < 0.5, "Native axis moved away from the CAD origin.")
+                if frame < 2 && index != (frame == 0 ? 2 : 0) {
+                    func atEdge(_ p: CGPoint) -> Bool {
+                        min(abs(p.x), abs(p.y), abs(p.x - size.width), abs(p.y - size.height)) < 0.5
+                    }
+                    #expect(atEdge(a) && atEdge(b), "frame \(frame), axis \(index): \(a) -> \(b), viewport \(size)")
+                }
+            }
+        }
+        // Render the actual prepared resources through RealityKit/Metal as
+        // well as checking projection; a populated buffer alone is not proof.
+        let renderer = try RealityRenderer()
+        let renderedRoot = viewport.root.clone(recursive: true)
+        renderer.entities.append(renderedRoot)
+        let camera = try #require(renderedRoot.children.first {
+            $0.components[OrthographicCameraComponent.self] != nil || $0.components[PerspectiveCameraComponent.self] != nil
+        })
+        renderer.activeCamera = camera
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 512, height: 384, mipmapped: false)
+        descriptor.storageMode = .shared
+        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+        let texture = try #require(device.makeTexture(descriptor: descriptor))
+        let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+        for _ in 0..<3 {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                do { try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output, onComplete: { _ in continuation.resume() }) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+        var bytes = [UInt8](repeating: 0, count: 512 * 384 * 4)
+        texture.getBytes(&bytes, bytesPerRow: 512 * 4, from: MTLRegionMake2D(0, 0, 512, 384), mipmapLevel: 0)
+        for channel in 0..<3 {
+            let colored = stride(from: 0, to: bytes.count, by: 4).filter {
+                Int(bytes[$0 + channel]) > Int(bytes[$0 + (channel + 1) % 3]) + 20
+                    && Int(bytes[$0 + channel]) > Int(bytes[$0 + (channel + 2) % 3]) + 20
+            }.count
+            #expect(colored > 20, "RealityKit produced no visible reference axis for color channel \(channel).")
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func referenceAxesClipInfiniteLinesWithoutModelExtent() throws {
+        let forward = CGAffineTransform(a: 100, b: 0, c: 0, d: -100, tx: 50, ty: 40)
+        func segment(_ origin: SIMD3<Double>, _ direction: SIMD3<Double>,
+                     perspective: Bool = false, far: Double = 100) throws -> (start: CGPoint, end: CGPoint)? {
+            try RealityViewportSpatialResources.projectedAxis(origin: origin, direction: direction,
+                forward: forward, sampleDepth: 1, perspective: perspective,
+                near: 0.1, far: far, viewportSize: CGSize(width: 100, height: 80))
+        }
+        for perspective in [false, true] {
+            for pan in [0.0, 10_000.0, -10_000.0] {
+                let x = try #require(try segment([pan, 0, -2], [1, 0, 0], perspective: perspective))
+                #expect(abs(x.start.x) < 0.01 && abs(x.end.x - 100) < 0.01)
+                #expect(abs(x.start.y - 40) < 0.01 && abs(x.end.y - 40) < 0.01)
+            }
+            let y = try #require(try segment([0, 0, -2], [0, 1, 0], perspective: perspective))
+            #expect(abs(y.start.y - 80) < 0.01 && abs(y.end.y) < 0.01)
+            #expect(try segment([0, 0, -2], [0, 0, 1], perspective: perspective) == nil)
+        }
+        // An infinite far plane ends at the true vanishing point, never an
+        // arbitrary large world coordinate. A finite far plane clips sooner.
+        let infinite = try #require(try segment([0, 0, -2], [0.2, 0, -1], perspective: true, far: .infinity))
+        #expect(abs(infinite.start.x) < 0.01)
+        #expect(abs(infinite.end.x - 70) < 0.01)
+        let finite = try #require(try segment([0, 0, -2], [0.2, 0, -1], perspective: true, far: 3))
+        #expect(abs(finite.end.x - (50 + 20.0 / 3)) < 0.01)
+        #expect(try segment([0, 10, -2], [1, 0, 0]) == nil)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try segment([.nan, 0, -2], [1, 0, 0])
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try segment([0, 0, -2], [1, 0, 0], far: 0)
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try segment([Double.greatestFiniteMagnitude, 0, -2], [1, 0, 0])
+        }
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
     func coldMountPublishesNativeGridWithoutManualCameraUpdates(
         perspective: Bool,

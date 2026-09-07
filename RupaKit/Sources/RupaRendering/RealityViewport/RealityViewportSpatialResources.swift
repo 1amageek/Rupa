@@ -27,6 +27,13 @@ final class RealityViewportSpatialResources {
     private var gridLabels: [Entity] = []
     private var gridPlacement: ModelEntity?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
+    private struct AxisResource {
+        let axis: ViewportCoordinateAxis
+        let line: ModelEntity
+        let mesh: LowLevelMesh
+        let label: Entity
+    }
+    private var axes: [AxisResource] = []
     private let surfaceItemCount: Int
     private let surfacePositionCount: Int
     private let byteLimit: Int
@@ -36,6 +43,14 @@ final class RealityViewportSpatialResources {
     /// True when the prepared batch admitted native grid resources, independent
     /// of whether the grid is currently enabled for a frame.
     var hasGrid: Bool { grid != nil }
+
+    private static func axisColor(_ axis: ViewportCoordinateAxis) -> SIMD4<Float> {
+        switch axis {
+        case .x: return [1, 0.32, 0.35, 1]
+        case .y: return [0.22, 0.82, 0.60, 1]
+        case .z: return [0.25, 0.58, 1, 1]
+        }
+    }
 
     let hasSectionedCameraGeometry: Bool
 
@@ -63,6 +78,165 @@ final class RealityViewportSpatialResources {
         return nil
     }
 
+    /// Clips one mathematical camera-local axis against the mounted frustum.
+    /// Perspective uses homogeneous screen coordinates so an infinite far
+    /// endpoint is represented by its direction limit rather than a guessed
+    /// large world coordinate.
+    nonisolated static func projectedAxis(
+        origin: SIMD3<Double>, direction: SIMD3<Double>, forward: CGAffineTransform,
+        sampleDepth: Double, perspective: Bool, near: Double, far: Double,
+        viewportSize: CGSize
+    ) throws -> (start: CGPoint, end: CGPoint)? {
+        let a = Double(forward.a)
+        let b = Double(forward.b)
+        let c = Double(forward.c)
+        let d = Double(forward.d)
+        let tx = Double(forward.tx)
+        let ty = Double(forward.ty)
+        guard origin.x.isFinite, origin.y.isFinite, origin.z.isFinite,
+              direction.x.isFinite, direction.y.isFinite, direction.z.isFinite,
+              a.isFinite, b.isFinite, c.isFinite, d.isFinite, tx.isFinite, ty.isFinite,
+              sampleDepth.isFinite, near.isFinite,
+              sampleDepth > 0, near > 0,
+              viewportSize.width.isFinite, viewportSize.height.isFinite,
+              viewportSize.width > 0, viewportSize.height > 0,
+              far > near, far.isFinite || far.isInfinite else {
+            throw RealityViewportSpatialBatch.invalid("The native reference-axis frame is invalid.")
+        }
+        guard direction.x != 0 || direction.y != 0 || direction.z != 0 else { return nil }
+
+        struct Linear {
+            let constant: Double
+            let slope: Double
+        }
+        var lower = -Double.infinity
+        var upper = Double.infinity
+
+        func checked(_ value: Double) throws -> Double {
+            guard value.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis projection overflowed.")
+            }
+            return value
+        }
+
+        func clipLess(_ value: Linear, _ bound: Double) throws -> Bool {
+            guard value.constant.isFinite, value.slope.isFinite, bound.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis clip is not finite.")
+            }
+            if value.slope == 0 {
+                return value.constant <= bound
+            }
+            let limit = try checked((bound - value.constant) / value.slope)
+            if value.slope > 0 { upper = min(upper, limit) }
+            else { lower = max(lower, limit) }
+            return lower <= upper
+        }
+        func clipGreater(_ value: Linear, _ bound: Double) throws -> Bool {
+            try clipLess(Linear(constant: try checked(-value.constant), slope: try checked(-value.slope)),
+                         try checked(-bound))
+        }
+        func linear(_ constant: Double, _ slope: Double) -> Linear {
+            Linear(constant: constant, slope: slope)
+        }
+
+        let z = linear(origin.z, direction.z)
+        guard try clipLess(z, -near) else { return nil }
+        if far.isFinite {
+            guard try clipGreater(z, -far) else { return nil }
+        }
+
+        if perspective {
+            let originXY = try checked(a * origin.x + c * origin.y)
+            let directionXY = try checked(a * direction.x + c * direction.y)
+            let nxConstant = try checked(-sampleDepth * originXY + tx * origin.z)
+            let nxSlope = try checked(-sampleDepth * directionXY + tx * direction.z)
+            let originYY = try checked(b * origin.x + d * origin.y)
+            let directionYY = try checked(b * direction.x + d * direction.y)
+            let nyConstant = try checked(-sampleDepth * originYY + ty * origin.z)
+            let nySlope = try checked(-sampleDepth * directionYY + ty * direction.z)
+            let nx = linear(
+                nxConstant, nxSlope
+            )
+            let ny = linear(
+                nyConstant, nySlope
+            )
+            let rightConstant = try checked(nx.constant - Double(viewportSize.width) * z.constant)
+            let rightSlope = try checked(nx.slope - Double(viewportSize.width) * z.slope)
+            let bottomConstant = try checked(ny.constant - Double(viewportSize.height) * z.constant)
+            let bottomSlope = try checked(ny.slope - Double(viewportSize.height) * z.slope)
+            guard try clipLess(nx, 0),
+                  try clipGreater(Linear(constant: rightConstant, slope: rightSlope), 0),
+                  try clipLess(ny, 0),
+                  try clipGreater(Linear(constant: bottomConstant, slope: bottomSlope), 0) else {
+                return nil
+            }
+        } else {
+            let sx = linear(try checked(a * origin.x + c * origin.y + tx),
+                            try checked(a * direction.x + c * direction.y))
+            let sy = linear(try checked(b * origin.x + d * origin.y + ty),
+                            try checked(b * direction.x + d * direction.y))
+            guard try clipGreater(sx, 0), try clipLess(sx, Double(viewportSize.width)),
+                  try clipGreater(sy, 0), try clipLess(sy, Double(viewportSize.height)) else { return nil }
+        }
+        guard lower <= upper else { return nil }
+
+        func finiteProjection(_ parameter: Double) throws -> CGPoint? {
+            guard parameter.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not finite.")
+            }
+            let px = try checked(origin.x + direction.x * parameter)
+            let py = try checked(origin.y + direction.y * parameter)
+            let pz = try checked(origin.z + direction.z * parameter)
+            guard pz < 0 else { return nil }
+            if perspective {
+                let scale = try checked(-pz / sampleDepth)
+                guard scale > 0 else { return nil }
+                let point = CGPoint(x: CGFloat(try checked(px / scale)),
+                                    y: CGFloat(try checked(py / scale))).applying(forward)
+                guard point.x.isFinite, point.y.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not finite.")
+                }
+                return point
+            }
+            let point = CGPoint(x: CGFloat(px), y: CGFloat(py)).applying(forward)
+            guard point.x.isFinite, point.y.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not finite.")
+            }
+            return point
+        }
+
+        func endpoint(_ parameter: Double) throws -> CGPoint? {
+            guard parameter.isInfinite else { return try finiteProjection(parameter) }
+            if perspective {
+                let nx = try checked(-sampleDepth * (a * direction.x + c * direction.y) + tx * direction.z)
+                let ny = try checked(-sampleDepth * (b * direction.x + d * direction.y) + ty * direction.z)
+                if direction.z != 0 {
+                    let x = try checked(nx / direction.z)
+                    let y = try checked(ny / direction.z)
+                    let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
+                    guard point.x.isFinite, point.y.isFinite else {
+                        throw RealityViewportSpatialBatch.invalid("The native reference-axis vanishing point is not finite.")
+                    }
+                    return point
+                }
+                guard nx == 0, ny == 0 else { return nil }
+                return try finiteProjection(0)
+            }
+            let sx = try checked(a * direction.x + c * direction.y)
+            let sy = try checked(b * direction.x + d * direction.y)
+            guard sx == 0, sy == 0 else { return nil }
+            return try finiteProjection(0)
+        }
+        guard let start = try endpoint(lower), let end = try endpoint(upper),
+              start.x.isFinite, start.y.isFinite, end.x.isFinite, end.y.isFinite else {
+            return nil
+        }
+        let endpointBounds = CGRect(origin: .zero, size: viewportSize).insetBy(dx: -1, dy: -1)
+        guard endpointBounds.contains(start), endpointBounds.contains(end) else { return nil }
+        guard hypot(end.x - start.x, end.y - start.y) > 0 else { return nil }
+        return (start, end)
+    }
+
     private func register(_ entity: Entity, handleIndex: UInt32?) {
         if let handleIndex { handleIndices[ObjectIdentifier(entity)] = handleIndex }
     }
@@ -75,6 +249,8 @@ final class RealityViewportSpatialResources {
         let sampleDepth: Float
         let perspective: Bool
         let annotationDepth: Float
+        let near: Float
+        let far: Float
 
         func local(_ point: SIMD3<Float>) -> SIMD3<Float> {
             let value = cameraFromWorld * SIMD4(point, 1)
@@ -184,6 +360,46 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = false
             result.gridPlacement = entity
             result.root.addChild(entity)
+        }
+        if batch.includesAxes {
+            let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+            for axis in ViewportCoordinateAxis.allCases {
+                let mesh = try LowLevelMesh(descriptor: descriptor(vertices: 2, indices: 2))
+                mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+                    let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                    vertices[0] = .zero
+                    vertices[1] = .zero
+                }
+                mesh.withUnsafeMutableIndices { bytes in
+                    let indices = bytes.bindMemory(to: UInt32.self)
+                    indices[0] = 0
+                    indices[1] = 1
+                }
+                mesh.parts.replaceAll([.init(indexCount: 2, topology: .line, materialIndex: 0,
+                                             bounds: .init(min: .zero, max: .zero))])
+                let resource = try await MeshResource(from: mesh)
+                try Task.checkCancellation()
+                let line = ModelEntity(mesh: resource, materials: [material(axisColor(axis), depth: .annotation)])
+                line.name = "Reference Axis \(axis.label)"
+                line.isEnabled = false
+
+                let label = Entity()
+                label.name = "Reference Axis \(axis.label) Label"
+                var text = TextComponent()
+                let attributed = NSAttributedString(string: axis.label, attributes: [
+                    .font: font,
+                    .foregroundColor: NSColor.white
+                ])
+                text.text = AttributedString(attributed)
+                text.size = CGSize(width: 14, height: 14)
+                label.components.set(text)
+                label.components.set(BillboardComponent())
+                label.isEnabled = false
+
+                result.axes.append(.init(axis: axis, line: line, mesh: mesh, label: label))
+                result.root.addChild(line)
+                result.root.addChild(label)
+            }
         }
         var pathResources: [CGPath: MeshResource] = [:]
         var textResources: [String: MeshResource] = [:]
@@ -357,7 +573,7 @@ final class RealityViewportSpatialResources {
                       safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
                       gridRuler: RulerConfiguration? = nil, gridBasis: ViewportProjectionBasis = .isometric,
                       gridSize: CGSize = .zero, gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
-        guard grid != nil || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !boundsRulers.isEmpty else { return nil }
+        guard grid != nil || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !boundsRulers.isEmpty else { return nil }
         guard let projection = cameraProjection(camera: camera, content: content) else {
             for (entity, _) in cameraPaths { entity.isEnabled = false }
             for (entity, _) in labels { entity.isEnabled = false }
@@ -366,9 +582,12 @@ final class RealityViewportSpatialResources {
             for (axis, label, line, _) in boundsRulers {
                 label.isEnabled = false; line.isEnabled = false; disabledRulerAxes.insert(axis)
             }
+            disableAxes()
             hideGrid()
             throw CameraReadinessError.projectionUnavailable
         }
+        try updateAxes(projection: projection, viewportSize: gridSize,
+                       safeRect: safeRect, excludedRects: excludedRects)
         for (entity, path) in cameraPaths {
             guard let placement = placement(anchor: path.anchor, offset: path.offset, projection: projection) else {
                 entity.isEnabled = false
@@ -476,6 +695,212 @@ final class RealityViewportSpatialResources {
             label.components.remove(TextComponent.self)
             label.isEnabled = false
         }
+    }
+
+    private func disableAxes() {
+        for axis in axes {
+            axis.line.isEnabled = false
+            axis.label.isEnabled = false
+            axis.mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+                let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                vertices[0] = .zero
+                vertices[1] = .zero
+            }
+            var part = axis.mesh.parts[0]
+            part.bounds = .init(min: .zero, max: .zero)
+            axis.mesh.parts[0] = part
+        }
+    }
+
+    private func updateAxes(projection: CameraProjection, viewportSize: CGSize,
+                            safeRect: CGRect, excludedRects: [CGRect]) throws {
+        guard !axes.isEmpty else { return }
+        guard viewportSize.width.isFinite, viewportSize.height.isFinite,
+              viewportSize.width > 0, viewportSize.height > 0 else {
+            throw RealityViewportSpatialBatch.invalid("The native reference-axis viewport is invalid.")
+        }
+        // Use the same checked CAD-to-native boundary as surface geometry.
+        // Mixing a Double origin with the already rounded native camera moves
+        // a view-aligned axis off its true native origin in perspective.
+        let nativeOrigin = try RealityViewportSpatialBatch.nativePoint(.origin, relativeTo: batch.renderOrigin)
+        let originLocal = SIMD3<Double>(projection.local(nativeOrigin))
+        guard originLocal.x.isFinite, originLocal.y.isFinite, originLocal.z.isFinite else {
+            throw RealityViewportSpatialBatch.invalid("The native reference-axis origin is not finite.")
+        }
+        let cameraFromWorld = projection.cameraFromWorld
+        func direction(_ axis: ViewportCoordinateAxis) -> SIMD3<Double> {
+            let column: SIMD4<Float>
+            switch axis {
+            case .x: column = cameraFromWorld.columns.0
+            case .y: column = cameraFromWorld.columns.1
+            case .z: column = cameraFromWorld.columns.2
+            }
+            return SIMD3<Double>(Double(column.x), Double(column.y), Double(column.z))
+        }
+        let annotationDepth = projection.annotationDepth
+        let unitsPerPoint = projection.depthScale([0, 0, -annotationDepth])
+            / Float(hypot(projection.forward.c, projection.forward.d))
+        guard annotationDepth.isFinite, annotationDepth > 0,
+              unitsPerPoint.isFinite, unitsPerPoint > 0 else {
+            throw RealityViewportSpatialBatch.invalid("The native reference-axis annotation plane is invalid.")
+        }
+        typealias Prepared = (start: SIMD3<Float>, end: SIMD3<Float>, label: SIMD3<Float>?, scale: Float)
+        func prepare(_ axis: ViewportCoordinateAxis) throws -> Prepared? {
+            guard let screen = try Self.projectedAxis(
+                origin: originLocal, direction: direction(axis), forward: projection.forward,
+                sampleDepth: Double(projection.sampleDepth), perspective: projection.perspective,
+                near: Double(projection.near), far: Double(projection.far), viewportSize: viewportSize
+            ) else { return nil }
+            // Reference lines ignore scene depth. Use the native calibration
+            // plane, not the near plane where world-space Float cancellation
+            // can visibly shorten the projected segment.
+            var start = projection.point(at: screen.start, depth: projection.sampleDepth)
+            var end = projection.point(at: screen.end, depth: projection.sampleDepth)
+            guard start.x.isFinite, start.y.isFinite, start.z.isFinite,
+                  end.x.isFinite, end.y.isFinite, end.z.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not finite.")
+            }
+            let pointResolution = CGFloat(Float.ulpOfOne) * max(viewportSize.width, viewportSize.height)
+            let screenLength = hypot(screen.end.x - screen.start.x, screen.end.y - screen.start.y)
+            guard screenLength > pointResolution else { return nil }
+            let unit = CGPoint(x: (screen.end.x - screen.start.x) / screenLength,
+                               y: (screen.end.y - screen.start.y) / screenLength)
+            func shift(_ point: CGPoint, from target: CGPoint) -> CGFloat {
+                (point.x - target.x) * unit.x + (point.y - target.y) * unit.y
+            }
+            // Correct measured inward quantization, not a guessed world extent.
+            // The final check rejects a frame if native Float cannot represent it.
+            func corrected(_ point: SIMD3<Float>, target: CGPoint, outward: CGFloat) throws -> SIMD3<Float> {
+                guard let projected = projection.project(point) else {
+                    throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not projectable.")
+                }
+                let error = shift(projected, from: target) * outward
+                guard error < 0 else { return point }
+                let amount = (-error + pointResolution) * outward
+                return projection.point(at: CGPoint(x: target.x + unit.x * amount, y: target.y + unit.y * amount),
+                                        depth: projection.sampleDepth)
+            }
+            start = try corrected(start, target: screen.start, outward: -1)
+            end = try corrected(end, target: screen.end, outward: 1)
+            start = Self.roundedOutward(start, awayFrom: end)
+            end = Self.roundedOutward(end, awayFrom: start)
+            guard let projectedStart = projection.project(start), let projectedEnd = projection.project(end) else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not projectable.")
+            }
+            guard hypot(projectedEnd.x - projectedStart.x, projectedEnd.y - projectedStart.y) > pointResolution,
+                  shift(projectedStart, from: screen.start) <= pointResolution,
+                  shift(projectedEnd, from: screen.end) >= -pointResolution else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis segment lost its clipped interval.")
+            }
+            let labelPoint = Self.axisLabelPoint(start: screen.start, end: screen.end,
+                                                 viewportSize: viewportSize, safeRect: safeRect,
+                                                 excludedRects: excludedRects)
+            let label: SIMD3<Float>?
+            if let labelPoint {
+                label = projection.point(at: labelPoint, depth: annotationDepth)
+            } else {
+                label = nil
+            }
+            if let label {
+                guard label.x.isFinite, label.y.isFinite, label.z.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid("The native reference-axis label endpoint is not finite.")
+                }
+            }
+            let scale = unitsPerPoint * 72 / 0.0254
+            guard scale.isFinite, scale > 0 else {
+                throw RealityViewportSpatialBatch.invalid("The native reference-axis label scale is invalid.")
+            }
+            return (start: start, end: end, label: label, scale: scale)
+        }
+        let x = try prepare(.x)
+        let y = try prepare(.y)
+        let z = try prepare(.z)
+        func prepared(_ axis: ViewportCoordinateAxis) -> Prepared? {
+            switch axis {
+            case .x: return x
+            case .y: return y
+            case .z: return z
+            }
+        }
+        for axisResource in axes {
+            guard let value = prepared(axisResource.axis) else {
+                axisResource.line.isEnabled = false
+                axisResource.label.isEnabled = false
+                axisResource.mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+                    let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                    vertices[0] = .zero
+                    vertices[1] = .zero
+                }
+                var part = axisResource.mesh.parts[0]
+                part.bounds = .init(min: .zero, max: .zero)
+                axisResource.mesh.parts[0] = part
+                continue
+            }
+            axisResource.mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+                let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                vertices[0] = value.start
+                vertices[1] = value.end
+            }
+            var part = axisResource.mesh.parts[0]
+            part.bounds = .init(min: simd_min(value.start, value.end), max: simd_max(value.start, value.end))
+            axisResource.mesh.parts[0] = part
+            axisResource.line.isEnabled = true
+            if let labelPosition = value.label {
+                axisResource.label.position = labelPosition
+                axisResource.label.orientation = simd_quatf(projection.worldFromCamera)
+                axisResource.label.scale = SIMD3(repeating: value.scale)
+                axisResource.label.isEnabled = true
+            } else {
+                axisResource.label.isEnabled = false
+            }
+        }
+    }
+
+    private static func roundedOutward(_ point: SIMD3<Float>, awayFrom other: SIMD3<Float>) -> SIMD3<Float> {
+        var result = point
+        if other.x > point.x { result.x = point.x.nextDown }
+        else if other.x < point.x { result.x = point.x.nextUp }
+        if other.y > point.y { result.y = point.y.nextDown }
+        else if other.y < point.y { result.y = point.y.nextUp }
+        if other.z > point.z { result.z = point.z.nextDown }
+        else if other.z < point.z { result.z = point.z.nextUp }
+        return result
+    }
+
+    private static func axisLabelPoint(start: CGPoint, end: CGPoint, viewportSize: CGSize,
+                                       safeRect: CGRect, excludedRects: [CGRect]) -> CGPoint? {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length.isFinite, length > 0 else { return nil }
+        let direction = CGPoint(x: dx / length, y: dy / length)
+        let base = CGPoint(x: end.x - direction.x * 11, y: end.y - direction.y * 11)
+        let viewport = CGRect(origin: .zero, size: viewportSize)
+        let safe = (safeRect.isEmpty ? viewport : safeRect).intersection(viewport)
+        guard !safe.isNull, !safe.isEmpty else { return nil }
+        let inset = min(4, min(safe.width, safe.height) / 2)
+        let allowed = safe.insetBy(dx: inset, dy: inset)
+        for index in 0..<5 {
+            let candidate: CGPoint
+            switch index {
+            case 0:
+                candidate = base
+            case 1:
+                candidate = CGPoint(x: end.x - direction.x * 18, y: end.y - direction.y * 18)
+            case 2:
+                candidate = CGPoint(x: end.x + direction.x * 8, y: end.y + direction.y * 8)
+            case 3:
+                candidate = CGPoint(x: end.x - direction.y * 11, y: end.y + direction.x * 11)
+            default:
+                candidate = CGPoint(x: end.x + direction.y * 11, y: end.y - direction.x * 11)
+            }
+            let clamped = CGPoint(x: min(max(candidate.x, allowed.minX), allowed.maxX),
+                                  y: min(max(candidate.y, allowed.minY), allowed.maxY))
+            let labelBounds = CGRect(x: clamped.x - 7, y: clamped.y - 7, width: 14, height: 14)
+            guard excludedRects.allSatisfy({ !$0.intersects(labelBounds) }) else { continue }
+            return clamped
+        }
+        return nil
     }
 
     private func updateGrid(_ frame: ViewportProjectedGrid.NativeFrame, projection: CameraProjection) throws {
@@ -754,7 +1179,7 @@ final class RealityViewportSpatialResources {
         let transform = camera.transformMatrix(relativeTo: nil)
         return CameraProjection(worldFromCamera: transform, cameraFromWorld: simd_inverse(transform),
                                 forward: mapping, inverseOffset: offsetMapping.inverted(),
-                                sampleDepth: depth, perspective: perspective != nil, annotationDepth: near * 1.01)
+                                sampleDepth: depth, perspective: perspective != nil, annotationDepth: near * 1.01, near: near, far: far)
     }
 
     private func placement(anchor: Point3D, offset: RealityViewportSpatialBatch.Offset,

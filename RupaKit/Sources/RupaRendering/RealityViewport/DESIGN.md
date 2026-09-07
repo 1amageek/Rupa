@@ -252,6 +252,49 @@ never reuses a stale transform or falls back to a fixed direction. Each
 direction-relative `toward` point consumes one additional item and position, and
 its concrete descriptor storage is included in the checked retained-byte sum.
 
+The XYZ reference axes are camera-owned native presentation, not finite
+world-source geometry. They are the three mathematical lines through the CAD
+world origin in the same coordinate frame as the mounted scene. For every
+applied camera frame, the existing native camera projection owner expresses
+each axis as a camera-local homogeneous line, clips it against the four screen
+half-spaces and the native near/far interval, and publishes only its finite
+projected visible segment. A finite bound is projected normally; an unbounded
+Perspective far direction uses its homogeneous direction limit as the vanishing
+endpoint rather than inventing a large world coordinate. Source/model bounds,
+grid coverage, and a guessed large extent never determine axis length. The result contains X,
+Y, and Z independently; an axis whose projection is degenerate or whose line
+does not intersect the frustum is explicitly disabled with its label rather
+than retaining stale endpoints. Otherwise both visible directions reach the
+actual screen or finite near/far boundary, or the true infinite-far projective
+limit, and no artificial endpoint appears inside the visible viewport. The
+positive visible endpoint owns the existing camera-relative axis label.
+
+`RealityViewportSpatialResources` prepares three fixed-capacity native line
+resources plus the bounded X/Y/Z label resources when the batch's independent
+`includesAxes` flag is set; the flag defaults to false and never follows
+`includesGrid`. The lines retain the existing `.annotation` policy through
+materials that neither read nor write depth, receive no collision component,
+and use the existing camera projection to place clipped endpoints at its finite
+in-frustum `sampleDepth`. This depth is solely the numerically stable inverse-
+projection plane and does not change line visibility. Native `TextComponent`
+labels remain at the existing near annotation depth and therefore keep their
+separate placement/occlusion behavior. A camera update uses the already-applied
+`ViewportLayout`/native camera mapping to update at most six positions, three
+enabled states, and label transforms. The pure clipping
+operation is bounded by three lines and the six frustum
+half-spaces; it creates no Entity, mesh, material, text, task, or buffer, performs
+no source traversal, and does not change preparation identity. Axis resources
+remain available for an empty scene and whether the grid is visible or has a
+valid plane intersection. Frustum clipping validates finite arithmetic and
+rounds its Float endpoints outward so conversion cannot shorten a valid segment;
+an invalid frame returns the existing typed camera/spatial failure without
+partially publishing new axes. After conversion to native Float positions, the
+owner reprojects both endpoints and verifies that every mathematically
+nondegenerate segment is still finite, noncollapsed, and covers the clipped
+screen interval without an inward endpoint. Outward Float correction may only
+recover that exact interval; it cannot extend an axis beyond the mathematical
+clip. A genuinely projected-degenerate axis remains explicitly disabled.
+
 Grid geometry is camera-owned bounded presentation rather than immutable
 world-source topology. The static producer does not materialize grid lines or
 scale-label strings into the retained spatial batch. On each changed grid
