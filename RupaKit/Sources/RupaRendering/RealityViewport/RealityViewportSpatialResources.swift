@@ -1189,10 +1189,14 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = true
         }
         for (entity, marker) in markers {
-            guard let placement = placement(anchor: marker.anchor, offset: .zero, projection: projection) else {
+            guard let placement = placement(anchor: marker.anchor, offset: marker.offset, projection: projection) else {
                 entity.isEnabled = false
                 continue
             }
+            // The collider is a child of this entity and both the collision
+            // bounds union and the projected handle distance read live
+            // transforms, so moving the parent needs no separate bookkeeping.
+            entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
         }
@@ -1834,6 +1838,27 @@ final class RealityViewportSpatialResources {
             }
             screenOffset = CGPoint(x: (dx * distance - dy * perpendicular) / length,
                                    y: (dy * distance + dx * perpendicular) / length)
+        case .worldDirected(let direction, let lengthPoints):
+            // Resolved in native scene space. The requested point length is
+            // converted to meters at the anchor's own depth, and the resolved
+            // point then reports its own depth and its own scale. Converting a
+            // screen offset here instead would normalize the projected
+            // direction and erase the foreshortening this case exists to keep.
+            let magnitude = direction.length
+            guard magnitude.isFinite, magnitude > 0 else { return nil }
+            let anchorScale = projection.depthScale(local) / Float(hypot(projection.forward.c, projection.forward.d))
+            guard anchorScale.isFinite, anchorScale > 0 else { return nil }
+            let unit = SIMD3<Float>(Float(direction.x / magnitude),
+                                    Float(direction.y / magnitude),
+                                    Float(direction.z / magnitude))
+            let resolved = point + unit * (Float(lengthPoints) * anchorScale)
+            let resolvedLocal = projection.local(resolved)
+            guard resolved.x.isFinite, resolved.y.isFinite, resolved.z.isFinite,
+                  resolvedLocal.x.isFinite, resolvedLocal.y.isFinite, resolvedLocal.z.isFinite,
+                  resolvedLocal.z < 0 else { return nil }
+            let resolvedScale = projection.depthScale(resolvedLocal) / Float(hypot(projection.forward.c, projection.forward.d))
+            guard resolvedScale.isFinite, resolvedScale > 0 else { return nil }
+            return (resolved, resolvedScale)
         }
         let delta = screenOffset.applying(projection.inverseOffset)
         // Fixed-offset line vertices extend continuously through the camera

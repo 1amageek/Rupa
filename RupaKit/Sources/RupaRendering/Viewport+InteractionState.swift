@@ -71,6 +71,23 @@ struct ViewportAffordanceDragState: Equatable {
     var baseGroupEdit: ViewportObjectEditState?
 }
 
+/// The prepared membership of a natively claimed transform affordance.
+///
+/// The overlay producer decides which selected bodies one transform gizmo
+/// stands for, and emits that decision into the interaction record it
+/// registers for the gizmo's handles. Re-deriving the grouping from the
+/// selection when the drag starts would give the drawn gizmo and the drag two
+/// owners: they disagree whenever one feature is selected through more than
+/// one scene node, where the gizmo spans the group while the derivation
+/// resolves a single body and the drag then matches no item at all. The claim
+/// carries the producer's decision from the press through to the drag, so the
+/// handle that was drawn is the handle that moves.
+struct ViewportNativeAffordanceClaim {
+    var target: ViewportAffordanceTarget
+    var members: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember]
+    var groupEdit: ViewportObjectEditState?
+}
+
 struct ViewportConstructionPlaneHandlePlane: Equatable {
     var constructionPlaneID: ConstructionPlaneSourceID
     var sceneNodeID: SceneNodeID

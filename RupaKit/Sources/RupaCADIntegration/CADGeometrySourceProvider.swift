@@ -289,6 +289,12 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                             code: .invalidMesh,
                             message: message
                         )
+                    case let .faceIdentityMismatch(triangleIndex, faceID):
+                        throw CADIntegrationError(
+                            code: .invalidMesh,
+                            message: "CAD mesh triangle \(triangleIndex) became mesh face \(faceID), "
+                                + "so a mesh hit cannot resolve back to the generating CAD face."
+                        )
                     }
                 }
                 meshSource = materialized.source

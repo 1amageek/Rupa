@@ -168,11 +168,16 @@ through `@State`. It owns only the last exact change key and one monotonic
 once before cache lookup for a changed key; returning to an earlier key still
 gets a new revision. Overflow is a typed failure, never wraparound. This
 synchronous comparison makes the new preparation identity visible in the same
-body evaluation. The exact-ready `surface(for:)` and handle-table queries cannot
-grant the previous overlay identity CAD authority while the new task is waiting.
-A separate display-only cache query may retain the preceding complete surface
-only when the scene key and optional real snapshot ID are unchanged and only
-the overlay revision differs. Render origin is derived from those admitted
+body evaluation. A pointer can only have addressed pixels that were drawn, so one
+cache rule owns which frame answers, and the display and every CAD, handle,
+projection, and section query resolve through it: the exact-ready frame when the
+requested identity is prepared, otherwise the mounted frame whose scene key and
+optional real snapshot ID are equal and whose overlay revision alone differs. An
+overlay-only rebuild therefore never converts a press into a silent refusal. A
+changed source or snapshot, an idle cache, or a typed failure recorded for the
+requested identity withdraws display and authority together, so the two cannot
+disagree about which frame answers. The exact-ready `surface(for:)` accessor
+remains the preparation-lifecycle readiness predicate, not the input authority. Render origin is derived from those admitted
 source/layout inputs rather than being a second cache-authority coordinate;
 warm synchronous native reuse still requires the mounted and requested origins
 to be equal. The `.task(id:)` that captures the immutable raw
@@ -262,12 +267,15 @@ independent tessellator is never an alternative implementation.
    Document-generation and real presentation-snapshot sources are accepted; no
    generation-less document, duplicate generation input, or workspace-revision
    fallback is accepted.
-2. An exact-ready RealityKit scene and its hit-test scene are the same root and
-   same frame. During same-source/snapshot overlay-only preparation or failure,
-   the preceding complete root may remain visible and camera-navigable, but it
-   cannot resolve CAD hits, handles, drags, selection mutations, or provenance
-   for the requested identity. A source/snapshot change, teardown, or
-   mismatched request exposes neither the prior display nor its authority.
+2. A mounted RealityKit scene and its hit-test scene are the same root and same
+   frame, and that mounted frame is the single query authority. During
+   same-source/snapshot overlay-only preparation the preceding complete root
+   stays visible, camera-navigable, and resolves CAD hits, handles, drags,
+   selection mutations, and provenance, because those are the pixels the pointer
+   addressed and the ordered handle indexes it returns name its own prepared
+   record table. A typed failure recorded for the requested identity keeps that
+   root visible but withdraws its authority. A source/snapshot change, teardown,
+   or mismatched request exposes neither the prior display nor its authority.
    The native child may reuse immutable resource content across source
    snapshots under its [bounded resource lifetime](RealityViewport/DESIGN.md).
    Such sharing does not reuse frame identity or any old query authority.
@@ -378,8 +386,8 @@ independent tessellator is never an alternative implementation.
    commit/cancel reference. An occurrence/model-transform change not owned by
    that preview requires a changed source authority and cancellation; it cannot
    silently replace the baseline under the same press.
-   Each subsequent geometric update separately requires the currently mounted
-   presentation identity and camera revision to be exact-ready. Temporary
+   Each subsequent geometric update separately requires a mounted frame for the
+   current presentation identity and a matching camera revision. Temporary
    overlay/preview/camera preparation unavailability performs no drag mutation
    and grants no stale-frame fallback, but it does not by itself discard the
    retained baseline; once the matching camera is ready, the same interaction
@@ -387,13 +395,13 @@ independent tessellator is never an alternative implementation.
    equal the replacement preview frame and never resolves a second hit to
    refresh that record.
    Releasing an accepted gesture while its own preview replacement is not yet
-   exact-ready closes input but does not finish or discard the interaction. The
+   mounted closes input but does not finish or discard the interaction. The
    owner retains one pending-finish value containing the release point, release
    camera revision, press record, and the same source/selection/route/base
-   guards. Publication of that exact-ready frame retries the native axis query
+   guards. Publication of that mounted frame retries the native axis query
    once and either emits exactly one commit or produces the route's typed
    refusal; it never uses the last preview scalar or bypasses revision checking.
-   Exact cache/frame unavailability is the retryable state. Once the requested
+   Absence of a mounted frame for the requested identity is the retryable state. Once the requested
    identity and revision are mounted, a nonfinite, degenerate, parallel, or
    behind-axis query is a terminal refusal rather than another readiness retry.
    A change to the document/source, non-self-owned presentation snapshot,
@@ -439,9 +447,57 @@ independent tessellator is never an alternative implementation.
    change to the retained base-value setting. The interaction's own overlay
    replacement retains the press record, and
    temporary native-frame unavailability performs no mutation until an
-   exact-ready replacement resumes. Every other route remains explicitly
+   exact-ready replacement resumes. The same lifecycle also owns
+   `patternArrayLinearAxis`, `independentCopyExtrudeDistance`, and
+   `independentCopyBodyDimension`; all three begin from their ordered prepared
+   record and preserve source ID, output index, output scene-node ID, feature
+   ID, and handle kind through preview, finish, or cancellation. Linear spacing
+   adds the signed native world-axis delta to its retained world-metre base and
+   applies `PatternArrayDistancePolicy.minimumLinearDistanceMeters`. The two
+   independent-copy routes likewise retain their world-metre base, while their
+   existing public callbacks convert the resulting world value by the retained
+   finite positive output-axis length exactly once; the native input owner must
+   neither omit nor duplicate that output-model scale conversion. Preview uses
+   immutable callback values to feed the existing `PatternSource`, and a
+   native-enabled route never invokes its corresponding legacy selector on
+   miss, typed failure, or cancellation. Every other route remains explicitly
    incomplete until migrated under the same authority rather than silently
-   sharing this eight-route claim.
+   sharing these route claims.
+   The body transform affordance is native-enabled under this same authority.
+   `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
+   prepared interaction record at the point, and its `.affordance` case owns
+   the press, the hover highlight, and the drag for `translate`,
+   `oneSidedScale`, `centerScale`, `rotate`, `vertexMove`, and `faceMove`. The
+   legacy CPU projection selector is removed from this route: a native miss, a
+   typed query failure, or a leading record whose action is not one of those
+   six ends the route with no body transform hit instead of consulting the
+   legacy gizmo. That fallback is prohibited rather than merely unused,
+   because the legacy gizmo sizes its handles from the body's projected span
+   while the native handles hold the point lengths fixed below, so
+   reintroducing it would restore the scale-dependent hit geometry those
+   lengths replace.
+   The press retains the record's own member list, per-member edit baseline,
+   and group edit, and the drag materializes `baseEdits` and `baseGroupEdit`
+   from exactly those retained values, as the record contract above requires.
+   Nothing on this route is re-read from the current scene, the current
+   selection, or the live per-feature edit table: the record is admitted only
+   from a frame prepared for the current overlay revision, and the edit table
+   is one of that revision's own inputs, so a live re-read could only restate
+   the prepared value under a second owner. Re-deriving the grouping is
+   additionally unsound, because the producer groups by the selected
+   scene-node addresses: a feature selected through more than one scene node
+   yields a group handle there, while a feature-keyed re-derivation resolves a
+   single body, matches no scene item, and ends the drag as a silent no-op.
+   A body scene item carrying no scene-node address matches no selected target
+   in the producer and therefore draws no transform gizmo; with the legacy
+   selector gone it also receives no transform input, so this route no longer
+   hit-tests geometry it never draws.
+   The profile corner, profile face, edge chamfer, and edge fillet affordance
+   actions are outside these claims and stay on their legacy selectors until
+   RK-4.2.2/3 prepares records for them. Rectangle selection no longer waits on
+   a later seam: its CAD sub-shape rules are owned by invariant 8, and the
+   legacy rectangle resolver is reached only for the residual geometry named
+   there.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no
@@ -574,19 +630,19 @@ independent tessellator is never an alternative implementation.
    selection and measurement consume one throwing native query whose nearest
    optional result contains
    occurrence/source-triangle provenance and the child-owned CAD world point;
-   both require the exact-ready preparation identity and matching mounted camera
-   revision. Only a ready query with no retained hit is a miss; unavailable or
-   stale presentation is a typed failure and cannot fall through to another
-   semantic target. Second, spatial and legacy affordances resolve native entities
-   through the already prepared frame-local handle table. The cache maps the
-   ordered native indexes to records only from the same exact-ready identity;
+   both require a mounted frame for the requested presentation identity and a
+   matching mounted camera revision. Only a mounted query with no retained hit is
+   a miss; an absent or stale presentation is a typed failure and cannot fall
+   through to another semantic target. Second, spatial and legacy affordances
+   resolve native entities through the already prepared frame-local handle table.
+   The cache maps the ordered native indexes to records only from that same
+   mounted frame's prepared table;
    materialization then consumes only revision-checked projection calls on that
    same native owner, synchronously without suspension or intervening frame
    mutation. An index mismatch or failed projection is typed unavailability,
    never a partial candidate list or old selector fallback. Third, rectangle
    selection uses only the bounded exception in invariant 8. Completing the
-   first seam does not make a retained display surface authoritative and does
-   not complete RK-4.
+   first seam does not by itself complete RK-4.
 8. Edge/vertex tolerance, rectangle selection, and any operation for which
    RealityKit has no equivalent may use the same prepared geometry and native
    camera projection as a bounded CPU query. This exception preserves CAD
@@ -613,7 +669,7 @@ independent tessellator is never an alternative implementation.
    vertex; an occluding occurrence therefore rejects it. Selection is minimum
    projected distance followed by stable prepared order. Missing authored-mesh
    provenance, projection, incidence, or native visibility is a miss or typed
-   frame failure according to the exact-ready query contract, never a CPU
+   frame failure according to the mounted-frame query contract, never a CPU
    triangle hit or legacy selector fallback.
    CAD body face/edge/vertex selection uses the same bounded exception with the
    prepared B-Rep topology instead of the authored-mesh face loops.
@@ -631,33 +687,40 @@ independent tessellator is never an alternative implementation.
    same rank-then-metric order — vertex before edge before face, then projected
    distance — so the nearest sub-shape wins across the scene and equal
    candidates keep stable scene order.
-   A face result is the containing face whose interpolated depth is nearest the
-   native visible-surface depth at the pointer, so the front-most face needs no
-   depth epsilon. A face is offered only for the body the native frame actually
-   draws at that pixel: an empty pixel and an occluding body both end the face
-   query, because a face cannot exist where the frame draws none of this body.
-   Containment is even-odd ray casting over the projected outer loop, which
-   admits a non-convex loop exactly and preserves the rule of the projected
-   topology tester this path replaces; depth is interpolated over that loop's
-   fan triangulation under the projection the mounted frame was drawn with.
-   Native camera depth is linear view-space z under both cameras, so the
-   interpolation rule is a property of the frame and never of the sign of the
-   sampled depths: an orthographic frame makes depth linear on screen, and a
-   perspective frame makes reciprocal depth linear. The resolver asks the frame
-   which of the two it is through `usesPerspectiveProjection` and infers
-   neither.
-   This face rule is interim and is not the target design. It re-estimates on
-   the CPU which face a pixel belongs to, beside the native frame that already
-   hit a triangle there, so it is a second face judgement rather than the CAD
-   identity of the hit. The target is provenance: the hit triangle carries the
-   prepared CAD face identity, and the face branch becomes that lookup, which
-   deletes the projected-loop containment and the face depth interpolation
-   described above. The resolver carries the matching
-   `FIXME(INCOMPLETE_IMPLEMENTATION)` marker and its completion condition.
+   A face result is the CAD face that generated the triangle the native frame
+   drew at the pointer. A face is offered only for the body the native frame
+   actually draws at that pixel: an empty pixel and an occluding body both end
+   the face query, because a face cannot exist where the frame draws none of
+   this body. The resolver forms no containment test and no face depth of its
+   own. The frame already decided which triangle it drew there, and evaluation
+   already recorded which CAD face generated each triangle, so the branch reads
+   that prepared answer. Its key is the hit triangle's `MeshFaceID` raw value,
+   which the universal mesh source preserves as the triangle's emission index;
+   the recorded runs are scanned in the order they are held rather than searched
+   as sorted, because a malformed list answered by a binary search would name
+   the wrong face instead of no face. A triangle no run names is a truthful
+   miss: evaluation gave its face no stable sub-shape identity, so there is no
+   CAD name to select, and no neighbouring face is substituted. A raw value no
+   triangle index can hold is malformed provenance and is a typed failure, not
+   a miss, because a miss would hand the query to the legacy resolver as if the
+   frame had answered.
+   Only a `.cad` source reference reaches this branch. An authored mesh numbers
+   its own faces independently, so its `MeshFaceID` could land inside a CAD run
+   by coincidence and name a face the frame never drew; `Viewport` withholds the
+   surface from those bodies so the face query misses instead.
+   The runs travel with the prepared topology as
+   `ViewportBodyTopology.meshFaceRuns`, built once per scene build from the body
+   display snapshot. No camera move and no click rebuilds them, and no side
+   table keyed by mesh identity exists to fall out of step with the snapshot.
    An edge candidate interpolates no depth at all. The screen parameter of the
    nearest projected point is mapped back to the edge's own world parameter
    under that same frame projection, and the native camera then reports the
-   depth of the resulting world point.
+   depth of the resulting world point. Native camera depth is linear view-space
+   z under both cameras, so which mapping applies is a property of the frame and
+   never of the sign of the sampled depths: an orthographic frame makes depth
+   linear on screen, and a perspective frame makes reciprocal depth linear. The
+   resolver asks the frame which of the two it is through
+   `usesPerspectiveProjection` and infers neither.
    A vertex or edge candidate is admitted only when the mounted frame still
    retains its world point through the active section, and is then rejected
    only when the frame draws a nearer surface at the candidate's own projected
@@ -677,16 +740,128 @@ independent tessellator is never an alternative implementation.
    topology-backed scene nor a hover over empty space can be answered by a
    second, differently projected hit rule. The scopes that still have no native
    input path — object, vertex, region, sketch entity, and the unscoped query —
-   remain routed to the legacy resolver on a miss until their own seams land,
-   and rectangle selection is unchanged until RK-4.3.
+   remain routed to the legacy resolver on a miss until their own seams land.
+
+   Rectangle selection uses this same resolver and this same frame under the
+   bounded exception above. It is a set query, not a nearest query: the
+   rectangle entry point returns every CAD sub-shape of one body that meets the
+   rectangle, so `Candidate.rank` and its projected-distance metric have no role
+   and no candidate precedes another. `Viewport` walks the CAD interaction
+   bodies in scene order and each body's topology in recorded order, and
+   de-duplicates by `SelectionComponentID`, because one CAD face can own more
+   than one recorded run. The covered scopes are exactly face, edge, and vertex.
+   The `all` and `object` scopes are deliberately not covered: the legacy
+   rectangle filter already drops every body hit wherever object hits are
+   allowed, so a rectangle there selects whole occurrences and never a
+   sub-shape. Region and sketch entity keep their existing routes. The
+   occurrence rectangle that answers `all` and `object` still projects through
+   `ViewportLayout` instead of the mounted camera and carries an explicit
+   incompleteness marker at its declaration.
+   A vertex is inside the rectangle when its projected point is, with no
+   tolerance, which is the containment the replaced pixel scan required, and it
+   is then admitted by exactly the section-then-occlusion rule a pointer vertex
+   is.
+   An edge is clipped rather than sampled at a fixed pitch, because a pitch
+   would make a short edge's admission depend on zoom. Both endpoints are
+   projected, the projected segment is clipped against the rectangle in its own
+   screen parameter, and the midpoint of the surviving interval is mapped back
+   to the edge's world parameter under the frame's own projection rule and
+   admitted by that same visibility rule. One sample per edge bounds the cost
+   and costs a stated behavior: an edge crossing the rectangle but occluded at
+   that one point is rejected even when an unoccluded part of it lies inside.
+   A face is answered from the drawn triangles, not from a face loop, because
+   the prepared loops omit a face whose outer loop has fewer than three points
+   and a loop centroid can land in an annular face's hole. Each recorded run is
+   first tested by projecting the eight corners of its world-space bounding box;
+   the run is skipped only when all eight project inside the camera's depth
+   interval and their screen bounds miss the rectangle, so a corner the camera
+   cannot answer widens the search instead of losing the face. A surviving run
+   is scanned in emission order, its triangles are projected, and the first
+   triangle whose projected polygon meets the rectangle supplies the
+   representative point: the centroid of that triangle clipped to the
+   rectangle, which lies inside both. The run is admitted only when one native
+   surface query at that point returns a triangle this body drew and whose
+   emission index resolves through this same run list back to this run. Both
+   halves of that check are load-bearing. The half that asks whether the frame
+   drew the triangle here is the occlusion and section test, since the frame
+   draws only what survived the section and only what nothing nearer covers, so
+   this branch needs no depth compare and no world point of its own. The half
+   that asks which run owns the returned index is not redundant with it: mesh
+   face identities are numbered per body, so another body's triangle can carry
+   an index that also names a run of this body, and without the first half the
+   rectangle would admit a face standing behind another solid.
+   Answering a face from drawn triangles makes the snapshot mesh positions an
+   input of this path alongside the run list. The scene builder writes the mesh
+   and the topology from one body display snapshot or writes neither, so
+   prepared topology without that mesh is malformed preparation and a typed
+   failure, never a body whose faces the rectangle silently skips.
+   The rectangle therefore holds the cost class of the pointer query rather
+   than of the triangle count. Per body it costs at most eight projections per
+   recorded run, three per triangle of the runs that survive their bounds test,
+   one native surface query per admitted run, one projection per vertex, two per
+   edge, and one surface query plus one projection for each vertex or edge that
+   reaches the visibility rule. Clipping and the bounds test are CPU arithmetic
+   over already projected points and call the frame not at all. This bound is a
+   correctness contract rather than an optimization: a rectangle drag re-runs
+   the query on every pointer move, and a per-triangle native projection would
+   make the cost of one input event a function of tessellation density.
+   The failure contract belongs to the drag, not to the resolver alone.
+   `Viewport.selectionDragTarget` throws, and both the preview publisher and the
+   drag handler answer a typed failure by publishing nothing, as the pointer
+   press ends a cancelled native gesture and the hover clears its canvas state.
+   A rectangle that could not be resolved changes no selection and never
+   publishes an empty answer that would read as an intentional deselection.
+   The legacy rectangle resolver is narrowed, not removed. Face, edge, and
+   vertex consult it when, and only when, the hit scene holds geometry the
+   native path does not own: a CAD interaction body whose prepared topology
+   carries no face, edge, or vertex target, which the legacy pick index answers
+   with projected bounding-box sub-objects, and, for vertex alone, a body
+   carrying surface knot, span, trim-knot, or trim-span displays, which are
+   addressed by `SelectionReference` and have no prepared topology identity at
+   all. With neither present the rectangle makes no legacy call and renders no
+   identity buffer. With either present the legacy result has the hits the
+   native path owns removed by ownership and not by outcome — every body hit
+   carrying a generated face, edge, or vertex `SelectionComponent` whose scene
+   node is a CAD interaction node — so a native miss cannot let the legacy
+   answer back in for a body the native path answered for. `unsupported` is
+   unchanged: with no presentation mounted, or with no CAD interaction body
+   carrying prepared topology, the whole legacy rectangle path runs as before.
+   The GPU identity buffer therefore survives this seam for that residual, and
+   is removed only once those producers have seams of their own or are retired.
+   The resulting rectangle semantic differs from the buffer it replaces, which
+   admitted a sub-shape owning any front-most pixel inside the rectangle. The
+   departures are the half-occluded edge above, and a face whose first
+   in-rectangle triangle is occluded at its clipped centroid while a later
+   triangle of the same face is not.
    `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
    the behavioral evidence for this resolver: the rank-then-metric order across
-   bodies, the orthographic and perspective edge-parameter rules, rejection of
-   vertices and edges the section removed, silhouette retention over an empty
-   pixel, and the `miss` versus `unsupported` split. Those tests drive the
+   bodies, the run lookup that names the CAD face of the drawn triangle
+   including its recorded-order scan, its truthful miss for a triangle no run
+   names and its typed failure for an unrepresentable identity, the orthographic
+   and perspective edge-parameter rules, rejection of vertices and edges the
+   section removed, silhouette retention over an empty pixel, and the `miss`
+   versus `unsupported` split.
+   `Tests/RupaRenderingTests/ViewportNativeCADRectangleResolverTests.swift` owns
+   the rectangle rules: zero-tolerance vertex containment, the clipped-interval
+   edge sample including an edge whose endpoints both lie outside, the run
+   bounds test that skips no run a camera could not project, the first
+   in-rectangle triangle and its clipped centroid, the confirming surface query
+   that rejects a triangle another body drew and a triangle belonging to a
+   different run, rejection of the sub-shapes the section removed, the
+   de-duplication of one component named by two runs, the typed failure for an
+   unrepresentable identity, and the absence of any rank order in the result.
+   Both suites drive the
    resolver through synthetic frame closures, so they prove its rules and not
-   the mounted RealityKit frame; mounted-frame evidence for CAD sub-shape input
-   is owned by the integration verification of this migration.
+   the mounted RealityKit frame. The two frame answers those closures stand in
+   for are proven on a mounted frame by
+   `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:
+   that `usesPerspectiveProjection(revision:)` reports the projection the frame
+   was actually drawn with under both cameras, and that
+   `retainsSectionedPoint(_:revision:)` separates a point the active section
+   removed from a point that merely draws no pixel, together with the stale
+   revision and unrepresentable point failures. The remaining mounted-frame
+   evidence for CAD sub-shape input is owned by the integration verification of
+   this migration.
 
 ### Native shading and spatial content
 
@@ -767,6 +942,45 @@ independent tessellator is never an alternative implementation.
     and transform handles use the direction and anchor defined by their CAD
     target. Exact legacy screen-side choice and pixel stroke decoration are not
     source semantics.
+    A body transform affordance is reachable at the same screen size whatever
+    the body measures and whatever the camera distance is, so its extent is a
+    point length owned here rather than a fraction of the body span. The
+    semantic producer owns these lengths; the native owner resolves them.
+
+    | Handle | Screen extent | Hit tolerance | Placement |
+    |---|---|---|---|
+    | Rotation ring radius | 72 pt | 8 pt | World-directed `CameraPoint` per sampled arc direction |
+    | Uniform centre-scale marker | 95 pt | 10 pt | Direction-relative marker offset toward the axis tip |
+    | One-sided scale marker (arrow tip) | 132 pt | 10 pt | Direction-relative marker offset toward the axis tip |
+    | Translate arrow shaft | 0 pt to 132 pt | 7 pt | Direction-relative `CameraPoint` pair |
+
+    The lengths are chosen so that footprints of adjacent handles on one axis
+    cannot overlap: 95 - 72 = 23 >= 10 + 8, and 132 - 95 = 37 >= 10 + 10. The
+    invariant is the ordering 72 < 95 < 132 together with that separation rule,
+    not the three literals, so any later change re-derives them from the
+    tolerances instead of adjusting one value alone. The translate shaft spans
+    both markers by construction and cannot be separated geometrically; a
+    pointer inside a marker footprint is resolved by the interaction route's
+    priority, which prefers a marker over the shaft that carries it. Both axis
+    markers share the shaft's own `toward` point so they resolve on the drawn
+    arrow at every camera angle; advancing them in scene space instead would
+    foreshorten them off it and shrink the separation the rule fixes. Vertex,
+    face, and centre markers keep their real geometry anchors because they name
+    a place on the body rather than a distance from it.
+
+    A rotation ring is sampled as a camera line of world-directed points rather
+    than a world polyline, so it stays a fixed 72-pt radius and keeps the
+    camera's own foreshortening. Twelve segments per quarter turn bound the
+    sagitta at 72 * (1 - cos 3.75 degrees) = 0.154 pt, below the ring's own line
+    width, so the sampling is a consequence of the fixed radius rather than an
+    independent constant. Against the 640-item plan ceiling this replaces three
+    37-point world polylines (111 items and 111 positions) with three 13-point
+    camera lines (78 items and 39 positions), and adds one item and one position
+    for each of the six axis markers that gains a direction-relative offset: a
+    net -27 items and -66 positions per body. Value-encoding affordances keep their existing
+    `minimumLength` behaviour, because for an edge offset, a slot width, a
+    pattern array axis, a surface frame axis, or a spline slide the drawn length
+    is the edited quantity and a fixed length would misreport it.
     Grid presentation is the source-independent camera-frame exception defined
     by the [RealityViewport component](RealityViewport/DESIGN.md):
     `ViewportProjectedGrid` remains the sole owner of adaptive/fixed spacing,
@@ -929,12 +1143,12 @@ tests and native GPU measurements.
 
 | Invariant | Required evidence |
 |---|---|
-| Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible while exact-ready CAD hit and handle lookup remain unavailable for the requested identity. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |
+| Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible and continuously authoritative for CAD hit and handle lookup at the requested identity, and that a changed source or snapshot and a typed failure recorded for that identity each withdraw display and authority together. A press issued with no gap after a native axis commit, which lands inside the overlay-only rebuild that commit starts, is proved to reach the native route and commit again rather than being refused. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |
 | Native camera | macOS 27-or-later mounted tests retain the raw native inverse-query counterexamples, then exercise documented native orthographic/symmetric-perspective lens forms, centered and off-center fit/pan framing, native render/project parity, child-owned composed-ray/project round trips, fit, orbit, pan, zoom, saved views, invalid/stale explicit-miss paths, and no geometry rebuild on camera changes. Lens skew or an unsupported projective component is rejected. |
 | Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. |
-| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. |
+| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 

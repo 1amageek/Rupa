@@ -861,9 +861,16 @@ final class RealityViewport {
         return (triangle: triangle, point: worldPoint)
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Native handle queries are not yet the
-    // production input authority. RK-4.2.2/3 must bind these frame-local indices
-    // to prepared semantic targets and replace the legacy pointer selectors.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): These hits are the production input
+    // authority only for the migrated routes. `Viewport.beginViewportPress` and
+    // `Viewport.hover` resolve the prepared axis handles and the body transform
+    // affordance from them; the sketch, curve, surface, pattern,
+    // construction-plane and profile routes still fall through to the legacy
+    // CPU selectors. RK-4.2.2/3 completes the cutover by preparing records for
+    // those routes. Rectangle selection no longer waits on this method:
+    // `Viewport.selectionDragTarget` answers CAD face, edge and vertex
+    // rectangles from prepared topology through this same mounted frame, and
+    // only the occurrence rectangle still projects through the plan.
     func spatialHandleHits(at point: CGPoint, revision: UInt64) throws -> [UInt32] {
         guard point.x.isFinite, point.y.isFinite, appliedViewportRevision == revision,
               root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {
@@ -1015,14 +1022,18 @@ final class RealityViewport {
     /// from the section plane it did not apply.
     func retainsSectionedPoint(_ point: Point3D, revision: UInt64) throws -> Bool {
         try validateCameraQuery(point: .zero, revision: revision)
-        guard geometryRoot.isEnabled else { return false }
-        guard let section else { return true }
+        // The point is validated before the scene state is read. A whole scene
+        // behind the cut and a scene with no section both answer without the
+        // predicate, so validating later would let an unrepresentable point
+        // receive a plain `false` or `true` instead of the failure it owns.
         let local = SIMD3<Double>(
             point.x - renderOrigin.x, point.y - renderOrigin.y, point.z - renderOrigin.z
         )
         guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
             throw Self.queryFailure("The world point cannot be represented in native scene space.")
         }
+        guard geometryRoot.isEnabled else { return false }
+        guard let section else { return true }
         return Self.retains(local, section: section)
     }
 

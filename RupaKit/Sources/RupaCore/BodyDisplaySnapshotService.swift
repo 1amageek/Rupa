@@ -68,6 +68,7 @@ public struct BodyDisplaySnapshotService: Sendable {
             ),
             topology: topology(
                 for: featureID,
+                mesh: mesh,
                 in: evaluatedDocument
             )
         )
@@ -75,12 +76,18 @@ public struct BodyDisplaySnapshotService: Sendable {
 
     private func topology(
         for featureID: FeatureID,
+        mesh: SwiftCAD.Mesh,
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyDisplaySnapshot.Topology {
         let model = evaluatedDocument.brep
         var faces: [BodyDisplaySnapshot.Topology.Face] = []
         var edges: [BodyDisplaySnapshot.Topology.Edge] = []
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []
+        // Every generated face of this feature, whether or not it also has the
+        // outer-loop polygon `faces` requires, so that mesh provenance is
+        // resolved from the kernel's own record rather than from what a polygon
+        // hit test happened to be able to represent.
+        var faceComponentIDs: [FaceID: SelectionComponentID] = [:]
 
         for (subshapeID, reference) in evaluatedDocument.subshapes.entries.sorted(by: {
             GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
@@ -93,6 +100,7 @@ public struct BodyDisplaySnapshotService: Sendable {
             case .body:
                 continue
             case .face(let faceID):
+                faceComponentIDs[faceID] = componentID
                 guard let face = model.faces[faceID],
                       let points = orderedOuterLoopPoints(for: face, in: model),
                       points.count >= 3 else {
@@ -127,8 +135,37 @@ public struct BodyDisplaySnapshotService: Sendable {
         return BodyDisplaySnapshot.Topology(
             faces: faces,
             edges: edges,
-            vertices: vertices
+            vertices: vertices,
+            meshFaceRuns: meshFaceRuns(for: mesh, componentIDs: faceComponentIDs)
         )
+    }
+
+    /// Converts the kernel's per-face triangle counts into triangle ranges.
+    ///
+    /// The kernel records the runs contiguously in emission order, so the range
+    /// of a run starts where the previous one ended. A run whose face has no
+    /// generated-topology identity is omitted: that face carries no stable name
+    /// a selection can refer to, so reporting no component is the truthful
+    /// answer for its triangles rather than a substituted one.
+    private func meshFaceRuns(
+        for mesh: SwiftCAD.Mesh,
+        componentIDs: [FaceID: SelectionComponentID]
+    ) -> [BodyDisplaySnapshot.Topology.MeshFaceRun] {
+        var runs: [BodyDisplaySnapshot.Topology.MeshFaceRun] = []
+        runs.reserveCapacity(mesh.faceRuns.count)
+        var triangleStart = 0
+        for run in mesh.faceRuns {
+            let triangleEnd = triangleStart + run.triangleCount
+            defer { triangleStart = triangleEnd }
+            guard let componentID = componentIDs[run.faceID] else {
+                continue
+            }
+            runs.append(BodyDisplaySnapshot.Topology.MeshFaceRun(
+                componentID: componentID,
+                triangleRange: triangleStart ..< triangleEnd
+            ))
+        }
+        return runs
     }
 
     private func orderedOuterLoopPoints(

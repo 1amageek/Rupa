@@ -14,6 +14,9 @@ struct ViewportNativeAxisInput: Sendable {
         case edgeOffset(ViewportEdgeOffsetDragTarget)
         case slotWidth(ViewportSlotWidthDragTarget)
         case sketchVertexOffset(ViewportSketchVertexOffsetDragTarget)
+        case patternArrayLinearAxis(ViewportPatternArrayLinearAxisDragTarget)
+        case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragTarget)
+        case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragTarget)
     }
 
     let record: ViewportSpatialInteractionRecord
@@ -39,6 +42,12 @@ struct ViewportNativeAxisInput: Sendable {
             axis = value
         case .sketchVertexOffset(_, _, _, _, let value):
             axis = value
+        case .patternArrayLinearAxis(let value):
+            axis = try Self.patternAxis(origin: value.basePoint, direction: value.direction, value: value.distanceMeters)
+        case .independentCopyExtrudeDistance(let value):
+            axis = try Self.patternAxis(origin: value.basePoint, direction: value.axis, value: value.distanceMeters)
+        case .independentCopyBodyDimension(let value):
+            axis = try Self.patternAxis(origin: value.basePoint, direction: value.axis, value: value.valueMeters)
         default:
             return nil
         }
@@ -89,6 +98,12 @@ struct ViewportNativeAxisInput: Sendable {
                 throw RealityViewportSpatialBatch.invalid("The native slot-width delta is not finite.")
             }
             return try Self.positiveValue(axis.baseValue, adding: scaledDelta)
+        case .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension:
+            let result = axis.baseValue + sourceDelta
+            guard result.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native pattern-axis value overflowed.")
+            }
+            return max(result, PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters)
         default:
             throw RealityViewportSpatialBatch.invalid("The prepared record is not a world-axis operation.")
         }
@@ -97,6 +112,15 @@ struct ViewportNativeAxisInput: Sendable {
     func commit(value: Double) throws -> Commit? {
         guard value.isFinite else {
             throw RealityViewportSpatialBatch.invalid("The native interaction value is not finite.")
+        }
+
+        switch record.target {
+        case .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension:
+            guard value >= PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters else {
+                throw RealityViewportSpatialBatch.invalid("The native pattern-axis value is below its minimum.")
+            }
+            guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
+        default: break
         }
 
         switch record.target {
@@ -161,9 +185,45 @@ struct ViewportNativeAxisInput: Sendable {
             guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
             return .sketchVertexOffset(.init(target: target, handle: handle, distance: value))
 
+        case .patternArrayLinearAxis(let target):
+            return .patternArrayLinearAxis(.init(sourceID: target.sourceID, axisSlot: target.axisSlot, distance: value))
+
+        case .independentCopyExtrudeDistance(let target):
+            return .independentCopyExtrudeDistance(.init(
+                sourceID: target.sourceID, outputIndex: target.outputIndex,
+                outputSceneNodeID: target.outputSceneNodeID, featureID: target.featureID,
+                distance: try sourcePatternValue(fromWorldValue: value)
+            ))
+
+        case .independentCopyBodyDimension(let target):
+            return .independentCopyBodyDimension(.init(
+                sourceID: target.sourceID, outputIndex: target.outputIndex,
+                outputSceneNodeID: target.outputSceneNodeID, featureID: target.featureID, kind: target.kind,
+                value: try sourcePatternValue(fromWorldValue: value)
+            ))
+
         default:
             throw RealityViewportSpatialBatch.invalid("The prepared record is not a world-axis operation.")
         }
+    }
+
+    private static func patternAxis(origin: Point3D, direction: Vector3D, value: Double) throws -> ViewportSpatialPreparedInteractionTarget.Axis {
+        guard value.isFinite, value > 0 else {
+            throw RealityViewportSpatialBatch.invalid("The prepared pattern-axis value is not positive and finite.")
+        }
+        // Pattern handles already own world coordinates and world-metre values.
+        // Only independent-copy callback payloads convert back to source units.
+        return .init(origin: origin, direction: direction,
+                     baseValue: max(value, PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters),
+                     sourceUnitsPerWorldMetre: 1)
+    }
+
+    private func sourcePatternValue(fromWorldValue value: Double) throws -> Double {
+        let result = value / Self.length(axis.direction)
+        guard result.isFinite, result > 0 else {
+            throw RealityViewportSpatialBatch.invalid("The independent-copy source value is not positive and finite.")
+        }
+        return result
     }
 
     private static func length(_ value: Vector3D) -> Double {

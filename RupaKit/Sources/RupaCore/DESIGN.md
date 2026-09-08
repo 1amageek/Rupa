@@ -337,6 +337,31 @@ This contract preserves source feature identity, selection filtering, and
 supersession behavior. It does not add a second measurement model or infer
 solid geometry from source parameters.
 
+### Body display face-run contract
+
+`BodyDisplaySnapshot.Topology.meshFaceRuns` records which CAD face generated
+each contiguous run of the snapshot's drawn triangles. It is the identity the
+viewport reads when the native frame reports the triangle it hit, so the runs
+are derived once with the snapshot and are never rebuilt per camera move or per
+click, and no side table keyed by mesh identity exists to fall out of step with
+the snapshot they describe.
+
+```mermaid
+flowchart LR
+    Kernel["swift-CAD tessellation"] -->|"Mesh.faceRuns"| Evaluated["Evaluated document mesh"]
+    Evaluated --> Service["BodyDisplaySnapshotService"]
+    Service -->|"Topology.meshFaceRuns"| Snapshot["BodyDisplaySnapshot"]
+```
+
+The runs are independent of `Topology.faces`. A `Face` carries the projected
+outer loop a CPU polygon test needs and is absent for a face without one, while
+a run needs no polygon and describes exactly the triangles the frame draws. A
+face that evaluation gave no stable sub-shape identity records no run; the
+omission is truthful absence, and a hit on such a triangle is reported as a miss
+rather than answered with a neighbouring face. A run always carries the prepared
+`SelectionComponentID`: Core never substitutes a mesh identifier for a CAD
+identifier.
+
 ### Executor substitution boundary
 
 The public `DefaultGeometrySourceCommandApplier` initializer selects
@@ -429,6 +454,7 @@ T09-B owns the following behavioral proof:
 | Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
 | Evaluated primitives | Box, cylinder, cone, sphere, and torus all produce evaluated-body solids with exact B-rep volume and Mesh-only area/bounds through one cached evaluation path; unavailable outputs remain diagnostics. |
 | Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green. |
+| Body display face runs | `Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift` proves an evaluated box snapshot records one run per prepared face, that the runs carry the same prepared identities as `Topology.faces`, and that they partition every drawn triangle contiguously from zero to the snapshot's triangle count. |
 
 CADAPI-C must additionally prove:
 

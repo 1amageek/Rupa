@@ -339,6 +339,90 @@ struct RealityViewportSpatialResourcesTests {
         for (mesh, previous) in zip(meshes(in: prepared.root), original) { #expect(mesh === previous) }
     }
 
+    /// A world-directed placement is the one form the body transform uses for
+    /// its rotation rings, because a ring has to keep a fixed screen radius and
+    /// still foreshorten into the plane it rotates about. The camera-plane forms
+    /// normalize the projected direction first, which would draw three
+    /// identical circles. This mounts the frame and reads the two halves of that
+    /// contract off the real projection.
+    @Test(.timeLimit(.minutes(1)))
+    func worldDirectedPlacementBoundsItsScreenExtentAndKeepsForeshortening() async throws {
+        _ = NSApplication.shared
+        let radiusPoints: CGFloat = 72
+        let batch = try RealityViewportSpatialBatch(markers: [
+            // Perpendicular to the view axis: the full point length is drawn.
+            .init(shape: .sphere, anchor: .origin, diameterPoints: 9, color: [1, 1, 1, 1],
+                  offset: .worldDirected(along: .init(x: 0, y: 1, z: 0), lengthPoints: radiusPoints)),
+            // Tilted forty-five degrees out of it: the same length projects
+            // shorter, by the cosine the camera itself applies.
+            .init(shape: .sphere, anchor: .origin, diameterPoints: 9, color: [1, 1, 1, 1],
+                  offset: .worldDirected(along: .init(x: 0, y: 1, z: 1), lengthPoints: radiusPoints)),
+            // Advanced far enough along the view axis to pass the eye: the
+            // resolved point is refused rather than drawn mirrored behind it.
+            .init(shape: .sphere, anchor: .origin, diameterPoints: 9, color: [1, 1, 1, 1],
+                  offset: .worldDirected(along: .init(x: 0, y: 0, z: 1), lengthPoints: 5_000)),
+        ], renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let prepared = try await RealityViewportSpatialResources.prepare(batch: batch)
+        try #require(prepared.root.children.count == 3)
+        let camera = Entity()
+        var lens = OrthographicCameraComponent()
+        lens.scale = 3; lens.near = 0.01; lens.far = 100
+        camera.components.set(lens)
+        camera.position.z = 5
+        let capture = CameraCapture()
+        let controller = NSHostingController(rootView: RealityView { content in
+            content.camera = .virtual
+            content.add(camera); content.add(prepared.root)
+            capture.content = content
+        }.frame(width: 400, height: 300))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer {
+            capture.content?.remove(prepared.root); capture.content?.remove(camera)
+            capture.content = nil
+            window.contentViewController = nil; window.close()
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while capture.content == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        let content = try #require(capture.content)
+        // The zoom is the point of the second pass: an orthographic scale change
+        // is exactly the case a world length would follow and a screen length
+        // must not, so both radii have to come back at the same pixels while the
+        // marker's own world scale tracks the new meters-per-point.
+        var worldScales: [Float] = []
+        for scale: Float in [3, 6] {
+            lens.scale = scale
+            camera.components.set(lens)
+            let settle = ContinuousClock.now.advanced(by: .seconds(5))
+            var matched = false
+            while ContinuousClock.now < settle {
+                try prepared.updateCamera(camera: camera, content: content)
+                if let anchor = content.project(point: .zero, to: .local),
+                   let inPlane = content.project(point: prepared.root.children[0].position, to: .local),
+                   let tilted = content.project(point: prepared.root.children[1].position, to: .local) {
+                    let inPlaneExtent = hypot(inPlane.x - anchor.x, inPlane.y - anchor.y)
+                    let tiltedExtent = hypot(tilted.x - anchor.x, tilted.y - anchor.y)
+                    matched = abs(inPlaneExtent - radiusPoints) < 0.5
+                        && abs(tiltedExtent - radiusPoints / CGFloat(2).squareRoot()) < 0.5
+                        && tiltedExtent < inPlaneExtent
+                    if matched { break }
+                }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            #expect(matched)
+            #expect(prepared.root.children[0].isEnabled)
+            #expect(prepared.root.children[1].isEnabled)
+            #expect(!prepared.root.children[2].isEnabled)
+            worldScales.append(prepared.root.children[0].scale.x)
+        }
+        try #require(worldScales.count == 2)
+        #expect(worldScales[0] > 0)
+        #expect(abs(worldScales[1] / worldScales[0] - 2) < 0.05)
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func repeatedTopologySharesNativeResourcesAcrossPlacements() async throws {
         _ = NSApplication.shared

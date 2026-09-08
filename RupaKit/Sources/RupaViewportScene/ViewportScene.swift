@@ -467,15 +467,38 @@ public struct ViewportBodyTopology: Equatable, Sendable {
     public var faces: [Face]
     public var edges: [Edge]
     public var vertices: [Vertex]
+    public var meshFaceRuns: [MeshFaceRun]
 
     public init(
         faces: [Face] = [],
         edges: [Edge] = [],
-        vertices: [Vertex] = []
+        vertices: [Vertex] = [],
+        meshFaceRuns: [MeshFaceRun] = []
     ) {
         self.faces = faces
         self.edges = edges
         self.vertices = vertices
+        self.meshFaceRuns = meshFaceRuns
+    }
+
+    /// The prepared CAD sub-shape of the triangle the native frame hit.
+    ///
+    /// The universal mesh source names the triangles of a CAD body in the order
+    /// the kernel emitted them, so the raw value of a hit triangle's
+    /// `MeshFaceID` is that triangle's index and the run containing it names the
+    /// generating face. The scan is linear because a run list carries no
+    /// ordering guarantee across the value boundary; assuming one and searching
+    /// it as sorted would answer a malformed list with the wrong face instead of
+    /// no face.
+    ///
+    /// A `nil` result is a truthful miss: the triangle belongs to a face that
+    /// evaluation gave no stable sub-shape identity, so there is no CAD name to
+    /// select. It is never a substituted neighbouring face.
+    public func componentID(forTriangle index: Int) -> SelectionComponentID? {
+        for run in meshFaceRuns where run.triangleRange.contains(index) {
+            return run.componentID
+        }
+        return nil
     }
 
     public struct Face: Equatable, Sendable {
@@ -509,6 +532,22 @@ public struct ViewportBodyTopology: Equatable, Sendable {
             self.point = point
         }
     }
+
+    /// The contiguous drawn triangles one CAD face generated.
+    ///
+    /// This list is independent of `faces`: a `Face` carries the projected
+    /// outer loop a CPU polygon test needs and is absent for a face that has
+    /// none, while a run needs no polygon and describes exactly the triangles
+    /// the native frame draws.
+    public struct MeshFaceRun: Equatable, Sendable {
+        public var componentID: SelectionComponentID
+        public var triangleRange: Range<Int>
+
+        public init(componentID: SelectionComponentID, triangleRange: Range<Int>) {
+            self.componentID = componentID
+            self.triangleRange = triangleRange
+        }
+    }
 }
 
 extension ViewportBodyTopology {
@@ -531,6 +570,12 @@ extension ViewportBodyTopology {
                 ViewportBodyTopology.Vertex(
                     componentID: vertex.componentID,
                     point: vertex.point
+                )
+            },
+            meshFaceRuns: topology.meshFaceRuns.map { run in
+                ViewportBodyTopology.MeshFaceRun(
+                    componentID: run.componentID,
+                    triangleRange: run.triangleRange
                 )
             }
         )

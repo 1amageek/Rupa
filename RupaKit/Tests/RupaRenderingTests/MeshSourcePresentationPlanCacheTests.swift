@@ -18,9 +18,58 @@ import simd
 
 private let planCacheDocumentID = DocumentID()
 
-private func planCacheIdentity(_ scene: UniversalViewportScene?, overlayRevision: UInt64 = 0) -> RealityViewportPreparationRequest.Identity {
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func nativeScaledPrimitiveCollisionPreservesSubmillimeterExtent() async throws {
+    let renderer = try RealityRenderer()
+    let root = Entity()
+    let camera = Entity()
+    var lens = OrthographicCameraComponent()
+    lens.scale = 0.01
+    lens.near = 0.01
+    lens.far = 0.2
+    camera.components.set(lens)
+    camera.position.z = 0.1
+    root.addChild(camera)
+    let target = Entity()
+    root.addChild(target)
+    renderer.entities.append(root)
+    renderer.activeCamera = camera
+    let device = try #require(MTLCreateSystemDefaultDevice())
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 64, height: 64, mipmapped: false)
+    descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    let texture = try #require(device.makeTexture(descriptor: descriptor))
+    let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+    for sphere in [false, true] {
+        for scaled in [false, true] {
+            let extent: Float = scaled ? 1 : 0.0002
+            let shape = sphere ? ShapeResource.generateSphere(radius: extent / 2) : ShapeResource.generateBox(size: SIMD3(repeating: extent))
+            target.components.set(CollisionComponent(shapes: [shape]))
+            target.scale = SIMD3(repeating: scaled ? 0.0002 : 1)
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                do {
+                    try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output, onComplete: { _ in continuation.resume() })
+                } catch { continuation.resume(throwing: error) }
+            }
+            let scene = try #require(root.scene)
+            let offsets: [Float] = [0, 0.00005, 0.00015, 0.0005, 0.0015]
+            let hits = offsets.map { x in
+                scene.raycast(origin: [x, 0, 0.1], direction: [0, 0, -1], length: 0.2).contains { $0.entity === target }
+            }
+            #expect(hits == (scaled
+                ? [true, true, false, false, false]
+                : [true, true, true, true, false]))
+        }
+    }
+}
+
+private func planCacheIdentity(
+    _ scene: UniversalViewportScene?,
+    overlayRevision: UInt64 = 0,
+    generation: UInt64 = 1
+) -> RealityViewportPreparationRequest.Identity {
     .init(scene: ViewportSceneSnapshotKey(
-        source: .document(id: planCacheDocumentID, generation: DocumentGeneration(1)),
+        source: .document(id: planCacheDocumentID, generation: DocumentGeneration(generation)),
         currentEvaluationGeneration: nil, evaluationCacheGeneration: nil,
         workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
         renderInvalidation: RenderInvalidation(), sectionClippingPlan: nil, objectDefinitions: []),
@@ -111,7 +160,12 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     let nativeIndex = try #require(nativeHandleIndex(prepared.root))
     expectBaseline(cache.interactionRecord(at: nativeIndex, for: first), matches: firstHandle)
     #expect(cache.interactionRecord(at: 1, for: first) == nil)
-    #expect(cache.interactionRecord(at: 0, for: second) == nil)
+    // `second` differs from the published frame by overlay revision alone, so
+    // the frame the view is displaying is what a pointer could have addressed,
+    // and it answers with the table it drew. The changed-scene identity below
+    // is the negative that keeps this rule falsifiable.
+    expectBaseline(cache.interactionRecord(at: 0, for: second), matches: firstHandle)
+    #expect(cache.interactionRecord(at: 0, for: planCacheIdentity(nil, overlayRevision: 101, generation: 2)) == nil)
     cache.prepare(request(second, handle: secondHandle))
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.interactionRecords(at: .zero, for: first, revision: 1)
@@ -119,8 +173,10 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.project(.origin, for: first, revision: 1)
     }
-    #expect(cache.interactionRecord(at: 0, for: first) == nil)
-    #expect(cache.interactionRecord(at: 0, for: second) == nil)
+    // The rebuild is in flight: the first frame is still displayed, so it still
+    // answers for both identities with the table it drew.
+    expectBaseline(cache.interactionRecord(at: 0, for: first), matches: firstHandle)
+    expectBaseline(cache.interactionRecord(at: 0, for: second), matches: firstHandle)
     try await settlePlanCache(cache)
     expectBaseline(cache.interactionRecord(at: 0, for: second), matches: secondHandle)
     #expect(throws: MeshSourcePresentationRenderError.self) {
@@ -129,7 +185,10 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.project(.origin, for: first, revision: 1)
     }
-    #expect(cache.interactionRecord(at: 0, for: first) == nil)
+    // The published frame moved on, so the superseded overlay identity is
+    // answered by the table now displayed, never by the retired one.
+    expectBaseline(cache.interactionRecord(at: 0, for: first), matches: secondHandle)
+    #expect(cache.interactionRecord(at: 0, for: planCacheIdentity(nil, overlayRevision: 102, generation: 2)) == nil)
     cache.teardown()
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.interactionRecords(at: .zero, for: second, revision: 1)
@@ -438,8 +497,13 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     cache.prepare(request(scene, revision: 4))
     #expect(ready.root.isEnabled, "An overlay-only preparation must not blank the displayed scene.")
     #expect(cache.displaySurface(for: planCacheIdentity(scene, overlayRevision: 4)) === ready)
+    // `surface(for:)` reports whether this identity's own frame is prepared,
+    // which during an overlay-only rebuild it is not. Query authority is a
+    // separate rule: the frame the view is still displaying answers for the
+    // pending overlay identity, because those are the pixels a pointer can have
+    // addressed. The mounted assertions at the end of this test prove it.
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4)) == nil,
-            "The displayed previous frame must not acquire the pending frame's query authority.")
+            "An overlay-only rebuild must not report the pending frame as prepared.")
     try await settlePlanCache(cache)
     #expect(started.withLock { $0 } == 2, "Overlay-only replacement rebuilt the surface plan.")
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 3)) == nil)
@@ -511,6 +575,41 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     )
     #expect(mountedEmptyMiss == nil)
 
+    // An overlay-only rebuild starting from the mounted frame. The frame stays
+    // displayed and stays the query authority, so the same point that answered a
+    // truthful miss above answers one again instead of becoming unavailable.
+    let pendingOverlay = planCacheIdentity(nil, overlayRevision: 6)
+    cache.prepare(request(nil, revision: 6))
+    #expect(cache.isPreparing(pendingOverlay))
+    #expect(empty.root.isEnabled)
+    #expect(cache.displaySurface(for: pendingOverlay) === empty)
+    #expect(cache.surface(for: pendingOverlay) == nil)
+    #expect(cache.hasReadyCamera(for: pendingOverlay, revision: 5))
+    #expect(try cache.surfaceHit(
+        at: CGPoint(x: emptySize.width / 2, y: emptySize.height / 2),
+        for: pendingOverlay, revision: 5
+    ) == nil)
+    #expect(try cache.interactionRecords(
+        at: CGPoint(x: emptySize.width / 2, y: emptySize.height / 2),
+        for: pendingOverlay, revision: 5
+    ).isEmpty)
+
+    // A failure recorded for the requested identity keeps the frame displayed
+    // but withdraws its authority, so display and queries never disagree about
+    // which frame the viewport is showing.
+    let rejectedOverlay = planCacheIdentity(nil, overlayRevision: 7)
+    cache.reject(rejectedOverlay, error: .init(code: .failed, message: "Rejected mounted overlay fixture."))
+    #expect(empty.root.isEnabled)
+    #expect(cache.displaySurface(for: rejectedOverlay) === empty)
+    #expect(cache.failure(for: rejectedOverlay) != nil)
+    #expect(cache.hasReadyCamera(for: rejectedOverlay, revision: 5) == false)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(
+            at: CGPoint(x: emptySize.width / 2, y: emptySize.height / 2),
+            for: rejectedOverlay, revision: 5
+        )
+    }
+
     emptyWindow.contentViewController = nil
     emptyWindow.close()
     cache.teardown()
@@ -520,9 +619,9 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.surfaceHit(at: .zero, for: emptyIdentity, revision: 5)
     }
-    cache.prepare(request(nil, revision: 6))
+    cache.prepare(request(nil, revision: 8))
     #expect(throws: MeshSourcePresentationRenderError.self) {
-        try cache.surfaceHit(at: .zero, for: planCacheIdentity(nil, overlayRevision: 6), revision: 5)
+        try cache.surfaceHit(at: .zero, for: planCacheIdentity(nil, overlayRevision: 8), revision: 5)
     }
     cache.teardown()
 }
@@ -800,8 +899,17 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: identity, revision: revision - 1)
     }
+    // An overlay-only rebuild keeps the mounted frame as the query authority,
+    // so this resolves against the drawn pixels and reports a truthful miss.
+    // A changed snapshot is a different drawing and withdraws authority.
+    #expect(
+        try cache.surfaceHit(
+            at: CGPoint(x: 0, y: 0),
+            for: planCacheIdentity(scene, overlayRevision: 99), revision: revision
+        ) == nil
+    )
     #expect(throws: MeshSourcePresentationRenderError.self) {
-        try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: planCacheIdentity(scene, overlayRevision: 99), revision: revision)
+        try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: planCacheIdentity(nil, overlayRevision: 99), revision: revision)
     }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.surfaceHit(at: CGPoint(x: CGFloat.nan, y: 0), for: identity, revision: revision)

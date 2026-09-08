@@ -21,6 +21,20 @@ struct RealityViewportSpatialBatch: Sendable {
         case fixed(CGPoint)
         case directed(toward: Point3D, parallel: CGFloat, perpendicular: CGFloat)
         case projected(toward: Point3D, minimumLength: CGFloat, parallel: CGFloat, perpendicular: CGFloat)
+        /// A source-owned world direction advanced by a screen length, resolved
+        /// in native scene space rather than in the camera plane at the
+        /// anchor's depth.
+        ///
+        /// The other cases normalize a screen direction before applying their
+        /// point distances, which makes every projected direction the same
+        /// length on screen. That is correct for an arrow the reader follows
+        /// but wrong for a source direction whose foreshortening carries
+        /// meaning, such as a rotation ring that must stay an ellipse in the
+        /// plane it rotates about. This case keeps the world direction and
+        /// converts only the length, so the projected extent is bounded by
+        /// `lengthPoints` and independent of model size and zoom while the
+        /// camera keeps its own foreshortening.
+        case worldDirected(along: Vector3D, lengthPoints: CGFloat)
 
         static var zero: Self { .fixed(.zero) }
     }
@@ -72,6 +86,9 @@ struct RealityViewportSpatialBatch: Sendable {
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
         var hitTolerancePoints: Float? = nil
+        /// Placement relative to `anchor`, resolved by the mounted camera on
+        /// every update together with the marker's point diameter.
+        var offset: Offset = .zero
     }
 
     /// Native filled/stroked Path coordinates are screen points about this world anchor.
@@ -246,6 +263,18 @@ struct RealityViewportSpatialBatch: Sendable {
                 _ = try Self.nativePoint(toward, relativeTo: renderOrigin)
                 guard parallel.isFinite, perpendicular.isFinite else {
                     throw Self.invalid("Camera-relative directional distances are not finite.")
+                }
+            case .worldDirected(let direction, let lengthPoints):
+                // A world direction needs no second world point, so it charges
+                // no additional item or position. Its length and non-degeneracy
+                // are source properties the camera cannot repair, unlike a
+                // behind-camera anchor, so both are refused at admission rather
+                // than disabling the placement every frame.
+                guard direction.isFinite, direction.length > 0 else {
+                    throw Self.invalid("Camera-relative world direction is degenerate.")
+                }
+                guard lengthPoints.isFinite, lengthPoints >= 0 else {
+                    throw Self.invalid("Camera-relative world length is invalid.")
                 }
             }
         }
@@ -442,6 +471,7 @@ struct RealityViewportSpatialBatch: Sendable {
             }
             try Self.validateColor(marker.color)
             _ = try Self.nativePoint(marker.anchor, relativeTo: renderOrigin)
+            try validateOffset(marker.offset)
             guard marker.diameterPoints.isFinite, marker.diameterPoints > 0 else {
                 throw Self.invalid("Spatial marker size is invalid.")
             }

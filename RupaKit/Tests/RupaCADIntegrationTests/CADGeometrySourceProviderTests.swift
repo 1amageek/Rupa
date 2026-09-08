@@ -133,6 +133,19 @@ func cadProviderConvertsEvaluatedBodyMeshIntoUniversalGeometrySource() throws {
     #expect(result.mesh.attributes.layer(for: "cad.normal") != nil)
     #expect(result.localBounds.maximum.x > result.localBounds.minimum.x)
     #expect(result.copyTelemetry.didCopy)
+
+    // A native hit is resolved back to the CAD face that generated the drawn
+    // triangle through the triangle's own index, so the converted source must
+    // name the n-th Swift-CAD triangle `MeshFaceID(n)`. The converter refuses a
+    // divergence instead of renumbering, so this equality is the contract the
+    // viewport reads and not an incidental property of the builder.
+    let cadMesh = try #require(evaluatedDocument.meshes[bodyID])
+    #expect(result.mesh.faceIDs.count == cadMesh.indices.count / 3)
+    #expect(
+        result.mesh.faceIDs.elementsEqual(
+            (0 ..< cadMesh.indices.count / 3).map { MeshFaceID(UInt64($0)) }
+        )
+    )
 }
 
 @Test(.timeLimit(.minutes(1)))

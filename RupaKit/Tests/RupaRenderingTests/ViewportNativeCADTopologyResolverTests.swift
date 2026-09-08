@@ -36,6 +36,10 @@ private struct NativeCADFrame {
     /// Camera depth of the drawn square. Placing it in front of a candidate
     /// makes the frame an occluder instead of the body's own face.
     var surfaceDepth: Double = 10
+    /// The mesh face identity of the drawn triangle, which is the triangle's
+    /// own index in the CAD body's emission order. It is the only thing the
+    /// face branch reads, so varying it selects a different prepared face.
+    var surfaceFaceID: MeshFaceID = MeshFaceID(7)
     var usesPerspectiveProjection: Bool = false
     /// The retained half-space, in the same world space as the topology:
     /// `dot(point, normal) - offset >= -tolerance`.
@@ -75,7 +79,7 @@ private struct NativeCADFrame {
         // pixel is empty in exactly the same way a silhouette pixel is.
         guard try retainsSectionedPoint(surfacePoint) else { return nil }
         return (
-            triangle: frameTriangle(occurrenceID: surfaceOccurrenceID),
+            triangle: frameTriangle(occurrenceID: surfaceOccurrenceID, faceID: surfaceFaceID),
             point: surfacePoint
         )
     }
@@ -89,13 +93,16 @@ private struct NativeCADFrame {
     }
 }
 
-private func frameTriangle(occurrenceID: SceneOccurrenceID) -> MeshSourcePresentationTriangle {
+private func frameTriangle(
+    occurrenceID: SceneOccurrenceID,
+    faceID: MeshFaceID
+) -> MeshSourcePresentationTriangle {
     MeshSourcePresentationTriangle(
         occurrenceID: occurrenceID,
         definitionID: ObjectDefinitionID(rawValue: "definition.cad"),
         representationID: GeometryRepresentationID(rawValue: "representation.cad"),
         sourceReference: .cad(sourceID: "cad.source", outputID: "cad.output"),
-        faceID: MeshFaceID(7),
+        faceID: faceID,
         firstVertexID: MeshVertexID(0),
         secondVertexID: MeshVertexID(1),
         thirdVertexID: MeshVertexID(2),
@@ -114,6 +121,7 @@ private func preparedComponentID(role: String, ordinal: Int) -> SelectionCompone
 }
 
 private let frontFaceComponentID = preparedComponentID(role: "face", ordinal: 3)
+private let sideFaceComponentID = preparedComponentID(role: "face", ordinal: 4)
 private let bottomEdgeComponentID = preparedComponentID(role: "edge", ordinal: 11)
 private let originVertexComponentID = preparedComponentID(role: "vertex", ordinal: 5)
 private let hiddenVertexComponentID = preparedComponentID(role: "vertex", ordinal: 6)
@@ -121,6 +129,11 @@ private let hiddenVertexComponentID = preparedComponentID(role: "vertex", ordina
 /// The face is the unit square at `y = 0`; the edge is its `z = 0` side; the
 /// vertices are the visible origin corner and one corner hidden behind the
 /// face at the same pixel as the face centre.
+///
+/// Two prepared runs partition the drawn triangles: the front face generated
+/// triangles 0..<10 and a second face generated 10..<20. The frame's default
+/// triangle, 7, therefore belongs to the front face, and triangle 20 and above
+/// belongs to no prepared face at all.
 private func bodyTopology(includingHiddenVertex hidden: Bool = true) -> ViewportBodyTopology {
     ViewportBodyTopology(
         faces: [
@@ -148,34 +161,11 @@ private func bodyTopology(includingHiddenVertex hidden: Bool = true) -> Viewport
             ]
             : [
                 .init(componentID: originVertexComponentID, point: Point3D(x: 0, y: 0, z: 0))
-            ]
-    )
-}
-
-private let concaveFaceComponentID = preparedComponentID(role: "face", ordinal: 9)
-
-/// A U-shaped outer loop at `y = 0`. Its notch lies inside the fan
-/// triangulation taken from the loop's first vertex and outside the loop
-/// itself, which is what separates fan containment from even-odd containment.
-private func concaveBodyTopology() -> ViewportBodyTopology {
-    ViewportBodyTopology(
-        faces: [
-            .init(
-                componentID: concaveFaceComponentID,
-                points: [
-                    Point3D(x: 0, y: 0, z: 0),
-                    Point3D(x: 1, y: 0, z: 0),
-                    Point3D(x: 1, y: 0, z: 1),
-                    Point3D(x: 0.7, y: 0, z: 1),
-                    Point3D(x: 0.7, y: 0, z: 0.3),
-                    Point3D(x: 0.3, y: 0, z: 0.3),
-                    Point3D(x: 0.3, y: 0, z: 1),
-                    Point3D(x: 0, y: 0, z: 1),
-                ]
-            )
-        ],
-        edges: [],
-        vertices: []
+            ],
+        meshFaceRuns: [
+            .init(componentID: frontFaceComponentID, triangleRange: 0 ..< 10),
+            .init(componentID: sideFaceComponentID, triangleRange: 10 ..< 20),
+        ]
     )
 }
 
@@ -199,18 +189,21 @@ private func slantedEdgeTopology() -> ViewportBodyTopology {
     )
 }
 
-/// The depth of the native surface the body under test draws at `point`, which
-/// is what the viewport resolves before it asks each body. It is nil when the
-/// frame draws nothing there, and nil when the drawn surface belongs to another
-/// occurrence, so an empty pixel and an occluding body reach the resolver the
-/// same way they do in production.
-private func visibleSurfaceDepth(at point: CGPoint, frame: NativeCADFrame) throws -> Double? {
+/// The render provenance of the native surface the body under test draws at
+/// `point`, which is what the viewport resolves before it asks each body. It is
+/// nil when the frame draws nothing there, and nil when the drawn surface
+/// belongs to another occurrence, so an empty pixel and an occluding body reach
+/// the resolver the same way they do in production.
+private func visibleSurface(
+    at point: CGPoint,
+    frame: NativeCADFrame
+) throws -> (faceID: MeshFaceID, depth: Double)? {
     guard let hit = try frame.surfaceHit(at: point),
           hit.triangle.occurrenceID == NativeCADFrame.occurrenceID,
           let depth = try frame.project(hit.point)?.depth else {
         return nil
     }
-    return depth
+    return (faceID: hit.triangle.faceID, depth: depth)
 }
 
 private func resolve(
@@ -225,7 +218,7 @@ private func resolve(
         topology: topology,
         modelTransform: modelTransform,
         selectionHitPolicy: policy,
-        visibleSurfaceDepth: visibleSurfaceDepth(at: point, frame: frame),
+        visibleSurface: try visibleSurface(at: point, frame: frame),
         usesPerspectiveProjection: frame.usesPerspectiveProjection,
         project: frame.project,
         surfaceHit: frame.surfaceHit,
@@ -240,6 +233,77 @@ private func resolve(
     func nativeCADTopologyResolverReturnsPreparedFaceIdentityAtTheSurfacePoint() throws {
         let component = try #require(try resolve(at: CGPoint(x: 250, y: 150)))
         #expect(component == .face(frontFaceComponentID))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func nativeCADTopologyResolverNamesTheRunThatContainsTheDrawnTriangle() throws {
+        // The drawn pixel does not move; only the triangle the frame reports
+        // there does. The answer follows the triangle, which is what makes this
+        // the frame's own face decision rather than a second one.
+        var frame = NativeCADFrame()
+        frame.surfaceFaceID = MeshFaceID(9)
+        #expect(try resolve(at: CGPoint(x: 250, y: 150), frame: frame) == .face(frontFaceComponentID))
+        frame.surfaceFaceID = MeshFaceID(10)
+        #expect(try resolve(at: CGPoint(x: 250, y: 150), frame: frame) == .face(sideFaceComponentID))
+        frame.surfaceFaceID = MeshFaceID(19)
+        #expect(try resolve(at: CGPoint(x: 250, y: 150), frame: frame) == .face(sideFaceComponentID))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func nativeCADTopologyResolverReadsRunsInTheOrderTheyAreRecorded() throws {
+        // A run list carries no ordering guarantee across the value boundary,
+        // so the lookup scans it. Descending runs resolve to the same faces an
+        // ascending list would, which a search that assumed sorted order would
+        // not.
+        var topology = bodyTopology()
+        topology.meshFaceRuns.reverse()
+        var frame = NativeCADFrame()
+        frame.surfaceFaceID = MeshFaceID(3)
+        #expect(
+            try resolve(at: CGPoint(x: 250, y: 150), frame: frame, topology: topology)
+                == .face(frontFaceComponentID)
+        )
+        frame.surfaceFaceID = MeshFaceID(13)
+        #expect(
+            try resolve(at: CGPoint(x: 250, y: 150), frame: frame, topology: topology)
+                == .face(sideFaceComponentID)
+        )
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func nativeCADTopologyResolverReportsAMissForATriangleNoPreparedRunNames() throws {
+        // Evaluation gave this triangle's face no stable sub-shape identity, so
+        // there is no CAD name to select. The miss is reported rather than
+        // answered with the nearest run, which would select a face the frame
+        // never drew.
+        var frame = NativeCADFrame()
+        frame.surfaceFaceID = MeshFaceID(20)
+        #expect(try resolve(at: CGPoint(x: 250, y: 150), frame: frame) == nil)
+        // The same pixel with an unprepared body answers nothing at all, so the
+        // miss is the run lookup and not a projection or visibility failure.
+        #expect(
+            try resolve(
+                at: CGPoint(x: 250, y: 150),
+                frame: frame,
+                topology: slantedEdgeTopology(),
+                policy: .face
+            ) == nil
+        )
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func nativeCADTopologyResolverRejectsAnUnrepresentableMeshFaceIdentity() throws {
+        // A raw value no triangle index can hold is malformed provenance. It is
+        // reported as a typed failure, because answering "nothing was hit"
+        // would hand the query on as if the frame had decided.
+        var frame = NativeCADFrame()
+        frame.surfaceFaceID = MeshFaceID(UInt64.max)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try resolve(at: CGPoint(x: 250, y: 150), frame: frame)
+        }
+        // The scope still gates the branch: a query that asks for no face never
+        // reads the identity and so never fails on it.
+        #expect(try resolve(at: CGPoint(x: 250, y: 150), frame: frame, policy: .vertex) == nil)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -352,30 +416,13 @@ private func resolve(
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func nativeCADTopologyResolverExcludesTheNotchOfANonConvexFaceLoop() throws {
-        // (250, 130) is the world point (0.5, 0.7): inside the loop's fan
-        // triangulation, outside the loop.
-        #expect(
-            try resolve(
-                at: CGPoint(x: 250, y: 130), topology: concaveBodyTopology(), policy: .face
-            ) == nil
-        )
-        // (250, 190) is (0.5, 0.1), inside the loop's base.
-        #expect(
-            try resolve(
-                at: CGPoint(x: 250, y: 190), topology: concaveBodyTopology(), policy: .face
-            ) == .face(concaveFaceComponentID)
-        )
-    }
-
-    @Test(.timeLimit(.minutes(1)))
     func nativeCADTopologyResolverAnswersVertexAndEdgeWherePointerDrawsNoSurface() throws {
         // Hovering just off the body is the common case. The native frame still
         // answers it, so the query never has to reach the legacy identity
         // resolver merely because nothing is drawn under the pointer.
         var frame = NativeCADFrame()
         frame.surfaceInset = 0.1
-        #expect(try visibleSurfaceDepth(at: CGPoint(x: 198, y: 202), frame: frame) == nil)
+        #expect(try visibleSurface(at: CGPoint(x: 198, y: 202), frame: frame) == nil)
         #expect(
             try resolve(at: CGPoint(x: 198, y: 202), frame: frame)
                 == .vertex(originVertexComponentID)

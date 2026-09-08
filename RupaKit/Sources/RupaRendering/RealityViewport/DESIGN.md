@@ -386,19 +386,42 @@ it never reruns projected distance/layout candidate selectors or reconstructs
 a drag baseline from the normalized identity. Missing index/provenance, stale identity,
 unapplied camera, nonfinite transform, or admission/resource failure is typed
 failure and never falls back to projected legacy handles or identity rendering.
-The internal camera-relative offset is either a fixed point-space translation or
-a direction-relative value containing one immutable world `toward` point plus
-finite parallel and perpendicular point distances. `CameraPoint`, label, and
-camera-path descriptors use this one value contract. A direction-relative
-placement resolves the normalized screen direction from the projected anchor to
-the projected `toward` point, then applies its parallel distance on that axis and
-its perpendicular distance on the counterclockwise normal. `BillboardComponent`
+The internal camera-relative offset is a fixed point-space translation, a
+direction-relative value containing one immutable world `toward` point plus
+finite parallel and perpendicular point distances, or a world-directed value
+containing one immutable source-owned world direction plus a finite screen
+length in points. `CameraPoint`, label, camera-path, and marker descriptors use
+this one value contract. A direction-relative placement resolves the normalized
+screen direction from the projected anchor to the projected `toward` point, then
+applies its parallel distance on that axis and its perpendicular distance on the
+counterclockwise normal. `BillboardComponent`
 continues to own camera facing, but Entity orientation is not a substitute for
 this calculation: under perspective, a world or camera-local direction alone
 does not contain the depth division that determines the projected direction.
 Arrow wings use direction-relative `CameraPoint` values in an admitted
 fixed-capacity camera line; this contract adds no renderer, tessellator, or
 per-frame geometry resource.
+
+A world-directed placement resolves in native scene space instead of in the
+camera plane at the anchor's depth. The mounted camera reports the
+meters-per-point scale at the anchor's own depth; the placement advances from
+the native anchor along the normalized world direction by that many meters for
+each requested point, and the resolved scene point keeps its own depth and its
+own meters-per-point scale. The projected extent of a source-owned direction is
+therefore bounded by the requested point length and stays independent of model
+size and zoom, while the camera keeps its own foreshortening: a direction
+perpendicular to the view projects at the full requested length and a direction
+with a view-axis component projects shorter. That is the whole reason this case
+exists, because a direction-relative offset applies its parallel distance after
+screen normalization and would flatten every foreshortened source arc into the
+same camera-plane circle. The value carries a direction, not a second world
+point, so it charges no additional item or position, and its non-degenerate
+length is a source property rather than a camera property: a non-finite or
+zero-length direction and a non-finite or negative point length are typed
+admission failures. A behind-camera anchor, a resolved point behind the camera,
+or a non-finite resolved scale disables that placement for the update. A
+resolved point behind the camera is not a second line-extension exception; only
+a `.fixed` `CameraLine` vertex crosses the camera plane.
 
 One finite frame-local camera-plane projection map is derived per mounted camera
 update from three bounded `RealityViewCameraContent.project` samples at a
@@ -426,7 +449,8 @@ the camera plane may collapse to the eye and is removed by native near clipping.
 Directed/projected offsets retain the existing front-facing direction
 requirement because a behind-camera pair cannot authorize its screen direction.
 Each direction-relative `toward` point consumes one additional item and
-position, and its concrete descriptor storage is included in the checked
+position; a world-directed offset consumes neither because it carries no second
+world point. The concrete descriptor storage of both is included in the checked
 retained-byte sum.
 
 The XYZ reference axes are camera-owned native presentation, not finite
@@ -989,7 +1013,7 @@ latency for every allocator arrangement.
 | Overlay display continuity | A delayed same-scene/snapshot overlay fixture proves the mounted root, camera, source surface, and native grid remain enabled through preparation and typed failure while exact-ready surface, CAD hit, and handle-table lookup for the requested identity remain unavailable. Warm-host Ortho/Persp tests prove successful publication has no empty rendered frame; source/snapshot replacement still withdraws the old root. |
 | Empty and optional surface | Nil-surface and real empty-snapshot fixtures mount one native root and camera in Ortho and Persp, display grid/axis/measurement spatial entities, return an explicit surface miss, and contain no fabricated project/evaluation identity. |
 | Spatial attachment | Apple-GPU section fixtures prove `.sectionedGeometry` follows the surface clip while `.world` grid/section-plane/reference entities remain uncut; both retain their declared depth policy and update through the same mounted camera. Ortho/Persp zoom fixtures move a sectioned camera-relative label/marker beyond the prepared surface bounds, prove the native visual-bounds union expands only the five containment faces, preserves the cut half-space, and reuses every geometry/text/path resource identity. |
-| Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed and direction-relative `CameraPoint`, label, and camera-path placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, degenerate or behind-camera single-point/direction pairs become explicitly disabled without stale positions, and a fixed-offset `CameraLine` crossing the camera plane retains its native-clipped visible segments and collision provenance instead of disabling the polyline. Camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
+| Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed, direction-relative, and world-directed `CameraPoint`, label, camera-path, and marker placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, a world-directed offset keeps its projected extent bounded by its point length under zoom and under a changed source scale while a direction along the view axis still projects shorter than one perpendicular to it, a marker's scaled collider stays centered on its resolved placement, a degenerate direction or negative point length is a typed admission failure, degenerate or behind-camera single-point/direction pairs and behind-camera resolved world-directed points become explicitly disabled without stale positions, and a fixed-offset `CameraLine` crossing the camera plane retains its native-clipped visible segments and collision provenance instead of disabling the polyline. Camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
 | Native dynamic grid | Fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare the complete native line classes, signed formatted labels, separation, and chrome exclusion with `ViewportProjectedGrid`. The same line `LowLevelMesh`, three material parts, surface resources, and non-grid spatial resources retain identity while world coverage and `TextComponent` values change. Invalid and combined line/label/item/position/byte boundaries preserve the previous grid and report typed failure without label truncation. Apple-GPU evidence confirms TextComponent visibility, constant point size, and annotation ordering; a maximum admitted grid plus camera-relative update remains within 8.333 ms and performs no scene/CAD traversal or application-owned asynchronous resource generation. |
 | Provenance | Face/edge/vertex/occurrence mappings survive entity/resource reuse; missing mapping is an explicit miss. |
 | Failure and bounds | Owned-buffer count/byte admission, native resource-count bounds, opaque native resource/collision failure, measured peak memory, cancellation, and root-preservation tests pass without empty success. A lowered caller byte limit that admits the CPU plan but not checked grouping metadata fails with `.resourceExhausted` before grouping allocation. A finite `1e-100` world scale must pass the Double CPU plan, fail only when native Float preparation collapses its surface with `.invalidTransform`, publish no surface, and allow the next valid snapshot to recover to ready. The maximum single-upload fixture and its boundary refusal are recomputed after grouping admission is added rather than preserving old hard-coded counts. Current-process footprint evidence reports baseline/peak/retained/signed delta and sample count without being promoted to signed-App or exact opaque-allocation proof. |

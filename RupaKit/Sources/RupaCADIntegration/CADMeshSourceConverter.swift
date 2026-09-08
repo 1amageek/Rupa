@@ -13,6 +13,13 @@ struct CADMeshSourceMaterialization: Sendable {
 enum CADMeshSourceConversionError: Error, Equatable, Sendable {
     case unsupportedMaterial
     case invalidMesh(String)
+    /// The builder did not name triangle `triangleIndex` `MeshFaceID(triangleIndex)`.
+    ///
+    /// CAD face provenance is recorded against the Swift-CAD triangle order, so
+    /// a native hit can only be resolved through the mesh face identity if the
+    /// two orders coincide. A divergence is reported rather than repaired,
+    /// because a repaired ordering would resolve hits to the wrong CAD face.
+    case faceIdentityMismatch(triangleIndex: Int, faceID: UInt64)
 }
 
 enum CADMeshSourceConverter {
@@ -72,11 +79,18 @@ enum CADMeshSourceConverter {
                         "Mesh triangle index is outside the position buffer."
                     )
                 }
-                _ = try builder.addTriangle(
+                let triangleIndex = triangleStart / 3
+                let faceID = try builder.addTriangle(
                     vertices[firstIndex],
                     vertices[secondIndex],
                     vertices[thirdIndex]
                 )
+                guard faceID.rawValue == UInt64(triangleIndex) else {
+                    throw CADMeshSourceConversionError.faceIdentityMismatch(
+                        triangleIndex: triangleIndex,
+                        faceID: faceID.rawValue
+                    )
+                }
             }
 
             if !mesh.normals.isEmpty {

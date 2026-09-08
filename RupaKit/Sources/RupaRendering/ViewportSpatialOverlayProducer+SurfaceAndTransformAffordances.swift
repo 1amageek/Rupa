@@ -179,6 +179,9 @@ extension ViewportSpatialOverlayProducer {
         struct DirectedPoint: Sendable {
             let anchor: Point3D
             let toward: Point3D
+            /// Set only by the world-directed form, where `parallel` carries the
+            /// screen length and `toward` is unused.
+            let worldDirection: Vector3D?
             let parallel: CGFloat
             let perpendicular: CGFloat
             let minimumLength: CGFloat?
@@ -194,10 +197,33 @@ extension ViewportSpatialOverlayProducer {
             ) {
                 self.anchor = anchor
                 self.toward = toward
+                self.worldDirection = nil
                 self.parallel = parallel
                 self.perpendicular = perpendicular
                 self.minimumLength = minimumLength
                 self.usesFixedOffset = usesFixedOffset
+            }
+
+            /// Advances from `anchor` along a source-owned world direction by a
+            /// fixed screen length.
+            ///
+            /// Unlike the directed form, the direction is not normalized on
+            /// screen, so the placement keeps the camera's foreshortening while
+            /// its projected extent stays bounded by `lengthPoints`.
+            init(anchor: Point3D, along direction: Vector3D, lengthPoints: CGFloat) {
+                self.anchor = anchor
+                self.toward = anchor
+                self.worldDirection = direction
+                self.parallel = lengthPoints
+                self.perpendicular = 0
+                self.minimumLength = nil
+                self.usesFixedOffset = false
+            }
+
+            /// Whether resolving this placement needs a second world point, and
+            /// therefore an extra admitted item and position.
+            var carriesTowardPoint: Bool {
+                worldDirection == nil && usesFixedOffset == false
             }
         }
 
@@ -258,6 +284,11 @@ extension ViewportSpatialOverlayProducer {
             let state: SurfaceTransformAffordanceState
             var hitTolerancePoints: Float? = nil
             var occurrenceID: String? = nil
+            /// Placement relative to `anchor`. A marker that names a place on
+            /// the body leaves this at zero; a marker that names a distance
+            /// from it states that distance here, and the mounted camera
+            /// resolves it on every update.
+            var offset: RealityViewportSpatialBatch.Offset = .zero
         }
 
         struct Label: Sendable {
@@ -483,34 +514,10 @@ extension ViewportSpatialOverlayProducer {
                 hasFootprint: value.hitTolerancePoints != nil
             )
             let points = try value.points.map { point in
-                guard point.anchor.isFinite, point.toward.isFinite,
-                      point.parallel.isFinite, point.perpendicular.isFinite,
-                      point.minimumLength?.isFinite ?? true else {
-                    throw RealityViewportSpatialBatch.invalid("Surface/transform camera line is not finite.")
-                }
-                let offset: RealityViewportSpatialBatch.Offset
-                if point.usesFixedOffset {
-                    guard point.minimumLength == nil else {
-                        throw RealityViewportSpatialBatch.invalid(
-                            "A fixed camera point cannot also request projected length."
-                        )
-                    }
-                    offset = .fixed(CGPoint(x: point.parallel, y: point.perpendicular))
-                } else if let minimumLength = point.minimumLength {
-                    offset = .projected(
-                        toward: point.toward,
-                        minimumLength: minimumLength,
-                        parallel: point.parallel,
-                        perpendicular: point.perpendicular
-                    )
-                } else {
-                    offset = .directed(
-                        toward: point.toward,
-                        parallel: point.parallel,
-                        perpendicular: point.perpendicular
-                    )
-                }
-                return RealityViewportSpatialBatch.CameraPoint(anchor: point.anchor, offset: offset)
+                RealityViewportSpatialBatch.CameraPoint(
+                    anchor: point.anchor,
+                    offset: try cameraOffset(point, describedAs: "camera point")
+                )
             }
             guard points.count >= 2 else {
                 throw RealityViewportSpatialBatch.invalid("Surface/transform camera line requires two points.")
@@ -535,33 +542,7 @@ extension ViewportSpatialOverlayProducer {
                 hasFootprint: value.hitTolerancePoints != nil
             )
             let point = value.placement
-            guard point.anchor.isFinite, point.toward.isFinite,
-                  point.parallel.isFinite, point.perpendicular.isFinite,
-                  point.minimumLength?.isFinite ?? true else {
-                throw RealityViewportSpatialBatch.invalid("Surface/transform camera path is not finite.")
-            }
-            let offset: RealityViewportSpatialBatch.Offset
-            if point.usesFixedOffset {
-                guard point.minimumLength == nil else {
-                    throw RealityViewportSpatialBatch.invalid(
-                        "A fixed camera path cannot also request projected length."
-                    )
-                }
-                offset = .fixed(CGPoint(x: point.parallel, y: point.perpendicular))
-            } else if let minimumLength = point.minimumLength {
-                offset = .projected(
-                    toward: point.toward,
-                    minimumLength: minimumLength,
-                    parallel: point.parallel,
-                    perpendicular: point.perpendicular
-                )
-            } else {
-                offset = .directed(
-                    toward: point.toward,
-                    parallel: point.parallel,
-                    perpendicular: point.perpendicular
-                )
-            }
+            let offset = try cameraOffset(point, describedAs: "camera path")
             var path = RealityViewportSpatialBatch.CameraPath(
                 path: value.path,
                 anchor: point.anchor,
@@ -584,33 +565,7 @@ extension ViewportSpatialOverlayProducer {
                 hasFootprint: value.hitRectPoints != nil
             )
             let point = value.placement
-            guard point.anchor.isFinite, point.toward.isFinite,
-                  point.parallel.isFinite, point.perpendicular.isFinite,
-                  point.minimumLength?.isFinite ?? true else {
-                throw RealityViewportSpatialBatch.invalid("Surface/transform label is not finite.")
-            }
-            let offset: RealityViewportSpatialBatch.Offset
-            if point.usesFixedOffset {
-                guard point.minimumLength == nil else {
-                    throw RealityViewportSpatialBatch.invalid(
-                        "A fixed label cannot also request projected length."
-                    )
-                }
-                offset = .fixed(CGPoint(x: point.parallel, y: point.perpendicular))
-            } else if let minimumLength = point.minimumLength {
-                offset = .projected(
-                    toward: point.toward,
-                    minimumLength: minimumLength,
-                    parallel: point.parallel,
-                    perpendicular: point.perpendicular
-                )
-            } else {
-                offset = .directed(
-                    toward: point.toward,
-                    parallel: point.parallel,
-                    perpendicular: point.perpendicular
-                )
-            }
+            let offset = try cameraOffset(point, describedAs: "label")
             var label = RealityViewportSpatialBatch.Label(
                 text: value.text,
                 anchor: point.anchor,
@@ -645,6 +600,7 @@ extension ViewportSpatialOverlayProducer {
             )
             marker.handleIndex = index
             marker.hitTolerancePoints = value.hitTolerancePoints
+            marker.offset = value.offset
             markers.append(.init(family: value.family, value: marker))
             activeFamilies.insert(value.family)
         }
@@ -933,6 +889,59 @@ private extension ViewportSpatialOverlayProducer {
             cameraLines: &cameraLines,
             cameraPaths: &cameraPaths,
             markers: &markers
+        )
+    }
+
+    /// The one conversion from a producer placement to the batch's camera
+    /// offset value.
+    ///
+    /// Every descriptor kind that carries a placement resolves it here, so a
+    /// placement form cannot be honoured by one kind and silently dropped by
+    /// another. A form that cannot be expressed is refused rather than reduced
+    /// to the nearest expressible one.
+    static func cameraOffset(
+        _ point: SurfaceTransformAffordanceSource.DirectedPoint,
+        describedAs description: String
+    ) throws -> RealityViewportSpatialBatch.Offset {
+        guard point.anchor.isFinite, point.toward.isFinite,
+              point.parallel.isFinite, point.perpendicular.isFinite,
+              point.minimumLength?.isFinite ?? true else {
+            throw RealityViewportSpatialBatch.invalid("Surface/transform \(description) is not finite.")
+        }
+        if let direction = point.worldDirection {
+            guard point.usesFixedOffset == false, point.minimumLength == nil,
+                  point.perpendicular == 0 else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A world-directed \(description) cannot also request a fixed, projected, or perpendicular offset."
+                )
+            }
+            guard direction.isFinite, direction.length > 0 else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A world-directed \(description) has no usable direction."
+                )
+            }
+            return .worldDirected(along: direction, lengthPoints: point.parallel)
+        }
+        if point.usesFixedOffset {
+            guard point.minimumLength == nil else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A fixed \(description) cannot also request projected length."
+                )
+            }
+            return .fixed(CGPoint(x: point.parallel, y: point.perpendicular))
+        }
+        if let minimumLength = point.minimumLength {
+            return .projected(
+                toward: point.toward,
+                minimumLength: minimumLength,
+                parallel: point.parallel,
+                perpendicular: point.perpendicular
+            )
+        }
+        return .directed(
+            toward: point.toward,
+            parallel: point.parallel,
+            perpendicular: point.perpendicular
         )
     }
 
@@ -1356,6 +1365,27 @@ private extension ViewportSpatialOverlayProducer {
         Vector3D(x: Double(vector.x), y: Double(vector.y), z: Double(vector.z))
     }
 
+    /// Unit directions sampling a quarter turn from `planeStart` to `planeEnd`.
+    ///
+    /// A ring whose radius is a screen length has no world radius to sample, so
+    /// the sampling is expressed as directions and the radius is applied by
+    /// whichever placement the caller uses.
+    static func rotationArcDirections(
+        planeStart: Vector3D,
+        planeEnd: Vector3D,
+        segmentCount: Int = 36
+    ) -> [Vector3D] {
+        guard let start = normalized(planeStart),
+              let end = normalized(planeEnd) else {
+            return []
+        }
+        let count = max(segmentCount, 1)
+        return (0 ... count).map { index in
+            let radians = Double(index) / Double(count) * .pi / 2.0
+            return start * cos(radians) + end * sin(radians)
+        }
+    }
+
     static func rotationArcPoints(
         center: Point3D,
         planeStart: Vector3D,
@@ -1363,18 +1393,12 @@ private extension ViewportSpatialOverlayProducer {
         radius: Double,
         segmentCount: Int = 36
     ) -> [Point3D] {
-        guard let start = normalized(planeStart),
-              let end = normalized(planeEnd),
-              radius.isFinite,
-              radius > 0 else {
-            return []
-        }
-        let count = max(segmentCount, 1)
-        return (0 ... count).map { index in
-            let progress = Double(index) / Double(count)
-            let radians = progress * .pi / 2.0
-            return center + start * (cos(radians) * radius) + end * (sin(radians) * radius)
-        }
+        guard radius.isFinite, radius > 0 else { return [] }
+        return rotationArcDirections(
+            planeStart: planeStart,
+            planeEnd: planeEnd,
+            segmentCount: segmentCount
+        ).map { center + $0 * radius }
     }
 
     static func normalized(_ vector: Vector3D) -> Vector3D? {
@@ -1726,6 +1750,7 @@ private extension ViewportSpatialOverlayProducer {
         identity: ViewportSpatialHandleIdentity,
         input: SurfaceTransformAffordanceSource.RawInput,
         minimumLength: CGFloat? = nil,
+        fixedLengthPoints: CGFloat? = nil,
         startGap: CGFloat? = nil,
         hitTolerancePoints: Float? = nil,
         occurrenceID: String? = nil,
@@ -1742,7 +1767,29 @@ private extension ViewportSpatialOverlayProducer {
                 throw RealityViewportSpatialBatch.invalid("Surface/transform affordance has an invalid start gap.")
             }
         }
-        let endMinimumLength = max(minimumLength ?? 0, startGap ?? 0)
+        // A minimum length lets the arrow grow with the value it draws; a fixed
+        // length pins it on screen. Requesting both would leave the reader
+        // unable to tell which of the two the drawn length means.
+        let endPoint: SurfaceTransformAffordanceSource.DirectedPoint
+        if let fixedLengthPoints {
+            guard minimumLength == nil else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A fixed-length affordance arrow cannot also request a projected minimum length."
+                )
+            }
+            guard fixedLengthPoints.isFinite, fixedLengthPoints >= (startGap ?? 0) else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A fixed-length affordance arrow is invalid or shorter than its start gap."
+                )
+            }
+            endPoint = .init(anchor: origin, toward: tip, parallel: fixedLengthPoints)
+        } else {
+            endPoint = .init(
+                anchor: origin,
+                toward: tip,
+                minimumLength: max(minimumLength ?? 0, startGap ?? 0)
+            )
+        }
         let startPoint = startGap.map {
             SurfaceTransformAffordanceSource.DirectedPoint(
                 anchor: origin,
@@ -1756,10 +1803,7 @@ private extension ViewportSpatialOverlayProducer {
         )
         let guide = SurfaceTransformAffordanceSource.CameraLine(
             route: route,
-            points: [
-                startPoint,
-                .init(anchor: origin, toward: tip, minimumLength: endMinimumLength),
-            ],
+            points: [startPoint, endPoint],
             color: axisColor(for: identity),
             family: .transform,
             identity: identity,
@@ -2514,6 +2558,25 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
+    /// Screen-fixed extents of the body transform affordance.
+    ///
+    /// A transform handle is reachable at the same screen size whatever the
+    /// body measures and however far the camera is, so its extent is a point
+    /// length owned here rather than a fraction of the body span. The values
+    /// satisfy the separation rule that the footprints of adjacent handles on
+    /// one axis cannot overlap: 95 - 72 >= 10 + 8 and 132 - 95 >= 10 + 10.
+    /// Changing one length re-derives the others from that rule and from the
+    /// tolerances the emit site passes; the ordering itself is the invariant.
+    enum BodyTransformMetrics {
+        static let rotationRadiusPoints: CGFloat = 72
+        static let centerScalePoints: CGFloat = 95
+        static let axisLengthPoints: CGFloat = 132
+        /// Twelve segments bound the quarter-arc sagitta at
+        /// `72 * (1 - cos 3.75 degrees)` = 0.154 pt, below the ring's own line
+        /// width, so the count follows from the fixed radius.
+        static let rotationSegmentCount = 12
+    }
+
     static func emitBodyTransform(
         featureID: FeatureID,
         selectionTarget: SelectionTarget?,
@@ -2579,6 +2642,9 @@ private extension ViewportSpatialOverlayProducer {
         guard maxSpan.isFinite, maxSpan > 0 else {
             throw RealityViewportSpatialBatch.invalid("Body transform bounds have no finite span.")
         }
+        // A world length is still needed to name each axis direction to the
+        // camera, but it no longer decides how long anything is drawn: every
+        // extent below is a point length from `BodyTransformMetrics`.
         let axisLength = max(maxSpan * 0.32, input.ruler.majorTickMeters * 0.5)
         for axis in ViewportCoordinateAxis.allCases {
             let modelDirection: ViewportModelVector3D
@@ -2588,6 +2654,12 @@ private extension ViewportSpatialOverlayProducer {
             case .z: modelDirection = edit.orientation.zAxis
             }
             let direction = normalized(worldVector(modelDirection)) ?? modelAxis(axis)
+            // The two axis markers sit on the arrow this loop draws, so they
+            // resolve the way the arrow does: along the projected axis, at the
+            // point distance each one owns. Advancing them in scene space
+            // instead would foreshorten them off the arrow, putting the
+            // "arrow tip" marker mid-shaft on any axis tilted out of the camera
+            // plane and collapsing the separation between the two markers.
             let tip = offset(center, direction: direction, distance: axisLength)
             let translateIdentity = try affordance(.translate(axis))
             try emitDirectedArrow(
@@ -2597,7 +2669,7 @@ private extension ViewportSpatialOverlayProducer {
                 length: axisLength,
                 identity: translateIdentity,
                 input: input,
-                minimumLength: 48,
+                fixedLengthPoints: BodyTransformMetrics.axisLengthPoints,
                 hitTolerancePoints: 7.0,
                 occurrenceID: occurrenceID,
                 checkpoint: checkpoint,
@@ -2607,7 +2679,7 @@ private extension ViewportSpatialOverlayProducer {
             try appendMarker(
                 .init(
                     route: .bodyTransform,
-                    anchor: tip,
+                    anchor: center,
                     shape: .box,
                     diameterPoints: 11,
                     color: axisColor(axis),
@@ -2615,17 +2687,21 @@ private extension ViewportSpatialOverlayProducer {
                     identity: endIdentity,
                     state: state(for: endIdentity, input: input),
                     hitTolerancePoints: 10.0,
-                    occurrenceID: occurrenceID
+                    occurrenceID: occurrenceID,
+                    offset: .directed(
+                        toward: tip,
+                        parallel: BodyTransformMetrics.axisLengthPoints,
+                        perpendicular: 0
+                    )
                 ),
                 to: &markers,
                 checkpoint: checkpoint
             )
-            let centerScale = offset(center, direction: direction, distance: axisLength * 0.72)
             let centerIdentity = try affordance(.centerScale(axis))
             try appendMarker(
                 .init(
                     route: .bodyTransform,
-                    anchor: centerScale,
+                    anchor: center,
                     shape: .sphere,
                     diameterPoints: 9,
                     color: axisColor(axis),
@@ -2633,7 +2709,12 @@ private extension ViewportSpatialOverlayProducer {
                     identity: centerIdentity,
                     state: state(for: centerIdentity, input: input),
                     hitTolerancePoints: 10.0,
-                    occurrenceID: occurrenceID
+                    occurrenceID: occurrenceID,
+                    offset: .directed(
+                        toward: tip,
+                        parallel: BodyTransformMetrics.centerScalePoints,
+                        perpendicular: 0
+                    )
                 ),
                 to: &markers,
                 checkpoint: checkpoint
@@ -2699,7 +2780,6 @@ private extension ViewportSpatialOverlayProducer {
             normalized(worldVector(edit.orientation.yAxis)) ?? Vector3D.unitY,
             normalized(worldVector(edit.orientation.zAxis)) ?? Vector3D.unitZ,
         ]
-        let rotationRadius = max(maxSpan * 0.5, input.ruler.majorTickMeters * 0.5)
         let rotationPlanes: [(ViewportCoordinateAxis, Vector3D, Vector3D)] = [
             (.x, orientedAxes[1], orientedAxes[2]),
             (.y, orientedAxes[2], orientedAxes[0]),
@@ -2707,17 +2787,25 @@ private extension ViewportSpatialOverlayProducer {
         ]
         for (axis, planeStart, planeEnd) in rotationPlanes {
             let identity = try affordance(.rotate(axis))
-            let arc = rotationArcPoints(
-                center: center,
+            // Each sample is placed by its own world direction, so the ring
+            // keeps a fixed screen radius and still foreshortens into the plane
+            // it rotates about. A camera-plane offset would normalize every
+            // projected direction and draw three identical circles.
+            let arc = rotationArcDirections(
                 planeStart: planeStart,
                 planeEnd: planeEnd,
-                radius: rotationRadius
-            )
-            try appendWorldLine(
+                segmentCount: BodyTransformMetrics.rotationSegmentCount
+            ).map {
+                SurfaceTransformAffordanceSource.DirectedPoint(
+                    anchor: center,
+                    along: $0,
+                    lengthPoints: BodyTransformMetrics.rotationRadiusPoints
+                )
+            }
+            try appendCameraLine(
                 .init(
                     route: .bodyTransform,
                     points: arc,
-                    closed: false,
                     color: axisColor(axis),
                     family: .transform,
                     identity: identity,
@@ -2725,7 +2813,7 @@ private extension ViewportSpatialOverlayProducer {
                     hitTolerancePoints: 8.0,
                     occurrenceID: occurrenceID
                 ),
-                to: &worldLines,
+                to: &cameraLines,
                 checkpoint: checkpoint
             )
         }

@@ -54,10 +54,13 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
             checkpoint: { _, _, _ in }
         )
     )
-    #expect(source.worldLines.count == 15)
-    #expect(source.worldLines.prefix(12).allSatisfy { $0.points.count == 2 })
+    // The twelve bounds edges are the only world polylines left: the three
+    // rotation rings became camera lines when the ring radius became a screen
+    // length, so the camera lines are three axis arrows plus three rings.
+    #expect(source.worldLines.count == 12)
+    #expect(source.worldLines.allSatisfy { $0.points.count == 2 })
     #expect(source.markers.count >= 15)
-    #expect(source.cameraLines.count == 3)
+    #expect(source.cameraLines.count == 6)
     #expect(source.cameraPaths.isEmpty)
     let bodyRecord = try #require(interactionRecords.first { record in
         guard case .affordance(let target, _, _) = record.target else { return false }
@@ -96,13 +99,19 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
         activeFamilies: &families
     )
     #expect(families.contains(.transform))
-    #expect(cameraLines.contains { line in
-        line.value.points.contains { point in
-            if case .projected = point.offset { return true }
-            return false
+    // A body transform arrow is pinned on screen, so its end point is
+    // direction-relative rather than projected; a ring sample advances in scene
+    // space so the ring keeps its foreshortening.
+    #expect(cameraLines.allSatisfy { line in
+        line.value.points.allSatisfy { point in
+            switch point.offset {
+            case .fixed, .directed, .worldDirected: return true
+            case .projected: return false
+            }
         }
     })
-    #expect(cameraLines.allSatisfy { $0.value.points.count == 2 })
+    #expect(cameraLines.filter { $0.value.points.count == 2 }.count == 3)
+    #expect(cameraLines.filter { $0.value.points.count == 13 }.count == 3)
 }
 
 @Test
@@ -691,7 +700,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 16)
         #expect(perpendicular == 0)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("Surface control-point axis start must use a directed 16 point gap.")
     }
     switch nativeControlAxis.value.points[1].offset {
@@ -699,7 +708,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
         #expect(minimumLength == 16)
         #expect(parallel == 0)
         #expect(perpendicular == 0)
-    case .fixed, .directed:
+    case .fixed, .directed, .worldDirected:
         Issue.record("Surface control-point axis tip must retain its 16 point minimum length.")
     }
 
@@ -713,7 +722,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 10)
         #expect(perpendicular == 0)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("Active surface frame native line must preserve its directed start gap.")
     }
     switch nativeFrameLine.value.points[1].offset {
@@ -722,7 +731,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
         #expect(minimumLength == 0)
         #expect(parallel == 0)
         #expect(perpendicular == 0)
-    case .fixed, .directed:
+    case .fixed, .directed, .worldDirected:
         Issue.record("Active surface frame tip must use projected native placement.")
     }
     let nativeFramePath = try #require(cameraPaths.first { $0.value.handleIndex == frameHandleIndex })
@@ -732,7 +741,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
         #expect(minimumLength == 0)
         #expect(parallel == 0)
         #expect(perpendicular == 0)
-    case .fixed, .directed:
+    case .fixed, .directed, .worldDirected:
         Issue.record("Active surface frame tip glyph must share projected tip placement.")
     }
     #expect(labels.contains { $0.value.handleIndex == nil && $0.value.text.hasPrefix("U ") })
@@ -747,7 +756,7 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 36)
         #expect(perpendicular == 0)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("Passive surface frame tip must use fixed-point directed placement.")
     }
 }
@@ -878,7 +887,7 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 16)
         #expect(perpendicular == 0)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("PolySpline vertex axis start must use a directed 16 point gap.")
     }
     switch nativeVertexAxis.value.points[1].offset {
@@ -886,7 +895,7 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
         #expect(minimumLength == 16)
         #expect(parallel == 0)
         #expect(perpendicular == 0)
-    case .fixed, .directed:
+    case .fixed, .directed, .worldDirected:
         Issue.record("PolySpline vertex axis tip must retain its 16 point minimum length.")
     }
 }

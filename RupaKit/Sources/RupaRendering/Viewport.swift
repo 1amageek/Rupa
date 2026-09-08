@@ -48,6 +48,7 @@ public struct Viewport: View {
     @State private var surfaceFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var hoveredInteractionTarget: ViewportInteractionTarget?
     @State private var pendingInteractionTarget: ViewportInteractionTarget?
+    @State private var pendingNativeAffordance: ViewportNativeAffordanceClaim?
     @State private var hoveredNativeAxisIdentity: ViewportSpatialHandleIdentity?
     @State private var nativeAxisGesture: NativeAxisGesture?
 
@@ -1815,6 +1816,20 @@ public struct Viewport: View {
         return identity
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This rectangle query still projects
+    // through `ViewportLayout` and the plan's own screen hit tester instead of
+    // the mounted native frame, so an occurrence is admitted from its projected
+    // triangles with no depth test against what the frame actually drew.
+    //
+    // Production path: `selectionDragTarget(from:to:size:)` calls this for the
+    // `.all` and `.object` scopes, whose rectangle selects whole occurrences,
+    // and `legacySelectionRectangleHits(in:scene:layout:)` calls it to decide
+    // which legacy body hits the presentation still shows.
+    //
+    // Do not treat rectangle selection as fully migrated while this is
+    // reachable: an occurrence rectangle needs a native query answering from
+    // the same frame as the point path, after which this method is deleted
+    // rather than reimplemented.
     private func presentationOccurrenceIDs(
         intersecting rect: CGRect,
         layout: ViewportLayout
@@ -1867,8 +1882,11 @@ public struct Viewport: View {
     //
     // Do not treat the input cutover as complete while this returns true for
     // any scope: surface knot, span and trim handles need a native path, and
-    // rectangle selection needs a native query, before the legacy resolver and
-    // this property can be deleted together.
+    // the object, region and sketch-entity scopes need a prepared native
+    // identity, before the legacy resolver and this property can be deleted
+    // together. Rectangle selection no longer waits on this property; it asks
+    // `presentationCADSubshapeRectangleHits(in:in:)` for the CAD sub-shape
+    // scopes.
     private var requiresLegacyHitFallback: Bool {
         switch selectionHitPolicy {
         case .face, .edge:
@@ -1904,10 +1922,10 @@ public struct Viewport: View {
     /// point tolerance, and gating the whole query on a drawn surface would
     /// send those queries — and every hover over empty space — back to the
     /// legacy identity resolver. `visibleSurface` is the native surface hit at
-    /// the pointer; it ranks faces of the body it belongs to and is nil over an
-    /// empty pixel. Candidates from different bodies are compared through
-    /// `Candidate.precedes`, so the nearest projected sub-shape wins and equal
-    /// candidates keep stable scene order.
+    /// the pointer; its triangle provenance answers the face query for the body
+    /// it belongs to and is nil over an empty pixel. Candidates from different
+    /// bodies are compared through `Candidate.precedes`, so the nearest
+    /// projected sub-shape wins and equal candidates keep stable scene order.
     private func presentationCADSubshapeHit(
         at point: CGPoint,
         visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
@@ -1931,15 +1949,21 @@ public struct Viewport: View {
         let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
             for: identity, revision: revision
         )
+        // Only a CAD-sourced triangle carries provenance the prepared run list
+        // can name. An authored mesh numbers its own faces independently, so
+        // its `MeshFaceID` could land inside a CAD run by coincidence and name
+        // a face the frame never drew. Withholding the surface from those bodies
+        // makes the face query miss instead.
         var visibleSceneNodeID: SceneNodeID?
-        var visibleDepth: Double?
+        var visibleFace: (faceID: MeshFaceID, depth: Double)?
         if let visibleSurface,
+           case .cad = visibleSurface.triangle.sourceReference,
            let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
                visibleSurface.triangle.occurrenceID
            ],
            let depth = try project(visibleSurface.point)?.depth {
             visibleSceneNodeID = sceneNodeID
-            visibleDepth = depth
+            visibleFace = (faceID: visibleSurface.triangle.faceID, depth: depth)
         }
         var best: (hit: ViewportHit, candidate: ViewportNativeCADTopologyResolver.Candidate)?
         var resolvedTopology = false
@@ -1956,7 +1980,7 @@ public struct Viewport: View {
                 topology: topology,
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: selectionHitPolicy,
-                visibleSurfaceDepth: sceneNodeID == visibleSceneNodeID ? visibleDepth : nil,
+                visibleSurface: sceneNodeID == visibleSceneNodeID ? visibleFace : nil,
                 usesPerspectiveProjection: usesPerspectiveProjection,
                 project: project,
                 surfaceHit: surfaceHit,
@@ -1982,6 +2006,186 @@ public struct Viewport: View {
             return .resolved(best.hit)
         }
         return resolvedTopology ? .miss : .unsupported
+    }
+
+    /// Selection scopes whose rectangle the native frame answers from prepared
+    /// B-Rep topology.
+    ///
+    /// `.all` and `.object` are excluded because a rectangle that allows object
+    /// hits selects whole occurrences: the legacy filter already drops every
+    /// body hit there, and `presentationOccurrenceIDs(intersecting:layout:)`
+    /// carries the result. `.region` and `.sketchEntity` name geometry the
+    /// prepared topology does not describe.
+    private var usesNativeCADSubshapeRectangle: Bool {
+        guard presentationScene != nil else {
+            return false
+        }
+        switch selectionHitPolicy {
+        case .face, .edge, .vertex:
+            return true
+        case .all, .object, .region, .sketchEntity:
+            return false
+        }
+    }
+
+    /// Outcome of the native CAD sub-shape rectangle query.
+    ///
+    /// `resolved` carries every sub-shape the native frame admitted.
+    /// `requiresLegacyResidual` reports whether a CAD interaction body in the
+    /// same scene still holds geometry the prepared topology cannot name — a
+    /// body without face, edge or vertex targets, whose sub-objects the pick
+    /// index projects from a bounding box, and, for the vertex scope, a body
+    /// carrying surface knot, span, trim-knot or trim-span handles. Only then
+    /// does the legacy resolver run alongside, stripped of everything the
+    /// native query owns.
+    ///
+    /// `unsupported` reports that no CAD interaction body carried prepared
+    /// topology at all, so the whole legacy path answers, exactly as the point
+    /// query does.
+    private enum NativeCADSubshapeRectangleResult {
+        case resolved(hits: [ViewportHit], requiresLegacyResidual: Bool)
+        case unsupported
+    }
+
+    /// Resolves every CAD face, edge and vertex the rectangle admits from
+    /// prepared B-Rep topology, using the same native projection, occlusion and
+    /// section rule that drew the frame.
+    ///
+    /// This is a set query with no rank: each admitted sub-shape is reported
+    /// once, keyed by its prepared `SelectionComponentID`. A `SubshapeID` names
+    /// the feature it belongs to, so two scene items can never claim one
+    /// identity and de-duplicating by it loses nothing a `SelectionComponent`
+    /// could express.
+    private func presentationCADSubshapeRectangleHits(
+        in rect: CGRect,
+        in scene: ViewportScene
+    ) throws -> NativeCADSubshapeRectangleResult {
+        let identity = try presentationQueryIdentity()
+        let revision = activeControlSession.revision
+        let project: (Point3D) throws -> (point: CGPoint, depth: Double)? = {
+            try presentationPlanCache.projectedPointWithinDepthRange(
+                $0, for: identity, revision: revision
+            )
+        }
+        let surfaceHit: (CGPoint) throws -> (
+            triangle: MeshSourcePresentationTriangle, point: Point3D
+        )? = {
+            try presentationPlanCache.surfaceHit(at: $0, for: identity, revision: revision)
+        }
+        let retainsSectionedPoint: (Point3D) throws -> Bool = {
+            try presentationPlanCache.retainsSectionedPoint($0, for: identity, revision: revision)
+        }
+        let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
+            for: identity, revision: revision
+        )
+        var hits: [ViewportHit] = []
+        var admitted: Set<SelectionComponentID> = []
+        var resolvedTopology = false
+        var requiresLegacyResidual = false
+        for item in scene.items {
+            guard let sceneNodeID = item.sceneNodeID,
+                  presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+                  case .body(let component) = item.kind else {
+                continue
+            }
+            guard let topology = component.topology,
+                  topology.faces.isEmpty == false
+                      || topology.edges.isEmpty == false
+                      || topology.vertices.isEmpty == false else {
+                // Without prepared targets the pick index answers this body
+                // with sub-objects projected from its bounding box, which carry
+                // no CAD identity the native query could name.
+                requiresLegacyResidual = true
+                continue
+            }
+            if selectionHitPolicy.allowsVertexHits,
+               component.surfaceKnotDisplays.isEmpty == false
+                   || component.surfaceSpanDisplays.isEmpty == false
+                   || component.surfaceTrimKnotDisplays.isEmpty == false
+                   || component.surfaceTrimSpanDisplays.isEmpty == false {
+                requiresLegacyResidual = true
+            }
+            guard let mesh = component.mesh else {
+                throw MeshSourcePresentationRenderError(
+                    code: .invalidSceneItem,
+                    message: "A CAD body prepared topology without the mesh its face runs index."
+                )
+            }
+            resolvedTopology = true
+            // A run names a triangle of this body only. Another body's triangle,
+            // and any authored mesh triangle, numbers its faces independently
+            // and could land inside a run by coincidence.
+            let bodyDrawsTriangle: (MeshSourcePresentationTriangle) throws -> Bool = {
+                guard case .cad = $0.sourceReference else {
+                    return false
+                }
+                return presentationSceneNodeIDByOccurrenceID[$0.occurrenceID] == sceneNodeID
+            }
+            let components = try ViewportNativeCADTopologyResolver.resolve(
+                in: rect,
+                topology: topology,
+                mesh: mesh,
+                modelTransform: item.modelTransform,
+                selectionHitPolicy: selectionHitPolicy,
+                usesPerspectiveProjection: usesPerspectiveProjection,
+                project: project,
+                surfaceHit: surfaceHit,
+                retainsSectionedPoint: retainsSectionedPoint,
+                bodyDrawsTriangle: bodyDrawsTriangle
+            )
+            for selectionComponent in components {
+                guard let componentID = Self.rectangleComponentID(selectionComponent),
+                      admitted.insert(componentID).inserted else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: sceneNodeID,
+                        kind: .body,
+                        pickingBackend: .native,
+                        selectionComponent: selectionComponent
+                    )
+                )
+            }
+        }
+        guard resolvedTopology else {
+            return .unsupported
+        }
+        return .resolved(hits: hits, requiresLegacyResidual: requiresLegacyResidual)
+    }
+
+    /// Whether the native rectangle query already owns this legacy hit.
+    ///
+    /// Ownership is decided by what produced the record, not by whether the
+    /// native query happened to admit the same sub-shape: a CAD interaction
+    /// body's generated face, edge and vertex records are exactly what prepared
+    /// topology names, so keeping one would let the identity-buffer rule
+    /// re-admit a sub-shape the native frame rejected as occluded, sectioned
+    /// away, or outside the rectangle.
+    private func nativeRectangleOwnsLegacyHit(_ hit: ViewportHit) -> Bool {
+        guard hit.kind == .body,
+              let sceneNodeID = hit.sceneNodeID,
+              presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+              let component = hit.selectionComponent,
+              let componentID = Self.rectangleComponentID(component) else {
+            return false
+        }
+        return componentID.generatedTopologySubshapeID != nil
+    }
+
+    /// The identity a rectangle-admitted `SelectionComponent` is keyed by. The
+    /// native rectangle resolver reports only face, edge and vertex components;
+    /// the remaining cases name no generated sub-shape.
+    private static func rectangleComponentID(
+        _ component: SelectionComponent
+    ) -> SelectionComponentID? {
+        switch component {
+        case .face(let componentID), .edge(let componentID), .vertex(let componentID):
+            return componentID
+        case .object, .sketchEntity, .region, .constructionPlane:
+            return nil
+        }
     }
 
     /// Resolves the native outcome into the hit the viewport acts on, asking
@@ -2049,7 +2253,10 @@ public struct Viewport: View {
     private func presentationFrameFailure(
         for identity: RealityViewportPreparationRequest.Identity
     ) -> MeshSourcePresentationRenderError? {
-        guard let renderer = presentationPlanCache.surface(for: identity),
+        // A native update failure is recorded against the mounted frame, which
+        // is also the frame a query for this identity resolves against, so an
+        // overlay-only rebuild must not hide it.
+        guard let renderer = presentationPlanCache.displaySurface(for: identity),
               surfaceFailure?.rendererID == ObjectIdentifier(renderer) else { return nil }
         return surfaceFailure?.error
     }
@@ -3811,58 +4018,7 @@ public struct Viewport: View {
 
 
 
-    private func projectedBoxEdges(_ corners: [Point3D], layout: ViewportLayout) -> Path {
-        var result = Path()
-        for index in 0..<8 {
-            for bit in [1, 2, 4] where index & bit == 0 {
-                result.addPath(projectedPath([corners[index], corners[index | bit]], layout: layout))
-            }
-        }
-        return result
-    }
 
-
-
-    private func bodyVertexHandles(
-        _ edit: ViewportObjectEditState,
-        layout: ViewportLayout
-    ) -> [ViewportVertexHandle] {
-        ViewportBodyVertex.allCases.compactMap { vertex in
-            let position = edit.position(for: vertex)
-            guard let point = edit.projectedPoint(position, layout: layout) else { return nil }
-            return ViewportVertexHandle(
-                vertex: vertex,
-                position: position,
-                point: point
-            )
-        }
-    }
-
-    private func bodyFaceCenterHandles(
-        _ edit: ViewportObjectEditState,
-        layout: ViewportLayout
-    ) -> [ViewportFaceHandle] {
-        ViewportBodyFace.editableCases.compactMap { face in
-            let position = edit.position(for: face)
-            guard let point = edit.projectedPoint(position, layout: layout) else { return nil }
-            return ViewportFaceHandle(
-                face: face,
-                position: position,
-                point: point
-            )
-        }
-    }
-
-    private func bodyAffordanceAxisLength(for rotationRadius: CGFloat) -> CGFloat {
-        max(72.0, min(132.0, rotationRadius * 1.9))
-    }
-
-    private func bodyAffordanceEndScaleLength(
-        axisLength: CGFloat,
-        rotationRadius: CGFloat
-    ) -> CGFloat {
-        min(axisLength - 14.0, max(rotationRadius + 18.0, axisLength - 24.0))
-    }
 
 
 
@@ -3946,75 +4102,11 @@ public struct Viewport: View {
 
 
 
-    private func projectedRotationArcPoints(
-        center: CGPoint,
-        radius: CGFloat,
-        planeStart: CGVector,
-        planeEnd: CGVector,
-        segmentCount: Int = 36
-    ) -> [CGPoint] {
-        (0 ... segmentCount).map { index in
-            let progress = CGFloat(index) / CGFloat(segmentCount)
-            let radians = progress * .pi / 2.0
-            let startScale = cos(radians) * radius
-            let endScale = sin(radians) * radius
-            return CGPoint(
-                x: center.x + planeStart.dx * startScale + planeEnd.dx * endScale,
-                y: center.y + planeStart.dy * startScale + planeEnd.dy * endScale
-            )
-        }
-    }
 
 
 
 
 
-    private func perpendicularAxes(
-        for axis: ViewportCoordinateAxis
-    ) -> (first: ViewportCoordinateAxis, second: ViewportCoordinateAxis) {
-        switch axis {
-        case .x:
-            return (.y, .z)
-        case .y:
-            return (.z, .x)
-        case .z:
-            return (.x, .y)
-        }
-    }
-
-
-
-    private func facePlaneAxes(
-        for face: ViewportBodyFace
-    ) -> (first: ViewportCoordinateAxis, second: ViewportCoordinateAxis) {
-        switch face {
-        case .front, .back:
-            return (.x, .z)
-        case .top, .bottom:
-            return (.x, .y)
-        case .left, .right, .side:
-            return (.y, .z)
-        }
-    }
-
-    private func projectedCirclePoints(
-        center: ViewportModelPoint3D,
-        firstAxis: ViewportCoordinateAxis,
-        secondAxis: ViewportCoordinateAxis,
-        radius: CGFloat,
-        edit: ViewportObjectEditState,
-        layout: ViewportLayout,
-        segmentCount: Int = 36
-    ) -> [CGPoint] {
-        let points = (0 ..< segmentCount).map { index in
-            let angle = CGFloat(index) / CGFloat(segmentCount) * 2.0 * CGFloat.pi
-            let point = center
-                .offset(axis: firstAxis, amount: cos(angle) * radius)
-                .offset(axis: secondAxis, amount: sin(angle) * radius)
-            return edit.worldPoint(point)
-        }
-        return layout.projectedPolygon(points).map(\.point)
-    }
 
 
 
@@ -4511,50 +4603,6 @@ public struct Viewport: View {
         return nil
     }
 
-    private func patternArrayLinearAxisAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayLinearAxisAffordanceCandidate] {
-        guard onPatternArrayLinearAxisDrag != nil else {
-            return []
-        }
-        return ViewportPatternArrayLinearAxisAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
-    private func independentCopyExtrudeDistanceAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportIndependentCopyExtrudeDistanceAffordanceCandidate] {
-        guard onIndependentCopyExtrudeDistanceDrag != nil else {
-            return []
-        }
-        return ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
-    private func independentCopyBodyDimensionAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
-        guard onIndependentCopyBodyDimensionDrag != nil else {
-            return []
-        }
-        return ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
 
     private func patternArrayRadialAngleAffordanceCandidates(
         scene: ViewportScene,
@@ -5273,21 +5321,6 @@ public struct Viewport: View {
         }
     }
 
-    private func selectionGroupFeatureID(for bodyItems: [ViewportSceneItem]) -> FeatureID? {
-        let bodyFeatureIDs = Set(bodyItems.map(\.featureID))
-        return selection.selectedSceneNodeReferences(in: document)
-            .compactMap(\.featureID)
-            .last(where: { bodyFeatureIDs.contains($0) })
-            ?? bodyItems.first?.featureID
-    }
-
-    private func selectionGroupEditState(for bodyItems: [ViewportSceneItem]) -> ViewportObjectEditState? {
-        let edits = bodyItems.map { item in
-            editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
-        }
-        return selectionGroupEditState(for: edits)
-    }
-
     private func selectionGroupEditState(for edits: [ViewportObjectEditState]) -> ViewportObjectEditState? {
         guard let first = edits.first else {
             return nil
@@ -5310,6 +5343,26 @@ public struct Viewport: View {
                     editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
                 )
             }
+        )
+    }
+
+    /// Edit states for the bodies a native affordance record names.
+    ///
+    /// The member's own prepared state is the answer: the producer resolved it
+    /// from the same `editedBodies` entry this drag would read, and the record
+    /// is admitted only from a frame prepared for the current overlay
+    /// revision, which `editedBodies` participates in. Reading the live entry
+    /// here would give one value two owners without being able to differ.
+    ///
+    /// A feature selected through several scene nodes contributes one entry, so
+    /// the drag applies one transform per feature just as `editedBodies` stores
+    /// one state per feature.
+    private func bodyEditStates(
+        for members: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember]
+    ) -> [FeatureID: ViewportObjectEditState] {
+        Dictionary(
+            members.map { member in (member.featureID, member.edit) },
+            uniquingKeysWith: { first, _ in first }
         )
     }
 
@@ -5483,6 +5536,7 @@ public struct Viewport: View {
     private func clearPendingCanvasInteractionTargets() {
         nativeAxisGesture = nil
         pendingInteractionTarget = nil
+        pendingNativeAffordance = nil
         clearDragPreviewDocument()
         clearAffordanceGhostEdits()
         clearActiveInteractionDrags()
@@ -5522,12 +5576,31 @@ public struct Viewport: View {
         }
     }
 
-    private func nativeAxisInput(at point: CGPoint) throws -> ViewportNativeAxisInput? {
-        let records = try presentationPlanCache.interactionRecords(
+    /// The prepared interaction the native frame ranks first at this point.
+    ///
+    /// The frame owns the priority order, so the pointer routes read only its
+    /// leading record and never re-rank the handles the frame drew.
+    private func nativeInteractionRecord(at point: CGPoint) throws -> ViewportSpatialInteractionRecord? {
+        try presentationPlanCache.interactionRecords(
             at: point, for: presentationQueryIdentity(), revision: activeControlSession.revision
-        )
-        guard let record = records.first else { return nil }
-        return try ViewportNativeAxisInput(record: record)
+        ).first
+    }
+
+    /// Whether the native record owns the production route for this affordance
+    /// action.
+    ///
+    /// The producer registers a record only while the route is interactive, and
+    /// this re-check keeps the claim honest for the frame the pointer actually
+    /// meets. Actions with no native handle stay with the legacy profile
+    /// selectors, so an unclaimed action falls through instead of ending the
+    /// interaction with nothing.
+    private func nativeAffordanceRouteEnabled(_ action: ViewportAffordanceAction) -> Bool {
+        switch action {
+        case .translate, .oneSidedScale, .centerScale, .rotate, .vertexMove, .faceMove:
+            allowsObjectAffordances
+        case .profileCornerMove, .profileFaceMove, .profileEdgeChamfer, .profileEdgeFillet:
+            false
+        }
     }
 
     private func nativeAxisRouteEnabled(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
@@ -5540,6 +5613,9 @@ public struct Viewport: View {
         case .edgeOffset: onEdgeOffsetDrag != nil
         case .slotWidth: onSlotWidthDrag != nil
         case .sketchVertexOffset: onSketchVertexOffsetDrag != nil
+        case .patternArrayLinearAxis: onPatternArrayLinearAxisDrag != nil
+        case .independentCopyExtrudeDistance: onIndependentCopyExtrudeDistanceDrag != nil
+        case .independentCopyBodyDimension: onIndependentCopyBodyDimensionDrag != nil
         default: false
         }
     }
@@ -5602,8 +5678,9 @@ public struct Viewport: View {
             nativeAxisGesture = .active(press)
             return true
         } catch {
-            // A self-preview may temporarily replace the native frame. Keep
-            // the press baseline; no update or commit is authorized until ready.
+            // A self-preview replaces the scene, so no frame is mounted for the
+            // new identity until it is drawn. Keep the press baseline; no update
+            // or commit is authorized until that frame answers.
             return false
         }
     }
@@ -5658,6 +5735,9 @@ public struct Viewport: View {
         case .edgeOffset(let target): onEdgeOffsetDrag?(target)
         case .slotWidth(let target): onSlotWidthDrag?(target)
         case .sketchVertexOffset(let target): onSketchVertexOffsetDrag?(target)
+        case .patternArrayLinearAxis(let target): onPatternArrayLinearAxisDrag?(target)
+        case .independentCopyExtrudeDistance(let target): onIndependentCopyExtrudeDistanceDrag?(target)
+        case .independentCopyBodyDimension(let target): onIndependentCopyBodyDimensionDrag?(target)
         }
     }
 
@@ -5669,18 +5749,29 @@ public struct Viewport: View {
         }
         clearPendingCanvasInteractionTargets()
         do {
-            if let input = try nativeAxisInput(at: point) {
-                guard nativeAxisRouteEnabled(input.record.target) else {
-                    nativeAxisGesture = .cancelled
+            if let record = try nativeInteractionRecord(at: point) {
+                if let input = try ViewportNativeAxisInput(record: record) {
+                    guard nativeAxisRouteEnabled(record.target) else {
+                        nativeAxisGesture = .cancelled
+                        return
+                    }
+                    nativeAxisGesture = .active(.init(
+                        input: input, source: sourceIdentity, snapshotID: presentationScene?.snapshotID,
+                        selectedTargets: selection.selectedTargets,
+                        selectedReferences: selection.selectedReferences, start: point
+                    ))
+                    activeCanvasDrag = nil
                     return
                 }
-                nativeAxisGesture = .active(.init(
-                    input: input, source: sourceIdentity, snapshotID: presentationScene?.snapshotID,
-                    selectedTargets: selection.selectedTargets,
-                    selectedReferences: selection.selectedReferences, start: point
-                ))
-                activeCanvasDrag = nil
-                return
+                if case .affordance(let target, let members, let groupEdit) = record.target,
+                   nativeAffordanceRouteEnabled(target.action) {
+                    setPendingInteractionTarget(.affordance(target))
+                    pendingNativeAffordance = ViewportNativeAffordanceClaim(
+                        target: target, members: members, groupEdit: groupEdit
+                    )
+                    activeCanvasDrag = nil
+                    return
+                }
             }
         } catch {
             nativeAxisGesture = .cancelled
@@ -5695,9 +5786,14 @@ public struct Viewport: View {
         activeCanvasDrag = nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Non-axis CAD routes still use legacy
-    // selectors from press/hover. Full RK-4 input cutover requires replacing
-    // those routes; migrated native axis routes are never resolved here.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch, curve, surface, pattern,
+    // construction-plane and profile affordance routes still resolve from this
+    // legacy CPU projection when press/hover find no native record. Production
+    // reaches it from `beginViewportPress` and `hover` after the native frame
+    // declines the point. Completing RK-4 requires prepared records for those
+    // routes, after which this selector and its CPU gizmo geometry are removed;
+    // the migrated native axis and body transform routes are never resolved
+    // here.
     private func resolvedInteractionTarget(
         at point: CGPoint,
         size: CGSize,
@@ -5736,15 +5832,6 @@ public struct Viewport: View {
         if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimControlPoint(target)
         }
-        if let target = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .independentCopyExtrudeDistance(target)
-        }
-        if let target = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .independentCopyBodyDimension(target)
-        }
-        if let target = selectedPatternArrayLinearAxisAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayLinearAxis(target)
-        }
         if let target = selectedPatternArrayRadialAngleAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayRadialAngle(target)
         }
@@ -5775,14 +5862,7 @@ public struct Viewport: View {
         if let target = selectedEdgeAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
-        guard allowsObjectAffordances else {
-            return nil
-        }
-        return affordanceTarget(
-            at: point,
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        ).map(ViewportInteractionTarget.affordance)
+        return nil
     }
 
     private func setPendingInteractionTarget(_ target: ViewportInteractionTarget) {
@@ -7074,74 +7154,6 @@ public struct Viewport: View {
         return nil
     }
 
-    private func selectedPatternArrayLinearAxisAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayLinearAxisHandleTarget? {
-        guard onPatternArrayLinearAxisDrag != nil else {
-            return nil
-        }
-        let candidates = patternArrayLinearAxisAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            let start = candidate.geometry.baseProjectedPoint
-            let end = candidate.geometry.projectedTip()
-            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
-            let tipHit = point.distance(to: end) <= 14.0
-            if lineHit || tipHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedIndependentCopyExtrudeDistanceAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportIndependentCopyExtrudeDistanceHandleTarget? {
-        guard onIndependentCopyExtrudeDistanceDrag != nil else {
-            return nil
-        }
-        let candidates = independentCopyExtrudeDistanceAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            let start = candidate.geometry.baseProjectedPoint
-            let end = candidate.geometry.projectedTip()
-            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
-            let tipHit = point.distance(to: end) <= 14.0
-            if lineHit || tipHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedIndependentCopyBodyDimensionAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportIndependentCopyBodyDimensionHandleTarget? {
-        guard onIndependentCopyBodyDimensionDrag != nil else {
-            return nil
-        }
-        let candidates = independentCopyBodyDimensionAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            let start = candidate.geometry.baseProjectedPoint
-            let end = candidate.geometry.projectedTip()
-            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
-            let tipHit = point.distance(to: end) <= 14.0
-            if lineHit || tipHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
 
     private func selectedPatternArrayRadialAngleAffordanceTarget(
         at point: CGPoint,
@@ -7315,174 +7327,6 @@ public struct Viewport: View {
         return nil
     }
 
-    private func affordanceTarget(
-        at point: CGPoint,
-        size: CGSize
-    ) -> ViewportAffordanceTarget? {
-        guard allowsObjectAffordances else {
-            return nil
-        }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        return affordanceTarget(at: point, scene: scene, layout: layout)
-    }
-
-    private func affordanceTarget(
-        at point: CGPoint,
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> ViewportAffordanceTarget? {
-        let selectedBodyItems = selectedBodyItems(in: scene)
-        if selectedBodyItems.count > 1,
-           let groupFeatureID = selectionGroupFeatureID(for: selectedBodyItems),
-           let groupEdit = selectionGroupEditState(for: selectedBodyItems) {
-            return bodyAffordanceTarget(
-                point: point,
-                featureID: groupFeatureID,
-                edit: groupEdit,
-                layout: layout
-            )
-        }
-
-        for item in selectedBodyItems.reversed() {
-            if let target = bodyAffordanceTarget(
-                point: point,
-                item: item,
-                layout: layout
-            ) {
-                return target
-            }
-        }
-        return nil
-    }
-
-    private func bodyAffordanceTarget(
-        point: CGPoint,
-        item: ViewportSceneItem,
-        layout: ViewportLayout
-    ) -> ViewportAffordanceTarget? {
-        let edit = editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
-        return bodyAffordanceTarget(
-            point: point,
-            featureID: item.featureID,
-            selectionTarget: objectSelectionIndex.exactTarget(for: item),
-            edit: edit,
-            layout: layout
-        )
-    }
-
-    private func bodyAffordanceTarget(
-        point: CGPoint,
-        featureID: FeatureID,
-        selectionTarget: SelectionTarget? = nil,
-        edit: ViewportObjectEditState,
-        layout: ViewportLayout
-    ) -> ViewportAffordanceTarget? {
-        guard let bodyBounds = edit.projectedBodyProjection(layout: layout)?.hitBounds else { return nil }
-        let modelCenter = edit.centerPoint
-        guard let center = edit.projectedPoint(modelCenter, layout: layout),
-              let affordanceBasis = edit.projectedAxisBasis(layout: layout) else { return nil }
-        let radius = max(28.0, min(72.0, min(bodyBounds.width, bodyBounds.height) * 0.38))
-        let axisLength = bodyAffordanceAxisLength(for: radius)
-        let endScaleLength = bodyAffordanceEndScaleLength(
-            axisLength: axisLength,
-            rotationRadius: radius
-        )
-        let handleTolerance: CGFloat = 10.0
-
-        for axis in ViewportCoordinateAxis.allCases {
-            guard let endLength = edit.modelLength(forViewportLength: endScaleLength, axis: axis, layout: layout),
-                  let centerLength = edit.modelLength(forViewportLength: radius, axis: axis, layout: layout) else { continue }
-            let endpoint = edit.projectedPoint(
-                modelCenter.offset(
-                    axis: axis,
-                    amount: endLength
-                ),
-                layout: layout
-            )
-            if let endpoint, point.distance(to: endpoint) <= handleTolerance {
-                return ViewportAffordanceTarget(
-                    featureID: featureID,
-                    selectionTarget: selectionTarget,
-                    action: .oneSidedScale(axis)
-                )
-            }
-
-            let centerScalePoint = edit.projectedPoint(
-                modelCenter.offset(
-                    axis: axis,
-                    amount: centerLength
-                ),
-                layout: layout
-            )
-            if let centerScalePoint, point.distance(to: centerScalePoint) <= handleTolerance {
-                return ViewportAffordanceTarget(
-                    featureID: featureID,
-                    selectionTarget: selectionTarget,
-                    action: .centerScale(axis)
-                )
-            }
-        }
-
-        for handle in bodyVertexHandles(edit, layout: layout) {
-            if point.distance(to: handle.point) <= handleTolerance {
-                return ViewportAffordanceTarget(
-                    featureID: featureID,
-                    selectionTarget: selectionTarget,
-                    action: .vertexMove(handle.vertex)
-                )
-            }
-        }
-
-        for handle in bodyFaceCenterHandles(edit, layout: layout) {
-            if point.distance(to: handle.point) <= handleTolerance {
-                return ViewportAffordanceTarget(
-                    featureID: featureID,
-                    selectionTarget: selectionTarget,
-                    action: .faceMove(handle.face)
-                )
-            }
-        }
-
-        if let axis = rotationAffordanceAxis(
-            point: point,
-            center: center,
-            radius: radius,
-            basis: affordanceBasis
-        ) {
-            return ViewportAffordanceTarget(
-                featureID: featureID,
-                selectionTarget: selectionTarget,
-                action: .rotate(axis)
-            )
-        }
-
-        for axis in ViewportCoordinateAxis.allCases {
-            guard let axisModelLength = edit.modelLength(forViewportLength: axisLength, axis: axis, layout: layout) else { continue }
-            let endpoint = edit.projectedPoint(
-                modelCenter.offset(
-                    axis: axis,
-                    amount: axisModelLength
-                ),
-                layout: layout
-            )
-            if let endpoint, point.distanceToSegment(start: center, end: endpoint) <= 7.0 {
-                return ViewportAffordanceTarget(
-                    featureID: featureID,
-                    selectionTarget: selectionTarget,
-                    action: .translate(axis)
-                )
-            }
-        }
-
-        return nil
-    }
-
     private func viewportHit(
         point: CGPoint,
         in scene: ViewportScene,
@@ -7494,65 +7338,6 @@ public struct Viewport: View {
             layout: layout,
             selectionHitPolicy: selectionHitPolicy
         )
-    }
-
-    private func polygonBounds(_ polygon: [CGPoint]) -> CGRect {
-        var bounds = CGRect.null
-        for point in polygon {
-            bounds = bounds.union(CGRect(x: point.x, y: point.y, width: 0.0, height: 0.0))
-        }
-        return bounds
-    }
-
-    private func rotationAffordanceAxis(
-        point: CGPoint,
-        center: CGPoint,
-        radius: CGFloat,
-        basis: ViewportProjectionBasis
-    ) -> ViewportCoordinateAxis? {
-        let candidates: [(axis: ViewportCoordinateAxis, start: CGVector, end: CGVector)] = [
-            (.x, basis.yDirection, basis.zDirection),
-            (.y, basis.zDirection, basis.xDirection),
-            (.z, basis.xDirection, basis.yDirection),
-        ]
-        var best: (axis: ViewportCoordinateAxis, distance: CGFloat)?
-        for candidate in candidates {
-            let distance = distanceToRotationArc(
-                point: point,
-                center: center,
-                radius: radius,
-                from: candidate.start,
-                to: candidate.end
-            )
-            if let current = best {
-                if distance < current.distance {
-                    best = (candidate.axis, distance)
-                }
-            } else {
-                best = (candidate.axis, distance)
-            }
-        }
-        guard let best, best.distance <= 8.0 else {
-            return nil
-        }
-        return best.axis
-    }
-
-    private func distanceToRotationArc(
-        point: CGPoint,
-        center: CGPoint,
-        radius: CGFloat,
-        from startDirection: CGVector,
-        to endDirection: CGVector
-    ) -> CGFloat {
-        projectedRotationArcPoints(
-            center: center,
-            radius: radius,
-            planeStart: startDirection,
-            planeEnd: endDirection
-        )
-        .map { point.distance(to: $0) }
-        .min() ?? CGFloat.greatestFiniteMagnitude
     }
 
 
@@ -7655,15 +7440,29 @@ public struct Viewport: View {
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let selectedFeatureIDs = selectedObjectFeatureIDs()
-        let selectedBodyItems = selectedBodyItems(in: scene)
-        let targetIsSelectionGroup = selectedBodyItems.count > 1
-            && selectedBodyItems.contains { $0.featureID == target.featureID }
 
         let dragState: ViewportAffordanceDragState
         if let activeAffordanceDrag,
            activeAffordanceDrag.target == target {
             dragState = activeAffordanceDrag
+        } else if let claim = pendingNativeAffordance, claim.target == target {
+            // The native frame claimed this handle, so the record decides which
+            // bodies move, where each one starts, and whether they move as a
+            // group. Nothing here is re-derived from the current scene or
+            // selection: the drawn handle and the drag share one baseline.
+            let baseEdits = bodyEditStates(for: claim.members)
+            guard baseEdits.isEmpty == false else { return }
+            dragState = ViewportAffordanceDragState(
+                target: target,
+                startPoint: start,
+                baseEdits: baseEdits,
+                baseGroupEdit: claim.groupEdit
+            )
+            activeAffordanceDrag = dragState
         } else {
+            let selectedBodyItems = selectedBodyItems(in: scene)
+            let targetIsSelectionGroup = selectedBodyItems.count > 1
+                && selectedBodyItems.contains { $0.featureID == target.featureID }
             let baseEdits: [FeatureID: ViewportObjectEditState]
             let baseGroupEdit: ViewportObjectEditState?
             if targetIsSelectionGroup {
@@ -9928,7 +9727,13 @@ public struct Viewport: View {
         guard let onSelectionDrag else {
             return
         }
-        var target = selectionDragTarget(from: start, to: end, size: size)
+        var target: ViewportSelectionDragTarget
+        do {
+            target = try selectionDragTarget(from: start, to: end, size: size)
+        } catch {
+            // An unavailable frame cannot authorize a selection.
+            return
+        }
         target.selectionIntent = selectionIntent
         onSelectionDrag(target)
     }
@@ -9938,9 +9743,13 @@ public struct Viewport: View {
         to end: CGPoint,
         size: CGSize
     ) {
-        publishSelectionDragPreview(
-            target: selectionDragTarget(from: start, to: end, size: size)
-        )
+        do {
+            publishSelectionDragPreview(
+                target: try selectionDragTarget(from: start, to: end, size: size)
+            )
+        } catch {
+            // An unavailable frame cannot authorize a selection preview.
+        }
     }
 
     private func publishSelectionDragPreview(target: ViewportSelectionDragTarget) {
@@ -9953,11 +9762,22 @@ public struct Viewport: View {
         )
     }
 
+    /// The rectangle selection the viewport publishes.
+    ///
+    /// For a CAD sub-shape scope over a mounted presentation the native frame
+    /// answers from prepared topology, and the legacy resolver runs only for
+    /// the geometry that has no prepared identity — stripped of every hit the
+    /// native query owns, so one sub-shape is never judged twice by two
+    /// different projections. Every other scope keeps the whole legacy path.
+    ///
+    /// A native query that cannot be answered is a failure, not an empty
+    /// selection: both publishers report nothing rather than replacing the
+    /// selection with a rectangle the frame never judged.
     private func selectionDragTarget(
         from start: CGPoint,
         to end: CGPoint,
         size: CGSize
-    ) -> ViewportSelectionDragTarget {
+    ) throws -> ViewportSelectionDragTarget {
         let rect = dragRect(from: start, to: end)
         guard rect.width > 0.0, rect.height > 0.0 else {
             return ViewportSelectionDragTarget(hits: [])
@@ -9968,38 +9788,78 @@ public struct Viewport: View {
             basis: currentProjectionBasis
         )
         let scene = sceneContext.scene
-        let mapper = sceneContext.mapper
-        let hitScene = sceneBySuppressingSketches(
-            scene,
-            selectedFeatureIDs: selectedTargetFeatureIDs()
-        )
-        let presentationOccurrenceIDs = presentationOccurrenceIDs(
-            intersecting: rect,
-            layout: mapper.layout
-        )
-        let rawHits = identityHitResolver.selectionHits(
-            in: rect,
-            scene: hitScene,
-            layout: mapper.layout,
-            sketchControlPointHitPolicy: sketchControlPointHitPolicy(for: hitScene),
-            selectionHitPolicy: selectionHitPolicy
-        )
-        let hits = if presentationScene == nil {
-            rawHits
-        } else {
-            MeshSourcePresentationLegacyHitFilter().selectionHits(
-                rawHits,
-                visiblePresentationOccurrenceIDs: presentationOccurrenceIDs,
-                navigation: presentationSceneNodeIDByOccurrenceID,
-                exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs,
-                selectionHitPolicy: selectionHitPolicy
-            )
+        let layout = sceneContext.mapper.layout
+        var nativeResult = NativeCADSubshapeRectangleResult.unsupported
+        if usesNativeCADSubshapeRectangle {
+            nativeResult = try presentationCADSubshapeRectangleHits(in: rect, in: scene)
+        }
+        let hits: [ViewportHit]
+        switch nativeResult {
+        case .resolved(let nativeHits, let requiresLegacyResidual):
+            if requiresLegacyResidual {
+                let residual = legacySelectionRectangleHits(
+                    in: rect,
+                    scene: scene,
+                    layout: layout
+                )
+                hits = nativeHits + residual.filter { nativeRectangleOwnsLegacyHit($0) == false }
+            } else {
+                hits = nativeHits
+            }
+        case .unsupported:
+            hits = legacySelectionRectangleHits(in: rect, scene: scene, layout: layout)
         }
         return ViewportSelectionDragTarget(
             hits: hits,
             presentationOccurrenceIDs: selectionHitPolicy.allowsObjectHits
-                ? presentationOccurrenceIDs
+                ? presentationOccurrenceIDs(intersecting: rect, layout: layout)
                 : []
+        )
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This is the interim bridge to the
+    // pre-RealityKit identity-buffer resolver for rectangle selection. It
+    // projects, occludes and clips with the GPU identity rule instead of the
+    // mounted native frame, so a second selection judgement stays live for the
+    // geometry it still answers.
+    //
+    // Production path: `selectionDragTarget(from:to:size:)` calls this for
+    // every scope outside `usesNativeCADSubshapeRectangle`, and for the CAD
+    // sub-shape scopes when the scene still holds a body the native query
+    // cannot name — one without prepared topology targets, or, for `.vertex`,
+    // one carrying surface knot, span or trim handles.
+    //
+    // Do not treat rectangle selection as migrated while this is reachable:
+    // those bodies need a prepared native identity first, after which this
+    // method is deleted with the resolver rather than reimplemented.
+    private func legacySelectionRectangleHits(
+        in rect: CGRect,
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportHit] {
+        let hitScene = sceneBySuppressingSketches(
+            scene,
+            selectedFeatureIDs: selectedTargetFeatureIDs()
+        )
+        let rawHits = identityHitResolver.selectionHits(
+            in: rect,
+            scene: hitScene,
+            layout: layout,
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy(for: hitScene),
+            selectionHitPolicy: selectionHitPolicy
+        )
+        guard presentationScene != nil else {
+            return rawHits
+        }
+        return MeshSourcePresentationLegacyHitFilter().selectionHits(
+            rawHits,
+            visiblePresentationOccurrenceIDs: presentationOccurrenceIDs(
+                intersecting: rect,
+                layout: layout
+            ),
+            navigation: presentationSceneNodeIDByOccurrenceID,
+            exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs,
+            selectionHitPolicy: selectionHitPolicy
         )
     }
 
@@ -10009,12 +9869,24 @@ public struct Viewport: View {
             return
         }
         do {
-            if let input = try nativeAxisInput(at: point) {
-                clearCanvasHover()
-                if nativeAxisRouteEnabled(input.record.target) {
-                    hoveredNativeAxisIdentity = input.record.identity
+            if let record = try nativeInteractionRecord(at: point) {
+                if try ViewportNativeAxisInput(record: record) != nil {
+                    clearCanvasHover()
+                    if nativeAxisRouteEnabled(record.target) {
+                        hoveredNativeAxisIdentity = record.identity
+                    }
+                    return
                 }
-                return
+                if case .affordance(let target, _, _) = record.target,
+                   nativeAffordanceRouteEnabled(target.action) {
+                    hoveredNativeAxisIdentity = nil
+                    setHoveredInteractionTarget(.affordance(target))
+                    hoveredCanvasHit = nil
+                    hoveredModelPoint = nil
+                    onPresentationOccurrenceHover?(nil)
+                    clearHoverCallbacks()
+                    return
+                }
             }
         } catch {
             clearCanvasHover()
@@ -10842,6 +10714,21 @@ extension Viewport {
             || onPatternArrayCurvePathPointDrag != nil
             || onPatternArrayOutputModeChange != nil
             || patternArrayCurvePathReplacementPreviewRequest != nil
+        var nativeLinearAxis: ViewportPatternArrayLinearAxisDragTarget?
+        var nativeIndependentExtrude: ViewportIndependentCopyExtrudeDistanceDragTarget?
+        var nativeIndependentDimension: ViewportIndependentCopyBodyDimensionDragTarget?
+        var nativePatternIdentities: [ViewportSpatialHandleIdentity] = []
+        if case .active(let press) = nativeAxisGesture, let value = press.value {
+            switch try press.input.commit(value: value) {
+            case .patternArrayLinearAxis(let target): nativeLinearAxis = target
+            case .independentCopyExtrudeDistance(let target): nativeIndependentExtrude = target
+            case .independentCopyBodyDimension(let target): nativeIndependentDimension = target
+            default: break
+            }
+            if nativeLinearAxis != nil || nativeIndependentExtrude != nil || nativeIndependentDimension != nil {
+                nativePatternIdentities.append(press.input.record.identity)
+            }
+        }
         let patternSource: ViewportSpatialOverlaySemanticSnapshot.PatternSource? =
             patternRoute || !document.productMetadata.patternArrays.isEmpty
                 ? .init(
@@ -10851,7 +10738,7 @@ extension Viewport {
                     ruler: workspaceRuler,
                     hasRoute: patternRoute,
                     replacementRequest: patternArrayCurvePathReplacementPreviewRequest,
-                    activeHandleIdentities: [
+                    activeHandleIdentities: nativePatternIdentities + [
                         activePatternArrayLinearAxisDrag.map { .patternArrayLinearAxis($0.target.identity) },
                         activePatternArrayRadialAngleDrag.map { .patternArrayRadialAngle($0.target.identity) },
                         activePatternArrayCopyCountDrag.map { .patternArrayCopyCount($0.target.identity) },
@@ -10862,7 +10749,7 @@ extension Viewport {
                     ].compactMap { $0 },
                     hoveredHandleIdentities: try hoveredSpatialHandleIdentity.map { [$0] } ?? [],
                     pendingHandleIdentities: try pendingSpatialHandleIdentity.map { [$0] } ?? [],
-                    activeLinearAxis: activePatternArrayLinearAxisDrag.map {
+                    activeLinearAxis: nativeLinearAxis ?? activePatternArrayLinearAxisDrag.map {
                         .init(sourceID: $0.target.sourceID, axisSlot: $0.target.axisSlot, distance: $0.distanceMeters)
                     },
                     activeRadialAngle: activePatternArrayRadialAngleDrag.map {
@@ -10877,12 +10764,12 @@ extension Viewport {
                     activeCurvePathPoint: activePatternArrayCurvePathPointDrag.map {
                         .init(sourceID: $0.target.sourceID, pointIndex: $0.target.pointIndex, point: $0.point)
                     },
-                    activeIndependentCopyExtrude: activeIndependentCopyExtrudeDistanceDrag.map {
+                    activeIndependentCopyExtrude: nativeIndependentExtrude ?? activeIndependentCopyExtrudeDistanceDrag.map {
                         .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
                               outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
                               distance: $0.distanceMeters / $0.target.valueScale)
                     },
-                    activeIndependentCopyDimension: activeIndependentCopyBodyDimensionDrag.map {
+                    activeIndependentCopyDimension: nativeIndependentDimension ?? activeIndependentCopyBodyDimensionDrag.map {
                         .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
                               outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
                               kind: $0.target.kind, value: $0.valueMeters / $0.target.valueScale)

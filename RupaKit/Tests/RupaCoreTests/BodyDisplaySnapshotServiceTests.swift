@@ -61,6 +61,23 @@ import SwiftCAD
     #expect(snapshot.topology.faces.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
     #expect(snapshot.topology.edges.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
     #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.generatedTopologySubshapeID != nil })
+
+    // Every drawn triangle of a prepared body is named by exactly one run, in
+    // emission order and with no gap. A gap would make a native hit on that
+    // triangle a truthful miss, which for a fully prepared body means a hit the
+    // viewport silently loses, so the partition is asserted rather than the
+    // count alone.
+    let meshFaceRuns = snapshot.topology.meshFaceRuns
+    #expect(meshFaceRuns.count == 6)
+    #expect(Set(meshFaceRuns.map(\.componentID)) == Set(snapshot.topology.faces.map(\.componentID)))
+    #expect(meshFaceRuns.allSatisfy { $0.triangleRange.isEmpty == false })
+    #expect(meshFaceRuns.first?.triangleRange.lowerBound == 0)
+    #expect(meshFaceRuns.last?.triangleRange.upperBound == snapshot.mesh.indices.count / 3)
+    #expect(
+        zip(meshFaceRuns, meshFaceRuns.dropFirst()).allSatisfy {
+            $0.triangleRange.upperBound == $1.triangleRange.lowerBound
+        }
+    )
 }
 
 @MainActor

@@ -134,6 +134,15 @@ flowchart LR
 9. The adapter returns immutable values only. Core stages them through the
    existing geometry-source command and Project owns atomic publication,
    cancellation, revision checks, undo/redo, and package persistence.
+10. Swift-CAD triangle order is the converted mesh face identity. The universal
+    source conversion names the *n*-th Swift-CAD triangle `MeshFaceID(n)`,
+    which is what lets a later native hit be resolved back to the CAD face that
+    generated the drawn triangle without a second geometric test. The converter
+    checks the identity the builder returned for every triangle and reports a
+    divergence as `faceIdentityMismatch`; it never renumbers, because a repaired
+    order would resolve hits to the wrong CAD face. This module records no CAD
+    face identity of its own: the face provenance itself travels with the
+    evaluated document, and the ordering agreement is all this boundary owes it.
 
 ## Runtime Flows
 
@@ -178,5 +187,8 @@ the lowered ceiling and refuses an exhausted request before the kernel is
 entered, a cached artifact the current allowance no longer admits is refused
 without a second evaluation, exhaustion and cancellation stay typed and
 distinct from an unrelated failure, and failure or cancellation publishes no
-partial cache entry. Changes require rechecking RupaEvaluation, RupaKit
+partial cache entry. `Tests/RupaCADIntegrationTests/CADGeometrySourceProviderTests.swift`
+additionally proves the converted source names the *n*-th Swift-CAD triangle
+`MeshFaceID(n)`, which is the ordering the viewport's CAD face resolution reads.
+Changes require rechecking RupaEvaluation, RupaKit
 composition, RupaProject staging, and Swift-CAD tessellation contracts.

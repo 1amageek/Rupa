@@ -54,11 +54,31 @@ final class MeshSourcePresentationPlanCache {
     }
 
     func hasReadyCamera(for identity: RealityViewportPreparationRequest.Identity, revision: UInt64) -> Bool {
-        surface(for: identity)?.isCameraReady(revision: revision) == true
+        queryAuthority(for: identity)?.isCameraReady(revision: revision) == true
     }
 
-    /// Queries only the exact-ready surface for `identity`. A retained
-    /// display-only surface is intentionally not a query authority.
+    /// The frame a query for `identity` resolves against.
+    ///
+    /// A pointer can only have addressed pixels that were drawn, so the frame
+    /// the view mounted answers for it. That is the exact-ready frame once this
+    /// identity is prepared, and otherwise the mounted frame the display is
+    /// still showing for the same scene and snapshot, whose ordered handle
+    /// indexes name its own prepared record table. A recorded failure for this
+    /// identity keeps the display but withdraws its authority, and a changed
+    /// scene or snapshot withdraws both.
+    private func queryAuthority(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
+        switch state {
+        case let .ready(current, _, surface) where current == identity:
+            return surface
+        case let .failed(current, _) where current == identity:
+            return nil
+        default:
+            return displaySurface(for: identity)
+        }
+    }
+
+    /// Queries the frame mounted for `identity`, never a frame drawn for a
+    /// different scene or snapshot.
     func surfaceHit(
         at point: CGPoint,
         for identity: RealityViewportPreparationRequest.Identity,
@@ -67,7 +87,7 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).surfaceHit(at: point, revision: revision)
     }
 
-    /// Resolves the native priority order without granting display-only frames authority.
+    /// Resolves the native priority order the mounted frame drew.
     func interactionRecords(
         at point: CGPoint,
         for identity: RealityViewportPreparationRequest.Identity,
@@ -173,11 +193,9 @@ final class MeshSourcePresentationPlanCache {
     }
 
     private func querySurface(for identity: RealityViewportPreparationRequest.Identity) throws -> RealityViewport {
+        if case let .failed(current, error) = state, current == identity { throw error }
+        if let surface = queryAuthority(for: identity) { return surface }
         switch state {
-        case let .ready(current, _, surface) where current == identity:
-            return surface
-        case let .failed(current, error) where current == identity:
-            throw error
         case .idle:
             throw queryFailure("The native surface query is unavailable before preparation.")
         case .preparing:
@@ -197,7 +215,7 @@ final class MeshSourcePresentationPlanCache {
     ) throws -> ViewportMeshElementHit? {
         let surface = try querySurface(for: identity)
         let pointerHit = try surface.surfaceHit(at: point, revision: revision)
-        guard let current, current.identity == identity, let plan = current.plan else { return nil }
+        guard let current, current.surface === surface, let plan = current.plan else { return nil }
         return try MeshSourcePresentationMeshElementResolver.resolve(
             at: point, domain: domain, in: plan,
             project: { try self.project($0, for: identity, revision: revision) },
@@ -209,8 +227,11 @@ final class MeshSourcePresentationPlanCache {
     }
 
 
-    /// Retains a complete display during an overlay-only replacement. This is
-    /// not a query authority: handles and CAD queries still require exact readiness.
+    /// The complete frame retained through an overlay-only replacement.
+    ///
+    /// Display and queries share this rule so the two cannot disagree about
+    /// which frame the viewport is showing. Only the overlay revision may
+    /// differ; a changed scene or snapshot withdraws it.
     func displaySurface(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
         guard let requested = state.identity,
               requested.scene == identity.scene, requested.snapshotID == identity.snapshotID,
@@ -220,7 +241,7 @@ final class MeshSourcePresentationPlanCache {
     }
 
     func interactionRecord(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialInteractionRecord? {
-        guard case let .ready(readyIdentity, _, surface) = state, readyIdentity == identity,
+        guard let surface = queryAuthority(for: identity),
               let current, current.surface === surface,
               Int(index) < current.interactionRecords.count else { return nil }
         return current.interactionRecords[Int(index)]

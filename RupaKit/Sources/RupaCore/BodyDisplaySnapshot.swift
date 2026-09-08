@@ -121,18 +121,42 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
             }
         }
 
+        /// The contiguous mesh triangles one CAD face generated.
+        ///
+        /// `triangleRange` indexes the triangles of this snapshot's `mesh`, which
+        /// the universal mesh source preserves one-for-one as `MeshFaceID` raw
+        /// values. A native hit therefore resolves to `componentID` by finding
+        /// the run that contains the hit triangle, with no projection or
+        /// polygon test of its own.
+        ///
+        /// This list is independent of `faces`: `faces` carries the outer-loop
+        /// polygon a legacy CPU hit test needs and omits a face without one,
+        /// while a run needs no polygon and describes the drawn triangles.
+        public struct MeshFaceRun: Codable, Equatable, Sendable {
+            public var componentID: SelectionComponentID
+            public var triangleRange: Range<Int>
+
+            public init(componentID: SelectionComponentID, triangleRange: Range<Int>) {
+                self.componentID = componentID
+                self.triangleRange = triangleRange
+            }
+        }
+
         public var faces: [Face]
         public var edges: [Edge]
         public var vertices: [Vertex]
+        public var meshFaceRuns: [MeshFaceRun]
 
         public init(
             faces: [Face] = [],
             edges: [Edge] = [],
-            vertices: [Vertex] = []
+            vertices: [Vertex] = [],
+            meshFaceRuns: [MeshFaceRun] = []
         ) {
             self.faces = faces
             self.edges = edges
             self.vertices = vertices
+            self.meshFaceRuns = meshFaceRuns
         }
     }
 

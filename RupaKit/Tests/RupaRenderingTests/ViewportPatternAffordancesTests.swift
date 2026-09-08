@@ -505,7 +505,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         switch start.offset {
         case .fixed(let offset):
             #expect(offset == .zero)
-        case .directed, .projected:
+        case .directed, .projected, .worldDirected:
             Issue.record("Pattern camera arrows must begin at the fixed world anchor.")
         }
         switch tip.offset {
@@ -513,7 +513,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
             #expect(minimumLength == 76)
             #expect(parallel == 0)
             #expect(perpendicular == 0)
-        case .directed, .fixed:
+        case .directed, .fixed, .worldDirected:
             Issue.record("Pattern camera arrow tips must use projected native placement.")
         }
     } else {
@@ -605,14 +605,14 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 0)
         #expect(perpendicular == 24)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("The curve copy-count perpendicular guide must use directed placement.")
     }
     switch copyCountGuide.points[2].offset {
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 56)
         #expect(perpendicular == 24)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("The curve copy-count terminal guide must use directed placement.")
     }
     let copyCountLabel = try #require(labels.first { $0.value.text == "Count 2" }).value
@@ -620,7 +620,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
     case .directed(_, let parallel, let perpendicular):
         #expect(parallel == 66)
         #expect(perpendicular == 44)
-    case .fixed, .projected:
+    case .fixed, .projected, .worldDirected:
         Issue.record("The curve copy-count label must use the terminal directed guide offset.")
     }
     for prefix in ["Angle", "Extent"] {
@@ -629,7 +629,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         case .directed(_, let parallel, let perpendicular):
             #expect(parallel == 64)
             #expect(perpendicular == -10)
-        case .fixed, .projected:
+        case .fixed, .projected, .worldDirected:
             Issue.record("Pattern \(prefix.lowercased()) labels must use strict point-space offsets.")
         }
     }
