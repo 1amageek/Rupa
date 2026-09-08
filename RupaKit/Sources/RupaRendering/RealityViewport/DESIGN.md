@@ -170,9 +170,10 @@ only the newest additional pending request is retained, as engine-neutral
 values, until the active worker exits.
 
 `RealityViewport` stores the surface plan, material programs, immutable
-visual/line `MeshResource` and `ShapeResource` values together in one optional
-private `SurfaceResources` record. Frame Entities, mutable appearance, bounds,
-and provenance attachment remain owned by each `RealityViewport`. `nil` means
+visual/line `MeshResource` and `ShapeResource` values, and the admitted
+full-`Geometry` grouping dictionary together in one optional private
+`SurfaceResources` record. Frame Entities, mutable appearance, bounds, and
+provenance attachment remain owned by each `RealityViewport`. `nil` means
 no surface exists; camera, spatial resources, and the scene root still exist.
 An empty non-optional surface plan also produces no `SurfaceResources`, while
 its real snapshot identity remains in the preparation identity. Appearance and
@@ -187,16 +188,26 @@ candidate shares those resource identities while constructing distinct frame
 Entities and provenance attachment. It does not rerun surface-plan traversal,
 custom-material program generation, mesh upload, or collision generation. The
 shared record remains retained by the current/candidate ownership pair and is
-released when neither owns it. A source-snapshot change never reuses it. This is
-reuse inside the existing cache lifecycle, not an additional cache or
-allocation lane; native objects never become producer input or leave their
-declared isolation.
-While that candidate is preparing, the current complete root remains enabled
+released when neither owns it. Across a source-snapshot change the old frame is
+synchronously withdrawn from display and query authority, but the same cache
+worker may privately borrow its immutable material programs and group resources
+while preparing the replacement. Off-main grouping uses the retained dictionary
+and full `Geometry` equality; a hash alone is never resource identity. The new
+plan, provenance, bounds, frame Entities, appearance, and spatial resources
+always belong to the replacement generation. This is reuse inside the existing
+cache lifecycle, not an additional cache, history, allocation lane, or worker;
+native objects never become producer input or leave their declared isolation.
+During an overlay-only replacement, the current complete root remains enabled
 as display-only continuity. Its old spatial entities may remain visible, but
 their native handle indices have no CAD meaning without the cache's exact-ready
 identity table, and no CAD input path may query them. A typed overlay failure
 keeps that display-only root and reports the failure. Source/snapshot
-replacement and teardown still withdraw it immediately.
+replacement and teardown still withdraw the old frame immediately. A terminal
+source-replacement failure, rejection, or teardown releases the privately
+retained old owner. Superseding cancellation may retain that one old owner for
+the newest pending request, but releases the cancelled candidate. Successful
+publication retains only the replacement owner, whose
+shared resources confer no old provenance or input authority.
 
 The spatial-overlay seam remains internal to this component. An immutable
 `RealityViewportSpatialBatch` carries finite world polylines, indexed triangles,
@@ -897,8 +908,11 @@ The worst case is one unique group per item. Exceeding the caller's lowered
 limit is `.resourceExhausted` before allocation. Payload backing buffers are
 not charged twice: all occurrence Float positions, normals, boundary indices,
 and collision indices are already admitted, and grouping retains them through
-copy-on-write references. The grouping dictionary is discarded before native
-resource creation; SDK resource allocations remain count-bounded and opaque.
+copy-on-write references. The grouping dictionary is retained by the surface
+owner for the next single candidate. Its key/value buckets and record strides
+are already covered by the grouping reservation, while its `Geometry` payloads
+share the already-admitted buffers through copy-on-write. SDK resource
+allocations remain count-bounded and opaque.
 
 The optional surface record and spatial batch consume one shared count/byte
 admission. An empty or absent surface contributes no invented resource charge,
@@ -907,7 +921,9 @@ its first allocation. At most one current native owner and one candidate may be
 retained; the newest pending request contains no native resource. When current
 and candidate share one `SurfaceResources` record, its immutable application
 buffers and native resource identities are charged once rather than presented
-as two independent allocations.
+as two independent allocations. Different snapshots may share only matching
+native resource references; each still owns its admitted dictionary, plan,
+instances, and frame state, and the pending value retains no native resource.
 
 The maximum single native line-upload fixture is derived from the current
 hard plan limits rather than selected from a representative model. For one

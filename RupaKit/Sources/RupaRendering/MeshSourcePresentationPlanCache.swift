@@ -180,7 +180,9 @@ final class MeshSourcePresentationPlanCache {
     /// Retains a complete display during an overlay-only replacement. This is
     /// not a query authority: handles and CAD queries still require exact readiness.
     func displaySurface(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
-        guard let current, current.identity.scene == identity.scene,
+        guard let requested = state.identity,
+              requested.scene == identity.scene, requested.snapshotID == identity.snapshotID,
+              let current, current.identity.scene == identity.scene,
               current.identity.snapshotID == identity.snapshotID else { return nil }
         return current.surface
     }
@@ -223,7 +225,8 @@ final class MeshSourcePresentationPlanCache {
         self.requestID = requestID
         if displaySurface(for: request.identity) == nil {
             current?.surface.invalidateCamera()
-            current = nil
+            // Retain only immutable asset reuse through the existing worker.
+            // Display and queries still reject this old frame identity.
         }
         state = .preparing(identity: request.identity)
         if buildTask != nil {
@@ -382,6 +385,7 @@ final class MeshSourcePresentationPlanCache {
                 self.current = prepared
                 state = .ready(identity: identity, plan: prepared.plan, surface: prepared.surface)
             case let .failure(error):
+                if displaySurface(for: identity) == nil { self.current = nil }
                 state = .failed(identity: identity, error: error)
             }
         }

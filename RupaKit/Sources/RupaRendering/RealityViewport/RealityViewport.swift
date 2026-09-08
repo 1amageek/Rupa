@@ -90,6 +90,7 @@ final class RealityViewport {
     private struct GeometryGroupRecord: Sendable {
         let geometry: Geometry
         let visualIndices: [UInt32]
+        let reusedResourceIndex: Int?
     }
 
     private struct GeometryInstanceRecord: Sendable {
@@ -100,6 +101,7 @@ final class RealityViewport {
     private struct GeometryGrouping: Sendable {
         let groups: [GeometryGroupRecord]
         let instances: [GeometryInstanceRecord]
+        let groupByGeometry: [Geometry: Int]
     }
 
     /// Native resource references are retained once per unique geometry group.
@@ -115,6 +117,7 @@ final class RealityViewport {
         let plan: MeshSourcePresentationRenderPlan
         let materials: RealityViewportMaterial
         let resources: [NativeResourceReference]
+        let groupByGeometry: [Geometry: Int]
         let instances: [GeometryInstanceRecord]
         let bounds: BoundingBox
     }
@@ -168,7 +171,8 @@ final class RealityViewport {
                 prepared.surfaceResources = resources
             } else {
                 prepared.surfaceResources = try await prepared.prepareSurface(
-                    plan: plan, retainedByteCount: spatialBatch?.admittedByteCount ?? plan.retainedByteCount)
+                    plan: plan, retainedByteCount: spatialBatch?.admittedByteCount ?? plan.retainedByteCount,
+                    reusing: previous?.surfaceResources)
             }
             try prepared.attachSurfaces()
         }
@@ -188,7 +192,8 @@ final class RealityViewport {
         return prepared
     }
 
-    private func prepareSurface(plan: MeshSourcePresentationRenderPlan, retainedByteCount: Int) async throws -> SurfaceResources {
+    private func prepareSurface(plan: MeshSourcePresentationRenderPlan, retainedByteCount: Int,
+                                reusing previous: SurfaceResources?) async throws -> SurfaceResources {
         // The plan admits all owned Float position, face-normal, boundary, and collision
         // input arrays before this first native allocation. SDK-owned mesh,
         // collision, and program memory is bounded by admitted geometry/resource
@@ -197,14 +202,21 @@ final class RealityViewport {
             occurrences: plan.occurrences,
             origin: renderOrigin,
             retainedByteCount: retainedByteCount,
-            nativePreparationByteLimit: plan.nativePreparationByteLimit
+            nativePreparationByteLimit: plan.nativePreparationByteLimit,
+            previousGroups: previous?.groupByGeometry ?? [:]
         )
         try Task.checkCancellation()
-        let materials = try await RealityViewportMaterial()
+        let materials: RealityViewportMaterial
+        if let previous { materials = previous.materials }
+        else { materials = try await RealityViewportMaterial() }
         var nativeResources: [NativeResourceReference] = []
         nativeResources.reserveCapacity(grouping.groups.count)
         for (groupIndex, group) in grouping.groups.enumerated() {
             try Task.checkCancellation()
+            if let reusedIndex = group.reusedResourceIndex, let previous {
+                nativeResources.append(previous.resources[reusedIndex])
+                continue
+            }
             var descriptor = MeshDescriptor(name: "group.\(groupIndex)")
             descriptor.positions = MeshBuffers.Positions(group.geometry.positions)
             // Face-rate normals ask RealityKit to preserve hard CAD face boundaries.
@@ -241,6 +253,7 @@ final class RealityViewport {
             bounds.formUnion(BoundingBox(min: minimum, max: maximum))
         }
         return SurfaceResources(plan: plan, materials: materials, resources: nativeResources,
+                                groupByGeometry: grouping.groupByGeometry,
                                 instances: grouping.instances, bounds: bounds)
     }
 
@@ -294,7 +307,8 @@ final class RealityViewport {
         occurrences: [MeshSourcePresentationRenderPlan.Occurrence],
         origin: Point3D,
         retainedByteCount: Int,
-        nativePreparationByteLimit: Int
+        nativePreparationByteLimit: Int,
+        previousGroups: [Geometry: Int]
     ) async throws -> GeometryGrouping {
         try Task.checkCancellation()
         let reservation = try groupingReservation(occurrenceCount: occurrences.count)
@@ -324,13 +338,14 @@ final class RealityViewport {
             } else {
                 groupIndex = groups.count
                 groups.append(GeometryGroupRecord(geometry: payload.geometry,
-                                                  visualIndices: occurrence.vertexIndices))
+                                                  visualIndices: occurrence.vertexIndices,
+                                                  reusedResourceIndex: previousGroups[payload.geometry]))
                 groupByGeometry[payload.geometry] = groupIndex
             }
             instances.append(GeometryInstanceRecord(groupIndex: groupIndex,
                                                     translation: payload.translation))
         }
-        return GeometryGrouping(groups: groups, instances: instances)
+        return GeometryGrouping(groups: groups, instances: instances, groupByGeometry: groupByGeometry)
     }
 
     @concurrent

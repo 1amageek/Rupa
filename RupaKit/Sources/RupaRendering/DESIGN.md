@@ -261,6 +261,9 @@ independent tessellator is never an alternative implementation.
    cannot resolve CAD hits, handles, drags, selection mutations, or provenance
    for the requested identity. A source/snapshot change, teardown, or
    mismatched request exposes neither the prior display nor its authority.
+   The native child may reuse immutable resource content across source
+   snapshots under its [bounded resource lifetime](RealityViewport/DESIGN.md).
+   Such sharing does not reuse frame identity or any old query authority.
 3. Entity names, hierarchy, UUIDs, `MeshResource` identity, and collision
    shape identity are implementation details. Stable occurrence, definition,
    representation, source, face, edge, vertex, sketch, and handle IDs remain
