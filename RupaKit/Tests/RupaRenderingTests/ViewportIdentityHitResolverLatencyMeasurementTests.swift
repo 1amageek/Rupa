@@ -38,15 +38,14 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
         var encodedCommandCount: Int
         var pixelCount: Int
         var resolverSeconds: Double
+        /// Everything the run spent outside `render(plan:viewportSize:)`: pick
+        /// index construction, cost estimation, and render plan building. Held
+        /// per run rather than derived from reduced intervals, because a
+        /// difference of independent medians is not a measurement of anything.
+        var planSeconds: Double
         var encodeSeconds: Double
         var gpuSeconds: Double
         var readbackSeconds: Double
-
-        /// Everything the resolver spends outside `render(plan:viewportSize:)`:
-        /// pick index construction, cost estimation, and render plan building.
-        var planSeconds: Double {
-            max(resolverSeconds - (encodeSeconds + gpuSeconds + readbackSeconds), 0.0)
-        }
 
         var description: String {
             String(
@@ -91,8 +90,8 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
             y: Self.viewportSize.height / 2.0
         )
 
-        // A cold resolver per run: this is the interval a hover pays the first
-        // time any camera or model change invalidates the cache key.
+        // An invalidated cache on a warmed resolver: this is the interval a
+        // hover pays the first time a camera or model change drops the key.
         let coldMiss = Self.measureColdMiss(
             label: "cold-miss",
             point: probePoint,
@@ -170,21 +169,24 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
 
     // MARK: - Measurement
 
-    /// Times a fresh resolver per run, so every run pays the full pick index,
-    /// render plan, GPU, and readback cost.
+    /// Times a cache miss on a resolver that has already built its renderer,
+    /// which is what the application pays: the resolver is view state, so the
+    /// `MTLDevice`, library, and pipeline are created once and every later
+    /// camera or model change invalidates only the cached buffer. A fresh
+    /// resolver per run would charge Metal object creation to plan building.
     private static func measureColdMiss(
         label: String,
         point: CGPoint,
         scene: ViewportScene,
         layout: ViewportLayout
     ) -> Sample {
-        median(
-            label: label,
-            runs: (0..<repeatCount).map { _ in
-                let resolver = ViewportIdentityHitResolver(renderBudget: .deviceCalibrated())
-                return run(resolver: resolver, point: point, scene: scene, layout: layout)
-            }
-        )
+        let resolver = ViewportIdentityHitResolver(renderBudget: .deviceCalibrated())
+        _ = run(resolver: resolver, point: point, scene: scene, layout: layout)
+        let runs = (0..<repeatCount).map { _ -> Sample in
+            resolver.invalidate()
+            return run(resolver: resolver, point: point, scene: scene, layout: layout)
+        }
+        return median(label: label, runs: runs)
     }
 
     /// Times repeated queries against one warmed resolver, where the cache key
@@ -201,6 +203,7 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
         _ = run(resolver: resolver, point: point, scene: scene, layout: layout)
         let runs = (0..<repeatCount).map { _ in
             var sample = run(resolver: resolver, point: point, scene: scene, layout: layout)
+            sample.planSeconds = sample.resolverSeconds
             sample.encodeSeconds = 0.0
             sample.gpuSeconds = 0.0
             sample.readbackSeconds = 0.0
@@ -221,21 +224,28 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
         let elapsed = clock.now - start
         let summary = resolver.lastResolutionSummary
         let metrics = summary?.renderMetrics
+        let resolverSeconds = seconds(elapsed)
+        let renderSeconds = (metrics?.encodeDurationSeconds ?? 0.0)
+            + (metrics?.gpuDurationSeconds ?? 0.0)
+            + (metrics?.readbackDurationSeconds ?? 0.0)
         return Sample(
             label: "",
             status: summary?.status,
             drawItemCount: summary?.renderCost?.drawItemCount ?? 0,
             encodedCommandCount: metrics?.encodedCommandCount ?? 0,
             pixelCount: summary?.renderCost?.pixelCount ?? 0,
-            resolverSeconds: seconds(elapsed),
+            resolverSeconds: resolverSeconds,
+            planSeconds: max(resolverSeconds - renderSeconds, 0.0),
             encodeSeconds: metrics?.encodeDurationSeconds ?? 0.0,
             gpuSeconds: metrics?.gpuDurationSeconds ?? 0.0,
             readbackSeconds: metrics?.readbackDurationSeconds ?? 0.0
         )
     }
 
-    /// Each interval is reduced independently, so the reported intervals do not
-    /// have to come from the same run and are not expected to sum to the total.
+    /// Each interval is reduced independently, so the reported intervals come
+    /// from different runs and are not expected to sum to the reported total.
+    /// Plan time is reduced as a per-run measurement rather than derived from
+    /// the other medians, so it stays a real interval of a real run.
     private static func median(label: String, runs: [Sample]) -> Sample {
         precondition(runs.isEmpty == false)
         let representative = runs[runs.count / 2]
@@ -246,6 +256,7 @@ struct ViewportIdentityHitResolverLatencyMeasurements {
             encodedCommandCount: representative.encodedCommandCount,
             pixelCount: representative.pixelCount,
             resolverSeconds: median(runs.map(\.resolverSeconds)),
+            planSeconds: median(runs.map(\.planSeconds)),
             encodeSeconds: median(runs.map(\.encodeSeconds)),
             gpuSeconds: median(runs.map(\.gpuSeconds)),
             readbackSeconds: median(runs.map(\.readbackSeconds))
