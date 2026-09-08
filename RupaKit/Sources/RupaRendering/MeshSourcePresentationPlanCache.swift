@@ -88,6 +88,14 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).project(point, revision: revision)
     }
 
+    func projectWithinDepthRange(
+        _ point: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> CGPoint {
+        try querySurface(for: identity).projectWithinDepthRange(point, revision: revision)
+    }
+
     /// Resolves a world plane through the exact-ready native camera owned by
     /// `identity`. The cache validates preparation identity before any native
     /// query so retained display surfaces cannot acquire input authority.

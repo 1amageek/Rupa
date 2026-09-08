@@ -940,6 +940,25 @@ final class RealityViewport {
         return projected
     }
 
+    /// Admits a world point against the mounted camera's depth interval only;
+    /// screen containment, section clipping and occlusion are separate queries.
+    func projectWithinDepthRange(_ point: Point3D, revision: UInt64) throws -> CGPoint {
+        try validateCameraQuery(point: .zero, revision: revision)
+        let local = SIMD3<Float>(
+            Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y),
+            Float(point.z - renderOrigin.z)
+        )
+        let depth = -camera.convert(position: local, from: nil).z
+        let near = camera.components[OrthographicCameraComponent.self]?.near
+            ?? camera.components[PerspectiveCameraComponent.self]?.near
+        let far = camera.components[OrthographicCameraComponent.self]?.far
+            ?? camera.components[PerspectiveCameraComponent.self]?.far
+        guard let near, let far, depth.isFinite, depth >= near, depth <= far else {
+            throw Self.queryFailure("The world point is outside the native camera depth range.")
+        }
+        return try project(point, revision: revision)
+    }
+
     /// Intersects a screen point with a world plane using the exact mounted
     /// native camera calibration. The returned point is in CAD world space;
     /// native scene coordinates remain relative to `renderOrigin` internally.

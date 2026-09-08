@@ -83,15 +83,20 @@ struct ViewportMeasurementResolver: Sendable {
     init() {}
 
     func resolve(
-        at point: CGPoint,
-        layout: ViewportLayout,
         effectivePlane: SketchPlane?,
         snap: ViewportSnapResolution?,
-        presentationHit: ViewportMeasurementPresentationHit?
+        presentationHit: ViewportMeasurementPresentationHit?,
+        planeIntersection: (SketchPlane) throws -> Point3D,
+        validateWorldPoint: (Point3D) throws -> Void
     ) -> ViewportMeasurementResolution {
         if let failure = snap?.failureDescription {
-            var fallback = resolve(at: point, layout: layout, effectivePlane: effectivePlane,
-                                   snap: nil, presentationHit: presentationHit)
+            var fallback = resolve(
+                effectivePlane: effectivePlane,
+                snap: nil,
+                presentationHit: presentationHit,
+                planeIntersection: planeIntersection,
+                validateWorldPoint: validateWorldPoint
+            )
             fallback.warning = ViewportMeasurementResolutionFailure.snapFailed(failure).message
             return fallback
         }
@@ -101,8 +106,13 @@ struct ViewportMeasurementResolver: Sendable {
                 guard worldPoint.isFinite else {
                     return ViewportMeasurementResolution(endpoint: nil, failure: .nonFiniteEndpoint)
                 }
-                guard layout.projectedPoint(worldPoint) != nil else {
-                    return ViewportMeasurementResolution(endpoint: nil, failure: .pointBehindPerspectiveCamera)
+                do {
+                    try validateWorldPoint(worldPoint)
+                } catch {
+                    return ViewportMeasurementResolution(
+                        endpoint: nil,
+                        failure: Self.failure(for: error)
+                    )
                 }
                 return ViewportMeasurementResolution(
                     endpoint: ViewportMeasurementEndpoint(
@@ -118,6 +128,14 @@ struct ViewportMeasurementResolver: Sendable {
                    plane: effectivePlane
                ),
                worldPoint.isFinite {
+                do {
+                    try validateWorldPoint(worldPoint)
+                } catch {
+                    return ViewportMeasurementResolution(
+                        endpoint: nil,
+                        failure: Self.failure(for: error)
+                    )
+                }
                 return ViewportMeasurementResolution(
                     endpoint: ViewportMeasurementEndpoint(
                         point: worldPoint,
@@ -127,8 +145,10 @@ struct ViewportMeasurementResolver: Sendable {
             }
         }
 
-        if let presentationHit,
-           presentationHit.point.isFinite {
+        if let presentationHit {
+            guard presentationHit.point.isFinite else {
+                return ViewportMeasurementResolution(endpoint: nil, failure: .nonFiniteEndpoint)
+            }
             return ViewportMeasurementResolution(
                 endpoint: ViewportMeasurementEndpoint(
                     point: presentationHit.point,
@@ -143,58 +163,30 @@ struct ViewportMeasurementResolver: Sendable {
                 failure: .noConstructionPlane
             )
         }
-        guard let ray = layout.viewportRay(for: point) else {
-            return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .viewRayUnavailable
-            )
-        }
-        let coordinateSystem: SketchPlaneCoordinateSystem
         do {
-            coordinateSystem = try SketchPlaneCoordinateSystem(plane: effectivePlane)
+            let worldPoint = try planeIntersection(effectivePlane)
+            guard worldPoint.isFinite else {
+                return ViewportMeasurementResolution(endpoint: nil, failure: .nonFiniteEndpoint)
+            }
+            return ViewportMeasurementResolution(
+                endpoint: ViewportMeasurementEndpoint(
+                    point: worldPoint,
+                    source: .constructionPlane(effectivePlane)
+                )
+            )
         } catch {
             return ViewportMeasurementResolution(
                 endpoint: nil,
-                failure: .viewRayUnavailable
+                failure: Self.failure(for: error)
             )
         }
-        let denominator = ray.direction.dot(coordinateSystem.normal)
-        guard denominator.isFinite, abs(denominator) > 1.0e-12 else {
-            return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .viewRayParallelToPlane
-            )
+    }
+
+    private static func failure(for error: Error) -> ViewportMeasurementResolutionFailure {
+        if let failure = error as? ViewportMeasurementResolutionFailure {
+            return failure
         }
-        let distance = (coordinateSystem.origin - ray.origin).dot(coordinateSystem.normal)
-            / denominator
-        guard distance.isFinite else {
-            return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .nonFiniteEndpoint
-            )
-        }
-        if case .perspective = layout.projection, distance < 0.0 {
-            return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .pointBehindPerspectiveCamera
-            )
-        }
-        let worldPoint = ray.origin + ray.direction * distance
-        guard worldPoint.isFinite else {
-            return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .nonFiniteEndpoint
-            )
-        }
-        guard layout.projectedPoint(worldPoint) != nil else {
-            return ViewportMeasurementResolution(endpoint: nil, failure: .pointBehindPerspectiveCamera)
-        }
-        return ViewportMeasurementResolution(
-            endpoint: ViewportMeasurementEndpoint(
-                point: worldPoint,
-                source: .constructionPlane(effectivePlane)
-            )
-        )
+        return .presentationUnavailable(error.localizedDescription)
     }
 
     private func planarSnapPoint(

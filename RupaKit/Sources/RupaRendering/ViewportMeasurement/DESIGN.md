@@ -18,8 +18,10 @@ acceptance rather than activation of a second renderer.
 
 The component owns measurement endpoint resolution, endpoint snap provenance,
 the idle/anchored/completed interaction state, Euclidean world-space distance,
-and bounded screen-space ruler placement descriptors. It receives the mounted
-native camera's synchronous project closure and projects one selected
+and bounded screen-space ruler placement descriptors. Endpoint resolution
+receives the mounted native camera's synchronous exact-ready surface, plane,
+and depth-admitted point-projection queries. Ruler placement separately receives
+the synchronous unrestricted native project closure and projects one selected
 occurrence's immutable evaluated world bounds into at most three World X/Y/Z
 native RealityKit rulers. Formatting occurs before camera updates; the layout
 receives the three already formatted axis labels.
@@ -39,7 +41,7 @@ component's non-spatial status.
 |---|---|---|---|---|
 | [RupaRendering](../DESIGN.md) | parent | RealityKit frame, native camera queries, ready-scene and cancellation lifecycle | Composes the component into the current viewport. | Measurement must run before ordinary affordance and object-pick interception. |
 | [RupaUI](../../RupaUI/DESIGN.md) | used by | Active mode and visible transient status | Selects the tool without acquiring geometry authority. | Tool exit and authority change cancel transient measurement. |
-| [RupaViewportScene](../../RupaViewportScene/DESIGN.md) | depends on | `ViewportLayout` projection and view ray | Resolves and projects world points in either lens. | A camera projection changes only screen placement, never the measured value. |
+| [RupaViewportScene](../../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snap inputs | Supplies source values without owning the live measurement ray or projection; those queries remain with [RealityViewport](../RealityViewport/DESIGN.md). | A camera projection changes only screen placement, never the measured value. |
 | [RupaCore](../../RupaCore/DESIGN.md) | depends on | Existing `SnapResolver`, `SnapResolutionResult`, ruler and immutable selection | Reuses current snap policy and source provenance. | A snap failure is visible and is not replaced by guessed depth. |
 | [Rendering tests](../../../Tests/RupaRenderingTests) | verification owner | Interaction, resolution, geometry and native spatial behavior | Rejects stale, ambiguous, occluding, or screen-distance implementations. | CPU/build success alone does not prove the signed-App input workflow. |
 

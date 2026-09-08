@@ -1870,78 +1870,67 @@ public struct Viewport: View {
     }
 
     private func measurementEndpoint(
-        at point: CGPoint,
-        size: CGSize
+        at point: CGPoint
     ) -> ViewportMeasurementResolution {
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        let layout = sceneContext.layout
-        let presentationHit: ViewportMeasurementPresentationHit?
         do {
-            presentationHit = try presentationSurfaceHit(at: point).map {
+            let identity = try presentationQueryIdentity()
+            let revision = activeControlSession.revision
+            let presentationHit = try presentationPlanCache.surfaceHit(
+                at: point, for: identity, revision: revision
+            ).map {
                 ViewportMeasurementPresentationHit(point: $0.point, occurrenceID: $0.triangle.occurrenceID)
             }
+            let effectivePlane = activeMeasurementPlane
+            // Snap and plane fallback consume the same native intersection.
+            // A plane failure does not invalidate a valid surface hit.
+            let planeInput: Result<(world: Point3D, local: Point2D), Error>? = effectivePlane.map { plane in
+                Result {
+                    let coordinates = try SketchPlaneCoordinateSystem(plane: plane)
+                    let world = try presentationPlanCache.worldPlaneIntersection(
+                        at: point, planeOrigin: coordinates.origin, planeNormal: coordinates.normal,
+                        for: identity, revision: revision
+                    )
+                    _ = try presentationPlanCache.projectWithinDepthRange(
+                        world, for: identity, revision: revision
+                    )
+                    return (world, coordinates.project(world).point)
+                }
+            }
+            let snapQuery: ViewportSnapQuery?
+            if case .success(let input)? = planeInput {
+                snapQuery = ViewportSnapQuery(point: input.local)
+            } else {
+                snapQuery = nil
+            }
+            let snap = ViewportSnapResolutionService().resolution(
+                for: snapQuery, document: document, ruler: workspaceRuler,
+                options: snapResolutionOptions, modifierFlags: modifierFlags
+            )
+            return ViewportMeasurementResolver().resolve(
+                effectivePlane: effectivePlane, snap: snap, presentationHit: presentationHit,
+                planeIntersection: { _ in
+                    guard let planeInput else {
+                        throw ViewportMeasurementResolutionFailure.noConstructionPlane
+                    }
+                    return try planeInput.get().world
+                },
+                validateWorldPoint: { world in
+                    _ = try presentationPlanCache.projectWithinDepthRange(
+                        world, for: identity, revision: revision
+                    )
+                }
+            )
         } catch {
             return ViewportMeasurementResolution(
-                endpoint: nil,
-                failure: .presentationUnavailable(error.localizedDescription)
+                endpoint: nil, failure: .presentationUnavailable(error.localizedDescription)
             )
-        }
-        let effectivePlane = activeMeasurementPlane
-        let snapQueryPoint = measurementSnapQueryPoint(
-            at: point,
-            layout: layout,
-            effectivePlane: effectivePlane
-        )
-        let snap = ViewportSnapResolutionService().resolution(
-            for: snapQueryPoint.map { ViewportSnapQuery(point: $0) },
-            document: document,
-            ruler: workspaceRuler,
-            options: snapResolutionOptions,
-            modifierFlags: modifierFlags
-        )
-        return ViewportMeasurementResolver().resolve(
-            at: point,
-            layout: layout,
-            effectivePlane: effectivePlane,
-            snap: snap,
-            presentationHit: presentationHit
-        )
-    }
-
-    private func measurementSnapQueryPoint(
-        at point: CGPoint,
-        layout: ViewportLayout,
-        effectivePlane: SketchPlane?
-    ) -> Point2D? {
-        guard let effectivePlane, let ray = layout.viewportRay(for: point) else { return nil }
-        do {
-            let coordinateSystem = try SketchPlaneCoordinateSystem(plane: effectivePlane)
-            let denominator = ray.direction.dot(coordinateSystem.normal)
-            guard denominator.isFinite, abs(denominator) > 1.0e-12 else {
-                return nil
-            }
-            let distance = (coordinateSystem.origin - ray.origin).dot(coordinateSystem.normal)
-                / denominator
-            guard distance.isFinite else { return nil }
-            let worldPoint = ray.origin + ray.direction * distance
-            guard worldPoint.isFinite, layout.projectedPoint(worldPoint) != nil else { return nil }
-            return coordinateSystem.project(worldPoint).point
-        } catch {
-            // The endpoint resolver reports the invalid plane; do not query
-            // snapping in a different coordinate system.
-            return nil
         }
     }
 
     private func handleMeasurementClick(
-        at point: CGPoint,
-        size: CGSize
+        at point: CGPoint
     ) {
-        let resolution = measurementEndpoint(at: point, size: size)
+        let resolution = measurementEndpoint(at: point)
         if let endpoint = resolution.endpoint {
             measurementSession.click(endpoint)
         } else {
@@ -1954,13 +1943,12 @@ public struct Viewport: View {
     }
 
     private func handleMeasurementHover(
-        at point: CGPoint,
-        size: CGSize
+        at point: CGPoint
     ) {
         guard measurementSession.state.phase == .anchored else {
             return
         }
-        let resolution = measurementEndpoint(at: point, size: size)
+        let resolution = measurementEndpoint(at: point)
         measurementSession.hover(resolution.endpoint)
         if resolution.endpoint == nil {
             measurementSession.refuse(
@@ -13735,7 +13723,7 @@ public struct Viewport: View {
         selectionIntent: ViewportSelectionIntent
     ) {
         if measurementToolActive {
-            handleMeasurementClick(at: point, size: size)
+            handleMeasurementClick(at: point)
             return
         }
         if let pendingInteractionTarget {
@@ -15159,7 +15147,7 @@ public struct Viewport: View {
 
     private func hover(at point: CGPoint, size: CGSize) {
         if measurementToolActive {
-            handleMeasurementHover(at: point, size: size)
+            handleMeasurementHover(at: point)
             return
         }
         let sceneContext = makeSceneContext(

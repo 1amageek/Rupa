@@ -195,25 +195,27 @@ private func measurementInput(in view: NSView) -> ViewportInputSurface.InputView
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(1)))
-func viewportMeasurementInputRequiresMatchingNativeFrame() async throws {
+@Test(.timeLimit(.minutes(1)), arguments: [ViewportCameraProjection.parallel, .standardPerspective])
+func viewportMeasurementInputRequiresMatchingNativeFrame(projection: ViewportCameraProjection) async throws {
     _ = NSApplication.shared
     let document = DesignDocument.empty()
-    let control = ViewportControlSession(basis: .axisFront(.z))
+    let control = ViewportControlSession(camera: .init(projection: projection), basis: .isometric)
     let size = CGSize(width: 800, height: 600)
     var state = ViewportMeasurementState()
-    let viewport = Viewport(
+    var canvasPoint: Point2D?
+    func viewport(measuring: Bool) -> some View { Viewport(
         document: document,
         sourceIdentity: .document(id: document.id, generation: DocumentGeneration(1)),
         controlSession: control,
         workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
         objectSelectionIndex: .init(document: document, selection: .empty),
-        measurementToolActive: true,
+        measurementToolActive: measuring,
         measurementConstructionPlane: .xy,
         selectedPresentationHasExactCADContext: false,
+        onPick: { canvasPoint = $0.modelPoint },
         onMeasurementStateChange: { state = $0 }
-    ).frame(width: size.width, height: size.height)
-    let controller = NSHostingController(rootView: viewport)
+    ).frame(width: size.width, height: size.height) }
+    let controller = NSHostingController(rootView: viewport(measuring: false))
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
@@ -222,6 +224,13 @@ func viewportMeasurementInputRequiresMatchingNativeFrame() async throws {
     defer { window.contentViewController = nil; window.close() }
     let start = CGPoint(x: 390, y: 280)
     let end = CGPoint(x: 450, y: 300)
+    let canvasDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while canvasPoint == nil, ContinuousClock.now < canvasDeadline {
+        measurementInput(in: controller.view)?.onPick?(start, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let nativeStart = try #require(canvasPoint)
+    controller.rootView = viewport(measuring: true)
     let readyDeadline = ContinuousClock.now.advanced(by: .seconds(10))
     while state.start == nil, ContinuousClock.now < readyDeadline {
         measurementInput(in: controller.view)?.onPick?(start, size, .replace)
@@ -230,6 +239,9 @@ func viewportMeasurementInputRequiresMatchingNativeFrame() async throws {
     let inputView = try #require(measurementInput(in: controller.view))
     let acceptedStart = try #require(state.start)
     #expect(acceptedStart.source == .constructionPlane(.xy))
+    #expect(acceptedStart.point.isApproximatelyEqual(
+        to: Point3D(x: nativeStart.x, y: nativeStart.y, z: 0), tolerance: 1e-6
+    ))
 
     // Mutate the camera and invoke the production input callback before the
     // native host can apply the new revision on its next update.
@@ -249,6 +261,17 @@ func viewportMeasurementInputRequiresMatchingNativeFrame() async throws {
     #expect(state.phase == .completed)
     #expect(acceptedEnd.source == .constructionPlane(.xy))
     #expect(try #require(state.distanceMeters) > 0)
+    canvasPoint = nil
+    controller.rootView = viewport(measuring: false)
+    let endCanvasDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while canvasPoint == nil, ContinuousClock.now < endCanvasDeadline {
+        measurementInput(in: controller.view)?.onPick?(end, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let nativeEnd = try #require(canvasPoint)
+    #expect(acceptedEnd.point.isApproximatelyEqual(
+        to: Point3D(x: nativeEnd.x, y: nativeEnd.y, z: 0), tolerance: 1e-6
+    ))
 }
 #endif
 
@@ -267,25 +290,30 @@ func viewportMeasurementRefusalAndResetClearPreview() {
 }
 
 @Test
-func viewportMeasurementPlaneRayRoundTripsBothLenses() throws {
-    for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
-        let layout = ViewportLayout(
-            modelBounds: CGRect(x: -2, y: -2, width: 4, height: 4),
-            size: CGSize(width: 800, height: 600), camera: ViewportCamera(projection: projection),
-            basis: .isometric, verticalBounds: -2...2
-        )
-        let world = Point3D(x: 0.5, y: -0.25, z: 0)
-        let screen = try #require(layout.projectedPoint(world)).point
-        let resolved = ViewportMeasurementResolver().resolve(at: screen, layout: layout, effectivePlane: .xy,
-                                                            snap: nil, presentationHit: nil)
-        #expect(try #require(resolved.endpoint).point.isApproximatelyEqual(to: world, tolerance: 1.0e-9))
-        let failure = ViewportMeasurementResolver().resolve(at: screen, layout: layout, effectivePlane: .xy,
-            snap: ViewportSnapResolution(attemptedResolution: true, result: nil, failureDescription: "Invalid plane"),
-            presentationHit: nil)
-        #expect(failure.endpoint != nil)
-        #expect(failure.failure == nil)
-        #expect(failure.warning == "Snap failed: Invalid plane")
-    }
+func viewportMeasurementResolverPreservesPlanePointAndSnapFailureWarning() throws {
+    let world = Point3D(x: 0.5, y: -0.25, z: 0)
+    let resolved = ViewportMeasurementResolver().resolve(
+        effectivePlane: .xy,
+        snap: nil,
+        presentationHit: nil,
+        planeIntersection: { _ in world },
+        validateWorldPoint: { _ in }
+    )
+    #expect(try #require(resolved.endpoint).point.isApproximatelyEqual(to: world, tolerance: 1.0e-9))
+    let failure = ViewportMeasurementResolver().resolve(
+        effectivePlane: .xy,
+        snap: ViewportSnapResolution(
+            attemptedResolution: true,
+            result: nil,
+            failureDescription: "Invalid plane"
+        ),
+        presentationHit: nil,
+        planeIntersection: { _ in world },
+        validateWorldPoint: { _ in }
+    )
+    #expect(failure.endpoint != nil)
+    #expect(failure.failure == nil)
+    #expect(failure.warning == "Snap failed: Invalid plane")
 }
 
 private func measurementEndpoint(
@@ -314,24 +342,17 @@ func viewportMeasurementSessionRecomputesClickAndUsesWorldDistance() {
 
 @Test
 func viewportMeasurementResolverUsesPresentationBeforeConstructionPlane() throws {
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -2.0, y: -2.0, width: 4.0, height: 4.0),
-        size: CGSize(width: 800.0, height: 600.0),
-        basis: .isometric,
-        verticalBounds: -2.0...2.0
-    )
-    let point = try #require(layout.projectedPoint(Point3D(x: 0.5, y: 0.4, z: -0.2))).point
     let occurrenceID = SceneOccurrenceID(rawValue: "measurement.presentation")
     let presentation = ViewportMeasurementPresentationHit(
         point: Point3D(x: 0.5, y: 0.4, z: -0.2),
         occurrenceID: occurrenceID
     )
     let resolution = ViewportMeasurementResolver().resolve(
-        at: point,
-        layout: layout,
         effectivePlane: nil,
         snap: nil,
-        presentationHit: presentation
+        presentationHit: presentation,
+        planeIntersection: { _ in presentation.point },
+        validateWorldPoint: { _ in }
     )
 
     #expect(resolution.endpoint?.point == presentation.point)
@@ -340,18 +361,12 @@ func viewportMeasurementResolverUsesPresentationBeforeConstructionPlane() throws
 
 @Test
 func viewportMeasurementResolverRefusesMissingPlaneInsteadOfUsingWorldOrigin() throws {
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -2.0, y: -2.0, width: 4.0, height: 4.0),
-        size: CGSize(width: 800.0, height: 600.0),
-        basis: .isometric,
-        verticalBounds: -2.0...2.0
-    )
     let resolution = ViewportMeasurementResolver().resolve(
-        at: CGPoint(x: layout.fittingCenter.x + 20.0, y: layout.fittingCenter.y + 15.0),
-        layout: layout,
         effectivePlane: nil,
         snap: nil,
-        presentationHit: nil
+        presentationHit: nil,
+        planeIntersection: { _ in Point3D.origin },
+        validateWorldPoint: { _ in }
     )
 
     #expect(resolution.endpoint == nil)
@@ -360,12 +375,6 @@ func viewportMeasurementResolverRefusesMissingPlaneInsteadOfUsingWorldOrigin() t
 
 @Test
 func viewportMeasurementResolverRetainsSnapProvenanceAndReconstructsPlanePoint() throws {
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -2.0, y: -2.0, width: 4.0, height: 4.0),
-        size: CGSize(width: 800.0, height: 600.0),
-        basis: .isometric,
-        verticalBounds: -2.0...2.0
-    )
     let candidate = SnapCandidate(
         kind: .grid,
         point: Point2D(x: 1.25, y: -0.5),
@@ -384,15 +393,52 @@ func viewportMeasurementResolverRetainsSnapProvenanceAndReconstructsPlanePoint()
         failureDescription: nil
     )
     let resolution = ViewportMeasurementResolver().resolve(
-        at: layout.fittingCenter,
-        layout: layout,
         effectivePlane: .xy,
         snap: snap,
-        presentationHit: nil
+        presentationHit: nil,
+        planeIntersection: { _ in Point3D.origin },
+        validateWorldPoint: { _ in }
     )
 
     #expect(resolution.endpoint?.point == Point3D(x: 1.25, y: -0.5, z: 0.0))
     #expect(resolution.endpoint?.source == .snap(candidate))
+}
+
+@Test
+func viewportMeasurementResolverRefusesNativeSnapDepthFailureWithoutFallback() {
+    let candidate = SnapCandidate(
+        kind: .grid,
+        point: Point2D(x: 1.0, y: 2.0),
+        distanceMeters: 0.0,
+        label: "Grid"
+    )
+    let snapResult = SnapResolutionResult(
+        originalPoint: candidate.point,
+        resolvedPoint: candidate.point,
+        selectedCandidate: candidate,
+        candidates: [candidate]
+    )
+    let snap = ViewportSnapResolution(
+        attemptedResolution: true,
+        result: snapResult,
+        failureDescription: nil
+    )
+    let fallbackPresentation = ViewportMeasurementPresentationHit(
+        point: Point3D(x: 8.0, y: 9.0, z: 10.0),
+        occurrenceID: SceneOccurrenceID(rawValue: "measurement.depth-fallback")
+    )
+    let resolution = ViewportMeasurementResolver().resolve(
+        effectivePlane: .xy,
+        snap: snap,
+        presentationHit: fallbackPresentation,
+        planeIntersection: { _ in Point3D(x: -1.0, y: -1.0, z: 0.0) },
+        validateWorldPoint: { _ in
+            throw ViewportMeasurementResolutionFailure.pointBehindPerspectiveCamera
+        }
+    )
+
+    #expect(resolution.endpoint == nil)
+    #expect(resolution.failure == .pointBehindPerspectiveCamera)
 }
 
 @Test

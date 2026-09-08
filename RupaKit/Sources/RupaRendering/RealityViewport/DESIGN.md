@@ -716,6 +716,16 @@ of screen-baked dashes.
    to no result only at its explicitly nonauthoritative compatibility boundary;
    it does not weaken the native query contract.
 
+   Baseline `project(_:revision:)` remains an unrestricted finite native
+   projection and may return a finite screen point for a world point behind the
+   eye. `projectWithinDepthRange(_:revision:)` is the point-admission query: it
+   converts through the same mounted camera, requires `-localZ` within the
+   active orthographic or perspective component's native near/far interval, and
+   only then delegates to the baseline projection. It does not claim viewport
+   XY containment, section visibility, occlusion, or collision visibility.
+   Measurement snap validation uses this depth-admitted query; ruler and
+   projection baselines retain the unrestricted query.
+
    Native collision uses `Scene.raycast` with that composed scene-space ray,
    `.all`, and the existing collision mask. Its required finite positive length
    is the representable Float value of

@@ -110,6 +110,26 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
         let resolved = try #require(planePoint)
         #expect(resolved.isApproximatelyEqual(to: anchor, tolerance: 1e-4))
 
+        #expect(try viewport.projectWithinDepthRange(anchor, revision: 1) == projected)
+        let near = try #require(viewport.camera.components[OrthographicCameraComponent.self]?.near
+            ?? viewport.camera.components[PerspectiveCameraComponent.self]?.near)
+        let far = try #require(viewport.camera.components[OrthographicCameraComponent.self]?.far
+            ?? viewport.camera.components[PerspectiveCameraComponent.self]?.far)
+        var rejectedDepths: [Float] = [-1, 0, near / 2]
+        if far.isFinite { rejectedDepths.append(far * 2) }
+        for depth in rejectedDepths {
+            let scenePoint = viewport.camera.convert(position: [0, 0, -depth], to: nil)
+            let worldPoint = Point3D(x: Double(scenePoint.x) + renderOrigin.x,
+                                     y: Double(scenePoint.y) + renderOrigin.y,
+                                     z: Double(scenePoint.z) + renderOrigin.z)
+            #expect(throws: MeshSourcePresentationRenderError.self) {
+                try viewport.projectWithinDepthRange(worldPoint, revision: 1)
+            }
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.projectWithinDepthRange(Point3D(x: .nan, y: 0, z: 0), revision: 1)
+        }
+
         let xDirection = Vector3D(x: 1, y: 0, z: 0)
         let xAxisOrigin = Point3D(x: renderOrigin.x, y: anchor.y, z: anchor.z)
         let axisParameter = try viewport.worldAxisParameter(
@@ -314,6 +334,13 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
         revision: 1
     )
     #expect(resolved.isApproximatelyEqual(to: anchor, tolerance: 1e-4))
+    #expect(try cache.projectWithinDepthRange(anchor, for: identity, revision: 1) == screenPoint)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.projectWithinDepthRange(anchor, for: identity, revision: 2)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.projectWithinDepthRange(anchor, for: nativeCameraQueryIdentity(overlayRevision: 2), revision: 1)
+    }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.worldPlaneIntersection(
             at: screenPoint,
@@ -337,6 +364,9 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
     let unmountDeadline = ContinuousClock.now.advanced(by: .seconds(5))
     while viewport.appliedViewportRevision != nil, ContinuousClock.now < unmountDeadline {
         try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.projectWithinDepthRange(anchor, for: identity, revision: 1)
     }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.worldPlaneIntersection(
