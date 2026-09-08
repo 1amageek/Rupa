@@ -171,6 +171,108 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+func nativeMeshElementsAcceptOutsideSilhouetteTolerance(perspective: Bool) async throws {
+    _ = NSApplication.shared
+    let base = try planCacheScene(suffix: perspective ? "mesh-tolerance-perspective" : "mesh-tolerance-ortho")
+    let near = try #require(base.items.first)
+    func translated(_ suffix: String, z: Double) throws -> UniversalViewportSceneItem {
+        let transform = try GeometryTransform3D(values: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, z, 0, 0, 0, 1])
+        return .init(id: SceneOccurrenceID(rawValue: near.occurrenceID.rawValue + suffix),
+                     definitionID: near.definitionID, displayName: suffix, representationID: near.representationID,
+                     reference: near.reference, mesh: near.mesh, copyTelemetry: near.copyTelemetry,
+                     worldTransform: transform, worldBounds: try near.mesh.bounds().transformed(by: transform))
+    }
+    let far = try translated(".far", z: -1)
+    let items = perspective ? [far, try translated(".behind-camera", z: 1_000), near] : [far, near]
+    let scene = UniversalViewportScene(snapshotID: base.snapshotID, projectID: base.projectID,
+                                      items: items, copyTelemetry: base.copyTelemetry)
+    let identity = planCacheIdentity(scene)
+    let cache = MeshSourcePresentationPlanCache()
+    cache.prepare(for: scene)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: scene))
+    let plan = try #require(cache.plan(for: scene))
+    defer { viewport.unbind(); cache.teardown() }
+    let size = CGSize(width: 512, height: 384)
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1), size: size,
+        camera: .init(zoom: 0.6, projection: perspective ? .standardPerspective : .parallel),
+        basis: .axisFront(.z), verticalBounds: 0...1)
+    var failure: MeshSourcePresentationRenderError?
+    let controller = NSHostingController(rootView: RealityViewportView(
+        viewport: viewport, viewportRevision: 1, displayMode: .solid,
+        shading: .init(style: .flat), materialColors: [:], layout: layout,
+        interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+        sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+        onUpdateResult: { failure = $0 }
+    ).frame(width: size.width, height: size.height))
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while viewport.appliedViewportRevision != 1 || viewport.project(.origin) == nil {
+        try #require(ContinuousClock.now < deadline)
+        if let failure { throw failure }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let center = try cache.project(.init(x: 0.5, y: 0.5, z: 0), for: identity, revision: 1)
+    let corner = try cache.project(.origin, for: identity, revision: 1)
+    let edge = try cache.project(.init(x: 0, y: 0.5, z: 0), for: identity, revision: 1)
+    func outside(_ anchor: CGPoint, distance: CGFloat) -> CGPoint {
+        let dx = anchor.x - center.x, dy = anchor.y - center.y
+        let length = hypot(dx, dy)
+        return .init(x: anchor.x + dx / length * distance, y: anchor.y + dy / length * distance)
+    }
+    var expectedVertex: MeshVertexID?
+    var expectedEdge: MeshEdgeID?
+    plan.forEachTriangle { triangle in
+        let vertices = [(triangle.firstVertexID, triangle.firstPosition),
+                        (triangle.secondVertexID, triangle.secondPosition),
+                        (triangle.thirdVertexID, triangle.thirdPosition)]
+        for (id, position) in vertices where position.x == 0 && position.y == 0 { expectedVertex = id }
+        let edges = [triangle.firstEdgeID, triangle.secondEdgeID, triangle.thirdEdgeID]
+        for side in 0..<3 where vertices[side].1.x == 0 && vertices[(side + 1) % 3].1.x == 0 {
+            expectedEdge = edges[side]
+        }
+    }
+    let vertexID = try #require(expectedVertex)
+    let edgeID = try #require(expectedEdge)
+    #expect(try cache.meshElement(at: center, domain: .face, for: identity, revision: 1)?.occurrenceID == near.occurrenceID)
+    #expect(try cache.meshElement(at: center, domain: .edge, for: identity, revision: 1) == nil,
+            "Tessellation diagonals are not source edges.")
+    #expect(try cache.meshElement(at: outside(edge, distance: 7), domain: .edge, for: identity, revision: 1)?.element == .edge(edgeID))
+    #expect(try cache.meshElement(at: outside(corner, distance: 7), domain: .vertex, for: identity, revision: 1)?.element == .vertex(vertexID))
+    #expect(try cache.meshElement(at: outside(edge, distance: 7), domain: .edge, for: identity, revision: 1)?.occurrenceID == near.occurrenceID)
+    #expect(try cache.meshElement(at: outside(edge, distance: 9), domain: .edge, for: identity, revision: 1) == nil)
+    #expect(try cache.meshElement(at: outside(corner, distance: 9), domain: .vertex, for: identity, revision: 1) == nil)
+    #expect(try cache.meshElement(at: outside(edge, distance: 7), domain: .face, for: identity, revision: 1) == nil)
+    if perspective {
+        let occludedEdge = try cache.project(.init(x: 0, y: 0.5, z: -1), for: identity, revision: 1)
+        #expect(hypot(edge.x - occludedEdge.x, edge.y - occludedEdge.y) > 8)
+        #expect(try cache.meshElement(at: occludedEdge, domain: .edge, for: identity, revision: 1) == nil)
+    }
+    let section = SectionAnalysisResult.Plane(sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
+        origin: .init(x: 0.5, y: 0, z: 0), normal: .init(x: 1, y: 0, z: 0),
+        u: .init(x: 0, y: 1, z: 0), v: .init(x: 0, y: 0, z: 1))
+    try viewport.applySection(plane: section, side: .front, tolerance: 0)
+    #expect(try cache.meshElement(at: outside(edge, distance: 7), domain: .edge, for: identity, revision: 1) == nil)
+    #expect(try cache.meshElement(at: outside(corner, distance: 7), domain: .vertex, for: identity, revision: 1) == nil)
+    let retainedFace = try cache.project(.init(x: 0.75, y: 0.5, z: 0), for: identity, revision: 1)
+    #expect(try cache.meshElement(at: retainedFace, domain: .face, for: identity, revision: 1)?.occurrenceID == near.occurrenceID)
+    try viewport.applySection(plane: nil, side: .front, tolerance: 0)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.meshElement(at: edge, domain: .edge, for: identity, revision: 2)
+    }
+    viewport.setPresentationEnabled(false)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.meshElement(at: corner, domain: .vertex, for: identity, revision: 1)
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [false, true])
 func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
     perspective: Bool
 ) async throws {

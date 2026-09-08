@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import RupaCoreTypes
+import RupaGeometry
 import RupaViewportScene
 import SwiftCAD
 
@@ -102,6 +103,25 @@ final class MeshSourcePresentationPlanCache {
         case .failed:
             throw queryFailure("The native surface query uses a stale failed preparation identity.")
         }
+    }
+
+    func meshElement(
+        at point: CGPoint,
+        domain: GeometryAttributeDomain,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> ViewportMeshElementHit? {
+        let surface = try querySurface(for: identity)
+        let pointerHit = try surface.surfaceHit(at: point, revision: revision)
+        guard let current, current.identity == identity, let plan = current.plan else { return nil }
+        return try MeshSourcePresentationMeshElementResolver.resolve(
+            at: point, domain: domain, in: plan,
+            project: { try self.project($0, for: identity, revision: revision) },
+            surfaceHit: { candidate in
+                if candidate == point { return pointerHit?.triangle }
+                return try self.surfaceHit(at: candidate, for: identity, revision: revision)?.triangle
+            }
+        )
     }
 
 

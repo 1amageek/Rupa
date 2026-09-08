@@ -455,6 +455,25 @@ independent tessellator is never an alternative implementation.
    the declared point-space neighborhood through the mounted native projection,
    including candidates just outside a triangle or silhouette; restricting the
    tolerance query to the triangle interior is not equivalent CAD behavior.
+   The admitted render plan already owns the required occurrence/source
+   reference, face ID, source vertex IDs and world positions, and original
+   boundary-edge IDs for every triangle side; the resolver streams only that
+   retained, plan-count-bounded data and never reopens CAD source geometry or
+   allocates another full candidate table. It retains one current best result;
+   only a strict projected-distance improvement advances it, so duplicate
+   triangle references to the same source boundary cannot duplicate output and
+   equal-distance ties preserve stable prepared order.
+   A face result is the native hit at the pointer. For an edge or vertex, the
+   resolver projects the retained boundary, finds candidates within the fixed
+   8-point neighborhood (including a pointer outside the silhouette), and asks
+   the native surface query at each candidate's nearest projected boundary
+   point. A candidate is eligible only when that section/back-face-filtered
+   nearest native hit has the same occurrence and incident source edge or
+   vertex; an occluding occurrence therefore rejects it. Selection is minimum
+   projected distance followed by stable prepared order. Missing authored-mesh
+   provenance, projection, incidence, or native visibility is a miss or typed
+   frame failure according to the exact-ready query contract, never a CPU
+   triangle hit or legacy selector fallback.
 
 ### Native shading and spatial content
 
