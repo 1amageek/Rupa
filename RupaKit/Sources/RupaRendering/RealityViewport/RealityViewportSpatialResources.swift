@@ -18,15 +18,63 @@ final class RealityViewportSpatialResources {
     let root = Entity()
     let sectionedRoot = Entity()
     private let batch: RealityViewportSpatialBatch
-    private var labels: [(Entity, RealityViewportSpatialBatch.Label)] = []
+    private var labels: [(Entity, RealityViewportSpatialBatch.Label, Entity?)] = []
     private var markers: [(Entity, RealityViewportSpatialBatch.Marker)] = []
-    private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine)] = []
-    private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath)] = []
+    private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine, [Entity])] = []
+    private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
     private var grid: (entity: ModelEntity, mesh: LowLevelMesh)?
     private var gridLabels: [Entity] = []
     private var gridPlacement: ModelEntity?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
+    struct MarkerCollision {
+        let visual: Entity
+        let collider: Entity
+        let index: UInt32
+        let depth: RealityViewportSpatialBatch.Depth
+        let attachment: RealityViewportSpatialBatch.Attachment
+    }
+    private var markerCollisions: [ObjectIdentifier: MarkerCollision] = [:]
+    struct LabelCollision {
+        let visual: Entity
+        let collider: Entity
+        let index: UInt32
+        let depth: RealityViewportSpatialBatch.Depth
+        let attachment: RealityViewportSpatialBatch.Attachment
+        let rect: CGRect
+        let heightPoints: Float
+    }
+    private var labelCollisions: [ObjectIdentifier: LabelCollision] = [:]
+    private struct FillCollision {
+        let entity: ModelEntity
+        let index: UInt32
+        let depth: RealityViewportSpatialBatch.Depth
+        let attachment: RealityViewportSpatialBatch.Attachment
+    }
+    private var fillCollisions: [ObjectIdentifier: FillCollision] = [:]
+    private(set) var preparedItemCount: Int
+    private(set) var preparedPositionCount: Int
+    private(set) var preparedTriangleCount: Int
+    private(set) var preparedByteCount: Int
+    struct LineCollision {
+        let visual: Entity
+        let collider: Entity
+        let index: UInt32
+        let depth: RealityViewportSpatialBatch.Depth
+        let attachment: RealityViewportSpatialBatch.Attachment
+        let tolerance: Float
+        var sourceFirst: SIMD3<Float>
+        var sourceLast: SIMD3<Float>
+        var first: SIMD3<Float> = .zero
+        var last: SIMD3<Float> = .zero
+        var firstDepth: Float = 1
+        var lastDepth: Float = 1
+        var perspective = false
+    }
+    private var lineCollisions: [LineCollision] = []
+    private var lineCollisionIndex: [ObjectIdentifier: Int] = [:]
+    private var lineCollisionShape: ShapeResource?
+    private var sphereCollision: ShapeResource?
     private struct AxisResource {
         let axis: ViewportCoordinateAxis
         let line: ModelEntity
@@ -34,7 +82,7 @@ final class RealityViewportSpatialResources {
         let label: Entity
     }
     private var axes: [AxisResource] = []
-    private let surfaceItemCount: Int
+    private(set) var collisionBounds: BoundingBox?
     private let surfacePositionCount: Int
     private let byteLimit: Int
     private(set) var disabledRulerAxes: Set<ViewportMeasurementRulerAxis> = []
@@ -76,6 +124,97 @@ final class RealityViewportSpatialResources {
             candidate = current.parent
         }
         return nil
+    }
+
+    func handleMetadata(for entity: Entity) -> (
+        index: UInt32, depth: RealityViewportSpatialBatch.Depth,
+        attachment: RealityViewportSpatialBatch.Attachment
+    )? {
+        if let record = fillCollisions[ObjectIdentifier(entity)] {
+            return (record.index, record.depth, record.attachment)
+        }
+        if let record = labelCollisions[ObjectIdentifier(entity)] {
+            return (record.index, record.depth, record.attachment)
+        }
+        if let record = markerCollisions[ObjectIdentifier(entity)] {
+            return (record.index, record.depth, record.attachment)
+        }
+        if let index = lineCollisionIndex[ObjectIdentifier(entity)] {
+            let record = lineCollisions[index]
+            return (record.index, record.depth, record.attachment)
+        }
+        return nil
+    }
+
+    func projectedHandleDistance(
+        for entity: Entity, at point: CGPoint,
+        section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)? = nil,
+        project: (SIMD3<Float>) -> CGPoint?
+    ) throws -> (distance: CGFloat, position: SIMD3<Float>?)? {
+        if let record = fillCollisions[ObjectIdentifier(entity)] {
+            return record.entity.isEnabled ? (0, nil) : nil
+        }
+        if let record = labelCollisions[ObjectIdentifier(entity)] {
+            guard record.visual.isEnabled, record.collider.isEnabled else { return nil }
+            // The native quad owns exact rectangle acceptance. It is already
+            // the closest valid point for ordering purposes.
+            return (0, nil)
+        }
+        if let index = lineCollisionIndex[ObjectIdentifier(entity)] {
+            let line = lineCollisions[index]
+            guard line.visual.isEnabled, line.collider.isEnabled else { return nil }
+            guard let clipped = try Self.clippedLine(first: line.first, last: line.last, section: section) else { return nil }
+            guard let a = project(clipped.first), let b = project(clipped.last),
+                  a.x.isFinite, a.y.isFinite, b.x.isFinite, b.y.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native line hit has no finite prepared projection.")
+            }
+            let depthDifference = line.lastDepth - line.firstDepth
+            return Self.lineHit(at: point, first: clipped.first, last: clipped.last,
+                projectedFirst: a, projectedLast: b, tolerance: line.tolerance,
+                firstDepth: line.firstDepth + depthDifference * clipped.lower,
+                lastDepth: line.firstDepth + depthDifference * clipped.upper, perspective: line.perspective)
+        }
+        guard let record = markerCollisions[ObjectIdentifier(entity)],
+              record.visual.isEnabled, record.collider.isEnabled,
+              let center = project(record.collider.convert(position: .zero,
+                                                          to: self.root(for: record.attachment))),
+              center.x.isFinite, center.y.isFinite else {
+            throw RealityViewportSpatialBatch.invalid("The native marker hit has no finite prepared projection.")
+        }
+        // The native sphere owns acceptance. Projection only orders valid hits.
+        return (hypot(center.x - point.x, center.y - point.y), nil)
+    }
+
+    static func clippedLine(first: SIMD3<Float>, last: SIMD3<Float>,
+                            section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)?) throws
+        -> (first: SIMD3<Float>, last: SIMD3<Float>, lower: Float, upper: Float)? {
+        guard let section else { return (first, last, 0, 1) }
+        let a = simd_dot(SIMD3<Double>(first), section.normal) - section.offset + section.tolerance
+        let b = simd_dot(SIMD3<Double>(last), section.normal) - section.offset + section.tolerance
+        guard a.isFinite, b.isFinite else {
+            throw RealityViewportSpatialBatch.invalid("The native line section distance is not finite.")
+        }
+        if a < 0 && b < 0 { return nil }
+        if a >= 0 && b >= 0 { return (first, last, 0, 1) }
+        let t = Float(a / (a - b))
+        let intersection = first + (last - first) * t
+        return a < 0 ? (intersection, last, t, 1) : (first, intersection, 0, t)
+    }
+
+    static func lineHit(at point: CGPoint, first: SIMD3<Float>, last: SIMD3<Float>,
+                         projectedFirst a: CGPoint, projectedLast b: CGPoint, tolerance: Float,
+                         firstDepth: Float, lastDepth: Float, perspective: Bool)
+        -> (distance: CGFloat, position: SIMD3<Float>?)? {
+        let dx = b.x - a.x, dy = b.y - a.y
+        let lengthSquared = dx * dx + dy * dy
+        let t = lengthSquared > 0 ? max(0, min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared)) : 0
+        let distance = hypot(point.x - a.x - t * dx, point.y - a.y - t * dy)
+        guard distance <= CGFloat(tolerance) else { return nil }
+        // Screen interpolation is not world interpolation under perspective.
+        let fraction = perspective
+            ? Float(t) * firstDepth / ((1 - Float(t)) * lastDepth + Float(t) * firstDepth)
+            : Float(t)
+        return (distance, first + (last - first) * fraction)
     }
 
     /// Clips one mathematical camera-local axis against the mounted frustum.
@@ -237,8 +376,222 @@ final class RealityViewportSpatialResources {
         return (start, end)
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Production affordance input still uses
+    // legacy selectors until RK-4.2 connects explicit descriptor footprints and
+    // prepared semantic targets to this frame-local native identity table.
     private func register(_ entity: Entity, handleIndex: UInt32?) {
         if let handleIndex { handleIndices[ObjectIdentifier(entity)] = handleIndex }
+    }
+
+    private func admitFill(positions: Int, indices: Int, tolerance: Float, generated: Bool) throws {
+        guard positions > 0, indices > 0, indices.isMultiple(of: 3) else {
+            throw RealityViewportSpatialBatch.invalid("Native fill has no complete triangles.")
+        }
+        let edges = tolerance > 0 ? indices : 0
+        func add(_ value: inout Int, _ count: Int, limit: Int) throws {
+            let sum = value.addingReportingOverflow(count)
+            guard !sum.overflow, count >= 0, sum.partialValue <= limit else {
+                throw RealityViewportSpatialBatch.exhausted()
+            }
+            value = sum.partialValue
+        }
+        func charge(_ count: Int, _ stride: Int) throws {
+            let size = count.multipliedReportingOverflow(by: stride)
+            guard !size.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            try add(&preparedByteCount, size.partialValue, limit: byteLimit)
+        }
+        try add(&preparedItemCount, edges, limit: batch.limits.maxItemCount)
+        try add(&preparedPositionCount, positions, limit: batch.limits.maxPositionCount)
+        // Source mesh triangles were admitted by the batch; native generated
+        // paths and the reversed collision-only mesh each add one triangle set.
+        try add(&preparedTriangleCount, indices / 3, limit: batch.limits.maxTriangleCount)
+        try charge(1, MemoryLayout<FillCollision>.stride + MemoryLayout<ObjectIdentifier>.stride
+            + MemoryLayout<CollisionComponent>.stride + MemoryLayout<[ShapeResource]>.stride
+            + MemoryLayout<ShapeResource>.stride + MemoryLayout<MeshDescriptor>.stride
+            + MemoryLayout<MeshResource>.stride)
+        try charge(positions, MemoryLayout<SIMD3<Float>>.stride)
+        try charge(indices, (generated ? 1 : 2) * MemoryLayout<UInt32>.stride)
+        try charge(edges, MemoryLayout<Entity>.stride + MemoryLayout<LineCollision>.stride
+            + MemoryLayout<CollisionComponent>.stride + MemoryLayout<[ShapeResource]>.stride
+            + MemoryLayout<ShapeResource>.stride + 2 * MemoryLayout<ObjectIdentifier>.stride
+            + MemoryLayout<Int>.stride + MemoryLayout<UInt32>.stride)
+        lineCollisions.reserveCapacity(lineCollisions.count + edges)
+        lineCollisionIndex.reserveCapacity(lineCollisionIndex.count + edges)
+    }
+
+    private func addFillCollision(_ entity: ModelEntity, mesh: MeshResource, index: UInt32,
+                                  depth: RealityViewportSpatialBatch.Depth,
+                                  attachment: RealityViewportSpatialBatch.Attachment) async throws {
+        let shape = try await ShapeResource.generateStaticMesh(from: mesh)
+        try Task.checkCancellation()
+        entity.components.set(CollisionComponent(shapes: [shape],
+            filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
+        fillCollisions[ObjectIdentifier(entity)] = .init(entity: entity, index: index,
+            depth: depth, attachment: attachment)
+    }
+
+    static func pathParts(_ contents: MeshResource.Contents,
+        _ body: (MeshResource.Part, simd_float4x4) throws -> Void) throws {
+        guard !contents.instances.isEmpty else {
+            throw RealityViewportSpatialBatch.invalid("Native path has no placed geometry instance.")
+        }
+        for instance in contents.instances {
+            guard let model = contents.models.first(where: { $0.id == instance.model }), !model.parts.isEmpty else {
+                throw RealityViewportSpatialBatch.invalid("Native path instance references absent model geometry.")
+            }
+            let transform = instance.transform
+            guard (0..<4).allSatisfy({ column in (0..<4).allSatisfy { transform[column][$0].isFinite } }),
+                  transform.columns.0.w == 0, transform.columns.1.w == 0,
+                  transform.columns.2.w == 0, transform.columns.3.w == 1 else {
+                throw RealityViewportSpatialBatch.invalid("Native path instance has an invalid affine transform.")
+            }
+            for part in model.parts { try body(part, transform) }
+        }
+    }
+
+    private func addTriangleBoundary(_ entity: Entity, positions: [SIMD3<Float>], a: UInt32, b: UInt32, c: UInt32,
+        transform: simd_float4x4, index: UInt32, depth: RealityViewportSpatialBatch.Depth,
+        attachment: RealityViewportSpatialBatch.Attachment, tolerance: Float) throws {
+        func point(_ index: UInt32) throws -> SIMD3<Float> {
+            guard Int(index) < positions.count else {
+                throw RealityViewportSpatialBatch.invalid("Native path triangle references an absent position.")
+            }
+            let point = transform * SIMD4(positions[Int(index)], 1)
+            guard point.x.isFinite, point.y.isFinite, point.z.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native fill exceeds finite coordinate precision.")
+            }
+            return SIMD3(point.x, point.y, point.z)
+        }
+        let first = try point(a), second = try point(b), third = try point(c)
+        _ = try addLineCollision(visual: entity, first: first, last: second, index: index,
+            depth: depth, attachment: attachment, tolerance: tolerance)
+        _ = try addLineCollision(visual: entity, first: second, last: third, index: index,
+            depth: depth, attachment: attachment, tolerance: tolerance)
+        _ = try addLineCollision(visual: entity, first: third, last: first, index: index,
+            depth: depth, attachment: attachment, tolerance: tolerance)
+    }
+
+    private func addLineCollision(visual: Entity, first: SIMD3<Float>, last: SIMD3<Float>,
+                                  index: UInt32, depth: RealityViewportSpatialBatch.Depth,
+                                  attachment: RealityViewportSpatialBatch.Attachment, tolerance: Float) throws -> Entity {
+        if lineCollisionShape == nil { lineCollisionShape = .generateBox(size: SIMD3(repeating: 1)) }
+        guard let lineCollisionShape else { throw RealityViewportSpatialBatch.invalid("Native line collision is unavailable.") }
+        let collider = Entity()
+        collider.components.set(CollisionComponent(shapes: [lineCollisionShape],
+            filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
+        collider.isEnabled = false
+        // Source endpoints are attachment-root coordinates, including planar
+        // paths whose visual Entity carries an independent plane transform.
+        root(for: attachment).addChild(collider)
+        handleIndices[ObjectIdentifier(collider)] = index
+        lineCollisionIndex[ObjectIdentifier(collider)] = lineCollisions.count
+        lineCollisions.append(.init(visual: visual, collider: collider,
+            index: index, depth: depth, attachment: attachment, tolerance: tolerance,
+            sourceFirst: first, sourceLast: last))
+        return collider
+    }
+
+    private func updateCollisionBounds(projection: CameraProjection) throws {
+        var bounds = BoundingBox()
+        var hasBounds = false
+        for record in fillCollisions.values where record.entity.isEnabled {
+            bounds.formUnion(record.entity.visualBounds(relativeTo: root(for: record.attachment)))
+            hasBounds = true
+        }
+        for record in markerCollisions.values where record.visual.isEnabled && record.collider.isEnabled {
+            // Ancestor roots may be withheld until this camera update succeeds.
+            let radius = record.collider.parent === record.visual
+                ? record.visual.scale.x * record.collider.scale.x / 2
+                : record.collider.scale.x / 2
+            guard radius.isFinite, radius > 0 else {
+                throw RealityViewportSpatialBatch.invalid("Native marker tolerance exceeds transform precision.")
+            }
+            let collisionRoot = self.root(for: record.attachment)
+            let center = record.collider.convert(position: .zero, to: collisionRoot)
+            guard center.x.isFinite, center.y.isFinite, center.z.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native primitive collision center exceeds transform precision.")
+            }
+            bounds.formUnion(BoundingBox(min: center - SIMD3(repeating: radius),
+                                         max: center + SIMD3(repeating: radius)))
+            hasBounds = true
+        }
+        for record in labelCollisions.values where record.visual.isEnabled && record.collider.isEnabled {
+            let height = CGFloat(record.heightPoints)
+            guard height.isFinite, height > 0 else {
+                throw RealityViewportSpatialBatch.invalid("Native label collision scale is invalid.")
+            }
+            let collisionRoot = self.root(for: record.attachment)
+            let corner0 = record.collider.convert(position: [-0.5, -0.5, 0], to: collisionRoot)
+            let corner1 = record.collider.convert(position: [0.5, -0.5, 0], to: collisionRoot)
+            let corner2 = record.collider.convert(position: [0.5, 0.5, 0], to: collisionRoot)
+            let corner3 = record.collider.convert(position: [-0.5, 0.5, 0], to: collisionRoot)
+            guard corner0.x.isFinite, corner0.y.isFinite, corner0.z.isFinite,
+                  corner1.x.isFinite, corner1.y.isFinite, corner1.z.isFinite,
+                  corner2.x.isFinite, corner2.y.isFinite, corner2.z.isFinite,
+                  corner3.x.isFinite, corner3.y.isFinite, corner3.z.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native label collision bounds exceed transform precision.")
+            }
+            var labelBounds = BoundingBox(min: corner0, max: corner0)
+            labelBounds.formUnion(BoundingBox(min: corner1, max: corner1))
+            labelBounds.formUnion(BoundingBox(min: corner2, max: corner2))
+            labelBounds.formUnion(BoundingBox(min: corner3, max: corner3))
+            bounds.formUnion(labelBounds)
+            hasBounds = true
+        }
+        for index in lineCollisions.indices {
+            var line = lineCollisions[index]
+            line.collider.isEnabled = false
+            guard line.visual.isEnabled else { continue }
+            let firstDepth = -projection.local(line.sourceFirst).z
+            let lastDepth = -projection.local(line.sourceLast).z
+            let difference = lastDepth - firstDepth
+            guard firstDepth.isFinite, lastDepth.isFinite, difference.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native line depth exceeds transform precision.")
+            }
+            var lower: Float = 0, upper: Float = 1
+            if difference == 0 {
+                guard firstDepth >= projection.near, firstDepth <= projection.far else { continue }
+            } else {
+                let nearT = (projection.near - firstDepth) / difference
+                let farT = (projection.far - firstDepth) / difference
+                lower = max(0, min(nearT, farT))
+                upper = min(1, max(nearT, farT))
+                guard lower <= upper else { continue }
+            }
+            let delta = line.sourceLast - line.sourceFirst
+            line.first = line.sourceFirst + delta * lower
+            line.last = line.sourceFirst + delta * upper
+            line.firstDepth = -projection.local(line.first).z
+            line.lastDepth = -projection.local(line.last).z
+            line.perspective = projection.perspective
+            let nativeLength = simd_length(line.last - line.first)
+            let depthScale = max(projection.depthScale(projection.local(line.first)),
+                                 projection.depthScale(projection.local(line.last)))
+            // One point minimum is only a conservative acquisition volume for
+            // zero-tolerance lines; the projected filter still enforces zero.
+            let radius = max(line.tolerance, 1) * depthScale / Float(hypot(projection.forward.c, projection.forward.d))
+            guard nativeLength.isFinite, radius.isFinite, radius > 0,
+                  (nativeLength + 2 * radius).isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native line collision exceeds transform precision.")
+            }
+            line.collider.position = line.first / 2 + line.last / 2
+            line.collider.orientation = nativeLength > 0
+                ? simd_quatf(from: [1, 0, 0], to: (line.last - line.first) / nativeLength)
+                : simd_quatf(angle: 0, axis: [1, 0, 0])
+            line.collider.scale = [nativeLength + 2 * radius, 2 * radius, 2 * radius]
+            line.collider.isEnabled = true
+            let padding = SIMD3<Float>(repeating: radius * 2)
+            let minimum = simd_min(line.first, line.last) - padding
+            let maximum = simd_max(line.first, line.last) + padding
+            guard minimum.x.isFinite, minimum.y.isFinite, minimum.z.isFinite,
+                  maximum.x.isFinite, maximum.y.isFinite, maximum.z.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Native line collision bounds exceed transform precision.")
+            }
+            bounds.formUnion(BoundingBox(min: minimum, max: maximum))
+            hasBounds = true
+            lineCollisions[index] = line
+        }
+        collisionBounds = hasBounds ? bounds : nil
     }
 
     private struct CameraProjection {
@@ -294,7 +647,10 @@ final class RealityViewportSpatialResources {
 
     private init(batch: RealityViewportSpatialBatch, surfacePlan: MeshSourcePresentationRenderPlan?) {
         self.batch = batch
-        surfaceItemCount = surfacePlan?.itemCount ?? 0
+        preparedItemCount = batch.itemCount + (surfacePlan?.itemCount ?? 0)
+        preparedPositionCount = batch.positionCount + (surfacePlan?.positionCount ?? 0)
+        preparedTriangleCount = batch.triangleCount + (surfacePlan?.triangleCount ?? 0)
+        preparedByteCount = batch.admittedByteCount
         surfacePositionCount = surfacePlan?.positionCount ?? 0
         byteLimit = min(batch.limits.maxRetainedByteCount, surfacePlan?.nativePreparationByteLimit ?? batch.limits.maxRetainedByteCount)
         hasSectionedCameraGeometry = batch.labels.contains { $0.attachment == .sectionedGeometry }
@@ -309,6 +665,8 @@ final class RealityViewportSpatialResources {
         try Task.checkCancellation()
         try batch.validate(surfacePlan: surfacePlan)
         let result = RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan)
+        result.lineCollisions.reserveCapacity(batch.lineCollisionCount)
+        result.lineCollisionIndex.reserveCapacity(batch.lineCollisionCount)
         if batch.includesGrid {
             let capacity = ViewportProjectedGrid.maximumGridLineCount * 2
             let mesh = try LowLevelMesh(descriptor: descriptor(vertices: capacity, indices: capacity))
@@ -414,7 +772,7 @@ final class RealityViewportSpatialResources {
         for (index, source) in batch.meshes.enumerated() {
             try Task.checkCancellation()
             if let group = groups.firstIndex(where: {
-                $0.attachment == source.attachment && $0.handleIndex == source.handleIndex
+                source.handleIndex == nil && $0.attachment == source.attachment && $0.handleIndex == nil
             }) {
                 groups[group].meshIndices.append(index)
             } else {
@@ -440,17 +798,79 @@ final class RealityViewportSpatialResources {
             let entity = ModelEntity(mesh: resource, materials: geometry.appearances.map { material($0.color, depth: $0.depth) })
             result.register(entity, handleIndex: group.handleIndex)
             result.root(for: group.attachment).addChild(entity)
+            if let index = group.handleIndex {
+                let source = batch.meshes[group.meshIndices[0]]
+                if source.topology == .lines, let tolerance = source.hitTolerancePoints {
+                    for offset in stride(from: 0, to: geometry.indices.count, by: 2) {
+                        _ = try result.addLineCollision(visual: entity,
+                            first: geometry.positions[Int(geometry.indices[offset])],
+                            last: geometry.positions[Int(geometry.indices[offset + 1])],
+                            index: index, depth: source.depth, attachment: source.attachment, tolerance: tolerance)
+                    }
+                } else if source.topology == .triangles, let tolerance = source.hitTolerancePoints {
+                    try result.admitFill(positions: geometry.positions.count, indices: geometry.indices.count,
+                        tolerance: tolerance, generated: false)
+                    var descriptor = MeshDescriptor()
+                    descriptor.positions = MeshBuffers.Positions(geometry.positions)
+                    let indices = try await Self.doubleWoundIndices(geometry.indices)
+                    descriptor.primitives = .triangles(indices)
+                    let collisionMesh = try await MeshResource(from: [descriptor])
+                    try await result.addFillCollision(entity, mesh: collisionMesh, index: index,
+                        depth: source.depth, attachment: source.attachment)
+                    if tolerance > 0 {
+                        for offset in stride(from: 0, to: geometry.indices.count, by: 3) {
+                            try result.addTriangleBoundary(entity, positions: geometry.positions,
+                                a: geometry.indices[offset], b: geometry.indices[offset + 1], c: geometry.indices[offset + 2],
+                                transform: matrix_identity_float4x4, index: index, depth: source.depth,
+                                attachment: source.attachment, tolerance: tolerance)
+                        }
+                    }
+                }
+            }
         }
         for path in batch.paths {
             try Task.checkCancellation()
-            let resource = try await pathResource(planarPath(path), cache: &pathResources)
+            let resource = try await pathResource(planarPath(path), cache: &pathResources,
+                additionalPositionLimit: batch.limits.maxPositionCount - result.preparedPositionCount,
+                additionalByteLimit: result.byteLimit - result.preparedByteCount)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(path.color, depth: path.depth)])
             entity.position = try RealityViewportSpatialBatch.nativePoint(path.origin, relativeTo: batch.renderOrigin)
             orient(entity, on: path)
             result.register(entity, handleIndex: path.handleIndex)
             result.root(for: path.attachment).addChild(entity)
+            if let index = path.handleIndex, let tolerance = path.hitTolerancePoints {
+                let contents = resource.contents
+                var positionCount = 0, indexCount = 0
+                try Self.pathParts(contents) { part, _ in
+                    guard let indices = part.triangleIndices, indices.count.isMultiple(of: 3) else {
+                        throw RealityViewportSpatialBatch.invalid("Native path has invalid triangle topology.")
+                    }
+                    let p = positionCount.addingReportingOverflow(part.positions.count)
+                    let i = indexCount.addingReportingOverflow(indices.count)
+                    guard !p.overflow, !i.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                    positionCount = p.partialValue; indexCount = i.partialValue
+                }
+                try result.admitFill(positions: positionCount, indices: indexCount, tolerance: tolerance, generated: true)
+                try await result.addFillCollision(entity, mesh: resource, index: index,
+                    depth: path.depth, attachment: path.attachment)
+                if tolerance > 0 {
+                    try Self.pathParts(contents) { part, transform in
+                        guard let indices = part.triangleIndices else {
+                            throw RealityViewportSpatialBatch.invalid("Native path lost its triangle topology.")
+                        }
+                        let positions = part.positions.elements
+                        let worldTransform = entity.transformMatrix(relativeTo: result.root(for: path.attachment)) * transform
+                        try indices.forEach { a, b, c in
+                            try result.addTriangleBoundary(entity, positions: positions, a: a, b: b, c: c,
+                                transform: worldTransform, index: index, depth: path.depth,
+                                attachment: path.attachment, tolerance: tolerance)
+                        }
+                    }
+                }
+            }
         }
+        var quadCollision: ShapeResource?
         for label in batch.labels {
             try Task.checkCancellation()
             let resource = try await textResource(label.text, cache: &textResources)
@@ -466,7 +886,30 @@ final class RealityViewportSpatialResources {
             entity.addChild(glyph)
             entity.components.set(BillboardComponent())
             entity.isEnabled = false
-            result.labels.append((entity, label))
+            var collider: Entity?
+            if let index = label.handleIndex, let rect = label.hitRectPoints {
+                if quadCollision == nil { quadCollision = try await Self.unitQuadCollision() }
+                guard let quadCollision else {
+                    throw RealityViewportSpatialBatch.invalid("Native label collision is unavailable.")
+                }
+                let height = CGFloat(label.heightPoints)
+                let hit = Entity()
+                hit.position = SIMD3(Float(rect.midX / height), Float(rect.midY / height), 0)
+                hit.scale = SIMD3(Float(rect.width / height), Float(rect.height / height), 1)
+                hit.components.set(CollisionComponent(shapes: [quadCollision],
+                    filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
+                hit.isEnabled = false
+                // The hit plane is a camera-facing sibling. Keeping it outside
+                // the Billboard visual avoids asynchronous inherited rotation
+                // and lets updateCamera publish one exact native orientation.
+                result.handleIndices[ObjectIdentifier(hit)] = index
+                result.labelCollisions[ObjectIdentifier(hit)] = .init(
+                    visual: entity, collider: hit, index: index, depth: label.depth,
+                    attachment: label.attachment, rect: rect, heightPoints: label.heightPoints)
+                collider = hit
+                result.root(for: label.attachment).addChild(hit)
+            }
+            result.labels.append((entity, label, collider))
             result.register(entity, handleIndex: label.handleIndex)
             result.root(for: label.attachment).addChild(entity)
         }
@@ -486,11 +929,36 @@ final class RealityViewportSpatialResources {
                 mesh = box
             }
             let entity = ModelEntity(mesh: mesh, materials: [material(marker.color, depth: marker.depth)])
-            entity.position = try RealityViewportSpatialBatch.nativePoint(marker.anchor, relativeTo: batch.renderOrigin)
+            let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(marker.anchor, relativeTo: batch.renderOrigin)
+            entity.position = nativeAnchor
             entity.isEnabled = false
             result.markers.append((entity, marker))
             result.register(entity, handleIndex: marker.handleIndex)
             result.root(for: marker.attachment).addChild(entity)
+            // FIXME(INCOMPLETE_IMPLEMENTATION): A handle without an explicit
+            // footprint is metadata-only until RK-4.2.2 maps its existing input
+            // route. Production remains on legacy selectors until RK-4.2.3.
+            if let index = marker.handleIndex, let tolerance = marker.hitTolerancePoints, tolerance > 0 {
+                if result.sphereCollision == nil { result.sphereCollision = .generateSphere(radius: 0.5) }
+                guard let sphereCollision = result.sphereCollision else {
+                    throw RealityViewportSpatialBatch.invalid("Native marker collision is unavailable.")
+                }
+                // A shared unit sphere avoids the native generation floor.
+                // Its child transform separates input radius from visible size.
+                let collider = Entity()
+                let ratio = 2 * tolerance / marker.diameterPoints
+                guard ratio.isFinite, ratio > 0 else {
+                    throw RealityViewportSpatialBatch.invalid("Native marker tolerance exceeds transform precision.")
+                }
+                collider.scale = SIMD3(repeating: ratio)
+                collider.components.set(CollisionComponent(shapes: [sphereCollision],
+                    filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
+                entity.addChild(collider)
+                result.handleIndices[ObjectIdentifier(collider)] = index
+                result.markerCollisions[ObjectIdentifier(collider)] = .init(
+                    visual: entity, collider: collider, index: index, depth: marker.depth,
+                    attachment: marker.attachment)
+            }
         }
         for line in batch.cameraLines {
             try Task.checkCancellation()
@@ -514,18 +982,50 @@ final class RealityViewportSpatialResources {
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(line.color, depth: line.depth)])
             entity.isEnabled = false
-            result.cameraLines.append((entity, mesh, line))
+            var proxies: [Entity] = []
+            if let index = line.handleIndex, let tolerance = line.hitTolerancePoints {
+                proxies.reserveCapacity(count - 1)
+                for _ in 0..<(count - 1) {
+                    proxies.append(try result.addLineCollision(visual: entity, first: .zero, last: .zero,
+                        index: index, depth: line.depth, attachment: line.attachment, tolerance: tolerance))
+                }
+            }
+            result.cameraLines.append((entity, mesh, line, proxies))
             result.register(entity, handleIndex: line.handleIndex)
             result.root(for: line.attachment).addChild(entity)
         }
         for path in batch.cameraPaths {
             try Task.checkCancellation()
-            let resource = try await pathResource(path.path.applying(.init(scaleX: 1, y: -1)), cache: &pathResources)
+            let resource = try await pathResource(path.path.applying(.init(scaleX: 1, y: -1)), cache: &pathResources,
+                additionalPositionLimit: batch.limits.maxPositionCount - result.preparedPositionCount,
+                additionalByteLimit: result.byteLimit - result.preparedByteCount)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(path.color, depth: path.depth)])
             entity.components.set(BillboardComponent())
             entity.isEnabled = false
-            result.cameraPaths.append((entity, path))
+            var collider: Entity?
+            if let index = path.handleIndex, let tolerance = path.hitTolerancePoints, tolerance > 0 {
+                if result.sphereCollision == nil { result.sphereCollision = .generateSphere(radius: 0.5) }
+                guard let sphereCollision = result.sphereCollision else {
+                    throw RealityViewportSpatialBatch.invalid("Native camera-path collision is unavailable.")
+                }
+                let hit = Entity()
+                let radiusScale = 2 * tolerance
+                guard radiusScale.isFinite, radiusScale > 0 else {
+                    throw RealityViewportSpatialBatch.invalid("Native camera-path tolerance exceeds transform precision.")
+                }
+                hit.scale = SIMD3(repeating: radiusScale)
+                hit.components.set(CollisionComponent(shapes: [sphereCollision],
+                    filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
+                hit.isEnabled = false
+                result.handleIndices[ObjectIdentifier(hit)] = index
+                result.markerCollisions[ObjectIdentifier(hit)] = .init(
+                    visual: entity, collider: hit, index: index, depth: path.depth,
+                    attachment: path.attachment)
+                collider = hit
+                result.root(for: path.attachment).addChild(hit)
+            }
+            result.cameraPaths.append((entity, path, collider))
             result.register(entity, handleIndex: path.handleIndex)
             result.root(for: path.attachment).addChild(entity)
         }
@@ -566,6 +1066,58 @@ final class RealityViewportSpatialResources {
         return result
     }
 
+    /// Places a zero-thickness label hit quad in the current native camera
+    /// plane. The authored rectangle is in screen points (y-down) relative to
+    /// the placed anchor, so the collider cannot inherit the visual Billboard.
+    private func updateLabelCollision(
+        _ record: LabelCollision, rect: CGRect, anchor: SIMD3<Float>, projection: CameraProjection
+    ) throws -> Bool {
+        guard rect.origin.x.isFinite, rect.origin.y.isFinite,
+              rect.width.isFinite, rect.height.isFinite,
+              rect.width > 0, rect.height > 0,
+              rect.minX.isFinite, rect.minY.isFinite,
+              rect.maxX.isFinite, rect.maxY.isFinite else {
+            throw RealityViewportSpatialBatch.invalid("Native label interaction rectangle is invalid.")
+        }
+        guard let anchorScreen = projection.project(anchor) else { return false }
+        let local = projection.local(anchor)
+        let depth = -local.z
+        guard depth.isFinite, depth >= projection.near, depth <= projection.far else { return false }
+
+        let centerScreen = CGPoint(x: anchorScreen.x + rect.midX, y: anchorScreen.y + rect.midY)
+        let leftScreen = CGPoint(x: centerScreen.x - rect.width / 2, y: centerScreen.y)
+        let rightScreen = CGPoint(x: centerScreen.x + rect.width / 2, y: centerScreen.y)
+        let topScreen = CGPoint(x: centerScreen.x, y: centerScreen.y - rect.height / 2)
+        let bottomScreen = CGPoint(x: centerScreen.x, y: centerScreen.y + rect.height / 2)
+        let center = projection.point(at: centerScreen, depth: depth)
+        let rightPoint = projection.point(at: rightScreen, depth: depth)
+        let leftPoint = projection.point(at: leftScreen, depth: depth)
+        let topPoint = projection.point(at: topScreen, depth: depth)
+        let bottomPoint = projection.point(at: bottomScreen, depth: depth)
+        let horizontal = rightPoint - leftPoint
+        let vertical = bottomPoint - topPoint
+        let width = simd_length(horizontal)
+        let height = simd_length(vertical)
+        guard center.x.isFinite, center.y.isFinite, center.z.isFinite,
+              width.isFinite, width > 0, height.isFinite, height > 0 else {
+            return false
+        }
+        let xAxis = horizontal / width
+        let verticalProjection = vertical - xAxis * simd_dot(vertical, xAxis)
+        let verticalLength = simd_length(verticalProjection)
+        guard verticalLength.isFinite, verticalLength > 0 else { return false }
+        let yAxis = verticalProjection / verticalLength
+        let zAxis = simd_normalize(simd_cross(xAxis, yAxis))
+        guard zAxis.x.isFinite, zAxis.y.isFinite, zAxis.z.isFinite else { return false }
+        let orientation = simd_quatf(simd_float4x4(columns: (
+            SIMD4(xAxis, 0), SIMD4(yAxis, 0), SIMD4(zAxis, 0), SIMD4(0, 0, 0, 1)
+        )))
+        record.collider.position = center
+        record.collider.orientation = orientation
+        record.collider.scale = [width, height, 1]
+        return true
+    }
+
     /// Native world geometry remains untouched. Only the already admitted
     /// camera-relative annotations change, synchronously with the mounted camera.
     @discardableResult
@@ -573,12 +1125,18 @@ final class RealityViewportSpatialResources {
                       safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
                       gridRuler: RulerConfiguration? = nil, gridBasis: ViewportProjectionBasis = .isometric,
                       gridSize: CGSize = .zero, gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
-        guard grid != nil || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !boundsRulers.isEmpty else { return nil }
+        guard grid != nil || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !lineCollisions.isEmpty || !fillCollisions.isEmpty || !boundsRulers.isEmpty else { return nil }
         guard let projection = cameraProjection(camera: camera, content: content) else {
-            for (entity, _) in cameraPaths { entity.isEnabled = false }
-            for (entity, _) in labels { entity.isEnabled = false }
+            for (entity, _, collider) in cameraPaths {
+                entity.isEnabled = false
+                collider?.isEnabled = false
+            }
+            for (entity, _, collider) in labels {
+                entity.isEnabled = false
+                collider?.isEnabled = false
+            }
             for (entity, _) in markers { entity.isEnabled = false }
-            for (entity, _, _) in cameraLines { entity.isEnabled = false }
+            for (entity, _, _, _) in cameraLines { entity.isEnabled = false }
             for (axis, label, line, _) in boundsRulers {
                 label.isEnabled = false; line.isEnabled = false; disabledRulerAxes.insert(axis)
             }
@@ -588,22 +1146,46 @@ final class RealityViewportSpatialResources {
         }
         try updateAxes(projection: projection, viewportSize: gridSize,
                        safeRect: safeRect, excludedRects: excludedRects)
-        for (entity, path) in cameraPaths {
+        for (entity, path, collider) in cameraPaths {
+            entity.isEnabled = false
+            collider?.isEnabled = false
             guard let placement = placement(anchor: path.anchor, offset: path.offset, projection: projection) else {
-                entity.isEnabled = false
                 continue
             }
             entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint)
+            if let collider, let tolerance = path.hitTolerancePoints {
+                let scale = 2 * tolerance * placement.metersPerPoint
+                guard scale.isFinite, scale > 0 else {
+                    throw RealityViewportSpatialBatch.invalid("Native camera-path tolerance exceeds transform precision.")
+                }
+                // Camera-path hit geometry is a sibling, so it receives the
+                // complete native point scale rather than inheriting Billboard
+                // or visual transforms.
+                collider.position = placement.position
+                collider.scale = SIMD3(repeating: scale)
+                collider.isEnabled = true
+            }
             entity.isEnabled = true
         }
-        for (entity, label) in labels {
+        for (entity, label, collider) in labels {
+            entity.isEnabled = false
+            collider?.isEnabled = false
             guard let placement = placement(anchor: label.anchor, offset: label.offset, projection: projection) else {
-                entity.isEnabled = false
                 continue
             }
             entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint * label.heightPoints)
+            if let collider {
+                guard let rect = label.hitRectPoints,
+                      let record = labelCollisions[ObjectIdentifier(collider)] else {
+                    throw RealityViewportSpatialBatch.invalid("Native label collision lost its prepared rectangle.")
+                }
+                guard try updateLabelCollision(record, rect: rect, anchor: placement.position, projection: projection) else {
+                    continue
+                }
+                collider.isEnabled = true
+            }
             entity.isEnabled = true
         }
         for (entity, marker) in markers {
@@ -614,13 +1196,15 @@ final class RealityViewportSpatialResources {
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
         }
-        for (entity, mesh, line) in cameraLines {
+        for (entity, mesh, line, proxies) in cameraLines {
             var valid = true
+            var missingProvenance = false
             var bounds = BoundingBox()
             mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
                 let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
                 for (index, point) in line.points.enumerated() {
-                    guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection) else {
+                    guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection,
+                                                    allowsBehindCamera: true) else {
                         valid = false
                         vertices[index] = .zero
                         continue
@@ -628,6 +1212,19 @@ final class RealityViewportSpatialResources {
                     vertices[index] = placement.position
                     bounds.formUnion(BoundingBox(min: placement.position, max: placement.position))
                 }
+                if valid {
+                    for (offset, proxy) in proxies.enumerated() {
+                        guard let index = lineCollisionIndex[ObjectIdentifier(proxy)] else {
+                            missingProvenance = true
+                            break
+                        }
+                        lineCollisions[index].sourceFirst = vertices[offset]
+                        lineCollisions[index].sourceLast = vertices[offset + 1]
+                    }
+                }
+            }
+            if missingProvenance {
+                throw RealityViewportSpatialBatch.invalid("The native camera line lost its prepared collision provenance.")
             }
             if valid {
                 // Mutate one native part; do not allocate a replacement mesh or array.
@@ -638,10 +1235,11 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = valid
         }
         try updateBoundsRulers(projection: projection, safeRect: safeRect, excludedRects: excludedRects)
+        try updateCollisionBounds(projection: projection)
         do {
             if let gridRuler {
                 guard grid != nil else { throw RealityViewportSpatialBatch.invalid("The mounted frame did not admit a grid.") }
-                let remaining = batch.limits.maxItemCount - batch.itemCount - surfaceItemCount
+                let remaining = batch.limits.maxItemCount - preparedItemCount
                 guard excludedRects.count <= remaining else { throw RealityViewportSpatialBatch.exhausted() }
                 let plane = ViewportCanvasPlane.displayed(for: gridBasis)
                 var scaleAnchor: Point3D?
@@ -911,11 +1509,11 @@ final class RealityViewportSpatialResources {
             minorStepMeters: frame.minorStepMeters, renderOrigin: batch.renderOrigin
         )
         let slotCount = max(gridLabels.count, frame.screenLabels.count)
-        guard slotCount <= batch.limits.maxItemCount - batch.itemCount - surfaceItemCount else {
+        guard slotCount <= batch.limits.maxItemCount - preparedItemCount else {
             throw RealityViewportSpatialBatch.exhausted()
         }
-        var byteCount = batch.admittedByteCount
-        var positionCount = batch.positionCount + surfacePositionCount
+        var byteCount = preparedByteCount
+        var positionCount = preparedPositionCount
         func charge(_ count: Int, _ stride: Int) throws {
             let size = count.multipliedReportingOverflow(by: stride)
             let sum = byteCount.addingReportingOverflow(size.partialValue)
@@ -1026,7 +1624,7 @@ final class RealityViewportSpatialResources {
             line.isEnabled = false
             disabledRulerAxes.insert(axis)
         }
-        guard excludedRects.count <= batch.limits.maxItemCount - batch.itemCount else {
+        guard excludedRects.count <= batch.limits.maxItemCount - preparedItemCount else {
             throw MeshSourcePresentationRenderError(code: .resourceExhausted,
                 message: "Current chrome exclusions exceed bounds ruler placement admission.")
         }
@@ -1179,16 +1777,43 @@ final class RealityViewportSpatialResources {
         let transform = camera.transformMatrix(relativeTo: nil)
         return CameraProjection(worldFromCamera: transform, cameraFromWorld: simd_inverse(transform),
                                 forward: mapping, inverseOffset: offsetMapping.inverted(),
-                                sampleDepth: depth, perspective: perspective != nil, annotationDepth: near * 1.01, near: near, far: far)
+                                sampleDepth: depth, perspective: perspective != nil, annotationDepth: near * 1.01,
+                                near: near, far: far)
+    }
+
+    private static func unitQuadCollision() async throws -> ShapeResource {
+        let mesh = try LowLevelMesh(descriptor: descriptor(vertices: 4, indices: 12))
+        mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+            let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+            vertices[0] = [-0.5, -0.5, 0]
+            vertices[1] = [0.5, -0.5, 0]
+            vertices[2] = [0.5, 0.5, 0]
+            vertices[3] = [-0.5, 0.5, 0]
+        }
+        mesh.withUnsafeMutableIndices { bytes in
+            let indices = bytes.bindMemory(to: UInt32.self)
+            let winding: [UInt32] = [0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0]
+            for index in winding.indices { indices[index] = winding[index] }
+        }
+        mesh.parts.replaceAll([.init(indexCount: 12, topology: .triangle,
+                                     bounds: .init(min: [-0.5, -0.5, 0], max: [0.5, 0.5, 0]))])
+        let resource = try await MeshResource(from: mesh)
+        try Task.checkCancellation()
+        return try await ShapeResource.generateStaticMesh(from: resource)
     }
 
     private func placement(anchor: Point3D, offset: RealityViewportSpatialBatch.Offset,
-                           projection: CameraProjection) -> (position: SIMD3<Float>, metersPerPoint: Float)? {
+                           projection: CameraProjection, allowsBehindCamera: Bool = false)
+        -> (position: SIMD3<Float>, metersPerPoint: Float)? {
         let point: SIMD3<Float>
         do { point = try RealityViewportSpatialBatch.nativePoint(anchor, relativeTo: batch.renderOrigin) }
         catch { return nil }
         let local = projection.local(point)
-        guard local.x.isFinite, local.y.isFinite, local.z.isFinite, local.z < 0 else { return nil }
+        let extendsLine: Bool
+        if allowsBehindCamera, case .fixed = offset { extendsLine = true }
+        else { extendsLine = false }
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite,
+              local.z < 0 || extendsLine else { return nil }
         let screenOffset: CGPoint
         switch offset {
         case .fixed(let value): screenOffset = value
@@ -1211,11 +1836,29 @@ final class RealityViewportSpatialResources {
                                    y: (dy * distance + dx * perpendicular) / length)
         }
         let delta = screenOffset.applying(projection.inverseOffset)
+        // Fixed-offset line vertices extend continuously through the camera
+        // plane. Native rendering and segment collision own near/far clipping;
+        // this signed scale is never used as an Entity size.
         let depthScale = projection.depthScale(local)
         let world = projection.worldFromCamera * SIMD4(local + SIMD3(Float(delta.x) * depthScale, Float(delta.y) * depthScale, 0), 1)
         let scale = depthScale / Float(hypot(projection.forward.c, projection.forward.d))
-        guard world.x.isFinite, world.y.isFinite, world.z.isFinite, scale.isFinite, scale > 0 else { return nil }
+        guard world.x.isFinite, world.y.isFinite, world.z.isFinite, scale.isFinite,
+              scale > 0 || extendsLine else { return nil }
         return (SIMD3(world.x, world.y, world.z), scale)
+    }
+
+    @concurrent
+    private nonisolated static func doubleWoundIndices(_ source: [UInt32]) async throws -> [UInt32] {
+        try Task.checkCancellation()
+        var result = source
+        result.reserveCapacity(source.count * 2)
+        for offset in stride(from: 0, to: source.count, by: 3) {
+            if offset.isMultiple(of: 3072) { try Task.checkCancellation() }
+            result.append(source[offset + 2])
+            result.append(source[offset + 1])
+            result.append(source[offset])
+        }
+        return result
     }
 
     private static func descriptor(vertices: Int, indices: Int) -> LowLevelMesh.Descriptor {
@@ -1235,12 +1878,62 @@ final class RealityViewportSpatialResources {
         ))
     }
 
-    private static func pathResource(_ path: Path, cache: inout [CGPath: MeshResource]) async throws -> MeshResource {
+    @concurrent
+    nonisolated static func normalizedPath(
+        _ path: Path, additionalPositionLimit: Int, additionalByteLimit: Int
+    ) async throws -> Path {
+        try Task.checkCancellation()
+        guard additionalPositionLimit >= 0, additionalByteLimit >= 0 else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        func controlCount(_ value: Path) throws -> Int {
+            var count = 0
+            var valid = true
+            var overflow = false
+            func check(_ point: CGPoint) {
+                valid = valid && Float(point.x).isFinite && Float(point.y).isFinite
+                let next = count.addingReportingOverflow(1)
+                overflow = overflow || next.overflow
+                count = next.partialValue
+            }
+            value.forEach { element in
+                switch element {
+                case .move(let p), .line(let p): check(p)
+                case .quadCurve(let p, let c): check(p); check(c)
+                case .curve(let p, let c1, let c2): check(p); check(c1); check(c2)
+                case .closeSubpath: break
+                }
+            }
+            guard !overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            guard valid else { throw RealityViewportSpatialBatch.invalid("Native path contains invalid control points.") }
+            return count
+        }
+        let sourceCount = try controlCount(path)
+        let normalized = Path(path.cgPath.normalized(using: .evenOdd))
+        try Task.checkCancellation()
+        let count = try controlCount(normalized)
+        guard !normalized.isEmpty, count > 0 else {
+            throw RealityViewportSpatialBatch.invalid("Native normalized path has no filled topology.")
+        }
+        let growth = max(0, count - sourceCount)
+        let bytes = growth.multipliedReportingOverflow(by: MemoryLayout<Path.Element>.stride)
+        guard growth <= additionalPositionLimit, !bytes.overflow, bytes.partialValue <= additionalByteLimit else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        return normalized
+    }
+
+    private static func pathResource(
+        _ path: Path, cache: inout [CGPath: MeshResource],
+        additionalPositionLimit: Int, additionalByteLimit: Int
+    ) async throws -> MeshResource {
         let key = path.cgPath
         if let existing = cache[key] { return existing }
+        let normalized = try await normalizedPath(path, additionalPositionLimit: additionalPositionLimit,
+            additionalByteLimit: additionalByteLimit)
         var extrusion = MeshResource.ShapeExtrusionOptions()
         extrusion.extrusionMethod = .linear(depth: 0)
-        let resource = try await MeshResource(extruding: path, extrusionOptions: extrusion)
+        let resource = try await MeshResource(extruding: normalized, extrusionOptions: extrusion)
         try Task.checkCancellation()
         cache[key] = resource
         return resource

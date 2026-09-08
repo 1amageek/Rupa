@@ -33,6 +33,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .scene
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitTolerancePoints: Float? = nil
     }
 
     struct PlanarPath: Sendable {
@@ -44,6 +45,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .scene
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitTolerancePoints: Float? = nil
     }
 
     struct Label: Sendable {
@@ -57,6 +59,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .annotation
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitRectPoints: CGRect? = nil
     }
 
     struct Marker: Sendable {
@@ -68,6 +71,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .annotation
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitTolerancePoints: Float? = nil
     }
 
     /// Native filled/stroked Path coordinates are screen points about this world anchor.
@@ -79,6 +83,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .annotation
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitTolerancePoints: Float? = nil
     }
 
     /// A screen offset at an explicit world anchor's depth, never guessed depth.
@@ -93,6 +98,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var depth: Depth = .annotation
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
+        var hitTolerancePoints: Float? = nil
     }
 
     struct BoundsRulers: Sendable {
@@ -145,6 +151,7 @@ struct RealityViewportSpatialBatch: Sendable {
     let includesAxes: Bool
     let gridPlacement: GridPlacement?
     let handleCount: Int
+    let lineCollisionCount: Int
     let renderOrigin: Point3D
     let admittedByteCount: Int
     let retainedSurfaceByteCount: Int
@@ -177,6 +184,10 @@ struct RealityViewportSpatialBatch: Sendable {
         var triangleCount = 0
         var itemCount = 0
         var handleFragmentCount = 0
+        var markerCollisionCount = 0
+        var labelCollisionCount = 0
+        var lineCollisionCount = 0
+        var labelCollisionResourceCharged = false
         func charge(_ count: Int, stride: Int) throws {
             let product = count.multipliedReportingOverflow(by: stride)
             let sum = bytes.addingReportingOverflow(product.partialValue)
@@ -200,6 +211,22 @@ struct RealityViewportSpatialBatch: Sendable {
                 throw Self.invalid("Spatial handle index is outside its frame identity table.")
             }
             handleFragmentCount += 1
+        }
+        func validateHitTolerance(_ value: Float?) throws {
+            guard let value else { return }
+            guard value.isFinite, value >= 0 else {
+                throw Self.invalid("Spatial interaction tolerance is not finite or nonnegative.")
+            }
+        }
+        func validateHitRect(_ value: CGRect?) throws {
+            guard let value else { return }
+            guard value.origin.x.isFinite, value.origin.y.isFinite,
+                  value.size.width.isFinite, value.size.height.isFinite,
+                  value.size.width > 0, value.size.height > 0,
+                  value.minX.isFinite, value.minY.isFinite,
+                  value.maxX.isFinite, value.maxY.isFinite else {
+                throw Self.invalid("Spatial label interaction rectangle is invalid.")
+            }
         }
         func validateOffset(_ offset: Offset) throws {
             if case .projected(_, let minimumLength, _, _) = offset {
@@ -266,6 +293,7 @@ struct RealityViewportSpatialBatch: Sendable {
         for mesh in meshes {
             try Task.checkCancellation()
             try validateHandle(mesh.handleIndex)
+            try validateHitTolerance(mesh.hitTolerancePoints)
             try item()
             try positions(mesh.positions.count)
             try charge(1, stride: MemoryLayout<Mesh>.stride + MemoryLayout<LowLevelMesh.Part>.stride
@@ -289,12 +317,41 @@ struct RealityViewportSpatialBatch: Sendable {
             for index in mesh.indices where Int(index) >= mesh.positions.count {
                 throw Self.invalid("Spatial topology references an absent vertex.")
             }
+            if mesh.handleIndex != nil, mesh.hitTolerancePoints != nil {
+                if mesh.topology == .triangles {
+                    // The native static-mesh collision shares the admitted mesh
+                    // topology, but its component and shape reference remain
+                    // application-owned admission items.
+                    try charge(1, stride: MemoryLayout<CollisionComponent>.stride
+                               + MemoryLayout<[ShapeResource]>.stride
+                               + MemoryLayout<ShapeResource>.stride)
+                } else {
+                    // Line geometry uses one bounded native proxy entity per
+                    // segment. The proxies are prepared once and only their
+                    // transforms change with the camera.
+                    for _ in 0..<(mesh.indices.count / 2) {
+                        try item()
+                        lineCollisionCount += 1
+                        handleFragmentCount += 1
+                        try charge(1, stride: MemoryLayout<Entity>.stride
+                                   + MemoryLayout<CollisionComponent>.stride
+                                   + MemoryLayout<[ShapeResource]>.stride + MemoryLayout<ShapeResource>.stride
+                                   + MemoryLayout<RealityViewportSpatialResources.LineCollision>.stride)
+                    }
+                }
+            }
         }
         for path in paths {
             try validateHandle(path.handleIndex)
+            try validateHitTolerance(path.hitTolerancePoints)
             try Task.checkCancellation()
             try item()
             try charge(1, stride: MemoryLayout<PlanarPath>.stride)
+            if path.handleIndex != nil, path.hitTolerancePoints != nil {
+                try charge(1, stride: MemoryLayout<CollisionComponent>.stride
+                           + MemoryLayout<[ShapeResource]>.stride
+                           + MemoryLayout<ShapeResource>.stride)
+            }
             try Self.validateColor(path.color)
             _ = try Self.nativePoint(path.origin, relativeTo: renderOrigin)
             let xLength = simd_length(path.xAxis)
@@ -328,14 +385,37 @@ struct RealityViewportSpatialBatch: Sendable {
             guard !excessive else { throw Self.exhausted() }
             guard valid, drawable else { throw Self.invalid("Spatial path has no drawable topology or has invalid control points.") }
             try positions(pointCount)
-            // A transformed native Path may retain a second control-point buffer.
-            try charge(pointCount, stride: 2 * MemoryLayout<Path.Element>.stride)
+            try positions(pointCount)
+            // Source, transformed cache key, and temporary native normalization.
+            try charge(pointCount, stride: 3 * MemoryLayout<Path.Element>.stride)
         }
         for label in labels {
             try validateHandle(label.handleIndex)
+            try validateHitRect(label.hitRectPoints)
             try Task.checkCancellation()
             try item()
-            try charge(1, stride: MemoryLayout<Label>.stride + MemoryLayout<(Entity, Label)>.stride)
+            try charge(1, stride: MemoryLayout<Label>.stride + MemoryLayout<(Entity, Label, Entity?)>.stride)
+            if label.handleIndex != nil, label.hitRectPoints != nil {
+                try item()
+                labelCollisionCount += 1
+                handleFragmentCount += 1
+                if !labelCollisionResourceCharged {
+                    labelCollisionResourceCharged = true
+                    // The shared zero-thickness quad is built once per prepared
+                    // owner. Admit its fixed native buffers before allocation.
+                    try positions(4)
+                    try charge(4, stride: MemoryLayout<SIMD3<Float>>.stride)
+                    try charge(12, stride: MemoryLayout<UInt32>.stride)
+                    try charge(1, stride: MemoryLayout<LowLevelMesh.Descriptor>.stride
+                               + MemoryLayout<LowLevelMesh.Part>.stride
+                               + MemoryLayout<MeshResource>.stride
+                               + MemoryLayout<ShapeResource>.stride)
+                }
+                try charge(1, stride: MemoryLayout<CollisionComponent>.stride
+                           + MemoryLayout<[ShapeResource]>.stride
+                           + MemoryLayout<ShapeResource>.stride
+                           + MemoryLayout<Entity>.stride)
+            }
             try charge(label.text.utf8.count, stride: 2)
             try positions(label.text.unicodeScalars.count)
             try Self.validateColor(label.color)
@@ -348,8 +428,18 @@ struct RealityViewportSpatialBatch: Sendable {
         }
         for marker in markers {
             try validateHandle(marker.handleIndex)
+            try validateHitTolerance(marker.hitTolerancePoints)
             try item()
             try charge(1, stride: MemoryLayout<Marker>.stride + MemoryLayout<(Entity, Marker)>.stride)
+            if marker.handleIndex != nil, let tolerance = marker.hitTolerancePoints, tolerance > 0 {
+                try item()
+                markerCollisionCount += 1
+                handleFragmentCount += 1
+                // Application-owned component and one-element shape reference
+                // storage; RealityKit's native collision allocation is opaque.
+                try charge(1, stride: MemoryLayout<Entity>.stride + MemoryLayout<CollisionComponent>.stride
+                           + MemoryLayout<[ShapeResource]>.stride + MemoryLayout<ShapeResource>.stride)
+            }
             try Self.validateColor(marker.color)
             _ = try Self.nativePoint(marker.anchor, relativeTo: renderOrigin)
             guard marker.diameterPoints.isFinite, marker.diameterPoints > 0 else {
@@ -358,9 +448,10 @@ struct RealityViewportSpatialBatch: Sendable {
         }
         for line in cameraLines {
             try validateHandle(line.handleIndex)
+            try validateHitTolerance(line.hitTolerancePoints)
             try item()
             try positions(line.points.count)
-            try charge(1, stride: MemoryLayout<CameraLine>.stride + MemoryLayout<(ModelEntity, LowLevelMesh, CameraLine)>.stride)
+            try charge(1, stride: MemoryLayout<CameraLine>.stride + MemoryLayout<(ModelEntity, LowLevelMesh, CameraLine, [Entity])>.stride)
             try charge(line.points.count, stride: MemoryLayout<CameraPoint>.stride + MemoryLayout<SIMD3<Float>>.stride + 2 * MemoryLayout<UInt32>.stride)
             try Self.validateColor(line.color)
             guard line.points.count >= 2 else { throw Self.invalid("A camera-relative line requires two points.") }
@@ -371,12 +462,33 @@ struct RealityViewportSpatialBatch: Sendable {
                 _ = try Self.nativePoint(point.anchor, relativeTo: renderOrigin)
                 try validateOffset(point.offset)
             }
+            if line.handleIndex != nil, line.hitTolerancePoints != nil {
+                for _ in 0..<(line.points.count - 1) {
+                    try item()
+                    lineCollisionCount += 1
+                    handleFragmentCount += 1
+                    try charge(1, stride: 2 * MemoryLayout<Entity>.stride
+                               + MemoryLayout<CollisionComponent>.stride
+                               + MemoryLayout<[ShapeResource]>.stride + MemoryLayout<ShapeResource>.stride
+                               + MemoryLayout<RealityViewportSpatialResources.LineCollision>.stride)
+                }
+            }
         }
         for path in cameraPaths {
             try validateHandle(path.handleIndex)
+            try validateHitTolerance(path.hitTolerancePoints)
             try Task.checkCancellation()
             try item()
-            try charge(1, stride: MemoryLayout<CameraPath>.stride + MemoryLayout<(Entity, CameraPath)>.stride)
+            try charge(1, stride: MemoryLayout<CameraPath>.stride + MemoryLayout<(Entity, CameraPath, Entity?)>.stride)
+            if path.handleIndex != nil, let tolerance = path.hitTolerancePoints, tolerance > 0 {
+                try item()
+                markerCollisionCount += 1
+                handleFragmentCount += 1
+                try charge(1, stride: MemoryLayout<CollisionComponent>.stride
+                           + MemoryLayout<[ShapeResource]>.stride
+                           + MemoryLayout<ShapeResource>.stride
+                           + MemoryLayout<Entity>.stride)
+            }
             _ = try Self.nativePoint(path.anchor, relativeTo: renderOrigin)
             try Self.validateColor(path.color)
             try validateOffset(path.offset)
@@ -401,7 +513,8 @@ struct RealityViewportSpatialBatch: Sendable {
             }
             guard valid, drawable else { throw Self.invalid("Camera path has no drawable topology or has invalid control points.") }
             try positions(count)
-            try charge(count, stride: 2 * MemoryLayout<Path.Element>.stride)
+            try positions(count)
+            try charge(count, stride: 3 * MemoryLayout<Path.Element>.stride)
         }
         var rulerLabelCount = 0
         if let group = boundsRulers {
@@ -450,6 +563,30 @@ struct RealityViewportSpatialBatch: Sendable {
                        + MemoryLayout<UInt64>.stride)
             try charge(128, stride: 1)
         }
+        if markerCollisionCount > 0 {
+            var buckets = 2
+            while buckets < markerCollisionCount * 2 { buckets *= 2 }
+            try charge(buckets, stride: MemoryLayout<ObjectIdentifier>.stride
+                       + MemoryLayout<RealityViewportSpatialResources.MarkerCollision>.stride
+                       + MemoryLayout<UInt64>.stride)
+            try charge(128, stride: 1)
+        }
+        if labelCollisionCount > 0 {
+            var buckets = 2
+            while buckets < labelCollisionCount * 2 { buckets *= 2 }
+            try charge(buckets, stride: MemoryLayout<ObjectIdentifier>.stride
+                       + MemoryLayout<RealityViewportSpatialResources.LabelCollision>.stride
+                       + MemoryLayout<UInt64>.stride)
+            try charge(128, stride: 1)
+            try charge(1, stride: MemoryLayout<LowLevelMesh>.stride
+                       + MemoryLayout<MeshResource>.stride + MemoryLayout<ShapeResource>.stride)
+        }
+        if lineCollisionCount > 0 {
+            var buckets = 2
+            while buckets < lineCollisionCount * 2 { buckets *= 2 }
+            try charge(buckets, stride: MemoryLayout<ObjectIdentifier>.stride + MemoryLayout<Int>.stride + MemoryLayout<UInt64>.stride)
+            try charge(128, stride: 1)
+        }
         // A grouped mesh retains a bounded source-index list and native owner.
         // Reserving once per source mesh covers the worst case of distinct handles.
         try charge(meshes.count, stride: 2 * MemoryLayout<Int>.stride
@@ -463,6 +600,7 @@ struct RealityViewportSpatialBatch: Sendable {
             try charge(128, stride: 1)
         }
         self.meshes = meshes
+        self.lineCollisionCount = lineCollisionCount
         self.paths = paths
         self.labels = labels
         self.markers = markers

@@ -162,6 +162,292 @@ struct RealityViewportMountTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func lineQueryClipsBeforeToleranceAndRestoresPerspectivePosition() throws {
+        let first = SIMD3<Float>(0, 0, 0), last = SIMD3<Float>(2, 0, 2)
+        let hit = try #require(RealityViewportSpatialResources.lineHit(at: CGPoint(x: 10, y: 7),
+            first: first, last: last, projectedFirst: .zero, projectedLast: CGPoint(x: 20, y: 0),
+            tolerance: 8, firstDepth: 1, lastDepth: 3, perspective: true))
+        #expect(hit.position == SIMD3<Float>(0.5, 0, 0.5))
+        #expect(hit.distance == 7)
+        #expect(RealityViewportSpatialResources.lineHit(at: CGPoint(x: 10, y: 9),
+            first: first, last: last, projectedFirst: .zero, projectedLast: CGPoint(x: 20, y: 0),
+            tolerance: 8, firstDepth: 1, lastDepth: 3, perspective: true) == nil)
+        let section = (normal: SIMD3<Double>(1, 0, 0), offset: 1.2, tolerance: 0.0)
+        let retained = try #require(try RealityViewportSpatialResources.clippedLine(first: first, last: last, section: section))
+        #expect(abs(retained.first.x - 1.2) < 0.00001)
+        let nearDepth = 1 + 2 * retained.lower
+        let projectedFirst = CGPoint(x: CGFloat(retained.first.x / nearDepth * 30), y: 0)
+        // The uncut nearest point is clipped away, but the visible endpoint
+        // remains within the pointer tolerance and must still be selectable.
+        let edgeHit = try #require(RealityViewportSpatialResources.lineHit(at: CGPoint(x: 15, y: 0),
+            first: retained.first, last: retained.last, projectedFirst: projectedFirst,
+            projectedLast: CGPoint(x: 20, y: 0), tolerance: 8,
+            firstDepth: nearDepth, lastDepth: 3, perspective: true))
+        #expect(edgeHit.distance < 2)
+        #expect(edgeHit.position == retained.first)
+        #expect(try RealityViewportSpatialResources.clippedLine(first: first, last: last,
+            section: (normal: [1, 0, 0], offset: 3, tolerance: 0)) == nil)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try RealityViewportSpatialResources.clippedLine(first: first, last: last,
+                section: (normal: [Double.nan, 0, 0], offset: 0, tolerance: 0))
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func lineCollisionTracksProjectedTolerance(perspective: Bool, cameraRelative: Bool) async throws {
+        _ = NSApplication.shared
+        let points: [Point3D] = [.init(x: -0.003, y: 0, z: -0.003), .origin, .init(x: 0.003, y: 0, z: 0.003)]
+        let offsets: [CGFloat] = [-20, 0, 20]
+        let batch = try RealityViewportSpatialBatch(
+            meshes: cameraRelative ? [] : [.init(positions: points, indices: [0, 1, 1, 2], topology: .lines,
+                color: [1, 1, 1, 1], handleIndex: 0, hitTolerancePoints: 8)],
+            cameraLines: cameraRelative ? [.init(points: zip(points, offsets).map {
+                .init(anchor: $0, offset: .fixed(CGPoint(x: $1, y: 0)))
+            }, color: [1, 1, 1, 1], handleIndex: 0, hitTolerancePoints: 8)] : [],
+            handleCount: 1, renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        #expect(batch.lineCollisionCount == 2)
+        do {
+            _ = try RealityViewportSpatialBatch(meshes: batch.meshes, cameraLines: batch.cameraLines,
+                handleCount: 1, renderOrigin: .origin, retainedSurfaceByteCount: 0,
+                limits: .init(maxItemCount: batch.itemCount - 1, maxPositionCount: batch.limits.maxPositionCount,
+                    maxTriangleCount: batch.limits.maxTriangleCount, maxRetainedByteCount: batch.limits.maxRetainedByteCount))
+            Issue.record("Line proxies bypassed native entity admission.")
+        } catch let error as MeshSourcePresentationRenderError {
+            #expect(error.code == .resourceExhausted)
+        }
+        let viewport = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: nil)
+        let size = CGSize(width: 512, height: 384)
+        var reportedError: MeshSourcePresentationRenderError?
+        func view(zoom: CGFloat, revision: UInt64) -> some View {
+            RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
+                shading: .init(style: .flat), materialColors: [:],
+                layout: .init(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
+                    camera: .init(zoom: zoom, projection: perspective ? .standardPerspective : .parallel),
+                    basis: .axisFront(.z), verticalBounds: -0.01...0.01),
+                interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+                sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+                onUpdateResult: { reportedError = $0 })
+                .frame(width: size.width, height: size.height)
+        }
+        let controller = NSHostingController(rootView: view(zoom: 0.2, revision: 1))
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer { viewport.unbind(); window.contentViewController = nil; window.close() }
+        func colliders(in entity: Entity) -> [Entity] {
+            var result = entity.components[CollisionComponent.self] == nil ? [] : [entity]
+            for child in entity.children { result.append(contentsOf: colliders(in: child)) }
+            return result
+        }
+        let collisionEntities = colliders(in: viewport.root)
+        #expect(collisionEntities.count == 2)
+        let shape = try #require(collisionEntities.first?.components[CollisionComponent.self]?.shapes.first)
+        for (iteration, zoom) in [CGFloat(0.2), 1, 20].enumerated() {
+            let revision = UInt64(iteration + 1)
+            if iteration > 0 { controller.rootView = view(zoom: zoom, revision: revision) }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while viewport.appliedViewportRevision != revision || viewport.project(.origin) == nil {
+                try #require(ContinuousClock.now < deadline)
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            #expect(reportedError == nil)
+            for collider in collisionEntities {
+                #expect(collider.components[CollisionComponent.self]?.shapes.first == shape)
+            }
+            let center = try #require(viewport.project(.origin))
+            #expect(try viewport.spatialHandleHits(at: center, revision: revision) == [0], "Center at zoom \(zoom)")
+            #expect(try viewport.spatialHandleHits(at: CGPoint(x: center.x, y: center.y + 7), revision: revision) == [0], "Interior tolerance at zoom \(zoom)")
+            #expect(try viewport.spatialHandleHits(at: CGPoint(x: center.x, y: center.y + 9), revision: revision).isEmpty)
+            var endpoint = try #require(viewport.project(points[2]))
+            if cameraRelative { endpoint.x += offsets[2] }
+            let endpointDepth = -viewport.camera.convert(position: [0.003, 0, 0.003], from: nil).z
+            let near = try #require(viewport.camera.components[PerspectiveCameraComponent.self]?.near
+                ?? viewport.camera.components[OrthographicCameraComponent.self]?.near)
+            let endpointHits = try viewport.spatialHandleHits(at: CGPoint(x: endpoint.x + 7, y: endpoint.y), revision: revision)
+            if endpointDepth >= near {
+                #expect(endpointHits == [0], "Visible endpoint tolerance at zoom \(zoom)")
+            } else {
+                // Native project may return a finite screen point behind the
+                // eye; it is not a visible endpoint or a valid collision target.
+                #expect(endpointHits.isEmpty)
+                for collider in collisionEntities { #expect(collider.isEnabledInHierarchy) }
+            }
+            #expect(try viewport.spatialHandleHits(at: CGPoint(x: endpoint.x + 9, y: endpoint.y), revision: revision).isEmpty)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
+    func markerCollisionTracksExplicitPixelTolerance(perspective: Bool, sphere: Bool) async throws {
+        _ = NSApplication.shared
+        let marker = RealityViewportSpatialBatch.Marker(
+            shape: sphere ? .sphere : .box, anchor: .origin, diameterPoints: 12,
+            color: [1, 1, 1, 1], handleIndex: 0, hitTolerancePoints: 8
+        )
+        let batch = try RealityViewportSpatialBatch(markers: [marker], handleCount: 1,
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let viewport = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: nil)
+        let size = CGSize(width: 512, height: 384)
+        let interaction = MeshSourcePresentationInteractionStateResolver(
+            sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil)
+        var reportedError: MeshSourcePresentationRenderError?
+        func view(zoom: CGFloat, revision: UInt64) -> some View {
+            let layout = ViewportLayout(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02),
+                size: size, camera: .init(zoom: zoom, projection: perspective ? .standardPerspective : .parallel),
+                basis: .axisFront(.z), verticalBounds: -0.01...0.01)
+            return RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
+                shading: .init(style: .flat), materialColors: [:], layout: layout, interaction: interaction,
+                sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+                onUpdateResult: { reportedError = $0 }).frame(width: size.width, height: size.height)
+        }
+        let controller = NSHostingController(rootView: view(zoom: 0.2, revision: 1))
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer { viewport.unbind(); window.contentViewController = nil; window.close() }
+        func collider(in entity: Entity) -> Entity? {
+            if entity.components[CollisionComponent.self] != nil { return entity }
+            for child in entity.children { if let result = collider(in: child) { return result } }
+            return nil
+        }
+        let entity = try #require(collider(in: viewport.root))
+        let collision = try #require(entity.components[CollisionComponent.self])
+        let collisionShape = try #require(collision.shapes.first)
+        #expect(collision.filter.group == RealityViewport.spatialCollisionGroup)
+        #expect(viewport.spatialHandleIndex(for: entity) == 0)
+        for (offset, zoom) in [CGFloat(0.2), 1, 20].enumerated() {
+            let revision = UInt64(offset + 1)
+            if offset > 0 { controller.rootView = view(zoom: zoom, revision: revision) }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while viewport.appliedViewportRevision != revision || !entity.isEnabledInHierarchy {
+                try #require(ContinuousClock.now < deadline)
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            #expect(reportedError == nil)
+            #expect(entity.components[CollisionComponent.self]?.shapes.first == collisionShape)
+            let screenCenter = try #require(viewport.project(.origin))
+            // The visual radius is 6 pt; the explicit circular input radius is
+            // 8 pt for both marker shapes, independent of lens and zoom.
+            for (offset, expected) in [(CGPoint(x: 7, y: 0), true),
+                                       (CGPoint(x: 9, y: 0), false),
+                                       (CGPoint(x: 6, y: 6), false)] {
+                let point = CGPoint(x: screenCenter.x + offset.x, y: screenCenter.y + offset.y)
+                #expect(try viewport.spatialHandleHits(at: point, revision: revision).contains(0) == expected)
+            }
+            #expect(try viewport.surfaceHit(at: screenCenter, revision: revision) == nil)
+            #expect(try viewport.spatialHandleHits(at: screenCenter, revision: revision) == [0])
+            #expect(try viewport.spatialHandleHits(at: CGPoint(x: screenCenter.x + 12, y: screenCenter.y), revision: revision).isEmpty)
+            #expect(throws: MeshSourcePresentationRenderError.self) {
+                try viewport.spatialHandleHits(at: screenCenter, revision: revision + 1)
+            }
+            entity.isEnabled = false
+            #expect(try viewport.spatialHandleHits(at: screenCenter, revision: revision).isEmpty)
+            entity.isEnabled = true
+        }
+        viewport.invalidateCamera()
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.spatialHandleHits(at: .zero, revision: 3)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true], [0, 1, 2, 3, 4])
+    func spatialHandleQuerySeparatesOcclusionSectionAndAnnotation(perspective: Bool, family: Int) async throws {
+        _ = NSApplication.shared
+        let plan = try MeshSourcePresentationRenderPlan(scene: planCacheScene(suffix: "spatial-occlusion"))
+        let markers: [RealityViewportSpatialBatch.Marker] = [
+            .init(shape: .sphere, anchor: .init(x: 0.5, y: 0.5, z: 0.2), diameterPoints: 16,
+                  color: [1, 1, 1, 1], depth: .scene, handleIndex: 0, hitTolerancePoints: 8),
+            .init(shape: .sphere, anchor: .init(x: 0.5, y: 0.5, z: -0.2), diameterPoints: 16,
+                  color: [1, 1, 1, 1], depth: .scene, handleIndex: 1, hitTolerancePoints: 8),
+            .init(shape: .sphere, anchor: .init(x: 0.5, y: 0.5, z: -0.2), diameterPoints: 16,
+                  color: [1, 1, 1, 1], depth: .annotation, handleIndex: 2, hitTolerancePoints: 8),
+            .init(shape: .box, anchor: .init(x: 0.5, y: 0.5, z: 0.3), diameterPoints: 16,
+                  color: [1, 1, 1, 1], depth: .annotation, handleIndex: 2, hitTolerancePoints: 8),
+            .init(shape: .sphere, anchor: .init(x: 0.5, y: 0.5, z: 0.1), diameterPoints: 16,
+                  color: [1, 1, 1, 1], depth: .scene, attachment: .sectionedGeometry, handleIndex: 3, hitTolerancePoints: 8)
+        ]
+        let labels: [RealityViewportSpatialBatch.Label] = family == 1 ? markers.map {
+            .init(text: "Label", anchor: $0.anchor, offset: .zero, heightPoints: 12, color: $0.color,
+                  depth: $0.depth, attachment: $0.attachment, handleIndex: $0.handleIndex,
+                  hitRectPoints: CGRect(x: -8, y: -8, width: 16, height: 16))
+        } : []
+        let paths: [RealityViewportSpatialBatch.CameraPath] = family == 2 ? markers.map {
+            .init(path: Path(CGRect(x: -2, y: -2, width: 4, height: 4)), anchor: $0.anchor,
+                  offset: .zero, color: $0.color, depth: $0.depth, attachment: $0.attachment,
+                  handleIndex: $0.handleIndex, hitTolerancePoints: 8)
+        } : []
+        let fills: [RealityViewportSpatialBatch.Mesh] = family == 3 ? markers.map { marker in
+            let p = marker.anchor
+            return .init(positions: [.init(x: p.x - 0.05, y: p.y - 0.05, z: p.z),
+                .init(x: p.x + 0.05, y: p.y - 0.05, z: p.z),
+                .init(x: p.x + 0.05, y: p.y + 0.05, z: p.z),
+                .init(x: p.x - 0.05, y: p.y + 0.05, z: p.z)],
+                indices: [0, 1, 2, 0, 2, 3], topology: .triangles, color: marker.color,
+                depth: marker.depth, attachment: marker.attachment,
+                handleIndex: marker.handleIndex, hitTolerancePoints: 0)
+        } : []
+        let planarFills: [RealityViewportSpatialBatch.PlanarPath] = family == 4 ? markers.map {
+            .init(path: Path(CGRect(x: -0.05, y: -0.05, width: 0.1, height: 0.1)), origin: $0.anchor,
+                xAxis: [1, 0, 0], yAxis: [0, 1, 0], color: $0.color, depth: $0.depth,
+                attachment: $0.attachment, handleIndex: $0.handleIndex, hitTolerancePoints: 0)
+        } : []
+        let batch = try RealityViewportSpatialBatch(meshes: fills, paths: planarFills,
+            labels: labels, markers: family == 0 ? markers : [],
+            cameraPaths: paths, handleCount: 4,
+            renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
+        let viewport = try await RealityViewport.prepare(plan: plan, spatialBatch: batch, reusing: nil)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.spatialHandleHits(at: .zero, revision: 1)
+        }
+        let size = CGSize(width: 512, height: 384)
+        let layout = ViewportLayout(modelBounds: CGRect(x: 0, y: -0.5, width: 1, height: 1), size: size,
+            camera: .init(zoom: 0.6, projection: perspective ? .standardPerspective : .parallel),
+            basis: .axisFront(.z), verticalBounds: 0...1)
+        var reportedError: MeshSourcePresentationRenderError?
+        let view = RealityViewportView(viewport: viewport, viewportRevision: 1, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+            sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+            onUpdateResult: { reportedError = $0 }).frame(width: size.width, height: size.height)
+        let controller = NSHostingController(rootView: view)
+        let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer { viewport.unbind(); window.contentViewController = nil; window.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while viewport.project(.init(x: 0.5, y: 0.5, z: 0)) == nil {
+            try #require(ContinuousClock.now < deadline)
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(reportedError == nil)
+        if let lens = viewport.camera.components[OrthographicCameraComponent.self] {
+            for marker in markers {
+                let depth = -viewport.camera.convert(position: [Float(marker.anchor.x), Float(marker.anchor.y), Float(marker.anchor.z)], from: nil).z
+                #expect(depth > lens.near && depth < lens.far)
+            }
+        }
+        let point = try #require(viewport.project(.init(x: 0.5, y: 0.5, z: 0)))
+        let hits = try viewport.spatialHandleHits(at: point, revision: 1)
+        #expect(hits.first == 2)
+        #expect(Set(hits) == [0, 2, 3])
+        #expect(hits.count == 3)
+        #expect(try viewport.surfaceHit(at: point, revision: 1) != nil)
+        let section = SectionAnalysisResult.Plane(sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
+            origin: .init(x: 0, y: 0, z: 0.15), normal: .init(x: 0, y: 0, z: 1),
+            u: .init(x: 1, y: 0, z: 0), v: .init(x: 0, y: 1, z: 0))
+        try viewport.applySection(plane: section, side: .front, tolerance: 0)
+        let sectionHits = try viewport.spatialHandleHits(at: point, revision: 1)
+        #expect(sectionHits.first == 2)
+        #expect(Set(sectionHits) == [0, 1, 2])
+        #expect(try viewport.surfaceHit(at: point, revision: 1) == nil)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.spatialHandleHits(at: CGPoint(x: CGFloat.nan, y: 0), revision: 1)
+        }
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true], [false, true])
     func coldMountPublishesNativeGridWithoutManualCameraUpdates(
         perspective: Bool,

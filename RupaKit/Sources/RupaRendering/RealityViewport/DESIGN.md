@@ -211,16 +211,159 @@ Every camera-relative anchor placement also consumes the item ceiling; packing
 multiple points into one camera-line or marker array cannot bypass the per-frame
 work bound.
 Interactive top-level descriptors carry an optional frame-local `UInt32`
-`handleIndex`. The parent producer owns the immutable typed CAD identity table;
-this component accepts its count, validates every index before allocation, and
-never interprets the table's entries. World meshes are grouped by attachment and
+`handleIndex`. The parent producer owns an immutable frame table whose record
+contains the normalized typed CAD identity and the exact prepared
+`ViewportInteractionTarget`/drag baseline produced by that same semantic pass;
+it never retains the mutable drag coordinator. The normalized identity remains
+the stable deduplication address and excludes CAD `geometrySignature` payloads.
+The prepared target may retain an existing immutable COW source reference but
+must not deep-copy, traverse, or estimate source geometry in Rendering. Its
+shallow table storage and separately owned variable payloads consume the
+existing admission, and replacement invalidates the complete record with its
+source frame. This component accepts only the record count, validates every
+index before allocation, and never interprets either table value. World meshes are grouped by attachment and
 handle index, so distinct handles cannot lose their provenance through batching.
 All native fragments of a handle resolve to the same index through a frame-owned
 Entity lookup. Noninteractive fragments have no index. The host may use a returned
 index only with the matching prepared frame and identity table. Lookup storage
 and grouping scratch storage consume the existing aggregate byte admission.
-Native collision/query wiring remains the RK-4 gate; retaining this metadata
-alone does not make a handle pickable.
+RK-4.2 makes only descriptors with a validated `handleIndex` and an explicit
+finite interaction footprint pickable. Mesh, planar-path, marker, camera-line,
+and camera-path fragments use a nonnegative `hitTolerancePoints` scalar. Label
+descriptors have no scalar tolerance field; an interactive label instead carries
+a finite positive label-local `hitRectPoints`, already expanded to the exact
+route rectangle. These values are
+independent of visible marker diameter, line width, glyph outline, and engine-
+derived text bounds and are stored per fragment, because one semantic handle may
+use different line, tip, and label footprints. RK-4.2.1 owns these optional
+descriptor fields
+and native query behavior; RK-4.2.2 maps each existing route's current
+8/10/12/13/14-point or rectangular interaction footprint into only the
+fragments that its legacy route accepts before native input becomes
+authoritative. A handle index without a footprint remains prepared metadata but
+creates no collision candidate, so decorative fragments do not become input
+authority. At RK-4.2 completion every native-authoritative interactive fragment
+has an explicit footprint; absent or invalid footprint is a typed preparation
+failure, not a visual-size default.
+
+World mesh, planar path, label, marker, camera-line, and camera-path fragments
+with that complete metadata receive bounded native collision candidates during
+overlay preparation; fragments without an index, grid entities, and
+selected-object rulers receive none. Triangle Mesh collision accepts the exact
+indexed triangle fill; a hole or omitted region with no triangle remains a miss,
+and any positive screen tolerance applies only around its visible boundary.
+PlanarPath collision uses the existing closed native even-odd fill, preserving
+holes; its positive tolerance is likewise a boundary expansion rather than
+bounding-box fill. Current identity-bearing triangle meshes are active preview
+decoration and current PlanarPath fills have no interaction identity, so
+RK-4.2.2 leaves both without a footprint unless it maps a real legacy fill
+route. A conservative native boundary candidate may be used for expansion, but
+the mounted projection narrowphase must enforce the exact fill, holes, and
+point-space boundary distance.
+
+The native PlanarPath cache is keyed by the admitted raw `CGPath` and checks
+that cache before doing normalization work. On a cache miss, its existing
+off-Main preparation worker canonicalizes the path with native
+`CGPath.normalized(using: .evenOdd)` before native zero-depth extrusion and
+static collision generation. The normalized temporary is one candidate-lifetime
+value; it neither replaces nor becomes CAD source geometry. An empty or
+non-finite normalized result, or normalized control-point growth beyond the
+remaining peak application-owned position/byte admission for one sequential
+cache miss, is a typed preparation failure with no raw-path fallback or partial
+publication. Each awaited miss releases that normalized local after extrusion;
+only the raw key and opaque native MeshResource remain cached, so separate
+misses do not accumulate this transient scratch charge. Tessellation and its
+opaque allocation remain RealityKit-owned; this component adds no custom
+tessellator and does not claim the SDK allocation's exact byte size.
+
+An enabled triangle Mesh receives an exact native static-fill collider from a
+collision-only MeshResource with the admitted source indices in both windings;
+this matches its two-sided visual material without changing the visual resource.
+An enabled PlanarPath receives its exact static-fill collider from the
+even-odd-normalized native extrusion already used by its visual Entity. For a
+positive boundary tolerance, preparation adds existing `LineCollision` proxies
+for the Mesh triangle edges or for the native PlanarPath tessellation edges;
+their mounted projection narrowphase remains the acceptance authority. Reading
+`MeshResource.contents` to count native path positions and triangle indices
+precedes any application-owned array, edge table, or proxy allocation. Checked
+worst-case edge count, copied buffer bytes, proxy items, metadata, and retained
+records are cumulatively debited across the whole candidate before creation;
+overflow or a limit breach rejects the candidate. Native tessellation output is
+consumed as-is and is not retessellated by Rupa.
+
+The exact-fill Entity and every boundary proxy retain the same handle index,
+depth, attachment, and visibility as their source fragment. Sectioned geometry
+remains below the existing clipped root and also passes the query-time section
+half-space; scene-depth fill/proxies retain surface occlusion, while annotation
+depth retains affordance priority. A zero tolerance enables exact fill without
+boundary expansion, and an absent footprint creates neither collider nor proxy.
+Camera-only updates mutate no fill resource; a matching-frame query may return
+the handle only from an enabled exact fill or a boundary proxy that passes its
+point-space narrowphase.
+
+Current CameraPath fragments are centered handle-tip glyphs. Their scalar is
+the legacy total center/tip radius, not extra padding around the visible glyph;
+the native owner scales a shared unit collider to that radius and updates its
+transform to the final camera-relative glyph center in the same frame. It does
+not retain the static world anchor or derive collision from the glyph path. The
+glyph's fill rule and holes do not become input semantics. CameraLine owns
+the companion shaft tolerance independently. An interactive Label is a
+rectangle: the native owner transforms a shared unit quad to `hitRectPoints` at
+the same camera-relative placement and does not generate collision from text
+glyphs. The collision geometry is a camera-facing, zero-thickness native quad
+with both windings, not a volumetric box whose near face changes the projected
+rectangle in perspective. This preserves sketch-dimension rectangles and their
+split length/angle halves with four-point expansion, and the Pattern output-mode 156-by-26-point
+rectangle with six-point expansion. Other numeric/guide labels remain
+decorative even when they share a handle identity.
+
+The macOS 27 probe established that direct
+200-micrometer sphere/box generation is inflated, while a shared unit native
+sphere/box scaled by its Entity to a 200-micrometer diameter preserves the
+requested extent: a 50-micrometer offset hits and 150-micrometer-and-larger
+offsets miss. Primitive marker/box collision therefore uses the scaled shared
+unit collider as its native geometry; mounted Ortho/Persp tests still verify
+conversion from the explicit point tolerance to that world scale. A collider
+that is necessarily conservative, including a line/path broad phase that cannot
+represent the exact screen-space footprint, is only candidate acquisition; the
+same mounted camera
+then projects the existing descriptor geometry and applies the route's fixed
+point-space tolerance before the frame-local index is resolved. This narrow
+projection filter is used only for those proven broad proxies and is the
+existing tolerance exception, not CPU ray/triangle intersection or source
+traversal.
+
+Collision resources are prepared once per source/overlay topology and charged
+to the existing item, position, and retained-byte ceilings. Triangle/path
+resources may supply their native collision mesh, labels use the shared
+double-wound unit quad, and line topology uses admitted
+fixed-capacity native proxy segments, and camera-relative fragments update only
+existing Entity/proxy transforms with their visual placement. No pointer event
+creates a ShapeResource, mesh, Entity, or descriptor. Primitive collision uses
+that scaled shared unit sphere or box rather than requesting a sub-2-mm
+primitive: RealityKit documents that direct `generateSphere` extents below 2 mm
+are clamped. Marker/box queries do not add a duplicate projection narrowphase
+after mounted tests establish the requested point-radius conversion;
+conservative line/path proxies retain the projection narrowphase defined above.
+
+Surface and spatial hits use the same composed mounted-camera ray but retain
+separate provenance classification. A surface Entity must resolve through the
+prepared occurrence/source-triangle map; a spatial Entity must resolve through
+the prepared handle index. Neither may be rejected as though it were a corrupt
+member of the other class. Within an interaction route, eligible annotation-
+depth handles preserve the existing affordance-before-object priority and are
+ordered by projected tolerance distance then native ray distance; scene-depth
+handles must also pass occlusion by the nearest retained surface. Sectioned
+handles obey the same native clip half-space, world-attached handles retain the
+existing unsectioned policy, and disabled/hidden fragments are never returned.
+An exact-ready frame with interactive spatial bounds may compose a finite ray
+without surface entries; a frame with no eligible interactive or surface
+collision is a valid miss. The parent resolves the returned index only against
+the matching frame record and returns its already prepared interaction target;
+it never reruns projected distance/layout candidate selectors or reconstructs
+a drag baseline from the normalized identity. Missing index/provenance, stale identity,
+unapplied camera, nonfinite transform, or admission/resource failure is typed
+failure and never falls back to projected legacy handles or identity rendering.
 The internal camera-relative offset is either a fixed point-space translation or
 a direction-relative value containing one immutable world `toward` point plus
 finite parallel and perpendicular point distances. `CameraPoint`, label, and
@@ -246,11 +389,23 @@ map is shared by every admitted fixed and direction-relative placement in that
 update and is not stored across camera frames. Per-placement work is limited to
 camera-local conversion and bounded affine arithmetic; it performs no native
 resource creation, source traversal, or await. A behind-camera, non-finite,
-unprojectable, or screen-degenerate anchor/toward pair disables the affected
-descriptor for that update, clears any mutable line position used by it, and
-never reuses a stale transform or falls back to a fixed direction. Each
-direction-relative `toward` point consumes one additional item and position, and
-its concrete descriptor storage is included in the checked retained-byte sum.
+unprojectable, or screen-degenerate anchor/toward pair disables a marker,
+label, camera path, or direction-relative placement for that update and never
+reuses a stale transform or falls back to a fixed direction. The sole
+camera-plane-crossing exception is a `CameraLine` vertex with a `.fixed`
+point-space offset. Its private line-placement path admits finite camera-local Z
+on either side and applies the signed perspective depth scale continuously. The
+line caller consumes position only; the signed value is never used as an Entity size.
+Every finite vertex is written, so RealityKit clips visual segments to the
+native near/far interval and the already prepared line-collision owner clips
+the same source segments before query. A behind-camera endpoint therefore does
+not disable the visible prefix or suffix of the complete polyline. An anchor on
+the camera plane may collapse to the eye and is removed by native near clipping.
+Directed/projected offsets retain the existing front-facing direction
+requirement because a behind-camera pair cannot authorize its screen direction.
+Each direction-relative `toward` point consumes one additional item and
+position, and its concrete descriptor storage is included in the checked
+retained-byte sum.
 
 The XYZ reference axes are camera-owned native presentation, not finite
 world-source geometry. They are the three mathematical lines through the CAD
@@ -756,11 +911,12 @@ latency for every allocator arrangement.
 |---|---|
 | Native resource path | Apple GPU probe/test covers triangles, line topology, text/path extrusion, material assignment, and macOS-27-or-later `ClippingComponent` hierarchy. Purely translated exact-equal payloads use the same visual/collision/line resource identities through distinct entities and retain distinct occurrence/face hit provenance; a changed shear or other non-equal native payload does not share. A same-shading material-map replacement changes the actual native output; invalid replacement reports failure without partial mutation; a camera-only revision leaves appearance resources unchanged and performs no material-resolution callback or scene traversal. |
 | Native camera/input | Mounted macOS 27 tests retain the raw inverse-query counterexamples, then cover documented orthographic/symmetric-perspective lens forms; centered/off-center fit/pan render/project parity; three-point affine explicit miss; composed-ray/project round trips; near/far filtering; bounded `Scene.raycast`; true axis-front endpoints; rigid quaternion-transition frames; and invalid-frame or stale-tuple miss. Apple-GPU front/back quad tests prove the one-sided visual-mesh collision counterexample, then compare rendered visibility with ordered native `.all` results from the collision-only original/reversed mesh for material culling on/off, both normalized face ranges, out-of-range refusal, and exact source provenance. |
+| Spatial footprint admission | Focused RK-4.2.1 tests admit and query each enabled Mesh, PlanarPath, Label, and CameraPath footprint and reject invalid tolerance, rectangle, handle index, generated-tessellation count, cumulative proxy count/byte, or retained-byte input before application-owned copies or partial publication. The raw nested-path counterexample demonstrates that zero-depth native extrusion followed directly by static collision fills a same-winding hole; the native even-odd-normalized fixture proves GPU-visible fill, front/back hole misses, transformed reuse, and peak normalized-growth refusal. Two-sided Mesh and normalized PlanarPath fixtures distinguish exact filled regions, holes, zero tolerance, and point-space boundary expansion in world/sectioned and scene/annotation routes; Label fixtures compare the exact supplied rectangle after alignment, orbit, and zoom; CameraPath fixtures compare the legacy center radius at its final camera-relative position. Nil footprints create no collider, and camera-only updates retain native resource identity. |
 | Frame identity | Compile coverage proves every public and production `Viewport` caller supplies document-generation or real presentation-snapshot identity. Replacement, cancellation, overlay-only update, camera-only update, and unmount tests reject mixed roots and stale lookup. Same-snapshot/different-overlay replacement is distinct and retains identical surface plan/material/visual/line/collision resource identities; camera-only revision reuses all resource identities; rapid replacement retains one worker plus the newest pending value. A default-cache lifecycle test uses actual native preparation, then scene replacement and teardown with no external mount owner; weak `RealityViewport`, shared surface record, and root references prove that application owners withdraw and release each completed native owner. Native SDK deallocation may be deferred, so this is not GPU allocator-reclamation evidence. |
 | Overlay display continuity | A delayed same-scene/snapshot overlay fixture proves the mounted root, camera, source surface, and native grid remain enabled through preparation and typed failure while exact-ready surface, CAD hit, and handle-table lookup for the requested identity remain unavailable. Warm-host Ortho/Persp tests prove successful publication has no empty rendered frame; source/snapshot replacement still withdraws the old root. |
 | Empty and optional surface | Nil-surface and real empty-snapshot fixtures mount one native root and camera in Ortho and Persp, display grid/axis/measurement spatial entities, return an explicit surface miss, and contain no fabricated project/evaluation identity. |
 | Spatial attachment | Apple-GPU section fixtures prove `.sectionedGeometry` follows the surface clip while `.world` grid/section-plane/reference entities remain uncut; both retain their declared depth policy and update through the same mounted camera. Ortho/Persp zoom fixtures move a sectioned camera-relative label/marker beyond the prepared surface bounds, prove the native visual-bounds union expands only the five containment faces, preserves the cut half-space, and reuses every geometry/text/path resource identity. |
-| Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed and direction-relative `CameraPoint`, label, and camera-path placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, degenerate or behind-camera pairs become explicitly disabled without stale positions, camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
+| Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed and direction-relative `CameraPoint`, label, and camera-path placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, degenerate or behind-camera single-point/direction pairs become explicitly disabled without stale positions, and a fixed-offset `CameraLine` crossing the camera plane retains its native-clipped visible segments and collision provenance instead of disabling the polyline. Camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
 | Native dynamic grid | Fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare the complete native line classes, signed formatted labels, separation, and chrome exclusion with `ViewportProjectedGrid`. The same line `LowLevelMesh`, three material parts, surface resources, and non-grid spatial resources retain identity while world coverage and `TextComponent` values change. Invalid and combined line/label/item/position/byte boundaries preserve the previous grid and report typed failure without label truncation. Apple-GPU evidence confirms TextComponent visibility, constant point size, and annotation ordering; a maximum admitted grid plus camera-relative update remains within 8.333 ms and performs no scene/CAD traversal or application-owned asynchronous resource generation. |
 | Provenance | Face/edge/vertex/occurrence mappings survive entity/resource reuse; missing mapping is an explicit miss. |
 | Failure and bounds | Owned-buffer count/byte admission, native resource-count bounds, opaque native resource/collision failure, measured peak memory, cancellation, and root-preservation tests pass without empty success. A lowered caller byte limit that admits the CPU plan but not checked grouping metadata fails with `.resourceExhausted` before grouping allocation. A finite `1e-100` world scale must pass the Double CPU plan, fail only when native Float preparation collapses its surface with `.invalidTransform`, publish no surface, and allow the next valid snapshot to recover to ready. The maximum single-upload fixture and its boundary refusal are recomputed after grouping admission is added rather than preserving old hard-coded counts. Current-process footprint evidence reports baseline/peak/retained/signed delta and sample count without being promoted to signed-App or exact opaque-allocation proof. |

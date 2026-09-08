@@ -45,8 +45,17 @@ struct RealityViewportSpatialResourcesTests {
         )
         let resources = try await RealityViewportSpatialResources.prepare(batch: batch)
         let children = Array(resources.root.children)
-        #expect(children.count == 8)
-        #expect(children.filter { resources.handleIndex(for: $0) == 0 }.count == 4)
+        func colliderCount(_ entity: Entity) -> Int {
+            var count = entity.components[CollisionComponent.self] == nil ? 0 : 1
+            for child in entity.children { count += colliderCount(child) }
+            return count
+        }
+        #expect(colliderCount(resources.root) == 0)
+        #expect(colliderCount(resources.sectionedRoot) == 0)
+        // Indexed mesh fragments stay separate so their individual interaction
+        // footprints cannot be lost by grouping equal handle identities.
+        #expect(children.count == 9)
+        #expect(children.filter { resources.handleIndex(for: $0) == 0 }.count == 5)
         #expect(children.filter { resources.handleIndex(for: $0) == 1 }.count == 3)
         #expect(children.filter { resources.handleIndex(for: $0) == nil }.count == 1)
         #expect(resources.sectionedRoot.children.count == 1)

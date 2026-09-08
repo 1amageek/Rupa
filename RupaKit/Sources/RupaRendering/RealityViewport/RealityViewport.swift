@@ -11,6 +11,8 @@ import simd
 /// Owns native resources for one immutable presentation snapshot, never CAD data.
 @MainActor
 final class RealityViewport {
+    static let surfaceCollisionGroup = CollisionGroup(rawValue: 1 << 0)
+    static let spatialCollisionGroup = CollisionGroup(rawValue: 1 << 1)
     let root = Entity()
     let camera = Entity()
     let snapshotID: EvaluationSnapshotID?
@@ -230,7 +232,10 @@ final class RealityViewport {
             let resources = surfaceResources.resources[instance.groupIndex]
             let surface = ModelEntity(mesh: resources.visual, materials: [UnlitMaterial(color: .gray)])
             surface.position = instance.translation
-            surface.components.set(CollisionComponent(shapes: [resources.collision]))
+            surface.components.set(CollisionComponent(
+                shapes: [resources.collision],
+                filter: .init(group: Self.surfaceCollisionGroup, mask: .all)
+            ))
             geometryRoot.addChild(surface)
             occurrenceByEntity[ObjectIdentifier(surface)] = index
             let lines: ModelEntity?
@@ -746,6 +751,68 @@ final class RealityViewport {
         return (triangle: triangle, point: worldPoint)
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Native handle queries are not yet the
+    // production input authority. RK-4.2.2/3 must bind these frame-local indices
+    // to prepared semantic targets and replace the legacy pointer selectors.
+    func spatialHandleHits(at point: CGPoint, revision: UInt64) throws -> [UInt32] {
+        guard point.x.isFinite, point.y.isFinite, appliedViewportRevision == revision,
+              root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {
+            throw Self.queryFailure("The native handle query requires a finite point and matching mounted frame.")
+        }
+        guard let spatialResources, spatialResources.collisionBounds != nil else { return [] }
+        let query = try nativeHits(at: point, mask: [Self.surfaceCollisionGroup, Self.spatialCollisionGroup])
+        var occluder: Float?
+        for hit in query.hits {
+            guard hit.entity.isEnabledInHierarchy else { continue }
+            guard let group = hit.entity.components[CollisionComponent.self]?.filter.group else {
+                throw Self.queryFailure("The native hit lost its collision classification.")
+            }
+            if group == Self.surfaceCollisionGroup {
+                guard triangle(for: hit) != nil else {
+                    throw Self.queryFailure("The native collision hit has no prepared surface provenance.")
+                }
+                if occluder == nil, retains(hit, rayDirection: query.rayDirection) {
+                    occluder = -camera.convert(position: hit.position, from: nil).z
+                }
+            } else if group != Self.spatialCollisionGroup {
+                throw Self.queryFailure("The native collision hit has an ambiguous classification.")
+            }
+        }
+        var candidates: [(index: UInt32, annotation: Bool, projected: CGFloat, distance: Float)] = []
+        for hit in query.hits where hit.entity.isEnabledInHierarchy
+            && hit.entity.components[CollisionComponent.self]?.filter.group == Self.spatialCollisionGroup {
+            guard let metadata = spatialResources.handleMetadata(for: hit.entity) else {
+                throw Self.queryFailure("The native collision hit has no prepared handle provenance.")
+            }
+            guard let distance = try spatialResources.projectedHandleDistance(for: hit.entity, at: point,
+                section: metadata.attachment == .sectionedGeometry ? section : nil, project: {
+                self.content?.project(point: $0, to: .local)
+            }) else { continue }
+            let position = distance.position ?? hit.position
+            let depth = -camera.convert(position: position, from: nil).z
+            guard distance.distance.isFinite, distance.distance >= 0,
+                  position.x.isFinite, position.y.isFinite, position.z.isFinite, depth.isFinite else {
+                throw Self.queryFailure("The native handle distance is not finite.")
+            }
+            // Conservative descriptor queries clip their source geometry before
+            // finding its nearest point; exact colliders use the native hit.
+            if distance.position == nil, metadata.attachment == .sectionedGeometry, let section,
+               simd_dot(SIMD3<Double>(position), section.normal) - section.offset < -section.tolerance {
+                continue
+            }
+            if metadata.depth == .scene, let occluder, depth > occluder { continue }
+            candidates.append((metadata.index, metadata.depth == .annotation, distance.distance, hit.distance))
+        }
+        candidates.sort {
+            if $0.annotation != $1.annotation { return $0.annotation }
+            if $0.projected != $1.projected { return $0.projected < $1.projected }
+            if $0.distance != $1.distance { return $0.distance < $1.distance }
+            return $0.index < $1.index
+        }
+        var seen: Set<UInt32> = []
+        return candidates.compactMap { seen.insert($0.index).inserted ? $0.index : nil }
+    }
+
     /// Collision winding copies never create a new editable CAD face.
     nonisolated static func sourceTriangleIndex(for face: Int, triangleCount: Int) -> Int? {
         guard triangleCount > 0, face >= 0 else { return nil }
@@ -773,14 +840,15 @@ final class RealityViewport {
         }
     }
 
-    private func nativeHits(at point: CGPoint) throws -> (hits: [CollisionCastHit], rayDirection: SIMD3<Float>) {
+    private func nativeHits(at point: CGPoint, mask: CollisionGroup = surfaceCollisionGroup) throws -> (hits: [CollisionCastHit], rayDirection: SIMD3<Float>) {
         guard let scene = root.scene else {
             throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
         }
         guard let ray = cameraRay(through: point) else {
             throw Self.queryFailure("The mounted native camera cannot resolve a finite surface ray.")
         }
-        var hits = scene.raycast(origin: ray.origin, direction: ray.direction, length: ray.length, query: .all)
+        var hits = scene.raycast(origin: ray.origin, direction: ray.direction, length: ray.length,
+                                query: .all, mask: mask)
         try hits.removeAll { hit in
             guard hit.distance.isFinite, hit.distance >= 0 else {
                 throw Self.queryFailure("The native collision query returned a non-finite distance.")
@@ -804,11 +872,17 @@ final class RealityViewport {
     private func cameraRay(through point: CGPoint) -> (
         origin: SIMD3<Float>, direction: SIMD3<Float>, length: Float, near: Float, far: Float
     )? {
-        guard point.x.isFinite, point.y.isFinite, !entries.isEmpty, let content else { return nil }
+        guard point.x.isFinite, point.y.isFinite, let content else { return nil }
+        var queryBounds = entries.isEmpty ? nil : bounds
+        if let spatialBounds = spatialResources?.collisionBounds {
+            if queryBounds == nil { queryBounds = spatialBounds }
+            else { queryBounds?.formUnion(spatialBounds) }
+        }
+        guard let queryBounds else { return nil }
         let orthographic = camera.components[OrthographicCameraComponent.self]
         let perspective = camera.components[PerspectiveCameraComponent.self]
         guard orthographic == nil || perspective == nil else { return nil }
-        let center = (SIMD3<Double>(bounds.min) + SIMD3<Double>(bounds.max)) / 2
+        let center = (SIMD3<Double>(queryBounds.min) + SIMD3<Double>(queryBounds.max)) / 2
         let eye = camera.convert(position: .zero, to: nil)
         let near: Float
         let far: Float
@@ -852,7 +926,7 @@ final class RealityViewport {
             direction = camera.convert(direction: SIMD3<Float>(simd_normalize(local)), to: nil)
         }
         let magnitude = simd_length(SIMD3<Double>(direction))
-        let diagonal = simd_length(SIMD3<Double>(bounds.max) - SIMD3<Double>(bounds.min))
+        let diagonal = simd_length(SIMD3<Double>(queryBounds.max) - SIMD3<Double>(queryBounds.min))
         // A full diagonal leaves space beyond the enclosing sphere so native
         // raycast fully crosses the farthest surface, including flat bounds.
         let length = Float(simd_length(SIMD3<Double>(origin) - center) + diagonal).nextUp
@@ -865,27 +939,29 @@ final class RealityViewport {
     /// Native clipping changes rendering, not collision geometry. Keep the
     /// same half-space contract when resolving native collision results.
     func retainedHits(_ hits: [CollisionCastHit], rayDirection: SIMD3<Float>) -> [CollisionCastHit] {
+        hits.filter { retains($0, rayDirection: rayDirection) }
+    }
+
+    private func retains(_ hit: CollisionCastHit, rayDirection: SIMD3<Float>) -> Bool {
         guard root.isEnabled, geometryRoot.isEnabled,
               rayDirection.x.isFinite, rayDirection.y.isFinite, rayDirection.z.isFinite,
-              rayDirection != .zero else { return [] }
+              rayDirection != .zero else { return false }
         let cullsBackfaces = appearance.map { $0.shading.isBackfaceCullingActive(in: $0.mode) } ?? false
-        return hits.filter { hit in
-            guard let triangle = triangle(for: hit) else { return false }
-            if let section {
-                let position = SIMD3<Double>(hit.position)
-                guard simd_dot(position, section.normal) - section.offset >= -section.tolerance else { return false }
-            }
-            if cullsBackfaces {
-                let a = triangle.firstPosition
-                let b = triangle.secondPosition
-                let c = triangle.thirdPosition
-                let ab = SIMD3<Double>(b.x - a.x, b.y - a.y, b.z - a.z)
-                let ac = SIMD3<Double>(c.x - a.x, c.y - a.y, c.z - a.z)
-                // Only classify a native hit; intersection remains RealityKit's.
-                return simd_dot(simd_cross(ab, ac), SIMD3<Double>(rayDirection)) < 0
-            }
-            return true
+        guard let triangle = triangle(for: hit) else { return false }
+        if let section {
+            let position = SIMD3<Double>(hit.position)
+            guard simd_dot(position, section.normal) - section.offset >= -section.tolerance else { return false }
         }
+        if cullsBackfaces {
+            let a = triangle.firstPosition
+            let b = triangle.secondPosition
+            let c = triangle.thirdPosition
+            let ab = SIMD3<Double>(b.x - a.x, b.y - a.y, b.z - a.z)
+            let ac = SIMD3<Double>(c.x - a.x, c.y - a.y, c.z - a.z)
+            // Only classify a native hit; intersection remains RealityKit's.
+            return simd_dot(simd_cross(ab, ac), SIMD3<Double>(rayDirection)) < 0
+        }
+        return true
     }
 
     private nonisolated static func color(_ value: SIMD4<Float>) -> ColorRGBA {
