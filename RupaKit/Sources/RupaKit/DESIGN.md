@@ -297,12 +297,12 @@ flowchart LR
     unbounded diagnostic or ask Protocol to retry encoding another value.
 23. CADAPI-D mutation and explicit save are separate application actions. This
     use case never saves implicitly or edits package bytes.
-24. The existing evaluator factory receives `GeometryRepresentationPurpose`
-    before provider construction. `.modeling` derives fidelity from document
-    modeling settings; `.presentation` derives fidelity from one deterministic
-    product policy. Both purposes receive explicit product-owned aggregate
-    limits no wider than lower-layer hard ceilings. Export continues through
-    its existing independent policy.
+24. The existing evaluator factory constructs one CAD configuration from the
+    document modeling settings. Modeling and presentation share that fidelity
+    and CAD artifact; purpose selects representations and aggregate admission,
+    not a different tessellation. This follows
+    [CADIntegration](../RupaCADIntegration/DESIGN.md). Geometry exchange consumes
+    the immutable published result under its [own contract](GeometryExchange/DESIGN.md).
 25. Product policy may lower RupaEvaluation and Swift-CAD hard limits but never
     widens them. It changes only derived Mesh fidelity/resource admission, not
     exact source, B-rep topology, modeling tolerance, representation selection,
