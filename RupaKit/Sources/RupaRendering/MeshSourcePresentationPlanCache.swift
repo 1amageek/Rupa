@@ -53,6 +53,10 @@ final class MeshSourcePresentationPlanCache {
         return surface
     }
 
+    func hasReadyCamera(for identity: RealityViewportPreparationRequest.Identity, revision: UInt64) -> Bool {
+        surface(for: identity)?.isCameraReady(revision: revision) == true
+    }
+
     /// Queries only the exact-ready surface for `identity`. A retained
     /// display-only surface is intentionally not a query authority.
     func surfaceHit(

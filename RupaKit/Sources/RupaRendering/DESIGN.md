@@ -376,6 +376,23 @@ independent tessellator is never an alternative implementation.
    may resume. The owner never requires the press record's overlay revision to
    equal the replacement preview frame and never resolves a second hit to
    refresh that record.
+   Releasing an accepted gesture while its own preview replacement is not yet
+   exact-ready closes input but does not finish or discard the interaction. The
+   owner retains one pending-finish value containing the release point, release
+   camera revision, press record, and the same source/selection/route/base
+   guards. Publication of that exact-ready frame retries the native axis query
+   once and either emits exactly one commit or produces the route's typed
+   refusal; it never uses the last preview scalar or bypasses revision checking.
+   Exact cache/frame unavailability is the retryable state. Once the requested
+   identity and revision are mounted, a nonfinite, degenerate, parallel, or
+   behind-axis query is a terminal refusal rather than another readiness retry.
+   A change to the document/source, non-self-owned presentation snapshot,
+   selection/member set, route/base availability, or release camera revision
+   before completion cancels the pending finish and emits no callback; Escape
+   and teardown do the same. Clearing the pointer preview after mouse-up must
+   not clear this closed pending-finish;
+   completion or cancellation releases it exactly once before any external
+   mutation callback.
    A two-point screen chord obtained by projecting a world-axis origin and a
    one-meter probe is not an affine world-distance metric in perspective and
    may cross the eye or reverse for a visible small handle. Production axis
@@ -383,6 +400,38 @@ independent tessellator is never an alternative implementation.
    through the same mounted, revision-checked camera-query owner; the chord is
    only a bounded presentation/input sample and cannot authorize the CAD
    distance by itself.
+   The incremental native cutover for `splineControlPointSlide`,
+   `polySplineSurfaceVertexSlide`, `surfaceControlPointSlide`, `surfaceFrame`,
+   `regionOffset`, `edgeOffset`, `slotWidth`, and `sketchVertexOffset` starts
+   from the ordered native handle result and retains that exact prepared record,
+   occurrence/source baseline, and press point through finish or cancellation.
+   Each update queries the current exact-ready mounted revision for the signed
+   delta along the record's world axis. The callbacks mutate sketch, surface,
+   and CAD definition values expressed in source metres, whereas this native
+   query returns world metres. For a single occurrence, the input owner derives
+   the finite positive source-units-per-world-metre factor from the retained
+   source direction and `record.modelTransform`'s invertible linear part. For a
+   grouped surface handle, the producer derives every member's factor from its
+   corresponding local direction and transform, publishes the verified common
+   value as `Axis.sourceUnitsPerWorldMetre`, and refuses differing occurrence
+   scales rather than averaging them or assuming identity. The input owner
+   applies the applicable factor to the world delta before producing a commit
+   value. Spline, surface, frame, and region slides consume the
+   converted delta directly; edge and sketch-vertex offsets apply it to the
+   retained source base value with the existing positive lower bound; slot
+   width applies twice the converted delta to its retained source base width
+   with the same lower bound. The input state retains the prepared record and
+   axis and emits the existing public callback commit value; it does not retain
+   an inert legacy interaction geometry or repackage one as an adapter. Once one
+   of these routes is native-enabled, native miss or typed query/materialization
+   failure cannot invoke its legacy selector. A source-baseline change cancels
+   it. For edge offset, slot width, and sketch-vertex offset this includes a
+   change to the retained base-value setting. The interaction's own overlay
+   replacement retains the press record, and
+   temporary native-frame unavailability performs no mutation until an
+   exact-ready replacement resumes. Every other route remains explicitly
+   incomplete until migrated under the same authority rather than silently
+   sharing this eight-route claim.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no

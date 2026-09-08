@@ -1075,12 +1075,16 @@ final class RealityViewport {
         return delta
     }
 
+    func isCameraReady(revision: UInt64) -> Bool {
+        appliedViewportRevision == revision && root.isEnabled && clipper.isEnabled
+            && root.scene != nil && content != nil && cameraCalibration != nil
+    }
+
     private func validateCameraQuery(point: CGPoint, revision: UInt64) throws {
         guard point.x.isFinite, point.y.isFinite else {
             throw Self.queryFailure("The native camera query point is not finite.")
         }
-        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled,
-              root.scene != nil, content != nil, cameraCalibration != nil else {
+        guard isCameraReady(revision: revision) else {
             throw Self.queryFailure("The native camera query requires an exact-ready mounted frame.")
         }
     }

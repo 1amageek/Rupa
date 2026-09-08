@@ -19,6 +19,12 @@ import Testing
     #expect(try owner.revision(for: policy) == 4)
     policy.measurementToolActive = true
     #expect(try owner.revision(for: policy) == 5)
+    policy.nativeAxisValue = 0.01
+    #expect(try owner.revision(for: policy) == 6)
+    policy.nativeAxisValue = .nan
+    #expect(throws: MeshSourcePresentationRenderError.self) { try owner.revision(for: policy) }
+    policy.nativeAxisValue = 0.01
+    #expect(try owner.revision(for: policy) == 6)
 }
 
 @MainActor

@@ -1154,7 +1154,8 @@ extension ViewportSpatialOverlayProducer {
                                 selectionTarget: primitiveSource.selectionTarget,
                                 baseValue: source.ruler.minorTickMeters,
                                 label: label,
-                                state: override?.state ?? (entitySelected ? .pending : .normal)
+                                state: override?.state ?? (entitySelected ? .pending : .normal),
+                                modelTransform: item.modelTransform
                             )
                             try append(entry, to: &result, limits: limits)
                         }
@@ -1195,7 +1196,8 @@ extension ViewportSpatialOverlayProducer {
                             ),
                             baseValue: source.ruler.minorTickMeters,
                             label: label,
-                            state: override?.state ?? (selected ? .pending : .normal)
+                            state: override?.state ?? (selected ? .pending : .normal),
+                            modelTransform: item.modelTransform
                         )
                         try append(entry, to: &result, limits: limits)
                     }
@@ -1242,7 +1244,8 @@ extension ViewportSpatialOverlayProducer {
                         ),
                         baseValue: source.edgeOffsetDistanceMeters,
                         label: label,
-                        state: override?.state ?? .pending
+                        state: override?.state ?? .pending,
+                        modelTransform: item.modelTransform
                     )
                     try append(entry, to: &result, limits: limits)
                 }
@@ -2049,7 +2052,8 @@ extension ViewportSpatialOverlayProducer {
                     preferredUnit: ruler.displayUnit
                 )
             },
-            state: override?.state ?? state
+            state: override?.state ?? state,
+            modelTransform: modelTransform
         )
     }
 
@@ -2113,7 +2117,8 @@ extension ViewportSpatialOverlayProducer {
                 baseValue: defaultDistanceMeters,
                 selectionTarget: selectionTarget,
                 label: label,
-                state: override?.state ?? state
+                state: override?.state ?? state,
+                modelTransform: modelTransform
             ))
         }
         switch primitive {
@@ -2859,7 +2864,8 @@ extension ViewportSpatialOverlayProducer {
         baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState,
-        family: ViewportSpatialOverlayFamily = .sketch
+        family: ViewportSpatialOverlayFamily = .sketch,
+        modelTransform: Transform3D = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         guard sourceVertices.count >= 3 else {
             throw RealityViewportSpatialBatch.invalid(
@@ -2893,6 +2899,7 @@ extension ViewportSpatialOverlayProducer {
             anchor: anchor,
             direction: direction,
             distanceMeters: distanceMeters,
+            modelTransform: modelTransform,
             minimumLengthPoints: 64.0,
             label: label,
             state: state,
@@ -2913,7 +2920,8 @@ extension ViewportSpatialOverlayProducer {
         baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState,
-        family: ViewportSpatialOverlayFamily = .body
+        family: ViewportSpatialOverlayFamily = .body,
+        modelTransform: Transform3D = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         let anchor = midpoint(edgeStart, edgeEnd)
         let direction = try normalizedVector(from: anchor, to: inwardToward)
@@ -2938,6 +2946,7 @@ extension ViewportSpatialOverlayProducer {
             anchor: anchor,
             direction: direction,
             distanceMeters: distanceMeters,
+            modelTransform: modelTransform,
             minimumLengthPoints: 64.0,
             label: label,
             state: state,
@@ -2958,7 +2967,8 @@ extension ViewportSpatialOverlayProducer {
         baseValue: Double,
         selectionTarget: SelectionTarget?,
         label: String?,
-        state: SketchCurveAffordanceState
+        state: SketchCurveAffordanceState,
+        modelTransform: Transform3D = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         guard widthMeters.isFinite, widthMeters > 0.0 else {
             throw RealityViewportSpatialBatch.invalid(
@@ -2982,6 +2992,7 @@ extension ViewportSpatialOverlayProducer {
             anchor: base,
             direction: normalized,
             distanceMeters: widthMeters * 0.5,
+            modelTransform: modelTransform,
             minimumLengthPoints: 64.0,
             label: label,
             state: state,
@@ -3002,7 +3013,8 @@ extension ViewportSpatialOverlayProducer {
         baseValue: Double,
         selectionTarget: SelectionTarget?,
         label: String?,
-        state: SketchCurveAffordanceState
+        state: SketchCurveAffordanceState,
+        modelTransform: Transform3D = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         let normalized = try direction.normalized(tolerance: 1.0e-12)
         let preparedOrigin = preparedBase ?? base
@@ -3022,6 +3034,7 @@ extension ViewportSpatialOverlayProducer {
             anchor: base,
             direction: normalized,
             distanceMeters: distanceMeters,
+            modelTransform: modelTransform,
             minimumLengthPoints: 64.0,
             label: label,
             state: state,
@@ -3041,7 +3054,8 @@ extension ViewportSpatialOverlayProducer {
         selectionTarget: SelectionTarget?,
         baseValue: Double,
         label: String?,
-        state: SketchCurveAffordanceState
+        state: SketchCurveAffordanceState,
+        modelTransform: Transform3D = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         var indexes: [Int] = []
         var seenIndexes: Set<Int> = []
@@ -3095,6 +3109,7 @@ extension ViewportSpatialOverlayProducer {
             anchor: visualGeometry.anchor,
             direction: visualGeometry.direction,
             distanceMeters: distanceMeters,
+            modelTransform: modelTransform,
             minimumLengthPoints: 62.0,
             label: label,
             state: state,
@@ -3208,6 +3223,7 @@ extension ViewportSpatialOverlayProducer {
         anchor: Point3D,
         direction: Vector3D,
         distanceMeters: Double,
+        modelTransform: Transform3D,
         minimumLengthPoints: Double,
         label: String?,
         state: SketchCurveAffordanceState,
@@ -3225,10 +3241,20 @@ extension ViewportSpatialOverlayProducer {
             )
         }
         let unit = try direction.normalized(tolerance: 1.0e-12)
+        let sourceUnitsPerWorldMetre = try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(
+            for: unit,
+            in: modelTransform
+        )
+        let worldDistance = distanceMeters / sourceUnitsPerWorldMetre
+        guard worldDistance.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Sketch/curve world offset endpoint is not finite."
+            )
+        }
         let end = Point3D(
-            x: anchor.x + unit.x * distanceMeters,
-            y: anchor.y + unit.y * distanceMeters,
-            z: anchor.z + unit.z * distanceMeters
+            x: anchor.x + unit.x * worldDistance,
+            y: anchor.y + unit.y * worldDistance,
+            z: anchor.z + unit.z * worldDistance
         )
         guard end.isFinite else {
             throw RealityViewportSpatialBatch.invalid(

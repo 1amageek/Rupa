@@ -9,6 +9,15 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
         let origin: Point3D
         let direction: Vector3D
         let baseValue: Double
+        let sourceUnitsPerWorldMetre: Double?
+
+        init(origin: Point3D, direction: Vector3D, baseValue: Double,
+             sourceUnitsPerWorldMetre: Double? = nil) {
+            self.origin = origin
+            self.direction = direction
+            self.baseValue = baseValue
+            self.sourceUnitsPerWorldMetre = sourceUnitsPerWorldMetre
+        }
     }
 
     struct AffordanceBodyMember: Sendable {

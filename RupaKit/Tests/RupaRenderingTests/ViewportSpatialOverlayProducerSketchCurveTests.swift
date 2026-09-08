@@ -1088,3 +1088,124 @@ func offsetRoutesKeepTipFootprintWithProjectedGuideEndpoint() throws {
         toward: Point3D(x: 1.0, y: 0.0, z: 0.0)
     )
 }
+
+@Test
+func offsetRoutesPreserveSourceDistancesUnderModelScale() throws {
+    let featureID = FeatureID()
+    let componentID = SelectionComponentID.profileRegion(featureID: featureID, profileIndex: 0)
+    let selectionTarget = SelectionTarget(sceneNodeID: .init(), component: .object)
+    let transform = Transform3D(matrix: try Matrix4x4(values: [
+        2.0, 0.0, 0.0, 0.0,
+        0.0, 2.0, 0.0, 0.0,
+        0.0, 0.0, 2.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]))
+
+    func tipAnchor(
+        _ entry: ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.Entry
+    ) throws -> Point3D {
+        let tip = try #require(entry.cameraGuides.first?.points.last)
+        return entry.route == .regionOffset ? tip.anchor : tip.toward
+    }
+
+    func assertSourceBaseValue(
+        _ entry: ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.Entry,
+        equals expected: Double
+    ) throws {
+        let axis: ViewportSpatialPreparedInteractionTarget.Axis
+        switch try #require(entry.preparedTarget) {
+        case .regionOffset(_, _, _, let value),
+             .edgeOffset(_, _, _, _, _, let value),
+             .slotWidth(_, _, _, let value),
+             .sketchVertexOffset(_, _, _, _, let value),
+             .splineControlPointSlide(_, _, _, _, _, let value):
+            axis = value
+        default:
+            Issue.record("The offset route did not retain its prepared source axis.")
+            return
+        }
+        #expect(abs(axis.baseValue - expected) < 1.0e-12)
+    }
+
+    let edge = try ViewportSpatialOverlayProducer.makeEdgeOffsetEntry(
+        featureID: featureID,
+        edge: .leftBottom,
+        edgeStart: Point3D(x: -1.0, y: 0.0, z: 0.0),
+        edgeEnd: Point3D(x: 1.0, y: 0.0, z: 0.0),
+        inwardToward: Point3D(x: 0.0, y: 1.0, z: 0.0),
+        distanceMeters: 0.2,
+        selectionTarget: selectionTarget,
+        baseValue: 0.2,
+        label: nil,
+        state: .normal,
+        modelTransform: transform
+    )
+    let region = try ViewportSpatialOverlayProducer.makeRegionOffsetEntry(
+        featureID: featureID,
+        componentID: componentID,
+        sourceVertices: [
+            Point3D(x: -1.0, y: -1.0, z: 0.0),
+            Point3D(x: 1.0, y: -1.0, z: 0.0),
+            Point3D(x: 0.0, y: 1.0, z: 0.0),
+        ],
+        distanceMeters: 0.2,
+        selectionTarget: selectionTarget,
+        baseValue: 0.2,
+        label: nil,
+        state: .normal,
+        modelTransform: transform
+    )
+    let slot = try ViewportSpatialOverlayProducer.makeSlotWidthEntry(
+        featureID: featureID,
+        entityID: SketchEntityID(),
+        base: .origin,
+        direction: .unitY,
+        widthMeters: 0.2,
+        baseValue: 0.2,
+        selectionTarget: selectionTarget,
+        label: nil,
+        state: .normal,
+        modelTransform: transform
+    )
+    let vertex = try ViewportSpatialOverlayProducer.makeSketchVertexOffsetEntry(
+        featureID: featureID,
+        entityID: SketchEntityID(),
+        handle: .point,
+        base: .origin,
+        direction: .unitX,
+        distanceMeters: 0.2,
+        baseValue: 0.2,
+        selectionTarget: selectionTarget,
+        label: nil,
+        state: .normal,
+        modelTransform: transform
+    )
+    let spline = try ViewportSpatialOverlayProducer.makeSplineSlideEntries(
+        featureID: featureID,
+        entityID: SketchEntityID(),
+        controlPoints: [
+            Point3D(x: -1.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 1.0, y: 0.0, z: 0.0),
+        ],
+        selectedIndexes: [1],
+        direction: .positiveU,
+        distanceMeters: 0.2,
+        selectionTarget: selectionTarget,
+        baseValue: 0.2,
+        label: nil,
+        state: .normal,
+        modelTransform: transform
+    )
+
+    #expect(abs(try tipAnchor(edge).y - 0.4) < 1.0e-12)
+    #expect(abs(try tipAnchor(region).y - 1.4) < 1.0e-12)
+    #expect(abs(try tipAnchor(slot).y - 0.2) < 1.0e-12)
+    #expect(abs(try tipAnchor(vertex).x - 0.4) < 1.0e-12)
+    #expect(abs(try tipAnchor(spline).x - 0.4) < 1.0e-12)
+    try assertSourceBaseValue(edge, equals: 0.2)
+    try assertSourceBaseValue(region, equals: 0.2)
+    try assertSourceBaseValue(slot, equals: 0.2)
+    try assertSourceBaseValue(vertex, equals: 0.2)
+    try assertSourceBaseValue(spline, equals: 0.2)
+}

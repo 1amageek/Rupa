@@ -48,6 +48,25 @@ public struct Viewport: View {
     @State private var surfaceFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var hoveredInteractionTarget: ViewportInteractionTarget?
     @State private var pendingInteractionTarget: ViewportInteractionTarget?
+    @State private var hoveredNativeAxisIdentity: ViewportSpatialHandleIdentity?
+    @State private var nativeAxisGesture: NativeAxisGesture?
+
+    private struct NativeAxisPress {
+        let input: ViewportNativeAxisInput
+        let source: ViewportSourceIdentity
+        let snapshotID: EvaluationSnapshotID?
+        let selectedTargets: [SelectionTarget]
+        let selectedReferences: [SelectionReference]
+        let start: CGPoint
+        var value: Double?
+        var finish: (point: CGPoint, revision: UInt64)?
+    }
+
+    private enum NativeAxisGesture {
+        case active(NativeAxisPress)
+        // Consume the rest of a refused gesture, including its mouse-up.
+        case cancelled
+    }
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     @State private var snapOverlayResult: SnapResolutionResult?
     @State private var snapOverlayFailureDescription: String?
@@ -707,6 +726,11 @@ public struct Viewport: View {
                             onUpdateResult: { error in
                                 guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
                                 surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
+                                if error == nil {
+                                    resumeNativeAxisFinish()
+                                } else if presentationSurface.appliedViewportRevision == nil {
+                                    cancelNativeAxisGesture()
+                                }
                             }
                         )
                         .allowsHitTesting(false)
@@ -793,6 +817,11 @@ public struct Viewport: View {
                             captureReferenceLineAnchor(at: point)
                         },
                         onCancel: {
+                            if nativeAxisGesture != nil {
+                                clearPendingCanvasInteractionTargets()
+                                activeCanvasDrag = nil
+                                return true
+                            }
                             guard measurementToolActive else { return false }
                             resetMeasurement()
                             return true
@@ -869,6 +898,10 @@ public struct Viewport: View {
                     if let newValue { onProjectedGridStepChange?(newValue) }
                 }
                 .onChange(of: activeControlSession.revision) { _, _ in
+                    if case .active(let press) = nativeAxisGesture, let finish = press.finish,
+                       finish.revision != activeControlSession.revision {
+                        cancelNativeAxisGesture()
+                    }
                     // Agent and UI commands share the session. Reflect their applied
                     // state through the existing snapshot callbacks without waiting
                     // for GPU completion or mutating session state during `body`.
@@ -886,6 +919,9 @@ public struct Viewport: View {
                         fittingInsets: fittingChromeLayout.fittingInsets
                     )
                     activeControlSession.updateContext(context)
+                }
+                .onChange(of: presentationFailure) { _, _ in
+                    if case .failed = presentationPlanCache.state { cancelNativeAxisGesture() }
                 }
                 .task(id: viewportInstanceID) {
                     let viewportID = viewportInstanceID
@@ -920,6 +956,7 @@ public struct Viewport: View {
                 refreshPlacementHighlight(size: proxy.size)
             }
             .onChange(of: measurementToolActive) { _, isActive in
+                cancelNativeAxisGesture()
                 if !isActive {
                     resetMeasurement()
                 }
@@ -934,8 +971,18 @@ public struct Viewport: View {
                 }
             }
             .onChange(of: presentationScene?.snapshotID) { _, _ in
+                cancelNativeAxisGesture()
                 resetMeasurement()
             }
+            .onChange(of: selection.selectedTargets) { _, _ in
+                cancelNativeAxisGesture()
+            }
+            .onChange(of: selection.selectedReferences) { _, _ in
+                cancelNativeAxisGesture()
+            }
+            .onChange(of: slotWidthMeters) { _, _ in cancelChangedNativeAxisBaseline() }
+            .onChange(of: edgeOffsetDistanceMeters) { _, _ in cancelChangedNativeAxisBaseline() }
+            .onChange(of: sketchVertexOffsetDistanceMeters) { _, _ in cancelChangedNativeAxisBaseline() }
             .onChange(of: selection.selectedSceneNodeIDs) { _, _ in
                 resetMeasurement()
             }
@@ -949,12 +996,14 @@ public struct Viewport: View {
                 clearCanvasHover()
             }
             .onChange(of: sourceIdentity) { _, _ in
+                cancelNativeAxisGesture()
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution(size: proxy.size)
                 refreshPlacementHighlight(size: proxy.size)
                 resetMeasurement()
             }
             .onDisappear {
+                clearPendingCanvasInteractionTargets()
                 previewEvaluationCache.clear()
                 presentationPlanCache.teardown()
                 surfaceFailure = nil
@@ -1585,8 +1634,9 @@ public struct Viewport: View {
         key.meshSelection = meshSelectionOverlay
         key.editedBodies = editedBodies
         key.activeDrags = activeInteractionDrags
-        key.hoveredHandle = try hoveredInteractionTarget?.spatialIdentity
-        key.pendingHandle = try pendingInteractionTarget?.spatialIdentity
+        key.hoveredHandle = try hoveredSpatialHandleIdentity
+        key.pendingHandle = try pendingSpatialHandleIdentity
+        if case .active(let press) = nativeAxisGesture { key.nativeAxisValue = press.value }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
         if let drag = activeCanvasDrag, case .creation(let kind) = drag.kind {
             key.creation = .init(kind: kind, drag: drag.modelDrag, plane: drag.sketchPlane)
@@ -1961,6 +2011,7 @@ public struct Viewport: View {
 
     private func automaticMeasurementReadout(size: CGSize) -> String? {
         guard showsAutomaticMeasurement, activeCanvasDrag == nil, pendingInteractionTarget == nil,
+              nativeAxisGesture == nil,
               let occurrence = selectedMeasurementOccurrence() else { return nil }
         let layout = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).layout
         let chrome = ViewportCanvasChromeLayout(
@@ -2652,6 +2703,7 @@ public struct Viewport: View {
         guard showsAutomaticMeasurement,
               activeCanvasDrag == nil,
               pendingInteractionTarget == nil,
+              nativeAxisGesture == nil,
               let occurrence = selectedMeasurementOccurrence() else {
             return
         }
@@ -10680,6 +10732,9 @@ public struct Viewport: View {
             refreshSnapOverlayResolution(size: size)
         }
         if start == nil || current == nil {
+            // Mouse-up clears the adapter preview before a replacement frame
+            // may become ready. The input owner still owns that release.
+            if case .active(let press) = nativeAxisGesture, press.finish != nil { return }
             clearPendingCanvasInteractionTargets()
             clearDragPreviewDocument()
             activeCanvasDrag = nil
@@ -10689,6 +10744,10 @@ public struct Viewport: View {
         guard let start, let current else {
             activeCanvasDrag = nil
             publishSelectionDragPreview(hits: [])
+            return
+        }
+        if nativeAxisGesture != nil {
+            _ = updateNativeAxisGesture(current: current)
             return
         }
         if let pendingInteractionTarget {
@@ -10781,6 +10840,7 @@ public struct Viewport: View {
     }
 
     private func clearPendingCanvasInteractionTargets() {
+        nativeAxisGesture = nil
         pendingInteractionTarget = nil
         clearDragPreviewDocument()
         clearAffordanceGhostEdits()
@@ -10821,10 +10881,168 @@ public struct Viewport: View {
         }
     }
 
+    private func nativeAxisInput(at point: CGPoint) throws -> ViewportNativeAxisInput? {
+        let records = try presentationPlanCache.interactionRecords(
+            at: point, for: presentationQueryIdentity(), revision: activeControlSession.revision
+        )
+        guard let record = records.first else { return nil }
+        return try ViewportNativeAxisInput(record: record)
+    }
+
+    private func nativeAxisRouteEnabled(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
+        switch target {
+        case .splineControlPointSlide: onSplineControlPointSlideDrag != nil
+        case .polySplineSurfaceVertexSlide: onPolySplineSurfaceVertexSlideDrag != nil
+        case .surfaceControlPointSlide: onSurfaceControlPointSlideDrag != nil
+        case .surfaceFrame: onSurfaceFrameDrag != nil
+        case .regionOffset: onRegionOffsetDrag != nil
+        case .edgeOffset: onEdgeOffsetDrag != nil
+        case .slotWidth: onSlotWidthDrag != nil
+        case .sketchVertexOffset: onSketchVertexOffsetDrag != nil
+        default: false
+        }
+    }
+
+    private var hoveredSpatialHandleIdentity: ViewportSpatialHandleIdentity? {
+        get throws { try hoveredNativeAxisIdentity ?? hoveredInteractionTarget?.spatialIdentity }
+    }
+
+    private var pendingSpatialHandleIdentity: ViewportSpatialHandleIdentity? {
+        get throws {
+            if case .active(let press) = nativeAxisGesture { return press.input.record.identity }
+            return try pendingInteractionTarget?.spatialIdentity
+        }
+    }
+
+    private func cancelNativeAxisGesture() {
+        guard nativeAxisGesture != nil else { return }
+        nativeAxisGesture = .cancelled
+        hoveredNativeAxisIdentity = nil
+        activeCanvasDrag = nil
+        clearActiveInteractionDrags()
+        clearDragPreviewDocument()
+        clearAffordanceGhostEdits()
+    }
+
+    private func nativeAxisBaselineMatches(_ input: ViewportNativeAxisInput) -> Bool {
+        switch input.record.target {
+        case .slotWidth: input.axis.baseValue == slotWidthMeters
+        case .edgeOffset: input.axis.baseValue == edgeOffsetDistanceMeters
+        case .sketchVertexOffset: input.axis.baseValue == sketchVertexOffsetDistanceMeters
+        default: true
+        }
+    }
+
+    private func cancelChangedNativeAxisBaseline() {
+        if case .active(let press) = nativeAxisGesture, !nativeAxisBaselineMatches(press.input) {
+            cancelNativeAxisGesture()
+        }
+    }
+
+    private func updateNativeAxisGesture(current: CGPoint) -> Bool {
+        guard case .active(var press) = nativeAxisGesture else { return false }
+        guard press.source == sourceIdentity,
+              press.snapshotID == presentationScene?.snapshotID,
+              press.selectedTargets == selection.selectedTargets,
+              press.selectedReferences == selection.selectedReferences,
+              press.finish == nil || press.finish?.revision == activeControlSession.revision,
+              nativeAxisBaselineMatches(press.input),
+              nativeAxisRouteEnabled(press.input.record.target) else {
+            cancelNativeAxisGesture()
+            return false
+        }
+        do {
+            let delta = try presentationPlanCache.worldAxisDelta(
+                from: press.start, to: current,
+                axisOrigin: press.input.axis.origin, axisDirection: press.input.axis.direction,
+                for: presentationQueryIdentity(), revision: activeControlSession.revision
+            )
+            press.value = try press.input.value(forWorldDelta: delta)
+            nativeAxisGesture = .active(press)
+            return true
+        } catch {
+            // A self-preview may temporarily replace the native frame. Keep
+            // the press baseline; no update or commit is authorized until ready.
+            return false
+        }
+    }
+
+    private func finishNativeAxisGesture(at point: CGPoint) {
+        guard case .active(var press) = nativeAxisGesture else {
+            clearPendingCanvasInteractionTargets()
+            return
+        }
+        guard point.x.isFinite, point.y.isFinite else {
+            cancelNativeAxisGesture()
+            return
+        }
+        press.finish = (point, activeControlSession.revision)
+        nativeAxisGesture = .active(press)
+        resumeNativeAxisFinish()
+    }
+
+    private func resumeNativeAxisFinish() {
+        guard case .active(let press) = nativeAxisGesture, let finish = press.finish else { return }
+        guard finish.revision == activeControlSession.revision,
+              press.source == sourceIdentity, press.snapshotID == presentationScene?.snapshotID,
+              press.selectedTargets == selection.selectedTargets,
+              press.selectedReferences == selection.selectedReferences,
+              nativeAxisBaselineMatches(press.input), nativeAxisRouteEnabled(press.input.record.target) else {
+            cancelNativeAxisGesture()
+            return
+        }
+        let commit: ViewportNativeAxisInput.Commit?
+        do {
+            let identity = try presentationPreparation.get()
+            if let failure = presentationPlanCache.failure(for: identity) { throw failure }
+            guard presentationPlanCache.hasReadyCamera(for: identity, revision: finish.revision) else { return }
+            if updateNativeAxisGesture(current: finish.point),
+               case .active(let press) = nativeAxisGesture, let value = press.value {
+                commit = try press.input.commit(value: value)
+            } else { commit = nil }
+        } catch {
+            // Invalid native values never reach a source mutation callback.
+            commit = nil
+        }
+        // Release input ownership before calling external mutation callbacks.
+        clearPendingCanvasInteractionTargets()
+        activeCanvasDrag = nil
+        guard let commit else { return }
+        switch commit {
+        case .splineControlPointSlide(let target): onSplineControlPointSlideDrag?(target)
+        case .polySplineSurfaceVertexSlide(let target): onPolySplineSurfaceVertexSlideDrag?(target)
+        case .surfaceControlPointSlide(let target): onSurfaceControlPointSlideDrag?(target)
+        case .surfaceFrame(let target): onSurfaceFrameDrag?(target)
+        case .regionOffset(let target): onRegionOffsetDrag?(target)
+        case .edgeOffset(let target): onEdgeOffsetDrag?(target)
+        case .slotWidth(let target): onSlotWidthDrag?(target)
+        case .sketchVertexOffset(let target): onSketchVertexOffsetDrag?(target)
+        }
+    }
+
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
         if measurementToolActive {
             clearPendingCanvasInteractionTargets()
             activeCanvasDrag = nil
+            return
+        }
+        clearPendingCanvasInteractionTargets()
+        do {
+            if let input = try nativeAxisInput(at: point) {
+                guard nativeAxisRouteEnabled(input.record.target) else {
+                    nativeAxisGesture = .cancelled
+                    return
+                }
+                nativeAxisGesture = .active(.init(
+                    input: input, source: sourceIdentity, snapshotID: presentationScene?.snapshotID,
+                    selectedTargets: selection.selectedTargets,
+                    selectedReferences: selection.selectedReferences, start: point
+                ))
+                activeCanvasDrag = nil
+                return
+            }
+        } catch {
+            nativeAxisGesture = .cancelled
             return
         }
         guard let target = resolvedInteractionTarget(at: point, size: size) else {
@@ -10836,6 +11054,9 @@ public struct Viewport: View {
         activeCanvasDrag = nil
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Non-axis CAD routes still use legacy
+    // selectors from press/hover. Full RK-4 input cutover requires replacing
+    // those routes; migrated native axis routes are never resolved here.
     private func resolvedInteractionTarget(
         at point: CGPoint,
         size: CGSize,
@@ -10859,18 +11080,6 @@ public struct Viewport: View {
            let target = selectedBridgeCurveEndpointTarget(at: point, sceneContext: sceneContext) {
             return .bridgeCurveEndpoint(target)
         }
-        if let target = selectedSplineControlPointSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .splineControlPointSlide(target)
-        }
-        if let target = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .polySplineSurfaceVertexSlide(target)
-        }
-        if let target = selectedSurfaceControlPointSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .surfaceControlPointSlide(target)
-        }
-        if let target = selectedSurfaceFrameAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .surfaceFrame(target)
-        }
         if let target = selectedSplineControlPointTarget(at: point, sceneContext: sceneContext) {
             return .splineControlPoint(target)
         }
@@ -10885,12 +11094,6 @@ public struct Viewport: View {
         }
         if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimControlPoint(target)
-        }
-        if let target = selectedEdgeOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .edgeOffset(target)
-        }
-        if let target = selectedSlotWidthAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .slotWidth(target)
         }
         if let target = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .independentCopyExtrudeDistance(target)
@@ -10918,12 +11121,6 @@ public struct Viewport: View {
         }
         if let target = selectedConstructionPlaneHandleTarget(at: point, sceneContext: sceneContext) {
             return .constructionPlane(target)
-        }
-        if let target = selectedSketchVertexOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .sketchVertexOffset(target)
-        }
-        if let target = selectedRegionOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .regionOffset(target)
         }
         if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
@@ -10956,7 +11153,8 @@ public struct Viewport: View {
     }
 
     private var hasActiveInteractionDrag: Bool {
-        activeInteractionDrags.hasActiveDrag
+        if case .active(let press) = nativeAxisGesture, press.value != nil { return true }
+        return activeInteractionDrags.hasActiveDrag
     }
 
     private func updatePendingInteractionDrag(
@@ -13722,6 +13920,10 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
+        if nativeAxisGesture != nil {
+            clearPendingCanvasInteractionTargets()
+            return
+        }
         if measurementToolActive {
             handleMeasurementClick(at: point)
             return
@@ -13885,6 +14087,10 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
+        if nativeAxisGesture != nil {
+            finishNativeAxisGesture(at: end)
+            return
+        }
         if measurementToolActive {
             activeCanvasDrag = nil
             return
@@ -15150,6 +15356,19 @@ public struct Viewport: View {
             handleMeasurementHover(at: point)
             return
         }
+        do {
+            if let input = try nativeAxisInput(at: point) {
+                clearCanvasHover()
+                if nativeAxisRouteEnabled(input.record.target) {
+                    hoveredNativeAxisIdentity = input.record.identity
+                }
+                return
+            }
+        } catch {
+            clearCanvasHover()
+            return
+        }
+        hoveredNativeAxisIdentity = nil
         let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
@@ -15211,6 +15430,7 @@ public struct Viewport: View {
     }
 
     private func clearHoverInteractionTargets() {
+        hoveredNativeAxisIdentity = nil
         hoveredInteractionTarget = nil
     }
 
@@ -15890,6 +16110,7 @@ extension Viewport {
         if showsAutomaticMeasurement,
            activeCanvasDrag == nil,
            pendingInteractionTarget == nil,
+           nativeAxisGesture == nil,
            let occurrence = selectedMeasurementOccurrence() {
             let input = ViewportMeasurementBoundsRulerInput(
                 bounds: occurrence.worldBounds,
@@ -15983,8 +16204,8 @@ extension Viewport {
                         activeIndependentCopyExtrudeDistanceDrag.map { .independentCopyExtrudeDistance($0.target.identity) },
                         activeIndependentCopyBodyDimensionDrag.map { .independentCopyBodyDimension($0.target.identity) },
                     ].compactMap { $0 },
-                    hoveredHandleIdentities: try hoveredInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
-                    pendingHandleIdentities: try pendingInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+                    hoveredHandleIdentities: try hoveredSpatialHandleIdentity.map { [$0] } ?? [],
+                    pendingHandleIdentities: try pendingSpatialHandleIdentity.map { [$0] } ?? [],
                     activeLinearAxis: activePatternArrayLinearAxisDrag.map {
                         .init(sourceID: $0.target.sourceID, axisSlot: $0.target.axisSlot, distance: $0.distanceMeters)
                     },
@@ -16094,6 +16315,15 @@ extension Viewport {
         if onSketchVertexOffsetDrag != nil { routes.insert(.sketchVertexOffset) }
         if onSplineControlPointSlideDrag != nil { routes.insert(.splineSlide) }
         var overrides: [Override] = []
+        if case .active(let press) = nativeAxisGesture, let value = press.value {
+            switch press.input.record.target {
+            case .regionOffset, .edgeOffset, .sketchVertexOffset, .splineControlPointSlide:
+                overrides.append(.init(identity: press.input.record.identity, distanceMeters: value))
+            case .slotWidth:
+                overrides.append(.init(identity: press.input.record.identity, widthMeters: value))
+            default: break
+            }
+        }
         if let drag = activeSketchCurveHandleDrag {
             overrides.append(.init(identity: .sketchCurveHandle(drag.target.identity),
                                    radiusMeters: drag.radiusMeters,
@@ -16135,8 +16365,8 @@ extension Viewport {
             document: document, scene: scene, selection: selection,
             interaction: .init(
                 active: overrides.map { .init(identity: $0.identity, state: $0.state) },
-                hovered: try hoveredInteractionTarget?.spatialIdentity,
-                pending: try pendingInteractionTarget?.spatialIdentity
+                hovered: try hoveredSpatialHandleIdentity,
+                pending: try pendingSpatialHandleIdentity
             ),
             overlayState: sceneOverlayState,
             ruler: workspaceRuler, enabledRoutes: routes, activeOverrides: overrides,
@@ -16184,6 +16414,14 @@ extension Viewport {
         routes.formUnion(interactive)
         var active: [Active] = []
         let comparison = modifierFlags.containsControl
+        if case .active(let press) = nativeAxisGesture, let value = press.value {
+            switch press.input.record.target {
+            case .polySplineSurfaceVertexSlide, .surfaceControlPointSlide, .surfaceFrame:
+                active.append(.init(identity: press.input.record.identity, distance: value,
+                                    showsOriginalComparison: comparison))
+            default: break
+            }
+        }
         if let drag = activeAffordanceDrag {
             active.append(.init(identity: .affordance(drag.target)))
         }
@@ -16241,8 +16479,8 @@ extension Viewport {
             document: document, scene: scene, selection: selection, editedBodies: editedBodies,
             ruler: workspaceRuler, enabledRoutes: routes, interactiveRoutes: interactive,
             activeValues: active,
-            hoveredHandleIdentities: try hoveredInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
-            pendingHandleIdentities: try pendingInteractionTarget.map { [try $0.spatialIdentity] } ?? [],
+            hoveredHandleIdentities: try hoveredSpatialHandleIdentity.map { [$0] } ?? [],
+            pendingHandleIdentities: try pendingSpatialHandleIdentity.map { [$0] } ?? [],
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
     }

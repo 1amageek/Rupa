@@ -106,6 +106,13 @@ it is never an empty successful frame. Other invalid input/resource failures
 retain their terminal failure contract. MainActor owns the subscription,
 pending closure, entity mutations, and coalesced status callback. Detach cancels
 the subscription before removing content and drops the pending closure.
+
+The internal `isCameraReady(revision:)` predicate and camera-query validation
+share the same mounted, enabled, calibrated, exact-revision conditions. The
+parent cache admits that predicate only for its exact preparation identity;
+the input owner may defer a retained release until publication, not query a
+display-only surface or infer readiness from the presence of an Entity.
+
 This cold-mount rule does not hide an already-mounted complete presentation on
 an unchanged camera layout/revision. A warm update first uses the existing
 native content synchronously; it defers and withholds presentation only if that

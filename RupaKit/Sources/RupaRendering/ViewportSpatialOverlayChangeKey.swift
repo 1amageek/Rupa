@@ -17,6 +17,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var activeDrags = ViewportActiveInteractionDrags()
     var hoveredHandle: ViewportSpatialHandleIdentity?
     var pendingHandle: ViewportSpatialHandleIdentity?
+    var nativeAxisValue: Double?
     var hoveredHit: ViewportHit?
     var creation: Creation?
     var hasCanvasDrag = false

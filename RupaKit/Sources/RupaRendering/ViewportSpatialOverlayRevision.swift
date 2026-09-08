@@ -12,7 +12,8 @@ final class ViewportSpatialOverlayRevision {
     func revision(for next: ViewportSpatialOverlayChangeKey) throws(MeshSourcePresentationRenderError) -> UInt64 {
         guard next.slotWidthMeters.isFinite,
               next.sketchVertexOffsetDistanceMeters.isFinite,
-              next.edgeOffsetDistanceMeters.isFinite else {
+              next.edgeOffsetDistanceMeters.isFinite,
+              next.nativeAxisValue?.isFinite != false else {
             throw .init(code: .invalidLimit, message: "Spatial overlay guide dimensions must be finite.")
         }
         if key == next { return value }

@@ -1190,6 +1190,16 @@ private extension ViewportSpatialOverlayProducer {
             throw RealityViewportSpatialBatch.invalid("Surface frame has a degenerate basis.")
         }
         let selected = selectedSurfaceFrameReferences(input.selection)
+        let selectedModelTransforms = try selected.map { reference in
+            let matches = input.scene.items.filter { sceneItem in
+                guard case .body(let component) = sceneItem.kind else { return false }
+                return component.surfaceControlPointDisplays.contains { $0.selectionReference == reference }
+            }
+            guard matches.count == 1, let match = matches.first else {
+                throw RealityViewportSpatialBatch.invalid("Surface frame source occurrence is ambiguous or absent.")
+            }
+            return match.modelTransform
+        }
         for (axis, modelDirection, color, title) in modelAxes {
             guard let direction = normalized(modelDirection) else {
                 throw RealityViewportSpatialBatch.invalid("Surface frame has a degenerate axis.")
@@ -1205,9 +1215,21 @@ private extension ViewportSpatialOverlayProducer {
                 identity = nil
             }
             if identity != nil {
+                let localDirection: Vector3D = switch axis {
+                case .u: display.uAxis
+                case .v: display.vAxis
+                case .normal: display.normal
+                }
+                let factors = try (selectedModelTransforms + [item.modelTransform]).map { transform in
+                    try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(
+                        for: transform.viewportTransformedVector(localDirection), in: transform
+                    )
+                }
+                let factor = try ViewportNativeAxisInput.commonSourceScale(factors)
                 _ = try handleIndex(for: .surfaceFrame(
                     targets: selected, query: display.query, displayID: display.id, axis: axis,
-                    geometry: .init(origin: origin, direction: modelDirection, baseValue: 0)
+                    geometry: .init(origin: origin, direction: modelDirection, baseValue: 0,
+                                    sourceUnitsPerWorldMetre: factor)
                 ), occurrenceID: item.id, modelTransform: item.modelTransform, in: &interactionRecords)
             }
             let activeDistance: Double? = if let identity,
@@ -1538,31 +1560,37 @@ private extension ViewportSpatialOverlayProducer {
                 )
             }
             for direction in PolySplineSurfaceVertexSlideDirection.allCases {
-                guard let first = inputs.first,
-                      let localDirection = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
-                          for: first.target,
-                          direction: direction,
-                          topologyVertices: topologyVertices,
-                          patches: patches
-                      ) else { continue }
-                let vectors = inputs.compactMap {
-                    normalized($0.modelTransform.viewportTransformedVector(
-                        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
+                let localDirections = inputs.compactMap {
+                    ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
                             for: $0.target,
                             direction: direction,
                             topologyVertices: topologyVertices,
                             patches: patches
-                        ) ?? localDirection
-                    ))
+                    )
+                }
+                guard localDirections.count == inputs.count else {
+                    throw RealityViewportSpatialBatch.invalid("A grouped poly-spline source direction is missing.")
+                }
+                let worldVectors = zip(inputs, localDirections).map {
+                    $0.0.modelTransform.viewportTransformedVector($0.1)
+                }
+                let vectors = worldVectors.compactMap { normalized($0) }
+                guard vectors.count == inputs.count else {
+                    throw RealityViewportSpatialBatch.invalid("A grouped poly-spline world direction is degenerate.")
                 }
                 guard let worldDirection = average(vectors) else { continue }
                 let origin = average(inputs.map { $0.modelTransform.viewportTransformedPoint($0.point) })
                 let identity = ViewportSpatialHandleIdentity.polySplineSurfaceVertexSlide(
                     .init(targets: inputs.map(\.selectionTarget), direction: direction)
                 )
+                let factors = try zip(inputs, worldVectors).map {
+                    try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(for: $0.1, in: $0.0.modelTransform)
+                }
+                let factor = try ViewportNativeAxisInput.commonSourceScale(factors)
                 _ = try handleIndex(for: .polySplineSurfaceVertexSlide(
                     targets: inputs.map(\.selectionTarget), direction: direction,
-                    axis: .init(origin: origin, direction: worldDirection, baseValue: 0)
+                    axis: .init(origin: origin, direction: worldDirection, baseValue: 0,
+                                sourceUnitsPerWorldMetre: factor)
                 ), in: &interactionRecords)
                 let guideLength = max(input.ruler.majorTickMeters * 0.25, 0.05)
                 let guideTip = offset(origin, direction: worldDirection, distance: guideLength)
@@ -1928,14 +1956,21 @@ private extension ViewportSpatialOverlayProducer {
             let patchValues = patches
             let addresses = slideInputs.map { ViewportSpatialReferenceAddress($0.target) }
             for direction in PolySplineSurfaceVertexSlideDirection.allCases {
-                let vectors = slideInputs.compactMap { controlPoint in
+                let worldVectors = slideInputs.compactMap { controlPoint in
                     ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
                         featureID: controlPoint.featureID,
                         patchID: controlPoint.patchID,
                         direction: direction,
                         topologyVertices: topologyVertices,
                         patches: patchValues
-                    ).flatMap { normalized(controlPoint.modelTransform.viewportTransformedVector($0)) }
+                    ).map { controlPoint.modelTransform.viewportTransformedVector($0) }
+                }
+                guard worldVectors.count == slideInputs.count else {
+                    throw RealityViewportSpatialBatch.invalid("A grouped surface source direction is missing.")
+                }
+                let vectors = worldVectors.compactMap { normalized($0) }
+                guard vectors.count == slideInputs.count else {
+                    throw RealityViewportSpatialBatch.invalid("A grouped surface world direction is degenerate.")
                 }
                 guard let worldDirection = average(vectors) else { continue }
                 let origin = average(slideInputs.map {
@@ -1945,9 +1980,14 @@ private extension ViewportSpatialOverlayProducer {
                     addresses,
                     direction: direction
                 )
+                let factors = try zip(slideInputs, worldVectors).map {
+                    try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(for: $0.1, in: $0.0.modelTransform)
+                }
+                let factor = try ViewportNativeAxisInput.commonSourceScale(factors)
                 _ = try handleIndex(for: .surfaceControlPointSlide(
                     targets: slideInputs.map(\.target), direction: direction,
-                    axis: .init(origin: origin, direction: worldDirection, baseValue: 0)
+                    axis: .init(origin: origin, direction: worldDirection, baseValue: 0,
+                                sourceUnitsPerWorldMetre: factor)
                 ), in: &interactionRecords)
                 let guideLength = max(input.ruler.majorTickMeters * 0.25, 0.05)
                 let guideTip = offset(origin, direction: worldDirection, distance: guideLength)
