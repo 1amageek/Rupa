@@ -31,6 +31,8 @@ final class RealityViewport {
     private var occurrenceByEntity: [ObjectIdentifier: Int] = [:]
     private var content: RealityViewCameraContent?
     private var bindingOwner: ObjectIdentifier?
+    private var cameraCalibration: CameraCalibration?
+    private var cameraCalibrationDepth: Double?
     private var appearance: Appearance?
     private var section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)?
     private var requestedSection: (plane: SectionAnalysisResult.Plane, side: SectionAnalysisRetainedSide, tolerance: Double)?
@@ -45,6 +47,24 @@ final class RealityViewport {
         let plane: SectionAnalysisResult.Plane?
         let side: SectionAnalysisRetainedSide
         let tolerance: Double
+    }
+
+    /// A camera-local affine screen map sampled from the mounted native
+    /// projection. Collision bounds are deliberately absent: this calibration
+    /// is also the authority for empty-scene plane and axis queries.
+    private struct CameraCalibration {
+        let eye: SIMD3<Float>
+        let inverseMapping: CGAffineTransform
+        let sampleDepth: Float
+        let step: Float
+        let perspective: Bool
+    }
+
+    private struct NativeCameraRay {
+        let origin: SIMD3<Float>
+        let direction: SIMD3<Float>
+        let near: Float
+        let far: Float
     }
 
     /// A normalized native payload. Translation is kept as an instance value so
@@ -438,6 +458,8 @@ final class RealityViewport {
     }
 
     func applyCamera(layout: ViewportLayout, revision: UInt64) throws {
+        cameraCalibration = nil
+        cameraCalibrationDepth = nil
         let viewportCenter = CGPoint(x: layout.viewportSize.width / 2, y: layout.viewportSize.height / 2)
         guard let rows = layout.projectionRows(relativeTo: renderOrigin),
               let normal = layout.basis.viewNormal,
@@ -500,6 +522,7 @@ final class RealityViewport {
                   component.scale.isFinite, component.scale > 0 else {
                 throw Self.failure("The orthographic camera exceeds native precision.")
             }
+            cameraCalibrationDepth = (Double(component.near) + Double(component.far)) / 2
             orthographic = component
         case .perspective:
             let distance = (centerRay.origin - layout.focus).dot(normal)
@@ -514,6 +537,7 @@ final class RealityViewport {
                 near: Float(ViewportLayout.minimumPerspectiveW), far: .infinity,
                 fieldOfViewInDegrees: fieldOfView, fieldOfViewOrientation: .vertical
             )
+            cameraCalibrationDepth = max(Double(ViewportLayout.minimumPerspectiveW) * 2, distance)
         }
         let world = simd_double4x4(SIMD4<Double>(right, 0), SIMD4<Double>(up, 0), SIMD4<Double>(forward, 0), SIMD4<Double>(eye, 1))
         let nativeWorld = try Self.nativeMatrix(world)
@@ -669,6 +693,7 @@ final class RealityViewport {
         let gridError = try spatialResources?.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: excludedRects,
                                            gridRuler: gridRuler, gridBasis: appliedLayout.basis,
                                            gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing)
+        try updateCameraCalibration(content: content)
         if let spatialResources, spatialResources.hasSectionedCameraGeometry {
             bounds = fixedBounds
             bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
@@ -677,6 +702,72 @@ final class RealityViewport {
             }
         }
         return gridError
+    }
+
+    /// Rebuilds the projection-free camera map only after the mounted native
+    /// camera has accepted the current frame. This remains valid when the
+    /// frame has no collision geometry because it samples the camera itself.
+    private func updateCameraCalibration(content: RealityViewCameraContent) throws {
+        let orthographic = camera.components[OrthographicCameraComponent.self]
+        let perspective = camera.components[PerspectiveCameraComponent.self]
+        guard orthographic == nil || perspective == nil else {
+            throw Self.failure("The native camera has conflicting projection components.")
+        }
+        let near: Float
+        let far: Float
+        let sampleDepth: Float
+        let step: Float
+        let isPerspective: Bool
+        if let orthographic {
+            near = orthographic.near
+            far = orthographic.far
+            sampleDepth = Float((Double(near) + Double(far)) / 2)
+            step = orthographic.scale
+            isPerspective = false
+        } else if let perspective {
+            near = perspective.near
+            far = perspective.far
+            guard let requestedDepth = cameraCalibrationDepth else {
+                throw Self.failure("The perspective camera has no admitted calibration depth.")
+            }
+            sampleDepth = Float(requestedDepth)
+            step = sampleDepth
+            isPerspective = true
+        } else {
+            throw Self.failure("The native camera has no projection component.")
+        }
+        guard near.isFinite, near > 0, far.isFinite || far == .infinity, far > near,
+              sampleDepth.isFinite, sampleDepth > 0,
+              step.isFinite, step > 0 else {
+            throw Self.failure("The native camera calibration depth is not finite and positive.")
+        }
+        func project(_ local: SIMD3<Float>) -> CGPoint? {
+            content.project(point: camera.convert(position: local, to: nil), to: .local)
+        }
+        guard let zero = project([0, 0, -sampleDepth]),
+              let right = project([step, 0, -sampleDepth]),
+              let up = project([0, step, -sampleDepth]),
+              zero.x.isFinite, zero.y.isFinite,
+              right.x.isFinite, right.y.isFinite,
+              up.x.isFinite, up.y.isFinite else {
+            throw RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable
+        }
+        let mapping = CGAffineTransform(a: right.x - zero.x, b: right.y - zero.y,
+                                         c: up.x - zero.x, d: up.y - zero.y,
+                                         tx: zero.x, ty: zero.y)
+        let determinant = mapping.a * mapping.d - mapping.b * mapping.c
+        guard determinant.isFinite, determinant != 0 else {
+            throw RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable
+        }
+        let inverse = mapping.inverted()
+        let eye = camera.convert(position: .zero, to: nil)
+        guard eye.x.isFinite, eye.y.isFinite, eye.z.isFinite else {
+            throw Self.failure("The native camera eye is not finite.")
+        }
+        cameraCalibration = CameraCalibration(
+            eye: eye, inverseMapping: inverse,
+            sampleDepth: sampleDepth, step: step, perspective: isPerspective
+        )
     }
 
     func unbind(owner: ObjectIdentifier? = nil) {
@@ -688,6 +779,8 @@ final class RealityViewport {
         bindingOwner = nil
         appliedLayout = nil
         appliedViewportRevision = nil
+        cameraCalibration = nil
+        cameraCalibrationDepth = nil
         appearance = nil
         root.removeFromParent()
     }
@@ -695,6 +788,8 @@ final class RealityViewport {
     func invalidateCamera() {
         appliedLayout = nil
         appliedViewportRevision = nil
+        cameraCalibration = nil
+        cameraCalibrationDepth = nil
         root.isEnabled = false
     }
 
@@ -845,6 +940,132 @@ final class RealityViewport {
         return projected
     }
 
+    /// Intersects a screen point with a world plane using the exact mounted
+    /// native camera calibration. The returned point is in CAD world space;
+    /// native scene coordinates remain relative to `renderOrigin` internally.
+    func worldPlaneIntersection(
+        at point: CGPoint,
+        planeOrigin: Point3D,
+        planeNormal: Vector3D,
+        revision: UInt64
+    ) throws -> Point3D {
+        try validateCameraQuery(point: point, revision: revision)
+        let normal = SIMD3<Double>(planeNormal.x, planeNormal.y, planeNormal.z)
+        let normalLength = simd_length(normal)
+        guard normal.x.isFinite, normal.y.isFinite, normal.z.isFinite,
+              normalLength.isFinite, normalLength > 0,
+              planeOrigin.x.isFinite, planeOrigin.y.isFinite, planeOrigin.z.isFinite else {
+            throw Self.queryFailure("The native camera plane is not finite and valid.")
+        }
+        let unitNormal = normal / normalLength
+        let ray = try nativeCameraRay(through: point)
+        let origin = SIMD3<Double>(ray.origin)
+        let rawDirection = SIMD3<Double>(ray.direction)
+        let directionLength = simd_length(rawDirection)
+        guard directionLength.isFinite, directionLength > 0 else {
+            throw Self.queryFailure("The native camera ray direction is not finite.")
+        }
+        let direction = rawDirection / directionLength
+        let denominator = simd_dot(direction, unitNormal)
+        guard denominator.isFinite, abs(denominator) > 1e-12 else {
+            throw Self.queryFailure("The native camera ray is parallel to the requested plane.")
+        }
+        let plane = SIMD3<Double>(
+            planeOrigin.x - renderOrigin.x,
+            planeOrigin.y - renderOrigin.y,
+            planeOrigin.z - renderOrigin.z
+        )
+        let distance = simd_dot(plane - origin, unitNormal) / denominator
+        guard distance.isFinite, distance >= 0 else {
+            throw Self.queryFailure("The requested plane lies behind the native camera ray.")
+        }
+        let result = origin + direction * distance
+        let world = Point3D(x: result.x + renderOrigin.x,
+                            y: result.y + renderOrigin.y,
+                            z: result.z + renderOrigin.z)
+        guard world.x.isFinite, world.y.isFinite, world.z.isFinite else {
+            throw Self.queryFailure("The native plane intersection is not finite in CAD world space.")
+        }
+        return world
+    }
+
+    /// Returns the signed physical distance along a retained world axis from
+    /// its origin to the closest point represented by the native screen ray.
+    /// The ray/axis closest-point solve preserves perspective reversal and does
+    /// not treat a two-point screen chord as a world-space distance.
+    func worldAxisParameter(
+        at point: CGPoint,
+        axisOrigin: Point3D,
+        axisDirection: Vector3D,
+        revision: UInt64
+    ) throws -> Double {
+        try validateCameraQuery(point: point, revision: revision)
+        let rawAxis = SIMD3<Double>(axisDirection.x, axisDirection.y, axisDirection.z)
+        let axisLength = simd_length(rawAxis)
+        guard rawAxis.x.isFinite, rawAxis.y.isFinite, rawAxis.z.isFinite,
+              axisLength.isFinite, axisLength > 0,
+              axisOrigin.x.isFinite, axisOrigin.y.isFinite, axisOrigin.z.isFinite else {
+            throw Self.queryFailure("The native world axis is not finite and valid.")
+        }
+        let axis = rawAxis / axisLength
+        let ray = try nativeCameraRay(through: point)
+        let rawDirection = SIMD3<Double>(ray.direction)
+        let directionLength = simd_length(rawDirection)
+        guard directionLength.isFinite, directionLength > 0 else {
+            throw Self.queryFailure("The native camera ray direction is not finite.")
+        }
+        let direction = rawDirection / directionLength
+        let origin = SIMD3<Double>(ray.origin)
+        let base = SIMD3<Double>(axisOrigin.x - renderOrigin.x,
+                                 axisOrigin.y - renderOrigin.y,
+                                 axisOrigin.z - renderOrigin.z)
+        let offset = origin - base
+        let dot = simd_dot(direction, axis)
+        let denominator = 1 - dot * dot
+        guard dot.isFinite, denominator.isFinite, denominator > 1e-12 else {
+            throw Self.queryFailure("The native camera ray is parallel to the requested world axis.")
+        }
+        let rayParameter = simd_dot(direction, offset)
+        let axisParameter = simd_dot(axis, offset)
+        let rayDistance = (dot * axisParameter - rayParameter) / denominator
+        let parameter = (axisParameter - dot * rayParameter) / denominator
+        guard rayDistance.isFinite, rayDistance >= 0, parameter.isFinite else {
+            throw Self.queryFailure("The requested world axis lies behind the native camera ray.")
+        }
+        return parameter
+    }
+
+    /// Returns the signed retained-axis movement between two native screen
+    /// points. Both points are resolved independently against the same exact
+    /// mounted camera revision.
+    func worldAxisDelta(
+        from start: CGPoint,
+        to end: CGPoint,
+        axisOrigin: Point3D,
+        axisDirection: Vector3D,
+        revision: UInt64
+    ) throws -> Double {
+        let first = try worldAxisParameter(at: start, axisOrigin: axisOrigin,
+                                           axisDirection: axisDirection, revision: revision)
+        let second = try worldAxisParameter(at: end, axisOrigin: axisOrigin,
+                                            axisDirection: axisDirection, revision: revision)
+        let delta = second - first
+        guard delta.isFinite else {
+            throw Self.queryFailure("The native world-axis delta is not finite.")
+        }
+        return delta
+    }
+
+    private func validateCameraQuery(point: CGPoint, revision: UInt64) throws {
+        guard point.x.isFinite, point.y.isFinite else {
+            throw Self.queryFailure("The native camera query point is not finite.")
+        }
+        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled,
+              root.scene != nil, content != nil, cameraCalibration != nil else {
+            throw Self.queryFailure("The native camera query requires an exact-ready mounted frame.")
+        }
+    }
+
 
     func hitTest(_ point: CGPoint, revision: UInt64) -> [CollisionCastHit] {
         guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled, geometryRoot.isEnabled else {
@@ -864,9 +1085,7 @@ final class RealityViewport {
         guard let scene = root.scene else {
             throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
         }
-        guard let ray = cameraRay(through: point) else {
-            throw Self.queryFailure("The mounted native camera cannot resolve a finite surface ray.")
-        }
+        let ray = try cameraRay(through: point)
         var hits = scene.raycast(origin: ray.origin, direction: ray.direction, length: ray.length,
                                 query: .all, mask: mask)
         try hits.removeAll { hit in
@@ -889,71 +1108,75 @@ final class RealityViewport {
     /// Mounted macOS 27 inverse queries do not round-trip native projection.
     /// Invert only a camera-plane affine map sampled through native project;
     /// camera transforms and all geometry intersections remain RealityKit's.
-    private func cameraRay(through point: CGPoint) -> (
+    private func nativeCameraRay(through point: CGPoint) throws -> NativeCameraRay {
+        guard point.x.isFinite, point.y.isFinite,
+              let calibration = cameraCalibration else {
+            throw Self.queryFailure("The mounted native camera has no exact-ready calibration.")
+        }
+        let plane = point.applying(calibration.inverseMapping)
+        guard plane.x.isFinite, plane.y.isFinite else {
+            throw Self.queryFailure("The native camera plane inverse is not finite.")
+        }
+        let local = SIMD3<Double>(Double(plane.x) * Double(calibration.step),
+                                  Double(plane.y) * Double(calibration.step),
+                                  -Double(calibration.sampleDepth))
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
+            throw Self.queryFailure("The native camera query point exceeds finite precision.")
+        }
+        let origin: SIMD3<Float>
+        let direction: SIMD3<Float>
+        if calibration.perspective {
+            origin = calibration.eye
+            direction = camera.convert(direction: SIMD3<Float>(simd_normalize(local)), to: nil)
+        } else {
+            origin = camera.convert(position: [Float(local.x), Float(local.y), 0], to: nil)
+            direction = camera.convert(direction: [0, 0, -1], to: nil)
+        }
+        let magnitude = simd_length(SIMD3<Double>(direction))
+        guard origin.x.isFinite, origin.y.isFinite, origin.z.isFinite,
+              magnitude.isFinite, magnitude > 0 else {
+            throw Self.queryFailure("The native camera ray is not finite and directed.")
+        }
+        let unitDirection = SIMD3<Float>(SIMD3<Double>(direction) / magnitude)
+        guard unitDirection.x.isFinite, unitDirection.y.isFinite, unitDirection.z.isFinite else {
+            throw Self.queryFailure("The native camera ray direction is not finite.")
+        }
+        let near = camera.components[OrthographicCameraComponent.self]?.near
+            ?? camera.components[PerspectiveCameraComponent.self]?.near
+        let far = camera.components[OrthographicCameraComponent.self]?.far
+            ?? camera.components[PerspectiveCameraComponent.self]?.far
+        guard let near, let far, near.isFinite, near > 0,
+              (far.isFinite && far > near) || far == .infinity else {
+            throw Self.queryFailure("The native camera clipping interval is invalid.")
+        }
+        return NativeCameraRay(origin: origin, direction: unitDirection, near: near, far: far)
+    }
+
+    /// Collision queries add a finite geometry-bounds length to the exact
+    /// camera calibration. Plane and axis queries intentionally bypass this
+    /// bounds requirement so an empty frame remains queryable.
+    private func cameraRay(through point: CGPoint) throws -> (
         origin: SIMD3<Float>, direction: SIMD3<Float>, length: Float, near: Float, far: Float
-    )? {
-        guard point.x.isFinite, point.y.isFinite, let content else { return nil }
+    ) {
         var queryBounds = entries.isEmpty ? nil : bounds
         if let spatialBounds = spatialResources?.collisionBounds {
             if queryBounds == nil { queryBounds = spatialBounds }
             else { queryBounds?.formUnion(spatialBounds) }
         }
-        guard let queryBounds else { return nil }
-        let orthographic = camera.components[OrthographicCameraComponent.self]
-        let perspective = camera.components[PerspectiveCameraComponent.self]
-        guard orthographic == nil || perspective == nil else { return nil }
+        guard let queryBounds else {
+            throw Self.queryFailure("The mounted native camera has no finite collision bounds.")
+        }
+        let ray = try nativeCameraRay(through: point)
         let center = (SIMD3<Double>(queryBounds.min) + SIMD3<Double>(queryBounds.max)) / 2
-        let eye = camera.convert(position: .zero, to: nil)
-        let near: Float
-        let far: Float
-        let depth: Float
-        let step: Float
-        if let orthographic {
-            near = orthographic.near
-            far = orthographic.far
-            depth = Float((Double(near) + Double(far)) / 2)
-            step = orthographic.scale
-        } else if let perspective {
-            near = perspective.near
-            far = perspective.far
-            depth = Float(max(Double(near) * 2, simd_length(SIMD3<Double>(eye) - center)))
-            step = depth
-        } else { return nil }
-        guard near.isFinite, near > 0, far > near,
-              depth.isFinite, depth > 0, step.isFinite, step > 0 else { return nil }
-        func project(_ local: SIMD3<Float>) -> CGPoint? {
-            content.project(point: camera.convert(position: local, to: nil), to: .local)
-        }
-        guard let zero = project([0, 0, -depth]),
-              let right = project([step, 0, -depth]),
-              let up = project([0, step, -depth]),
-              zero.x.isFinite, zero.y.isFinite, right.x.isFinite, right.y.isFinite,
-              up.x.isFinite, up.y.isFinite else { return nil }
-        let mapping = CGAffineTransform(a: right.x - zero.x, b: right.y - zero.y,
-                                        c: up.x - zero.x, d: up.y - zero.y, tx: zero.x, ty: zero.y)
-        let determinant = mapping.a * mapping.d - mapping.b * mapping.c
-        guard determinant.isFinite, determinant != 0 else { return nil }
-        let plane = point.applying(mapping.inverted())
-        let local = SIMD3<Double>(Double(plane.x) * Double(step), Double(plane.y) * Double(step), -Double(depth))
-        guard local.x.isFinite, local.y.isFinite else { return nil }
-        let origin: SIMD3<Float>
-        let direction: SIMD3<Float>
-        if orthographic != nil {
-            origin = camera.convert(position: [Float(local.x), Float(local.y), 0], to: nil)
-            direction = camera.convert(direction: [0, 0, -1], to: nil)
-        } else {
-            origin = eye
-            direction = camera.convert(direction: SIMD3<Float>(simd_normalize(local)), to: nil)
-        }
-        let magnitude = simd_length(SIMD3<Double>(direction))
         let diagonal = simd_length(SIMD3<Double>(queryBounds.max) - SIMD3<Double>(queryBounds.min))
         // A full diagonal leaves space beyond the enclosing sphere so native
         // raycast fully crosses the farthest surface, including flat bounds.
-        let length = Float(simd_length(SIMD3<Double>(origin) - center) + diagonal).nextUp
-        guard origin.x.isFinite, origin.y.isFinite, origin.z.isFinite,
-              magnitude.isFinite, magnitude > 0, diagonal.isFinite, diagonal > 0,
-              length.isFinite, length > 0, length < Float.greatestFiniteMagnitude else { return nil }
-        return (origin, SIMD3<Float>(SIMD3<Double>(direction) / magnitude), length, near, far)
+        let length = Float(simd_length(SIMD3<Double>(ray.origin) - center) + diagonal).nextUp
+        guard diagonal.isFinite, diagonal > 0,
+              length.isFinite, length > 0, length < Float.greatestFiniteMagnitude else {
+            throw Self.queryFailure("The native collision bounds do not provide a finite ray length.")
+        }
+        return (ray.origin, ray.direction, length, ray.near, ray.far)
     }
 
     /// Native clipping changes rendering, not collision geometry. Keep the

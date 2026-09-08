@@ -88,6 +88,46 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).project(point, revision: revision)
     }
 
+    /// Resolves a world plane through the exact-ready native camera owned by
+    /// `identity`. The cache validates preparation identity before any native
+    /// query so retained display surfaces cannot acquire input authority.
+    func worldPlaneIntersection(
+        at point: CGPoint,
+        planeOrigin: Point3D,
+        planeNormal: Vector3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Point3D {
+        try querySurface(for: identity).worldPlaneIntersection(
+            at: point, planeOrigin: planeOrigin, planeNormal: planeNormal, revision: revision
+        )
+    }
+
+    func worldAxisParameter(
+        at point: CGPoint,
+        axisOrigin: Point3D,
+        axisDirection: Vector3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Double {
+        try querySurface(for: identity).worldAxisParameter(
+            at: point, axisOrigin: axisOrigin, axisDirection: axisDirection, revision: revision
+        )
+    }
+
+    func worldAxisDelta(
+        from start: CGPoint,
+        to end: CGPoint,
+        axisOrigin: Point3D,
+        axisDirection: Vector3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Double {
+        try querySurface(for: identity).worldAxisDelta(
+            from: start, to: end, axisOrigin: axisOrigin, axisDirection: axisDirection, revision: revision
+        )
+    }
+
     private func querySurface(for identity: RealityViewportPreparationRequest.Identity) throws -> RealityViewport {
         switch state {
         case let .ready(current, _, surface) where current == identity:

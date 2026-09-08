@@ -789,8 +789,8 @@ public struct Viewport: View {
                         onShiftScroll: { direction in
                             onShiftScroll?(direction) ?? false
                         },
-                        onShiftTap: { point, size in
-                            captureReferenceLineAnchor(at: point, size: size)
+                        onShiftTap: { point, _ in
+                            captureReferenceLineAnchor(at: point)
                         },
                         onCancel: {
                             guard measurementToolActive else { return false }
@@ -3136,7 +3136,7 @@ public struct Viewport: View {
         }
     }
 
-    private func snapOverlayQuery(layout: ViewportLayout) -> ViewportSnapQuery? {
+    private func snapOverlayQuery() -> ViewportSnapQuery? {
         if let activeCanvasDrag {
             guard case .creation = activeCanvasDrag.kind else {
                 return nil
@@ -3145,14 +3145,12 @@ public struct Viewport: View {
             guard let startInput = canvasInput(
                 for: activeCanvasDrag.startLocation,
                 exactWorldPoint: nil,
-                sketchPlane: sketchPlane,
-                layout: layout
+                sketchPlane: sketchPlane
             ),
             let currentInput = canvasInput(
                 for: activeCanvasDrag.currentLocation,
                 exactWorldPoint: nil,
-                sketchPlane: sketchPlane,
-                layout: layout
+                sketchPlane: sketchPlane
             ) else {
                 return nil
             }
@@ -3175,21 +3173,33 @@ public struct Viewport: View {
     private func canvasInput(
         for viewportPoint: CGPoint,
         exactWorldPoint: Point3D?,
-        sketchPlane: SketchPlane,
-        layout: ViewportLayout
+        sketchPlane: SketchPlane
     ) -> WorkspaceCanvasPlaneInputMapper.Result? {
-        guard let legacyModelPoint = layout.canvasCoordinates(for: viewportPoint) else { return nil }
         do {
-            return try WorkspaceCanvasPlaneInputMapper(
-                projectionBasis: layout.basis
-            ).map(
-                modelPoint: Point2D(
-                    x: Double(legacyModelPoint.x),
-                    y: Double(legacyModelPoint.y)
-                ),
-                modelWorldPoint: exactWorldPoint,
-                viewRayAnchorWorldPoint: layout.displayedCanvasWorldPoint(for: viewportPoint),
-                sketchPlane: sketchPlane
+            let identity = try presentationQueryIdentity()
+            let coordinateSystem = try SketchPlaneCoordinateSystem(plane: sketchPlane)
+            let worldPoint: Point3D
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Legacy CAD face callers still
+            // supply CPU-resolved surface points. RK-4.2.3 must replace those
+            // callers with native provenance before claiming full input cutover.
+            if let exactWorldPoint {
+                _ = try presentationPlanCache.project(
+                    exactWorldPoint, for: identity, revision: activeControlSession.revision
+                )
+                worldPoint = exactWorldPoint
+            } else {
+                worldPoint = try presentationPlanCache.worldPlaneIntersection(
+                    at: viewportPoint,
+                    planeOrigin: coordinateSystem.origin,
+                    planeNormal: coordinateSystem.normal,
+                    for: identity,
+                    revision: activeControlSession.revision
+                )
+            }
+            return .init(
+                point: SketchPlaneCanvasMapper(sketchPlane: sketchPlane)
+                    .canvasPoint(fromLocal: coordinateSystem.project(worldPoint).point),
+                worldPoint: worldPoint
             )
         } catch {
             return nil
@@ -3208,14 +3218,12 @@ public struct Viewport: View {
         guard let startInput = canvasInput(
             for: start,
             exactWorldPoint: startExactWorldPoint,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         ),
         let endInput = canvasInput(
             for: end,
             exactWorldPoint: endExactWorldPoint,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         ) else {
             return nil
         }
@@ -3251,7 +3259,7 @@ public struct Viewport: View {
     private func refreshSnapOverlayResolution(layout: ViewportLayout) {
         applySnapOverlayResolution(
             ViewportSnapResolutionService().resolution(
-                for: snapOverlayQuery(layout: layout),
+                for: snapOverlayQuery(),
                 document: document,
                 ruler: workspaceRuler,
                 options: snapResolutionOptions,
@@ -3348,21 +3356,15 @@ public struct Viewport: View {
         publishSnapCandidateKind(nil)
     }
 
-    private func captureReferenceLineAnchor(at point: CGPoint, size: CGSize) -> Bool {
+    private func captureReferenceLineAnchor(at point: CGPoint) -> Bool {
         guard let onReferenceLineAnchor else {
             return false
         }
-        let mapper = makeCoordinateMapper(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
         guard let modelPoint = canvasInput(
             for: point,
             exactWorldPoint: nil,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         )?.point else {
             return false
         }
@@ -10770,13 +10772,11 @@ public struct Viewport: View {
         guard let startInput = canvasInput(
             for: start,
             exactWorldPoint: nil,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         ), let endInput = canvasInput(
             for: end,
             exactWorldPoint: nil,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         ) else {
             return nil
         }
@@ -13809,8 +13809,7 @@ public struct Viewport: View {
         let input = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         )
         guard let input else {
             return
@@ -15210,8 +15209,7 @@ public struct Viewport: View {
         hoveredModelPoint = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
-            sketchPlane: sketchPlane,
-            layout: mapper.layout
+            sketchPlane: sketchPlane
         )?.point
         refreshSnapOverlayResolution(layout: mapper.layout)
         refreshPlacementHighlight(layout: mapper.layout)

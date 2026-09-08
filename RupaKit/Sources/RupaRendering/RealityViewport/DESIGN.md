@@ -701,20 +701,30 @@ of screen-baked dashes.
    `(planeX, planeY, 0)` with local direction `-Z`. Perspective rays start at
    the local camera origin and point through
    `(planeX, planeY, -sampleDepth)`. The orthographic sample depth is the
-   midpoint of native near/far and its basis step is the native scale; the
-   perspective sample depth is the native-eye distance to the prepared bounds
-   center, clamped to at least twice the native near distance, and its basis
-   step equals that depth. All sample values, projected points, the affine
+   midpoint of native near/far and its basis step is the native scale. Every
+   applied perspective camera admits one finite positive in-frustum calibration
+   depth in mounted projection state even when the prepared scene has no
+   geometry; when finite prepared bounds exist, their native-eye center distance
+   may select that depth, clamped to at least twice the native near distance.
+   The perspective basis step equals the admitted depth. Camera-plane
+   calibration, point/plane mapping, and world-axis drag therefore remain
+   available for an exact-ready empty scene and do not require query bounds or
+   a collision-segment length. All sample values, projected points, the affine
    determinant, inverse result, origin, and normalized direction must be finite
-   and nondegenerate or the existing query returns an explicit miss.
+   and nondegenerate or the native throwing query returns the existing typed
+   presentation failure. A legacy optional adapter may translate that failure
+   to no result only at its explicitly nonauthoritative compatibility boundary;
+   it does not weaken the native query contract.
 
    Native collision uses `Scene.raycast` with that composed scene-space ray,
    `.all`, and the existing collision mask. Its required finite positive length
    is the representable Float value of
    `distance(rayOrigin, preparedBoundsCenter) + preparedBoundsFullDiagonal`,
    advanced to include the bounded endpoint. This conservative segment covers
-   every admitted source surface without per-triangle traversal; empty,
-   non-finite, non-positive, or unrepresentable bounds return an explicit miss.
+   every admitted source surface without per-triangle traversal. A ready frame
+   with no collision geometry returns a valid collision miss without
+   invalidating the mounted camera-plane calibration; non-finite, non-positive,
+   or unrepresentable supplied bounds are a typed presentation failure.
    Each
    returned hits are sorted by ascending distance, converted into camera-local
    space, and retained only when
@@ -920,7 +930,7 @@ latency for every allocator arrangement.
 | Invariant | Evidence |
 |---|---|
 | Native resource path | Apple GPU probe/test covers triangles, line topology, text/path extrusion, material assignment, and macOS-27-or-later `ClippingComponent` hierarchy. Purely translated exact-equal payloads use the same visual/collision/line resource identities through distinct entities and retain distinct occurrence/face hit provenance; a changed shear or other non-equal native payload does not share. A same-shading material-map replacement changes the actual native output; invalid replacement reports failure without partial mutation; a camera-only revision leaves appearance resources unchanged and performs no material-resolution callback or scene traversal. |
-| Native camera/input | Mounted macOS 27 tests retain the raw inverse-query counterexamples, then cover documented orthographic/symmetric-perspective lens forms; centered/off-center fit/pan render/project parity; three-point affine explicit miss; composed-ray/project round trips; near/far filtering; bounded `Scene.raycast`; true axis-front endpoints; rigid quaternion-transition frames; and invalid-frame or stale-tuple miss. Apple-GPU front/back quad tests prove the one-sided visual-mesh collision counterexample, then compare rendered visibility with ordered native `.all` results from the collision-only original/reversed mesh for material culling on/off, both normalized face ranges, out-of-range refusal, and exact source provenance. |
+| Native camera/input | [`RealityViewportNativeCameraQueryTests`](../../../Tests/RupaRenderingTests/RealityViewportNativeCameraQueryTests.swift) mounts the real owner and proves empty-scene Ortho/Persp camera-plane queries, plane intersection, a 1 mm depth-axis drag, perspective eye-probe reversal handling, behind-camera refusal, render-origin conversion, and cache stale/unmounted refusal. Existing mounted macOS 27 tests retain the raw inverse-query counterexamples, then cover documented orthographic/symmetric-perspective lens forms; centered/off-center fit/pan render/project parity; three-point affine explicit miss; composed-ray/project round trips; near/far filtering; bounded `Scene.raycast`; true axis-front endpoints; rigid quaternion-transition frames; and invalid-frame or stale-tuple miss. Apple-GPU front/back quad tests prove the one-sided visual-mesh collision counterexample, then compare rendered visibility with ordered native `.all` results from the collision-only original/reversed mesh for material culling on/off, both normalized face ranges, out-of-range refusal, and exact source provenance. |
 | Spatial footprint admission | Focused RK-4.2.1 tests admit and query each enabled Mesh, PlanarPath, Label, and CameraPath footprint and reject invalid tolerance, rectangle, handle index, generated-tessellation count, cumulative proxy count/byte, or retained-byte input before application-owned copies or partial publication. The raw nested-path counterexample demonstrates that zero-depth native extrusion followed directly by static collision fills a same-winding hole; the native even-odd-normalized fixture proves GPU-visible fill, front/back hole misses, transformed reuse, and peak normalized-growth refusal. Two-sided Mesh and normalized PlanarPath fixtures distinguish exact filled regions, holes, zero tolerance, and point-space boundary expansion in world/sectioned and scene/annotation routes; Label fixtures compare the exact supplied rectangle after alignment, orbit, and zoom; CameraPath fixtures compare the legacy center radius at its final camera-relative position. Nil footprints create no collider, and camera-only updates retain native resource identity. |
 | Frame identity | Compile coverage proves every public and production `Viewport` caller supplies document-generation or real presentation-snapshot identity. Replacement, cancellation, overlay-only update, camera-only update, and unmount tests reject mixed roots and stale lookup. Same-snapshot/different-overlay replacement is distinct and retains identical surface plan/material/visual/line/collision resource identities; camera-only revision reuses all resource identities; rapid replacement retains one worker plus the newest pending value. A default-cache lifecycle test uses actual native preparation, then scene replacement and teardown with no external mount owner; weak `RealityViewport`, shared surface record, and root references prove that application owners withdraw and release each completed native owner. Native SDK deallocation may be deferred, so this is not GPU allocator-reclamation evidence. |
 | Overlay display continuity | A delayed same-scene/snapshot overlay fixture proves the mounted root, camera, source surface, and native grid remain enabled through preparation and typed failure while exact-ready surface, CAD hit, and handle-table lookup for the requested identity remain unavailable. Warm-host Ortho/Persp tests prove successful publication has no empty rendered frame; source/snapshot replacement still withdraws the old root. |

@@ -347,12 +347,35 @@ independent tessellator is never an alternative implementation.
    surface-free ready frame uses that owner's admitted camera projection sample
    depth; it does not fabricate geometry bounds, call `ViewportLayout`
    unprojection, or rely on the platform inverse-projection APIs that the
-   mounted macOS 27 runtime contract excludes.
+   mounted macOS 27 runtime contract excludes. Finite collision-cast length
+   remains separately derived from admitted geometry bounds and is not a
+   prerequisite for point/plane or world-axis camera queries.
    Drag updates consume the retained materialized value and occurrence/group
    baseline; they do not recapture the scene, resolve current hover, or rebuild
    members in a feature-ID-keyed dictionary. Existing input calculations may
    be extracted to accept materialized projected scalars, but pending state
    cannot retain a legacy geometry value that stores `ViewportLayout`.
+   Baseline authority and camera readiness use different coordinates after
+   press. The retained record remains authorized by its pressed base source
+   identity, occurrence/member addresses, route availability, and operation
+   role. A changed document ID/generation, presentation snapshot, selected
+   operation target/member set, or callback availability cancels the pending or
+   active interaction and clears its owned preview. A same-base-source overlay
+   revision caused by hover, pending state, or that interaction's own active
+   state does not cancel it. Nor does the existing drag-preview revision owned
+   by that exact active interaction: its changed geometry may replace the
+   displayed native frame while the immutable pre-drag baseline remains the
+   commit/cancel reference. An occurrence/model-transform change not owned by
+   that preview requires a changed source authority and cancellation; it cannot
+   silently replace the baseline under the same press.
+   Each subsequent geometric update separately requires the currently mounted
+   presentation identity and camera revision to be exact-ready. Temporary
+   overlay/preview/camera preparation unavailability performs no drag mutation
+   and grants no stale-frame fallback, but it does not by itself discard the
+   retained baseline; once the matching camera is ready, the same interaction
+   may resume. The owner never requires the press record's overlay revision to
+   equal the replacement preview frame and never resolves a second hit to
+   refresh that record.
    A two-point screen chord obtained by projecting a world-axis origin and a
    one-meter probe is not an affine world-distance metric in perspective and
    may cross the eye or reverse for a visible small handle. Production axis
@@ -449,6 +472,13 @@ independent tessellator is never an alternative implementation.
    `unproject`, or `hitTest`; the macOS 27 counterexamples and exact composition,
    sample, finite-bound, near/far, and refusal rules are owned only by the
    [RealityViewport design](RealityViewport/DESIGN.md#contracts-and-invariants).
+   The production canvas-input mapper routes all nine point/plane callers
+   through that exact-ready cache/native entry point, including an empty scene;
+   stale or unmounted input performs no callback and may resume only after the
+   matching mounted camera is ready. The legacy CAD-face `exactWorldPoint`
+   branch remains separately marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until it
+   uses the same native owner, and camera-plane evidence does not complete or
+   authorize that branch.
    Results are sorted by ascending distance and filtered by the
    same visible/section/back-face rules as the scene. The host requests all
    native collision hits before filtering so a rejected

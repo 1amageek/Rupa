@@ -139,6 +139,53 @@ func viewportMeshInputRejectsUnappliedNativeFrame(projection: ViewportCameraProj
 }
 
 @MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [ViewportCameraProjection.parallel, .standardPerspective])
+func viewportCanvasPlaneInputRejectsUnappliedNativeFrame(projection: ViewportCameraProjection) async throws {
+    _ = NSApplication.shared
+    let document = DesignDocument.empty()
+    let control = ViewportControlSession(camera: .init(projection: projection), basis: .axisFront(.z))
+    let size = CGSize(width: 800, height: 600)
+    var picks: [ViewportCanvasTarget] = []
+    let viewport = Viewport(
+        document: document,
+        sourceIdentity: .document(id: document.id, generation: DocumentGeneration(1)),
+        controlSession: control,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
+        objectSelectionIndex: .init(document: document, selection: .empty),
+        allowsObjectAffordances: false,
+        selectedPresentationHasExactCADContext: false,
+        onPick: { picks.append($0) }
+    ).frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: viewport)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+    let point = CGPoint(x: 450, y: 310)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while picks.isEmpty, ContinuousClock.now < deadline {
+        measurementInput(in: controller.view)?.onPick?(point, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let accepted = try #require(picks.first)
+    #expect(accepted.sketchPlane == .xy)
+    let input = try #require(measurementInput(in: controller.view))
+    let count = picks.count
+    _ = try control.perform(.pan(deltaXPoints: 17, deltaYPoints: 9))
+    input.onPick?(point, size, .replace)
+    #expect(picks.count == count)
+    let resumedDeadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while picks.count == count, ContinuousClock.now < resumedDeadline {
+        try await Task.sleep(for: .milliseconds(20))
+        measurementInput(in: controller.view)?.onPick?(point, size, .replace)
+    }
+    #expect(picks.count == count + 1)
+    #expect(try #require(picks.last).modelPoint != accepted.modelPoint)
+}
+
+@MainActor
 private func measurementInput(in view: NSView) -> ViewportInputSurface.InputView? {
     if let input = view as? ViewportInputSurface.InputView { return input }
     for child in view.subviews {
