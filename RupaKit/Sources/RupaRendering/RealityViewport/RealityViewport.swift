@@ -907,7 +907,7 @@ final class RealityViewport {
             // Conservative descriptor queries clip their source geometry before
             // finding its nearest point; exact colliders use the native hit.
             if distance.position == nil, metadata.attachment == .sectionedGeometry, let section,
-               simd_dot(SIMD3<Double>(position), section.normal) - section.offset < -section.tolerance {
+               !Self.retains(SIMD3<Double>(position), section: section) {
                 continue
             }
             if metadata.depth == .scene, let occluder, depth > occluder { continue }
@@ -955,23 +955,86 @@ final class RealityViewport {
         return projected
     }
 
-    /// Admits a world point against the mounted camera's depth interval only;
-    /// screen containment, section clipping and occlusion are separate queries.
-    func projectWithinDepthRange(_ point: Point3D, revision: UInt64) throws -> CGPoint {
+    /// Admits a world point against the mounted camera's depth interval and
+    /// reports its camera-space depth. A nil result is a valid depth rejection
+    /// after the exact-ready gate; readiness, camera revision, representation
+    /// and calibration failures remain typed. Screen containment, section
+    /// clipping and occlusion are separate queries.
+    func projectedPointWithinDepthRange(
+        _ point: Point3D,
+        revision: UInt64
+    ) throws -> (point: CGPoint, depth: Double)? {
         try validateCameraQuery(point: .zero, revision: revision)
         let local = SIMD3<Float>(
             Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y),
             Float(point.z - renderOrigin.z)
         )
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
+            throw Self.queryFailure("The world point cannot be represented in native scene space.")
+        }
+        guard let near = camera.components[OrthographicCameraComponent.self]?.near
+            ?? camera.components[PerspectiveCameraComponent.self]?.near,
+              let far = camera.components[OrthographicCameraComponent.self]?.far
+            ?? camera.components[PerspectiveCameraComponent.self]?.far else {
+            throw Self.queryFailure("The mounted native camera has no depth interval.")
+        }
         let depth = -camera.convert(position: local, from: nil).z
-        let near = camera.components[OrthographicCameraComponent.self]?.near
-            ?? camera.components[PerspectiveCameraComponent.self]?.near
-        let far = camera.components[OrthographicCameraComponent.self]?.far
-            ?? camera.components[PerspectiveCameraComponent.self]?.far
-        guard let near, let far, depth.isFinite, depth >= near, depth <= far else {
+        guard depth.isFinite, depth >= near, depth <= far else { return nil }
+        return (point: try project(point, revision: revision), depth: Double(depth))
+    }
+
+    /// Admits a world point against the mounted camera's depth interval only;
+    /// screen containment, section clipping and occlusion are separate queries.
+    func projectWithinDepthRange(_ point: Point3D, revision: UInt64) throws -> CGPoint {
+        guard let admitted = try projectedPointWithinDepthRange(point, revision: revision) else {
             throw Self.queryFailure("The world point is outside the native camera depth range.")
         }
-        return try project(point, revision: revision)
+        return admitted.point
+    }
+
+    /// Reports the projection the mounted camera drew the frame with. Camera
+    /// depth is linear in screen space under an orthographic camera and linear
+    /// in reciprocal depth under a perspective camera, so a caller that
+    /// interpolates along a projected segment has to follow the mode the frame
+    /// was drawn with instead of inferring one from the sampled depths.
+    func usesPerspectiveProjection(revision: UInt64) throws -> Bool {
+        try validateCameraQuery(point: .zero, revision: revision)
+        guard let cameraCalibration else {
+            throw Self.queryFailure("The mounted native camera has no calibration.")
+        }
+        return cameraCalibration.perspective
+    }
+
+    /// Reports whether the mounted frame retains `point` on the kept side of
+    /// the active section, using the predicate that admits native surface hits.
+    ///
+    /// Section clipping is not observable through the depth interval or through
+    /// an empty pixel: a point the section removed draws nothing, exactly like a
+    /// silhouette point just outside the tessellated outline. This query is the
+    /// authority that separates the two, so no caller has to re-derive the cut
+    /// from the section plane it did not apply.
+    func retainsSectionedPoint(_ point: Point3D, revision: UInt64) throws -> Bool {
+        try validateCameraQuery(point: .zero, revision: revision)
+        guard geometryRoot.isEnabled else { return false }
+        guard let section else { return true }
+        let local = SIMD3<Double>(
+            point.x - renderOrigin.x, point.y - renderOrigin.y, point.z - renderOrigin.z
+        )
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
+            throw Self.queryFailure("The world point cannot be represented in native scene space.")
+        }
+        return Self.retains(local, section: section)
+    }
+
+    /// The single section admission predicate. `position` is in native scene
+    /// space, which is `renderOrigin`-relative, so every caller converts before
+    /// asking. Sharing one implementation keeps the drawn frame and the queries
+    /// that report about it from drifting apart.
+    private static func retains(
+        _ position: SIMD3<Double>,
+        section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)
+    ) -> Bool {
+        simd_dot(position, section.normal) - section.offset >= -section.tolerance
     }
 
     /// Intersects a screen point with a world plane using the exact mounted
@@ -1230,8 +1293,7 @@ final class RealityViewport {
         let cullsBackfaces = appearance.map { $0.shading.isBackfaceCullingActive(in: $0.mode) } ?? false
         guard let triangle = triangle(for: hit) else { return false }
         if let section {
-            let position = SIMD3<Double>(hit.position)
-            guard simd_dot(position, section.normal) - section.offset >= -section.tolerance else { return false }
+            guard Self.retains(SIMD3<Double>(hit.position), section: section) else { return false }
         }
         if cullsBackfaces {
             let a = triangle.firstPosition

@@ -615,6 +615,78 @@ independent tessellator is never an alternative implementation.
    provenance, projection, incidence, or native visibility is a miss or typed
    frame failure according to the exact-ready query contract, never a CPU
    triangle hit or legacy selector fallback.
+   CAD body face/edge/vertex selection uses the same bounded exception with the
+   prepared B-Rep topology instead of the authored-mesh face loops.
+   `ViewportNativeCADTopologyResolver` owns it. The prepared
+   `SelectionComponentID` of the sub-shape is the only identity it emits; a
+   native `MeshFaceID` is render provenance and is never reinterpreted as a CAD
+   identity. The resolver projects the retained topology through the same
+   mounted camera the surface query uses, tries vertex, then edge, then face,
+   and keeps one current best that only a strict projected-distance improvement
+   advances.
+   Every CAD interaction body carrying prepared topology is a candidate, not
+   only the body the pointer draws, because a pixel just outside the tessellated
+   silhouette still has outline edges and silhouette vertices inside the point
+   tolerance. `Viewport` compares candidates from different bodies through the
+   same rank-then-metric order — vertex before edge before face, then projected
+   distance — so the nearest sub-shape wins across the scene and equal
+   candidates keep stable scene order.
+   A face result is the containing face whose interpolated depth is nearest the
+   native visible-surface depth at the pointer, so the front-most face needs no
+   depth epsilon. A face is offered only for the body the native frame actually
+   draws at that pixel: an empty pixel and an occluding body both end the face
+   query, because a face cannot exist where the frame draws none of this body.
+   Containment is even-odd ray casting over the projected outer loop, which
+   admits a non-convex loop exactly and preserves the rule of the projected
+   topology tester this path replaces; depth is interpolated over that loop's
+   fan triangulation under the projection the mounted frame was drawn with.
+   Native camera depth is linear view-space z under both cameras, so the
+   interpolation rule is a property of the frame and never of the sign of the
+   sampled depths: an orthographic frame makes depth linear on screen, and a
+   perspective frame makes reciprocal depth linear. The resolver asks the frame
+   which of the two it is through `usesPerspectiveProjection` and infers
+   neither.
+   This face rule is interim and is not the target design. It re-estimates on
+   the CPU which face a pixel belongs to, beside the native frame that already
+   hit a triangle there, so it is a second face judgement rather than the CAD
+   identity of the hit. The target is provenance: the hit triangle carries the
+   prepared CAD face identity, and the face branch becomes that lookup, which
+   deletes the projected-loop containment and the face depth interpolation
+   described above. The resolver carries the matching
+   `FIXME(INCOMPLETE_IMPLEMENTATION)` marker and its completion condition.
+   An edge candidate interpolates no depth at all. The screen parameter of the
+   nearest projected point is mapped back to the edge's own world parameter
+   under that same frame projection, and the native camera then reports the
+   depth of the resulting world point.
+   A vertex or edge candidate is admitted only when the mounted frame still
+   retains its world point through the active section, and is then rejected
+   only when the frame draws a nearer surface at the candidate's own projected
+   point, within the resolver-owned relative `depthSlack`. The section query
+   runs first because an empty pixel is ambiguous on its own: a silhouette point
+   and a point the section cut away both draw nothing, and only the frame that
+   applied the section separates them. Once that question is answered, a pixel
+   that draws nothing hides nothing, which keeps silhouette vertices and outline
+   edges selectable where the exact B-Rep point and the tessellated collision
+   surface disagree.
+   The native outcome is three-valued. `resolved` and `miss` both mean the
+   native frame answered the query; `unsupported` means it could not, because no
+   presentation is mounted or no CAD interaction node in the scene carries
+   prepared topology. An empty pixel is a `miss`, not `unsupported`: the frame
+   answered, and nothing is drawn there. Face and edge scopes reach the legacy
+   identity resolver only on `unsupported`, so neither a miss on a
+   topology-backed scene nor a hover over empty space can be answered by a
+   second, differently projected hit rule. The scopes that still have no native
+   input path — object, vertex, region, sketch entity, and the unscoped query —
+   remain routed to the legacy resolver on a miss until their own seams land,
+   and rectangle selection is unchanged until RK-4.3.
+   `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
+   the behavioral evidence for this resolver: the rank-then-metric order across
+   bodies, the orthographic and perspective edge-parameter rules, rejection of
+   vertices and edges the section removed, silhouette retention over an empty
+   pixel, and the `miss` versus `unsupported` split. Those tests drive the
+   resolver through synthetic frame closures, so they prove its rules and not
+   the mounted RealityKit frame; mounted-frame evidence for CAD sub-shape input
+   is owned by the integration verification of this migration.
 
 ### Native shading and spatial content
 

@@ -744,6 +744,26 @@ of screen-baked dashes.
    Measurement snap validation uses this depth-admitted query; ruler and
    projection baselines retain the unrestricted query.
 
+   `usesPerspectiveProjection(revision:)` reports which projection the mounted
+   camera drew the frame with. Native camera depth is linear view-space z under
+   both cameras, so a caller that interpolates along a projected segment cannot
+   infer the rule from the sampled depths; it asks the frame. The query reads
+   the mounted calibration under the same readiness and revision validation as
+   the projection queries and reconstructs no projection of its own.
+
+   `retainsSectionedPoint(_:revision:)` reports whether the mounted frame keeps
+   a world point on the kept side of the active section, applying the same
+   native-scene-space predicate that admits native surface hits: the
+   `renderOrigin`-relative distance along the section normal against its offset
+   and tolerance. Section clipping is observable through neither the depth
+   interval nor an empty pixel, because a removed point draws nothing exactly as
+   a silhouette point just outside the tessellated outline does. This query is
+   the authority that separates the two, so no caller re-derives the cut from a
+   section plane it did not apply. A frame whose geometry root is disabled
+   retains no point, a frame with no active section retains every representable
+   point, and a world point that cannot be represented in native scene space is
+   a typed presentation failure.
+
    Native collision uses `Scene.raycast` with that composed scene-space ray,
    `.all`, and the existing collision mask. Its required finite positive length
    is the representable Float value of

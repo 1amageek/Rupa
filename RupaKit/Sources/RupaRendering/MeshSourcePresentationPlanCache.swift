@@ -100,6 +100,38 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).projectWithinDepthRange(point, revision: revision)
     }
 
+    /// Admits a world point and reports its camera-space depth so callers can
+    /// compare candidate depths against the native surface frame. A nil result
+    /// is a valid depth rejection, never a silent projection failure.
+    func projectedPointWithinDepthRange(
+        _ point: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> (point: CGPoint, depth: Double)? {
+        try querySurface(for: identity).projectedPointWithinDepthRange(point, revision: revision)
+    }
+
+    /// Reports the projection the mounted frame was drawn with, so depth
+    /// interpolation along a projected segment follows the mounted camera
+    /// instead of being inferred from the sampled depths.
+    func usesPerspectiveProjection(
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Bool {
+        try querySurface(for: identity).usesPerspectiveProjection(revision: revision)
+    }
+
+    /// Reports whether the mounted frame retains a world point through the
+    /// active section. A removed point draws nothing, exactly like a silhouette
+    /// point, so this is the only query that separates the two.
+    func retainsSectionedPoint(
+        _ point: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Bool {
+        try querySurface(for: identity).retainsSectionedPoint(point, revision: revision)
+    }
+
     /// Resolves a world plane through the exact-ready native camera owned by
     /// `identity`. The cache validates preparation identity before any native
     /// query so retained display surfaces cannot acquire input authority.
