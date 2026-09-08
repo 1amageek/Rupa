@@ -59,9 +59,38 @@ final class MeshSourcePresentationPlanCache {
         for identity: RealityViewportPreparationRequest.Identity,
         revision: UInt64
     ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        try querySurface(for: identity).surfaceHit(at: point, revision: revision)
+    }
+
+    /// Resolves the native priority order without granting display-only frames authority.
+    func interactionRecords(
+        at point: CGPoint,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> [ViewportSpatialInteractionRecord] {
+        let surface = try querySurface(for: identity)
+        let indices = try surface.spatialHandleHits(at: point, revision: revision)
+        return try indices.map { index in
+            guard let record = interactionRecord(at: index, for: identity) else {
+                throw queryFailure("The native handle has no matching prepared interaction record.")
+            }
+            return record
+        }
+    }
+
+    /// Materialization must revalidate both identities for every projected point.
+    func project(
+        _ point: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> CGPoint {
+        try querySurface(for: identity).project(point, revision: revision)
+    }
+
+    private func querySurface(for identity: RealityViewportPreparationRequest.Identity) throws -> RealityViewport {
         switch state {
         case let .ready(current, _, surface) where current == identity:
-            return try surface.surfaceHit(at: point, revision: revision)
+            return surface
         case let .failed(current, error) where current == identity:
             throw error
         case .idle:
@@ -74,6 +103,7 @@ final class MeshSourcePresentationPlanCache {
             throw queryFailure("The native surface query uses a stale failed preparation identity.")
         }
     }
+
 
     /// Retains a complete display during an overlay-only replacement. This is
     /// not a query authority: handles and CAD queries still require exact readiness.

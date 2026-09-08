@@ -77,11 +77,29 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
             return try ViewportSpatialOverlayProducer.makeBuilder(from: input)(origin, charge)
         })
     }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.prepare(request(first, handle: firstHandle))
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: first) == nil)
     try await settlePlanCache(cache)
     expectBaseline(cache.interactionRecord(at: 0, for: first), matches: firstHandle)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     let prepared = try #require(cache.surface(for: first))
     func nativeHandleIndex(_ entity: Entity) -> UInt32? {
         if let index = prepared.spatialHandleIndex(for: entity) { return index }
@@ -95,12 +113,30 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     #expect(cache.interactionRecord(at: 1, for: first) == nil)
     #expect(cache.interactionRecord(at: 0, for: second) == nil)
     cache.prepare(request(second, handle: secondHandle))
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: first) == nil)
     #expect(cache.interactionRecord(at: 0, for: second) == nil)
     try await settlePlanCache(cache)
     expectBaseline(cache.interactionRecord(at: 0, for: second), matches: secondHandle)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.teardown()
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: second, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: second, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: second) == nil)
 
     // A mismatched native count must fail before any handle gains authority.
@@ -109,6 +145,12 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     }))
     try await settlePlanCacheFailure(cache)
     #expect(cache.failure(for: first)?.code == .invalidSceneItem)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: first, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: first, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.teardown()
 
@@ -117,8 +159,125 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     }))
     try await settlePlanCacheFailure(cache)
     #expect(cache.failure(for: second)?.code == .invalidSceneItem)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: .zero, for: second, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: second, revision: 1)
+    }
     #expect(cache.interactionRecord(at: 0, for: second) == nil)
     cache.teardown()
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [false, true])
+func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
+    perspective: Bool
+) async throws {
+    _ = NSApplication.shared
+    let cache = MeshSourcePresentationPlanCache()
+    let identity = planCacheIdentity(nil, overlayRevision: perspective ? 202 : 201)
+    let featureID = FeatureID()
+    let reference = SelectionReference.surface(.controlPoint(.init(
+        surface: .init(subshape: .init(subshapeID: .init(featureID: featureID, role: "native-interaction", ordinal: 0),
+                                      geometrySignature: .vertex(point: .origin))), uIndex: 0, vIndex: 0)))
+    let record = try ViewportSpatialInteractionRecord(
+        target: .surfaceControlPoint(.init(
+            featureID: featureID, target: reference, point: .origin,
+            modelTransform: .identity, dragMode: .planar)),
+        occurrenceID: "native.interaction")
+    let request = RealityViewportPreparationRequest(
+        identity: identity, scene: nil, fallbackOrigin: .origin,
+        spatialOverlay: { origin, charge in
+            let input = ViewportSpatialOverlayInput(
+                markers: [.init(family: .transform,
+                                value: .init(shape: .sphere, anchor: .origin, diameterPoints: 12,
+                                             color: [1, 0, 0, 1], handleIndex: 0, hitTolerancePoints: 8))],
+                interactionRecords: [record], renderOrigin: origin,
+                retainedSurfaceByteCount: charge, topologyRevision: identity.overlayRevision)
+            return try ViewportSpatialOverlayProducer.makeBuilder(from: input)(origin, charge)
+        })
+    cache.prepare(request)
+    try await settlePlanCache(cache)
+    let viewport = try #require(cache.surface(for: identity))
+    defer { viewport.unbind(); cache.teardown() }
+
+    let size = CGSize(width: 512, height: 384)
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
+        camera: .init(zoom: 0.2, projection: perspective ? .standardPerspective : .parallel),
+        basis: .axisFront(.z), verticalBounds: -0.01...0.01)
+    var reportedError: MeshSourcePresentationRenderError?
+    let interaction = MeshSourcePresentationInteractionStateResolver(
+        sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+        previewSceneNodeIDs: [], hoveredSceneNodeID: nil)
+    let controller = NSHostingController(
+        rootView: RealityViewportView(
+            viewport: viewport, viewportRevision: 1, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            interaction: interaction, sectionPlane: nil, retainedSide: .front,
+            sectionTolerance: 0,
+            onUpdateResult: { reportedError = $0 }
+        ).frame(width: size.width, height: size.height))
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    var center: CGPoint?
+    while ContinuousClock.now < deadline {
+        controller.view.layoutSubtreeIfNeeded()
+        if let reportedError { throw reportedError }
+        if viewport.appliedViewportRevision == 1,
+           let projected = viewport.project(.origin) {
+            center = projected
+            break
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let screenCenter = try #require(center)
+    let strictProjection = try cache.project(.origin, for: identity, revision: 1)
+    #expect(hypot(strictProjection.x - screenCenter.x, strictProjection.y - screenCenter.y) <= 0.1)
+    let hits = try cache.interactionRecords(at: screenCenter, for: identity, revision: 1)
+    #expect(hits.count == 1)
+    #expect(hits.first?.identity == record.identity)
+    #expect(hits.first?.occurrenceID == record.occurrenceID)
+    #expect(try cache.interactionRecords(at: CGPoint(x: -10_000, y: -10_000), for: identity, revision: 1).isEmpty)
+
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: screenCenter, for: identity, revision: 2)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: CGPoint(x: CGFloat.nan, y: screenCenter.y), for: identity, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: identity, revision: 2)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.init(x: .nan, y: 0, z: 0), for: identity, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try viewport.project(.origin, revision: 2)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try viewport.project(.init(x: .nan, y: 0, z: 0), revision: 1)
+    }
+
+    window.contentViewController = nil
+    window.close()
+    let unmountDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while viewport.appliedViewportRevision != nil, ContinuousClock.now < unmountDeadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.interactionRecords(at: screenCenter, for: identity, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.project(.origin, for: identity, revision: 1)
+    }
 }
 
 @MainActor

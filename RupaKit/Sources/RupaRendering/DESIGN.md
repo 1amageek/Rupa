@@ -437,7 +437,12 @@ independent tessellator is never an alternative implementation.
    revision. Only a ready query with no retained hit is a miss; unavailable or
    stale presentation is a typed failure and cannot fall through to another
    semantic target. Second, spatial and legacy affordances resolve native entities
-   through the already prepared frame-local handle table. Third, rectangle
+   through the already prepared frame-local handle table. The cache maps the
+   ordered native indexes to records only from the same exact-ready identity;
+   materialization then consumes only revision-checked projection calls on that
+   same native owner, synchronously without suspension or intervening frame
+   mutation. An index mismatch or failed projection is typed unavailability,
+   never a partial candidate list or old selector fallback. Third, rectangle
    selection uses only the bounded exception in invariant 8. Completing the
    first seam does not make a retained display surface authoritative and does
    not complete RK-4.

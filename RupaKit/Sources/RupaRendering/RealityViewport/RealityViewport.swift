@@ -826,6 +826,26 @@ final class RealityViewport {
         return content?.project(point: [Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y), Float(point.z - renderOrigin.z)], to: .local)
     }
 
+    /// Projects operation baselines only through their matching mounted camera.
+    func project(_ point: Point3D, revision: UInt64) throws -> CGPoint {
+        guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled,
+              root.scene != nil, let content else {
+            throw Self.queryFailure("The native projection requires a matching mounted camera revision.")
+        }
+        let local = SIMD3<Float>(
+            Float(point.x - renderOrigin.x),
+            Float(point.y - renderOrigin.y),
+            Float(point.z - renderOrigin.z)
+        )
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite,
+              let projected = content.project(point: local, to: .local),
+              projected.x.isFinite, projected.y.isFinite else {
+            throw Self.queryFailure("The native projection cannot represent the requested world point.")
+        }
+        return projected
+    }
+
+
     func hitTest(_ point: CGPoint, revision: UInt64) -> [CollisionCastHit] {
         guard appliedViewportRevision == revision, root.isEnabled, clipper.isEnabled, geometryRoot.isEnabled else {
             return []

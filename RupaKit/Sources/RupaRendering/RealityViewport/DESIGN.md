@@ -736,8 +736,14 @@ of screen-baked dashes.
    or a nonfinite world conversion throws the existing typed render failure, so
    Measure cannot reinterpret unavailable presentation as a construction-plane
    or snap hit. Neither outcome invokes the CPU screen-hit tester or legacy
-   identity renderer. Spatial-handle collision and rectangle
-   selection remain later RK-4 seams and do not weaken this surface contract.
+   identity renderer. The spatial-handle seam uses the same exact mounted
+   revision: its throwing query returns bounded, priority-ordered frame-local
+   indexes, and every projection used to materialize one of those candidates
+   explicitly supplies that same revision. Projection with a stale/unapplied
+   revision, disabled root, missing content, or nonfinite result is typed frame
+   unavailability rather than an optional legacy fallback. This component does
+   not map indexes to CAD records. Rectangle selection remains a later RK-4
+   seam and does not weaken this surface contract.
 
    Production camera presentation uses
    RealityKit's built-in `PerspectiveCameraComponent` or
