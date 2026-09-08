@@ -98,7 +98,15 @@ extension ViewportInputSurface {
 
         override func cancelOperation(_ sender: Any?) {
             guard onCancel?() == true else {
-                super.cancelOperation(sender)
+                // `NSResponder` declares `cancelOperation(_:)` as a key-binding
+                // command but provides no implementation, so calling `super`
+                // raises an unrecognized selector. Forward the command up the
+                // chain instead, starting past this view so it cannot recurse,
+                // and let it be dropped when no responder handles it.
+                _ = nextResponder?.tryToPerform(
+                    #selector(NSStandardKeyBindingResponding.cancelOperation(_:)),
+                    with: sender
+                )
                 return
             }
             if dragStart != nil { primaryDragCancelled = true }
