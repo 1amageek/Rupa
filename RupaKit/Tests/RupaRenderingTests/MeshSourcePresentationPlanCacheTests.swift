@@ -347,6 +347,28 @@ func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
     #expect(hits.count == 1)
     #expect(hits.first?.identity == record.identity)
     #expect(hits.first?.occurrenceID == record.occurrenceID)
+    let materialized = try record.materialize { try cache.project($0, for: identity, revision: 1) }
+    guard case .projectionFree = materialized else {
+        Issue.record("The native record lost its projection-free input route.")
+        return
+    }
+    let radialRecord = try ViewportSpatialInteractionRecord(target: .patternArrayRadialAngle(.init(
+        sourceID: .init(), title: "Native radial input", center: .origin, axis: .unitZ,
+        referencePoint: .init(x: 0.01, y: 0, z: 0), angleRadians: 0.5,
+        displayAngleRadians: nil, angleMode: .spacing, state: .normal)))
+    let radialInput = try radialRecord.materialize { try cache.project($0, for: identity, revision: 1) }
+    guard case .patternArrayRadialAngle(_, let radial) = radialInput else {
+        Issue.record("The native radial record did not materialize.")
+        return
+    }
+    let radialTip = try cache.project(.init(x: 0.01, y: 0, z: 0), for: identity, revision: 1)
+    let tangentTip = try cache.project(.init(x: 0, y: 0.01, z: 0), for: identity, revision: 1)
+    #expect(radial.center == strictProjection)
+    #expect(abs(radial.radialVector.dx - (radialTip.x - strictProjection.x)) < 0.01)
+    #expect(abs(radial.tangentVector.dy - (tangentTip.y - strictProjection.y)) < 0.01)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try radialRecord.materialize { try cache.project($0, for: identity, revision: 2) }
+    }
     #expect(try cache.interactionRecords(at: CGPoint(x: -10_000, y: -10_000), for: identity, revision: 1).isEmpty)
 
     #expect(throws: MeshSourcePresentationRenderError.self) {

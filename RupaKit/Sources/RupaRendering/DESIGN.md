@@ -308,14 +308,26 @@ independent tessellator is never an alternative implementation.
    not record payloads; directed routes retain their raw world anchor,
    direction, and semantic value instead. It is not a
    `ViewportInteractionTarget` or `ViewportActiveInteractionDragState`; the
-   MainActor input owner materializes the former in RK-4.2.3 from the exact
-   record and matching mounted RealityKit projection, then creates the latter
-   from the current press point. Materialization is one exhaustive route switch
+   MainActor input owner materializes a closed
+   `ViewportSpatialMaterializedInteractionTarget` in RK-4.2.3 from the exact
+   record and matching mounted RealityKit projection, then creates the existing
+   target/drag state only where its payload is projection-owner-free.
+   Materialization is one exhaustive route switch
    over the prepared value and may not invoke `ViewportLayout`, the legacy
    projected candidate selectors, or source traversal. A missing/degenerate
    native projection is typed frame unavailability, never placeholder geometry
-   or legacy fallback. No closure, mutable coordinator, native Entity, Viewport,
-   camera, or layout owner crosses this table boundary.
+   or legacy fallback. A legacy target/geometry that stores `ViewportLayout`
+   is not reconstructed. Its materialized case instead stores only the finite
+   projected points, vectors, and semantic scalars consumed by the input math,
+   and the drag path consumes that case directly. Radial-angle and angular
+   copy-count input store the native-projected center plus radial and tangent
+   vectors with their base angle/count and policy minimum/step. Angular-density
+   input stores the native-projected anchor and tangent direction, base count,
+   and points-per-copy value derived from the existing policy. These cases do
+   not store arc/guide visuals, a projection closure, or an approximation of
+   `ViewportLayout`; native spatial resources already own their visuals. No
+   closure, mutable coordinator, native Entity, Viewport, camera, or layout
+   owner crosses this table boundary.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no
