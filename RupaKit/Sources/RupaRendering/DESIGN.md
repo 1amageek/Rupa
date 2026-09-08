@@ -353,6 +353,13 @@ independent tessellator is never an alternative implementation.
    members in a feature-ID-keyed dictionary. Existing input calculations may
    be extracted to accept materialized projected scalars, but pending state
    cannot retain a legacy geometry value that stores `ViewportLayout`.
+   A two-point screen chord obtained by projecting a world-axis origin and a
+   one-meter probe is not an affine world-distance metric in perspective and
+   may cross the eye or reverse for a visible small handle. Production axis
+   drag therefore retains the semantic world axis and resolves its world delta
+   through the same mounted, revision-checked camera-query owner; the chord is
+   only a bounded presentation/input sample and cannot authorize the CAD
+   distance by itself.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no
