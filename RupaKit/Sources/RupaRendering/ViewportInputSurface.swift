@@ -80,7 +80,7 @@ extension ViewportInputSurface {
 
         private var dragStart: CGPoint?
         private var secondaryDragStart: CGPoint?
-        private var primaryDragCancelledByInputExclusion = false
+        private var primaryDragCancelled = false
         private var isOrbiting = false
         private var isInsideInputExclusion = false
         private var trackedPointerLocation: CGPoint?
@@ -97,7 +97,14 @@ extension ViewportInputSurface {
         }
 
         override func cancelOperation(_ sender: Any?) {
-            if onCancel?() != true { super.cancelOperation(sender) }
+            guard onCancel?() == true else {
+                super.cancelOperation(sender)
+                return
+            }
+            if dragStart != nil { primaryDragCancelled = true }
+            dragStart = nil
+            secondaryDragStart = nil
+            onDragPreview?(nil, nil, bounds.size)
         }
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
@@ -138,7 +145,7 @@ extension ViewportInputSurface {
         override func mouseDown(with event: NSEvent) {
             publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
-            primaryDragCancelledByInputExclusion = false
+            primaryDragCancelled = false
             dragStart = location(from: event)
             guard let dragStart,
                   !isInputExcluded(dragStart) else {
@@ -172,23 +179,23 @@ extension ViewportInputSurface {
             markCanvasInputActive()
             let intent = selectionIntent(from: event)
             guard let start = dragStart else {
-                if !primaryDragCancelledByInputExclusion {
+                if !primaryDragCancelled {
                     onPick?(end, bounds.size, intent)
                 }
-                primaryDragCancelledByInputExclusion = false
+                primaryDragCancelled = false
                 return
             }
 
             dragStart = nil
             let dragDistance = hypot(end.x - start.x, end.y - start.y)
             if dragDistance <= 4.0 {
-                onDragPreview?(nil, nil, bounds.size)
                 onPick?(end, bounds.size, intent)
+                onDragPreview?(nil, nil, bounds.size)
             } else {
                 onCanvasDrag?(start, end, bounds.size, intent)
                 onDragPreview?(nil, nil, bounds.size)
             }
-            primaryDragCancelledByInputExclusion = false
+            primaryDragCancelled = false
         }
 
         override func rightMouseDown(with event: NSEvent) {
@@ -477,7 +484,7 @@ extension ViewportInputSurface {
 
         private func clearInteractionStateForInputExclusion() {
             if dragStart != nil {
-                primaryDragCancelledByInputExclusion = true
+                primaryDragCancelled = true
             }
             let shouldPublishClear = !isInsideInputExclusion
                 || dragStart != nil

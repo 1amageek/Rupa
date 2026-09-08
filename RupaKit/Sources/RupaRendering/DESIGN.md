@@ -473,6 +473,14 @@ independent tessellator is never an alternative implementation.
    RealityKit SDK changes.
    Missing collision or `triangleHit.faceIndex` mapping is an explicit miss or
    typed failure; legacy GPU identity rendering is not a fallback.
+   The shared `ViewportInputSurface` preserves one primary-gesture lifecycle.
+   For a click, the resolved press baseline remains alive through `onPick`; the
+   owner clears its preview and pending state only after that callback returns.
+   When Escape handles cancellation, it consumes the active primary mouse
+   gesture as well as its preview, so the remaining mouse-up event cannot emit
+   a pick or drag. The following mouse-down starts a normal fresh gesture.
+   Escape with no handled viewport interaction is not consumed and remains in
+   the existing responder chain.
    RK-4 connects this contract in three serial seams. First, surface pointer
    selection and measurement consume one throwing native query whose nearest
    optional result contains

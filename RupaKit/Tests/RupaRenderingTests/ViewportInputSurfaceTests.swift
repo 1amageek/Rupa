@@ -30,6 +30,43 @@ struct ViewportInputSurfaceTests {
     }
 
     @Test
+    func primaryClickCommitsBeforePreviewClear() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var events: [String] = []
+        view.onPress = { _, _, _ in events.append("press") }
+        view.onPick = { _, _, _ in events.append("pick") }
+        view.onDragPreview = { start, end, _ in
+            if start == nil, end == nil { events.append("clear") }
+        }
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 12, y: 10)))
+        #expect(events == ["press", "pick", "clear"])
+    }
+
+    @Test(arguments: [false, true])
+    func handledEscapeConsumesPrimaryGestureUntilNextPress(dragged: Bool) throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var events: [String] = []
+        view.onCancel = { events.append("cancel"); return true }
+        view.onPick = { _, _, _ in events.append("pick") }
+        view.onCanvasDrag = { _, _, _, _ in events.append("drag") }
+        view.onDragPreview = { start, end, _ in
+            events.append(start == nil && end == nil ? "clear" : "preview")
+        }
+        let start = CGPoint(x: 10, y: 10)
+        let end = CGPoint(x: dragged ? 60 : 12, y: 10)
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: start))
+        view.cancelOperation(nil)
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: end))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: end))
+        #expect(events == ["cancel", "clear"])
+        events.removeAll()
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: start))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: start))
+        #expect(events == ["pick", "clear"])
+    }
+
+    @Test
     func primaryDragCommitsBeforePreviewClear() throws {
         let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
         var events: [String] = []
