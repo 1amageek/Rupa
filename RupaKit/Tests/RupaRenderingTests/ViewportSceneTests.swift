@@ -4328,36 +4328,6 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 }
 
 @MainActor
-@Test func viewportGridRendererHidesScaleLabelsCoveredByCanvasChrome() {
-    let layout = ViewportCanvasChromeLayout(viewportSize: CGSize(width: 800.0, height: 600.0))
-    let coveredLabel = ViewportProjectedGrid.ScaleLabel(
-        axis: .x,
-        valueMeters: 1.0,
-        displayValue: 1.0,
-        displayUnit: .meter,
-        position: CGPoint(x: 20.0, y: 20.0),
-        text: "1m"
-    )
-    let visibleLabel = ViewportProjectedGrid.ScaleLabel(
-        axis: .z,
-        valueMeters: 2.0,
-        displayValue: 2.0,
-        displayUnit: .meter,
-        position: CGPoint(x: 420.0, y: 280.0),
-        text: "2m"
-    )
-
-    let visible = ViewportGridRenderer.visibleScaleLabels(
-        from: [coveredLabel, visibleLabel],
-        chromeLayout: layout
-    )
-
-    #expect(visible == [visibleLabel])
-    #expect(layout.intersectsCanvasChrome(ViewportGridRenderer.scaleLabelRect(for: coveredLabel)))
-    #expect(!layout.intersectsCanvasChrome(ViewportGridRenderer.scaleLabelRect(for: visibleLabel)))
-}
-
-@MainActor
 @Test func viewportCanvasChromeLayoutMergesExternalOverlayExclusions() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let overlayRect = CGRect(x: 612.0, y: 44.0, width: 38.0, height: 210.0)
@@ -4681,62 +4651,6 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
     #expect(resolution.attemptedResolution)
 }
 
-@Test func viewportSnapOverlayRendererBuildsPolicyCompliantPresentations() {
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
-        size: CGSize(width: 800.0, height: 600.0)
-    )
-    let chromeLayout = ViewportCanvasChromeLayout(viewportSize: CGSize(width: 800.0, height: 600.0))
-    let gridCandidate = SnapCandidate(
-        kind: .grid,
-        point: Point2D(x: 0.0, y: 0.0),
-        distanceMeters: 0.0,
-        label: "Grid"
-    )
-    let lineCandidate = SnapCandidate(
-        kind: .lineStart,
-        point: Point2D(x: 0.0, y: 0.0),
-        distanceMeters: 0.0,
-        label: "Start"
-    )
-    let gridResult = SnapResolutionResult(
-        originalPoint: Point2D(x: 0.0, y: 0.0),
-        resolvedPoint: Point2D(x: 0.0, y: 0.0),
-        selectedCandidate: gridCandidate,
-        candidates: [gridCandidate]
-    )
-    let lineResult = SnapResolutionResult(
-        originalPoint: Point2D(x: 0.0, y: 0.0),
-        resolvedPoint: Point2D(x: 0.0, y: 0.0),
-        selectedCandidate: lineCandidate,
-        candidates: [lineCandidate]
-    )
-
-    #expect(ViewportSnapOverlayRenderer.presentation(
-        result: gridResult,
-        layout: layout,
-        chromeLayout: chromeLayout,
-        context: .passiveHover
-    ) == nil)
-    let gridDragPresentation = ViewportSnapOverlayRenderer.presentation(
-        result: gridResult,
-        layout: layout,
-        chromeLayout: chromeLayout,
-        context: .creationDrag
-    )
-    #expect(gridDragPresentation?.labelText == nil)
-    #expect(gridDragPresentation?.labelBackgroundRect == nil)
-
-    let linePresentation = ViewportSnapOverlayRenderer.presentation(
-        result: lineResult,
-        layout: layout,
-        chromeLayout: chromeLayout,
-        context: .passiveHover
-    )
-    #expect(linePresentation?.labelText == "Start")
-    #expect(linePresentation?.labelBackgroundRect != nil)
-    #expect(linePresentation?.markerRect.width == 8.0)
-}
 
 @MainActor
 private func makeCurvedSweepViewportSession() throws -> (

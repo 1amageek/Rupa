@@ -3,11 +3,12 @@
 ## Purpose and Scope
 
 `RupaRendering` owns the bounded, postpublication presentation contract for one
-immutable viewport snapshot. Production is currently a migration hybrid:
-`RealityViewportView` supplies the RealityKit surface and native camera, while
-SwiftUI `Canvas` still supplies the grid and world overlays and the legacy
-identity renderer still supplies part of picking. RK-3 through RK-5 and RK-IV
-remove those remaining routes. The target uses RealityKit on macOS 27 or later,
+immutable viewport snapshot. Production `RealityViewportView` supplies the
+RealityKit surface, native camera, grid, and world overlays. SwiftUI `Canvas`
+is limited to nonspatial selection chrome, while the legacy identity renderer
+still supplies the picking routes owned by RK-4; RK-5 removes that backend and
+the remaining migration-only code before RK-IV integration. The target uses
+RealityKit on macOS 27 or later,
 with `RealityView` as the live host and `RealityRenderer` limited to offscreen
 GPU verification. A mounted native surface or capability probe alone does not
 constitute the complete production backend cutover. The module's
@@ -19,10 +20,16 @@ never source authority.
 [`ViewportMeasurement`](ViewportMeasurement/DESIGN.md), and the new
 [`RealityViewport`](RealityViewport/DESIGN.md) component owns native scene
 resources, entities, camera application, materials, and native input queries.
-This target design replaces the remaining split native-surface,
-spatial-Canvas, and legacy-identity composition after the migration gates.
-Until then, spatial SwiftUI `Canvas` and identity GPU readback remain active
-production routes beside the RealityKit surface, not a completed cutover.
+RK-3 completed the native world-rendering cutover. The remaining migration
+boundary is input authority: legacy identity GPU readback remains active until
+RK-4, and its backend is removed by RK-5 before RK-IV integration.
+
+RK-CLEAN-1 retires the now-unreferenced `MTKView` surface host, fixed Canvas
+grid renderer, and private Canvas world-drawing roots that RK-3 replaced with
+production `RealityViewportView`. The nonspatial selection rectangle and its
+live input/layout helpers remain, as do the legacy identity-input paths until
+RK-4 and RK-5 replace them; this retirement therefore does not claim that every
+legacy backend has already been removed.
 
 ## Responsibilities and Boundaries
 
