@@ -297,6 +297,12 @@ independent tessellator is never an alternative implementation.
    edits, so sketch-transform presentation is not a body-affordance record:
    its fragments remain nonauthoritative unless RK-4.2.3 supplies a dedicated
    sketch mutation baseline and lifecycle instead of a placeholder body edit.
+   That baseline owns the selected occurrence's scene-node address, original
+   local transform, and the projection-free parent/world conversion needed to
+   apply the gizmo delta. Commit uses the existing scene-node transform command
+   through the workspace callback, preserving its validation, save, and Undo
+   authority; it neither rewrites sketch entities nor routes a sketch
+   occurrence through the body-move command.
    Until that implementation lands, the callable branch carries
    `FIXME(INCOMPLETE_IMPLEMENTATION)` and cannot be treated as a completed
    interactive route.
@@ -328,6 +334,25 @@ independent tessellator is never an alternative implementation.
    `ViewportLayout`; native spatial resources already own their visuals. No
    closure, mutable coordinator, native Entity, Viewport, camera, or layout
    owner crosses this table boundary.
+   The input owner resolves an ordered native handle result in two distinct
+   steps: hover retains only the matching prepared-record identity, while a
+   press materializes the first authoritative record and retains that closed
+   value together with its record until click, drag finish, or cancellation.
+   Failure to materialize the first native candidate is typed frame
+   unavailability; it does not skip to a lower-priority candidate or invoke a
+   legacy selector. A ready empty native result is a genuine handle miss and
+   may continue only into the existing non-handle canvas/object input decision.
+   A continued point/plane decision obtains its ray or world point from the
+   same revision-checked `RealityViewport` camera-projection owner. A
+   surface-free ready frame uses that owner's admitted camera projection sample
+   depth; it does not fabricate geometry bounds, call `ViewportLayout`
+   unprojection, or rely on the platform inverse-projection APIs that the
+   mounted macOS 27 runtime contract excludes.
+   Drag updates consume the retained materialized value and occurrence/group
+   baseline; they do not recapture the scene, resolve current hover, or rebuild
+   members in a feature-ID-keyed dictionary. Existing input calculations may
+   be extracted to accept materialized projected scalars, but pending state
+   cannot retain a legacy geometry value that stores `ViewportLayout`.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no

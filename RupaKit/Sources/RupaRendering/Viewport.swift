@@ -1785,16 +1785,20 @@ public struct Viewport: View {
     private func presentationSurfaceHit(
         at point: CGPoint
     ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        try presentationPlanCache.surfaceHit(
+            at: point,
+            for: presentationQueryIdentity(),
+            revision: activeControlSession.revision
+        )
+    }
+
+    private func presentationQueryIdentity() throws -> RealityViewportPreparationRequest.Identity {
         let identity = try presentationPreparation.get()
         guard identity.snapshotID == presentationScene?.snapshotID else {
             throw MeshSourcePresentationRenderError(code: .failed, message: "The surface query belongs to a different presentation snapshot.")
         }
         if let failure = presentationFrameFailure(for: identity) { throw failure }
-        return try presentationPlanCache.surfaceHit(
-            at: point,
-            for: identity,
-            revision: activeControlSession.revision
-        )
+        return identity
     }
 
     private func presentationOccurrenceIDs(
@@ -13751,21 +13755,17 @@ public struct Viewport: View {
                 // An unavailable frame cannot authorize selection or an edit.
                 return
             }
-            guard let plan = currentPresentationPlan(for: presentationScene) else {
-                // A scene that is still preparing, or one whose plan failed,
-                // picks nothing rather than blocking on a synchronous build.
-                return
-            }
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Mesh element picking still uses
-            // the CPU domain resolver on this production path until RK-4.2;
-            // native face/edge/vertex parity is required before migration completion.
             if let onMeshElementPick {
-                let hit = MeshSourcePresentationScreenHitTester().meshElement(
-                    at: point, domain: meshSelectionDomain, in: plan,
-                    scene: presentationScene, layout: sceneContext.layout,
-                    sectionGeometryResolver: presentationSectionGeometryResolver(),
-                    cullBackFaces: isBackfaceCullingActive
-                )
+                let hit: ViewportMeshElementHit?
+                do {
+                    hit = try presentationPlanCache.meshElement(
+                        at: point, domain: meshSelectionDomain,
+                        for: presentationQueryIdentity(), revision: activeControlSession.revision
+                    )
+                } catch {
+                    // An unavailable frame cannot authorize selection or an edit.
+                    return
+                }
                 onMeshElementPick(hit, selectionIntent)
                 if hit != nil { return }
             }

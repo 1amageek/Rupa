@@ -86,6 +86,59 @@ func viewportSurfaceInputUsesNativeFrame(projection: ViewportCameraProjection, m
 }
 
 @MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [ViewportCameraProjection.parallel, .standardPerspective])
+func viewportMeshInputRejectsUnappliedNativeFrame(projection: ViewportCameraProjection) async throws {
+    _ = NSApplication.shared
+    let document = DesignDocument.empty()
+    let scene = try planCacheScene(suffix: "mesh-input", projectID: document.projectID)
+    let occurrence = try #require(scene.items.first?.occurrenceID)
+    let control = ViewportControlSession(camera: .init(projection: projection), basis: .axisFront(.z))
+    let size = CGSize(width: 800, height: 600)
+    var hits: [ViewportMeshElementHit] = []
+    var meshCallbackCount = 0
+    var legacyPicks = 0
+    let viewport = Viewport(
+        document: document, sourceIdentity: .presentation(scene.snapshotID),
+        controlSession: control, presentationScene: scene,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: .standard(for: .millimeter)),
+        objectSelectionIndex: .init(document: document, selection: .empty),
+        allowsObjectAffordances: false,
+        meshSelectionDomain: .face,
+        onMeshElementPick: { hit, _ in
+            meshCallbackCount += 1
+            if let hit { hits.append(hit) }
+        },
+        selectedPresentationHasExactCADContext: false,
+        onPick: { _ in legacyPicks += 1 }
+    ).frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: viewport)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.orderFront(nil)
+    defer { window.contentViewController = nil; window.close() }
+    let point = CGPoint(x: 390, y: 280)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+    while hits.isEmpty, ContinuousClock.now < deadline {
+        measurementInput(in: controller.view)?.onPick?(point, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(try #require(hits.first).occurrenceID == occurrence)
+    guard case .face = try #require(hits.first).element else {
+        Issue.record("The production Mesh callback did not select a source face."); return
+    }
+    let input = try #require(measurementInput(in: controller.view))
+    let acceptedCount = hits.count
+    let acceptedCallbackCount = meshCallbackCount
+    _ = try control.perform(.pan(deltaXPoints: 17, deltaYPoints: 9))
+    input.onPick?(point, size, .replace)
+    #expect(hits.count == acceptedCount)
+    #expect(meshCallbackCount == acceptedCallbackCount)
+    #expect(legacyPicks == 0)
+}
+
+@MainActor
 private func measurementInput(in view: NSView) -> ViewportInputSurface.InputView? {
     if let input = view as? ViewportInputSurface.InputView { return input }
     for child in view.subviews {
