@@ -29,18 +29,20 @@ import Testing
     target.target = reference(point: .origin, uIndex: 3)
     #expect(try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity != localU)
 
-    var table: [ViewportSpatialHandleIdentity] = []
-    #expect(try ViewportSpatialOverlayProducer.handleIndex(for: planar, in: &table) == 0)
-    #expect(try ViewportSpatialOverlayProducer.handleIndex(for: xAxis, in: &table) == 1)
-    #expect(try ViewportSpatialOverlayProducer.handleIndex(for: planar, in: &table) == 0)
-    #expect(try ViewportSpatialOverlayProducer.handleIndex(for: localU, in: &table) == 2)
-    #expect(table == [planar, xAxis, localU])
+    target.target = reference(point: .origin, uIndex: 1)
+    var table: [ViewportSpatialInteractionRecord] = []
+    for role: ViewportPolySplineSurfaceVertexDragMode in [.planar, .axis(.x), .localAxis(.u, direction: .unitX)] {
+        target.dragMode = role
+        _ = try ViewportSpatialOverlayProducer.handleIndex(for: .surfaceControlPoint(target), in: &table)
+    }
+    #expect(try ViewportSpatialOverlayProducer.handleIndex(for: planar, in: table) == 0)
+    #expect(table.map(\.identity) == [planar, xAxis, localU])
     let input = ViewportSpatialOverlayInput(
-        handleIdentities: table, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1)
+        interactionRecords: table, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1)
     let output = try ViewportSpatialOverlayProducer.makeBuilder(from: input)(.origin, 0)
-    #expect(output.handleIdentities == table)
+    #expect(output.interactionRecords.map(\.identity) == table.map(\.identity))
     #expect(output.spatialBatch.handleCount == 3)
-    #expect(output.spatialBatch.retainedSemanticByteCount == (try ViewportSpatialHandleIdentity.retainedByteCount(for: table)))
+    #expect(output.spatialBatch.retainedSemanticByteCount == (try ViewportSpatialInteractionRecord.retainedByteCount(for: table)))
 }
 
 @Test func spatialHandleIdentityAdmitsVariableLengthIDsBeforeNativePreparation() throws {

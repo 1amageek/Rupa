@@ -77,6 +77,13 @@ func rawPatternInputBuildsSelectedWorldRouteOnWorkerBoundary() throws {
     #expect(built.linearAxisHandles.contains { $0.sourceID == sourceID })
     #expect(built.copyCountHandles.contains { $0.sourceID == sourceID })
     #expect(built.outputModeHandles.contains { $0.sourceID == sourceID })
+    let output = try #require(built.outputModeHandles.first)
+    #expect(output.outputMode == .independentCopy)
+    let prepared = try ViewportSpatialInteractionRecord(target: .patternArrayOutputMode(output))
+    document.productMetadata.patternArrays[sourceID]?.outputMode = .componentInstance
+    if case .patternArrayOutputMode(let retained) = prepared.target {
+        #expect(retained.outputMode == .independentCopy)
+    } else { Issue.record("The prepared output-mode route was lost.") }
 }
 
 @Test
@@ -325,6 +332,17 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         isActive: false,
         isHighlighted: true
     )
+    var sourceLinearHandles = [ViewportPatternAffordanceSource.LinearAxisHandle(
+        sourceID: sourceID,
+        axisSlot: .first,
+        title: "Axis",
+        basePoint: .origin,
+        direction: .unitX,
+        distanceMeters: 1,
+        displayDistanceMeters: nil,
+        distanceMode: .spacing,
+        state: active
+    )]
     let source = ViewportPatternAffordanceSource(
         hasRoute: true,
         guides: [
@@ -376,17 +394,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
             outputPoints: [Point3D(x: 0, y: 0, z: 0.5)],
             totalOutputCount: 1
         ),
-        linearAxisHandles: [.init(
-            sourceID: sourceID,
-            axisSlot: .first,
-            title: "Axis",
-            basePoint: .origin,
-            direction: .unitX,
-            distanceMeters: 1,
-            displayDistanceMeters: nil,
-            distanceMode: .spacing,
-            state: active
-        )],
+        linearAxisHandles: sourceLinearHandles,
         radialAngleHandles: [.init(
             sourceID: sourceID,
             title: "Angle",
@@ -426,6 +434,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         )],
         outputModeHandles: [.init(
             sourceID: sourceID,
+            outputMode: .componentInstance,
             anchor: Point3D(x: 0.5, y: 0, z: 0.5),
             title: "Component",
             highlightedTitle: "Independent",
@@ -464,7 +473,7 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
-    var handleIdentities: [ViewportSpatialHandleIdentity] = []
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     try ViewportSpatialOverlayProducer.appendPatternAffordances(
         source,
         meshes: &meshes,
@@ -473,19 +482,22 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
         activeFamilies: &families,
-        handleIdentities: &handleIdentities,
+        interactionRecords: &interactionRecords,
         checkpoint: { _, _, _ in }
     )
 
     #expect(families.contains(.pattern))
-    #expect(handleIdentities.count == 8)
+    #expect(interactionRecords.count == 8)
     #expect(meshes.contains { $0.value.positions.contains(Point3D(x: 1, y: 0, z: 1)) })
     #expect(labels.contains { $0.value.text == "Independent" })
-    #expect(cameraPaths.count >= 6)
+    #expect(cameraPaths.count >= 4)
     #expect(cameraLines.count >= 6)
-    #expect(cameraLines.allSatisfy { line in
+    #expect(cameraLines.contains { $0.value.handleIndex == nil })
+    #expect(cameraPaths.allSatisfy { $0.value.handleIndex != nil })
+    #expect(cameraLines.filter { $0.value.handleIndex != nil }.allSatisfy { line in
         guard let index = line.value.handleIndex else { return false }
-        return cameraPaths.contains { $0.value.handleIndex == index }
+        return line.value.hitTolerancePoints == 10
+            && cameraPaths.contains { $0.value.handleIndex == index && $0.value.hitTolerancePoints == 14 }
     })
     if let firstLine = cameraLines.first?.value,
        let start = firstLine.points.first,
@@ -497,8 +509,10 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
             Issue.record("Pattern camera arrows must begin at the fixed world anchor.")
         }
         switch tip.offset {
-        case .projected(_, let minimumLength, _, _):
-            #expect(minimumLength > 0)
+        case .projected(_, let minimumLength, let parallel, let perpendicular):
+            #expect(minimumLength == 76)
+            #expect(parallel == 0)
+            #expect(perpendicular == 0)
         case .directed, .fixed:
             Issue.record("Pattern camera arrow tips must use projected native placement.")
         }
@@ -511,11 +525,180 @@ func patternAffordanceProducerEmitsEveryWorldRouteAndSharesHandleFragments() thr
         + labels.compactMap(\.value.handleIndex)
         + markers.compactMap(\.value.handleIndex)
         + meshes.compactMap(\.value.handleIndex)
-    #expect(Set(emittedHandleIndices).count == handleIdentities.count)
-    #expect(labels.contains { label in
+    #expect(Set(emittedHandleIndices).count == interactionRecords.count)
+    #expect(labels.filter { $0.value.handleIndex != nil }.allSatisfy { label in
         guard let index = label.value.handleIndex else { return false }
-        return cameraPaths.contains { $0.value.handleIndex == index }
+        return label.value.hitRectPoints == CGRect(x: -84, y: -19, width: 168, height: 38)
+            && interactionRecords[Int(index)].identity == .patternArrayOutputMode(.init(sourceID: sourceID))
     })
+    #expect(labels.filter { $0.value.handleIndex == nil }.count >= 7)
+    #expect(meshes.contains { $0.value.hitTolerancePoints == 10 })
+    #expect(markers.contains { $0.value.hitTolerancePoints == 13 })
+    #expect(markers.filter { $0.value.hitTolerancePoints == 14 }.count >= 2)
+    #expect(cameraLines.filter { $0.value.handleIndex == nil }.allSatisfy {
+        $0.value.hitTolerancePoints == nil
+    })
+    #expect(interactionRecords.indices.allSatisfy { index in
+        !interactionRecords[..<index].contains { $0.identity == interactionRecords[index].identity }
+    })
+    #expect(interactionRecords.contains { record in
+        if case .patternArrayLinearAxis(let value) = record.target {
+            return value.distanceMeters == 1 && value.direction == .unitX
+        }
+        return false
+    })
+    #expect(interactionRecords.contains { record in
+        if case .patternArrayOutputMode(let value) = record.target {
+            return value.outputMode == .componentInstance
+        }
+        return false
+    })
+
+    func index(for identity: ViewportSpatialHandleIdentity) throws -> UInt32 {
+        UInt32(try #require(interactionRecords.firstIndex(where: { $0.identity == identity })))
+    }
+    let linearIndex = try index(for: .patternArrayLinearAxis(.init(sourceID: sourceID, axisSlot: .first)))
+    let radialIndex = try index(for: .patternArrayRadialAngle(.init(sourceID: sourceID)))
+    let copyCountIndex = try index(for: .patternArrayCopyCount(.init(sourceID: sourceID, slot: .curve)))
+    let extentIndex = try index(for: .patternArrayCurveExtent(.init(sourceID: sourceID)))
+    let pathPointIndex = try index(for: .patternArrayCurvePathPoint(.init(sourceID: sourceID, pointIndex: 1)))
+    let outputIndex = try index(for: .patternArrayOutputMode(.init(sourceID: sourceID)))
+    let extrudeIndex = try index(for: .independentCopyExtrudeDistance(.init(
+        sourceID: sourceID,
+        outputIndex: 0,
+        featureID: featureID
+    )))
+    let dimensionIndex = try index(for: .independentCopyBodyDimension(.init(
+        sourceID: sourceID,
+        outputIndex: 0,
+        featureID: featureID,
+        kind: .sizeX
+    )))
+    #expect(cameraLines.contains { $0.value.handleIndex == linearIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(cameraPaths.contains { $0.value.handleIndex == linearIndex && $0.value.hitTolerancePoints == 14 })
+    #expect(meshes.contains { $0.value.handleIndex == radialIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(markers.contains { $0.value.handleIndex == radialIndex && $0.value.hitTolerancePoints == 14 })
+    #expect(!cameraLines.contains { $0.value.handleIndex == radialIndex })
+    #expect(!cameraPaths.contains { $0.value.handleIndex == radialIndex })
+    #expect(meshes.contains { $0.value.handleIndex == copyCountIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(cameraPaths.contains { $0.value.handleIndex == copyCountIndex && $0.value.hitTolerancePoints == 14 })
+    #expect(meshes.contains { $0.value.handleIndex == extentIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(markers.contains { $0.value.handleIndex == extentIndex && $0.value.hitTolerancePoints == 14 })
+    #expect(!cameraLines.contains { $0.value.handleIndex == extentIndex })
+    #expect(!cameraPaths.contains { $0.value.handleIndex == extentIndex })
+    #expect(markers.contains { $0.value.handleIndex == pathPointIndex && $0.value.hitTolerancePoints == 13 })
+    #expect(labels.contains { $0.value.handleIndex == outputIndex
+        && $0.value.hitRectPoints == CGRect(x: -84, y: -19, width: 168, height: 38) })
+    #expect(cameraLines.contains { $0.value.handleIndex == extrudeIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(cameraPaths.contains { $0.value.handleIndex == extrudeIndex && $0.value.hitTolerancePoints == 14 })
+    #expect(cameraLines.contains { $0.value.handleIndex == dimensionIndex && $0.value.hitTolerancePoints == 10 })
+    #expect(cameraPaths.contains { $0.value.handleIndex == dimensionIndex && $0.value.hitTolerancePoints == 14 })
+
+    let copyCountGuide = try #require(cameraLines.first {
+        $0.value.handleIndex == copyCountIndex && $0.value.points.count == 3
+    }).value
+    guard copyCountGuide.points.count == 3 else {
+        Issue.record("The curve copy-count guide must retain its three native camera points.")
+        return
+    }
+    switch copyCountGuide.points[1].offset {
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 0)
+        #expect(perpendicular == 24)
+    case .fixed, .projected:
+        Issue.record("The curve copy-count perpendicular guide must use directed placement.")
+    }
+    switch copyCountGuide.points[2].offset {
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 56)
+        #expect(perpendicular == 24)
+    case .fixed, .projected:
+        Issue.record("The curve copy-count terminal guide must use directed placement.")
+    }
+    let copyCountLabel = try #require(labels.first { $0.value.text == "Count 2" }).value
+    switch copyCountLabel.offset {
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 66)
+        #expect(perpendicular == 44)
+    case .fixed, .projected:
+        Issue.record("The curve copy-count label must use the terminal directed guide offset.")
+    }
+    for prefix in ["Angle", "Extent"] {
+        let label = try #require(labels.first { $0.value.text.hasPrefix(prefix) }).value
+        switch label.offset {
+        case .directed(_, let parallel, let perpendicular):
+            #expect(parallel == 64)
+            #expect(perpendicular == -10)
+        case .fixed, .projected:
+            Issue.record("Pattern \(prefix.lowercased()) labels must use strict point-space offsets.")
+        }
+    }
+
+    let linearRecord = try #require(interactionRecords.first { record in
+        if case .patternArrayLinearAxis = record.target { return true }
+        return false
+    })
+    let replacedLinear = ViewportPatternAffordanceSource.LinearAxisHandle(
+        sourceID: sourceID,
+        axisSlot: .first,
+        title: "Axis",
+        basePoint: .origin,
+        direction: .unitX,
+        distanceMeters: 99,
+        displayDistanceMeters: nil,
+        distanceMode: .spacing,
+        state: active
+    )
+    sourceLinearHandles[0] = replacedLinear
+    #expect(replacedLinear.distanceMeters == 99)
+    if case .patternArrayLinearAxis(let retained) = linearRecord.target {
+        #expect(retained.distanceMeters == 1)
+    } else {
+        Issue.record("The raw Pattern baseline was not retained in the interaction record.")
+    }
+}
+
+@Test
+func patternAffordanceProducerRejectsDuplicateSemanticHandle() {
+    let sourceID = PatternArraySourceID()
+    let handle = ViewportPatternAffordanceSource.LinearAxisHandle(
+        sourceID: sourceID,
+        axisSlot: .first,
+        title: "Duplicate Axis",
+        basePoint: .origin,
+        direction: .unitX,
+        distanceMeters: 1,
+        displayDistanceMeters: nil,
+        distanceMode: .spacing,
+        state: .normal
+    )
+    let source = ViewportPatternAffordanceSource(
+        hasRoute: true,
+        linearAxisHandles: [handle, handle]
+    )
+    var meshes: [ViewportSpatialOverlayInput.Mesh] = []
+    var labels: [ViewportSpatialOverlayInput.Label] = []
+    var markers: [ViewportSpatialOverlayInput.Marker] = []
+    var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
+    var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
+    var families: Set<ViewportSpatialOverlayFamily> = []
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
+
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try ViewportSpatialOverlayProducer.appendPatternAffordances(
+            source,
+            meshes: &meshes,
+            labels: &labels,
+            markers: &markers,
+            cameraLines: &cameraLines,
+            cameraPaths: &cameraPaths,
+            activeFamilies: &families,
+            interactionRecords: &interactionRecords,
+            checkpoint: { _, _, _ in }
+        )
+    }
+    #expect(interactionRecords.count == 1)
+    #expect(families.isEmpty)
 }
 
 @Test
@@ -536,7 +719,7 @@ func patternAffordanceProducerRejectsInvalidWorldGuide() {
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
-    var handleIdentities: [ViewportSpatialHandleIdentity] = []
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportSpatialOverlayProducer.appendPatternAffordances(
             source,
@@ -546,13 +729,14 @@ func patternAffordanceProducerRejectsInvalidWorldGuide() {
             cameraLines: &cameraLines,
             cameraPaths: &cameraPaths,
             activeFamilies: &families,
-            handleIdentities: &handleIdentities,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     }
     #expect(meshes.isEmpty)
     #expect(labels.isEmpty)
     #expect(markers.isEmpty)
+    #expect(interactionRecords.isEmpty)
 }
 
 @Test
@@ -573,7 +757,7 @@ func patternAffordanceProducerPropagatesAdmissionFailureBeforeAppending() {
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
-    var handleIdentities: [ViewportSpatialHandleIdentity] = []
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportSpatialOverlayProducer.appendPatternAffordances(
             source,
@@ -583,7 +767,7 @@ func patternAffordanceProducerPropagatesAdmissionFailureBeforeAppending() {
             cameraLines: &cameraLines,
             cameraPaths: &cameraPaths,
             activeFamilies: &families,
-            handleIdentities: &handleIdentities,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, positions, _ in
                 if positions > 0 {
                     throw RealityViewportSpatialBatch.exhausted()
@@ -595,6 +779,7 @@ func patternAffordanceProducerPropagatesAdmissionFailureBeforeAppending() {
     #expect(labels.isEmpty)
     #expect(markers.isEmpty)
     #expect(families.isEmpty)
+    #expect(interactionRecords.isEmpty)
 }
 
 @Test
@@ -615,7 +800,7 @@ func patternAffordanceProducerPropagatesCancellation() {
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
-    var handleIdentities: [ViewportSpatialHandleIdentity] = []
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: CancellationError.self) {
         try ViewportSpatialOverlayProducer.appendPatternAffordances(
             source,
@@ -625,7 +810,7 @@ func patternAffordanceProducerPropagatesCancellation() {
             cameraLines: &cameraLines,
             cameraPaths: &cameraPaths,
             activeFamilies: &families,
-            handleIdentities: &handleIdentities,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in
                 throw CancellationError()
             }
@@ -634,4 +819,5 @@ func patternAffordanceProducerPropagatesCancellation() {
     #expect(meshes.isEmpty)
     #expect(labels.isEmpty)
     #expect(markers.isEmpty)
+    #expect(interactionRecords.isEmpty)
 }

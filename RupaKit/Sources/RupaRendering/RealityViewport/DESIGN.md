@@ -213,15 +213,19 @@ work bound.
 Interactive top-level descriptors carry an optional frame-local `UInt32`
 `handleIndex`. The parent producer owns an immutable frame table whose record
 contains the normalized typed CAD identity and the exact prepared
-`ViewportInteractionTarget`/drag baseline produced by that same semantic pass;
-it never retains the mutable drag coordinator. The normalized identity remains
+camera-independent semantic drag baseline produced by that same pass. Legacy
+`ViewportInteractionTarget` values that embed layout or projected geometry are
+materialized only by the parent from the exact record and matching mounted
+RealityKit projection; the record never retains the mutable drag coordinator.
+The normalized identity remains
 the stable deduplication address and excludes CAD `geometrySignature` payloads.
-The prepared target may retain an existing immutable COW source reference but
+The prepared baseline may retain an existing immutable COW source reference but
 must not deep-copy, traverse, or estimate source geometry in Rendering. Its
 shallow table storage and separately owned variable payloads consume the
 existing admission, and replacement invalidates the complete record with its
 source frame. This component accepts only the record count, validates every
-index before allocation, and never interprets either table value. World meshes are grouped by attachment and
+index before allocation, and never interprets either table value or materializes
+an interaction target. World meshes are grouped by attachment and
 handle index, so distinct handles cannot lose their provenance through batching.
 All native fragments of a handle resolve to the same index through a frame-owned
 Entity lookup. Noninteractive fragments have no index. The host may use a returned

@@ -125,7 +125,7 @@ struct ViewportSpatialOverlayInput: Sendable {
     let markers: [Marker]
     let cameraLines: [CameraLine]
     let cameraPaths: [CameraPath]
-    let handleIdentities: [ViewportSpatialHandleIdentity]
+    let interactionRecords: [ViewportSpatialInteractionRecord]
     let boundsRuler: ViewportMeasurementBoundsRulerInput?
     let gridPlacement: RealityViewportSpatialBatch.GridPlacement?
     /// Requests the native camera-owned grid frame. Grid geometry and labels
@@ -144,7 +144,7 @@ struct ViewportSpatialOverlayInput: Sendable {
         markers: [Marker] = [],
         cameraLines: [CameraLine] = [],
         cameraPaths: [CameraPath] = [],
-        handleIdentities: [ViewportSpatialHandleIdentity] = [],
+        interactionRecords: [ViewportSpatialInteractionRecord] = [],
         boundsRuler: ViewportMeasurementBoundsRulerInput? = nil,
         gridPlacement: RealityViewportSpatialBatch.GridPlacement? = nil,
         includesGrid: Bool = false,
@@ -160,7 +160,7 @@ struct ViewportSpatialOverlayInput: Sendable {
         self.markers = markers
         self.cameraLines = cameraLines
         self.cameraPaths = cameraPaths
-        self.handleIdentities = handleIdentities
+        self.interactionRecords = interactionRecords
         self.boundsRuler = boundsRuler
         self.gridPlacement = gridPlacement
         self.includesGrid = includesGrid
@@ -182,7 +182,7 @@ struct ViewportSpatialOverlayInput: Sendable {
             markers: markers,
             cameraLines: cameraLines,
             cameraPaths: cameraPaths,
-            handleIdentities: handleIdentities,
+            interactionRecords: interactionRecords,
             boundsRuler: boundsRuler,
             gridPlacement: gridPlacement,
             includesGrid: includesGrid,
@@ -458,7 +458,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
 /// admitted by `RealityViewportSpatialBatch` before any native resource is
 /// allocated.
 enum ViewportSpatialOverlayProducer {
-    typealias Output = (spatialBatch: RealityViewportSpatialBatch, handleIdentities: [ViewportSpatialHandleIdentity])
+    typealias Output = (spatialBatch: RealityViewportSpatialBatch, interactionRecords: [ViewportSpatialInteractionRecord])
 
     /// Returns a worker-safe builder.  Scene/grid/measurement traversal occurs
     /// inside the closure, after the immutable snapshot has crossed the
@@ -475,7 +475,7 @@ enum ViewportSpatialOverlayProducer {
                 retainedSurfaceByteCount: retainedSurfaceByteCount,
                 topologyRevision: topologyRevision
             )
-            return (try makeBatch(from: input), input.handleIdentities)
+            return (try makeBatch(from: input), input.interactionRecords)
         }
     }
 
@@ -498,7 +498,7 @@ enum ViewportSpatialOverlayProducer {
         var markers: [ViewportSpatialOverlayInput.Marker] = []
         var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
         var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-        var handleIdentities: [ViewportSpatialHandleIdentity] = []
+        var interactionRecords: [ViewportSpatialInteractionRecord] = []
         var boundsRuler: ViewportMeasurementBoundsRulerInput?
         var gridPlacement: RealityViewportSpatialBatch.GridPlacement?
         let limits = MeshSourcePresentationPlanLimits.standard
@@ -544,17 +544,17 @@ enum ViewportSpatialOverlayProducer {
             try appendSketchCurveAffordances(
                 from: source, meshes: &meshes, paths: &paths, labels: &labels,
                 markers: &markers, cameraLines: &cameraLines, cameraPaths: &cameraPaths,
-                handleIdentities: &handleIdentities, activeFamilies: &activeFamilies,
+                interactionRecords: &interactionRecords, activeFamilies: &activeFamilies,
                 checkpoint: checkpoint
             )
         }
         if let raw = snapshot.surfaceTransformSource,
-           let source = try makeSurfaceTransformAffordanceSource(from: raw, checkpoint: checkpoint) {
+           let source = try makeSurfaceTransformAffordanceSource(from: raw, interactionRecords: &interactionRecords, checkpoint: checkpoint) {
             try appendSurfaceTransformAffordances(
                 from: source, checkpoint: checkpoint,
                 meshes: &meshes, paths: &paths, labels: &labels, markers: &markers,
                 cameraLines: &cameraLines, cameraPaths: &cameraPaths,
-                handleIdentities: &handleIdentities, activeFamilies: &activeFamilies
+                interactionRecords: &interactionRecords, activeFamilies: &activeFamilies
             )
         }
         if let pattern {
@@ -562,7 +562,7 @@ enum ViewportSpatialOverlayProducer {
                 pattern, meshes: &meshes, labels: &labels, markers: &markers,
                 cameraLines: &cameraLines,
                 cameraPaths: &cameraPaths,
-                activeFamilies: &activeFamilies, handleIdentities: &handleIdentities,
+                activeFamilies: &activeFamilies, interactionRecords: &interactionRecords,
                 checkpoint: checkpoint
             )
         }
@@ -622,7 +622,7 @@ enum ViewportSpatialOverlayProducer {
             markers: markers,
             cameraLines: cameraLines,
             cameraPaths: cameraPaths,
-            handleIdentities: handleIdentities,
+            interactionRecords: interactionRecords,
             boundsRuler: boundsRuler,
             gridPlacement: gridPlacement,
             includesGrid: snapshot.includesGrid,
@@ -643,7 +643,7 @@ enum ViewportSpatialOverlayProducer {
                     retainedSurfaceByteCount: retainedSurfaceByteCount
                 )
             )
-            return (batch, input.handleIdentities)
+            return (batch, input.interactionRecords)
         }
     }
 
@@ -696,8 +696,8 @@ enum ViewportSpatialOverlayProducer {
             includesGrid: input.includesGrid,
             includesAxes: input.includesAxes,
             gridPlacement: input.gridPlacement,
-            handleCount: input.handleIdentities.count,
-            retainedSemanticByteCount: try ViewportSpatialHandleIdentity.retainedByteCount(for: input.handleIdentities, limits: limits),
+            handleCount: input.interactionRecords.count,
+            retainedSemanticByteCount: try ViewportSpatialInteractionRecord.retainedByteCount(for: input.interactionRecords, limits: limits),
             renderOrigin: input.renderOrigin,
             retainedSurfaceByteCount: input.retainedSurfaceByteCount,
             limits: limits
@@ -2276,28 +2276,46 @@ enum ViewportSpatialOverlayProducer {
 
 extension ViewportSpatialOverlayProducer {
     static func handleIndex(
-        for identity: ViewportSpatialHandleIdentity,
-        in table: inout [ViewportSpatialHandleIdentity]
+        for target: ViewportSpatialPreparedInteractionTarget,
+        occurrenceID: String? = nil,
+        modelTransform: Transform3D = .identity,
+        in table: inout [ViewportSpatialInteractionRecord]
     ) throws -> UInt32 {
-        // ponytail: at most 640 entries; use a keyed index only if preparation profiling justifies it.
-        for (index, existing) in table.enumerated() {
+        let record = try ViewportSpatialInteractionRecord(
+            target: target, occurrenceID: occurrenceID, modelTransform: modelTransform
+        )
+        // ponytail: the admitted table has at most 640 entries; no second index is needed.
+        for existing in table {
             try Task.checkCancellation()
-            if existing == identity { return UInt32(index) }
+            guard existing.identity != record.identity || existing.occurrenceID != record.occurrenceID else {
+                throw RealityViewportSpatialBatch.invalid("A semantic handle was registered more than once in one frame.")
+            }
         }
         let limits = MeshSourcePresentationPlanLimits.standard
         guard table.count < limits.maxItemCount else { throw RealityViewportSpatialBatch.exhausted() }
-        let previousBytes = try ViewportSpatialHandleIdentity.retainedByteCount(for: table)
-        let addedBytes = try ViewportSpatialHandleIdentity.retainedByteCount(for: [identity])
-        let projectedBytes = previousBytes.addingReportingOverflow(addedBytes)
+        let previousBytes = try ViewportSpatialInteractionRecord.retainedByteCount(for: table)
+        let addedBytes = try ViewportSpatialInteractionRecord.retainedByteCount(for: [record])
+        let projected = previousBytes.addingReportingOverflow(addedBytes)
         let growth = table.count == table.capacity
-            ? max(table.capacity, 1) * MemoryLayout<ViewportSpatialHandleIdentity>.stride : 0
-        let withGrowth = projectedBytes.partialValue.addingReportingOverflow(growth)
-        guard !projectedBytes.overflow,
-              !withGrowth.overflow,
-              withGrowth.partialValue <= limits.maxRetainedByteCount else { throw RealityViewportSpatialBatch.exhausted() }
+            ? max(table.capacity, 1) * MemoryLayout<ViewportSpatialInteractionRecord>.stride : 0
+        let total = projected.partialValue.addingReportingOverflow(growth)
+        guard !projected.overflow, !total.overflow,
+              total.partialValue <= limits.maxRetainedByteCount else { throw RealityViewportSpatialBatch.exhausted() }
         let index = UInt32(table.count)
-        table.append(identity)
+        table.append(record)
         return index
+    }
+
+    static func handleIndex(
+        for identity: ViewportSpatialHandleIdentity,
+        occurrenceID: String? = nil,
+        in table: [ViewportSpatialInteractionRecord]
+    ) throws -> UInt32 {
+        for (index, record) in table.enumerated() {
+            try Task.checkCancellation()
+            if record.identity == identity && record.occurrenceID == occurrenceID { return UInt32(index) }
+        }
+        throw RealityViewportSpatialBatch.invalid("A native handle fragment has no registered semantic baseline.")
     }
 
     static let selectionColor = SIMD4<Float>(0.14, 0.66, 0.95, 1.0)
@@ -2353,6 +2371,16 @@ extension ViewportSpatialOverlayProducer {
             throw RealityViewportSpatialBatch.invalid("A closed spatial line requires three world points.")
         }
         return try line(points + [points[0]], color: color, depth: depth)
+    }
+
+    static func diamondPath(radius: CGFloat) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: -radius))
+        path.addLine(to: CGPoint(x: radius, y: 0))
+        path.addLine(to: CGPoint(x: 0, y: radius))
+        path.addLine(to: CGPoint(x: -radius, y: 0))
+        path.closeSubpath()
+        return path
     }
 
     static func triangles(

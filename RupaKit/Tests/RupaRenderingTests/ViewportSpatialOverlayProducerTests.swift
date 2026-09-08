@@ -54,9 +54,9 @@ func combinedRawAffordancesFitTheNativeGridBudgetForASelectedBody() async throws
     let builder = ViewportSpatialOverlayProducer.makeBuilder(from: snapshot, topologyRevision: 1)
     let output = try await Task.detached { try builder(.origin, 0) }.value
     #expect(output.spatialBatch.includesGrid)
-    #expect(output.spatialBatch.handleCount == output.handleIdentities.count)
-    #expect(output.handleIdentities.contains {
-        if case .affordance = $0 { return true }; return false
+    #expect(output.spatialBatch.handleCount == output.interactionRecords.count)
+    #expect(output.interactionRecords.contains {
+        if case .affordance = $0.target { return true }; return false
     })
     #expect(!output.spatialBatch.meshes.isEmpty)
 }

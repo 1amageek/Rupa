@@ -43,27 +43,45 @@ private extension MeshSourcePresentationPlanCache {
 @Test(.timeLimit(.minutes(1)))
 func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     let cache = MeshSourcePresentationPlanCache()
-    let firstHandle = ViewportSpatialHandleIdentity.affordance(.init(featureID: FeatureID(), action: .translate(.x)))
-    let secondHandle = ViewportSpatialHandleIdentity.affordance(.init(featureID: FeatureID(), action: .rotate(.y)))
+    let featureID = FeatureID()
+    let reference = SelectionReference.surface(.controlPoint(.init(
+        surface: .init(subshape: .init(subshapeID: .init(featureID: featureID, role: "surface", ordinal: 0),
+                                      geometrySignature: .vertex(point: .origin))), uIndex: 1, vIndex: 2)))
+    func record(point: SwiftCAD.Point3D) throws -> ViewportSpatialInteractionRecord {
+        try .init(target: .surfaceControlPoint(.init(
+            featureID: featureID, target: reference, point: point,
+            modelTransform: .identity, dragMode: .planar)), occurrenceID: "surface.first")
+    }
+    let firstHandle = try record(point: .init(x: 1, y: 2, z: 3))
+    let secondHandle = try record(point: .init(x: 4, y: 5, z: 6))
+    func expectBaseline(_ actual: ViewportSpatialInteractionRecord?, matches expected: ViewportSpatialInteractionRecord) {
+        #expect(actual?.identity == expected.identity)
+        #expect(actual?.occurrenceID == expected.occurrenceID)
+        if case .surfaceControlPoint(let value) = actual?.target,
+           case .surfaceControlPoint(let baseline) = expected.target {
+            #expect(value.point == baseline.point)
+            #expect(value.target == baseline.target)
+        } else { Issue.record("The native index lost its prepared drag baseline.") }
+    }
     let first = planCacheIdentity(nil, overlayRevision: 101)
     let second = planCacheIdentity(nil, overlayRevision: 102)
     func request(_ identity: RealityViewportPreparationRequest.Identity,
-                 handle: ViewportSpatialHandleIdentity) -> RealityViewportPreparationRequest {
+                 handle: ViewportSpatialInteractionRecord) -> RealityViewportPreparationRequest {
         .init(identity: identity, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
             let input = ViewportSpatialOverlayInput(
                 markers: [.init(family: .transform,
                                 value: .init(shape: .box, anchor: .origin, diameterPoints: 8,
-                                             color: [1, 0, 0, 1], handleIndex: 0))],
-                handleIdentities: [handle], renderOrigin: origin,
+                                             color: [1, 0, 0, 1], handleIndex: 0, hitTolerancePoints: 12))],
+                interactionRecords: [handle], renderOrigin: origin,
                 retainedSurfaceByteCount: charge, topologyRevision: identity.overlayRevision)
             return try ViewportSpatialOverlayProducer.makeBuilder(from: input)(origin, charge)
         })
     }
-    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.prepare(request(first, handle: firstHandle))
-    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    #expect(cache.interactionRecord(at: 0, for: first) == nil)
     try await settlePlanCache(cache)
-    #expect(cache.handleIdentity(at: 0, for: first) == firstHandle)
+    expectBaseline(cache.interactionRecord(at: 0, for: first), matches: firstHandle)
     let prepared = try #require(cache.surface(for: first))
     func nativeHandleIndex(_ entity: Entity) -> UInt32? {
         if let index = prepared.spatialHandleIndex(for: entity) { return index }
@@ -73,17 +91,17 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
         return nil
     }
     let nativeIndex = try #require(nativeHandleIndex(prepared.root))
-    #expect(cache.handleIdentity(at: nativeIndex, for: first) == firstHandle)
-    #expect(cache.handleIdentity(at: 1, for: first) == nil)
-    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    expectBaseline(cache.interactionRecord(at: nativeIndex, for: first), matches: firstHandle)
+    #expect(cache.interactionRecord(at: 1, for: first) == nil)
+    #expect(cache.interactionRecord(at: 0, for: second) == nil)
     cache.prepare(request(second, handle: secondHandle))
-    #expect(cache.handleIdentity(at: 0, for: first) == nil)
-    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    #expect(cache.interactionRecord(at: 0, for: first) == nil)
+    #expect(cache.interactionRecord(at: 0, for: second) == nil)
     try await settlePlanCache(cache)
-    #expect(cache.handleIdentity(at: 0, for: second) == secondHandle)
-    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    expectBaseline(cache.interactionRecord(at: 0, for: second), matches: secondHandle)
+    #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.teardown()
-    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    #expect(cache.interactionRecord(at: 0, for: second) == nil)
 
     // A mismatched native count must fail before any handle gains authority.
     cache.prepare(.init(identity: first, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
@@ -91,7 +109,7 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     }))
     try await settlePlanCacheFailure(cache)
     #expect(cache.failure(for: first)?.code == .invalidSceneItem)
-    #expect(cache.handleIdentity(at: 0, for: first) == nil)
+    #expect(cache.interactionRecord(at: 0, for: first) == nil)
     cache.teardown()
 
     cache.prepare(.init(identity: second, scene: nil, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
@@ -99,7 +117,7 @@ func nativeHandleTableResolvesOnlyTheMatchingPublishedFrame() async throws {
     }))
     try await settlePlanCacheFailure(cache)
     #expect(cache.failure(for: second)?.code == .invalidSceneItem)
-    #expect(cache.handleIdentity(at: 0, for: second) == nil)
+    #expect(cache.interactionRecord(at: 0, for: second) == nil)
     cache.teardown()
 }
 

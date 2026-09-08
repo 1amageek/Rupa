@@ -49,9 +49,16 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     /// Charges owned value/array storage and conservative UTF-8 backing, without
     /// walking CAD geometry or encoding another copy of the table.
     static func retainedByteCount(for table: [Self], limits: MeshSourcePresentationPlanLimits = .standard) throws -> Int {
+        try retainedByteCount(for: table, capacity: table.capacity, limits: limits)
+    }
+
+    static func retainedByteCount(
+        for table: some Collection<Self>, capacity: Int,
+        limits: MeshSourcePresentationPlanLimits
+    ) throws -> Int {
         try limits.validate()
-        guard table.count <= limits.maxItemCount else { throw RealityViewportSpatialBatch.exhausted() }
-        if table.capacity == 0 { return 0 }
+        guard table.count <= limits.maxItemCount, capacity >= table.count else { throw RealityViewportSpatialBatch.exhausted() }
+        if capacity == 0 { return 0 }
         var bytes = 0
         func charge(_ count: Int, stride: Int = 1) throws {
             try Task.checkCancellation()
@@ -80,7 +87,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
             try charge(values.capacity, stride: MemoryLayout<ViewportSpatialReferenceAddress>.stride)
             for value in values { try address(value) }
         }
-        try charge(table.capacity, stride: MemoryLayout<Self>.stride)
+        try charge(capacity, stride: MemoryLayout<Self>.stride)
         for identity in table {
             try Task.checkCancellation()
             switch identity {

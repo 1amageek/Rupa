@@ -83,11 +83,11 @@ final class MeshSourcePresentationPlanCache {
         return current.surface
     }
 
-    func handleIdentity(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialHandleIdentity? {
+    func interactionRecord(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialInteractionRecord? {
         guard case let .ready(readyIdentity, _, surface) = state, readyIdentity == identity,
               let current, current.surface === surface,
-              Int(index) < current.handleIdentities.count else { return nil }
-        return current.handleIdentities[Int(index)]
+              Int(index) < current.interactionRecords.count else { return nil }
+        return current.interactionRecords[Int(index)]
     }
 
     /// The failure recorded for this identity, or `nil` when the current state is not
@@ -196,9 +196,9 @@ final class MeshSourcePresentationPlanCache {
                 let origin = first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? request.fallbackOrigin
                 let overlay = try request.spatialOverlay(origin, plan?.retainedByteCount ?? 0)
                 let spatial = overlay.spatialBatch
-                guard spatial.handleCount == overlay.handleIdentities.count,
-                      spatial.retainedSemanticByteCount == (try ViewportSpatialHandleIdentity.retainedByteCount(for: overlay.handleIdentities, limits: spatial.limits)) else {
-                    throw RealityViewportSpatialBatch.invalid("Native handles and semantic identity table do not match.")
+                guard spatial.handleCount == overlay.interactionRecords.count,
+                      spatial.retainedSemanticByteCount == (try ViewportSpatialInteractionRecord.retainedByteCount(for: overlay.interactionRecords, limits: spatial.limits)) else {
+                    throw RealityViewportSpatialBatch.invalid("Native handles and semantic interaction records do not match.")
                 }
                 guard spatial.renderOrigin == origin else {
                     throw RealityViewportSpatialBatch.invalid("Spatial geometry does not use the selected native render origin.")
@@ -206,7 +206,7 @@ final class MeshSourcePresentationPlanCache {
                 try Task.checkCancellation()
                 let surface = try await RealityViewport.prepare(plan: plan, spatialBatch: spatial, reusing: reusable?.surface)
                 try Task.checkCancellation()
-                result = .success(Prepared(identity: request.identity, plan: plan, surface: surface, handleIdentities: overlay.handleIdentities))
+                result = .success(Prepared(identity: request.identity, plan: plan, surface: surface, interactionRecords: overlay.interactionRecords))
             } catch is CancellationError {
                 // A cancelled build publishes nothing at all. Identity would
                 // discard it anyway, but a cancellation is not a failure and is
@@ -254,7 +254,7 @@ final class MeshSourcePresentationPlanCache {
         let identity: RealityViewportPreparationRequest.Identity
         let plan: MeshSourcePresentationRenderPlan?
         let surface: RealityViewport
-        let handleIdentities: [ViewportSpatialHandleIdentity]
+        let interactionRecords: [ViewportSpatialInteractionRecord]
     }
 
     private func finish(

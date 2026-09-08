@@ -3,6 +3,7 @@ import Foundation
 import RupaCore
 import RupaViewportScene
 import SwiftCAD
+import SwiftUI
 
 extension ViewportSpatialOverlayProducer {
     /// Production draw routes owned by the sketch/curve affordance producer.
@@ -93,17 +94,20 @@ extension ViewportSpatialOverlayProducer {
         let toward: Point3D
         let parallel: Double
         let perpendicular: Double
+        let minimumLength: Double?
 
         init(
             anchor: Point3D,
             toward: Point3D,
             parallel: Double = 0.0,
-            perpendicular: Double = 0.0
+            perpendicular: Double = 0.0,
+            minimumLength: Double? = nil
         ) {
             self.anchor = anchor
             self.toward = toward
             self.parallel = parallel
             self.perpendicular = perpendicular
+            self.minimumLength = minimumLength
         }
     }
 
@@ -123,19 +127,22 @@ extension ViewportSpatialOverlayProducer {
         let heightPoints: Float
         let alignment: RealityViewportSpatialBatch.Label.Alignment
         let color: SIMD4<Float>?
+        let hitRectPoints: CGRect?
 
         init(
             text: String,
             point: SketchCurveDirectedPoint,
             heightPoints: Float = 10.0,
             alignment: RealityViewportSpatialBatch.Label.Alignment = .center,
-            color: SIMD4<Float>? = nil
+            color: SIMD4<Float>? = nil,
+            hitRectPoints: CGRect? = nil
         ) {
             self.text = text
             self.point = point
             self.heightPoints = heightPoints
             self.alignment = alignment
             self.color = color
+            self.hitRectPoints = hitRectPoints
         }
     }
 
@@ -155,6 +162,25 @@ extension ViewportSpatialOverlayProducer {
             self.diameterPoints = diameterPoints
             self.shape = shape
             self.color = color
+        }
+    }
+
+    struct SketchCurveCameraPathSource: Sendable {
+        let path: Path
+        let placement: SketchCurveDirectedPoint
+        let color: SIMD4<Float>?
+        let hitTolerancePoints: Float?
+
+        init(
+            path: Path,
+            placement: SketchCurveDirectedPoint,
+            color: SIMD4<Float>? = nil,
+            hitTolerancePoints: Float? = nil
+        ) {
+            self.path = path
+            self.placement = placement
+            self.color = color
+            self.hitTolerancePoints = hitTolerancePoints
         }
     }
 
@@ -318,8 +344,10 @@ extension ViewportSpatialOverlayProducer {
         struct Primitive: Sendable {
             let featureID: FeatureID
             let primitive: ViewportSketchPrimitive
+            let sourcePrimitive: ViewportSketchPrimitive?
             let sketchPlane: SketchPlane
             let modelTransform: Transform3D
+            let selectionTarget: SelectionTarget?
             let state: SketchCurveAffordanceState
             let showsPointHandles: Bool
             let showsCurveHandles: Bool
@@ -332,7 +360,9 @@ extension ViewportSpatialOverlayProducer {
                 featureID: FeatureID,
                 primitive: ViewportSketchPrimitive,
                 sketchPlane: SketchPlane,
+                sourcePrimitive: ViewportSketchPrimitive? = nil,
                 modelTransform: Transform3D = .identity,
+                selectionTarget: SelectionTarget? = nil,
                 state: SketchCurveAffordanceState = .normal,
                 showsPointHandles: Bool = true,
                 showsCurveHandles: Bool = true,
@@ -343,8 +373,10 @@ extension ViewportSpatialOverlayProducer {
             ) {
                 self.featureID = featureID
                 self.primitive = primitive
+                self.sourcePrimitive = sourcePrimitive
                 self.sketchPlane = sketchPlane
                 self.modelTransform = modelTransform
+                self.selectionTarget = selectionTarget
                 self.state = state
                 self.showsPointHandles = showsPointHandles
                 self.showsCurveHandles = showsCurveHandles
@@ -362,9 +394,13 @@ extension ViewportSpatialOverlayProducer {
             let identity: ViewportSpatialHandleIdentity?
             let world: SketchCurveWorldGeometry
             let cameraGuides: [SketchCurveCameraGuide]
+            let cameraPaths: [SketchCurveCameraPathSource]
             let labels: [SketchCurveLabelSource]
             let markers: [SketchCurveMarkerSource]
             let family: ViewportSpatialOverlayFamily
+            let preparedTarget: ViewportSpatialPreparedInteractionTarget?
+            var occurrenceID: String? = nil
+            var modelTransform: Transform3D = .identity
 
             init(
                 route: SketchCurveAffordanceRoute,
@@ -373,9 +409,11 @@ extension ViewportSpatialOverlayProducer {
                 identity: ViewportSpatialHandleIdentity? = nil,
                 world: SketchCurveWorldGeometry = .none,
                 cameraGuides: [SketchCurveCameraGuide] = [],
+                cameraPaths: [SketchCurveCameraPathSource] = [],
                 labels: [SketchCurveLabelSource] = [],
                 markers: [SketchCurveMarkerSource] = [],
-                family: ViewportSpatialOverlayFamily? = nil
+                family: ViewportSpatialOverlayFamily? = nil,
+                preparedTarget: ViewportSpatialPreparedInteractionTarget? = nil
             ) {
                 self.route = route
                 self.role = role
@@ -383,9 +421,11 @@ extension ViewportSpatialOverlayProducer {
                 self.identity = identity
                 self.world = world
                 self.cameraGuides = cameraGuides
+                self.cameraPaths = cameraPaths
                 self.labels = labels
                 self.markers = markers
                 self.family = family ?? Self.defaultFamily(for: route)
+                self.preparedTarget = preparedTarget
             }
 
             private static func defaultFamily(
@@ -452,7 +492,7 @@ extension ViewportSpatialOverlayProducer {
         markers: inout [ViewportSpatialOverlayInput.Marker],
         cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
-        handleIdentities: inout [ViewportSpatialHandleIdentity],
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>,
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -470,7 +510,7 @@ extension ViewportSpatialOverlayProducer {
             markers: &markers,
             cameraLines: &cameraLines,
             cameraPaths: &cameraPaths,
-            handleIdentities: &handleIdentities,
+            interactionRecords: &interactionRecords,
             activeFamilies: &activeFamilies,
             checkpoint: checkpoint
         )
@@ -486,7 +526,7 @@ extension ViewportSpatialOverlayProducer {
         markers: inout [ViewportSpatialOverlayInput.Marker],
         cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
-        handleIdentities: inout [ViewportSpatialHandleIdentity],
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>,
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -526,11 +566,12 @@ extension ViewportSpatialOverlayProducer {
             }
             for handle in handles {
                 try Task.checkCancellation()
-                guard let item = source.scene.items.first(where: { $0.featureID == handle.featureID }) else {
-                    throw RealityViewportSpatialBatch.invalid(
-                        "Bridge endpoint source has no matching scene item."
-                    )
-                }
+                var matchedOccurrence = false
+                for item in source.scene.items where item.featureID == handle.featureID {
+                    guard selectedSketchTarget(item: item, featureID: handle.featureID,
+                                               entityID: handle.bridgeEntityID,
+                                               selection: source.selection) != nil else { continue }
+                    matchedOccurrence = true
                 let identity = ViewportSpatialHandleIdentity.bridgeCurveEndpoint(.init(
                     sourceID: handle.sourceID,
                     role: handle.role
@@ -568,15 +609,21 @@ extension ViewportSpatialOverlayProducer {
                     resolvedHandle.point = sample.point
                     resolvedHandle.outgoingTangent = sample.tangent
                 }
-                resolvedEntries.append(
-                    try bridgeEndpointEntry(
+                var entry = try bridgeEndpointEntry(
                         handle: resolvedHandle,
+                        preparedHandle: handle,
                         modelTransform: item.modelTransform,
                         state: override?.state ?? source.bridgeState,
                         guideLengthMeters: source.bridgeGuideLengthMeters,
                         override: override
                     )
-                )
+                entry.occurrenceID = item.id
+                entry.modelTransform = item.modelTransform
+                try append(entry, to: &resolvedEntries, limits: limits)
+                }
+                guard matchedOccurrence else {
+                    throw RealityViewportSpatialBatch.invalid("Bridge endpoint source has no matching selected occurrence.")
+                }
             }
         }
 
@@ -593,7 +640,7 @@ extension ViewportSpatialOverlayProducer {
                 markers: &markers,
                 cameraLines: &cameraLines,
                 cameraPaths: &cameraPaths,
-                handleIdentities: &handleIdentities,
+                interactionRecords: &interactionRecords,
                 activeFamilies: &activeFamilies
             )
         }
@@ -609,11 +656,12 @@ extension ViewportSpatialOverlayProducer {
         markers: inout [ViewportSpatialOverlayInput.Marker],
         cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
-        handleIdentities: inout [ViewportSpatialHandleIdentity],
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>
     ) throws {
-        let handleIndex = try entry.identity.map {
-            try Self.handleIndex(for: $0, in: &handleIdentities)
+        let handleIndex = try entry.preparedTarget.map {
+            try Self.handleIndex(for: $0, occurrenceID: entry.occurrenceID,
+                                 modelTransform: entry.modelTransform, in: &interactionRecords)
         }
         let state = state(
             for: entry,
@@ -623,27 +671,106 @@ extension ViewportSpatialOverlayProducer {
         let color = color(for: state)
         var descriptorCount = 0
 
+        let isOffsetRoute: Bool = switch entry.route {
+        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide:
+            true
+        case .lineDimension, .circleDimension, .arcDimension, .curvePointControl,
+             .splineControl, .curvatureComb, .bridgeCurveEndpoint:
+            false
+        }
+        let isDimensionRoute: Bool = switch entry.route {
+        case .lineDimension, .circleDimension, .arcDimension: true
+        case .curvePointControl, .splineControl, .curvatureComb, .regionOffset,
+             .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide,
+             .bridgeCurveEndpoint: false
+        }
+        let markerTolerance: Float? = switch entry.route {
+        case .curvePointControl, .splineControl, .bridgeCurveEndpoint:
+            handleIndex == nil ? nil : 12.0
+        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide:
+            handleIndex == nil ? nil : 14.0
+        case .lineDimension, .circleDimension, .arcDimension, .curvatureComb:
+            nil
+        }
+
         func appendMesh(_ mesh: RealityViewportSpatialBatch.Mesh) {
             var value = mesh
-            value.handleIndex = handleIndex
+            value.handleIndex = nil
+            value.hitTolerancePoints = nil
             meshes.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
-        func appendCameraLine(_ line: RealityViewportSpatialBatch.CameraLine) {
+        func appendCameraLine(
+            _ line: RealityViewportSpatialBatch.CameraLine,
+            interactive: Bool = false
+        ) {
             var value = line
-            value.handleIndex = handleIndex
+            value.handleIndex = interactive ? handleIndex : nil
+            value.hitTolerancePoints = interactive ? 10.0 : nil
             cameraLines.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
-        func appendLabel(_ label: RealityViewportSpatialBatch.Label) {
+        func appendCameraPath(
+            _ source: SketchCurveCameraPathSource
+        ) throws {
+            let point = source.placement
+            guard point.parallel.isFinite,
+                  point.perpendicular.isFinite,
+                  point.anchor.isFinite,
+                  point.toward.isFinite,
+                  point.minimumLength?.isFinite ?? true,
+                  point.minimumLength.map({ $0 >= 0.0 }) ?? true,
+                  source.hitTolerancePoints.map({ $0.isFinite && $0 >= 0.0 }) ?? true else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "Sketch/curve camera path placement is not finite."
+                )
+            }
+            let offset: RealityViewportSpatialBatch.Offset
+            if let minimumLength = point.minimumLength {
+                offset = .projected(
+                    toward: point.toward,
+                    minimumLength: CGFloat(minimumLength),
+                    parallel: CGFloat(point.parallel),
+                    perpendicular: CGFloat(point.perpendicular)
+                )
+            } else {
+                offset = .directed(
+                    toward: point.toward,
+                    parallel: CGFloat(point.parallel),
+                    perpendicular: CGFloat(point.perpendicular)
+                )
+            }
+            var value = RealityViewportSpatialBatch.CameraPath(
+                path: source.path,
+                anchor: point.anchor,
+                offset: offset,
+                color: source.color ?? color,
+                depth: .annotation
+            )
+            value.handleIndex = source.hitTolerancePoints == nil ? nil : handleIndex
+            value.hitTolerancePoints = source.hitTolerancePoints
+            cameraPaths.append(.init(family: entry.family, value: value))
+            descriptorCount += 1
+        }
+        func appendLabel(
+            _ label: RealityViewportSpatialBatch.Label,
+            interactive: Bool = false
+        ) {
             var value = label
-            value.handleIndex = handleIndex
+            value.handleIndex = interactive ? handleIndex : nil
+            value.hitRectPoints = interactive
+                ? (label.hitRectPoints ?? Self.dimensionHitRectPoints(for: label.text))
+                : nil
             labels.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
-        func appendMarker(_ marker: RealityViewportSpatialBatch.Marker) {
+        func appendMarker(
+            _ marker: RealityViewportSpatialBatch.Marker,
+            tolerance: Float? = nil
+        ) {
             var value = marker
-            value.handleIndex = handleIndex
+            value.handleIndex = tolerance == nil ? nil : handleIndex
+            value.hitTolerancePoints = tolerance
             markers.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
@@ -664,7 +791,7 @@ extension ViewportSpatialOverlayProducer {
                 samples: samples,
                 scaleFactor: scaleFactor,
                 color: color,
-                handleIndex: handleIndex,
+                handleIndex: nil,
                 family: entry.family
             )
             for mesh in comb {
@@ -683,21 +810,38 @@ extension ViewportSpatialOverlayProducer {
                 guard point.parallel.isFinite,
                       point.perpendicular.isFinite,
                       point.anchor.isFinite,
-                      point.toward.isFinite else {
+                      point.toward.isFinite,
+                      point.minimumLength?.isFinite ?? true,
+                      point.minimumLength.map({ $0 >= 0.0 }) ?? true else {
                     throw RealityViewportSpatialBatch.invalid(
                         "Sketch/curve affordance camera guide is not finite."
                     )
                 }
-                return RealityViewportSpatialBatch.CameraPoint(
-                    anchor: point.anchor,
-                    offset: .directed(
+                let offset: RealityViewportSpatialBatch.Offset
+                if let minimumLength = point.minimumLength {
+                    offset = .projected(
+                        toward: point.toward,
+                        minimumLength: CGFloat(minimumLength),
+                        parallel: CGFloat(point.parallel),
+                        perpendicular: CGFloat(point.perpendicular)
+                    )
+                } else {
+                    offset = .directed(
                         toward: point.toward,
                         parallel: CGFloat(point.parallel),
                         perpendicular: CGFloat(point.perpendicular)
                     )
-                )
+                }
+                return RealityViewportSpatialBatch.CameraPoint(anchor: point.anchor, offset: offset)
             }
-            appendCameraLine(.init(points: points, color: guide.color ?? color, depth: .annotation))
+            appendCameraLine(
+                .init(points: points, color: guide.color ?? color, depth: .annotation),
+                interactive: isOffsetRoute && handleIndex != nil
+            )
+        }
+
+        for cameraPath in entry.cameraPaths {
+            try appendCameraPath(cameraPath)
         }
 
         for label in entry.labels {
@@ -712,24 +856,38 @@ extension ViewportSpatialOverlayProducer {
             guard point.anchor.isFinite,
                   point.toward.isFinite,
                   point.parallel.isFinite,
-                  point.perpendicular.isFinite else {
+                  point.perpendicular.isFinite,
+                  point.minimumLength?.isFinite ?? true,
+                  point.minimumLength.map({ $0 >= 0.0 }) ?? true else {
                 throw RealityViewportSpatialBatch.invalid(
                     "Sketch/curve affordance label point is not finite."
+                )
+            }
+            let offset: RealityViewportSpatialBatch.Offset
+            if let minimumLength = point.minimumLength {
+                offset = .projected(
+                    toward: point.toward,
+                    minimumLength: CGFloat(minimumLength),
+                    parallel: CGFloat(point.parallel),
+                    perpendicular: CGFloat(point.perpendicular)
+                )
+            } else {
+                offset = .directed(
+                    toward: point.toward,
+                    parallel: CGFloat(point.parallel),
+                    perpendicular: CGFloat(point.perpendicular)
                 )
             }
             appendLabel(.init(
                 text: label.text,
                 anchor: point.anchor,
-                offset: .directed(
-                    toward: point.toward,
-                    parallel: CGFloat(point.parallel),
-                    perpendicular: CGFloat(point.perpendicular)
-                ),
+                offset: offset,
                 heightPoints: label.heightPoints,
                 color: label.color ?? color,
                 alignment: label.alignment,
-                depth: .annotation
-            ))
+                depth: .annotation,
+                hitRectPoints: label.hitRectPoints
+            ), interactive: isDimensionRoute && handleIndex != nil)
         }
 
         for sourceMarker in entry.markers {
@@ -745,7 +903,7 @@ extension ViewportSpatialOverlayProducer {
                 anchor: sourceMarker.anchor,
                 diameterPoints: sourceMarker.diameterPoints,
                 color: sourceMarker.color ?? color
-            ))
+            ), tolerance: markerTolerance)
         }
 
         guard descriptorCount > 0 else {
@@ -788,6 +946,7 @@ extension ViewportSpatialOverlayProducer {
         for item in source.scene.items {
             try Task.checkCancellation()
             try checkpoint(0, 0, 1)
+            let firstEntry = result.count
             switch item.kind {
             case .sketch(let primitives):
                 let itemSelected = itemIsSelected(item, selection: source.selection, document: source.document)
@@ -844,7 +1003,14 @@ extension ViewportSpatialOverlayProducer {
                     )
                     let pointDisplayVisible = source.overlayState.pointDisplays[componentID]?.isVisible == true
                     let curvatureDisplay = source.overlayState.curveCurvatureDisplays[componentID]
-                    let sketchPlane = sketchPlane(for: effectivePrimitive)
+                    let sketchPlane: SketchPlane
+                    if let feature = source.document.cadDocument.designGraph.nodes[item.featureID],
+                       case .sketch(let sketch) = feature.operation {
+                        sketchPlane = sketch.plane
+                    } else {
+                        // Standalone scene primitives carry their own plane convention.
+                        sketchPlane = Self.sketchPlane(for: primitive)
+                    }
                     let isSpline: Bool = switch effectivePrimitive {
                     case .spline:
                         true
@@ -870,7 +1036,14 @@ extension ViewportSpatialOverlayProducer {
                         featureID: item.featureID,
                         primitive: effectivePrimitive,
                         sketchPlane: sketchPlane,
+                        sourcePrimitive: primitive,
                         modelTransform: item.modelTransform,
+                        selectionTarget: selectedSketchTarget(
+                            item: item,
+                            featureID: item.featureID,
+                            entityID: primitive.entityID,
+                            selection: source.selection
+                        ),
                         state: entitySelected ? .pending : (entityHovered ? .hovered : .normal),
                         showsPointHandles: emitsPointHandles && (pointDisplayVisible || entityHighlighted),
                         showsCurveHandles: emitsCurveHandles && entityHighlighted,
@@ -899,7 +1072,9 @@ extension ViewportSpatialOverlayProducer {
                        let slotEntry = try slotWidthEntry(
                            featureID: item.featureID,
                            primitive: effectivePrimitive,
+                           preparedPrimitive: primitiveSource.sourcePrimitive,
                            modelTransform: item.modelTransform,
+                           selectionTarget: primitiveSource.selectionTarget,
                            ruler: source.ruler,
                            defaultWidthMeters: source.slotWidthMeters,
                            overrides: source.activeOverrides,
@@ -912,10 +1087,12 @@ extension ViewportSpatialOverlayProducer {
                         let vertexEntries = try sketchVertexOffsetEntries(
                             featureID: item.featureID,
                             primitive: effectivePrimitive,
+                            preparedPrimitive: primitiveSource.sourcePrimitive,
                             modelTransform: item.modelTransform,
                             selectedEntities: selectedEntities,
                             selectedControlPoints: selectedControlPoints,
                             itemSelected: itemSelected,
+                            selectionTarget: primitiveSource.selectionTarget,
                             ruler: source.ruler,
                             defaultDistanceMeters: source.sketchVertexOffsetDistanceMeters,
                             overrides: source.activeOverrides,
@@ -967,9 +1144,15 @@ extension ViewportSpatialOverlayProducer {
                                 featureID: item.featureID,
                                 entityID: entityID,
                                 controlPoints: controlPoints.map { world($0, by: item.modelTransform) },
+                                preparedControlPoints: preparedSplineControlPoints(
+                                    from: primitiveSource.sourcePrimitive,
+                                    transform: item.modelTransform
+                                ),
                                 selectedIndexes: indexes,
                                 direction: direction,
                                 distanceMeters: distance,
+                                selectionTarget: primitiveSource.selectionTarget,
+                                baseValue: source.ruler.minorTickMeters,
                                 label: label,
                                 state: override?.state ?? (entitySelected ? .pending : .normal)
                             )
@@ -1004,6 +1187,13 @@ extension ViewportSpatialOverlayProducer {
                             componentID: region.componentID,
                             sourceVertices: vertices,
                             distanceMeters: distance,
+                            selectionTarget: selectedRegionTarget(
+                                item: item,
+                                featureID: item.featureID,
+                                componentID: region.componentID,
+                                selection: source.selection
+                            ),
+                            baseValue: source.ruler.minorTickMeters,
                             label: label,
                             state: override?.state ?? (selected ? .pending : .normal)
                         )
@@ -1042,7 +1232,15 @@ extension ViewportSpatialOverlayProducer {
                         edgeStart: start,
                         edgeEnd: end,
                         inwardToward: override?.toward ?? inward,
+                        preparedInwardToward: inward,
                         distanceMeters: distance,
+                        selectionTarget: selectedEdgeTarget(
+                            item: item,
+                            document: source.document,
+                            edge: edge,
+                            selection: source.selection
+                        ),
+                        baseValue: source.edgeOffsetDistanceMeters,
                         label: label,
                         state: override?.state ?? .pending
                     )
@@ -1071,6 +1269,10 @@ extension ViewportSpatialOverlayProducer {
                     )
                     try append(entry, to: &result, limits: limits)
                 }
+            }
+            for index in firstEntry ..< result.count {
+                result[index].occurrenceID = item.id
+                result[index].modelTransform = item.modelTransform
             }
         }
         return result
@@ -1136,18 +1338,21 @@ extension ViewportSpatialOverlayProducer {
         document: DesignDocument
     ) -> Bool {
         for target in selection.selectedTargets {
-            if let sceneNodeID = item.sceneNodeID, target.sceneNodeID == sceneNodeID {
-                return true
-            }
-            if let featureID = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID,
-               featureID == item.featureID {
-                return true
-            }
-            if case .sketchEntity(let componentID) = target.component,
-               let reference = componentID.sketchEntityBaseReference,
-               reference.featureID == item.featureID {
-                return true
-            }
+            if targetBelongsToItem(target, item: item, document: document) { return true }
+        }
+        return false
+    }
+
+    private static func targetBelongsToItem(
+        _ target: SelectionTarget, item: ViewportSceneItem, document: DesignDocument
+    ) -> Bool {
+        if let sceneNodeID = item.sceneNodeID { return sceneNodeID == target.sceneNodeID }
+        if let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference {
+            return reference.featureID == item.featureID
+        }
+        if case .sketchEntity(let componentID) = target.component,
+           let reference = componentID.sketchEntityBaseReference {
+            return reference.featureID == item.featureID
         }
         return false
     }
@@ -1164,6 +1369,86 @@ extension ViewportSpatialOverlayProducer {
             }
             return reference.entityID
         })
+    }
+
+    private static func selectedSketchTarget(
+        item: ViewportSceneItem,
+        featureID: FeatureID,
+        entityID: SketchEntityID,
+        selection: SelectionModel
+    ) -> SelectionTarget? {
+        func matches(_ target: SelectionTarget) -> Bool {
+            guard item.sceneNodeID == nil || item.sceneNodeID == target.sceneNodeID,
+                  case .sketchEntity(let componentID) = target.component,
+                  let reference = componentID.sketchEntityBaseReference else {
+                return false
+            }
+            return reference.featureID == featureID && reference.entityID == entityID
+        }
+        if let target = selection.selectedTargets.reversed().first(where: matches) {
+            return target
+        }
+        if let target = selection.hoveredTarget, matches(target) {
+            return target
+        }
+        return nil
+    }
+
+    private static func selectedRegionTarget(
+        item: ViewportSceneItem,
+        featureID: FeatureID,
+        componentID: SelectionComponentID,
+        selection: SelectionModel
+    ) -> SelectionTarget? {
+        func matches(_ target: SelectionTarget) -> Bool {
+            guard item.sceneNodeID == nil || item.sceneNodeID == target.sceneNodeID,
+                  case .region(let selectedComponentID) = target.component else {
+                return false
+            }
+            if selectedComponentID == componentID { return true }
+            guard let selectedReference = selectedComponentID.profileRegionReference,
+                  let currentReference = componentID.profileRegionReference else {
+                return false
+            }
+            return selectedReference.featureID == featureID
+                && selectedReference.featureID == currentReference.featureID
+                && selectedReference.profileIndex == currentReference.profileIndex
+        }
+        if let target = selection.selectedTargets.reversed().first(where: matches) {
+            return target
+        }
+        if let target = selection.hoveredTarget, matches(target) {
+            return target
+        }
+        return nil
+    }
+
+    private static func selectedEdgeTarget(
+        item: ViewportSceneItem,
+        document: DesignDocument,
+        edge: ViewportBodyEdge,
+        selection: SelectionModel
+    ) -> SelectionTarget? {
+        let componentID: SelectionComponentID = switch edge {
+        case .leftBottom: .bodyEdgeLeftBottom
+        case .rightBottom: .bodyEdgeRightBottom
+        case .rightTop: .bodyEdgeRightTop
+        case .leftTop: .bodyEdgeLeftTop
+        }
+        func matches(_ target: SelectionTarget) -> Bool {
+            guard targetBelongsToItem(target, item: item, document: document),
+                  case .edge(let selectedComponentID) = target.component else {
+                return false
+            }
+            return selectedComponentID == componentID
+        }
+        if let target = selection.selectedTargets.reversed().first(where: matches) {
+            return target
+        }
+        if let target = selection.hoveredTarget, matches(target) {
+            return target
+        }
+        return nil
     }
 
     private static func hoveredSketchEntities(
@@ -1228,7 +1513,8 @@ extension ViewportSpatialOverlayProducer {
             return []
         }
         return selection.selectedTargets.compactMap { target -> ViewportBodyEdge? in
-            guard case .edge(let componentID) = target.component else { return nil }
+            guard targetBelongsToItem(target, item: item, document: document),
+                  case .edge(let componentID) = target.component else { return nil }
             switch componentID {
             case .bodyEdgeLeftBottom: return .leftBottom
             case .bodyEdgeRightBottom: return .rightBottom
@@ -1606,10 +1892,125 @@ extension ViewportSpatialOverlayProducer {
         }
     }
 
+    private static func slotGeometry(
+        for primitive: ViewportSketchPrimitive,
+        modelTransform: Transform3D
+    ) throws -> (base: Point3D, direction: Vector3D)? {
+        switch primitive {
+        case .line(_, let start, let end):
+            let midpoint = CGPoint(
+                x: (start.x + end.x) * 0.5,
+                y: (start.y + end.y) * 0.5
+            )
+            let tangent = CGPoint(x: end.x - start.x, y: end.y - start.y)
+            let length = hypot(tangent.x, tangent.y)
+            guard length > 1.0e-12 else { return nil }
+            let direction = try modelTransform
+                .viewportTransformedVector(Vector3D(
+                    x: -Double(tangent.y / length),
+                    y: 0.0,
+                    z: Double(tangent.x / length)
+                ))
+                .normalized(tolerance: 1.0e-12)
+            return (world(midpoint, by: modelTransform), direction)
+        case .arc(_, let center, let radius, let start, let end):
+            let span = normalizedArcSpan(startAngle: start, endAngle: end)
+            guard radius.isFinite, radius > 0.0, span > 1.0e-12 else { return nil }
+            let angle = start + span * 0.5
+            let point = CGPoint(
+                x: center.x + CGFloat(cos(angle) * radius),
+                y: center.y + CGFloat(sin(angle) * radius)
+            )
+            let direction = try modelTransform
+                .viewportTransformedVector(Vector3D(
+                    x: cos(angle),
+                    y: 0.0,
+                    z: sin(angle)
+                ))
+                .normalized(tolerance: 1.0e-12)
+            return (world(point, by: modelTransform), direction)
+        case .spline(_, let points, let controlPoints, _):
+            let samples = points.count >= 2 ? points : controlPoints
+            guard samples.count >= 2 else { return nil }
+            let midpointIndex = max((samples.count - 1) / 2, 0)
+            let start = samples[midpointIndex]
+            let end = samples[min(midpointIndex + 1, samples.count - 1)]
+            let tangent = Vector3D(
+                x: Double(end.x - start.x),
+                y: 0.0,
+                z: Double(end.y - start.y)
+            )
+            guard tangent.length > 1.0e-12 else { return nil }
+            let direction = try modelTransform
+                .viewportTransformedVector(tangent.cross(Vector3D.unitY))
+                .normalized(tolerance: 1.0e-12)
+            return (world(start, by: modelTransform), direction)
+        case .point, .circle:
+            return nil
+        }
+    }
+
+    private static func sketchVertexGeometry(
+        for primitive: ViewportSketchPrimitive,
+        handle: SketchEntityPointHandle,
+        modelTransform: Transform3D
+    ) throws -> (point: CGPoint, direction: Vector3D)? {
+        switch primitive {
+        case .line(_, let start, let end):
+            let direction = try modelTransform
+                .viewportTransformedVector(Vector3D(
+                    x: Double(end.x - start.x),
+                    y: 0.0,
+                    z: Double(end.y - start.y)
+                ))
+                .normalized(tolerance: 1.0e-12)
+            switch handle {
+            case .lineStart:
+                return (start, direction)
+            case .lineEnd:
+                return (end, -direction)
+            case .point, .circleCenter, .arcCenter, .arcStart, .arcEnd:
+                return nil
+            }
+        case .arc(_, let center, let radius, let startAngle, let endAngle):
+            guard radius.isFinite, radius > 0.0 else { return nil }
+            switch handle {
+            case .arcStart:
+                let point = CGPoint(
+                    x: center.x + CGFloat(cos(startAngle) * radius),
+                    y: center.y + CGFloat(sin(startAngle) * radius)
+                )
+                let direction = try modelTransform
+                    .viewportTransformedVector(Vector3D(
+                        x: -sin(startAngle), y: 0.0, z: cos(startAngle)
+                    ))
+                    .normalized(tolerance: 1.0e-12)
+                return (point, direction)
+            case .arcEnd:
+                let point = CGPoint(
+                    x: center.x + CGFloat(cos(endAngle) * radius),
+                    y: center.y + CGFloat(sin(endAngle) * radius)
+                )
+                let direction = try modelTransform
+                    .viewportTransformedVector(Vector3D(
+                        x: sin(endAngle), y: 0.0, z: -cos(endAngle)
+                    ))
+                    .normalized(tolerance: 1.0e-12)
+                return (point, direction)
+            case .point, .circleCenter, .arcCenter, .lineStart, .lineEnd:
+                return nil
+            }
+        case .point, .circle, .spline:
+            return nil
+        }
+    }
+
     private static func slotWidthEntry(
         featureID: FeatureID,
         primitive: ViewportSketchPrimitive,
+        preparedPrimitive: ViewportSketchPrimitive? = nil,
         modelTransform: Transform3D,
+        selectionTarget: SelectionTarget?,
         ruler: RulerConfiguration,
         defaultWidthMeters: Double,
         overrides: [SketchCurveAffordanceSource.ActiveOverride],
@@ -1623,56 +2024,25 @@ extension ViewportSpatialOverlayProducer {
         let override = activeOverride(widthIdentity, in: overrides)
         let width = override?.widthMeters ?? defaultWidthMeters
         guard width.isFinite, width > 0.0 else { return nil }
-        let base: Point3D
-        let direction: Vector3D
-        switch primitive {
-        case .line(_, let start, let end):
-            let midpoint = CGPoint(x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5)
-            let tangent = CGPoint(x: end.x - start.x, y: end.y - start.y)
-            let length = hypot(tangent.x, tangent.y)
-            guard length > 1.0e-12 else { return nil }
-            base = world(midpoint, by: modelTransform)
-            direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
-                    x: -Double(tangent.y / length),
-                    y: 0.0,
-                    z: Double(tangent.x / length)
-                ))
-                .normalized(tolerance: 1.0e-12)
-        case .arc(_, let center, let radius, let start, let end):
-            let span = normalizedArcSpan(startAngle: start, endAngle: end)
-            guard radius.isFinite, radius > 0.0, span > 1.0e-12 else { return nil }
-            let angle = start + span * 0.5
-            let point = CGPoint(x: center.x + CGFloat(cos(angle) * radius), y: center.y + CGFloat(sin(angle) * radius))
-            base = world(point, by: modelTransform)
-            direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
-                    x: cos(angle),
-                    y: 0.0,
-                    z: sin(angle)
-                ))
-                .normalized(tolerance: 1.0e-12)
-        case .spline(_, let points, let controlPoints, _):
-            let samples = points.count >= 2 ? points : controlPoints
-            guard samples.count >= 2 else { return nil }
-            let midpointIndex = max((samples.count - 1) / 2, 0)
-            let start = samples[midpointIndex]
-            let end = samples[min(midpointIndex + 1, samples.count - 1)]
-            let tangent = Vector3D(x: Double(end.x - start.x), y: 0.0, z: Double(end.y - start.y))
-            guard tangent.length > 1.0e-12 else { return nil }
-            base = world(start, by: modelTransform)
-            direction = try modelTransform
-                .viewportTransformedVector(tangent.cross(Vector3D.unitY))
-                .normalized(tolerance: 1.0e-12)
-        case .point, .circle:
-            return nil
-        }
+        guard let visualGeometry = try slotGeometry(
+            for: primitive,
+            modelTransform: modelTransform
+        ) else { return nil }
+        let preparedGeometry = try slotGeometry(
+            for: preparedPrimitive ?? primitive,
+            modelTransform: modelTransform
+        )
+        guard let preparedGeometry else { return nil }
         return try makeSlotWidthEntry(
             featureID: featureID,
             entityID: entityID,
-            base: base,
-            direction: direction,
+            base: visualGeometry.base,
+            direction: visualGeometry.direction,
+            preparedBase: preparedGeometry.base,
+            preparedDirection: preparedGeometry.direction,
             widthMeters: width,
+            baseValue: defaultWidthMeters,
+            selectionTarget: selectionTarget,
             label: override.map { _ in
                 ViewportLengthLabelFormatter.string(
                     fromMeters: abs(width),
@@ -1686,10 +2056,12 @@ extension ViewportSpatialOverlayProducer {
     private static func sketchVertexOffsetEntries(
         featureID: FeatureID,
         primitive: ViewportSketchPrimitive,
+        preparedPrimitive: ViewportSketchPrimitive? = nil,
         modelTransform: Transform3D,
         selectedEntities: Set<SketchEntityID>,
         selectedControlPoints: [SketchEntityID: [Int]],
         itemSelected: Bool,
+        selectionTarget: SelectionTarget?,
         ruler: RulerConfiguration,
         defaultDistanceMeters: Double,
         overrides: [SketchCurveAffordanceSource.ActiveOverride],
@@ -1710,6 +2082,12 @@ extension ViewportSpatialOverlayProducer {
             point: CGPoint,
             direction: Vector3D
         ) throws {
+            let baseline = try sketchVertexGeometry(
+                for: preparedPrimitive ?? primitive,
+                handle: handle,
+                modelTransform: modelTransform
+            )
+            guard let baseline else { return }
             let identity = ViewportSpatialHandleIdentity.sketchVertexOffset(.init(
                 featureID: featureID,
                 entityID: entityID,
@@ -1729,7 +2107,11 @@ extension ViewportSpatialOverlayProducer {
                 handle: handle,
                 base: world(point, by: modelTransform),
                 direction: direction,
+                preparedBase: world(baseline.point, by: modelTransform),
+                preparedDirection: baseline.direction,
                 distanceMeters: distance,
+                baseValue: defaultDistanceMeters,
+                selectionTarget: selectionTarget,
                 label: label,
                 state: override?.state ?? state
             ))
@@ -1798,12 +2180,93 @@ extension ViewportSpatialOverlayProducer {
         }
     }
 
+    private static func preparedSplineControlPoints(
+        from primitive: ViewportSketchPrimitive?,
+        transform: Transform3D
+    ) -> [Point3D]? {
+        guard let primitive,
+              case .spline(_, _, let controlPoints, _) = primitive else {
+            return nil
+        }
+        return controlPoints.map { world($0, by: transform) }
+    }
+
+    private static func splineSlideGeometry(
+        controlPoints: [Point3D],
+        selectedIndexes: [Int],
+        direction: SplineControlPointSlideDirection
+    ) throws -> (anchor: Point3D, direction: Vector3D) {
+        guard controlPoints.count >= 2,
+              !selectedIndexes.isEmpty,
+              selectedIndexes.allSatisfy(controlPoints.indices.contains) else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Spline slide requires a valid source tangent frame."
+            )
+        }
+        var positiveU = Vector3D.zero
+        for index in selectedIndexes {
+            let tangent: Vector3D
+            if index == controlPoints.startIndex {
+                tangent = controlPoints[index + 1] - controlPoints[index]
+            } else if index == controlPoints.index(before: controlPoints.endIndex) {
+                tangent = controlPoints[index] - controlPoints[index - 1]
+            } else {
+                tangent = controlPoints[index + 1] - controlPoints[index - 1]
+            }
+            positiveU = positiveU + tangent
+        }
+        positiveU = try positiveU.normalized(tolerance: 1.0e-12)
+        let resolvedDirection: Vector3D
+        switch direction {
+        case .positiveU:
+            resolvedDirection = positiveU
+        case .negativeU:
+            resolvedDirection = -positiveU
+        case .normal:
+            guard let first = controlPoints.first,
+                  let last = controlPoints.last else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "Spline slide has no tangent frame."
+                )
+            }
+            let tangent = try (last - first).normalized(tolerance: 1.0e-12)
+            let xzNormal = tangent.cross(Vector3D.unitY)
+            if xzNormal.length > 1.0e-12 {
+                resolvedDirection = try xzNormal.normalized(tolerance: 1.0e-12)
+            } else {
+                resolvedDirection = try tangent.cross(Vector3D.unitX)
+                    .normalized(tolerance: 1.0e-12)
+            }
+        }
+        let anchorSum = selectedIndexes.reduce(Point3D.origin) { partial, index in
+            let point = controlPoints[index]
+            return Point3D(
+                x: partial.x + point.x,
+                y: partial.y + point.y,
+                z: partial.z + point.z
+            )
+        }
+        let divisor = Double(selectedIndexes.count)
+        let anchor = Point3D(
+            x: anchorSum.x / divisor,
+            y: anchorSum.y / divisor,
+            z: anchorSum.z / divisor
+        )
+        guard anchor.isFinite, resolvedDirection.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Spline slide source geometry is not finite."
+            )
+        }
+        return (anchor, resolvedDirection)
+    }
+
     private static func entries(
         for primitive: SketchCurveAffordanceSource.Primitive
     ) throws -> [SketchCurveAffordanceSource.Entry] {
         let featureID = primitive.featureID
         let entityID = primitive.primitive.entityID
         let state = primitive.state
+        let sourcePrimitive = primitive.sourcePrimitive ?? primitive.primitive
         func world(_ point: CGPoint) -> Point3D {
             ViewportLayout.transformedPoint(
                 Point3D(x: Double(point.x), y: 0.0, z: Double(point.y)),
@@ -1818,6 +2281,89 @@ extension ViewportSpatialOverlayProducer {
         }
         func dimensionIdentity(_ kind: SketchEntityDimensionKind) -> ViewportSpatialHandleIdentity {
             .sketchDimension(.init(featureID: featureID, entityID: entityID, kind: kind))
+        }
+        func pointTarget(
+            _ handle: SketchEntityPointHandle
+        ) -> ViewportSpatialPreparedInteractionTarget? {
+            guard let target = primitive.selectionTarget else { return nil }
+            return .sketchPointHandle(.init(
+                featureID: featureID,
+                entityID: entityID,
+                target: target,
+                handle: handle,
+                sketchPlane: primitive.sketchPlane
+            ))
+        }
+        func curveTarget(
+            _ handle: ViewportSketchCurveHandleKind
+        ) -> ViewportSpatialPreparedInteractionTarget? {
+            guard let target = primitive.selectionTarget else { return nil }
+            switch sourcePrimitive {
+            case .circle(_, let center, let radiusMeters):
+                return .sketchCurveHandle(.init(
+                    featureID: featureID,
+                    entityID: entityID,
+                    target: target,
+                    handle: handle,
+                    sketchPlane: primitive.sketchPlane,
+                    center: center,
+                    radiusMeters: radiusMeters,
+                    startAngleRadians: nil,
+                    endAngleRadians: nil
+                ))
+            case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
+                return .sketchCurveHandle(.init(
+                    featureID: featureID,
+                    entityID: entityID,
+                    target: target,
+                    handle: handle,
+                    sketchPlane: primitive.sketchPlane,
+                    center: center,
+                    radiusMeters: radiusMeters,
+                    startAngleRadians: startAngle,
+                    endAngleRadians: endAngle
+                ))
+            case .point, .line, .spline:
+                return nil
+            }
+        }
+        func dimensionTarget(
+            _ kind: SketchEntityDimensionKind,
+            baselineValue: Double,
+            start: CGPoint? = nil,
+            end: CGPoint? = nil,
+            center: CGPoint? = nil,
+            radiusMeters: Double? = nil,
+            startAngleRadians: Double? = nil,
+            endAngleRadians: Double? = nil
+        ) -> ViewportSpatialPreparedInteractionTarget? {
+            guard let target = primitive.selectionTarget else { return nil }
+            return .sketchDimension(.init(
+                featureID: featureID,
+                entityID: entityID,
+                target: target,
+                kind: kind,
+                sketchPlane: primitive.sketchPlane,
+                baselineValue: baselineValue,
+                start: start,
+                end: end,
+                center: center,
+                radiusMeters: radiusMeters,
+                startAngleRadians: startAngleRadians,
+                endAngleRadians: endAngleRadians
+            ))
+        }
+        func splinePointTarget(
+            _ controlPointIndex: Int
+        ) -> ViewportSpatialPreparedInteractionTarget? {
+            guard let target = primitive.selectionTarget else { return nil }
+            return .splineControlPoint(.init(
+                featureID: featureID,
+                entityID: entityID,
+                target: target,
+                controlPointIndex: controlPointIndex,
+                sketchPlane: primitive.sketchPlane
+            ))
         }
         func directed(
             anchor: Point3D,
@@ -1860,12 +2406,22 @@ extension ViewportSpatialOverlayProducer {
                 role: .curvePoint,
                 state: state,
                 identity: identity(.point),
-                markers: [.init(anchor: anchor, diameterPoints: 8)]
+                markers: [.init(anchor: anchor, diameterPoints: 8)],
+                preparedTarget: pointTarget(.point)
             ))
 
         case .line(_, let start, let end):
             let worldStart = world(start)
             let worldEnd = world(end)
+            let sourceStart: CGPoint
+            let sourceEnd: CGPoint
+            if case .line(_, let originalStart, let originalEnd) = sourcePrimitive {
+                sourceStart = originalStart
+                sourceEnd = originalEnd
+            } else {
+                sourceStart = start
+                sourceEnd = end
+            }
             if primitive.showsPointHandles {
                 result.append(contentsOf: [
                     .init(
@@ -1873,14 +2429,16 @@ extension ViewportSpatialOverlayProducer {
                         role: .curvePoint,
                         state: state,
                         identity: identity(.lineStart),
-                        markers: [.init(anchor: worldStart, diameterPoints: 8)]
+                        markers: [.init(anchor: worldStart, diameterPoints: 8)],
+                        preparedTarget: pointTarget(.lineStart)
                     ),
                     .init(
                         route: .curvePointControl,
                         role: .curvePoint,
                         state: state,
                         identity: identity(.lineEnd),
-                        markers: [.init(anchor: worldEnd, diameterPoints: 8)]
+                        markers: [.init(anchor: worldEnd, diameterPoints: 8)],
+                        preparedTarget: pointTarget(.lineEnd)
                     ),
                 ])
             }
@@ -1891,6 +2449,16 @@ extension ViewportSpatialOverlayProducer {
                     directed(anchor: midpoint, toward: toward),
                     directed(anchor: midpoint, toward: toward, perpendicular: 26.0),
                 ])
+                let dimensionPairHitRects: (left: CGRect, right: CGRect)?
+                if let lengthLabel = primitive.labels.length,
+                   let angleLabel = primitive.labels.angle {
+                    dimensionPairHitRects = Self.dimensionLabelPairHitRectPoints(
+                        left: "L \(lengthLabel)",
+                        right: "A \(angleLabel)"
+                    )
+                } else {
+                    dimensionPairHitRects = nil
+                }
                 if let label = primitive.labels.length {
                     result.append(.init(
                         route: .lineDimension,
@@ -1901,8 +2469,19 @@ extension ViewportSpatialOverlayProducer {
                         cameraGuides: [guide],
                         labels: [.init(
                             text: label,
-                            point: directed(anchor: midpoint, toward: toward, perpendicular: 26.0)
-                        )]
+                            point: directed(anchor: midpoint, toward: toward, perpendicular: 26.0),
+                            alignment: dimensionPairHitRects == nil ? .center : .trailing,
+                            hitRectPoints: dimensionPairHitRects?.left
+                        )],
+                        preparedTarget: dimensionTarget(
+                            .length,
+                            baselineValue: hypot(
+                                Double(sourceEnd.x - sourceStart.x),
+                                Double(sourceEnd.y - sourceStart.y)
+                            ),
+                            start: sourceStart,
+                            end: sourceEnd
+                        )
                     ))
                 }
                 if let label = primitive.labels.angle {
@@ -1913,14 +2492,34 @@ extension ViewportSpatialOverlayProducer {
                         identity: dimensionIdentity(.angle),
                         labels: [.init(
                             text: label,
-                            point: directed(anchor: midpoint, toward: toward, perpendicular: 26.0)
-                        )]
+                            point: directed(anchor: midpoint, toward: toward, perpendicular: 26.0),
+                            alignment: dimensionPairHitRects == nil ? .center : .leading,
+                            hitRectPoints: dimensionPairHitRects?.right
+                        )],
+                        preparedTarget: dimensionTarget(
+                            .angle,
+                            baselineValue: atan2(
+                                Double(sourceEnd.y - sourceStart.y),
+                                Double(sourceEnd.x - sourceStart.x)
+                            ),
+                            start: sourceStart,
+                            end: sourceEnd
+                        )
                     ))
                 }
             }
 
         case .circle(_, let center, let radiusMeters):
             let worldCenter = world(center)
+            let sourceCenter: CGPoint
+            let sourceRadius: Double
+            if case .circle(_, let originalCenter, let originalRadius) = sourcePrimitive {
+                sourceCenter = originalCenter
+                sourceRadius = originalRadius
+            } else {
+                sourceCenter = center
+                sourceRadius = radiusMeters
+            }
             let radiusPoint = CGPoint(
                 x: center.x + CGFloat(max(radiusMeters, 1.0e-12)),
                 y: center.y
@@ -1932,7 +2531,8 @@ extension ViewportSpatialOverlayProducer {
                     role: .curvePoint,
                     state: state,
                     identity: identity(.circleCenter),
-                    markers: [.init(anchor: worldCenter, diameterPoints: 8)]
+                    markers: [.init(anchor: worldCenter, diameterPoints: 8)],
+                    preparedTarget: pointTarget(.circleCenter)
                 ))
             }
             if primitive.showsCurveHandles {
@@ -1941,7 +2541,8 @@ extension ViewportSpatialOverlayProducer {
                     role: .curveHandle,
                     state: state,
                     identity: curveIdentity(.circleRadius),
-                    markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)]
+                    markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)],
+                    preparedTarget: curveTarget(.circleRadius)
                 ))
             }
             if primitive.showsDimensions {
@@ -1960,7 +2561,13 @@ extension ViewportSpatialOverlayProducer {
                                 parallel: 34.0,
                                 perpendicular: -18.0
                             )
-                        )]
+                        )],
+                        preparedTarget: dimensionTarget(
+                            .radius,
+                            baselineValue: sourceRadius,
+                            center: sourceCenter,
+                            radiusMeters: sourceRadius
+                        )
                     ))
                 }
             }
@@ -1977,6 +2584,21 @@ extension ViewportSpatialOverlayProducer {
 
         case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
             let worldCenter = world(center)
+            let sourceCenter: CGPoint
+            let sourceRadius: Double
+            let sourceStartAngle: Double
+            let sourceEndAngle: Double
+            if case .arc(_, let originalCenter, let originalRadius, let originalStart, let originalEnd) = sourcePrimitive {
+                sourceCenter = originalCenter
+                sourceRadius = originalRadius
+                sourceStartAngle = originalStart
+                sourceEndAngle = originalEnd
+            } else {
+                sourceCenter = center
+                sourceRadius = radiusMeters
+                sourceStartAngle = startAngle
+                sourceEndAngle = endAngle
+            }
             let midpointAngle = startAngle + normalizedArcSpan(
                 startAngle: startAngle,
                 endAngle: endAngle
@@ -2001,21 +2623,24 @@ extension ViewportSpatialOverlayProducer {
                         role: .curvePoint,
                         state: state,
                         identity: identity(.arcCenter),
-                        markers: [.init(anchor: worldCenter, diameterPoints: 8)]
+                        markers: [.init(anchor: worldCenter, diameterPoints: 8)],
+                        preparedTarget: pointTarget(.arcCenter)
                     ),
                     .init(
                         route: .curvePointControl,
                         role: .curvePoint,
                         state: state,
                         identity: identity(.arcStart),
-                        markers: [.init(anchor: world(startPoint), diameterPoints: 8)]
+                        markers: [.init(anchor: world(startPoint), diameterPoints: 8)],
+                        preparedTarget: pointTarget(.arcStart)
                     ),
                     .init(
                         route: .curvePointControl,
                         role: .curvePoint,
                         state: state,
                         identity: identity(.arcEnd),
-                        markers: [.init(anchor: world(endPoint), diameterPoints: 8)]
+                        markers: [.init(anchor: world(endPoint), diameterPoints: 8)],
+                        preparedTarget: pointTarget(.arcEnd)
                     ),
                 ])
             }
@@ -2026,21 +2651,24 @@ extension ViewportSpatialOverlayProducer {
                         role: .curveHandle,
                         state: state,
                         identity: curveIdentity(.arcRadius),
-                        markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)]
+                        markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)],
+                        preparedTarget: curveTarget(.arcRadius)
                     ),
                     .init(
                         route: .curvePointControl,
                         role: .curveHandle,
                         state: state,
                         identity: curveIdentity(.arcStartAngle),
-                        markers: [.init(anchor: world(startPoint), diameterPoints: 8)]
+                        markers: [.init(anchor: world(startPoint), diameterPoints: 8)],
+                        preparedTarget: curveTarget(.arcStartAngle)
                     ),
                     .init(
                         route: .curvePointControl,
                         role: .curveHandle,
                         state: state,
                         identity: curveIdentity(.arcEndAngle),
-                        markers: [.init(anchor: world(endPoint), diameterPoints: 8)]
+                        markers: [.init(anchor: world(endPoint), diameterPoints: 8)],
+                        preparedTarget: curveTarget(.arcEndAngle)
                     ),
                 ])
             }
@@ -2054,6 +2682,16 @@ extension ViewportSpatialOverlayProducer {
                     toward: toward,
                     parallel: 34.0
                 )
+                let dimensionPairHitRects: (left: CGRect, right: CGRect)?
+                if let radiusLabel = primitive.labels.radius,
+                   let angleLabel = primitive.labels.angle {
+                    dimensionPairHitRects = Self.dimensionLabelPairHitRectPoints(
+                        left: "R \(radiusLabel)",
+                        right: "A \(angleLabel)"
+                    )
+                } else {
+                    dimensionPairHitRects = nil
+                }
                 if let label = primitive.labels.radius {
                     result.append(.init(
                         route: .arcDimension,
@@ -2061,7 +2699,20 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: dimensionIdentity(.radius),
                         world: .polyline([worldCenter, worldRadiusPoint]),
-                        labels: [.init(text: label, point: labelPoint)]
+                        labels: [.init(
+                            text: label,
+                            point: labelPoint,
+                            alignment: dimensionPairHitRects == nil ? .center : .trailing,
+                            hitRectPoints: dimensionPairHitRects?.left
+                        )],
+                        preparedTarget: dimensionTarget(
+                            .radius,
+                            baselineValue: sourceRadius,
+                            center: sourceCenter,
+                            radiusMeters: sourceRadius,
+                            startAngleRadians: sourceStartAngle,
+                            endAngleRadians: sourceEndAngle
+                        )
                     ))
                 }
                 if let label = primitive.labels.angle {
@@ -2070,7 +2721,23 @@ extension ViewportSpatialOverlayProducer {
                         role: .arcAngle,
                         state: state,
                         identity: dimensionIdentity(.angle),
-                        labels: [.init(text: label, point: labelPoint)]
+                        labels: [.init(
+                            text: label,
+                            point: labelPoint,
+                            alignment: dimensionPairHitRects == nil ? .center : .leading,
+                            hitRectPoints: dimensionPairHitRects?.right
+                        )],
+                        preparedTarget: dimensionTarget(
+                            .angle,
+                            baselineValue: normalizedArcSpan(
+                                startAngle: sourceStartAngle,
+                                endAngle: sourceEndAngle
+                            ),
+                            center: sourceCenter,
+                            radiusMeters: sourceRadius,
+                            startAngleRadians: sourceStartAngle,
+                            endAngleRadians: sourceEndAngle
+                        )
                     ))
                 }
             }
@@ -2109,7 +2776,8 @@ extension ViewportSpatialOverlayProducer {
                             entityID: entityID,
                             controlPointIndex: index
                         )),
-                        markers: [.init(anchor: point, diameterPoints: 8)]
+                        markers: [.init(anchor: point, diameterPoints: 8)],
+                        preparedTarget: splinePointTarget(index)
                     ))
                 }
             }
@@ -2187,6 +2855,8 @@ extension ViewportSpatialOverlayProducer {
         componentID: SelectionComponentID,
         sourceVertices: [Point3D],
         distanceMeters: Double,
+        selectionTarget: SelectionTarget?,
+        baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState,
         family: ViewportSpatialOverlayFamily = .sketch
@@ -2209,15 +2879,25 @@ extension ViewportSpatialOverlayProducer {
         }
         let anchor = sourceVertices[farthestIndex]
         let direction = try normalizedVector(from: centroid, to: anchor)
+        let preparedTarget = selectionTarget.map {
+            ViewportSpatialPreparedInteractionTarget.regionOffset(
+                featureID: featureID,
+                componentID: componentID,
+                target: $0,
+                axis: .init(origin: anchor, direction: direction, baseValue: baseValue)
+            )
+        }
         return try offsetEntry(
             route: .regionOffset,
             identity: .regionOffset(.init(featureID: featureID, componentID: componentID)),
             anchor: anchor,
             direction: direction,
             distanceMeters: distanceMeters,
+            minimumLengthPoints: 64.0,
             label: label,
             state: state,
-            family: family
+            family: family,
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2227,7 +2907,10 @@ extension ViewportSpatialOverlayProducer {
         edgeStart: Point3D,
         edgeEnd: Point3D,
         inwardToward: Point3D,
+        preparedInwardToward: Point3D? = nil,
         distanceMeters: Double,
+        selectionTarget: SelectionTarget?,
+        baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState,
         family: ViewportSpatialOverlayFamily = .body
@@ -2235,16 +2918,32 @@ extension ViewportSpatialOverlayProducer {
         let anchor = midpoint(edgeStart, edgeEnd)
         let direction = try normalizedVector(from: anchor, to: inwardToward)
         let identity = ViewportSpatialHandleIdentity.edgeOffset(.init(featureID: featureID, edge: edge))
+        let preparedDirection = try normalizedVector(
+            from: anchor,
+            to: preparedInwardToward ?? inwardToward
+        )
+        let preparedTarget = selectionTarget.map {
+            ViewportSpatialPreparedInteractionTarget.edgeOffset(
+                featureID: featureID,
+                edge: edge,
+                target: $0,
+                edgeStart: edgeStart,
+                edgeEnd: edgeEnd,
+                axis: .init(origin: anchor, direction: preparedDirection, baseValue: baseValue)
+            )
+        }
         return try offsetEntry(
             route: .edgeOffset,
             identity: identity,
             anchor: anchor,
             direction: direction,
             distanceMeters: distanceMeters,
+            minimumLengthPoints: 64.0,
             label: label,
             state: state,
             family: family,
-            worldGuide: [edgeStart, edgeEnd]
+            worldGuide: [edgeStart, edgeEnd],
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2253,7 +2952,11 @@ extension ViewportSpatialOverlayProducer {
         entityID: SketchEntityID,
         base: Point3D,
         direction: Vector3D,
+        preparedBase: Point3D? = nil,
+        preparedDirection: Vector3D? = nil,
         widthMeters: Double,
+        baseValue: Double,
+        selectionTarget: SelectionTarget?,
         label: String?,
         state: SketchCurveAffordanceState
     ) throws -> SketchCurveAffordanceSource.Entry {
@@ -2263,15 +2966,27 @@ extension ViewportSpatialOverlayProducer {
             )
         }
         let normalized = try direction.normalized(tolerance: 1.0e-12)
+        let preparedOrigin = preparedBase ?? base
+        let preparedUnit = try (preparedDirection ?? direction).normalized(tolerance: 1.0e-12)
+        let preparedTarget = selectionTarget.map {
+            ViewportSpatialPreparedInteractionTarget.slotWidth(
+                featureID: featureID,
+                entityID: entityID,
+                target: $0,
+                axis: .init(origin: preparedOrigin, direction: preparedUnit, baseValue: baseValue)
+            )
+        }
         return try offsetEntry(
             route: .slotWidth,
             identity: .slotWidth(.init(featureID: featureID, entityID: entityID)),
             anchor: base,
             direction: normalized,
             distanceMeters: widthMeters * 0.5,
+            minimumLengthPoints: 64.0,
             label: label,
             state: state,
-            family: .sketch
+            family: .sketch,
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2281,20 +2996,37 @@ extension ViewportSpatialOverlayProducer {
         handle: SketchEntityPointHandle,
         base: Point3D,
         direction: Vector3D,
+        preparedBase: Point3D? = nil,
+        preparedDirection: Vector3D? = nil,
         distanceMeters: Double,
+        baseValue: Double,
+        selectionTarget: SelectionTarget?,
         label: String?,
         state: SketchCurveAffordanceState
     ) throws -> SketchCurveAffordanceSource.Entry {
         let normalized = try direction.normalized(tolerance: 1.0e-12)
+        let preparedOrigin = preparedBase ?? base
+        let preparedUnit = try (preparedDirection ?? direction).normalized(tolerance: 1.0e-12)
+        let preparedTarget = selectionTarget.map {
+            ViewportSpatialPreparedInteractionTarget.sketchVertexOffset(
+                featureID: featureID,
+                entityID: entityID,
+                target: $0,
+                handle: handle,
+                axis: .init(origin: preparedOrigin, direction: preparedUnit, baseValue: baseValue)
+            )
+        }
         return try offsetEntry(
             route: .sketchVertexOffset,
             identity: .sketchVertexOffset(.init(featureID: featureID, entityID: entityID, handle: handle)),
             anchor: base,
             direction: normalized,
             distanceMeters: distanceMeters,
+            minimumLengthPoints: 64.0,
             label: label,
             state: state,
-            family: .sketch
+            family: .sketch,
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2302,9 +3034,12 @@ extension ViewportSpatialOverlayProducer {
         featureID: FeatureID,
         entityID: SketchEntityID,
         controlPoints: [Point3D],
+        preparedControlPoints: [Point3D]? = nil,
         selectedIndexes: [Int],
         direction: SplineControlPointSlideDirection,
         distanceMeters: Double,
+        selectionTarget: SelectionTarget?,
+        baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState
     ) throws -> SketchCurveAffordanceSource.Entry {
@@ -2325,56 +3060,30 @@ extension ViewportSpatialOverlayProducer {
                 "Spline slide requires at least two control points."
             )
         }
-        var positiveU = Vector3D.zero
-        for index in indexes {
-            let tangent: Vector3D
-            if index == controlPoints.startIndex {
-                tangent = controlPoints[index + 1] - controlPoints[index]
-            } else if index == controlPoints.index(before: controlPoints.endIndex) {
-                tangent = controlPoints[index] - controlPoints[index - 1]
-            } else {
-                tangent = controlPoints[index + 1] - controlPoints[index - 1]
-            }
-            positiveU = positiveU + tangent
-        }
-        positiveU = try positiveU.normalized(tolerance: 1.0e-12)
-        let resolvedDirection: Vector3D
-        switch direction {
-        case .positiveU:
-            resolvedDirection = positiveU
-        case .negativeU:
-            resolvedDirection = -positiveU
-        case .normal:
-            guard let first = controlPoints.first,
-                  let last = controlPoints.last else {
-                throw RealityViewportSpatialBatch.invalid(
-                    "Spline slide has no tangent frame."
-                )
-            }
-            let tangent = try (last - first).normalized(tolerance: 1.0e-12)
-            let xzNormal = tangent.cross(Vector3D.unitY)
-            if xzNormal.length > 1.0e-12 {
-                resolvedDirection = try xzNormal.normalized(tolerance: 1.0e-12)
-            } else {
-                resolvedDirection = try tangent.cross(Vector3D.unitX)
-                    .normalized(tolerance: 1.0e-12)
-            }
-        }
-        let anchorSum = indexes
-            .map { controlPoints[$0] }
-            .reduce(Point3D.origin) { partial, point in
-                Point3D(
-                    x: partial.x + point.x,
-                    y: partial.y + point.y,
-                    z: partial.z + point.z
-                )
-            }
-        let divisor = Double(indexes.count)
-        let anchor = Point3D(
-            x: anchorSum.x / divisor,
-            y: anchorSum.y / divisor,
-            z: anchorSum.z / divisor
+        let visualGeometry = try splineSlideGeometry(
+            controlPoints: controlPoints,
+            selectedIndexes: indexes,
+            direction: direction
         )
+        let preparedGeometry = try splineSlideGeometry(
+            controlPoints: preparedControlPoints ?? controlPoints,
+            selectedIndexes: indexes,
+            direction: direction
+        )
+        let preparedTarget = selectionTarget.map {
+            ViewportSpatialPreparedInteractionTarget.splineControlPointSlide(
+                featureID: featureID,
+                entityID: entityID,
+                target: $0,
+                controlPointIndexes: indexes,
+                direction: direction,
+                axis: .init(
+                    origin: preparedGeometry.anchor,
+                    direction: preparedGeometry.direction,
+                    baseValue: baseValue
+                )
+            )
+        }
         return try offsetEntry(
             route: .splineSlide,
             identity: .splineControlPointSlide(.init(
@@ -2383,12 +3092,14 @@ extension ViewportSpatialOverlayProducer {
                 controlPointIndexes: indexes,
                 direction: direction
             )),
-            anchor: anchor,
-            direction: resolvedDirection,
+            anchor: visualGeometry.anchor,
+            direction: visualGeometry.direction,
             distanceMeters: distanceMeters,
+            minimumLengthPoints: 62.0,
             label: label,
             state: state,
-            family: .sketch
+            family: .sketch,
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2401,6 +3112,7 @@ extension ViewportSpatialOverlayProducer {
     ) throws -> SketchCurveAffordanceSource.Entry {
         try bridgeEndpointEntry(
             handle: handle,
+            preparedHandle: handle,
             modelTransform: modelTransform,
             state: state,
             guideLengthMeters: guideLengthMeters,
@@ -2410,6 +3122,7 @@ extension ViewportSpatialOverlayProducer {
 
     private static func bridgeEndpointEntry(
         handle: BridgeCurveEndpointHandle,
+        preparedHandle: BridgeCurveEndpointHandle? = nil,
         modelTransform: Transform3D,
         state: SketchCurveAffordanceState,
         guideLengthMeters: Double,
@@ -2481,7 +3194,11 @@ extension ViewportSpatialOverlayProducer {
             cameraGuides: [guide],
             labels: labels,
             markers: [.init(anchor: worldPoint, diameterPoints: 8)],
-            family: .curve
+            family: .curve,
+            preparedTarget: .bridgeCurveEndpoint(
+                handle: preparedHandle ?? handle,
+                modelTransform: modelTransform
+            )
         )
     }
 
@@ -2491,12 +3208,16 @@ extension ViewportSpatialOverlayProducer {
         anchor: Point3D,
         direction: Vector3D,
         distanceMeters: Double,
+        minimumLengthPoints: Double,
         label: String?,
         state: SketchCurveAffordanceState,
         family: ViewportSpatialOverlayFamily,
-        worldGuide: [Point3D]? = nil
+        worldGuide: [Point3D]? = nil,
+        preparedTarget: ViewportSpatialPreparedInteractionTarget? = nil
     ) throws -> SketchCurveAffordanceSource.Entry {
         guard distanceMeters.isFinite,
+              minimumLengthPoints.isFinite,
+              minimumLengthPoints >= 0.0,
               anchor.isFinite,
               direction.isFinite else {
             throw RealityViewportSpatialBatch.invalid(
@@ -2514,19 +3235,80 @@ extension ViewportSpatialOverlayProducer {
                 "Sketch/curve offset endpoint is not finite."
             )
         }
-        let toward = Point3D(
+        let unitToward = Point3D(
             x: anchor.x + unit.x,
             y: anchor.y + unit.y,
             z: anchor.z + unit.z
         )
+        let endToward = Point3D(
+            x: end.x + unit.x,
+            y: end.y + unit.y,
+            z: end.z + unit.z
+        )
+        guard endToward.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Sketch/curve offset placement is not finite."
+            )
+        }
+        let tip: SketchCurveDirectedPoint
+        switch route {
+        case .regionOffset:
+            // Region offsets use the signed world distance first, then add
+            // the legacy 64-point screen-space guide length.
+            tip = .init(
+                anchor: end,
+                toward: endToward,
+                parallel: minimumLengthPoints
+            )
+        case .splineSlide:
+            // Spline slides preserve every nonzero signed distance.  The
+            // 62-point guide is only the zero-distance idle affordance.
+            if abs(distanceMeters) > 1.0e-12 {
+                tip = .init(anchor: anchor, toward: end, minimumLength: 0.0)
+            } else {
+                tip = .init(
+                    anchor: anchor,
+                    toward: unitToward,
+                    parallel: minimumLengthPoints
+                )
+            }
+        case .edgeOffset, .slotWidth, .sketchVertexOffset:
+            // These routes use the native projected minimum for a nonzero
+            // world distance and a directed idle guide at exactly zero.
+            if abs(distanceMeters) > 1.0e-12 {
+                tip = .init(
+                    anchor: anchor,
+                    toward: end,
+                    minimumLength: minimumLengthPoints
+                )
+            } else {
+                tip = .init(
+                    anchor: anchor,
+                    toward: unitToward,
+                    parallel: minimumLengthPoints
+                )
+            }
+        case .lineDimension, .circleDimension, .arcDimension,
+             .curvePointControl, .splineControl, .curvatureComb,
+             .bridgeCurveEndpoint:
+            throw RealityViewportSpatialBatch.invalid(
+                "Sketch/curve offset route is not an offset affordance."
+            )
+        }
         let cameraGuide = SketchCurveCameraGuide(points: [
-            .init(anchor: anchor, toward: toward),
-            .init(anchor: anchor, toward: toward, parallel: 64.0),
+            .init(anchor: anchor, toward: unitToward),
+            tip,
         ])
         let labels = label.map {
             [SketchCurveLabelSource(
                 text: $0,
-                point: .init(anchor: end, toward: toward, parallel: 10.0, perpendicular: 20.0)
+                point: .init(
+                    anchor: tip.anchor,
+                    toward: tip.toward,
+                    parallel: tip.parallel + 10.0,
+                    perpendicular: 20.0,
+                    minimumLength: tip.minimumLength
+                )
             )]
         } ?? []
         return .init(
@@ -2536,9 +3318,17 @@ extension ViewportSpatialOverlayProducer {
             identity: identity,
             world: .polyline(worldGuide ?? [anchor, end]),
             cameraGuides: [cameraGuide],
+            cameraPaths: [
+                .init(
+                    path: Self.diamondPath(radius: 4.0),
+                    placement: tip,
+                    hitTolerancePoints: 14.0
+                )
+            ],
             labels: labels,
-            markers: [.init(anchor: end, diameterPoints: 8)],
-            family: family
+            markers: [],
+            family: family,
+            preparedTarget: preparedTarget
         )
     }
 
@@ -2662,6 +3452,44 @@ extension ViewportSpatialOverlayProducer {
         case .active, .preview:
             SIMD4<Float>(1.0, 0.56, 0.18, 1.0)
         }
+    }
+
+    private static func dimensionHitRectPoints(for text: String) -> CGRect {
+        let width = max(52.0, CGFloat(text.count) * 6.4 + 16.0)
+        let height: CGFloat = 22.0
+        return CGRect(
+            x: -(width * 0.5 + 4.0),
+            y: -(height * 0.5 + 4.0),
+            width: width + 8.0,
+            height: height + 8.0
+        )
+    }
+
+    private static func dimensionLabelPairHitRectPoints(
+        left: String,
+        right: String
+    ) -> (left: CGRect, right: CGRect) {
+        let combinedLabel = "\(left) / \(right)"
+        let width = max(52.0, CGFloat(combinedLabel.count) * 6.4 + 16.0)
+        let height: CGFloat = 22.0
+        let halfWidth = width * 0.5
+        let hitWidth = halfWidth + 8.0
+        let hitHeight = height + 8.0
+        let y = -(height * 0.5 + 4.0)
+        return (
+            left: CGRect(
+                x: -(halfWidth + 4.0),
+                y: y,
+                width: hitWidth,
+                height: hitHeight
+            ),
+            right: CGRect(
+                x: -4.0,
+                y: y,
+                width: hitWidth,
+                height: hitHeight
+            )
+        )
     }
 }
 

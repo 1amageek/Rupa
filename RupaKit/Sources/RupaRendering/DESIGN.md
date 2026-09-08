@@ -274,12 +274,63 @@ independent tessellator is never an alternative implementation.
    index without interpreting the table entry. The host resolves it only while
    the complete frame tuple and its table still match. The index and native
    Entity are lookup coordinates, never CAD identity or authority. The
-   parent value is a named `(spatialBatch, handleIdentities)` result. The closed
-   `ViewportSpatialHandleIdentity: Equatable, Sendable` enum corresponds
-   one-to-one with `ViewportInteractionTarget` and contains only stable
-   source/selection addresses and semantic handle roles; it contains no screen
-   point, derived geometry, native object, name, or UUID. The five surface
-   handle cases that currently contain `SelectionReference` project it to the
+   parent value is a named `(spatialBatch, interactionRecords)` result. Each
+   internal `ViewportSpatialInteractionRecord` stores one normalized identity
+   and one case of the checked-`Sendable`, camera-independent
+   `ViewportSpatialPreparedInteractionTarget` emitted by the same worker pass.
+   The prepared semantic value is the drag baseline: it contains
+   the source references, plane/model transform, semantic mode, initial value,
+   and immutable world geometry required by the existing press/drag transition.
+   A body-affordance record also retains the exact projection-free edit
+   baseline resolved by that pass. Its internal payload is the affordance
+   target, a COW array of internal `AffordanceBodyMember` values containing
+   occurrence ID, feature ID, optional scene-node ID, model transform, and the existing
+   `ViewportObjectEditState`, plus an optional group edit. A single-body handle
+   has exactly one member and no group edit; a group handle has at least two
+   members and an explicit group edit. Members are never collapsed into a
+   feature-ID-keyed dictionary, because separate occurrences may reference the
+   same feature. Retained member capacity and values are charged
+   conservatively by the existing semantic-payload admission. Press-time
+   materialization consumes this prepared baseline; it may
+   not rebuild `baseEdits` or `baseGroupEdit` by traversing the current scene
+   or selection. The existing `.affordance` input path initializes only body
+   edits, so sketch-transform presentation is not a body-affordance record:
+   its fragments remain nonauthoritative unless RK-4.2.3 supplies a dedicated
+   sketch mutation baseline and lifecycle instead of a placeholder body edit.
+   Until that implementation lands, the callable branch carries
+   `FIXME(INCOMPLETE_IMPLEMENTATION)` and cannot be treated as a completed
+   interactive route.
+   Verified projection-free existing semantic values are reused directly,
+   including raw sketch/control/surface fields and the
+   `ViewportPatternAffordanceSource` handle structs. Legacy handle targets or
+   geometry values that contain `ViewportLayout`, projected points/vectors,
+   points-per-meter, hit rectangles, or layout-derived minimum/base lengths are
+   not record payloads; directed routes retain their raw world anchor,
+   direction, and semantic value instead. It is not a
+   `ViewportInteractionTarget` or `ViewportActiveInteractionDragState`; the
+   MainActor input owner materializes the former in RK-4.2.3 from the exact
+   record and matching mounted RealityKit projection, then creates the latter
+   from the current press point. Materialization is one exhaustive route switch
+   over the prepared value and may not invoke `ViewportLayout`, the legacy
+   projected candidate selectors, or source traversal. A missing/degenerate
+   native projection is typed frame unavailability, never placeholder geometry
+   or legacy fallback. No closure, mutable coordinator, native Entity, Viewport,
+   camera, or layout owner crosses this table boundary.
+   The closed
+   `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
+   stable source/selection addresses and semantic handle roles; it contains no
+   screen point, derived geometry, native object, name, or UUID. Record
+   registration and fragment lookup additionally use the stable scene
+   occurrence address from the same semantic pass. Scene-derived records with
+   the same feature/handle identity but different `SceneNodeID` values receive
+   different indexes and retain their occurrence-specific transform and drag
+   baseline; selection matching must resolve the occurrence before matching the
+   feature/component. A missing occurrence address is valid only for a source
+   that the prepared scene proves is genuinely uninstanced, or for one
+   explicitly represented selection-group handle whose payload contains the
+   complete stable member-occurrence list and group edit. The latter is one
+   aggregate handle, not permission to merge individual occurrences. The five
+   surface handle cases that currently contain `SelectionReference` project it to the
    exhaustive reference-case discriminator, `SubshapeID`, and the applicable
    parameter, UV, index, or trim address. They never retain or traverse
    `StableSubshapeReference.geometrySignature`; the matching frame tuple, not a
@@ -290,14 +341,39 @@ independent tessellator is never an alternative implementation.
    `.localAxis(ViewportPolySplineSurfaceVertexLocalAxis)`. The local direction
    vector remains derived geometry and is not part of identity; distinct roles
    never share one handle index.
-   The cache retains the immutable table beside its private prepared frame,
+   One canonical route source registers each record exactly once, then all of
+   that handle's visual fragments look up and reuse its normalized-identity
+   index. A second registration of the same identity is a typed producer
+   failure; it is not resolved by comparing complete targets, because synthesized
+   equality may traverse `SelectionReference.geometrySignature`. A fragment
+   lookup for an unregistered identity likewise fails. The cache retains the immutable record table beside
+   its private prepared frame,
    while the native batch receives only `handleCount`, the table's checked
    application-owned `retainedSemanticByteCount`, and optional indices. A synchronous cache lookup
    returns a table entry only when both the prepared frame identity and index
    match; the observable ready-state payload does not become a second owner.
-   Non-handle callers use the exact empty defaults: no table entries,
+   A synchronous lookup returns the prepared semantic baseline only for the exact ready
+   frame and a valid index; stale, preparing, rejected, replaced, or torn-down
+   frames expose neither identity nor target. Non-handle callers use the exact empty defaults: no table entries,
    `handleCount == 0`, `retainedSemanticByteCount == 0`, and
    `handleIndex == nil`.
+   Admission charges record-array capacity, normalized-identity payloads, and
+   producer-owned variable arrays/strings in prepared baselines with checked
+   arithmetic before the cache retains them. An immutable CAD COW source
+   reference is shallow-retained as part of the baseline: Rendering charges its
+   value slot but neither traverses, clones, serializes, nor guesses the backing
+   geometry size. Other producer-owned variable payloads are not exempt from
+   the existing item/position/retained-byte ceilings. The batch receives only
+   the validated record count and total `retainedSemanticByteCount`; the native
+   child never imports or interprets either interaction-target type.
+   A normalized identity may still be used transiently to calculate visual
+   hover/pending/active state without becoming a record. Such a state-only
+   identity gives its descriptors no `handleIndex`. Decorative fragments of an
+   already registered interactive handle may share its index for provenance but
+   remain non-pickable without an explicit footprint. Before RK-4.2.2 completes,
+   every enabled interactive route must register one complete semantic baseline and map at
+   least one accepted fragment footprint; an incomplete baseline is a typed
+   producer failure rather than identity-only native authority.
    The current projected CPU handle providers remain a temporary
    pre-RK-4 input path, not future identity authority: RK-4 must consume this
    prepared mapping and must not rerun producer candidate traversal to infer a
@@ -369,6 +445,11 @@ independent tessellator is never an alternative implementation.
    RealityKit has no equivalent may use the same prepared geometry and native
    camera projection as a bounded CPU query. This exception preserves CAD
    semantics only; it cannot introduce a second renderer or source traversal.
+   Mesh face selection consumes the native surface hit. Mesh edge/vertex
+   selection tests the exact prepared face-loop edge and vertex provenance in
+   the declared point-space neighborhood through the mounted native projection,
+   including candidates just outside a triangle or silhouette; restricting the
+   tolerance query to the triangle interior is not equivalent CAD behavior.
 
 ### Native shading and spatial content
 

@@ -46,9 +46,11 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
         interactiveRoutes: [.bodyTransform]
     )
 
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -57,6 +59,22 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
     #expect(source.markers.count >= 15)
     #expect(source.cameraLines.count == 3)
     #expect(source.cameraPaths.isEmpty)
+    let bodyRecord = try #require(interactionRecords.first { record in
+        guard case .affordance(let target, _, _) = record.target else { return false }
+        return target.featureID == featureID
+    })
+    guard case .affordance(let bodyTarget, let members, let groupEdit) = bodyRecord.target else {
+        Issue.record("Body transform record did not retain its prepared affordance baseline.")
+        return
+    }
+    #expect(bodyTarget.featureID == featureID)
+    #expect(members.count == 1)
+    #expect(members[0].occurrenceID == item.id)
+    #expect(members[0].featureID == featureID)
+    #expect(members[0].sceneNodeID == nodeID)
+    #expect(members[0].edit == ViewportObjectEditState(item: item))
+    #expect(groupEdit == nil)
+    #expect(bodyRecord.occurrenceID == item.id)
 
     var meshes: [ViewportSpatialOverlayInput.Mesh] = []
     var paths: [ViewportSpatialOverlayInput.Path] = []
@@ -64,7 +82,6 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
     var markers: [ViewportSpatialOverlayInput.Marker] = []
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-    var identities: [ViewportSpatialHandleIdentity] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSurfaceTransformAffordances(
         from: source,
@@ -75,7 +92,7 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
         markers: &markers,
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
-        handleIdentities: &identities,
+        interactionRecords: &interactionRecords,
         activeFamilies: &families
     )
     #expect(families.contains(.transform))
@@ -86,6 +103,112 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
         }
     })
     #expect(cameraLines.allSatisfy { $0.value.points.count == 2 })
+}
+
+@Test
+func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
+    let featureID = FeatureID()
+    let firstNodeID = SceneNodeID()
+    let secondNodeID = SceneNodeID()
+    func bodyItem(id: String, nodeID: SceneNodeID, bounds: CGRect) -> ViewportSceneItem {
+        ViewportSceneItem(
+            id: id,
+            featureID: featureID,
+            sceneNodeID: nodeID,
+            modelBounds: bounds,
+            kind: .body(component: ViewportBodyComponent(
+                sizeXMeters: Double(bounds.width),
+                sizeYMeters: 1,
+                sizeZMeters: Double(bounds.height),
+                yMinMeters: 0,
+                yMaxMeters: 1
+            ))
+        )
+    }
+    let first = bodyItem(id: "body-occurrence-1", nodeID: firstNodeID, bounds: CGRect(x: -1, y: -1, width: 2, height: 2))
+    let second = bodyItem(id: "body-occurrence-2", nodeID: secondNodeID, bounds: CGRect(x: 3, y: 2, width: 4, height: 5))
+    let baseline = ViewportObjectEditState(
+        xMin: -4, xMax: 4, yMin: -2, yMax: 2, zMin: -3, zMax: 3
+    )
+    var editedBodies: [FeatureID: ViewportObjectEditState] = [featureID: baseline]
+    let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: .empty(),
+        scene: ViewportScene(items: [first, second]),
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstNodeID),
+            SelectionTarget(sceneNodeID: secondNodeID),
+        ]),
+        editedBodies: editedBodies,
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.bodyTransform],
+        interactiveRoutes: [.bodyTransform]
+    )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
+    _ = try #require(
+        try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw,
+            interactionRecords: &interactionRecords,
+            checkpoint: { _, _, _ in }
+        )
+    )
+    editedBodies[featureID] = ViewportObjectEditState(
+        xMin: -9, xMax: 9, yMin: -8, yMax: 8, zMin: -7, zMax: 7
+    )
+    let bodyRecord = try #require(interactionRecords.first { record in
+        guard case .affordance(_, let members, let groupEdit) = record.target else { return false }
+        return members.count == 2 && groupEdit != nil
+    })
+    guard case .affordance(let target, let members, let groupEdit) = bodyRecord.target else {
+        Issue.record("Grouped body transform did not retain its occurrence-scoped baseline.")
+        return
+    }
+    #expect(target.featureID == featureID)
+    #expect(bodyRecord.occurrenceID == nil)
+    #expect(members.map(\.occurrenceID) == [first.id, second.id])
+    #expect(members.map(\.featureID) == [featureID, featureID])
+    #expect(members[0].sceneNodeID == firstNodeID)
+    #expect(members[1].sceneNodeID == secondNodeID)
+    #expect(members.map(\.edit) == [baseline, baseline])
+    #expect(groupEdit?.xMin == baseline.xMin)
+    #expect(groupEdit?.xMax == baseline.xMax)
+    #expect(groupEdit?.yMin == baseline.yMin)
+    #expect(groupEdit?.yMax == baseline.yMax)
+    #expect(groupEdit?.zMin == baseline.zMin)
+    #expect(groupEdit?.zMax == baseline.zMax)
+
+    let replacement = ViewportObjectEditState(
+        xMin: -9, xMax: 9, yMin: -8, yMax: 8, zMin: -7, zMax: 7
+    )
+    let replacementRaw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: .empty(),
+        scene: ViewportScene(items: [first]),
+        selection: SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: firstNodeID)]),
+        editedBodies: [featureID: replacement],
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.bodyTransform],
+        interactiveRoutes: [.bodyTransform]
+    )
+    var replacementRecords: [ViewportSpatialInteractionRecord] = []
+    _ = try #require(
+        try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: replacementRaw,
+            interactionRecords: &replacementRecords,
+            checkpoint: { _, _, _ in }
+        )
+    )
+    let replacementRecord = try #require(replacementRecords.first { record in
+        guard case .affordance(_, let members, let groupEdit) = record.target else { return false }
+        return members.count == 1 && groupEdit == nil
+    })
+    guard case .affordance(_, let replacementMembers, let replacementGroupEdit) = replacementRecord.target else {
+        Issue.record("Single body replacement did not retain its source edit baseline.")
+        return
+    }
+    #expect(replacementRecord.occurrenceID == first.id)
+    #expect(replacementMembers.count == 1)
+    #expect(replacementMembers[0].occurrenceID == first.id)
+    #expect(replacementMembers[0].edit == replacement)
+    #expect(replacementGroupEdit == nil)
 }
 
 @Test
@@ -120,9 +243,11 @@ func passiveSurfaceTransformRoutesDoNotRequireInteractiveCallbacks() throws {
         enabledRoutes: [.surfaceKnot],
         interactiveRoutes: []
     )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -146,9 +271,11 @@ func malformedConstructionFaceIsRefusedAsTypedFailure() throws {
         interactiveRoutes: [],
         constructionFaceTarget: target
     )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: MeshSourcePresentationRenderError.self) {
         _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     }
@@ -164,9 +291,11 @@ func surfaceTransformSourcePropagatesCheckpointCancellationBeforeAllocation() {
         ruler: .standard(for: .meter),
         enabledRoutes: [.bodyTransform]
     )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: Cancelled.self) {
         _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in throw Cancelled() }
         )
     }
@@ -208,9 +337,11 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         enabledRoutes: [.edgeFillet],
         interactiveRoutes: [.edgeFillet]
     )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -221,6 +352,41 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
     #expect(source.cameraLines[0].points[0].anchor == source.cameraLines[0].points[1].anchor)
     #expect(source.cameraLines[0].points[1].minimumLength == nil)
     #expect(source.cameraLines[0].points[1].parallel == 18)
+    #expect(source.cameraLines[0].hitTolerancePoints == nil)
+    #expect(source.cameraPaths[0].hitTolerancePoints == 10.0)
+    #expect(source.cameraPaths[0].occurrenceID == item.id)
+    #expect(interactionRecords.contains {
+        $0.identity == .affordance(.init(
+            featureID: featureID,
+            selectionTarget: target,
+            action: .profileEdgeFillet(target, .leftBottom)
+        )) && $0.occurrenceID == item.id
+    })
+    let filletRecord = try #require(interactionRecords.first {
+        $0.identity == .affordance(.init(
+            featureID: featureID,
+            selectionTarget: target,
+            action: .profileEdgeFillet(target, .leftBottom)
+        )) && $0.occurrenceID == item.id
+    })
+    guard case .affordance(let filletTarget, let filletMembers, let filletGroupEdit) = filletRecord.target else {
+        Issue.record("Edge fillet record did not retain its body baseline.")
+        return
+    }
+    #expect(filletTarget.featureID == featureID)
+    #expect(filletMembers.count == 1)
+    #expect(filletMembers[0].occurrenceID == item.id)
+    #expect(filletMembers[0].featureID == featureID)
+    #expect(filletMembers[0].sceneNodeID == nodeID)
+    #expect(filletMembers[0].edit == ViewportObjectEditState(item: item))
+    #expect(filletGroupEdit == nil)
+    #expect(interactionRecords.first(where: {
+        $0.identity == .affordance(.init(
+            featureID: featureID,
+            selectionTarget: target,
+            action: .profileEdgeFillet(target, .leftBottom)
+        )) && $0.occurrenceID == item.id
+    })?.modelTransform == item.modelTransform)
 
     var meshes: [ViewportSpatialOverlayInput.Mesh] = []
     var paths: [ViewportSpatialOverlayInput.Path] = []
@@ -228,7 +394,6 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
     var markers: [ViewportSpatialOverlayInput.Marker] = []
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-    var identities: [ViewportSpatialHandleIdentity] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSurfaceTransformAffordances(
         from: source,
@@ -239,7 +404,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         markers: &markers,
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
-        handleIdentities: &identities,
+        interactionRecords: &interactionRecords,
         activeFamilies: &families
     )
     #expect(cameraLines.count == 1)
@@ -256,6 +421,15 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
     } else if cameraLines.count == 1 {
         Issue.record("Fillet handle must use a directed 18 point offset.")
     }
+    let filletHandleIndex = UInt32(try #require(interactionRecords.firstIndex {
+        $0.identity == .affordance(.init(
+            featureID: featureID,
+            selectionTarget: target,
+            action: .profileEdgeFillet(target, .leftBottom)
+        )) && $0.occurrenceID == item.id
+    }))
+    #expect(cameraLines[0].value.handleIndex == nil)
+    #expect(cameraPaths[0].value.handleIndex == filletHandleIndex)
 }
 
 @Test
@@ -273,8 +447,10 @@ func unsupportedEdgeFilletSelectionProducesNoHandle() throws {
         enabledRoutes: [.edgeFillet],
         interactiveRoutes: [.edgeFillet]
     )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
         from: raw,
+        interactionRecords: &interactionRecords,
         checkpoint: { _, _, _ in }
     )
     #expect(source == nil)
@@ -402,9 +578,11 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
         ]
     )
 
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -413,7 +591,17 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     #expect(source.markers.contains { $0.identity == trimControlIdentity })
     #expect(source.cameraLines.contains { $0.route == .surfaceFrame && $0.identity == frameIdentity })
     #expect(source.cameraPaths.contains { $0.route == .surfaceFrame && $0.identity == frameIdentity })
-    #expect(source.labels.contains { $0.route == .surfaceFrame && $0.identity == frameIdentity })
+    #expect(source.labels.contains { $0.route == .surfaceFrame && $0.identity == nil })
+    let controlAxisIdentity = ViewportSpatialHandleIdentity.surfaceControlPoint(
+        .init(controlReference),
+        role: .axis(.x)
+    )
+    let controlAxis = try #require(source.cameraLines.first {
+        $0.route == .surfaceControlPoint && $0.identity == controlAxisIdentity
+    })
+    #expect(controlAxis.points[0].parallel == 16)
+    #expect(controlAxis.points[0].minimumLength == nil)
+    #expect(controlAxis.points[1].minimumLength == 16)
     let controlPreview = try #require(source.worldLines.first {
         $0.route == .surfaceControlPoint && $0.identity == controlIdentity && $0.state == .active
     })
@@ -440,10 +628,11 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     #expect(abs(frameDelta.x - 0.01) <= 1.0e-12)
     #expect(abs(frameDelta.y) <= 1.0e-12)
     #expect(abs(frameDelta.z) <= 1.0e-12)
-    let frameLabel = try #require(source.labels.first {
-        $0.route == .surfaceFrame && $0.identity == frameIdentity
-    })
     let expectedFrameLabel = "U \(ViewportLengthLabelFormatter.string(fromMeters: 0.01, preferredUnit: raw.ruler.displayUnit))"
+    let frameLabel = try #require(source.labels.first {
+        $0.route == .surfaceFrame && $0.text == expectedFrameLabel
+    })
+    #expect(frameLabel.identity == nil)
     #expect(frameLabel.text == expectedFrameLabel)
     #expect(frameLabel.placement.anchor == framePoint.anchor)
     #expect(frameLabel.placement.minimumLength == 0)
@@ -468,7 +657,6 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     var markers: [ViewportSpatialOverlayInput.Marker] = []
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-    var identities: [ViewportSpatialHandleIdentity] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSurfaceTransformAffordances(
         from: source,
@@ -479,27 +667,54 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
         markers: &markers,
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
-        handleIdentities: &identities,
+        interactionRecords: &interactionRecords,
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty || !paths.isEmpty || !cameraLines.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty)
     #expect(families.contains(.transform))
-    #expect(identities.contains(controlIdentity))
-    #expect(identities.contains(trimEndpointIdentity))
-    #expect(identities.contains(trimControlIdentity))
-    #expect(identities.contains(frameIdentity))
+    #expect(interactionRecords.contains { $0.identity == controlIdentity })
+    #expect(interactionRecords.contains { $0.identity == trimEndpointIdentity })
+    #expect(interactionRecords.contains { $0.identity == trimControlIdentity })
+    #expect(interactionRecords.contains { $0.identity == frameIdentity })
 
-    let frameHandleIndex = UInt32(try #require(identities.firstIndex(of: frameIdentity)))
+    let controlAxisHandleIndex = UInt32(try #require(interactionRecords.firstIndex {
+        $0.identity == controlAxisIdentity
+    }))
+    let nativeControlAxis = try #require(cameraLines.first {
+        $0.value.handleIndex == controlAxisHandleIndex
+    })
+    guard nativeControlAxis.value.points.count >= 2 else {
+        Issue.record("Surface control-point axis native line did not retain its two-point footprint.")
+        return
+    }
+    switch nativeControlAxis.value.points[0].offset {
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 16)
+        #expect(perpendicular == 0)
+    case .fixed, .projected:
+        Issue.record("Surface control-point axis start must use a directed 16 point gap.")
+    }
+    switch nativeControlAxis.value.points[1].offset {
+    case .projected(_, let minimumLength, let parallel, let perpendicular):
+        #expect(minimumLength == 16)
+        #expect(parallel == 0)
+        #expect(perpendicular == 0)
+    case .fixed, .directed:
+        Issue.record("Surface control-point axis tip must retain its 16 point minimum length.")
+    }
+
+    let frameHandleIndex = UInt32(try #require(interactionRecords.firstIndex { $0.identity == frameIdentity }))
     let nativeFrameLine = try #require(cameraLines.first { $0.value.handleIndex == frameHandleIndex })
     guard nativeFrameLine.value.points.count >= 2 else {
         Issue.record("Surface frame native line did not retain its fixed origin and active tip.")
         return
     }
     switch nativeFrameLine.value.points[0].offset {
-    case .fixed(let offset):
-        #expect(offset == .zero)
-    case .directed, .projected:
-        Issue.record("Surface frame native line must begin at a fixed world anchor.")
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 10)
+        #expect(perpendicular == 0)
+    case .fixed, .projected:
+        Issue.record("Active surface frame native line must preserve its directed start gap.")
     }
     switch nativeFrameLine.value.points[1].offset {
     case .projected(let toward, let minimumLength, let parallel, let perpendicular):
@@ -520,19 +735,9 @@ func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() thro
     case .fixed, .directed:
         Issue.record("Active surface frame tip glyph must share projected tip placement.")
     }
-    let nativeFrameLabel = try #require(labels.first { $0.value.handleIndex == frameHandleIndex })
-    #expect(nativeFrameLabel.value.anchor == framePoint.anchor)
-    switch nativeFrameLabel.value.offset {
-    case .projected(let toward, let minimumLength, let parallel, let perpendicular):
-        #expect(toward == framePoint.toward)
-        #expect(minimumLength == 0)
-        #expect(parallel == 8)
-        #expect(perpendicular == 18)
-    case .fixed, .directed:
-        Issue.record("Active surface frame label must share projected tip direction.")
-    }
+    #expect(labels.contains { $0.value.handleIndex == nil && $0.value.text.hasPrefix("U ") })
 
-    let passiveHandleIndex = UInt32(try #require(identities.firstIndex(of: passiveFrameIdentity)))
+    let passiveHandleIndex = UInt32(try #require(interactionRecords.firstIndex { $0.identity == passiveFrameIdentity }))
     let nativePassiveLine = try #require(cameraLines.first { $0.value.handleIndex == passiveHandleIndex })
     guard nativePassiveLine.value.points.count >= 2 else {
         Issue.record("Passive surface frame native line did not retain its fixed origin and tip.")
@@ -594,9 +799,11 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
         ]
     )
 
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -608,6 +815,22 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
         return valueFeatureID == featureID && componentID == vertex.componentID
     })
     #expect(source.cameraLines.contains { $0.route == .polySplineSurfaceVertexSlide && $0.identity == slideIdentity })
+    let vertexAxisIdentity = ViewportSpatialHandleIdentity.polySplineSurfaceVertex(
+        featureID: featureID,
+        componentID: vertex.componentID,
+        role: .axis(.x)
+    )
+    let vertexAxis = try #require(source.cameraLines.first {
+        $0.route == .polySplineSurfaceVertex && $0.identity == vertexAxisIdentity
+    })
+    #expect(vertexAxis.points[0].parallel == 16)
+    #expect(vertexAxis.points[0].minimumLength == nil)
+    #expect(vertexAxis.points[1].minimumLength == 16)
+    #expect(source.cameraPaths.contains {
+        $0.route == .polySplineSurfaceVertexSlide
+            && $0.identity == slideIdentity
+            && $0.hitTolerancePoints == 14.0
+    })
     #expect(source.worldLines.contains { $0.route == .activePolySplineSurfaceVertexPreview && $0.identity == slideIdentity })
     #expect(source.markers.contains { $0.route == .activePolySplineSurfaceVertexPreview && $0.identity == slideIdentity })
     #expect(source.meshes.contains { $0.route == .activePolySplineSurfaceVertexPreview && $0.identity == slideIdentity })
@@ -624,7 +847,6 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
     var markers: [ViewportSpatialOverlayInput.Marker] = []
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-    var identities: [ViewportSpatialHandleIdentity] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSurfaceTransformAffordances(
         from: source,
@@ -635,13 +857,38 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
         markers: &markers,
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
-        handleIdentities: &identities,
+        interactionRecords: &interactionRecords,
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty)
     #expect(!cameraLines.isEmpty)
     #expect(families.contains(.transform))
-    #expect(identities.contains(slideIdentity))
+    #expect(interactionRecords.contains { $0.identity == slideIdentity })
+    let vertexAxisHandleIndex = UInt32(try #require(interactionRecords.firstIndex {
+        $0.identity == vertexAxisIdentity
+    }))
+    let nativeVertexAxis = try #require(cameraLines.first {
+        $0.value.handleIndex == vertexAxisHandleIndex
+    })
+    guard nativeVertexAxis.value.points.count >= 2 else {
+        Issue.record("PolySpline vertex axis native line did not retain its two-point footprint.")
+        return
+    }
+    switch nativeVertexAxis.value.points[0].offset {
+    case .directed(_, let parallel, let perpendicular):
+        #expect(parallel == 16)
+        #expect(perpendicular == 0)
+    case .fixed, .projected:
+        Issue.record("PolySpline vertex axis start must use a directed 16 point gap.")
+    }
+    switch nativeVertexAxis.value.points[1].offset {
+    case .projected(_, let minimumLength, let parallel, let perpendicular):
+        #expect(minimumLength == 16)
+        #expect(parallel == 0)
+        #expect(perpendicular == 0)
+    case .fixed, .directed:
+        Issue.record("PolySpline vertex axis tip must retain its 16 point minimum length.")
+    }
 }
 
 @Test
@@ -675,9 +922,11 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
         interactiveRoutes: [.constructionPlane, .sketchTransform]
     )
 
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw,
+            interactionRecords: &interactionRecords,
             checkpoint: { _, _, _ in }
         )
     )
@@ -686,6 +935,12 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
     #expect(source.worldLines.contains { $0.route == .sketchTransform && $0.closed })
     #expect(source.worldLines.filter { $0.route == .sketchTransform && $0.identity != nil }.count == 3)
     #expect(source.cameraLines.contains { $0.route == .sketchTransform })
+    #expect(source.cameraLines.filter { $0.route == .sketchTransform }.allSatisfy { $0.hitTolerancePoints == nil })
+    #expect(source.worldLines.filter { $0.route == .sketchTransform }.allSatisfy { $0.hitTolerancePoints == nil })
+    #expect(!interactionRecords.contains { record in
+        guard case .affordance(let target, _, _) = record.target else { return false }
+        return target.featureID == sketchFeatureID
+    })
     #expect(source.markers.contains { $0.route == .constructionPlane && $0.identity != nil })
     #expect(source.markers.contains { $0.route == .sketchTransform })
 
@@ -695,7 +950,6 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
     var markers: [ViewportSpatialOverlayInput.Marker] = []
     var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
     var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
-    var identities: [ViewportSpatialHandleIdentity] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSurfaceTransformAffordances(
         from: source,
@@ -706,7 +960,7 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
         markers: &markers,
         cameraLines: &cameraLines,
         cameraPaths: &cameraPaths,
-        handleIdentities: &identities,
+        interactionRecords: &interactionRecords,
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty)

@@ -7,9 +7,9 @@ import SwiftUI
 /// Immutable world-space values for the Pattern Array affordance routes.
 ///
 /// This value is assembled at the producer boundary. It deliberately contains
-/// no camera, layout, projected point, or SwiftUI state. A handle identity is
-/// resolved once by the append operation and is shared by every visual
-/// fragment belonging to that handle.
+/// no camera, layout, projected point, or SwiftUI state. A semantic
+/// interaction record is resolved once by the append operation and is shared
+/// by every visual fragment belonging to that handle.
 struct ViewportPatternAffordanceSource: Sendable {
     /// Checked-Sendable values captured by the MainActor. The worker resolves
     /// all world guides, previews, and independent-copy handles from this
@@ -200,6 +200,7 @@ struct ViewportPatternAffordanceSource: Sendable {
 
     struct OutputModeHandle: Sendable {
         let sourceID: PatternArraySourceID
+        let outputMode: PatternArrayOutputMode
         let anchor: Point3D
         let title: String
         let highlightedTitle: String
@@ -674,6 +675,7 @@ extension ViewportSpatialOverlayProducer {
             }
             outputModeHandles.append(.init(
                 sourceID: sourceID,
+                outputMode: patternSource.outputMode,
                 anchor: basePoint,
                 title: title,
                 highlightedTitle: highlightedTitle,
@@ -1342,7 +1344,7 @@ extension ViewportSpatialOverlayProducer {
         cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>,
-        handleIdentities: inout [ViewportSpatialHandleIdentity],
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
         try Task.checkCancellation()
@@ -1627,8 +1629,8 @@ extension ViewportSpatialOverlayProducer {
                 distanceMeters: displayDistance
             )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .patternArrayLinearAxis(.init(sourceID: value.sourceID, axisSlot: value.axisSlot)),
-                in: &handleIdentities
+                for: .patternArrayLinearAxis(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             try appendPatternCameraArrow(
@@ -1657,7 +1659,7 @@ extension ViewportSpatialOverlayProducer {
                 toward: tip,
                 projectedMinimumLength: 76,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1674,8 +1676,8 @@ extension ViewportSpatialOverlayProducer {
                 angleRadians: angle
             )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .patternArrayRadialAngle(.init(sourceID: value.sourceID)),
-                in: &handleIdentities
+                for: .patternArrayRadialAngle(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             let tangentPoint = Point3D(
@@ -1683,33 +1685,32 @@ extension ViewportSpatialOverlayProducer {
                 y: geometry.end.y + geometry.tangent.y,
                 z: geometry.end.z + geometry.tangent.z
             )
-            try appendPatternCameraArrow(
-                anchor: geometry.end,
-                toward: tangentPoint,
-                minimumLength: 64,
+            try appendPatternLine(
+                geometry.arc,
                 color: color,
+                depth: .annotation,
                 handleIndex: index,
-                cameraLines: &cameraLines,
-                cameraPaths: &cameraPaths,
+                hitTolerancePoints: 10.0,
+                meshes: &meshes,
                 checkpoint: checkpoint
             )
-            if value.displayAngleRadians != nil {
-                try appendPatternLine(
-                    geometry.arc,
-                    color: color,
-                    depth: .annotation,
-                    handleIndex: index,
-                    meshes: &meshes,
-                    checkpoint: checkpoint
-                )
-            }
+            try appendPatternMarker(
+                .sphere,
+                anchor: geometry.end,
+                diameterPoints: 8,
+                color: color,
+                handleIndex: index,
+                hitTolerancePoints: 14.0,
+                markers: &markers,
+                checkpoint: checkpoint
+            )
             try appendPatternLabel(
                 "\(value.title) \(value.angleMode.rawValue) \(patternAngleLabel(angle))",
                 anchor: geometry.end,
                 toward: tangentPoint,
-                projectedMinimumLength: 64,
+                directedParallel: 64,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1718,50 +1719,79 @@ extension ViewportSpatialOverlayProducer {
 
         for value in source.copyCountHandles {
             try Task.checkCancellation()
-            let point = try patternCopyCountPoint(
+            let copyCount = value.displayCopyCount ?? value.copyCount
+            let footprint = try patternCopyCountFootprint(
                 value.guide,
-                copyCount: value.displayCopyCount ?? value.copyCount
+                copyCount: copyCount
             )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .patternArrayCopyCount(.init(sourceID: value.sourceID, slot: value.slot)),
-                in: &handleIdentities
+                for: .patternArrayCopyCount(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
-            let cameraGeometry = try patternCopyCountCameraGeometry(
-                value.guide,
-                copyCount: value.displayCopyCount ?? value.copyCount
-            )
-            try appendPatternCameraArrow(
-                anchor: cameraGeometry.anchor,
-                toward: cameraGeometry.toward,
-                minimumLength: 56,
-                parallel: cameraGeometry.parallel,
-                perpendicular: cameraGeometry.perpendicular,
+            try appendPatternLine(
+                footprint.guidePoints,
                 color: color,
+                depth: .annotation,
                 handleIndex: index,
-                cameraLines: &cameraLines,
-                cameraPaths: &cameraPaths,
+                hitTolerancePoints: 10.0,
+                meshes: &meshes,
                 checkpoint: checkpoint
             )
-            if value.displayCopyCount != nil, let toward = point.toward {
-                try appendPatternLine(
-                    [toward, point.point],
+            if let tipPoint = footprint.tipPoint, !footprint.cameraInteractive {
+                try appendPatternMarker(
+                    .sphere,
+                    anchor: tipPoint,
+                    diameterPoints: 8,
                     color: color,
-                    depth: .annotation,
                     handleIndex: index,
-                    meshes: &meshes,
+                    hitTolerancePoints: 14.0,
+                    markers: &markers,
                     checkpoint: checkpoint
                 )
             }
+            if footprint.cameraOffsetPolyline {
+                try appendPatternCameraGuide(
+                    anchor: footprint.cameraAnchor,
+                    toward: footprint.cameraToward,
+                    parallel: footprint.cameraParallel,
+                    perpendicular: footprint.cameraPerpendicular,
+                    color: color,
+                    handleIndex: index,
+                    cameraLines: &cameraLines,
+                    cameraPaths: &cameraPaths,
+                    checkpoint: checkpoint
+                )
+            } else if footprint.cameraMinimumLength > 0 {
+                try appendPatternCameraArrow(
+                    anchor: footprint.cameraAnchor,
+                    toward: footprint.cameraToward,
+                    minimumLength: footprint.cameraMinimumLength,
+                    parallel: footprint.cameraParallel,
+                    perpendicular: footprint.cameraPerpendicular,
+                    color: color,
+                    handleIndex: index,
+                    interactive: footprint.cameraInteractive,
+                    cameraLines: &cameraLines,
+                    cameraPaths: &cameraPaths,
+                    checkpoint: checkpoint
+                )
+            }
+            let labelParallel = CGFloat(footprint.cameraParallel + 10.0)
+            let labelPerpendicular = CGFloat(footprint.cameraPerpendicular + 20.0)
             try appendPatternLabel(
-                "\(value.title) \(value.displayCopyCount ?? value.copyCount)",
-                anchor: cameraGeometry.anchor,
-                toward: cameraGeometry.toward,
-                projectedMinimumLength: 56,
-                projectedParallel: CGFloat(cameraGeometry.parallel),
-                projectedPerpendicular: CGFloat(cameraGeometry.perpendicular),
+                "\(value.title) \(copyCount)",
+                anchor: footprint.cameraAnchor,
+                toward: footprint.cameraToward,
+                projectedMinimumLength: footprint.cameraMinimumLength > 0
+                    ? CGFloat(footprint.cameraMinimumLength)
+                    : nil,
+                projectedParallel: labelParallel,
+                projectedPerpendicular: labelPerpendicular,
+                directedParallel: footprint.cameraMinimumLength > 0 ? nil : labelParallel,
+                directedPerpendicular: labelPerpendicular,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1773,8 +1803,8 @@ extension ViewportSpatialOverlayProducer {
             let distance = value.displayDistanceMeters ?? value.distanceMeters
             let extent = try patternCurveExtent(pathPoints: value.pathPoints, distanceMeters: distance)
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .patternArrayCurveExtent(.init(sourceID: value.sourceID)),
-                in: &handleIdentities
+                for: .patternArrayCurveExtent(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             let tangentPoint = Point3D(
@@ -1782,33 +1812,32 @@ extension ViewportSpatialOverlayProducer {
                 y: extent.tip.y + extent.tangent.y,
                 z: extent.tip.z + extent.tangent.z
             )
-            try appendPatternCameraArrow(
-                anchor: extent.tip,
-                toward: tangentPoint,
-                minimumLength: 64,
+            try appendPatternLine(
+                extent.points,
                 color: color,
+                depth: .annotation,
                 handleIndex: index,
-                cameraLines: &cameraLines,
-                cameraPaths: &cameraPaths,
+                hitTolerancePoints: 10.0,
+                meshes: &meshes,
                 checkpoint: checkpoint
             )
-            if value.displayDistanceMeters != nil {
-                try appendPatternLine(
-                    extent.points,
-                    color: color,
-                    depth: .annotation,
-                    handleIndex: index,
-                    meshes: &meshes,
-                    checkpoint: checkpoint
-                )
-            }
+            try appendPatternMarker(
+                .sphere,
+                anchor: extent.tip,
+                diameterPoints: 8,
+                color: color,
+                handleIndex: index,
+                hitTolerancePoints: 14.0,
+                markers: &markers,
+                checkpoint: checkpoint
+            )
             try appendPatternLabel(
                 "\(value.title) \(value.extentMode == .distance ? patternLengthLabel(distance, ruler: source.ruler) : patternRatioLabel(distance, total: extent.totalLength))",
                 anchor: extent.tip,
                 toward: tangentPoint,
-                projectedMinimumLength: 64,
+                directedParallel: 64,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1839,12 +1868,9 @@ extension ViewportSpatialOverlayProducer {
                 checkpoint: checkpoint
             )
             let point = effectivePathPoints[value.pointIndex]
-            let identity = ViewportSpatialHandleIdentity.patternArrayCurvePathPoint(
-                .init(sourceID: value.sourceID, pointIndex: value.pointIndex)
-            )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: identity,
-                in: &handleIdentities
+                for: .patternArrayCurvePathPoint(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             try appendPatternMarker(
@@ -1853,6 +1879,7 @@ extension ViewportSpatialOverlayProducer {
                 diameterPoints: value.state.isActive ? 10 : 8,
                 color: color,
                 handleIndex: index,
+                hitTolerancePoints: 13.0,
                 markers: &markers,
                 checkpoint: checkpoint
             )
@@ -1861,7 +1888,7 @@ extension ViewportSpatialOverlayProducer {
                 anchor: point,
                 toward: value.pointIndex > 0 ? effectivePathPoints[value.pointIndex - 1] : nil,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1874,8 +1901,8 @@ extension ViewportSpatialOverlayProducer {
                 throw RealityViewportSpatialBatch.invalid("Pattern output-mode anchor is not finite.")
             }
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .patternArrayOutputMode(.init(sourceID: value.sourceID)),
-                in: &handleIdentities
+                for: .patternArrayOutputMode(value),
+                in: &interactionRecords
             )
             try appendPatternLabel(
                 value.state.isHighlighted ? value.highlightedTitle : value.title,
@@ -1884,6 +1911,7 @@ extension ViewportSpatialOverlayProducer {
                 fixedOffset: CGPoint(x: 46, y: -34),
                 color: patternColor(value.state),
                 handleIndex: index,
+                hitRectPoints: CGRect(x: -84, y: -19, width: 168, height: 38),
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1899,12 +1927,8 @@ extension ViewportSpatialOverlayProducer {
                 distanceMeters: distance
             )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .independentCopyExtrudeDistance(.init(
-                    sourceID: value.sourceID,
-                    outputIndex: value.outputIndex,
-                    featureID: value.featureID
-                )),
-                in: &handleIdentities
+                for: .independentCopyExtrudeDistance(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             try appendPatternCameraArrow(
@@ -1933,7 +1957,7 @@ extension ViewportSpatialOverlayProducer {
                 toward: tip,
                 projectedMinimumLength: 70,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -1949,13 +1973,8 @@ extension ViewportSpatialOverlayProducer {
                 distanceMeters: distance
             )
             let index = try ViewportSpatialOverlayProducer.handleIndex(
-                for: .independentCopyBodyDimension(.init(
-                    sourceID: value.sourceID,
-                    outputIndex: value.outputIndex,
-                    featureID: value.featureID,
-                    kind: value.kind
-                )),
-                in: &handleIdentities
+                for: .independentCopyBodyDimension(value),
+                in: &interactionRecords
             )
             let color = patternColor(value.state)
             try appendPatternCameraArrow(
@@ -1984,7 +2003,7 @@ extension ViewportSpatialOverlayProducer {
                 toward: tip,
                 projectedMinimumLength: 58,
                 color: color,
-                handleIndex: index,
+                handleIndex: nil,
                 labels: &labels,
                 checkpoint: checkpoint
             )
@@ -2006,6 +2025,7 @@ extension ViewportSpatialOverlayProducer {
         color: SIMD4<Float>,
         depth: RealityViewportSpatialBatch.Depth,
         handleIndex: UInt32?,
+        hitTolerancePoints: Float? = nil,
         meshes: inout [ViewportSpatialOverlayInput.Mesh],
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -2017,6 +2037,7 @@ extension ViewportSpatialOverlayProducer {
         try checkpoint(1, points.count, 0)
         var value = try ViewportSpatialOverlayProducer.line(points, color: color, depth: depth)
         value.handleIndex = handleIndex
+        value.hitTolerancePoints = hitTolerancePoints
         meshes.append(.init(family: .pattern, value: value))
     }
 
@@ -2025,6 +2046,7 @@ extension ViewportSpatialOverlayProducer {
         color: SIMD4<Float>,
         depth: RealityViewportSpatialBatch.Depth,
         handleIndex: UInt32?,
+        hitTolerancePoints: Float? = nil,
         meshes: inout [ViewportSpatialOverlayInput.Mesh],
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -2037,6 +2059,7 @@ extension ViewportSpatialOverlayProducer {
             color: color,
             depth: depth,
             handleIndex: handleIndex,
+            hitTolerancePoints: hitTolerancePoints,
             meshes: &meshes,
             checkpoint: checkpoint
         )
@@ -2054,6 +2077,7 @@ extension ViewportSpatialOverlayProducer {
         shape: RealityViewportSpatialBatch.Marker.Shape = .sphere,
         color: SIMD4<Float>,
         handleIndex: UInt32,
+        interactive: Bool = true,
         cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
         checkpoint: (Int, Int, Int) throws -> Void
@@ -2069,9 +2093,8 @@ extension ViewportSpatialOverlayProducer {
         }
         let minimumLength = CGFloat(minimumLength)
         let parallel = CGFloat(parallel)
-        let shaft = max(minimumLength, 18)
-        let wingLength = min(max(shaft * 0.22, 6), 14)
-        let wingParallel = max(shaft - wingLength, 0)
+        let wingLength = min(max(max(minimumLength, 18) * 0.22, 6), 14)
+        let wingParallel = parallel - wingLength
         let offset: (CGFloat, CGFloat) -> RealityViewportSpatialBatch.Offset = { parallel, perpendicular in
             .projected(
                 toward: toward,
@@ -2087,31 +2110,41 @@ extension ViewportSpatialOverlayProducer {
             ),
             RealityViewportSpatialBatch.CameraPoint(
                 anchor: anchor,
-                offset: offset(shaft, CGFloat(perpendicular))
-            ),
-            RealityViewportSpatialBatch.CameraPoint(
-                anchor: anchor,
-                offset: offset(wingParallel, CGFloat(perpendicular) + wingLength * 0.55)
-            ),
-            RealityViewportSpatialBatch.CameraPoint(
-                anchor: anchor,
-                offset: offset(shaft, CGFloat(perpendicular))
-            ),
-            RealityViewportSpatialBatch.CameraPoint(
-                anchor: anchor,
-                offset: offset(wingParallel, CGFloat(perpendicular) - wingLength * 0.55)
+                offset: offset(parallel, CGFloat(perpendicular))
             ),
         ]
-        // One line, five camera points, and one direction reference per point
-        // are admitted before the native batch repeats the same validation.
-        try checkpoint(11, 10, 0)
-        var value = RealityViewportSpatialBatch.CameraLine(
+        // Keep the shaft interactive while wings remain decorative. The native
+        // projected offset already applies `max(nativeLength, minimumLength)`;
+        // the tip uses the supplied parallel offset exactly once.
+        try checkpoint(1, 2, 0)
+        var shaft = RealityViewportSpatialBatch.CameraLine(
             points: points,
             color: color,
             depth: .annotation
         )
-        value.handleIndex = handleIndex
-        cameraLines.append(.init(family: .pattern, value: value))
+        shaft.handleIndex = interactive ? handleIndex : nil
+        shaft.hitTolerancePoints = interactive ? 10.0 : nil
+        cameraLines.append(.init(family: .pattern, value: shaft))
+
+        func appendWing(_ end: RealityViewportSpatialBatch.CameraPoint) throws {
+            var wing = RealityViewportSpatialBatch.CameraLine(
+                points: [points[1], end],
+                color: color,
+                depth: .annotation
+            )
+            wing.handleIndex = nil
+            wing.hitTolerancePoints = nil
+            try checkpoint(1, 2, 0)
+            cameraLines.append(.init(family: .pattern, value: wing))
+        }
+        try appendWing(.init(
+            anchor: anchor,
+            offset: offset(wingParallel, CGFloat(perpendicular) + wingLength * 0.55)
+        ))
+        try appendWing(.init(
+            anchor: anchor,
+            offset: offset(wingParallel, CGFloat(perpendicular) - wingLength * 0.55)
+        ))
 
         let glyphBounds = CGRect(x: -5, y: -5, width: 10, height: 10)
         let glyphPath: Path
@@ -2132,8 +2165,76 @@ extension ViewportSpatialOverlayProducer {
             ),
             color: color
         )
-        glyph.handleIndex = handleIndex
+        glyph.handleIndex = interactive ? handleIndex : nil
+        glyph.hitTolerancePoints = interactive ? 14.0 : nil
         try checkpoint(2, cameraPathPointCount(glyphPath) + 1, 1)
+        cameraPaths.append(.init(family: .pattern, value: glyph))
+    }
+
+    /// Emits a camera-independent source anchor followed by the explicit
+    /// perpendicular connector and parallel copy-count shaft used by the
+    /// density/curve guide footprints. Every guide segment is interactive;
+    /// only the terminal path receives the 14-point tip tolerance.
+    private static func appendPatternCameraGuide(
+        anchor: Point3D,
+        toward: Point3D,
+        parallel: Double,
+        perpendicular: Double,
+        color: SIMD4<Float>,
+        handleIndex: UInt32,
+        cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
+        cameraPaths: inout [ViewportSpatialOverlayInput.CameraPath],
+        checkpoint: (Int, Int, Int) throws -> Void
+    ) throws {
+        guard patternFinitePoint(anchor), patternFinitePoint(toward),
+              anchor.x != toward.x || anchor.y != toward.y || anchor.z != toward.z,
+              parallel.isFinite, parallel > 0,
+              perpendicular.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Pattern camera guide direction or offset is invalid."
+            )
+        }
+        let offset: (CGFloat, CGFloat) -> RealityViewportSpatialBatch.Offset = { parallel, perpendicular in
+            .directed(
+                toward: toward,
+                parallel: parallel,
+                perpendicular: perpendicular
+            )
+        }
+        let points = [
+            RealityViewportSpatialBatch.CameraPoint(
+                anchor: anchor,
+                offset: .fixed(.zero)
+            ),
+            RealityViewportSpatialBatch.CameraPoint(
+                anchor: anchor,
+                offset: offset(0, CGFloat(perpendicular))
+            ),
+            RealityViewportSpatialBatch.CameraPoint(
+                anchor: anchor,
+                offset: offset(CGFloat(parallel), CGFloat(perpendicular))
+            ),
+        ]
+        try checkpoint(2, 3, 0)
+        var line = RealityViewportSpatialBatch.CameraLine(
+            points: points,
+            color: color,
+            depth: .annotation
+        )
+        line.handleIndex = handleIndex
+        line.hitTolerancePoints = 10.0
+        cameraLines.append(.init(family: .pattern, value: line))
+
+        let glyphBounds = CGRect(x: -5, y: -5, width: 10, height: 10)
+        var glyph = RealityViewportSpatialBatch.CameraPath(
+            path: Path(ellipseIn: glyphBounds),
+            anchor: anchor,
+            offset: offset(CGFloat(parallel), CGFloat(perpendicular)),
+            color: color
+        )
+        glyph.handleIndex = handleIndex
+        glyph.hitTolerancePoints = 14.0
+        try checkpoint(2, cameraPathPointCount(glyph.path) + 1, 1)
         cameraPaths.append(.init(family: .pattern, value: glyph))
     }
 
@@ -2160,6 +2261,7 @@ extension ViewportSpatialOverlayProducer {
         diameterPoints: Float,
         color: SIMD4<Float>,
         handleIndex: UInt32?,
+        hitTolerancePoints: Float? = nil,
         markers: inout [ViewportSpatialOverlayInput.Marker],
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -2175,6 +2277,7 @@ extension ViewportSpatialOverlayProducer {
             color: color
         )
         value.handleIndex = handleIndex
+        value.hitTolerancePoints = hitTolerancePoints
         markers.append(.init(family: .pattern, value: value))
     }
 
@@ -2185,9 +2288,12 @@ extension ViewportSpatialOverlayProducer {
         projectedMinimumLength: CGFloat? = nil,
         projectedParallel: CGFloat = 0,
         projectedPerpendicular: CGFloat = -10,
+        directedParallel: CGFloat? = nil,
+        directedPerpendicular: CGFloat = -10,
         fixedOffset: CGPoint? = nil,
         color: SIMD4<Float>,
         handleIndex: UInt32?,
+        hitRectPoints: CGRect? = nil,
         labels: inout [ViewportSpatialOverlayInput.Label],
         checkpoint: (Int, Int, Int) throws -> Void
     ) throws {
@@ -2211,6 +2317,18 @@ extension ViewportSpatialOverlayProducer {
                 parallel: projectedParallel,
                 perpendicular: projectedPerpendicular
             )
+        } else if let directedParallel {
+            guard let toward,
+                  patternFinitePoint(toward),
+                  toward.x != anchor.x || toward.y != anchor.y || toward.z != anchor.z,
+                  directedParallel.isFinite, directedPerpendicular.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("Pattern label directed placement is invalid.")
+            }
+            offset = .directed(
+                toward: toward,
+                parallel: directedParallel,
+                perpendicular: directedPerpendicular
+            )
         } else if let fixedOffset {
             guard fixedOffset.x.isFinite, fixedOffset.y.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("Pattern label offset is not finite.")
@@ -2231,6 +2349,7 @@ extension ViewportSpatialOverlayProducer {
             color: color
         )
         value.handleIndex = handleIndex
+        value.hitRectPoints = hitRectPoints
         labels.append(.init(family: .pattern, value: value))
     }
 
@@ -2373,51 +2492,27 @@ extension ViewportSpatialOverlayProducer {
         return (points, last, tangent, totalLength)
     }
 
-    private static func patternCopyCountPoint(
-        _ guide: ViewportPatternAffordanceSource.CopyCountGuide,
-        copyCount: Int
-    ) throws -> (point: Point3D, toward: Point3D?) {
-        guard copyCount > 0 else {
-            throw RealityViewportSpatialBatch.invalid("Pattern copy count must be positive.")
-        }
-        switch guide {
-        case .linear(let basePoint, let direction, let distanceMeters, let mode):
-            let distance = mode == .spacing ? distanceMeters * Double(copyCount) : distanceMeters
-            let tip = try patternLinearTip(basePoint: basePoint, direction: direction, distanceMeters: distance)
-            return (tip, basePoint)
-        case .radial(let center, let axis, let referencePoint, let angleRadians, let mode):
-            let angle = mode == .spacing ? angleRadians * Double(copyCount) : angleRadians
-            let geometry = try patternRadialGeometry(
-                center: center,
-                axis: axis,
-                referencePoint: referencePoint,
-                angleRadians: angle
-            )
-            return (geometry.end, center)
-        case .curve(let pathPoints, let extentDistanceMeters):
-            let extent = try patternCurveExtent(pathPoints: pathPoints, distanceMeters: extentDistanceMeters)
-            let spacing = max(extent.totalLength * 0.08, 0.01)
-            let point = Point3D(
-                x: extent.tip.x + extent.tangent.x * spacing * Double(copyCount),
-                y: extent.tip.y + extent.tangent.y * spacing * Double(copyCount),
-                z: extent.tip.z + extent.tangent.z * spacing * Double(copyCount)
-            )
-            guard patternFinitePoint(point) else {
-                throw RealityViewportSpatialBatch.invalid("Pattern curve copy-count handle is not finite.")
-            }
-            return (point, extent.tip)
-        }
+    private struct PatternCopyCountFootprint {
+        let guidePoints: [Point3D]
+        let tipPoint: Point3D?
+        let cameraAnchor: Point3D
+        let cameraToward: Point3D
+        let cameraMinimumLength: Double
+        let cameraParallel: Double
+        let cameraPerpendicular: Double
+        let cameraInteractive: Bool
+        let cameraOffsetPolyline: Bool
     }
 
-    private static func patternCopyCountCameraGeometry(
+    private static func patternCopyCountFootprint(
         _ guide: ViewportPatternAffordanceSource.CopyCountGuide,
         copyCount: Int
-    ) throws -> (anchor: Point3D, toward: Point3D, parallel: Double, perpendicular: Double) {
+    ) throws -> PatternCopyCountFootprint {
         guard copyCount > 0 else {
             throw RealityViewportSpatialBatch.invalid("Pattern copy count must be positive.")
         }
-        let parallel = 28.0 * Double(copyCount)
-        guard parallel.isFinite, parallel > 0 else {
+        let handleOffset = 28.0 * Double(copyCount)
+        guard handleOffset.isFinite, handleOffset > 0 else {
             throw RealityViewportSpatialBatch.exhausted()
         }
         switch guide {
@@ -2428,11 +2523,31 @@ extension ViewportSpatialOverlayProducer {
                 direction: direction,
                 distanceMeters: distance
             )
-            return (
-                basePoint,
-                tip,
-                parallel,
-                mode == .extent ? 24 : 0
+            let cameraOffsetPolyline = mode == .extent
+            let cameraAnchor: Point3D
+            let cameraToward: Point3D
+            if cameraOffsetPolyline {
+                let tangent = patternNormalized(direction)
+                cameraAnchor = tip
+                cameraToward = Point3D(
+                    x: tip.x + tangent.x,
+                    y: tip.y + tangent.y,
+                    z: tip.z + tangent.z
+                )
+            } else {
+                cameraAnchor = basePoint
+                cameraToward = tip
+            }
+            return .init(
+                guidePoints: [basePoint, tip],
+                tipPoint: cameraOffsetPolyline ? nil : tip,
+                cameraAnchor: cameraAnchor,
+                cameraToward: cameraToward,
+                cameraMinimumLength: mode == .spacing ? handleOffset : 0,
+                cameraParallel: mode == .spacing ? 0 : handleOffset,
+                cameraPerpendicular: mode == .extent ? 24 : 0,
+                cameraInteractive: true,
+                cameraOffsetPolyline: cameraOffsetPolyline
             )
         case .radial(let center, let axis, let referencePoint, let angleRadians, let mode):
             let angle = mode == .spacing ? angleRadians * Double(copyCount) : angleRadians
@@ -2442,28 +2557,44 @@ extension ViewportSpatialOverlayProducer {
                 referencePoint: referencePoint,
                 angleRadians: angle
             )
-            let toward = Point3D(
+            let tangentPoint = Point3D(
                 x: geometry.end.x + geometry.tangent.x,
                 y: geometry.end.y + geometry.tangent.y,
                 z: geometry.end.z + geometry.tangent.z
             )
-            return (
-                geometry.end,
-                toward,
-                parallel,
-                mode == .extent ? 24 : 0
+            let cameraOffsetPolyline = mode == .extent
+            return .init(
+                guidePoints: geometry.arc,
+                tipPoint: geometry.end,
+                cameraAnchor: geometry.end,
+                cameraToward: tangentPoint,
+                cameraMinimumLength: 0,
+                cameraParallel: mode == .extent ? handleOffset : 0,
+                cameraPerpendicular: mode == .extent ? 24 : 0,
+                cameraInteractive: mode == .extent,
+                cameraOffsetPolyline: cameraOffsetPolyline
             )
         case .curve(let pathPoints, let extentDistanceMeters):
             let extent = try patternCurveExtent(
                 pathPoints: pathPoints,
                 distanceMeters: extentDistanceMeters
             )
-            let toward = Point3D(
+            let tangentPoint = Point3D(
                 x: extent.tip.x + extent.tangent.x,
                 y: extent.tip.y + extent.tangent.y,
                 z: extent.tip.z + extent.tangent.z
             )
-            return (extent.tip, toward, parallel, 24)
+            return .init(
+                guidePoints: extent.points,
+                tipPoint: nil,
+                cameraAnchor: extent.tip,
+                cameraToward: tangentPoint,
+                cameraMinimumLength: 0,
+                cameraParallel: handleOffset,
+                cameraPerpendicular: 24,
+                cameraInteractive: true,
+                cameraOffsetPolyline: true
+            )
         }
     }
 

@@ -277,7 +277,7 @@ struct ViewportSketchCurveHandleCandidate: Equatable {
     var endAngleRadians: Double?
 }
 
-struct ViewportSketchCurveHandleTarget: Equatable {
+struct ViewportSketchCurveHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
@@ -321,7 +321,7 @@ struct ViewportSketchDimensionCandidate: Equatable {
     var endAngleRadians: Double?
 }
 
-struct ViewportSketchDimensionTarget: Equatable {
+struct ViewportSketchDimensionTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
@@ -356,7 +356,7 @@ struct ViewportSketchPointHandleDragState: Equatable {
     var viewportDelta: CGPoint
 }
 
-struct ViewportSketchPointHandleTarget: Equatable {
+struct ViewportSketchPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
@@ -378,7 +378,7 @@ struct ViewportSketchPointHandleIdentity: Equatable, Sendable {
     var handle: SketchEntityPointHandle
 }
 
-struct ViewportSplineControlPointHandleTarget: Equatable {
+struct ViewportSplineControlPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
@@ -515,7 +515,7 @@ struct ViewportSurfaceFrameHandleIdentity: Equatable, Sendable {
     var axis: ViewportSurfaceFrameAxis
 }
 
-struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable {
+struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var target: SelectionTarget
     var componentID: SelectionComponentID
@@ -531,7 +531,7 @@ struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable {
     }
 }
 
-struct ViewportSurfaceControlPointHandleTarget: Equatable {
+struct ViewportSurfaceControlPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var target: SelectionReference
     var point: Point3D
@@ -554,7 +554,7 @@ struct ViewportSurfaceControlPointHandleIdentity: Equatable, Sendable {
     var target: SelectionReference
 }
 
-struct ViewportSurfaceTrimEndpointHandleTarget: Equatable {
+struct ViewportSurfaceTrimEndpointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var target: SelectionReference
     var endpoint: SurfaceTrimEndpoint
@@ -582,7 +582,7 @@ struct ViewportSurfaceTrimEndpointHandleIdentity: Equatable, Sendable {
     var endpoint: SurfaceTrimEndpoint
 }
 
-struct ViewportSurfaceTrimControlPointHandleTarget: Equatable {
+struct ViewportSurfaceTrimControlPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var target: SelectionReference
     var controlPointIndex: Int
@@ -646,7 +646,7 @@ enum ViewportPolySplineSurfaceVertexLocalAxis: CaseIterable, Equatable {
     }
 }
 
-enum ViewportPolySplineSurfaceVertexDragMode: Equatable {
+enum ViewportPolySplineSurfaceVertexDragMode: Equatable, Sendable {
     case planar
     case axis(ViewportCoordinateAxis)
     case localAxis(ViewportPolySplineSurfaceVertexLocalAxis, direction: Vector3D)
