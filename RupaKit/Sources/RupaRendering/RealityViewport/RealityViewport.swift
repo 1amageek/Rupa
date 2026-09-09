@@ -875,16 +875,55 @@ final class RealityViewport {
         return (triangle: triangle, point: worldPoint)
     }
 
+    /// The occurrences this mounted frame draws inside `rect`, in the retained
+    /// plan's order and de-duplicated.
+    ///
+    /// The rectangle is answered from `surfaceResources.plan` — the plan this
+    /// frame itself drew — and from this frame's own projection and surface
+    /// query, so the geometry it projects and the pixels it samples can never
+    /// belong to two different plans. Section clipping, occlusion and back-face
+    /// retention come from the surface query itself, so this path adds no
+    /// filter of its own.
+    ///
+    /// An empty result is a valid answer once the frame is mounted and holds
+    /// geometry; readiness, camera revision, projection and provenance failures
+    /// remain typed. The bounded cost contract belongs to
+    /// `ViewportNativeOccurrenceRectangleResolver`.
+    func occurrenceIDs(intersecting rect: CGRect, revision: UInt64) throws -> [SceneOccurrenceID] {
+        guard appliedViewportRevision == revision else {
+            throw Self.queryFailure("The native occurrence rectangle query uses a stale camera revision.")
+        }
+        guard root.isEnabled, clipper.isEnabled, content != nil else {
+            throw Self.queryFailure("The native occurrence rectangle query is unavailable for the mounted frame.")
+        }
+        guard root.scene != nil else {
+            throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
+        }
+        guard !entries.isEmpty, geometryRoot.isEnabled, let plan = surfaceResources?.plan else {
+            return []
+        }
+        var occurrences: [MeshSourcePresentationOccurrenceView] = []
+        occurrences.reserveCapacity(plan.occurrences.count)
+        plan.forEachOccurrence { occurrences.append($0) }
+        return try ViewportNativeOccurrenceRectangleResolver.occurrenceIDs(
+            intersecting: rect,
+            occurrences: occurrences,
+            project: { try self.projectedPointWithinDepthRange($0, revision: revision) },
+            drawnOccurrenceID: { try self.surfaceHit(at: $0, revision: revision)?.triangle.occurrenceID }
+        )
+    }
+
     // FIXME(INCOMPLETE_IMPLEMENTATION): These hits are the production input
     // authority only for the migrated routes. `Viewport.beginViewportPress` and
     // `Viewport.hover` resolve the prepared axis handles and the body transform
     // affordance from them; the sketch, curve, surface, pattern,
     // construction-plane and profile routes still fall through to the legacy
     // CPU selectors. RK-4.2.2/3 completes the cutover by preparing records for
-    // those routes. Rectangle selection no longer waits on this method:
+    // those routes. Rectangle selection does not wait on this method at all:
     // `Viewport.selectionDragTarget` answers CAD face, edge and vertex
-    // rectangles from prepared topology through this same mounted frame, and
-    // only the occurrence rectangle still projects through the plan.
+    // rectangles from prepared topology, and the occurrence rectangle from
+    // `occurrenceIDs(intersecting:revision:)`, both through this same mounted
+    // frame.
     func spatialHandleHits(at point: CGPoint, revision: UInt64) throws -> [UInt32] {
         guard point.x.isFinite, point.y.isFinite, appliedViewportRevision == revision,
               root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {

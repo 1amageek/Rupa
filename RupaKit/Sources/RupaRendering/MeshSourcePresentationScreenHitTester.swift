@@ -165,52 +165,6 @@ struct MeshSourcePresentationScreenHitTester {
         return distanceSquared(point, CGPoint(x: a.x + t * x, y: a.y + t * y))
     }
 
-    func occurrenceIDs(
-        intersecting rect: CGRect,
-        in plan: MeshSourcePresentationRenderPlan,
-        layout: ViewportLayout,
-        sectionGeometryResolver: MeshSourcePresentationSectionGeometryResolver? = nil,
-        cullBackFaces: Bool = false
-    ) -> [SceneOccurrenceID] {
-        let normalizedRect = rect.standardized
-        guard normalizedRect.isEmpty == false else {
-            return []
-        }
-        var occurrenceIDs: [SceneOccurrenceID] = []
-        var seen: Set<SceneOccurrenceID> = []
-        plan.forEachTriangle { triangle in
-            guard seen.contains(triangle.occurrenceID) == false else {
-                return
-            }
-            let polygon: ViewportTrianglePolygon
-            if let sectionGeometryResolver {
-                guard let resolvedPolygon = sectionGeometryResolver.polygon(for: triangle) else {
-                    return
-                }
-                polygon = resolvedPolygon
-            } else {
-                polygon = ViewportTrianglePolygon(
-                    first: point3D(triangle.firstPosition),
-                    second: point3D(triangle.secondPosition),
-                    third: point3D(triangle.thirdPosition)
-                )
-            }
-            guard !cullBackFaces || isFrontFacing(polygon, layout: layout) else {
-                return
-            }
-            guard polygonIntersects(
-                normalizedRect,
-                polygon: polygon,
-                layout: layout
-            ) else {
-                return
-            }
-            seen.insert(triangle.occurrenceID)
-            occurrenceIDs.append(triangle.occurrenceID)
-        }
-        return occurrenceIDs
-    }
-
     /// Metal uses counter-clockwise front faces in clip space. ViewportLayout
     /// projects to a y-down AppKit coordinate system, so the equivalent screen
     /// winding is clockwise (negative signed area).
@@ -226,76 +180,6 @@ struct MeshSourcePresentationScreenHitTester {
         let signedArea = (second.x - first.x) * (third.y - first.y)
             - (second.y - first.y) * (third.x - first.x)
         return signedArea < 0
-    }
-
-    private func polygonIntersects(
-        _ rect: CGRect,
-        polygon: ViewportTrianglePolygon,
-        layout: ViewportLayout
-    ) -> Bool {
-        let projected = layout.projectedPolygon(polygon.points).map(\.point)
-        guard projected.count >= 3,
-              rect.intersects(projectedBounds(of: projected)) else {
-            return false
-        }
-        let first = projected[0]
-        let second = projected[1]
-        let third = projected[2]
-        let fourth = projected.count > 3 ? projected[3] : nil
-
-        if rect.contains(first) || rect.contains(second) || rect.contains(third) {
-            return true
-        }
-        if let fourth, rect.contains(fourth) {
-            return true
-        }
-
-        let topLeft = CGPoint(x: rect.minX, y: rect.minY)
-        let topRight = CGPoint(x: rect.maxX, y: rect.minY)
-        let bottomRight = CGPoint(x: rect.maxX, y: rect.maxY)
-        let bottomLeft = CGPoint(x: rect.minX, y: rect.maxY)
-        if polygonContains(topLeft, first: first, second: second, third: third, fourth: fourth)
-            || polygonContains(topRight, first: first, second: second, third: third, fourth: fourth)
-            || polygonContains(bottomRight, first: first, second: second, third: third, fourth: fourth)
-            || polygonContains(bottomLeft, first: first, second: second, third: third, fourth: fourth) {
-            return true
-        }
-
-        if segmentIntersectsRect(first, second, rect: rect)
-            || segmentIntersectsRect(second, third, rect: rect) {
-            return true
-        }
-        if let fourth {
-            return segmentIntersectsRect(third, fourth, rect: rect)
-                || segmentIntersectsRect(fourth, first, rect: rect)
-        }
-        return segmentIntersectsRect(third, first, rect: rect)
-    }
-
-    private func polygonContains(
-        _ point: CGPoint,
-        first: CGPoint,
-        second: CGPoint,
-        third: CGPoint,
-        fourth: CGPoint?
-    ) -> Bool {
-        if barycentricWeights(
-            for: point,
-            first: first,
-            second: second,
-            third: third
-        ) != nil {
-            return true
-        }
-        guard let fourth else {
-            return false
-        }
-        return barycentricWeights(
-            for: point,
-            first: first,
-            second: third,
-            third: fourth
-        ) != nil
     }
 
     func segmentIntersectsRect(

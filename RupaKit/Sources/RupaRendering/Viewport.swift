@@ -108,7 +108,6 @@ public struct Viewport: View {
     @State private var overlayRevision = ViewportSpatialOverlayRevision()
     @State private var gridFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var nativeGridReadout: (rendererID: ObjectIdentifier, value: ViewportProjectedGrid.ScaleReadout)?
-    @State private var presentationSectionGeometryCache = MeshSourcePresentationSectionGeometryCache()
     @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
@@ -274,10 +273,6 @@ public struct Viewport: View {
 
     private var shading: ViewportShading {
         activeControlSession.shading
-    }
-
-    private var isBackfaceCullingActive: Bool {
-        shading.isBackfaceCullingActive(in: displayMode)
     }
 
     private var viewportBackground: Color {
@@ -1801,33 +1796,6 @@ public struct Viewport: View {
         )
     }
 
-
-
-
-    private func presentationSectionGeometryResolver(
-        sceneKey: ViewportSceneSnapshotKey? = nil
-    ) -> MeshSourcePresentationSectionGeometryResolver? {
-        guard let presentationScene,
-              let sectionClippingPlan else {
-            presentationSectionGeometryCache.invalidate()
-            return nil
-        }
-        let sceneKey = sceneKey ?? sceneSnapshotKey(usesDragPreviewDocument: true)
-        let cacheKey = MeshSourcePresentationSectionGeometryCache.Key(
-            presentationSnapshotID: presentationScene.snapshotID,
-            sceneSnapshotKey: sceneKey,
-            plane: sectionAnalysis?.plane,
-            toleranceMeters: sectionAnalysis?.toleranceMeters
-        )
-        return presentationSectionGeometryCache.resolver(for: cacheKey) {
-            MeshSourcePresentationSectionGeometryResolver(
-                sectionPlan: sectionClippingPlan,
-                plane: sectionAnalysis?.plane,
-                toleranceMeters: sectionAnalysis?.toleranceMeters
-            )
-        }
-    }
-
     private func presentationSurfaceHit(
         at point: CGPoint
     ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
@@ -1847,36 +1815,26 @@ public struct Viewport: View {
         return identity
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): This rectangle query still projects
-    // through `ViewportLayout` and the plan's own screen hit tester instead of
-    // the mounted native frame, so an occurrence is admitted from its projected
-    // triangles with no depth test against what the frame actually drew.
-    //
-    // Production path: `selectionDragTarget(from:to:size:)` calls this for the
-    // `.all` and `.object` scopes, whose rectangle selects whole occurrences,
-    // and `legacySelectionRectangleHits(in:scene:layout:)` calls it to decide
-    // which legacy body hits the presentation still shows.
-    //
-    // Do not treat rectangle selection as fully migrated while this is
-    // reachable: an occurrence rectangle needs a native query answering from
-    // the same frame as the point path, after which this method is deleted
-    // rather than reimplemented.
+    /// The occurrences the mounted native frame draws inside `rect`, answered
+    /// by the same frame, identity and camera revision as the point path.
+    ///
+    /// An empty result means the frame drew no occurrence there. A frame that
+    /// cannot answer is a typed failure, never an empty rectangle: the caller
+    /// publishes nothing rather than a selection the frame never judged.
+    ///
+    /// With no presentation mounted there is no native frame to ask and the
+    /// whole legacy rectangle path runs, so the empty result here is the
+    /// absence of a presentation occurrence rather than a refused query.
     private func presentationOccurrenceIDs(
-        intersecting rect: CGRect,
-        layout: ViewportLayout
-    ) -> [SceneOccurrenceID] {
-        guard let presentationScene else {
+        intersecting rect: CGRect
+    ) throws -> [SceneOccurrenceID] {
+        guard presentationScene != nil else {
             return []
         }
-        guard let plan = currentPresentationPlan(for: presentationScene) else {
-            return []
-        }
-        return MeshSourcePresentationScreenHitTester().occurrenceIDs(
+        return try presentationPlanCache.occurrenceIDs(
             intersecting: rect,
-            in: plan,
-            layout: layout,
-            sectionGeometryResolver: presentationSectionGeometryResolver(),
-            cullBackFaces: isBackfaceCullingActive
+            for: presentationQueryIdentity(),
+            revision: activeControlSession.revision
         )
     }
 
@@ -2044,9 +2002,9 @@ public struct Viewport: View {
     ///
     /// `.all` and `.object` are excluded because a rectangle that allows object
     /// hits selects whole occurrences: the legacy filter already drops every
-    /// body hit there, and `presentationOccurrenceIDs(intersecting:layout:)`
-    /// carries the result. `.region` and `.sketchEntity` name geometry the
-    /// prepared topology does not describe.
+    /// body hit there, and the native occurrence rectangle carries the result.
+    /// `.region` and `.sketchEntity` name geometry the prepared topology does
+    /// not describe.
     private var usesNativeCADSubshapeRectangle: Bool {
         guard presentationScene != nil else {
             return false
@@ -2290,14 +2248,6 @@ public struct Viewport: View {
         guard let renderer = presentationPlanCache.displaySurface(for: identity),
               surfaceFailure?.rendererID == ObjectIdentifier(renderer) else { return nil }
         return surfaceFailure?.error
-    }
-
-    private func currentPresentationPlan(for scene: UniversalViewportScene) -> MeshSourcePresentationRenderPlan? {
-        guard case .success(let identity) = presentationPreparation,
-              scene.snapshotID == identity.snapshotID,
-              presentationPlanCache.surface(for: identity) != nil,
-              presentationFrameFailure(for: identity) == nil else { return nil }
-        return presentationPlanCache.plan(for: scene)
     }
 
     private var activeMeasurementPlane: SketchPlane? {
@@ -10011,6 +9961,24 @@ public struct Viewport: View {
         if usesNativeCADSubshapeRectangle {
             nativeResult = try presentationCADSubshapeRectangleHits(in: rect, in: scene)
         }
+        let requiresLegacy: Bool
+        switch nativeResult {
+        case .resolved(_, let requiresLegacyResidual):
+            requiresLegacy = requiresLegacyResidual
+        case .unsupported:
+            requiresLegacy = true
+        }
+        // The occurrence rectangle is one query over the mounted frame, so both
+        // consumers below read the same answer: the legacy filter needs it to
+        // know which bodies the presentation still shows, and an object-scope
+        // drag reports it as the selection. A rectangle the native query
+        // resolves on its own asks the frame nothing.
+        let visibleOccurrenceIDs: [SceneOccurrenceID]
+        if requiresLegacy || selectionHitPolicy.allowsObjectHits {
+            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect)
+        } else {
+            visibleOccurrenceIDs = []
+        }
         let hits: [ViewportHit]
         switch nativeResult {
         case .resolved(let nativeHits, let requiresLegacyResidual):
@@ -10018,20 +9986,24 @@ public struct Viewport: View {
                 let residual = legacySelectionRectangleHits(
                     in: rect,
                     scene: scene,
-                    layout: layout
+                    layout: layout,
+                    visiblePresentationOccurrenceIDs: visibleOccurrenceIDs
                 )
                 hits = nativeHits + residual.filter { nativeRectangleOwnsLegacyHit($0) == false }
             } else {
                 hits = nativeHits
             }
         case .unsupported:
-            hits = legacySelectionRectangleHits(in: rect, scene: scene, layout: layout)
+            hits = legacySelectionRectangleHits(
+                in: rect,
+                scene: scene,
+                layout: layout,
+                visiblePresentationOccurrenceIDs: visibleOccurrenceIDs
+            )
         }
         return ViewportSelectionDragTarget(
             hits: hits,
-            presentationOccurrenceIDs: selectionHitPolicy.allowsObjectHits
-                ? presentationOccurrenceIDs(intersecting: rect, layout: layout)
-                : []
+            presentationOccurrenceIDs: selectionHitPolicy.allowsObjectHits ? visibleOccurrenceIDs : []
         )
     }
 
@@ -10047,13 +10019,19 @@ public struct Viewport: View {
     // cannot name — one without prepared topology targets, or, for `.vertex`,
     // one carrying surface knot, span or trim handles.
     //
+    // Which occurrences the presentation shows inside the rectangle is no
+    // longer decided here: the caller answers that from the mounted native
+    // frame and passes the result in, so only the hits themselves still come
+    // from the legacy projection.
+    //
     // Do not treat rectangle selection as migrated while this is reachable:
     // those bodies need a prepared native identity first, after which this
     // method is deleted with the resolver rather than reimplemented.
     private func legacySelectionRectangleHits(
         in rect: CGRect,
         scene: ViewportScene,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        visiblePresentationOccurrenceIDs: [SceneOccurrenceID]
     ) -> [ViewportHit] {
         let hitScene = sceneBySuppressingSketches(
             scene,
@@ -10071,10 +10049,7 @@ public struct Viewport: View {
         }
         return MeshSourcePresentationLegacyHitFilter().selectionHits(
             rawHits,
-            visiblePresentationOccurrenceIDs: presentationOccurrenceIDs(
-                intersecting: rect,
-                layout: layout
-            ),
+            visiblePresentationOccurrenceIDs: visiblePresentationOccurrenceIDs,
             navigation: presentationSceneNodeIDByOccurrenceID,
             exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs,
             selectionHitPolicy: selectionHitPolicy

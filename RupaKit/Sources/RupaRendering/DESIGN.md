@@ -871,9 +871,8 @@ independent tessellator is never an alternative implementation.
    rectangle filter already drops every body hit wherever object hits are
    allowed, so a rectangle there selects whole occurrences and never a
    sub-shape. Region and sketch entity keep their existing routes. The
-   occurrence rectangle that answers `all` and `object` still projects through
-   `ViewportLayout` instead of the mounted camera and carries an explicit
-   incompleteness marker at its declaration.
+   occurrence rectangle that answers `all` and `object` is a separate native
+   query over the same mounted frame, described after the legacy residual below.
    A vertex is inside the rectangle when its projected point is, with no
    tolerance, which is the containment the replaced pixel scan required, and it
    is then admitted by exactly the section-then-occlusion rule a pointer vertex
@@ -950,6 +949,71 @@ independent tessellator is never an alternative implementation.
    departures are the half-occluded edge above, and a face whose first
    in-rectangle triangle is occluded at its clipped centroid while a later
    triangle of the same face is not.
+
+   The occurrence rectangle that answers `all` and `object` is its own native
+   query, owned by `RealityViewport.occurrenceIDs(intersecting:revision:)` and
+   forwarded by the plan cache under the same exact-ready identity and camera
+   revision as the point path. It answers from the mounted frame's own retained
+   plan, so the geometry it projects and the pixels it samples can never belong
+   to two different plans. `usesNativeCADSubshapeRectangle` is not widened for
+   it: the sub-shape rectangle and the occurrence rectangle are different
+   questions over one frame, gated separately by
+   `selectionHitPolicy.allowsObjectHits` and by whether the legacy residual
+   still runs.
+   A candidate occurrence is first tested by projecting the eight corners of its
+   world-space bounding box, under the same rule the CAD face runs use: it is
+   skipped only when all eight project inside the camera's depth interval and
+   their screen bounds miss the rectangle. A surviving candidate has each of its
+   retained world positions projected once — the shape
+   `MeshSourcePresentationOccurrenceView` exists for — and its triangles are
+   then scanned in emission order over those already projected points until one
+   projected polygon meets the rectangle. The clipped centroid of that triangle
+   is the representative point, and one native surface query there decides the
+   candidate.
+   The surface query answers with the occurrence the frame draws at that pixel,
+   which carries two consequences. The occurrence it names is admitted whether
+   or not it is the candidate that asked, because the frame drawing it at a
+   pixel inside the rectangle is the admission evidence itself; a candidate
+   admitted that way is never asked again. And a candidate the frame answers
+   with a different occurrence, or with nothing, is not admitted. That single
+   answer is the section, occlusion and back-face test together: the frame draws
+   only what survived the section, only what nothing nearer covers, and only the
+   faces it retains, so this path adds no depth compare, no section predicate
+   and no culling filter of its own.
+   The stated limitation is the one the CAD face rectangle already carries, for
+   the same reason: the decision is taken at one point of the overlap, so an
+   occurrence occluded at its representative point is not admitted even when
+   another part of it is visible inside the rectangle. Emission order makes that
+   point deterministic, so a body either selects or does not, consistently
+   across a drag.
+   The cost is bounded by contract rather than by measurement. Per candidate:
+   eight bounding-box projections, one projection per retained source position,
+   CPU clipping per triangle until the first overlap, and exactly one native
+   surface query. Across a plan those are bounded by
+   `MeshSourcePresentationPlanLimits.standard` — 640 occurrences and 188,550
+   positions — and the surface queries by one per candidate, never one per
+   triangle. This is a correctness contract for the same reason the sub-shape
+   bound is: a rectangle drag re-runs the query on every pointer move, and a
+   per-triangle native query would make one input event cost a function of
+   tessellation density.
+   The result is returned in plan order, de-duplicated. Both consumers depend on
+   that determinism for stability and not for meaning:
+   `MeshSourcePresentationLegacyHitFilter` converts it to a set, and
+   `MainView.mergedSelectionTargets` appends it after the hit-derived targets and
+   drops duplicates.
+   The failure contract changes with this seam. The replaced query answered an
+   unready or absent presentation with an empty list, which the legacy filter
+   read as "no occurrence is visible" and used to drop every legacy body hit.
+   The native query reports readiness, camera revision, and projection failures
+   as typed errors instead, so `selectionDragTarget` throws and both publishers
+   report nothing. `all`, `object`, `region` and `sketch entity` therefore gain
+   the throwing surface that face, edge and vertex already had through the CAD
+   sub-shape rectangle. An empty result now means only what it says: the mounted
+   frame drew no occurrence inside the rectangle. `Viewport` computes the set at
+   most once per rectangle update and passes it to the legacy filter as a
+   parameter, so the two consumers cannot disagree, and the query does not run
+   at all for a face, edge or vertex rectangle the native path resolved with no
+   legacy residual.
    `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
    the behavioral evidence for this resolver: the rank-then-metric order across
    bodies, the run lookup that names the CAD face of the drawn triangle
@@ -967,10 +1031,24 @@ independent tessellator is never an alternative implementation.
    different run, rejection of the sub-shapes the section removed, the
    de-duplication of one component named by two runs, the typed failure for an
    unrepresentable identity, and the absence of any rank order in the result.
-   Both suites drive the
-   resolver through synthetic frame closures, so they prove its rules and not
-   the mounted RealityKit frame. The two frame answers those closures stand in
-   for are proven on a mounted frame by
+   `Tests/RupaRenderingTests/ViewportNativeOccurrenceRectangleResolverTests.swift`
+   owns the occurrence rectangle rules: a visible occurrence admitted, one fully
+   behind another rejected, a candidate whose bounds miss the rectangle skipped
+   with no surface query spent on it, no skip for a corner the camera cannot
+   project, the reuse that admits the occurrence a query names without asking
+   that occurrence again, exactly one surface query per candidate that reaches
+   the frame, plan-order output independent of admission order, an occurrence
+   the frame answers with nothing rejected, the typed failure for a degenerate
+   rectangle, and the typed failure for an answer naming an occurrence the
+   queried plan does not hold. Its candidates are real occurrence views taken
+   from a built plan, so the retained shape the cost contract is stated against
+   is the plan's own.
+   All three suites drive their resolver
+   through synthetic frame closures, so they prove its rules and not
+   the mounted RealityKit frame. The occurrence rectangle stands in for
+   `projectedPointWithinDepthRange` and `surfaceHit`, whose mounted-frame
+   behaviour the point path already owns. The two further frame answers the CAD
+   sub-shape closures stand in for are proven on a mounted frame by
    `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:
    that `usesPerspectiveProjection(revision:)` reports the projection the frame
    was actually drawn with under both cameras, and that

@@ -551,7 +551,11 @@ enum ViewportNativeCADTopologyResolver {
     /// surviving polygon is convex and lies inside both. The mean of a convex
     /// polygon's vertices lies inside it, which is what lets one native surface
     /// query at that point stand for the whole overlap.
-    private static func clippedCentroid(
+    ///
+    /// `ViewportNativeOccurrenceRectangleResolver` shares this rule so the
+    /// sub-shape rectangle and the occurrence rectangle cannot disagree about
+    /// what meeting the rectangle means.
+    static func clippedCentroid(
         _ first: CGPoint,
         _ second: CGPoint,
         _ third: CGPoint,

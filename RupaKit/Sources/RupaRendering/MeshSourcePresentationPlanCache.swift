@@ -87,6 +87,17 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).surfaceHit(at: point, revision: revision)
     }
 
+    /// Answers the selection rectangle from the frame mounted for `identity`,
+    /// never a frame drawn for a different scene or snapshot. The result is the
+    /// answering frame's own plan order.
+    func occurrenceIDs(
+        intersecting rect: CGRect,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> [SceneOccurrenceID] {
+        try querySurface(for: identity).occurrenceIDs(intersecting: rect, revision: revision)
+    }
+
     /// Resolves the native priority order the mounted frame drew.
     func interactionRecords(
         at point: CGPoint,
