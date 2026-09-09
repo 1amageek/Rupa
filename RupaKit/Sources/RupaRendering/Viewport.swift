@@ -2041,10 +2041,12 @@ public struct Viewport: View {
     /// section rule that drew the frame.
     ///
     /// This is a set query with no rank: each admitted sub-shape is reported
-    /// once, keyed by its prepared `SelectionComponentID`. A `SubshapeID` names
-    /// the feature it belongs to, so two scene items can never claim one
-    /// identity and de-duplicating by it loses nothing a `SelectionComponent`
-    /// could express.
+    /// once per placement, keyed by the identity `SelectionTarget` defines of a
+    /// `SceneNodeID` together with its `SelectionComponent`. A `SubshapeID`
+    /// names the feature it belongs to, so scene items that place one shared
+    /// feature more than once share its face, edge and vertex identities.
+    /// De-duplicating by `SelectionComponentID` alone would drop every
+    /// placement after the first.
     private func presentationCADSubshapeRectangleHits(
         in rect: CGRect,
         in scene: ViewportScene
@@ -2068,7 +2070,7 @@ public struct Viewport: View {
             for: identity, revision: revision
         )
         var hits: [ViewportHit] = []
-        var admitted: Set<SelectionComponentID> = []
+        var admitted: Set<SelectionTarget> = []
         var resolvedTopology = false
         var requiresLegacyResidual = false
         for item in scene.items {
@@ -2122,26 +2124,54 @@ public struct Viewport: View {
                 retainsSectionedPoint: retainsSectionedPoint,
                 bodyDrawsTriangle: bodyDrawsTriangle
             )
-            for selectionComponent in components {
-                guard let componentID = Self.rectangleComponentID(selectionComponent),
-                      admitted.insert(componentID).inserted else {
-                    continue
-                }
-                hits.append(
-                    ViewportHit(
-                        featureID: item.featureID,
-                        sceneNodeID: sceneNodeID,
-                        kind: .body,
-                        pickingBackend: .native,
-                        selectionComponent: selectionComponent
-                    )
-                )
-            }
+            Self.appendRectangleSubshapeHits(
+                components,
+                featureID: item.featureID,
+                sceneNodeID: sceneNodeID,
+                into: &hits,
+                admitted: &admitted
+            )
         }
         guard resolvedTopology else {
             return .unsupported
         }
         return .resolved(hits: hits, requiresLegacyResidual: requiresLegacyResidual)
+    }
+
+    /// Appends the rectangle hits one scene item's admitted sub-shapes
+    /// contribute, refusing a sub-shape this rectangle already reported.
+    ///
+    /// `admitted` spans the whole scene, so the identity it holds has to keep
+    /// the placements of one shared feature apart: `ViewportSceneBuilder` gives
+    /// every `SceneNodeID` that places a feature its own scene item over the
+    /// same prepared topology, and those items therefore carry identical face,
+    /// edge and vertex `SelectionComponentID`s. `SelectionTarget` is the
+    /// identity the selection already names an editable sub-shape by, so the
+    /// rectangle de-duplicates by it and reports each placement once.
+    static func appendRectangleSubshapeHits(
+        _ components: [SelectionComponent],
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID,
+        into hits: inout [ViewportHit],
+        admitted: inout Set<SelectionTarget>
+    ) {
+        for selectionComponent in components {
+            // The resolver reports face, edge and vertex components only; a
+            // component naming no generated sub-shape has no rectangle identity
+            // to report.
+            guard rectangleComponentID(selectionComponent) != nil else { continue }
+            let target = SelectionTarget(sceneNodeID: sceneNodeID, component: selectionComponent)
+            guard admitted.insert(target).inserted else { continue }
+            hits.append(
+                ViewportHit(
+                    featureID: featureID,
+                    sceneNodeID: sceneNodeID,
+                    kind: .body,
+                    pickingBackend: .native,
+                    selectionComponent: selectionComponent
+                )
+            )
+        }
     }
 
     /// Whether the native rectangle query already owns this legacy hit.
