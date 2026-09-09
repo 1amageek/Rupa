@@ -1731,6 +1731,7 @@ private struct ProjectMainViewContent: View {
             onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
             onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
             onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
+            onSketchTransformCommit: viewportSketchTransformCommitHandler,
             onCommandConfirm: viewportCommandConfirmHandler,
             onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
             onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
@@ -1889,7 +1890,6 @@ private struct ProjectMainViewContent: View {
         return { target in
             handleViewportEdgeFilletDrag(target)
         }
-            onSketchTransformCommit: viewportSketchTransformCommitHandler,
     }
 
     private var viewportRegionOffsetDragHandler: ((ViewportRegionOffsetDragTarget) -> Void)? {
