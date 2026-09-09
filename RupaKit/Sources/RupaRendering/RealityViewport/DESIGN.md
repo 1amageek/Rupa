@@ -845,10 +845,16 @@ of screen-baked dashes.
    span, the shared minimum near distance, and an infinite far plane.
    Orthographic uses full viewport height divided by twice the target-plane
    pixels per meter as its native vertical half-extent; if `E` is the admitted
-   scene depth extent, its eye is two `E` in front of the viewport-center point
-   on the focus plane and its near/far distances are `E` and `3E`. These values
-   preserve the existing admitted near/depth interval without a custom
-   projection matrix. When the spatial batch contains an admitted native grid,
+   scene depth extent raised to at least that vertical half-extent, its eye is
+   two `E` in front of the viewport-center point on the focus plane and its
+   near/far distances are `E` and `3E`. These values preserve the existing
+   admitted near/depth interval without a custom projection matrix. The floor
+   on `E` is a correctness bound, not a margin: a scene whose drawn points all
+   share one plane perpendicular to the view direction reports a degenerate
+   source extent, and the near/far interval derived from it admits no
+   screen-sized handle standing on that plane, so native handle queries answer
+   an unconditional miss. Raising `E` keeps the focus plane at the interval's
+   center, so no admitted scene depth is lost. When the spatial batch contains an admitted native grid,
    the orthographic clip extent additionally includes every finite intersection
    between that grid plane and the four viewport-corner rays resolved by the
    existing canonical `ViewportLayout.unproject` before native camera setup.

@@ -110,6 +110,12 @@ struct ViewportSpatialInteractionRecord: Sendable {
             case .affordance(_, let members, _):
                 try array(members)
                 for member in members { try string(member.occurrenceID) }
+            case .sketchTransform(let value):
+                // Both frames own heap matrix storage the producer allocated
+                // for this table, so they are charged rather than treated as
+                // immutable source-owned geometry.
+                try array(value.baseLocalTransform.matrix.values)
+                try array(value.parentWorldTransform.matrix.values)
             case .surfaceControlPoint, .surfaceTrimEndpoint, .surfaceTrimControlPoint: break
             }
         }

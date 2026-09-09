@@ -312,18 +312,35 @@ independent tessellator is never an alternative implementation.
    materialization consumes this prepared baseline; it may
    not rebuild `baseEdits` or `baseGroupEdit` by traversing the current scene
    or selection. The existing `.affordance` input path initializes only body
-   edits, so sketch-transform presentation is not a body-affordance record:
-   its fragments remain nonauthoritative unless RK-4.2.3 supplies a dedicated
-   sketch mutation baseline and lifecycle instead of a placeholder body edit.
-   That baseline owns the selected occurrence's scene-node address, original
-   local transform, and the projection-free parent/world conversion needed to
-   apply the gizmo delta. Commit uses the existing scene-node transform command
-   through the workspace callback, preserving its validation, save, and Undo
-   authority; it neither rewrites sketch entities nor routes a sketch
-   occurrence through the body-move command.
-   Until that implementation lands, the callable branch carries
-   `FIXME(INCOMPLETE_IMPLEMENTATION)` and cannot be treated as a completed
-   interactive route.
+   edits, so sketch transform is not a body-affordance record and never names a
+   `ViewportAffordanceAction`: its handles form a separate closed identity
+   family carrying the occurrence's feature ID, selection target, and one
+   semantic role of translate axis, rotate axis, or bounds-corner scale. Naming
+   a body action here is prohibited rather than merely unused, because the
+   `.affordance` press path resolves a body edit baseline and commits through
+   the body-move command, which expresses a translation as a profile-sketch
+   edit and cannot express rotation or scale at all.
+   The matching prepared case is the sketch mutation baseline. It owns the
+   occurrence's scene-node address, the original local transform, the parent
+   world transform resolved by the same producer pass, the world pivot, and the
+   role's projection-free world geometry: an axis direction for translate, an
+   ordered pair of plane vectors for rotate, and a corner direction with its
+   base radius for scale. The baseline is fixed size and holds no collection,
+   so it is charged a constant retained byte count.
+   The producer resolves the parent world transform by walking the product
+   metadata's scene-node tree once per pass, from a root down to the
+   occurrence's node, and refuses a missing node, a cycle, a non-finite element,
+   or a singular composition as a typed batch failure. It does not reuse
+   `ViewportSceneTransformIndex`, whose lookup answers a missing node with the
+   identity transform and whose compose returns the receiver unchanged when the
+   product is not representable: either would seat a silent fallback at the
+   origin of the baseline this whole route trusts. The duplication is therefore
+   deliberate, and the index keeps its own non-throwing contract for the
+   non-authoritative scene-tree consumers that already depend on it.
+   Commit uses the existing scene-node transform command through the workspace
+   callback, preserving its validation, save, and Undo authority as one
+   transaction and therefore one Undo entry; it neither rewrites sketch
+   entities nor routes a sketch occurrence through the body-move command.
    Verified projection-free existing semantic values are reused directly,
    including raw sketch/control/surface fields and the
    `ViewportPatternAffordanceSource` handle structs. Legacy handle targets or
@@ -492,6 +509,106 @@ independent tessellator is never an alternative implementation.
    in the producer and therefore draws no transform gizmo; with the legacy
    selector gone it also receives no transform input, so this route no longer
    hit-tests geometry it never draws.
+   The sketch transform affordance is native-enabled under this same authority
+   and under its own identity family. The producer registers one record per
+   drawn handle only while the route is interactive, which is exactly a bound
+   scene-node transform commit callback; that gate is part of the overlay
+   change key and is re-checked at press, on every drag update, and at finish,
+   so a route that loses its callback cancels instead of committing. The gate
+   is the callback alone, and the object-affordance permission is deliberately
+   not part of it: that permission answers whether every selected target has an
+   exact CAD affordance context, which is resolved from the selected
+   presentations, and a sketch feature has no mesh presentation to resolve. A
+   selection naming a sketch therefore cannot satisfy that permission under any
+   document or camera state, so adding it to this gate would make the route
+   unreachable in production while fixtures that pass the permission directly
+   still drew and drove it. The tool and selection-scope predicate that decides
+   whether object-scope editing is offered at all stays with the callback's
+   provider, which binds the callback only in that state, so the viewport reads
+   one gate and the workspace owns one policy. `Viewport.beginViewportPress` and
+   `Viewport.hover` read the leading prepared record exactly as the migrated
+   axis routes do, and a native miss, a typed query failure, or a leading
+   record of another case ends the route with no sketch transform hit. No
+   legacy sketch transform selector exists, and none may be added.
+   The drawn handle set is closed at two translate axes, one rotate axis, and
+   the four bounds corners, because the viewport's own sketch representation is
+   planar. `ViewportSceneBuilder` discards `SketchDisplaySnapshot.plane` and
+   emits every sketch primitive as a world point at `y == 0`, and the sketch
+   overlay producer reads those points back the same way, so the drawn curves,
+   their pick geometry, and this gizmo all live in the world XZ plane whatever
+   plane the feature was authored on. A translation along world Y, or a
+   rotation about world X or Z, would therefore commit a scene-node frame the
+   preview cannot show and the curves cannot follow: the overlay would redraw
+   the same flattened rectangle while the committed geometry left the plane.
+   Those legs are omitted rather than drawn and refused, because a drawn handle
+   is a promise that the gesture it names can be completed. The two translate
+   axes and the rotate axis are taken from the drawn bounds rectangle's own
+   edge directions and their cross product rather than assumed to be the world
+   basis, so a sketch whose scene item carries a non-identity model transform
+   names the axes it is actually drawn along. The pivot is the mean of the four
+   drawn corners; each retained leg is invariant to the pivot's height, which
+   is what makes the flattened frame a sound origin for all seven handles.
+   Uniform corner scale is the only scale offered, so the committed frame stays
+   similar to the drawn one under the same flattening.
+   The parent world transform each baseline retains is resolved by this
+   producer, in one top-down walk of `rootSceneNodeIDs` and `childIDs` taken
+   once per frame and only when the frame draws at least one sketch gizmo. The
+   walk is the producer's own because the shared scene transform index answers
+   a missing node and a non-representable product with an identity frame, which
+   would commit a mutation against a frame nobody authored. A node reached
+   twice makes the document's tree ill-formed at that node; the walk records
+   the collision and the lookup for that node alone is a typed refusal, so one
+   malformed subtree cannot silently drop handles elsewhere in the same frame.
+   A sketch item with no scene-node address, one placed through a component
+   instance, or one whose node is absent from the document draws its bounds
+   outline and no handles at all: the commit addresses a scene node's local
+   frame, and none of those three names one. Drawing nothing there is not a
+   failure and is not reported as one.
+   The gesture follows the native axis lifecycle. The press closes over the
+   prepared baseline and the frame tuple; every update re-validates source
+   identity, presentation snapshot, selected targets, selected references, the
+   finish revision, and the route gate, and any mismatch cancels the gesture
+   and discards the pending mutation. Each update asks the mounted frame for
+   the one query its role owns — a world axis delta for translate and scale, an
+   ordered pair of world plane intersections for rotate — and the input type
+   converts that answer into a world mutation `M_w` about the pivot. Non-finite
+   input, a rotation whose start or current point coincides with the pivot, and
+   a scale factor at or below a positive floor owned by the input type are
+   typed refusals, not clamped values. A refused update keeps the press
+   baseline and authorizes nothing, matching the unmounted-frame rule above.
+   Nothing mutates the document during the drag: the pending mutation commits
+   once at finish, converted to the occurrence's local frame as
+   `P⁻¹ · M_w · P · L` by a throwing 4x4 multiply and inverse that refuses a
+   non-finite element or a determinant magnitude at or below `1.0e-12`. The
+   shared viewport transform helpers are not used for this composition, because
+   their compose returns the receiver unchanged when the product is not
+   representable. The scene-node command accepts a non-rigid matrix, so scale
+   commits through the same path as translate and rotate.
+   The drag preview is overlay-level, exactly as the body transform route
+   previews through its ghost edit. The emitted bounds outline, gizmo arrows,
+   rotation arcs, corner handles, and center marker are drawn at the mutated
+   world geometry, while the sketch curves themselves do not move until the
+   commit lands; that is the observable this route promises, and its preview
+   test asserts the emitted world points equal the mutated baseline corners.
+   The drag never installs a preview document: that path re-validates and
+   re-evaluates the whole document per pointer move, which the frame budget
+   owns as a correctness limit, and no migrated drag route uses it. The pending
+   mutation is part of the overlay change key, so each move re-prepares a frame
+   whose handles sit where they are drawn.
+   Commit hands the workspace the scene node's address, the baseline local
+   transform the press closed over, and the new local transform. The workspace
+   refuses the command as a typed editor error when the stored local transform
+   no longer equals that baseline, so a document that changed under the drag is
+   neither silently overwritten nor partially applied; on success the single
+   scene-node transform command is one workspace transaction and therefore one
+   Undo entry. A cancelled gesture, a refused query, and a refused commit all
+   clear the pending mutation and leave the document untouched, and a refused
+   finish reports its typed failure instead of discarding it. The viewport owns
+   no workspace error channel, so both native gesture routes report a refused
+   finish through this module's gesture logger and nowhere else; the released
+   native axis route reports the same way rather than dropping an unanswered
+   value at mouse-up, and neither route ever turns a refusal into a committed
+   value.
    The profile corner, profile face, edge chamfer, and edge fillet affordance
    actions are outside these claims and stay on their legacy selectors until
    RK-4.2.2/3 prepares records for them. Rectangle selection no longer waits on
@@ -1147,8 +1264,8 @@ tests and native GPU measurements.
 | Native camera | macOS 27-or-later mounted tests retain the raw native inverse-query counterexamples, then exercise documented native orthographic/symmetric-perspective lens forms, centered and off-center fit/pan framing, native render/project parity, child-owned composed-ray/project round trips, fit, orbit, pan, zoom, saved views, invalid/stale explicit-miss paths, and no geometry rebuild on camera changes. Lens skew or an unsupported projective component is rejected. |
 | Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
-| Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. |
-| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. |
+| Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. `ViewportSketchTransformLifecycleTests` owns the sketch transform route. Producer tests prove that an interactive route registers exactly one record per handle — two translate axes, one rotate, four scale corners — and never a body affordance record; that the arrow, ring, and marker extents are the point lengths `BodyTransformMetrics` owns rather than any sketch measurement; that a non-interactive route draws the outline and registers nothing; that a pending mutation moves every emitted handle; and that an active value of the wrong kind, or a second active value, is refused. Value tests prove the world mutation and the `P^-1 * M_w * P * L` conversion for translate, rotate, and scale, and the typed refusals for a non-finite query answer, another role's query, a rotation point at the pivot, a scale factor at or below the floor, and a singular parent transform. Mounted Ortho and Persp tests prove press, drag, and finish through the input surface and cancel through real event routing, prove the committed corner moves away from the pivot, and prove that neither the body-move route nor the canvas fallback sees the gesture; the Ortho case views the sketch face-on, so it is also the counterexample the orthographic depth-window floor answers. A mounted Ortho test proves the route gate retires the press when it loses its callback. The drag target carries the baseline local frame it was measured against so the workspace owner can refuse a stale commit; that refusal belongs to `RupaUI` and is outside this module's verification. |
+| Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. `ViewportSketchTransformLifecycleTests` proves the sketch transform gizmo registers one record per handle only while the route is interactive, and that a pending mutation moves the emitted outline, arrows, arcs, corner handles, and centre marker to the mutated world geometry while the `scene` and `document` inputs the route reads are unchanged. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 

@@ -44,6 +44,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleIdentity)
     case patternArrayOutputMode(ViewportPatternArrayOutputModeHandleIdentity)
     case constructionPlane(ViewportConstructionPlaneHandleIdentity)
+    case sketchTransform(ViewportSketchTransformHandleIdentity)
     case affordance(ViewportAffordanceTarget)
 
     /// Charges owned value/array storage and conservative UTF-8 backing, without
@@ -117,7 +118,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                  .splineControlPoint, .edgeOffset, .slotWidth, .sketchVertexOffset,
                  .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension,
                  .patternArrayRadialAngle, .patternArrayCopyCount, .patternArrayCurveExtent,
-                 .patternArrayCurvePathPoint, .patternArrayOutputMode, .constructionPlane: break
+                 .patternArrayCurvePathPoint, .patternArrayOutputMode, .constructionPlane,
+                 .sketchTransform: break
             }
         }
         return bytes

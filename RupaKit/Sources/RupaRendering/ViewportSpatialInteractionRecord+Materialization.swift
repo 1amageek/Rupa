@@ -187,7 +187,7 @@ extension ViewportSpatialPreparedInteractionTarget {
              .surfaceControlPoint, .surfaceControlPointSlide,
              .surfaceTrimEndpoint, .surfaceTrimControlPoint, .surfaceFrame,
              .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
-             .affordance:
+             .sketchTransform, .affordance:
             return .projectionFree(self)
 
         case .bridgeCurveEndpoint(let handle, let modelTransform):

@@ -490,7 +490,22 @@ final class RealityViewport {
         switch layout.projection {
         case .parallel:
             let depth = SIMD3<Double>(rows.depth.x, rows.depth.y, rows.depth.z)
-            var extent = 0.5 / simd_length(depth)
+            // RealityKit's orthographic scale is the vertical half-extent.
+            let visibleHalfHeight = layout.viewportSize.height / (2 * layout.scale)
+            guard visibleHalfHeight.isFinite, visibleHalfHeight > 0 else {
+                throw Self.failure("The orthographic camera vertical extent exceeds native precision.")
+            }
+            // The scene's own depth extent degenerates whenever every drawn
+            // point shares one plane perpendicular to the view direction. A
+            // sketch seen face-on reports an extent near zero, and the clip
+            // window derived from it is thinner than the screen-sized handles
+            // the overlay stands on that plane, so every native handle hit
+            // falls outside the admitted near/far interval. Admitting at least
+            // the visible half-extent keeps those handles inside the window;
+            // the eye still sits two extents in front of the focus plane, so
+            // the focus plane stays at the window's center and no admitted
+            // scene depth is lost.
+            var extent = max(0.5 / simd_length(depth), visibleHalfHeight)
             guard extent.isFinite, extent > 0 else {
                 throw Self.failure("The orthographic camera depth extent exceeds native precision.")
             }
@@ -529,8 +544,7 @@ final class RealityViewport {
             var component = OrthographicCameraComponent()
             component.near = Float(extent)
             component.far = Float(3 * extent)
-            // RealityKit's orthographic scale is the vertical half-extent.
-            component.scale = Float(layout.viewportSize.height / (2 * layout.scale))
+            component.scale = Float(visibleHalfHeight)
             component.scaleDirection = .vertical
             guard component.near.isFinite, component.near > 0,
                   component.far.isFinite, component.far > component.near,

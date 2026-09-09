@@ -901,7 +901,7 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
 }
 
 @Test
-func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
+func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform() throws {
     var document = DesignDocument.empty()
     let planeID = try document.createConstructionPlane(
         name: "Surface Transform Construction Plane",
@@ -941,17 +941,24 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
     )
     #expect(source.worldLines.contains { $0.route == .constructionPlane && $0.closed })
     #expect(source.worldLines.contains { $0.route == .constructionPlane && $0.identity != nil })
+    // The sketch here names a scene node the document does not hold, so a
+    // commit has no address to send. That is the route's documented no-handle
+    // branch: it draws the bounds outline and registers nothing, rather than
+    // offering a handle whose drag could not be applied.
     #expect(source.worldLines.contains { $0.route == .sketchTransform && $0.closed })
-    #expect(source.worldLines.filter { $0.route == .sketchTransform && $0.identity != nil }.count == 3)
-    #expect(source.cameraLines.contains { $0.route == .sketchTransform })
-    #expect(source.cameraLines.filter { $0.route == .sketchTransform }.allSatisfy { $0.hitTolerancePoints == nil })
+    #expect(source.worldLines.filter { $0.route == .sketchTransform && $0.identity != nil }.isEmpty)
     #expect(source.worldLines.filter { $0.route == .sketchTransform }.allSatisfy { $0.hitTolerancePoints == nil })
+    #expect(source.cameraLines.filter { $0.route == .sketchTransform }.isEmpty)
+    #expect(source.markers.filter { $0.route == .sketchTransform }.isEmpty)
+    #expect(!interactionRecords.contains { record in
+        if case .sketchTransform = record.target { return true }
+        return false
+    })
     #expect(!interactionRecords.contains { record in
         guard case .affordance(let target, _, _) = record.target else { return false }
         return target.featureID == sketchFeatureID
     })
     #expect(source.markers.contains { $0.route == .constructionPlane && $0.identity != nil })
-    #expect(source.markers.contains { $0.route == .sketchTransform })
 
     var meshes: [ViewportSpatialOverlayInput.Mesh] = []
     var paths: [ViewportSpatialOverlayInput.Path] = []
@@ -973,7 +980,9 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndSketchTransform() throws {
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty)
-    #expect(!cameraLines.isEmpty)
+    // Neither route emits camera-anchored geometry here: the construction plane
+    // draws in world space, and the outline-only sketch draws no gizmo.
+    #expect(cameraLines.isEmpty)
     #expect(families.contains(.construction))
     #expect(families.contains(.transform))
 }

@@ -1889,6 +1889,7 @@ private struct ProjectMainViewContent: View {
         return { target in
             handleViewportEdgeFilletDrag(target)
         }
+            onSketchTransformCommit: viewportSketchTransformCommitHandler,
     }
 
     private var viewportRegionOffsetDragHandler: ((ViewportRegionOffsetDragTarget) -> Void)? {
@@ -2356,6 +2357,21 @@ private struct ProjectMainViewContent: View {
             nil
         }
     }
+    /// Provider for the sketch transform gizmo route.
+    ///
+    /// The route commits a scene-node frame rather than CAD topology, so the
+    /// tool and selection-scope policy that decides whether object-scope
+    /// editing is offered lives here and the viewport reads the bound callback
+    /// as its only gate. It deliberately does not require an exact CAD
+    /// affordance context: that permission is resolved from mesh presentations,
+    /// and a sketch feature has none.
+    private var viewportSketchTransformCommitHandler: ((ViewportSketchTransformDragTarget) -> Void)? {
+        guard selectedTool == .select, selectionScope == .object else { return nil }
+        return { target in
+            handleViewportSketchTransformCommit(target)
+        }
+    }
+
 
     private var canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? {
         switch selectedTool {
@@ -5587,6 +5603,32 @@ private struct ProjectMainViewContent: View {
             point: target.point
         )
     }
+    private func handleViewportSketchTransformCommit(
+        _ target: ViewportSketchTransformDragTarget
+    ) {
+        guard selectedTool == .select, selectionScope == .object else { return }
+        submitSource(name: "transformSketch") { current in
+            guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Sketch scene node \(target.sceneNodeID) no longer exists."
+                )
+            }
+            // The gesture measured its mutation against the frame read at press,
+            // so committing onto a frame that changed since then would move the
+            // sketch by a delta the pointer never described.
+            guard node.localTransform == target.baseLocalTransform else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The sketch frame changed during the transform gesture."
+                )
+            }
+            return [
+                .setSceneNodeTransform(id: node.id, localTransform: target.localTransform)
+            ]
+        }
+    }
+
 
     private func handleViewportSketchCurveHandleDrag(_ target: ViewportSketchCurveHandleDragTarget) {
         guard selectedTool == .select,
