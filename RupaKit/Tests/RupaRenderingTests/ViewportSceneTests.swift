@@ -2658,7 +2658,13 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 @Test func viewportIdentityPickIndexIncludesProjectedBodyFallbackWhenTopologyIsMissing() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // The fallback under test only runs for a body with no prepared CAD
+    // topology, so this build is pinned to carry no evaluated geometry.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
 
     let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
 
@@ -2673,7 +2679,13 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 @Test func viewportIdentityPickRenderPlanBuildsProjectedBodyFallbackDrawItems() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // The fallback under test only runs for a body with no prepared CAD
+    // topology, so this build is pinned to carry no evaluated geometry.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -2939,7 +2951,13 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 @Test func viewportSelectionRectangleHitTesterReturnsProjectedBodySubobjectHitsWhenTopologyIsMissing() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // The fallback under test only runs for a body with no prepared CAD
+    // topology, so this build is pinned to carry no evaluated geometry.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
     let layout = try #require(
         ViewportLayout(
             scene: scene,
@@ -3068,7 +3086,15 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
             direction: .normal
         )
     )
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // This legacy CPU tester is pinned to a body drawn from its projected
+    // box, so a sketch edge and a body silhouette edge that land on the same
+    // point are ranked the way they always were.  A body that carries prepared
+    // CAD topology is covered by `ViewportCarriedCADTopologyTests`.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let bodyItem = try #require(scene.items.first { item in
@@ -3120,7 +3146,13 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 @Test func viewportHitTesterSelectsBodyVertexBeforeEdgesAndFaces() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // The fallback under test only runs for a body with no prepared CAD
+    // topology, so this build is pinned to carry no evaluated geometry.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
     let bodyItem = try #require(scene.items.first { item in

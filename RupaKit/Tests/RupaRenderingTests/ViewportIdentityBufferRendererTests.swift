@@ -987,7 +987,13 @@ import Testing
 @Test func viewportIdentityBufferRendererSamplesProjectedBodyFallbackHits() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
+    // The fallback under test only runs for a body with no prepared CAD
+    // topology, so this build is pinned to carry no evaluated geometry.
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler,
+        evaluationPolicy: .suppliedOnly
+    )
     let viewportSize = CGSize(width: 240.0, height: 180.0)
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let bodyItem = try #require(scene.items.first { item in

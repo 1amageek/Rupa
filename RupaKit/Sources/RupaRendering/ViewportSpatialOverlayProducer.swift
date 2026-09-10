@@ -755,7 +755,12 @@ enum ViewportSpatialOverlayProducer {
                     || snapshot.editedBodies[item.featureID] != nil
                 guard shouldDrawBody else { continue }
                 let color = isSelected ? selectionColor : bodyColor
-                if let mesh = component.mesh {
+                // An edit state owns the preview shape while a drag is running.
+                // The component's mesh describes the body before the drag, so
+                // drawing it here would show the pre-drag solid instead of the
+                // box the edit is moving.  The interaction state decides the
+                // geometry; carrying a prepared mesh does not.
+                if snapshot.editedBodies[item.featureID] == nil, let mesh = component.mesh {
                     guard !mesh.positions.isEmpty,
                           !mesh.indices.isEmpty,
                           mesh.indices.count.isMultiple(of: 3) else {

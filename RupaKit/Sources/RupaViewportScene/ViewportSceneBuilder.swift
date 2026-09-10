@@ -107,8 +107,7 @@ public struct ViewportSceneBuilder {
                     bounds: bounds,
                     depthMeters: extrudeSnapshot.depthMeters,
                     direction: extrudeSnapshot.direction,
-                    bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
-                    subshapeID: bodyDisplaySnapshots[featureID]?.subshapeID,
+                    evaluatedBody: bodyDisplaySnapshots[featureID],
                     declaredObjectTypeID: object?.typeID,
                     declaredProperties: object?.properties ?? ObjectPropertySet()
                 )
@@ -149,8 +148,7 @@ public struct ViewportSceneBuilder {
                         bounds: bounds,
                         depthMeters: sweepSnapshot.depthMeters,
                         direction: sweepSnapshot.direction,
-                        bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
-                        subshapeID: bodyDisplaySnapshots[featureID]?.subshapeID,
+                        evaluatedBody: bodyDisplaySnapshots[featureID],
                         declaredObjectTypeID: object?.typeID,
                         declaredProperties: object?.properties ?? ObjectPropertySet()
                     )
@@ -1783,13 +1781,19 @@ public struct ViewportSceneBuilder {
         return (lower, upper)
     }
 
+    /// Builds the body component a projected profile box draws.
+    ///
+    /// The evaluated snapshot is taken whole rather than field by field: its
+    /// face runs index the triangles of its own mesh, so a component that
+    /// carried one without the other would name sub-shapes on geometry the run
+    /// list never described. Passing the snapshot keeps the CAD sub-shape
+    /// identity and the mesh it indexes inseparable.
     private func bodyComponent(
         sketchSnapshot: SketchDisplaySnapshot,
         bounds: CGRect,
         depthMeters: Double,
         direction: ExtrudeDirection,
-        bodyID: String?,
-        subshapeID: String?,
+        evaluatedBody: BodyDisplaySnapshot?,
         declaredObjectTypeID: ObjectTypeID?,
         declaredProperties: ObjectPropertySet
     ) -> ViewportBodyComponent {
@@ -1809,10 +1813,11 @@ public struct ViewportSceneBuilder {
         let cylinder = rawCylinder.map {
             cylinderComponent($0, properties: properties)
         }
+        let topology = evaluatedBody.map { ViewportBodyTopology($0.topology) }
         if let cylinder {
             return ViewportBodyComponent(
-                bodyID: bodyID,
-                subshapeID: subshapeID,
+                bodyID: evaluatedBody?.bodyID,
+                subshapeID: evaluatedBody?.subshapeID,
                 typeID: resolvedTypeID,
                 properties: properties,
                 sizeXMeters: Double(bounds.width),
@@ -1820,19 +1825,23 @@ public struct ViewportSceneBuilder {
                 sizeZMeters: Double(bounds.height),
                 yMinMeters: yExtents.min,
                 yMaxMeters: yExtents.max,
-                cylinder: cylinder
+                cylinder: cylinder,
+                mesh: evaluatedBody?.mesh,
+                topology: topology
             )
         }
         return ViewportBodyComponent(
-            bodyID: bodyID,
-            subshapeID: subshapeID,
+            bodyID: evaluatedBody?.bodyID,
+            subshapeID: evaluatedBody?.subshapeID,
             typeID: resolvedTypeID,
             properties: properties,
             sizeXMeters: Double(bounds.width),
             sizeYMeters: sizeY,
             sizeZMeters: Double(bounds.height),
             yMinMeters: yExtents.min,
-            yMaxMeters: yExtents.max
+            yMaxMeters: yExtents.max,
+            mesh: evaluatedBody?.mesh,
+            topology: topology
         )
     }
 

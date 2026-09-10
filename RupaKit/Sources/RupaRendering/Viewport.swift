@@ -2098,9 +2098,10 @@ public struct Viewport: View {
                   topology.faces.isEmpty == false
                       || topology.edges.isEmpty == false
                       || topology.vertices.isEmpty == false else {
-                // Without prepared targets the pick index answers this body
-                // with sub-objects projected from its bounding box, which carry
-                // no CAD identity the native query could name.
+                // The evaluation gave this body no stable sub-shape identity,
+                // so the pick index answers it with sub-objects projected from
+                // its bounding box and the native query has no CAD name to
+                // report.
                 requiresLegacyResidual = true
                 continue
             }
