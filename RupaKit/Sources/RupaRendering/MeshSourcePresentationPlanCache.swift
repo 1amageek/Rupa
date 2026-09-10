@@ -131,6 +131,28 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).projectWithinDepthRange(point, revision: revision)
     }
 
+    /// Reports the mounted camera's own depth interval so a selection rectangle
+    /// can clip candidate geometry against it in world space instead of
+    /// discarding a triangle whose vertices straddle a clip plane.
+    func cameraDepthInterval(
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> ClosedRange<Double> {
+        try querySurface(for: identity).cameraDepthInterval(revision: revision)
+    }
+
+    /// Reports a world point's camera-space depth, and its projected point
+    /// wherever the mounted camera answers for one. Depth is reported whether
+    /// or not `cameraDepthInterval(for:revision:)` admits it, because the
+    /// crossing of a clip plane is interpolated from the depths on both sides.
+    func projectedPointWithDepth(
+        _ point: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> (point: CGPoint?, depth: Double) {
+        try querySurface(for: identity).projectedPointWithDepth(point, revision: revision)
+    }
+
     /// Admits a world point and reports its camera-space depth so callers can
     /// compare candidate depths against the native surface frame. A nil result
     /// is a valid depth rejection, never a silent projection failure.

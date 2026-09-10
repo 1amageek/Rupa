@@ -30,6 +30,41 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// this layer never changes source fidelity to make geometry fit.
     public static let standard = hardMaximum
 
+    /// Cells per axis of the grid a selection rectangle samples a candidate on.
+    ///
+    /// This ceiling lives here because it bounds the native surface queries one
+    /// rectangle update may spend, which is a budget of the same plan the other
+    /// ceilings bound. It is not a measured value: a convex fragment clipped to
+    /// a cell has its sample point inside that cell, and an axis-aligned window
+    /// spanning at least two cells always contains a whole one, so a candidate
+    /// showing such a window inside the rectangle always has a sample in it
+    /// whatever its tessellation. Four per axis makes that window a quarter of
+    /// the rectangle. Raising it tightens the guarantee and raises the query
+    /// ceiling in proportion; lowering it does the reverse.
+    ///
+    /// Unlike the plan dimensions below it, this is not caller-lowerable: the
+    /// guarantee it states is a property of the sampling rule and not of one
+    /// caller's admission budget, so `validate()` does not read it.
+    public static let rectangleSampleGridDivisions = 4
+
+    /// Native surface queries one selection rectangle update may spend on a
+    /// single candidate: at most one per grid cell.
+    ///
+    /// The occurrence rectangle has one candidate per plan item, so its
+    /// plan-wide ceiling is `maxRectangleSurfaceQueryCount`. The CAD sub-shape
+    /// rectangle asks per sub-shape rather than per item, so this per-candidate
+    /// ceiling is the bound that path states.
+    public static var maxRectangleSurfaceQueryCountPerCandidate: Int {
+        rectangleSampleGridDivisions * rectangleSampleGridDivisions
+    }
+
+    /// Native surface queries one selection rectangle update may spend across a
+    /// plan when every candidate is a plan item, as it is for the occurrence
+    /// rectangle: at most one per grid cell for each item.
+    public var maxRectangleSurfaceQueryCount: Int {
+        maxItemCount * Self.maxRectangleSurfaceQueryCountPerCandidate
+    }
+
     public let maxItemCount: Int
     public let maxPositionCount: Int
     public let maxTriangleCount: Int

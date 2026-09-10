@@ -209,17 +209,30 @@ enum ViewportNativeCADTopologyResolver {
     ///
     /// Vertices and edges reuse the point query's visibility rule verbatim, so
     /// a sub-shape cannot be visible to one query and hidden to the other. A
-    /// vertex is inside when its projected point is, with no tolerance. An edge
-    /// is clipped rather than sampled at a fixed pitch, because a pitch would
-    /// make a short edge's admission depend on zoom; the midpoint of the
-    /// surviving screen interval is mapped back to the edge's own world
-    /// parameter under the frame's projection rule, so no depth on this path is
-    /// interpolated by a rule the frame does not use. One sample per edge
-    /// bounds the cost and rejects an edge occluded at that point even when an
-    /// unoccluded part of it lies inside the rectangle.
+    /// vertex is inside when its projected point is, with no tolerance.
     ///
-    /// A face asks the frame one question at a representative point inside both
-    /// the triangle and the rectangle: which triangle it draws there. That one
+    /// Edges and faces are first clipped against the mounted camera's own depth
+    /// interval in world space, so a primitive crossing a clip plane
+    /// contributes the part the camera draws instead of being dropped whole.
+    /// A vertex that clip creates carries no projection, because screen
+    /// position is not affine under a perspective camera, so it is projected
+    /// again rather than interpolated.
+    ///
+    /// What survives is then sampled on `ViewportRectangleSampleGrid`, which
+    /// divides the rectangle into cells and keeps, per cell, the largest
+    /// fragment the candidate contributed there. A candidate is admitted when
+    /// the frame confirms it at any one of those samples. Two properties of
+    /// that rule are the reason it replaced a single representative point:
+    /// the per-cell maximum is a function of the fragment set and not of the
+    /// order the tessellator emitted its triangles, and a candidate showing an
+    /// axis-aligned window at least two cells wide inside the rectangle always
+    /// has a sample inside that window, so a section cut or a nearer solid
+    /// covering part of a face no longer loses the rest of it. The samples cost
+    /// at most `maxRectangleSurfaceQueryCountPerCandidate` native queries per
+    /// sub-shape, and the frame is asked in the grid's query order only until
+    /// one sample is confirmed.
+    ///
+    /// A face's samples ask the frame which triangle it draws there. That one
     /// answer carries occlusion and section at once, because the frame draws
     /// only what survived the section and only what nothing nearer covers, so
     /// this branch forms no depth compare and no world point of its own.
@@ -228,13 +241,12 @@ enum ViewportNativeCADTopologyResolver {
     /// index that also names a run of this body, and admitting it would select a
     /// face standing behind another solid.
     ///
-    /// A run whose projected bounds miss the rectangle, a triangle the camera
-    /// cannot project, and a representative point the frame answers with another
-    /// body's triangle are all valid misses. Readiness, camera revision and
-    /// projection failures stay typed and are propagated from the injected
-    /// native queries, and a `mesh` that does not hold a prepared run's
-    /// triangles is malformed preparation rather than a body whose faces are
-    /// silently skipped.
+    /// A run whose projected bounds miss the rectangle, a primitive the camera
+    /// draws none of, and samples the frame answers with another body's
+    /// triangle are all valid misses. Readiness, camera revision and projection
+    /// failures stay typed and are propagated from the injected native queries,
+    /// and a `mesh` that does not hold a prepared run's triangles is malformed
+    /// preparation rather than a body whose faces are silently skipped.
     static func resolve(
         in rect: CGRect,
         topology: ViewportBodyTopology,
@@ -242,7 +254,9 @@ enum ViewportNativeCADTopologyResolver {
         modelTransform: Transform3D,
         selectionHitPolicy: ViewportSelectionHitPolicy,
         usesPerspectiveProjection: Bool,
+        depthInterval: ClosedRange<Double>,
         project: (Point3D) throws -> (point: CGPoint, depth: Double)?,
+        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double),
         surfaceHit: (CGPoint) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
         retainsSectionedPoint: (Point3D) throws -> Bool,
         bodyDrawsTriangle: (MeshSourcePresentationTriangle) throws -> Bool
@@ -255,6 +269,13 @@ enum ViewportNativeCADTopologyResolver {
                 message: "CAD topology rectangle query bounds are invalid."
             )
         }
+        guard depthInterval.lowerBound.isFinite, depthInterval.upperBound.isFinite else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidSceneItem,
+                message: "CAD topology rectangle query camera depth bounds are invalid."
+            )
+        }
+        let grid = ViewportRectangleSampleGrid(rect: rect)
 
         var components: [SelectionComponent] = []
         var admitted: Set<SelectionComponentID> = []
@@ -280,30 +301,44 @@ enum ViewportNativeCADTopologyResolver {
             for edge in topology.edges where admitted.contains(edge.componentID) == false {
                 let worldStart = world(edge.start, modelTransform: modelTransform)
                 let worldEnd = world(edge.end, modelTransform: modelTransform)
-                guard let start = try project(worldStart),
-                      let end = try project(worldEnd),
-                      let interval = clippedParameterInterval(
-                          from: start.point, to: end.point, in: rect
-                      ) else { continue }
-                guard let edgeParameter = worldParameter(
-                    forScreenParameter: (interval.lower + interval.upper) / 2,
-                    startDepth: start.depth,
-                    endDepth: end.depth,
-                    usesPerspectiveProjection: usesPerspectiveProjection
+                let start = try projectWithDepth(worldStart)
+                let end = try projectWithDepth(worldEnd)
+                guard let drawn = ViewportCameraDepthClip.clippedParameterInterval(
+                    startDepth: start.depth, endDepth: end.depth, to: depthInterval
                 ) else { continue }
-                let worldPoint = Point3D(
-                    x: worldStart.x + (worldEnd.x - worldStart.x) * edgeParameter,
-                    y: worldStart.y + (worldEnd.y - worldStart.y) * edgeParameter,
-                    z: worldStart.z + (worldEnd.z - worldStart.z) * edgeParameter
-                )
-                guard let projected = try project(worldPoint),
-                      try isVisible(
-                          worldPoint,
-                          projected,
-                          project: project,
-                          surfaceHit: surfaceHit,
-                          retainsSectionedPoint: retainsSectionedPoint
+                guard let drawnStart = ViewportCameraDepthClip.interpolated(
+                          worldStart, worldEnd, drawn.lower
+                      ),
+                      let drawnEnd = ViewportCameraDepthClip.interpolated(
+                          worldStart, worldEnd, drawn.upper
                       ) else { continue }
+                let clippedStart = drawn.lower == 0 ? start : try projectWithDepth(drawnStart)
+                let clippedEnd = drawn.upper == 1 ? end : try projectWithDepth(drawnEnd)
+                guard let screenStart = clippedStart.point,
+                      let screenEnd = clippedEnd.point else { continue }
+                var isAdmitted = false
+                for sample in grid.segmentSamples(from: screenStart, to: screenEnd) {
+                    guard let edgeParameter = worldParameter(
+                        forScreenParameter: sample,
+                        startDepth: clippedStart.depth,
+                        endDepth: clippedEnd.depth,
+                        usesPerspectiveProjection: usesPerspectiveProjection
+                    ) else { continue }
+                    guard let worldPoint = ViewportCameraDepthClip.interpolated(
+                        drawnStart, drawnEnd, edgeParameter
+                    ) else { continue }
+                    guard let projected = try project(worldPoint),
+                          try isVisible(
+                              worldPoint,
+                              projected,
+                              project: project,
+                              surfaceHit: surfaceHit,
+                              retainsSectionedPoint: retainsSectionedPoint
+                          ) else { continue }
+                    isAdmitted = true
+                    break
+                }
+                guard isAdmitted else { continue }
                 admitted.insert(edge.componentID)
                 components.append(.edge(edge.componentID))
             }
@@ -312,36 +347,99 @@ enum ViewportNativeCADTopologyResolver {
         guard selectionHitPolicy.allowsFaceHits else {
             return components
         }
+        // The mesh positions belong to the whole body, so a position two runs
+        // share is projected once and indexed twice. The table is allocated on
+        // the first position a surviving run asks for and never before, so a
+        // run the bounds test skips projects none of its positions and a body
+        // the rectangle misses entirely costs nothing here.
+        var bodyPositions: [ProjectedPosition?] = []
+        func projectedPosition(at index: Int) throws -> ProjectedPosition {
+            if bodyPositions.isEmpty {
+                bodyPositions = [ProjectedPosition?](
+                    repeating: nil, count: mesh.positions.count
+                )
+            }
+            if let cached = bodyPositions[index] { return cached }
+            let worldPoint = world(mesh.positions[index], modelTransform: modelTransform)
+            let camera = try projectWithDepth(worldPoint)
+            let projected = ProjectedPosition(
+                world: worldPoint, point: camera.point, depth: camera.depth
+            )
+            bodyPositions[index] = projected
+            return projected
+        }
+
         for run in topology.meshFaceRuns where admitted.contains(run.componentID) == false {
             guard try runMayMeetRectangle(
                 triangleRange: run.triangleRange,
                 mesh: mesh,
                 modelTransform: modelTransform,
                 rect: rect,
-                project: project
+                depthInterval: depthInterval,
+                projectWithDepth: projectWithDepth
             ) else { continue }
-            guard let representative = try representativePoint(
-                triangleRange: run.triangleRange,
-                mesh: mesh,
-                modelTransform: modelTransform,
-                rect: rect,
-                project: project
-            ) else { continue }
-            guard let surface = try surfaceHit(representative),
-                  try bodyDrawsTriangle(surface.triangle) else { continue }
-            guard let triangleIndex = Int(exactly: surface.triangle.faceID.rawValue) else {
-                throw MeshSourcePresentationRenderError(
-                    code: .invalidSceneItem,
-                    message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
-                )
+            var sampler = grid.polygonSampler()
+            for triangleIndex in run.triangleRange {
+                let corners = try triangleVertexIndices(mesh: mesh, triangleIndex: triangleIndex)
+                var cornerVertices: [ViewportCameraDepthClip.Vertex] = []
+                cornerVertices.reserveCapacity(3)
+                for index in [corners.0, corners.1, corners.2] {
+                    let position = try projectedPosition(at: index)
+                    cornerVertices.append(
+                        ViewportCameraDepthClip.Vertex(
+                            point: position.world,
+                            depth: position.depth,
+                            projected: position.point
+                        )
+                    )
+                }
+                let drawn = ViewportCameraDepthClip.clipped(cornerVertices, to: depthInterval)
+                guard drawn.count >= 3 else { continue }
+                var screen: [CGPoint] = []
+                screen.reserveCapacity(drawn.count)
+                for vertex in drawn {
+                    if let projected = vertex.projected {
+                        screen.append(projected)
+                        continue
+                    }
+                    // A vertex the clip created has no projection yet, and a
+                    // vertex the camera does not answer for is dropped rather
+                    // than guessed: the remaining vertices still span a convex
+                    // subset of the drawn fragment, so the sample stays inside
+                    // it.
+                    guard let projected = try projectWithDepth(vertex.point).point else { continue }
+                    screen.append(projected)
+                }
+                guard screen.count >= 3 else { continue }
+                sampler.admit(screen)
             }
-            guard topology.componentID(forTriangle: triangleIndex) == run.componentID else {
-                continue
+            for sample in sampler.samples() {
+                guard let surface = try surfaceHit(sample),
+                      try bodyDrawsTriangle(surface.triangle) else { continue }
+                guard let triangleIndex = Int(exactly: surface.triangle.faceID.rawValue) else {
+                    throw MeshSourcePresentationRenderError(
+                        code: .invalidSceneItem,
+                        message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
+                    )
+                }
+                guard topology.componentID(forTriangle: triangleIndex) == run.componentID else {
+                    continue
+                }
+                admitted.insert(run.componentID)
+                components.append(.face(run.componentID))
+                break
             }
-            admitted.insert(run.componentID)
-            components.append(.face(run.componentID))
         }
         return components
+    }
+
+    /// One body mesh position as the rectangle's face path holds it: the world
+    /// point, the mounted camera's depth for it, and its projection wherever the
+    /// camera answers for one.
+    private struct ProjectedPosition {
+        let world: Point3D
+        let point: CGPoint?
+        let depth: Double
     }
 
     /// Whether a recorded run can still meet the rectangle.
@@ -349,18 +447,20 @@ enum ViewportNativeCADTopologyResolver {
     /// The model transform is affine, so the convex hull of the eight
     /// transformed corners of the run's body-local bounding box contains the
     /// run, and their projected bounds contain its projection whenever the
-    /// camera answers for all eight. A corner the camera cannot project, and a
-    /// box no finite bound describes, therefore widen the search instead of
-    /// losing the face. The box itself is CPU arithmetic over the prepared
-    /// mesh; only the eight corners reach the frame, which is what keeps a
-    /// rectangle update in the cost class of the pointer query rather than of
-    /// the triangle count.
+    /// camera answers for all eight and draws all eight. A corner the camera
+    /// cannot project, a corner outside the camera's depth interval, and a box
+    /// no finite bound describes therefore widen the search instead of losing
+    /// the face: the box may still straddle a clip plane and be drawn in part.
+    /// The box itself is CPU arithmetic over the prepared mesh; only the eight
+    /// corners reach the frame, which is what keeps a rectangle update in the
+    /// cost class of the pointer query rather than of the triangle count.
     private static func runMayMeetRectangle(
         triangleRange: Range<Int>,
         mesh: ViewportBodyMesh,
         modelTransform: Transform3D,
         rect: CGRect,
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?
+        depthInterval: ClosedRange<Double>,
+        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double)
     ) throws -> Bool {
         guard let bounds = try localBounds(mesh: mesh, triangleRange: triangleRange) else {
             return true
@@ -373,53 +473,23 @@ enum ViewportNativeCADTopologyResolver {
                 y: corner & 2 == 0 ? bounds.minimum.y : bounds.maximum.y,
                 z: corner & 4 == 0 ? bounds.minimum.z : bounds.maximum.z
             )
-            guard let projected = try project(world(point, modelTransform: modelTransform)),
-                  projected.point.x.isFinite, projected.point.y.isFinite else {
+            let camera = try projectWithDepth(world(point, modelTransform: modelTransform))
+            guard depthInterval.contains(camera.depth) else { return true }
+            guard let projected = camera.point,
+                  projected.x.isFinite, projected.y.isFinite else {
                 return true
             }
             minimum = CGPoint(
-                x: min(minimum.x, projected.point.x),
-                y: min(minimum.y, projected.point.y)
+                x: min(minimum.x, projected.x),
+                y: min(minimum.y, projected.y)
             )
             maximum = CGPoint(
-                x: max(maximum.x, projected.point.x),
-                y: max(maximum.y, projected.point.y)
+                x: max(maximum.x, projected.x),
+                y: max(maximum.y, projected.y)
             )
         }
         return maximum.x >= rect.minX && minimum.x <= rect.maxX
             && maximum.y >= rect.minY && minimum.y <= rect.maxY
-    }
-
-    /// The first triangle of the run whose projection meets the rectangle,
-    /// reported as a point inside both.
-    ///
-    /// The scan follows emission order and stops at the first such triangle:
-    /// one point of the overlap is enough to ask the frame whether it draws this
-    /// face there, and scanning further would cost a native projection per
-    /// triangle. That the answer is taken at this one point is what makes a face
-    /// occluded there a miss even when a later triangle of the same face is
-    /// visible.
-    private static func representativePoint(
-        triangleRange: Range<Int>,
-        mesh: ViewportBodyMesh,
-        modelTransform: Transform3D,
-        rect: CGRect,
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?
-    ) throws -> CGPoint? {
-        for triangleIndex in triangleRange {
-            let vertices = try triangleVertices(mesh: mesh, triangleIndex: triangleIndex)
-            guard let first = try project(world(vertices.0, modelTransform: modelTransform)),
-                  let second = try project(world(vertices.1, modelTransform: modelTransform)),
-                  let third = try project(world(vertices.2, modelTransform: modelTransform)) else {
-                continue
-            }
-            if let centroid = clippedCentroid(
-                first.point, second.point, third.point, in: rect
-            ) {
-                return centroid
-            }
-        }
-        return nil
     }
 
     /// The body-local bounding box of a run's triangles, or nil when no finite
@@ -463,17 +533,22 @@ enum ViewportNativeCADTopologyResolver {
         return (minimum, maximum)
     }
 
-    private static func triangleVertices(
+    /// The three body mesh position indices of one triangle.
+    ///
+    /// The face path memoizes one projection per position it references, so it
+    /// needs the indices to look those up rather than the points themselves.
+    private static func triangleVertexIndices(
         mesh: ViewportBodyMesh,
         triangleIndex: Int
-    ) throws -> (Point3D, Point3D, Point3D) {
-        let positions = mesh.positions
+    ) throws -> (Int, Int, Int) {
+        let positionCount = mesh.positions.count
         let indices = mesh.indices
         let base = try triangleIndexBase(triangleIndex, indexCount: indices.count)
-        let first = try vertexIndex(indices[base], positionCount: positions.count)
-        let second = try vertexIndex(indices[base + 1], positionCount: positions.count)
-        let third = try vertexIndex(indices[base + 2], positionCount: positions.count)
-        return (positions[first], positions[second], positions[third])
+        return (
+            try vertexIndex(indices[base], positionCount: positionCount),
+            try vertexIndex(indices[base + 1], positionCount: positionCount),
+            try vertexIndex(indices[base + 2], positionCount: positionCount)
+        )
     }
 
     private static func triangleIndexBase(
@@ -501,138 +576,6 @@ enum ViewportNativeCADTopologyResolver {
             )
         }
         return index
-    }
-
-    /// The parameter interval of a projected segment that lies inside the
-    /// rectangle, or nil when the segment misses it.
-    ///
-    /// Liang–Barsky in the segment's own screen parameter, so an edge whose two
-    /// endpoints both lie outside still reports the interval it crosses.
-    private static func clippedParameterInterval(
-        from start: CGPoint,
-        to end: CGPoint,
-        in rect: CGRect
-    ) -> (lower: Double, upper: Double)? {
-        guard start.x.isFinite, start.y.isFinite, end.x.isFinite, end.y.isFinite else {
-            return nil
-        }
-        let dx = Double(end.x - start.x)
-        let dy = Double(end.y - start.y)
-        var lower = 0.0
-        var upper = 1.0
-        for (denominator, numerator) in [
-            (-dx, Double(start.x - rect.minX)),
-            (dx, Double(rect.maxX - start.x)),
-            (-dy, Double(start.y - rect.minY)),
-            (dy, Double(rect.maxY - start.y)),
-        ] {
-            guard denominator != 0 else {
-                if numerator < 0 { return nil }
-                continue
-            }
-            let parameter = numerator / denominator
-            guard parameter.isFinite else { return nil }
-            if denominator < 0 {
-                if parameter > upper { return nil }
-                if parameter > lower { lower = parameter }
-            } else {
-                if parameter < lower { return nil }
-                if parameter < upper { upper = parameter }
-            }
-        }
-        guard lower <= upper else { return nil }
-        return (lower, upper)
-    }
-
-    /// A point inside both a projected triangle and the rectangle, or nil when
-    /// they do not meet.
-    ///
-    /// The triangle is clipped against the rectangle's four half-planes, so the
-    /// surviving polygon is convex and lies inside both. The mean of a convex
-    /// polygon's vertices lies inside it, which is what lets one native surface
-    /// query at that point stand for the whole overlap.
-    ///
-    /// `ViewportNativeOccurrenceRectangleResolver` shares this rule so the
-    /// sub-shape rectangle and the occurrence rectangle cannot disagree about
-    /// what meeting the rectangle means.
-    static func clippedCentroid(
-        _ first: CGPoint,
-        _ second: CGPoint,
-        _ third: CGPoint,
-        in rect: CGRect
-    ) -> CGPoint? {
-        var polygon = [first, second, third]
-        guard polygon.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
-        for boundary in RectangleBoundary.allCases {
-            guard polygon.isEmpty == false else { return nil }
-            var clipped: [CGPoint] = []
-            clipped.reserveCapacity(polygon.count + 1)
-            for index in polygon.indices {
-                let current = polygon[index]
-                let previous = polygon[(index + polygon.count - 1) % polygon.count]
-                let retainsCurrent = boundary.retains(current, in: rect)
-                let retainsPrevious = boundary.retains(previous, in: rect)
-                if retainsCurrent {
-                    if retainsPrevious == false {
-                        clipped.append(boundary.intersection(from: previous, to: current, in: rect))
-                    }
-                    clipped.append(current)
-                } else if retainsPrevious {
-                    clipped.append(boundary.intersection(from: previous, to: current, in: rect))
-                }
-            }
-            polygon = clipped
-        }
-        guard polygon.isEmpty == false else { return nil }
-        var sumX = 0.0
-        var sumY = 0.0
-        for point in polygon {
-            sumX += Double(point.x)
-            sumY += Double(point.y)
-        }
-        let count = Double(polygon.count)
-        let centroid = CGPoint(x: CGFloat(sumX / count), y: CGFloat(sumY / count))
-        guard centroid.x.isFinite, centroid.y.isFinite else { return nil }
-        return centroid
-    }
-
-    private enum RectangleBoundary: CaseIterable {
-        case minX
-        case maxX
-        case minY
-        case maxY
-
-        func retains(_ point: CGPoint, in rect: CGRect) -> Bool {
-            switch self {
-            case .minX: point.x >= rect.minX
-            case .maxX: point.x <= rect.maxX
-            case .minY: point.y >= rect.minY
-            case .maxY: point.y <= rect.maxY
-            }
-        }
-
-        /// The crossing of a segment with this boundary.
-        ///
-        /// The caller forms it only for a segment with one retained and one
-        /// rejected endpoint, so the denominator below is non-zero there; the
-        /// guard keeps the function total rather than describing a reachable
-        /// case.
-        func intersection(from start: CGPoint, to end: CGPoint, in rect: CGRect) -> CGPoint {
-            switch self {
-            case .minX, .maxX:
-                let bound = self == .minX ? rect.minX : rect.maxX
-                let dx = end.x - start.x
-                guard dx != 0 else { return CGPoint(x: bound, y: start.y) }
-                let parameter = (bound - start.x) / dx
-                return CGPoint(x: bound, y: start.y + (end.y - start.y) * parameter)
-            case .minY, .maxY:
-                let bound = self == .minY ? rect.minY : rect.maxY
-                let dy = end.y - start.y
-                guard dy != 0 else { return CGPoint(x: start.x, y: bound) }
-                let parameter = (bound - start.y) / dy
-                return CGPoint(x: start.x + (end.x - start.x) * parameter, y: bound)
-            }
-        }
     }
 
     private static func world(_ point: Point3D, modelTransform: Transform3D) -> Point3D {

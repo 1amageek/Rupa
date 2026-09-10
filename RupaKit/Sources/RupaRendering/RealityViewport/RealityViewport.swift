@@ -908,7 +908,8 @@ final class RealityViewport {
         return try ViewportNativeOccurrenceRectangleResolver.occurrenceIDs(
             intersecting: rect,
             occurrences: occurrences,
-            project: { try self.projectedPointWithinDepthRange($0, revision: revision) },
+            depthInterval: try cameraDepthInterval(revision: revision),
+            projectWithDepth: { try self.projectedPointWithDepth($0, revision: revision) },
             drawnOccurrenceID: { try self.surfaceHit(at: $0, revision: revision)?.triangle.occurrenceID }
         )
     }
@@ -1015,6 +1016,59 @@ final class RealityViewport {
         return projected
     }
 
+    /// The mounted camera's own depth interval, in the linear view-space depth
+    /// `projectedPointWithDepth(_:revision:)` reports.
+    ///
+    /// A selection rectangle clips candidate geometry against this interval in
+    /// world space, so it needs the interval itself and not only a per-point
+    /// verdict. This is the single reader of the mounted camera's near and far
+    /// planes, so no caller can form a second opinion about them.
+    func cameraDepthInterval(revision: UInt64) throws -> ClosedRange<Double> {
+        try validateCameraQuery(point: .zero, revision: revision)
+        guard let near = camera.components[OrthographicCameraComponent.self]?.near
+            ?? camera.components[PerspectiveCameraComponent.self]?.near,
+              let far = camera.components[OrthographicCameraComponent.self]?.far
+            ?? camera.components[PerspectiveCameraComponent.self]?.far else {
+            throw Self.queryFailure("The mounted native camera has no depth interval.")
+        }
+        guard near.isFinite, far.isFinite, near <= far else {
+            throw Self.queryFailure("The mounted native camera has no ordered finite depth interval.")
+        }
+        return Double(near) ... Double(far)
+    }
+
+    /// Reports a world point's camera-space depth, and its projected point
+    /// wherever the mounted camera answers for one.
+    ///
+    /// Depth is reported for every point this scene can represent, including
+    /// one the camera's depth interval excludes, because a rectangle clips a
+    /// candidate against that interval in world space and the crossing is
+    /// interpolated from the depths on both sides of it. A nil point is the
+    /// camera declining to project, which a caller reads as a miss; readiness,
+    /// camera revision and scene-space representation failures stay typed.
+    func projectedPointWithDepth(
+        _ point: Point3D,
+        revision: UInt64
+    ) throws -> (point: CGPoint?, depth: Double) {
+        try validateCameraQuery(point: .zero, revision: revision)
+        let local = SIMD3<Float>(
+            Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y),
+            Float(point.z - renderOrigin.z)
+        )
+        guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
+            throw Self.queryFailure("The world point cannot be represented in native scene space.")
+        }
+        let depth = -camera.convert(position: local, from: nil).z
+        guard depth.isFinite else {
+            throw Self.queryFailure("The mounted native camera reports no finite depth for the world point.")
+        }
+        guard let content, let projected = content.project(point: local, to: .local),
+              projected.x.isFinite, projected.y.isFinite else {
+            return (point: nil, depth: Double(depth))
+        }
+        return (point: projected, depth: Double(depth))
+    }
+
     /// Admits a world point against the mounted camera's depth interval and
     /// reports its camera-space depth. A nil result is a valid depth rejection
     /// after the exact-ready gate; readiness, camera revision, representation
@@ -1024,23 +1078,13 @@ final class RealityViewport {
         _ point: Point3D,
         revision: UInt64
     ) throws -> (point: CGPoint, depth: Double)? {
-        try validateCameraQuery(point: .zero, revision: revision)
-        let local = SIMD3<Float>(
-            Float(point.x - renderOrigin.x), Float(point.y - renderOrigin.y),
-            Float(point.z - renderOrigin.z)
-        )
-        guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
-            throw Self.queryFailure("The world point cannot be represented in native scene space.")
+        let interval = try cameraDepthInterval(revision: revision)
+        let answer = try projectedPointWithDepth(point, revision: revision)
+        guard interval.contains(answer.depth) else { return nil }
+        guard let projected = answer.point else {
+            throw Self.queryFailure("The native projection cannot represent the requested world point.")
         }
-        guard let near = camera.components[OrthographicCameraComponent.self]?.near
-            ?? camera.components[PerspectiveCameraComponent.self]?.near,
-              let far = camera.components[OrthographicCameraComponent.self]?.far
-            ?? camera.components[PerspectiveCameraComponent.self]?.far else {
-            throw Self.queryFailure("The mounted native camera has no depth interval.")
-        }
-        let depth = -camera.convert(position: local, from: nil).z
-        guard depth.isFinite, depth >= near, depth <= far else { return nil }
-        return (point: try project(point, revision: revision), depth: Double(depth))
+        return (point: projected, depth: answer.depth)
     }
 
     /// Admits a world point against the mounted camera's depth interval only;

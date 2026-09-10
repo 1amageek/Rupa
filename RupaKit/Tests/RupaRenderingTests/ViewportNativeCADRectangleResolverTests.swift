@@ -18,31 +18,55 @@ import Testing
 /// one world unit maps to 100 screen points, giving the orthographic screen map
 /// `(200 + 100x, 200 - 100z)`. The only surface in the frame is the body's
 /// front face, the unit square `x, z in [0, 1]` at camera depth 10.
-/// `unprojectablePoints` reproduces a point the mounted camera declines to
-/// answer for — a point outside the frame's depth range — without making the
-/// projection non-affine anywhere else. `section` is the frame's retained
-/// half-space, and `drawnByThisBody` is the render provenance the production
-/// query derives from the drawn triangle's occurrence.
+///
+/// `depthInterval` is the mounted camera's own clip range, and the two
+/// projection entry points answer it the way the mounted camera does:
+/// `projectWithDepth` reports a depth for every point the scene can represent,
+/// including one the interval excludes, while `project` admits a point only
+/// inside the interval. `unprojectablePoints` reproduces a point the mounted
+/// camera declines to project, without making the projection non-affine
+/// anywhere else. `coveredScreenRect` is a region another solid stands in front
+/// of, so a surface query there answers with a triangle this body did not draw.
+/// `section` is the frame's retained half-space, and `drawnByThisBody` is the
+/// render provenance the production query derives from the drawn triangle's
+/// occurrence.
 private struct RectangleFrame {
     static let occurrenceID = SceneOccurrenceID(rawValue: "occurrence.cad.body")
+    /// The occurrence of the solid standing in front of `coveredScreenRect`.
+    static let coveringOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.cad.covering")
 
     /// The mesh face identity of the drawn triangle, which is the triangle's
     /// own index in the CAD body's emission order.
     var surfaceFaceID: MeshFaceID = MeshFaceID(0)
     var drawnByThisBody: Bool = true
     var unprojectablePoints: Set<Point3D> = []
+    /// The mounted camera's near and far planes, in the depth `y + 10` reports.
+    var depthInterval: ClosedRange<Double> = 0.5 ... 100
+    /// The screen region another solid draws in front of this body.
+    var coveredScreenRect: CGRect?
     /// The retained half-space, in the same world space as the topology:
     /// `dot(point, normal) - offset >= 0`.
     var section: (normal: Vector3D, offset: Double)?
     let log = RectangleFrameLog()
 
-    func project(_ point: Point3D) throws -> (point: CGPoint, depth: Double)? {
+    func projectWithDepth(_ point: Point3D) throws -> (point: CGPoint?, depth: Double) {
         log.recordProjection(of: point)
-        guard unprojectablePoints.contains(point) == false else { return nil }
+        let depth = point.y + 10
+        guard unprojectablePoints.contains(point) == false else {
+            return (point: nil, depth: depth)
+        }
         return (
             point: CGPoint(x: 200 + point.x * 100, y: 200 - point.z * 100),
-            depth: point.y + 10
+            depth: depth
         )
+    }
+
+    func project(_ point: Point3D) throws -> (point: CGPoint, depth: Double)? {
+        let camera = try projectWithDepth(point)
+        guard depthInterval.contains(camera.depth), let projected = camera.point else {
+            return nil
+        }
+        return (point: projected, depth: camera.depth)
     }
 
     func surfaceHit(
@@ -56,8 +80,11 @@ private struct RectangleFrame {
         // The frame draws nothing where the section removed geometry, so a cut
         // pixel is empty in exactly the same way a silhouette pixel is.
         guard try retainsSectionedPoint(surfacePoint) else { return nil }
+        let occurrenceID = coveredScreenRect?.contains(point) == true
+            ? RectangleFrame.coveringOccurrenceID
+            : RectangleFrame.occurrenceID
         return (
-            triangle: frameTriangle(faceID: surfaceFaceID),
+            triangle: frameTriangle(faceID: surfaceFaceID, occurrenceID: occurrenceID),
             point: surfacePoint
         )
     }
@@ -104,9 +131,12 @@ private final class RectangleFrameLog: Sendable {
     }
 }
 
-private func frameTriangle(faceID: MeshFaceID) -> MeshSourcePresentationTriangle {
+private func frameTriangle(
+    faceID: MeshFaceID,
+    occurrenceID: SceneOccurrenceID = RectangleFrame.occurrenceID
+) -> MeshSourcePresentationTriangle {
     MeshSourcePresentationTriangle(
-        occurrenceID: RectangleFrame.occurrenceID,
+        occurrenceID: occurrenceID,
         definitionID: ObjectDefinitionID(rawValue: "definition.cad"),
         representationID: GeometryRepresentationID(rawValue: "representation.cad"),
         sourceReference: .cad(sourceID: "cad.source", outputID: "cad.output"),
@@ -196,6 +226,57 @@ private func bodyTopology(
     )
 }
 
+/// A face the camera's near plane cuts.
+///
+/// Two corners stand at camera depth -9, behind the near plane at 0.5, and the
+/// third stands at depth 10. The camera draws the part between them, the
+/// triangle `(230, 140)`, `(250, 100)`, `(270, 140)`, which meets the
+/// rectangle.
+private func nearPlaneCrossingMesh() -> ViewportBodyMesh {
+    ViewportBodyMesh(
+        positions: [
+            Point3D(x: 0.1, y: -19, z: 0.2),
+            Point3D(x: 0.9, y: -19, z: 0.2),
+            Point3D(x: 0.5, y: 0, z: 1.0),
+        ],
+        indices: [0, 1, 2]
+    )
+}
+
+/// A face whose projection meets the rectangle only where the near plane cut it
+/// away.
+///
+/// Unclipped it covers the middle of the rectangle; the part the camera draws
+/// projects to `y` in 90...99, clear of it.
+private func nearPlaneRejectedMesh() -> ViewportBodyMesh {
+    ViewportBodyMesh(
+        positions: [
+            Point3D(x: 0.1, y: -95, z: 0.2),
+            Point3D(x: 0.9, y: -95, z: 0.2),
+            Point3D(x: 0.5, y: 0, z: 1.1),
+        ],
+        indices: [0, 1, 2]
+    )
+}
+
+/// One triangle far larger than the rectangle, so every point the grid can name
+/// inside the rectangle lies inside the triangle.
+private func giantMesh() -> ViewportBodyMesh {
+    ViewportBodyMesh(
+        positions: [
+            Point3D(x: -1, y: 0, z: -1),
+            Point3D(x: 3, y: 0, z: -1),
+            Point3D(x: -1, y: 0, z: 3),
+        ],
+        indices: [0, 1, 2]
+    )
+}
+
+/// The single run each one-triangle mesh above carries.
+private let singleTriangleRun: [ViewportBodyTopology.MeshFaceRun] = [
+    .init(componentID: frontFaceComponentID, triangleRange: 0 ..< 1)
+]
+
 private func resolve(
     in rect: CGRect = queryRect,
     frame: RectangleFrame = RectangleFrame(),
@@ -211,7 +292,9 @@ private func resolve(
         modelTransform: modelTransform,
         selectionHitPolicy: policy,
         usesPerspectiveProjection: false,
+        depthInterval: frame.depthInterval,
         project: frame.project,
+        projectWithDepth: frame.projectWithDepth,
         surfaceHit: frame.surfaceHit,
         retainsSectionedPoint: frame.retainsSectionedPoint,
         bodyDrawsTriangle: frame.bodyDrawsTriangle
@@ -249,18 +332,19 @@ private func resolve(
     }
 
     /// An edge is clipped, not sampled at a fixed pitch: an edge whose two
-    /// endpoints both lie outside the rectangle still crosses it, and the
-    /// midpoint of the surviving interval is the point the frame is asked about.
+    /// endpoints both lie outside the rectangle still crosses it, and the frame
+    /// is asked about a point on the surviving interval.
     @Test(.timeLimit(.minutes(1)))
     func rectangleReportsAnEdgeCrossingItWithBothEndpointsOutside() throws {
         let frame = RectangleFrame()
         let components = try resolve(frame: frame)
 
-        // The edge projects to (200, 150)...(300, 150), so the rectangle keeps
-        // the screen interval 0.1...0.7 and its midpoint 0.4 maps back to the
-        // edge's own parameter 0.4 under an orthographic camera.
+        // The edge projects to (200, 150)...(300, 150), so every point the grid
+        // can name on it lies on `y = 150` inside the rectangle. Which cell of
+        // the grid answers first is the grid's order, not the edge's own
+        // parameter, so the test states the place and not the pitch.
         let sampled = frame.log.surfaceQueries.contains { point in
-            abs(point.x - 240) < 0.001 && abs(point.y - 150) < 0.001
+            abs(point.y - 150) < 0.001 && queryRect.contains(point)
         }
 
         #expect(components.contains(.edge(crossingEdgeComponentID)))
@@ -268,23 +352,26 @@ private func resolve(
         #expect(sampled)
     }
 
-    /// The face branch asks the frame one question, at a point inside both the
-    /// triangle and the rectangle, and reads the answer's mesh face identity
-    /// back through the run list. Nothing about the face is decided by a depth
+    /// The face branch asks the frame about a point inside both the run's drawn
+    /// projection and the rectangle, and reads the answer's mesh face identity
+    /// back through the run list. Which triangle of the run covers that point is
+    /// the grid's business, so the contract names the run's projection and not
+    /// one triangle of it, and nothing about the face is decided by a depth
     /// compare of the resolver's own.
     @Test(.timeLimit(.minutes(1)))
-    func rectangleConfirmsAFaceAtAPointInsideBothTheTriangleAndTheRectangle() throws {
+    func rectangleConfirmsAFaceAtAPointInsideBothItsProjectionAndTheRectangle() throws {
         let frame = RectangleFrame()
         let components = try resolve(frame: frame)
-        let representative = try #require(frame.log.surfaceQueries.last)
+        let sample = try #require(frame.log.surfaceQueries.last)
 
         #expect(components.contains(.face(frontFaceComponentID)))
-        #expect(queryRect.contains(representative))
-        // Triangle 0 projects to (200, 200), (300, 200), (300, 100), so its
-        // interior is bounded by the hypotenuse `y = 400 - x`.
-        #expect(Double(representative.y) >= 400 - Double(representative.x))
-        #expect(representative.y <= 200)
-        #expect(representative.x <= 300)
+        #expect(queryRect.contains(sample))
+        // The front face projects to the square 200...300 by 100...200, which
+        // its two triangles tile between them.
+        #expect(sample.x >= 200)
+        #expect(sample.x <= 300)
+        #expect(sample.y >= 100)
+        #expect(sample.y <= 200)
     }
 
     /// A run whose projected bounds miss the rectangle costs the eight corner
@@ -315,11 +402,112 @@ private func resolve(
         #expect(frame.log.projections.contains(Point3D(x: 2.5, y: 0.4, z: 0.8)))
     }
 
+    /// The mounted camera's clip region decides what is drawn, so the rectangle
+    /// intersects candidates with it instead of dropping a triangle that has a
+    /// corner behind a clip plane. A face the near plane cuts is still drawn
+    /// where the camera kept it, and the rectangle selects it there.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsAFaceTheNearPlaneCutsWhereTheCameraDrawsIt() throws {
+        let frame = RectangleFrame()
+        let components = try resolve(
+            frame: frame,
+            topology: bodyTopology(meshFaceRuns: singleTriangleRun),
+            mesh: nearPlaneCrossingMesh(),
+            policy: .face
+        )
+
+        #expect(components == [.face(frontFaceComponentID)])
+        #expect(frame.log.surfaceQueries.count == 1)
+        // The near plane cuts the two corners behind it away along `y = 140`,
+        // leaving the triangle (230, 140), (250, 100), (270, 140). Every
+        // question the frame is asked is inside it, never on the side the
+        // camera removed.
+        for query in frame.log.surfaceQueries {
+            #expect(queryRect.contains(query))
+            #expect(query.y <= 140)
+            #expect(Double(query.y) >= 600 - 2 * Double(query.x))
+            #expect(Double(query.y) >= 2 * Double(query.x) - 400)
+        }
+    }
+
+    /// Clipping is not a widening the resolver may skip. A face whose only part
+    /// inside the rectangle is the part the near plane removed is not in the
+    /// rectangle, and the run's projected bounds do not say so — they widen the
+    /// search precisely because the box straddles the plane.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleRejectsAFaceTheNearPlaneCutAwayWhereItMetTheRectangle() throws {
+        let frame = RectangleFrame()
+        let components = try resolve(
+            frame: frame,
+            topology: bodyTopology(meshFaceRuns: singleTriangleRun),
+            mesh: nearPlaneRejectedMesh(),
+            policy: .face
+        )
+
+        // Unclipped the triangle covers (232.5, 132.5) in the rectangle's
+        // middle; the part the camera draws projects to `y` in 90...99.
+        #expect(components.isEmpty)
+        #expect(frame.log.surfaceQueries.isEmpty)
+    }
+
+    /// A candidate is a region, not a point. When another solid stands in front
+    /// of the middle of the rectangle, the grid keeps asking about the cells
+    /// around it, so a face the camera still draws inside the rectangle is
+    /// selected — and the scan stays inside the per-candidate query ceiling.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsAFaceCoveredAtItsMiddleAndDrawnAtItsEdge() throws {
+        var frame = RectangleFrame()
+        frame.coveredScreenRect = CGRect(x: 222, y: 122, width: 36, height: 36)
+        let covered = try #require(frame.coveredScreenRect)
+
+        let components = try resolve(
+            frame: frame,
+            topology: bodyTopology(meshFaceRuns: singleTriangleRun),
+            mesh: giantMesh(),
+            policy: .face
+        )
+        let queries = frame.log.surfaceQueries
+        let first = try #require(queries.first)
+        let last = try #require(queries.last)
+
+        #expect(components == [.face(frontFaceComponentID)])
+        #expect(covered.contains(first))
+        #expect(covered.contains(last) == false)
+        #expect(queries.count > 1)
+        #expect(
+            queries.count
+                <= MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate
+        )
+    }
+
+    /// A run's first triangle is not the run. Covering the part of that triangle
+    /// which meets the rectangle must not lose the face, because the run's other
+    /// triangle still draws inside the rectangle. Deciding a face by one
+    /// representative point derived from the first intersecting triangle would
+    /// make the selection depend on the run's internal triangle order.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsAFaceWhoseFirstTriangleIsCoveredInsideTheRectangle() throws {
+        var frame = RectangleFrame()
+        frame.coveredScreenRect = CGRect(x: 250, y: 150, width: 22, height: 22)
+        let covered = try #require(frame.coveredScreenRect)
+
+        let components = try resolve(frame: frame, policy: .face)
+        let queries = frame.log.surfaceQueries
+
+        // Triangle 0 meets the rectangle only where `x + y >= 400`, and the
+        // covered region holds the centre of that intersection.
+        #expect(components == [.face(frontFaceComponentID)])
+        #expect(queries.count == 1)
+        for query in queries {
+            #expect(covered.contains(query) == false)
+        }
+    }
+
     /// Mesh face identities are numbered per body, so a triangle another body
     /// drew can carry an index that also names a run of this body. Admitting it
     /// would select a face standing behind another solid.
     @Test(.timeLimit(.minutes(1)))
-    func rectangleRejectsAFaceAnotherBodyDrewAtTheRepresentativePoint() throws {
+    func rectangleRejectsAFaceAnotherBodyDrewAtTheSampledPoint() throws {
         var frame = RectangleFrame()
         frame.drawnByThisBody = false
 
@@ -329,11 +517,11 @@ private func resolve(
         #expect(components.contains(.face(sideFaceComponentID)) == false)
     }
 
-    /// The drawn triangle at the representative point must belong to the run
+    /// The drawn triangle at the sampled point must belong to the run
     /// being tested. A triangle of another face of the same body means this run
     /// is not what the frame draws there.
     @Test(.timeLimit(.minutes(1)))
-    func rectangleRejectsARepresentativePointOwnedByAnotherRun() throws {
+    func rectangleRejectsASampledPointOwnedByAnotherRun() throws {
         var frame = RectangleFrame()
         frame.surfaceFaceID = MeshFaceID(2)
 

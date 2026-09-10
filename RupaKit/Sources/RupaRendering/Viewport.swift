@@ -2066,7 +2066,18 @@ public struct Viewport: View {
         let retainsSectionedPoint: (Point3D) throws -> Bool = {
             try presentationPlanCache.retainsSectionedPoint($0, for: identity, revision: revision)
         }
+        let projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double) = {
+            try presentationPlanCache.projectedPointWithDepth(
+                $0, for: identity, revision: revision
+            )
+        }
         let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
+            for: identity, revision: revision
+        )
+        // The interval belongs to the same mounted camera the projections come
+        // from, so a candidate crossing a clip plane contributes the part that
+        // camera draws instead of being dropped whole.
+        let depthInterval = try presentationPlanCache.cameraDepthInterval(
             for: identity, revision: revision
         )
         var hits: [ViewportHit] = []
@@ -2119,7 +2130,9 @@ public struct Viewport: View {
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: selectionHitPolicy,
                 usesPerspectiveProjection: usesPerspectiveProjection,
+                depthInterval: depthInterval,
                 project: project,
+                projectWithDepth: projectWithDepth,
                 surfaceHit: surfaceHit,
                 retainsSectionedPoint: retainsSectionedPoint,
                 bodyDrawsTriangle: bodyDrawsTriangle

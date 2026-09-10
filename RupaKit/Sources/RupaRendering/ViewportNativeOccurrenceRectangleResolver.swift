@@ -10,10 +10,10 @@ import RupaGeometry
 /// sub-shape rectangle: it names whole occurrences rather than sub-shapes, and
 /// it asks the same frame that answers the pointer instead of projecting the
 /// plan through a second camera. The resolver owns no projection model, no
-/// section predicate and no culling rule of its own — `project` and
-/// `drawnOccurrenceID` are the mounted frame's answers, and the frame draws
-/// only what survived the section, only what nothing nearer covers, and only
-/// the faces it retains.
+/// section predicate and no culling rule of its own — `projectWithDepth`,
+/// `depthInterval` and `drawnOccurrenceID` are the mounted frame's answers, and
+/// the frame draws only what survived the section, only what nothing nearer
+/// covers, and only the faces it retains.
 enum ViewportNativeOccurrenceRectangleResolver {
     /// The occurrences the mounted frame draws inside `rect`, in plan order and
     /// de-duplicated.
@@ -27,17 +27,28 @@ enum ViewportNativeOccurrenceRectangleResolver {
     /// answering frame and the projected geometry came from two different
     /// plans, so it is reported as a failure rather than dropped.
     ///
+    /// A candidate is clipped against the camera's depth interval in world
+    /// space and then sampled on `ViewportRectangleSampleGrid`, the same kernel
+    /// the CAD sub-shape rectangle uses, so the two rectangles cannot disagree
+    /// about what meeting the rectangle means. The grid is what keeps this
+    /// answer independent of the order the plan's triangles are stored in and
+    /// keeps an occurrence whose middle is covered by a nearer solid selectable
+    /// by the part of it that is not.
+    ///
     /// Cost per candidate: eight bounding-box projections, one projection per
-    /// retained source position, CPU clipping per triangle until the first
-    /// overlap, and exactly one native surface query. Across a plan those are
-    /// bounded by `MeshSourcePresentationPlanLimits.standard`, and the surface
-    /// queries by one per candidate — never one per triangle. The bound is a
+    /// retained source position, CPU clipping per triangle, and at most
+    /// `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`
+    /// native surface queries — never one per triangle. Every candidate here is
+    /// a plan item, so across a plan the surface queries are bounded by
+    /// `MeshSourcePresentationPlanLimits.standard.maxRectangleSurfaceQueryCount`
+    /// and the projections by that plan's own dimensions. The bound is a
     /// correctness contract, not an optimization: a rectangle drag re-runs this
     /// query on every pointer move.
     static func occurrenceIDs(
         intersecting rect: CGRect,
         occurrences: [MeshSourcePresentationOccurrenceView],
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?,
+        depthInterval: ClosedRange<Double>,
+        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double),
         drawnOccurrenceID: (CGPoint) throws -> SceneOccurrenceID?
     ) throws -> [SceneOccurrenceID] {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
@@ -48,18 +59,61 @@ enum ViewportNativeOccurrenceRectangleResolver {
                 message: "The occurrence rectangle query has no finite, non-empty rectangle."
             )
         }
+        guard depthInterval.lowerBound.isFinite, depthInterval.upperBound.isFinite else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidSceneItem,
+                message: "The occurrence rectangle query has no finite camera depth interval."
+            )
+        }
+        let grid = ViewportRectangleSampleGrid(rect: rect)
         var admitted: Set<SceneOccurrenceID> = []
         for occurrence in occurrences {
             // An occurrence a previous query already named is drawn inside the
             // rectangle, so asking again could only repeat that answer.
             guard admitted.contains(occurrence.occurrenceID) == false else { continue }
-            guard try mayMeetRectangle(occurrence, rect: rect, project: project) else { continue }
-            let projected = try projectedPositions(occurrence, project: project)
-            guard let point = representativePoint(
-                occurrence, projected: projected, rect: rect
+            guard try mayMeetRectangle(
+                occurrence,
+                rect: rect,
+                depthInterval: depthInterval,
+                projectWithDepth: projectWithDepth
             ) else { continue }
-            guard let drawn = try drawnOccurrenceID(point) else { continue }
-            admitted.insert(drawn)
+            let projected = try projectedPositions(
+                occurrence, projectWithDepth: projectWithDepth
+            )
+            var sampler = grid.polygonSampler()
+            for index in 0..<occurrence.triangleCount {
+                let indices = occurrence.positionIndices(at: index)
+                let drawn = ViewportCameraDepthClip.clipped(
+                    [projected[indices.first], projected[indices.second], projected[indices.third]],
+                    to: depthInterval
+                )
+                guard drawn.count >= 3 else { continue }
+                var screen: [CGPoint] = []
+                screen.reserveCapacity(drawn.count)
+                for vertex in drawn {
+                    if let point = vertex.projected {
+                        screen.append(point)
+                        continue
+                    }
+                    // A vertex the depth clip created has no projection yet, and
+                    // one the camera does not answer for is dropped rather than
+                    // guessed: what remains still spans a convex subset of the
+                    // drawn fragment, so the sample stays inside it.
+                    guard let point = try projectWithDepth(vertex.point).point,
+                          point.x.isFinite, point.y.isFinite else { continue }
+                    screen.append(point)
+                }
+                guard screen.count >= 3 else { continue }
+                sampler.admit(screen)
+            }
+            for sample in sampler.samples() {
+                guard let drawn = try drawnOccurrenceID(sample) else { continue }
+                admitted.insert(drawn)
+                // Another occurrence covering this sample is still a real
+                // answer for that occurrence, so it is admitted; only this
+                // candidate's own confirmation ends its samples.
+                if drawn == occurrence.occurrenceID { break }
+            }
         }
         guard admitted.isEmpty == false else { return [] }
         var result: [SceneOccurrenceID] = []
@@ -83,13 +137,16 @@ enum ViewportNativeOccurrenceRectangleResolver {
     ///
     /// The box is CPU arithmetic over the retained positions; only its eight
     /// corners reach the frame. A candidate is skipped only when the camera
-    /// answers for all eight and their screen bounds miss the rectangle, so a
-    /// corner the camera cannot project widens the search instead of losing the
-    /// occurrence. This is the same rule the CAD face runs use.
+    /// answers for all eight, draws all eight, and their screen bounds miss the
+    /// rectangle. A corner the camera cannot project and a corner outside the
+    /// camera's depth interval both widen the search instead of losing the
+    /// occurrence, because the box may still straddle a clip plane and be drawn
+    /// in part. This is the same rule the CAD face runs use.
     private static func mayMeetRectangle(
         _ occurrence: MeshSourcePresentationOccurrenceView,
         rect: CGRect,
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?
+        depthInterval: ClosedRange<Double>,
+        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double)
     ) throws -> Bool {
         guard let bounds = worldBounds(occurrence) else { return true }
         var minimum = CGPoint(x: CGFloat.infinity, y: CGFloat.infinity)
@@ -100,17 +157,19 @@ enum ViewportNativeOccurrenceRectangleResolver {
                 y: corner & 2 == 0 ? bounds.minimum.y : bounds.maximum.y,
                 z: corner & 4 == 0 ? bounds.minimum.z : bounds.maximum.z
             )
-            guard let projected = try project(point),
-                  projected.point.x.isFinite, projected.point.y.isFinite else {
+            let camera = try projectWithDepth(point)
+            guard depthInterval.contains(camera.depth) else { return true }
+            guard let projected = camera.point,
+                  projected.x.isFinite, projected.y.isFinite else {
                 return true
             }
             minimum = CGPoint(
-                x: min(minimum.x, projected.point.x),
-                y: min(minimum.y, projected.point.y)
+                x: min(minimum.x, projected.x),
+                y: min(minimum.y, projected.y)
             )
             maximum = CGPoint(
-                x: max(maximum.x, projected.point.x),
-                y: max(maximum.y, projected.point.y)
+                x: max(maximum.x, projected.x),
+                y: max(maximum.y, projected.y)
             )
         }
         return maximum.x >= rect.minX && minimum.x <= rect.maxX
@@ -143,59 +202,38 @@ enum ViewportNativeOccurrenceRectangleResolver {
         return (minimum, maximum)
     }
 
-    /// Each retained world position projected once, nil where the camera does
-    /// not answer for it.
+    /// Each retained world position with the camera's depth for it and its
+    /// projection, the latter nil where the camera does not answer for one.
     ///
     /// The plan retains one position per source vertex and indexes it per
     /// triangle, which is the shape `MeshSourcePresentationOccurrenceView`
     /// exists for: projecting here costs `positions.count` calls instead of
-    /// `3 * triangleCount`.
+    /// `3 * triangleCount`. Depth is reported for every position, whether or not
+    /// the camera draws it, because the depth clip interpolates the crossing of
+    /// a clip plane from the depths on both sides of it.
     private static func projectedPositions(
         _ occurrence: MeshSourcePresentationOccurrenceView,
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?
-    ) throws -> [CGPoint?] {
-        var projected: [CGPoint?] = []
+        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double)
+    ) throws -> [ViewportCameraDepthClip.Vertex] {
+        var projected: [ViewportCameraDepthClip.Vertex] = []
         projected.reserveCapacity(occurrence.positions.count)
         for position in occurrence.positions {
-            guard let result = try project(
-                Point3D(x: position.x, y: position.y, z: position.z)
-            ), result.point.x.isFinite, result.point.y.isFinite else {
-                projected.append(nil)
+            let point = Point3D(x: position.x, y: position.y, z: position.z)
+            let camera = try projectWithDepth(point)
+            guard let screen = camera.point, screen.x.isFinite, screen.y.isFinite else {
+                projected.append(
+                    ViewportCameraDepthClip.Vertex(
+                        point: point, depth: camera.depth, projected: nil
+                    )
+                )
                 continue
             }
-            projected.append(result.point)
+            projected.append(
+                ViewportCameraDepthClip.Vertex(
+                    point: point, depth: camera.depth, projected: screen
+                )
+            )
         }
         return projected
-    }
-
-    /// The first triangle of the occurrence whose projection meets the
-    /// rectangle, reported as a point inside both.
-    ///
-    /// The scan follows emission order and stops at the first such triangle:
-    /// one point of the overlap is enough to ask the frame what it draws there.
-    /// That the answer is taken at this one point is what makes an occurrence
-    /// occluded there a miss even when another part of it is visible inside the
-    /// rectangle. The clipping rule itself is owned by
-    /// `ViewportNativeCADTopologyResolver`, so the two rectangles cannot
-    /// disagree about what "meets the rectangle" means.
-    private static func representativePoint(
-        _ occurrence: MeshSourcePresentationOccurrenceView,
-        projected: [CGPoint?],
-        rect: CGRect
-    ) -> CGPoint? {
-        for index in 0..<occurrence.triangleCount {
-            let indices = occurrence.positionIndices(at: index)
-            guard let first = projected[indices.first],
-                  let second = projected[indices.second],
-                  let third = projected[indices.third] else {
-                continue
-            }
-            if let centroid = ViewportNativeCADTopologyResolver.clippedCentroid(
-                first, second, third, in: rect
-            ) {
-                return centroid
-            }
-        }
-        return nil
     }
 }
