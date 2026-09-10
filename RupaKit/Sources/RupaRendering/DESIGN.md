@@ -920,6 +920,15 @@ independent tessellator is never an alternative implementation.
    can answer for it. `projectedPointWithinDepthRange(_:revision:)` is defined
    in terms of those two, so the near and far planes have one reader and the
    point path and the rectangle cannot disagree about the interval.
+   That interval's near bound is finite and positive, and its far bound is
+   either finite beyond it or unbounded, because the perspective camera the
+   frame mounts draws with an infinite far plane. An unbounded far plane
+   retains every finite depth, so it contributes no half-space and has no
+   crossing to interpolate; `ViewportCameraDepthClip` skips it and admits the
+   near clip alone. `ViewportCameraDepthClip.canClip(against:)` owns which
+   intervals name a camera at all, and both rectangle resolvers refuse through
+   it rather than restating a finiteness rule, so no caller can decide that a
+   perspective frame has no interval and answer an empty selection.
    The surviving projected polygon is then sampled on a grid rather than at one
    representative point. The rectangle is divided into
    `MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions` cells per
@@ -1095,7 +1104,9 @@ independent tessellator is never an alternative implementation.
    that rejects a triangle another body drew and a triangle belonging to a
    different run, rejection of the sub-shapes the section removed, the
    de-duplication of one component named by two runs, the typed failure for an
-   unrepresentable identity, and the absence of any rank order in the result.
+   unrepresentable identity, the unbounded far plane that still admits every
+   candidate the near clip keeps, the typed failure for an interval with no
+   near plane, and the absence of any rank order in the result.
    `Tests/RupaRenderingTests/ViewportNativeOccurrenceRectangleResolverTests.swift`
    owns the occurrence rectangle rules: a visible occurrence admitted, one fully
    behind another rejected, a candidate whose bounds miss the rectangle skipped
@@ -1106,11 +1117,12 @@ independent tessellator is never an alternative implementation.
    straddle the camera's near plane, results independent of triangle emission
    order, at most one surface query per grid cell for a candidate that reaches
    the frame, plan-order output independent of admission order, an occurrence
-   the frame answers with nothing rejected, the typed failure for a degenerate
-   rectangle, and the typed failure for an answer naming an occurrence the
-   queried plan does not hold. Its candidates are real occurrence views taken
-   from a built plan, so the retained shape the cost contract is stated against
-   is the plan's own.
+   the frame answers with nothing rejected, the unbounded far plane that answers
+   exactly as a finite one does, the typed failure for a degenerate rectangle,
+   the typed failure for an interval with no near plane, and the typed failure
+   for an answer naming an occurrence the queried plan does not hold. Its
+   candidates are real occurrence views taken from a built plan, so the
+   retained shape the cost contract is stated against is the plan's own.
    `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` owns the
    sampling kernel both rectangles share: that a cell's sample is a maximum
    under the total order and not a first arrival, so the same fragment set

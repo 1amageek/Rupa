@@ -269,7 +269,7 @@ enum ViewportNativeCADTopologyResolver {
                 message: "CAD topology rectangle query bounds are invalid."
             )
         }
-        guard depthInterval.lowerBound.isFinite, depthInterval.upperBound.isFinite else {
+        guard ViewportCameraDepthClip.canClip(against: depthInterval) else {
             throw MeshSourcePresentationRenderError(
                 code: .invalidSceneItem,
                 message: "CAD topology rectangle query camera depth bounds are invalid."

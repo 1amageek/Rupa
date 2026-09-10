@@ -1021,8 +1021,16 @@ final class RealityViewport {
     ///
     /// A selection rectangle clips candidate geometry against this interval in
     /// world space, so it needs the interval itself and not only a per-point
-    /// verdict. This is the single reader of the mounted camera's near and far
-    /// planes, so no caller can form a second opinion about them.
+    /// verdict. The rectangle and the point path read the interval only here,
+    /// so the two cannot form a second opinion about where the camera stops
+    /// drawing.
+    ///
+    /// The near plane is always finite and positive. The far plane is finite
+    /// beyond it under the orthographic camera, and unbounded under the
+    /// perspective camera this owner mounts with an infinite far plane, so the
+    /// returned upper bound may be `.infinity` and means the camera never stops
+    /// drawing rather than a malformed interval. This matches the interval the
+    /// calibration and ray queries already accept.
     func cameraDepthInterval(revision: UInt64) throws -> ClosedRange<Double> {
         try validateCameraQuery(point: .zero, revision: revision)
         guard let near = camera.components[OrthographicCameraComponent.self]?.near
@@ -1031,8 +1039,8 @@ final class RealityViewport {
             ?? camera.components[PerspectiveCameraComponent.self]?.far else {
             throw Self.queryFailure("The mounted native camera has no depth interval.")
         }
-        guard near.isFinite, far.isFinite, near <= far else {
-            throw Self.queryFailure("The mounted native camera has no ordered finite depth interval.")
+        guard near.isFinite, near > 0, (far.isFinite && far > near) || far == .infinity else {
+            throw Self.queryFailure("The mounted native camera has no ordered depth interval.")
         }
         return Double(near) ... Double(far)
     }

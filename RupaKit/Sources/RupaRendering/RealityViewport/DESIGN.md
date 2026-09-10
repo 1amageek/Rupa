@@ -768,6 +768,16 @@ of screen-baked dashes.
    Measurement snap validation uses this depth-admitted query; ruler and
    projection baselines retain the unrestricted query.
 
+   `cameraDepthInterval(revision:)` reports that same near/far interval as a
+   range, for a caller that clips geometry against it rather than asking about
+   one point at a time. Its near bound is finite and positive; its far bound is
+   finite beyond the near bound under the orthographic camera, and `.infinity`
+   under the perspective camera, whose infinite far plane this owner
+   configures. The query accepts the interval the calibration and ray queries
+   already accept, so a mounted perspective frame reports an interval instead
+   of a failure, and an unbounded far bound means the camera never stops
+   drawing rather than a malformed camera.
+
    `usesPerspectiveProjection(revision:)` reports which projection the mounted
    camera drew the frame with. Native camera depth is linear view-space z under
    both cameras, so a caller that interpolates along a projected segment cannot

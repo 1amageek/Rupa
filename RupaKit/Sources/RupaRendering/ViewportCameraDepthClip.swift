@@ -22,7 +22,23 @@ import RupaCore
 /// `RealityViewport.cameraDepthInterval(revision:)` reports and the depths
 /// `projectedPointWithDepth(_:revision:)` reports, so the rectangle and the
 /// point path cannot disagree about where the camera stops drawing.
+///
+/// That interval's far bound is unbounded whenever the frame draws with the
+/// perspective camera's infinite far plane. An unbounded far plane retains
+/// every finite depth, so it contributes no constraint and has no crossing to
+/// interpolate; this owner skips it rather than refusing the interval, because
+/// refusing it would drop every candidate under the perspective camera.
 enum ViewportCameraDepthClip {
+    /// Whether this owner can clip against `interval`.
+    ///
+    /// A caller that holds the frame's interval asks here instead of writing
+    /// its own finiteness rule, so no caller can disagree with the clip about
+    /// which intervals name a camera.
+    static func canClip(against interval: ClosedRange<Double>) -> Bool {
+        guard interval.lowerBound.isFinite else { return false }
+        return interval.upperBound.isFinite || interval.upperBound == .infinity
+    }
+
     /// One vertex of a candidate as it enters and leaves depth clipping.
     struct Vertex {
         /// The world position.
@@ -46,13 +62,13 @@ enum ViewportCameraDepthClip {
     /// wholly inside the interval is returned unchanged, so a caller that
     /// already projected its vertices spends no further native call on it.
     static func clipped(_ polygon: [Vertex], to interval: ClosedRange<Double>) -> [Vertex] {
-        guard polygon.count >= 3 else { return [] }
-        guard interval.lowerBound.isFinite, interval.upperBound.isFinite else { return [] }
+        guard polygon.count >= 3, canClip(against: interval) else { return [] }
         for vertex in polygon where !vertex.depth.isFinite {
             return []
         }
         let near = clipped(polygon, against: interval.lowerBound, retainingDepthsAbove: true)
         guard near.count >= 3 else { return [] }
+        guard interval.upperBound.isFinite else { return near }
         let far = clipped(near, against: interval.upperBound, retainingDepthsAbove: false)
         return far.count >= 3 ? far : []
     }
@@ -67,9 +83,12 @@ enum ViewportCameraDepthClip {
         endDepth: Double,
         to interval: ClosedRange<Double>
     ) -> (lower: Double, upper: Double)? {
-        guard startDepth.isFinite, endDepth.isFinite,
-              interval.lowerBound.isFinite, interval.upperBound.isFinite else {
+        guard startDepth.isFinite, endDepth.isFinite, canClip(against: interval) else {
             return nil
+        }
+        var constraints: [(bound: Double, retainsAbove: Bool)] = [(interval.lowerBound, true)]
+        if interval.upperBound.isFinite {
+            constraints.append((interval.upperBound, false))
         }
         var lower = 0.0
         var upper = 1.0
@@ -77,7 +96,7 @@ enum ViewportCameraDepthClip {
         guard delta.isFinite else { return nil }
         // depth(parameter) = startDepth + parameter * delta, so each plane is
         // one linear constraint whose direction follows the sign of `delta`.
-        for (bound, retainsAbove) in [(interval.lowerBound, true), (interval.upperBound, false)] {
+        for (bound, retainsAbove) in constraints {
             guard delta != 0 else {
                 let retained = retainsAbove ? startDepth >= bound : startDepth <= bound
                 if retained == false { return nil }

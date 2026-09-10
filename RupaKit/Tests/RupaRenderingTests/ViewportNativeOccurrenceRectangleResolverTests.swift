@@ -573,6 +573,44 @@ private func resolve(
         }
     }
 
+    /// The perspective camera the viewport mounts draws with an infinite far
+    /// plane, so the interval it reports has an unbounded upper bound. That
+    /// bound constrains nothing, so the occurrence rectangle answers exactly as
+    /// it does under a finite one. Refusing the interval would empty the
+    /// occurrence rectangle under every perspective frame.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsTheDrawnOccurrenceUnderAnUnboundedFarPlane() throws {
+        let views = try occurrenceViews([
+            try planItem(
+                occurrenceID: frontOccurrenceID,
+                source: try squareSource(named: "mesh.front", offsetX: 0, depth: 0)
+            ),
+        ])
+        var frame = OccurrenceRectangleFrame(drawn: [(200...300, frontOccurrenceID)])
+        frame.depthInterval = 0.5 ... .infinity
+
+        #expect(try resolve(occurrences: views, frame: frame) == [frontOccurrenceID])
+    }
+
+    /// An unbounded far plane is a camera; an unbounded near plane is not.
+    /// Answering it with an empty selection would report "nothing was in the
+    /// rectangle" for a frame this resolver cannot clip against.
+    @Test(.timeLimit(.minutes(1)))
+    func aDepthIntervalWithoutANearPlaneIsATypedFailure() throws {
+        let views = try occurrenceViews([
+            try planItem(
+                occurrenceID: frontOccurrenceID,
+                source: try squareSource(named: "mesh.front", offsetX: 0, depth: 0)
+            ),
+        ])
+        var frame = OccurrenceRectangleFrame(drawn: [(200...300, frontOccurrenceID)])
+        frame.depthInterval = -.infinity ... 100
+
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try resolve(occurrences: views, frame: frame)
+        }
+    }
+
     /// A query naming an occurrence the candidate list does not hold would mean
     /// the answering frame and the projected geometry came from two different
     /// plans, so it is a typed failure rather than a silently dropped answer.

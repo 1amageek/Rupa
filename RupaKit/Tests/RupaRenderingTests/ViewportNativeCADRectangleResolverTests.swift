@@ -450,6 +450,64 @@ private func resolve(
         #expect(frame.log.surfaceQueries.isEmpty)
     }
 
+    /// The perspective camera the viewport mounts draws with an infinite far
+    /// plane, so the interval it reports has an unbounded upper bound. That
+    /// bound retains every finite depth, so it constrains nothing: the near
+    /// plane still cuts, and every candidate the camera draws is still
+    /// selectable. Refusing the interval instead would empty the rectangle
+    /// under every perspective frame.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleClipsAgainstAnUnboundedFarPlaneAndStillCutsAtTheNearPlane() throws {
+        var frame = RectangleFrame()
+        frame.depthInterval = 0.5 ... .infinity
+
+        #expect(
+            try resolve(frame: frame) == [
+                .vertex(insideVertexComponentID),
+                .edge(crossingEdgeComponentID),
+                .face(frontFaceComponentID),
+            ]
+        )
+
+        // The same two near-plane counterexamples answer the same way: the far
+        // bound is the only constraint the unbounded interval drops.
+        var crossing = RectangleFrame()
+        crossing.depthInterval = 0.5 ... .infinity
+        #expect(
+            try resolve(
+                frame: crossing,
+                topology: bodyTopology(meshFaceRuns: singleTriangleRun),
+                mesh: nearPlaneCrossingMesh(),
+                policy: .face
+            ) == [.face(frontFaceComponentID)]
+        )
+
+        var rejected = RectangleFrame()
+        rejected.depthInterval = 0.5 ... .infinity
+        #expect(
+            try resolve(
+                frame: rejected,
+                topology: bodyTopology(meshFaceRuns: singleTriangleRun),
+                mesh: nearPlaneRejectedMesh(),
+                policy: .face
+            ).isEmpty
+        )
+        #expect(rejected.log.surfaceQueries.isEmpty)
+    }
+
+    /// An unbounded far plane is a camera; an unbounded near plane is not. A
+    /// rectangle that answered it with an empty selection would report
+    /// "nothing was in the rectangle" for a frame it cannot clip against.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsADepthIntervalWithNoNearPlaneAsATypedFailure() throws {
+        var frame = RectangleFrame()
+        frame.depthInterval = -.infinity ... 100
+
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            _ = try resolve(frame: frame)
+        }
+    }
+
     /// A candidate is a region, not a point. When another solid stands in front
     /// of the middle of the rectangle, the grid keeps asking about the cells
     /// around it, so a face the camera still draws inside the rectangle is

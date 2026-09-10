@@ -58,10 +58,10 @@ enum ViewportNativeOccurrenceRectangleResolver {
                 message: "The occurrence rectangle query has no finite, non-empty rectangle."
             )
         }
-        guard depthInterval.lowerBound.isFinite, depthInterval.upperBound.isFinite else {
+        guard ViewportCameraDepthClip.canClip(against: depthInterval) else {
             throw MeshSourcePresentationRenderError(
                 code: .invalidSceneItem,
-                message: "The occurrence rectangle query has no finite camera depth interval."
+                message: "The occurrence rectangle query has no camera depth interval it can clip against."
             )
         }
         let grid = ViewportRectangleSampleGrid(rect: rect)
