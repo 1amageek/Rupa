@@ -669,8 +669,7 @@ public struct Viewport: View {
             previewSceneNodeIDs: presentationPreviewSceneNodeIDs,
             hoveredSceneNodeID: selection.hoveredSceneNodeID
         )
-        self.selectedPresentationHasExactCADContext = presentationScene == nil
-            || selectedPresentationHasExactCADContext
+        self.selectedPresentationHasExactCADContext = selectedPresentationHasExactCADContext
     }
 
     @ViewBuilder
@@ -2605,9 +2604,6 @@ public struct Viewport: View {
             let identity = try presentationQueryIdentity()
             let coordinateSystem = try SketchPlaneCoordinateSystem(plane: sketchPlane)
             let worldPoint: Point3D
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Legacy CAD face callers still
-            // supply CPU-resolved surface points. RK-4.2.3 must replace those
-            // callers with native provenance before claiming full input cutover.
             if let exactWorldPoint {
                 _ = try presentationPlanCache.project(
                     exactWorldPoint, for: identity, revision: activeControlSession.revision
@@ -3681,24 +3677,76 @@ public struct Viewport: View {
         }
     }
 
-    private func selectedGeneratedFaceSurfaceWorldPoint(
-        at point: CGPoint,
-        in scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> Point3D? {
-        guard let target = selection.primaryTarget,
+    /// A selected CAD face together with the run list that names its triangles.
+    private struct SelectedGeneratedTopologyFace {
+        var sceneNodeID: SceneNodeID
+        var componentID: SelectionComponentID
+        var topology: ViewportBodyTopology
+    }
+
+    /// The selected CAD face, when one is eligible for an exact surface point.
+    ///
+    /// Answering costs no frame query. It reports only whether the selection
+    /// names a kernel-generated face on a body the native CAD interaction set
+    /// covers, and hands back the prepared run list for that body. A caller
+    /// uses it to decide whether asking the mounted frame for a surface point
+    /// is worth a query at all.
+    private func selectedGeneratedTopologyFace(
+        in scene: ViewportScene
+    ) -> SelectedGeneratedTopologyFace? {
+        guard presentationScene != nil,
+              let target = selection.primaryTarget,
               case .face(let componentID) = target.component,
               componentID.generatedTopologySubshapeID != nil,
               let item = sceneItem(for: target, in: scene),
+              let sceneNodeID = item.sceneNodeID,
+              presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
               case .body(let component) = item.kind,
-              let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
+              let topology = component.topology else {
             return nil
         }
-        return ViewportFaceSurfacePointResolver().worldPoint(
-            for: point,
-            face: face,
-            layout: layout
+        return SelectedGeneratedTopologyFace(
+            sceneNodeID: sceneNodeID,
+            componentID: componentID,
+            topology: topology
         )
+    }
+
+    /// The exact world point of the selected CAD face, taken from the frame.
+    ///
+    /// The mounted frame already decided which triangle it drew at this pixel
+    /// and where the view ray met it, and the prepared run list names the CAD
+    /// face that emitted that triangle. So this answers with the frame's own
+    /// point when the drawn triangle belongs to the selected face, and with
+    /// `nil` when the frame drew something else there: another body, an
+    /// authored mesh, another face of the same body, or nothing at all. A face
+    /// the frame did not draw is occluded at that pixel, and an occluded face
+    /// has no surface point there to offer.
+    private func selectedCADFaceSurfaceWorldPoint(
+        _ surface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
+        face: SelectedGeneratedTopologyFace
+    ) throws -> Point3D? {
+        guard let surface,
+              case .cad = surface.triangle.sourceReference,
+              presentationSceneNodeIDByOccurrenceID[surface.triangle.occurrenceID] == face.sceneNodeID
+        else {
+            return nil
+        }
+        // The universal mesh source names a CAD body's triangles by their
+        // emission index, so the raw value is that index. A value no `Int` can
+        // hold is malformed provenance rather than a miss, and answering `nil`
+        // would let the caller intersect the sketch plane instead, as if the
+        // frame had drawn nothing here.
+        guard let triangleIndex = Int(exactly: surface.triangle.faceID.rawValue) else {
+            throw MeshSourcePresentationRenderError(
+                code: .invalidSceneItem,
+                message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
+            )
+        }
+        guard face.topology.componentID(forTriangle: triangleIndex) == face.componentID else {
+            return nil
+        }
+        return surface.point
     }
 
     private func edgeFilletHandlePoint(
@@ -8656,13 +8704,21 @@ public struct Viewport: View {
             presentationOccurrenceID: presentationOccurrenceID
         )
         let sketchPlane = constructionSketchPlane(for: hit)
-        let exactWorldPoint = selectedPresentationHasExactCADContext
-            ? selectedGeneratedFaceSurfaceWorldPoint(
-                at: point,
-                in: scene,
-                layout: mapper.layout
-            )
-            : nil
+        let exactWorldPoint: Point3D?
+        if selectedPresentationHasExactCADContext,
+           let selectedFace = selectedGeneratedTopologyFace(in: scene) {
+            do {
+                exactWorldPoint = try selectedCADFaceSurfaceWorldPoint(
+                    presentationSurface,
+                    face: selectedFace
+                )
+            } catch {
+                // An unavailable frame cannot authorize selection or an edit.
+                return
+            }
+        } else {
+            exactWorldPoint = nil
+        }
         let input = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
@@ -8789,22 +8845,31 @@ public struct Viewport: View {
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
         let sketchPlane = activeCanvasDrag?.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
+        var startExactWorldPoint: Point3D?
+        var endExactWorldPoint: Point3D?
+        if let selectedFace = selectedGeneratedTopologyFace(in: scene) {
+            do {
+                startExactWorldPoint = try selectedCADFaceSurfaceWorldPoint(
+                    presentationSurfaceHit(at: start),
+                    face: selectedFace
+                )
+                endExactWorldPoint = try selectedCADFaceSurfaceWorldPoint(
+                    presentationSurfaceHit(at: end),
+                    face: selectedFace
+                )
+            } catch {
+                // An unavailable frame cannot authorize selection or an edit.
+                return
+            }
+        }
         guard let drag = canvasModelDrag(
             from: start,
             to: end,
             mapper: mapper,
             sketchPlane: sketchPlane,
             modifierFlags: modifierFlags,
-            startExactWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
-                at: start,
-                in: scene,
-                layout: mapper.layout
-            ),
-            endExactWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
-                at: end,
-                in: scene,
-                layout: mapper.layout
-            )
+            startExactWorldPoint: startExactWorldPoint,
+            endExactWorldPoint: endExactWorldPoint
         ) else {
             return
         }
@@ -10176,6 +10241,7 @@ public struct Viewport: View {
         clearHoverInteractionTargets()
         let presentationOccurrenceID: SceneOccurrenceID?
         var nativeCADResult = NativeCADSubshapeResult.unsupported
+        var exactWorldPoint: Point3D?
         do {
             let presentationSurface = try presentationSurfaceHit(at: point)
             presentationOccurrenceID = presentationSurface?.triangle.occurrenceID
@@ -10184,6 +10250,13 @@ public struct Viewport: View {
                     at: point,
                     visibleSurface: presentationSurface,
                     in: scene
+                )
+            }
+            if selectedPresentationHasExactCADContext,
+               let selectedFace = selectedGeneratedTopologyFace(in: scene) {
+                exactWorldPoint = try selectedCADFaceSurfaceWorldPoint(
+                    presentationSurface,
+                    face: selectedFace
                 )
             }
         } catch {
@@ -10199,13 +10272,6 @@ public struct Viewport: View {
         )
         hoveredCanvasHit = hit
         let sketchPlane = canvasDragSketchPlane(for: hit)
-        let exactWorldPoint = selectedPresentationHasExactCADContext
-            ? selectedGeneratedFaceSurfaceWorldPoint(
-                at: point,
-                in: scene,
-                layout: mapper.layout
-            )
-            : nil
         hoveredModelPoint = canvasInput(
             for: point,
             exactWorldPoint: exactWorldPoint,
