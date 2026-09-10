@@ -154,11 +154,7 @@ extension ViewportInteractionTarget {
         case .patternArrayLinearAxis(let target): .patternArrayLinearAxis(target.identity)
         case .independentCopyExtrudeDistance(let target): .independentCopyExtrudeDistance(target.identity)
         case .independentCopyBodyDimension(let target): .independentCopyBodyDimension(target.identity)
-        case .patternArrayRadialAngle(let target): .patternArrayRadialAngle(target.identity)
-        case .patternArrayCopyCount(let target): .patternArrayCopyCount(target.identity)
-        case .patternArrayCurveExtent(let target): .patternArrayCurveExtent(target.identity)
         case .patternArrayCurvePathPoint(let target): .patternArrayCurvePathPoint(target.identity)
-        case .patternArrayOutputMode(let target): .patternArrayOutputMode(target.identity)
         case .constructionPlane(let target): .constructionPlane(target.identity)
         case .affordance(let target): .affordance(target)
         }

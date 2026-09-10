@@ -1,6 +1,5 @@
 enum ViewportInteractionDragFinishRequest: Equatable {
     case none
-    case clearCanvasDrag
     case finish(ViewportActiveInteractionDragKind)
 }
 
@@ -10,10 +9,7 @@ enum ViewportInteractionDragFinishResolver {
         activeInteractionDrags: ViewportActiveInteractionDrags
     ) -> ViewportInteractionDragFinishRequest {
         if let pendingTarget {
-            guard let finishKind = pendingTarget.activeDragKind else {
-                return .clearCanvasDrag
-            }
-            return .finish(finishKind)
+            return .finish(pendingTarget.activeDragKind)
         }
 
         guard let finishKind = activeInteractionDrags.nextFinishKind else {

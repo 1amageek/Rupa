@@ -201,10 +201,10 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportTransformUtilities.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceService.swift")
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleHandleIdentity.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceService.swift")
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentHandleIdentity.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathPointDragTarget.swift")
@@ -216,7 +216,7 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeTarget.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeAffordanceService.swift")
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportNativePatternInput.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathReplacementPreviewRequest.swift")
@@ -237,10 +237,7 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportIndependentCopyBodyDimensionAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift")
-    })
-    #expect(arrays.evidence.contains { evidence in
-        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCopyCountAffordanceServiceTests.swift")
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternAffordancesTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaCoreTests/PatternArrayExpressionResolverTests.swift")
@@ -252,13 +249,10 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaCoreTests/PatternArrayOwnershipResolverTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift")
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSpatialInteractionMaterializationTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathPointAffordanceServiceTests.swift")
-    })
-    #expect(arrays.evidence.contains { evidence in
-        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayOutputModeAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathReplacementPreviewServiceTests.swift")

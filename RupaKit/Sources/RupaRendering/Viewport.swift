@@ -88,9 +88,28 @@ public struct Viewport: View {
         var finish: (point: CGPoint, revision: UInt64)?
     }
 
+    /// One open pattern affordance gesture.
+    ///
+    /// The press materializes the prepared record once against the mounted
+    /// camera projection and retains that closed value for the whole drag.
+    /// Those samples are only meaningful against `revision`, so a camera
+    /// revision change ends the gesture rather than continuing against a stale
+    /// screen basis.
+    private struct NativePatternPress {
+        let input: ViewportNativePatternInput
+        let source: ViewportSourceIdentity
+        let snapshotID: EvaluationSnapshotID?
+        let selectedTargets: [SelectionTarget]
+        let selectedReferences: [SelectionReference]
+        let revision: UInt64
+        let start: CGPoint
+        var value: ViewportNativePatternInput.Value?
+    }
+
     private enum NativeInputGesture {
         case active(NativeAxisPress)
         case sketchTransform(SketchTransformPress)
+        case pattern(NativePatternPress)
         // Consume the rest of a refused gesture, including its mouse-up.
         case cancelled
     }
@@ -395,21 +414,6 @@ public struct Viewport: View {
     private var activeIndependentCopyBodyDimensionDrag: ViewportIndependentCopyBodyDimensionDragState? {
         get { activeInteractionDrags.independentCopyBodyDimension }
         nonmutating set { activeInteractionDrags.independentCopyBodyDimension = newValue }
-    }
-
-    private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState? {
-        get { activeInteractionDrags.patternArrayRadialAngle }
-        nonmutating set { activeInteractionDrags.patternArrayRadialAngle = newValue }
-    }
-
-    private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState? {
-        get { activeInteractionDrags.patternArrayCopyCount }
-        nonmutating set { activeInteractionDrags.patternArrayCopyCount = newValue }
-    }
-
-    private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState? {
-        get { activeInteractionDrags.patternArrayCurveExtent }
-        nonmutating set { activeInteractionDrags.patternArrayCurveExtent = newValue }
     }
 
     private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState? {
@@ -1664,6 +1668,7 @@ public struct Viewport: View {
         switch nativeInputGesture {
         case .active(let press): key.nativeAxisValue = press.value
         case .sketchTransform(let press): key.sketchTransformMutation = press.mutation
+        case .pattern(let press): key.nativePatternValue = press.value
         case .cancelled, nil: break
         }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
@@ -3942,19 +3947,6 @@ public struct Viewport: View {
 
 
 
-    private func patternArrayCurveExtentLabel(
-        target: ViewportPatternArrayCurveExtentHandleTarget,
-        distanceMeters: Double
-    ) -> String {
-        switch target.extentMode {
-        case .distance:
-            "\(target.title) \(formattedViewportLength(distanceMeters))"
-        case .ratio:
-            "\(target.title) \(Int((distanceMeters / target.geometry.totalLengthMeters * 100.0).rounded()))%"
-        }
-    }
-
-
     private func patternArrayCurvePathPointProjectedPath(
         target: ViewportPatternArrayCurvePathPointHandleTarget,
         layout: ViewportLayout
@@ -4681,51 +4673,6 @@ public struct Viewport: View {
     }
 
 
-    private func patternArrayRadialAngleAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayRadialAngleAffordanceCandidate] {
-        guard onPatternArrayRadialAngleDrag != nil else {
-            return []
-        }
-        return ViewportPatternArrayRadialAngleAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
-    private func patternArrayCopyCountAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayCopyCountAffordanceCandidate] {
-        guard onPatternArrayCopyCountDrag != nil else {
-            return []
-        }
-        return ViewportPatternArrayCopyCountAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
-    private func patternArrayCurveExtentAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayCurveExtentAffordanceCandidate] {
-        guard onPatternArrayCurveExtentDrag != nil else {
-            return []
-        }
-        return ViewportPatternArrayCurveExtentAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
     private func patternArrayCurvePathPointAffordanceCandidates(
         scene: ViewportScene,
         layout: ViewportLayout
@@ -4734,21 +4681,6 @@ public struct Viewport: View {
             return []
         }
         return ViewportPatternArrayCurvePathPointAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
-
-    private func patternArrayOutputModeAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayOutputModeAffordanceCandidate] {
-        guard onPatternArrayOutputModeChange != nil else {
-            return []
-        }
-        return ViewportPatternArrayOutputModeAffordanceService().candidates(
             document: document,
             scene: scene,
             selection: selection,
@@ -5518,10 +5450,10 @@ public struct Viewport: View {
             return
         }
         if nativeInputGesture != nil {
-            if case .sketchTransform = nativeInputGesture {
-                updateSketchTransformGesture(current: current)
-            } else {
-                _ = updateNativeAxisGesture(current: current)
+            switch nativeInputGesture {
+            case .sketchTransform: updateSketchTransformGesture(current: current)
+            case .pattern: updateNativePatternGesture(current: current)
+            case .active, .cancelled, nil: _ = updateNativeAxisGesture(current: current)
             }
             return
         }
@@ -5701,6 +5633,16 @@ public struct Viewport: View {
         }
     }
 
+    private func nativePatternRouteEnabled(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
+        switch target {
+        case .patternArrayRadialAngle: onPatternArrayRadialAngleDrag != nil
+        case .patternArrayCopyCount: onPatternArrayCopyCountDrag != nil
+        case .patternArrayCurveExtent: onPatternArrayCurveExtentDrag != nil
+        case .patternArrayOutputMode: onPatternArrayOutputModeChange != nil
+        default: false
+        }
+    }
+
     private var hoveredSpatialHandleIdentity: ViewportSpatialHandleIdentity? {
         get throws { try hoveredNativeHandleIdentity ?? hoveredInteractionTarget?.spatialIdentity }
     }
@@ -5710,6 +5652,7 @@ public struct Viewport: View {
             switch nativeInputGesture {
             case .active(let press): return press.input.record.identity
             case .sketchTransform(let press): return press.identity
+            case .pattern(let press): return press.input.record.identity
             case .cancelled, nil: return try pendingInteractionTarget?.spatialIdentity
             }
         }
@@ -5782,6 +5725,121 @@ public struct Viewport: View {
         }
     }
 
+    /// Opens a pattern gesture by materializing the prepared record against the
+    /// mounted camera projection exactly once.
+    ///
+    /// The frame that answered this press with a record is mounted for this
+    /// identity and revision, so a projection failure here is a degenerate
+    /// handle rather than an unprepared frame: the press is refused and
+    /// reported instead of falling through to a legacy selector.
+    private func beginNativePatternPress(record: ViewportSpatialInteractionRecord, at point: CGPoint) {
+        let revision = activeControlSession.revision
+        do {
+            let identity = try presentationQueryIdentity()
+            guard let input = try ViewportNativePatternInput(record: record, project: {
+                try presentationPlanCache.project($0, for: identity, revision: revision)
+            }) else {
+                nativeInputGesture = .cancelled
+                return
+            }
+            nativeInputGesture = .pattern(.init(
+                input: input,
+                source: sourceIdentity,
+                snapshotID: presentationScene?.snapshotID,
+                selectedTargets: selection.selectedTargets,
+                selectedReferences: selection.selectedReferences,
+                revision: revision,
+                start: point
+            ))
+            activeCanvasDrag = nil
+        } catch {
+            reportNativeGestureFailure(error)
+            nativeInputGesture = .cancelled
+        }
+    }
+
+    /// Whether the pattern press still describes the frame it was materialized
+    /// against.
+    ///
+    /// The retained projection is a closed sample of one camera revision, so a
+    /// revision change ends the gesture instead of reading a stale screen
+    /// basis; the axis owner tolerates the same change because it re-queries
+    /// the mounted camera on every update.
+    private func nativePatternPressMatches(_ press: NativePatternPress) -> Bool {
+        press.source == sourceIdentity
+            && press.snapshotID == presentationScene?.snapshotID
+            && press.selectedTargets == selection.selectedTargets
+            && press.selectedReferences == selection.selectedReferences
+            && press.revision == activeControlSession.revision
+            && nativePatternRouteEnabled(press.input.record.target)
+    }
+
+    private func updateNativePatternGesture(current: CGPoint) {
+        guard case .pattern(var press) = nativeInputGesture else { return }
+        guard nativePatternPressMatches(press) else {
+            cancelNativeInputGesture()
+            return
+        }
+        do {
+            // A pointer that names no direction leaves the retained value
+            // unchanged rather than substituting one.
+            if let value = try press.input.value(start: press.start, current: current) {
+                press.value = value
+                nativeInputGesture = .pattern(press)
+            }
+        } catch {
+            reportNativeGestureFailure(error)
+            cancelNativeInputGesture()
+        }
+    }
+
+    private func finishNativePatternDrag(_ press: NativePatternPress) {
+        let commit: ViewportNativePatternInput.Commit?
+        if nativePatternPressMatches(press) {
+            do {
+                commit = try press.input.commit(value: press.value)
+            } catch {
+                reportNativeGestureFailure(error)
+                commit = nil
+            }
+        } else {
+            commit = nil
+        }
+        applyNativePatternCommit(commit)
+    }
+
+    /// Commits the click-only pattern route.
+    ///
+    /// Output mode owns no drag state, so its press resolves on the release
+    /// that stayed on the projected label rather than through the drag path.
+    private func finishNativePatternClick(_ press: NativePatternPress, at point: CGPoint) {
+        let commit: ViewportNativePatternInput.Commit?
+        if nativePatternPressMatches(press) {
+            do {
+                commit = try press.input.outputModeCommit(releasedAt: point)
+            } catch {
+                reportNativeGestureFailure(error)
+                commit = nil
+            }
+        } else {
+            commit = nil
+        }
+        applyNativePatternCommit(commit)
+    }
+
+    private func applyNativePatternCommit(_ commit: ViewportNativePatternInput.Commit?) {
+        // Release input ownership before calling external mutation callbacks.
+        clearPendingCanvasInteractionTargets()
+        activeCanvasDrag = nil
+        guard let commit else { return }
+        switch commit {
+        case .patternArrayRadialAngle(let target): onPatternArrayRadialAngleDrag?(target)
+        case .patternArrayCopyCount(let target): onPatternArrayCopyCountDrag?(target)
+        case .patternArrayCurveExtent(let target): onPatternArrayCurveExtentDrag?(target)
+        case .patternArrayOutputMode(let target): onPatternArrayOutputModeChange?(target)
+        }
+    }
+
     /// The control-session revision a released gesture is still waiting on,
     /// whichever native route owns it. A released gesture holds input ownership
     /// until the frame for that revision answers, so every site that must keep
@@ -5790,7 +5848,9 @@ public struct Viewport: View {
         switch nativeInputGesture {
         case .active(let press): press.finish?.revision
         case .sketchTransform(let press): press.finish?.revision
-        case .cancelled, nil: nil
+        // The pattern owner reads its retained projection, so its release
+        // never waits on a later frame.
+        case .pattern, .cancelled, nil: nil
         }
     }
 
@@ -5812,6 +5872,21 @@ public struct Viewport: View {
             press.finish = (point, activeControlSession.revision)
             nativeInputGesture = .sketchTransform(press)
             resumeSketchTransformFinish()
+        case .pattern:
+            // The release point is the last sample of the gesture. The input
+            // surface reports no drag preview at it, so a release that left the
+            // last reported position is read here and nowhere else. Evaluating
+            // it through the update path keeps the drag and the release on one
+            // rule: a pointer that names no direction keeps the retained value,
+            // and a refused sample ends the gesture instead of committing.
+            updateNativePatternGesture(current: point)
+            if case .pattern(let press) = nativeInputGesture {
+                finishNativePatternDrag(press)
+            } else {
+                // The update refused the release, which cancelled the gesture
+                // without releasing input ownership. Release it here.
+                applyNativePatternCommit(nil)
+            }
         case .cancelled, nil:
             clearPendingCanvasInteractionTargets()
         }
@@ -6026,6 +6101,14 @@ public struct Viewport: View {
                     activeCanvasDrag = nil
                     return
                 }
+                if ViewportNativePatternInput.claims(record.target) {
+                    guard nativePatternRouteEnabled(record.target) else {
+                        nativeInputGesture = .cancelled
+                        return
+                    }
+                    beginNativePatternPress(record: record, at: point)
+                    return
+                }
                 if case .affordance(let target, let members, let groupEdit) = record.target,
                    nativeAffordanceRouteEnabled(target.action) {
                     setPendingInteractionTarget(.affordance(target))
@@ -6095,20 +6178,8 @@ public struct Viewport: View {
         if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimControlPoint(target)
         }
-        if let target = selectedPatternArrayRadialAngleAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayRadialAngle(target)
-        }
-        if let target = selectedPatternArrayCopyCountAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayCopyCount(target)
-        }
-        if let target = selectedPatternArrayCurveExtentAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayCurveExtent(target)
-        }
         if let target = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayCurvePathPoint(target)
-        }
-        if let target = selectedPatternArrayOutputModeAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayOutputMode(target)
         }
         if let target = selectedConstructionPlaneHandleTarget(at: point, sceneContext: sceneContext) {
             return .constructionPlane(target)
@@ -6139,6 +6210,7 @@ public struct Viewport: View {
     private var hasActiveInteractionDrag: Bool {
         if case .active(let press) = nativeInputGesture, press.value != nil { return true }
         if case .sketchTransform(let press) = nativeInputGesture, press.mutation != nil { return true }
+        if case .pattern(let press) = nativeInputGesture, press.value != nil { return true }
         return activeInteractionDrags.hasActiveDrag
     }
 
@@ -6190,16 +6262,8 @@ public struct Viewport: View {
             updateIndependentCopyExtrudeDistanceDrag(target: target, start: start, current: current)
         case .independentCopyBodyDimension(let target):
             updateIndependentCopyBodyDimensionDrag(target: target, start: start, current: current)
-        case .patternArrayRadialAngle(let target):
-            updatePatternArrayRadialAngleDrag(target: target, start: start, current: current)
-        case .patternArrayCopyCount(let target):
-            updatePatternArrayCopyCountDrag(target: target, start: start, current: current)
-        case .patternArrayCurveExtent(let target):
-            updatePatternArrayCurveExtentDrag(target: target, start: start, current: current)
         case .patternArrayCurvePathPoint(let target):
             updatePatternArrayCurvePathPointDrag(target: target, start: start, current: current, size: size)
-        case .patternArrayOutputMode:
-            break
         case .constructionPlane(let target):
             updateConstructionPlaneHandleDrag(target: target, start: start, current: current, size: size)
         case .affordance(let target):
@@ -7419,72 +7483,6 @@ public struct Viewport: View {
     }
 
 
-    private func selectedPatternArrayRadialAngleAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayRadialAngleHandleTarget? {
-        guard onPatternArrayRadialAngleDrag != nil else {
-            return nil
-        }
-        let candidates = patternArrayRadialAngleAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            let arcPoints = candidate.geometry.projectedArcPoints()
-            guard let tip = candidate.geometry.projectedTip() else { continue }
-            let arcHit = point.distanceToPolyline(arcPoints) <= 10.0
-            let tipHit = point.distance(to: tip) <= 14.0
-            if arcHit || tipHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedPatternArrayCopyCountAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayCopyCountHandleTarget? {
-        guard onPatternArrayCopyCountDrag != nil else {
-            return nil
-        }
-        let candidates = patternArrayCopyCountAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            guard let handlePoint = candidate.geometry.handlePoint else { continue }
-            let handleHit = point.distance(to: handlePoint) <= 14.0
-            let guideHit = point.distanceToPolyline(candidate.geometry.guidePoints()) <= 10.0
-            if handleHit || guideHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedPatternArrayCurveExtentAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayCurveExtentHandleTarget? {
-        guard onPatternArrayCurveExtentDrag != nil else {
-            return nil
-        }
-        let candidates = patternArrayCurveExtentAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            let tipHit = point.distance(to: candidate.geometry.projectedTip()) <= 14.0
-            let extentHit = point.distanceToPolyline(candidate.geometry.projectedExtentPoints()) <= 10.0
-            if tipHit || extentHit {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
     private func selectedPatternArrayCurvePathPointAffordanceTarget(
         at point: CGPoint,
         sceneContext: ViewportSceneContext
@@ -7498,25 +7496,6 @@ public struct Viewport: View {
         )
         for candidate in candidates.reversed() {
             if point.distance(to: candidate.projectedPoint) <= 13.0 {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedPatternArrayOutputModeAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayOutputModeHandleTarget? {
-        guard onPatternArrayOutputModeChange != nil else {
-            return nil
-        }
-        let candidates = patternArrayOutputModeAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            if candidate.hitRect.insetBy(dx: -6.0, dy: -6.0).contains(point) {
                 return candidate.target
             }
         }
@@ -8316,54 +8295,6 @@ public struct Viewport: View {
         )
     }
 
-    private func updatePatternArrayRadialAngleDrag(
-        target: ViewportPatternArrayRadialAngleHandleTarget,
-        start: CGPoint,
-        current: CGPoint
-    ) {
-        guard let angleRadians = target.geometry.angleRadians(
-            start: start,
-            current: current
-        ) else {
-            return
-        }
-        activePatternArrayRadialAngleDrag = ViewportPatternArrayRadialAngleDragState(
-            target: target,
-            startPoint: start,
-            angleRadians: angleRadians
-        )
-    }
-
-    private func updatePatternArrayCopyCountDrag(
-        target: ViewportPatternArrayCopyCountHandleTarget,
-        start: CGPoint,
-        current: CGPoint
-    ) {
-        guard let copyCount = target.geometry.copyCount(
-            start: start,
-            current: current
-        ) else {
-            return
-        }
-        activePatternArrayCopyCountDrag = ViewportPatternArrayCopyCountDragState(
-            target: target,
-            startPoint: start,
-            copyCount: copyCount
-        )
-    }
-
-    private func updatePatternArrayCurveExtentDrag(
-        target: ViewportPatternArrayCurveExtentHandleTarget,
-        start: CGPoint,
-        current: CGPoint
-    ) {
-        activePatternArrayCurveExtentDrag = ViewportPatternArrayCurveExtentDragState(
-            target: target,
-            startPoint: start,
-            distanceMeters: target.geometry.extentDistance(current: current)
-        )
-    }
-
     private func updatePatternArrayCurvePathPointDrag(
         target: ViewportPatternArrayCurvePathPointHandleTarget,
         start: CGPoint,
@@ -8625,6 +8556,11 @@ public struct Viewport: View {
         selectionIntent: ViewportSelectionIntent
     ) {
         if nativeInputGesture != nil {
+            // Output mode owns no drag state, so its release resolves here.
+            if case .pattern(let press) = nativeInputGesture {
+                finishNativePatternClick(press, at: point)
+                return
+            }
             clearPendingCanvasInteractionTargets()
             return
         }
@@ -8784,17 +8720,8 @@ public struct Viewport: View {
             activeIndependentCopyExtrudeDistanceDrag = nil
         case .independentCopyBodyDimension:
             activeIndependentCopyBodyDimensionDrag = nil
-        case .patternArrayRadialAngle:
-            activePatternArrayRadialAngleDrag = nil
-        case .patternArrayCopyCount:
-            activePatternArrayCopyCountDrag = nil
-        case .patternArrayCurveExtent:
-            activePatternArrayCurveExtentDrag = nil
         case .patternArrayCurvePathPoint:
             activePatternArrayCurvePathPointDrag = nil
-        case .patternArrayOutputMode(let target):
-            activeCanvasDrag = nil
-            onPatternArrayOutputModeChange?(target.commitTarget)
         case .constructionPlane:
             activeConstructionPlaneHandleDrag = nil
             activeCanvasDrag = nil
@@ -8889,9 +8816,6 @@ public struct Viewport: View {
         switch request {
         case .none:
             return false
-        case .clearCanvasDrag:
-            activeCanvasDrag = nil
-            return true
         case .finish(let finishKind):
             finishInteractionDrag(finishKind, end: end, size: size)
             return true
@@ -8940,12 +8864,6 @@ public struct Viewport: View {
             finishIndependentCopyBodyDimensionDrag()
         case .patternArrayLinearAxis:
             finishPatternArrayLinearAxisDrag()
-        case .patternArrayRadialAngle:
-            finishPatternArrayRadialAngleDrag()
-        case .patternArrayCopyCount:
-            finishPatternArrayCopyCountDrag()
-        case .patternArrayCurveExtent:
-            finishPatternArrayCurveExtentDrag()
         case .patternArrayCurvePathPoint:
             finishPatternArrayCurvePathPointDrag()
         case .constructionPlane:
@@ -9137,33 +9055,6 @@ public struct Viewport: View {
         activeCanvasDrag = nil
         if let target {
             onIndependentCopyBodyDimensionDrag?(target)
-        }
-    }
-
-    private func finishPatternArrayRadialAngleDrag() {
-        let target = committedPatternArrayRadialAngleDragTarget()
-        activePatternArrayRadialAngleDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onPatternArrayRadialAngleDrag?(target)
-        }
-    }
-
-    private func finishPatternArrayCopyCountDrag() {
-        let target = committedPatternArrayCopyCountDragTarget()
-        activePatternArrayCopyCountDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onPatternArrayCopyCountDrag?(target)
-        }
-    }
-
-    private func finishPatternArrayCurveExtentDrag() {
-        let target = committedPatternArrayCurveExtentDragTarget()
-        activePatternArrayCurveExtentDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onPatternArrayCurveExtentDrag?(target)
         }
     }
 
@@ -9647,56 +9538,6 @@ public struct Viewport: View {
             sourceID: activePatternArrayLinearAxisDrag.target.sourceID,
             axisSlot: activePatternArrayLinearAxisDrag.target.axisSlot,
             distance: distance
-        )
-    }
-
-    private func committedPatternArrayRadialAngleDragTarget() -> ViewportPatternArrayRadialAngleDragTarget? {
-        guard let activePatternArrayRadialAngleDrag else {
-            return nil
-        }
-        let angleRadians = activePatternArrayRadialAngleDrag.angleRadians
-        guard abs(angleRadians - activePatternArrayRadialAngleDrag.target.geometry.baseAngleRadians) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportPatternArrayRadialAngleDragTarget(
-            sourceID: activePatternArrayRadialAngleDrag.target.sourceID,
-            angleRadians: angleRadians
-        )
-    }
-
-    private func committedPatternArrayCopyCountDragTarget() -> ViewportPatternArrayCopyCountDragTarget? {
-        guard let activePatternArrayCopyCountDrag else {
-            return nil
-        }
-        let copyCount = activePatternArrayCopyCountDrag.copyCount
-        guard copyCount != activePatternArrayCopyCountDrag.target.geometry.baseCopyCount else {
-            return nil
-        }
-        return ViewportPatternArrayCopyCountDragTarget(
-            sourceID: activePatternArrayCopyCountDrag.target.sourceID,
-            slot: activePatternArrayCopyCountDrag.target.slot,
-            copyCount: copyCount
-        )
-    }
-
-    private func committedPatternArrayCurveExtentDragTarget() -> ViewportPatternArrayCurveExtentDragTarget? {
-        guard let activePatternArrayCurveExtentDrag else {
-            return nil
-        }
-        let distanceMeters = activePatternArrayCurveExtentDrag.distanceMeters
-        guard abs(distanceMeters - activePatternArrayCurveExtentDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
-            return nil
-        }
-        let extent: ViewportPatternArrayCurveExtentDragValue
-        switch activePatternArrayCurveExtentDrag.target.extentMode {
-        case .distance:
-            extent = .distance(distanceMeters)
-        case .ratio:
-            extent = .ratio(distanceMeters / activePatternArrayCurveExtentDrag.target.geometry.totalLengthMeters)
-        }
-        return ViewportPatternArrayCurveExtentDragTarget(
-            sourceID: activePatternArrayCurveExtentDrag.target.sourceID,
-            extent: extent
         )
     }
 
@@ -10207,6 +10048,13 @@ public struct Viewport: View {
                     }
                     return
                 }
+                if ViewportNativePatternInput.claims(record.target) {
+                    clearCanvasHover()
+                    if nativePatternRouteEnabled(record.target) {
+                        hoveredNativeHandleIdentity = record.identity
+                    }
+                    return
+                }
                 if case .affordance(let target, _, _) = record.target,
                    nativeAffordanceRouteEnabled(target.action) {
                     hoveredNativeHandleIdentity = nil
@@ -10613,36 +10461,8 @@ private extension Viewport {
         return target
     }
 
-    var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget? {
-        guard case .patternArrayRadialAngle(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget? {
-        guard case .patternArrayCopyCount(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget? {
-        guard case .patternArrayCurveExtent(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
     var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
         guard case .patternArrayCurvePathPoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget? {
-        guard case .patternArrayOutputMode(let target) = hoveredInteractionTarget else {
             return nil
         }
         return target
@@ -10846,45 +10666,9 @@ private extension Viewport {
         }
     }
 
-    var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget? {
-        get {
-            guard case .patternArrayRadialAngle(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget? {
-        get {
-            guard case .patternArrayCopyCount(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget? {
-        get {
-            guard case .patternArrayCurveExtent(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
     var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
         get {
             guard case .patternArrayCurvePathPoint(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget? {
-        get {
-            guard case .patternArrayOutputMode(let target) = pendingInteractionTarget else {
                 return nil
             }
             return target
@@ -11060,6 +10844,57 @@ extension Viewport {
                 nativePatternIdentities.append(press.input.record.identity)
             }
         }
+        var nativeRadialAngle: ViewportPatternArrayRadialAngleDragTarget?
+        var nativeCopyCount: ViewportPatternArrayCopyCountDragTarget?
+        var nativeCurveExtent: ViewportPatternArrayCurveExtentDragTarget?
+        if case .pattern(let press) = nativeInputGesture, let value = press.value {
+            switch try press.input.commit(value: value) {
+            case .patternArrayRadialAngle(let target): nativeRadialAngle = target
+            case .patternArrayCopyCount(let target): nativeCopyCount = target
+            case .patternArrayCurveExtent(let target): nativeCurveExtent = target
+            default: break
+            }
+            if nativeRadialAngle != nil || nativeCopyCount != nil || nativeCurveExtent != nil {
+                nativePatternIdentities.append(press.input.record.identity)
+            }
+        }
+        // Each argument is bound to an explicitly typed local: the single
+        // expression exceeded the type checker's budget once the native values
+        // joined the remaining legacy drag states.
+        let legacyPatternIdentities: [ViewportSpatialHandleIdentity?] = [
+            activePatternArrayLinearAxisDrag.map { .patternArrayLinearAxis($0.target.identity) },
+            activePatternArrayCurvePathPointDrag.map { .patternArrayCurvePathPoint($0.target.identity) },
+            activeIndependentCopyExtrudeDistanceDrag.map { .independentCopyExtrudeDistance($0.target.identity) },
+            activeIndependentCopyBodyDimensionDrag.map { .independentCopyBodyDimension($0.target.identity) },
+        ]
+        let patternHandleIdentities = nativePatternIdentities + legacyPatternIdentities.compactMap { $0 }
+        let patternHoveredIdentities: [ViewportSpatialHandleIdentity] =
+            try hoveredSpatialHandleIdentity.map { [$0] } ?? []
+        let patternPendingIdentities: [ViewportSpatialHandleIdentity] =
+            try pendingSpatialHandleIdentity.map { [$0] } ?? []
+        let activeLinearAxis: ViewportPatternArrayLinearAxisDragTarget? =
+            nativeLinearAxis ?? activePatternArrayLinearAxisDrag.map {
+                .init(sourceID: $0.target.sourceID, axisSlot: $0.target.axisSlot, distance: $0.distanceMeters)
+            }
+        let activeRadialAngle: ViewportPatternArrayRadialAngleDragTarget? = nativeRadialAngle
+        let activeCopyCount: ViewportPatternArrayCopyCountDragTarget? = nativeCopyCount
+        let activeCurveExtent: ViewportPatternArrayCurveExtentDragTarget? = nativeCurveExtent
+        let activeCurvePathPoint: ViewportPatternArrayCurvePathPointDragTarget? =
+            activePatternArrayCurvePathPointDrag.map {
+                .init(sourceID: $0.target.sourceID, pointIndex: $0.target.pointIndex, point: $0.point)
+            }
+        let activeIndependentCopyExtrude: ViewportIndependentCopyExtrudeDistanceDragTarget? =
+            nativeIndependentExtrude ?? activeIndependentCopyExtrudeDistanceDrag.map {
+                .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
+                      outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
+                      distance: $0.distanceMeters / $0.target.valueScale)
+            }
+        let activeIndependentCopyDimension: ViewportIndependentCopyBodyDimensionDragTarget? =
+            nativeIndependentDimension ?? activeIndependentCopyBodyDimensionDrag.map {
+                .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
+                      outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
+                      kind: $0.target.kind, value: $0.valueMeters / $0.target.valueScale)
+            }
         let patternSource: ViewportSpatialOverlaySemanticSnapshot.PatternSource? =
             patternRoute || !document.productMetadata.patternArrays.isEmpty
                 ? .init(
@@ -11069,42 +10904,16 @@ extension Viewport {
                     ruler: workspaceRuler,
                     hasRoute: patternRoute,
                     replacementRequest: patternArrayCurvePathReplacementPreviewRequest,
-                    activeHandleIdentities: nativePatternIdentities + [
-                        activePatternArrayLinearAxisDrag.map { .patternArrayLinearAxis($0.target.identity) },
-                        activePatternArrayRadialAngleDrag.map { .patternArrayRadialAngle($0.target.identity) },
-                        activePatternArrayCopyCountDrag.map { .patternArrayCopyCount($0.target.identity) },
-                        activePatternArrayCurveExtentDrag.map { .patternArrayCurveExtent($0.target.identity) },
-                        activePatternArrayCurvePathPointDrag.map { .patternArrayCurvePathPoint($0.target.identity) },
-                        activeIndependentCopyExtrudeDistanceDrag.map { .independentCopyExtrudeDistance($0.target.identity) },
-                        activeIndependentCopyBodyDimensionDrag.map { .independentCopyBodyDimension($0.target.identity) },
-                    ].compactMap { $0 },
-                    hoveredHandleIdentities: try hoveredSpatialHandleIdentity.map { [$0] } ?? [],
-                    pendingHandleIdentities: try pendingSpatialHandleIdentity.map { [$0] } ?? [],
-                    activeLinearAxis: nativeLinearAxis ?? activePatternArrayLinearAxisDrag.map {
-                        .init(sourceID: $0.target.sourceID, axisSlot: $0.target.axisSlot, distance: $0.distanceMeters)
-                    },
-                    activeRadialAngle: activePatternArrayRadialAngleDrag.map {
-                        .init(sourceID: $0.target.sourceID, angleRadians: $0.angleRadians)
-                    },
-                    activeCopyCount: activePatternArrayCopyCountDrag.map {
-                        .init(sourceID: $0.target.sourceID, slot: $0.target.slot, copyCount: $0.copyCount)
-                    },
-                    activeCurveExtent: activePatternArrayCurveExtentDrag.map {
-                        .init(sourceID: $0.target.sourceID, extent: .distance($0.distanceMeters))
-                    },
-                    activeCurvePathPoint: activePatternArrayCurvePathPointDrag.map {
-                        .init(sourceID: $0.target.sourceID, pointIndex: $0.target.pointIndex, point: $0.point)
-                    },
-                    activeIndependentCopyExtrude: nativeIndependentExtrude ?? activeIndependentCopyExtrudeDistanceDrag.map {
-                        .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
-                              outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
-                              distance: $0.distanceMeters / $0.target.valueScale)
-                    },
-                    activeIndependentCopyDimension: nativeIndependentDimension ?? activeIndependentCopyBodyDimensionDrag.map {
-                        .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
-                              outputSceneNodeID: $0.target.outputSceneNodeID, featureID: $0.target.featureID,
-                              kind: $0.target.kind, value: $0.valueMeters / $0.target.valueScale)
-                    },
+                    activeHandleIdentities: patternHandleIdentities,
+                    hoveredHandleIdentities: patternHoveredIdentities,
+                    pendingHandleIdentities: patternPendingIdentities,
+                    activeLinearAxis: activeLinearAxis,
+                    activeRadialAngle: activeRadialAngle,
+                    activeCopyCount: activeCopyCount,
+                    activeCurveExtent: activeCurveExtent,
+                    activeCurvePathPoint: activeCurvePathPoint,
+                    activeIndependentCopyExtrude: activeIndependentCopyExtrude,
+                    activeIndependentCopyDimension: activeIndependentCopyDimension,
                     linearAxisRouteEnabled: onPatternArrayLinearAxisDrag != nil,
                     radialAngleRouteEnabled: onPatternArrayRadialAngleDrag != nil,
                     copyCountRouteEnabled: onPatternArrayCopyCountDrag != nil,

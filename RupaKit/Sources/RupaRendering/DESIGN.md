@@ -484,34 +484,41 @@ independent tessellator is never an alternative implementation.
    disjoint prepared route sets. `ViewportNativeAxisInput` owns every route
    whose drag is a signed delta along one retained world axis; it holds no
    projected sample and re-queries the mounted camera on each update.
-   `ViewportSpatialMaterializedInteractionTarget` owns the routes whose
-   existing input math is defined on the pressed frame's screen basis; it
-   holds the finite projected samples taken once against that frame. A
-   prepared case is claimed by exactly one of them, so neither boundary
-   carries a case the other owns and neither may be consulted for a route
-   it does not claim. A prepared case belongs to the axis owner when its
-   drag reduces to one world-axis delta, to the materialized owner when its
-   drag needs that screen basis, and to neither when its drag resolves a
-   world point, which the world-point contract below covers.
+   `ViewportNativePatternInput` owns the routes whose existing input math
+   is defined on the pressed frame's screen basis; it retains one
+   `ViewportSpatialMaterializedInteractionTarget`, the finite projected
+   samples taken once against that frame. A prepared case is claimed by
+   exactly one of them, so neither boundary carries a case the other owns
+   and neither may be consulted for a route it does not claim. A prepared
+   case belongs to the axis owner when its drag reduces to one world-axis
+   delta, to the pattern owner when its drag needs that screen basis, and
+   to neither when its drag resolves a world point, which the world-point
+   contract below covers.
    The pattern affordance routes `patternArrayRadialAngle`,
    `patternArrayCopyCount`, `patternArrayCurveExtent`, and
-   `patternArrayOutputMode` are native-enabled through the materialized
+   `patternArrayOutputMode` are native-enabled through the pattern
    owner. Press materializes the leading prepared record exactly once
    against the mounted, revision-checked camera projection and retains that
    closed value with the record, base source identity, presentation
    snapshot, selection set, and route availability. Each update evaluates
    the retained projection with the shared input math and produces the
    existing public callback value; it does not reproject, consult
-   `ViewportLayout`, or re-resolve the handle. A projected basis that is
-   degenerate at press is a typed refusal at press, not a screen-polar
-   substitute during the drag: the legacy radial geometry answered a
-   collapsed radial/tangent basis with a raw screen angle about the
-   projected centre, which reports a CAD angle the drawn arc never had, so
-   that fallback is prohibited rather than merely unused. Output mode
-   carries the projected label rect and commits on click with no drag
-   state. Once these routes are native-enabled, a native miss, a typed
-   query failure, or a leading record of another case ends the route with
-   no pattern hit; their legacy selectors, layout-bearing affordance
+   `ViewportLayout`, or re-resolve the handle. Those retained samples are
+   only meaningful against the camera revision that produced them, so a
+   revision change during the gesture ends it rather than continuing
+   against a stale screen basis; the axis owner instead tolerates the
+   change because it re-queries the mounted camera each update. An update
+   whose pointer lands on the projected centre carries no direction, so it
+   leaves the retained value unchanged rather than substituting one. A
+   projected basis that is degenerate at press is a typed refusal at press,
+   not a screen-polar substitute during the drag: the legacy radial
+   geometry answered a collapsed radial/tangent basis with a raw screen
+   angle about the projected centre, which reports a CAD angle the drawn
+   arc never had, so that fallback is prohibited rather than merely unused.
+   Output mode carries the projected label rect and commits on click with
+   no drag state. Once these routes are native-enabled, a native miss, a
+   typed query failure, or a leading record of another case ends the route
+   with no pattern hit; their legacy selectors, layout-bearing affordance
    geometry, and candidate services are removed rather than left
    unreachable.
    The world-point routes `patternArrayCurvePathPoint`,

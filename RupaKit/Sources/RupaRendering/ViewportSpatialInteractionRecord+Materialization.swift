@@ -12,15 +12,6 @@ import RupaViewportScene
 /// geometry retain only the finite projected samples and semantic scalars
 /// needed by that math.
 enum ViewportSpatialMaterializedInteractionTarget: Sendable {
-    struct LinearProjection: Sendable {
-        let basePoint: CGPoint
-        let projectedDirection: CGVector
-        let pointsPerMeter: CGFloat
-        let minimumLengthPoints: CGFloat
-        let baseDistanceMeters: Double
-        let minimumDistanceMeters: Double
-    }
-
     struct RadialProjection: Sendable {
         let center: CGPoint
         let radialVector: CGVector
@@ -111,18 +102,6 @@ enum ViewportSpatialMaterializedInteractionTarget: Sendable {
         corners: [Point3D],
         projection: ConstructionPlaneProjection
     )
-    case patternArrayLinearAxis(
-        source: ViewportPatternAffordanceSource.LinearAxisHandle,
-        projection: LinearProjection
-    )
-    case independentCopyExtrudeDistance(
-        source: ViewportPatternAffordanceSource.IndependentCopyExtrudeHandle,
-        projection: LinearProjection
-    )
-    case independentCopyBodyDimension(
-        source: ViewportPatternAffordanceSource.IndependentCopyDimensionHandle,
-        projection: LinearProjection
-    )
     case patternArrayRadialAngle(
         source: ViewportPatternAffordanceSource.RadialAngleHandle,
         projection: RadialProjection
@@ -181,13 +160,16 @@ extension ViewportSpatialPreparedInteractionTarget {
         using project: (Point3D) throws -> CGPoint
     ) throws -> ViewportSpatialMaterializedInteractionTarget {
         switch self {
+        // The axis owner claims these routes and re-queries the mounted camera on
+        // each update, so this boundary must not answer for them.
         case .sketchCurveHandle, .sketchDimension, .sketchPointHandle,
              .splineControlPoint, .splineControlPointSlide,
              .polySplineSurfaceVertex, .polySplineSurfaceVertexSlide,
              .surfaceControlPoint, .surfaceControlPointSlide,
              .surfaceTrimEndpoint, .surfaceTrimControlPoint, .surfaceFrame,
              .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
-             .sketchTransform, .affordance:
+             .sketchTransform, .affordance, .patternArrayLinearAxis,
+             .independentCopyExtrudeDistance, .independentCopyBodyDimension:
             return .projectionFree(self)
 
         case .bridgeCurveEndpoint(let handle, let modelTransform):
@@ -230,39 +212,6 @@ extension ViewportSpatialPreparedInteractionTarget {
                 projection: .init(
                     projectedOrigin: try Self.finiteProjection(origin, project: project),
                     projectedNormalEnd: try Self.finiteProjection(normalEnd, project: project)
-                )
-            )
-
-        case .patternArrayLinearAxis(let source):
-            return .patternArrayLinearAxis(
-                source: source,
-                projection: try Self.linearProjection(
-                    basePoint: source.basePoint,
-                    direction: source.direction,
-                    distanceMeters: source.distanceMeters,
-                    project: project
-                )
-            )
-
-        case .independentCopyExtrudeDistance(let source):
-            return .independentCopyExtrudeDistance(
-                source: source,
-                projection: try Self.linearProjection(
-                    basePoint: source.basePoint,
-                    direction: source.axis,
-                    distanceMeters: source.distanceMeters,
-                    project: project
-                )
-            )
-
-        case .independentCopyBodyDimension(let source):
-            return .independentCopyBodyDimension(
-                source: source,
-                projection: try Self.linearProjection(
-                    basePoint: source.basePoint,
-                    direction: source.axis,
-                    distanceMeters: source.valueMeters,
-                    project: project
                 )
             )
 
@@ -393,34 +342,6 @@ private extension ViewportSpatialPreparedInteractionTarget {
         let density: ViewportSpatialMaterializedInteractionTarget.LinearDensityProjection
     }
 
-    static func linearProjection(
-        basePoint: Point3D,
-        direction: Vector3D,
-        distanceMeters: Double,
-        project: (Point3D) throws -> CGPoint
-    ) throws -> ViewportSpatialMaterializedInteractionTarget.LinearProjection {
-        let unit = try unitVector(direction, message: "Linear pattern direction is degenerate.")
-        guard distanceMeters.isFinite, distanceMeters > 0.0 else {
-            throw RealityViewportSpatialBatch.invalid("Linear pattern distance is invalid.")
-        }
-        let base = try finiteProjection(basePoint, project: project)
-        let tip = try finiteProjection(add(basePoint, unit), project: project)
-        let projected = vector(from: base, to: tip)
-        let pointsPerMeter = vectorLength(projected)
-        guard pointsPerMeter.isFinite, pointsPerMeter > 1.0e-9 else {
-            throw RealityViewportSpatialBatch.invalid("Linear pattern projection is degenerate.")
-        }
-        let minimumDistance = PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters
-        return .init(
-            basePoint: base,
-            projectedDirection: normalized(projected),
-            pointsPerMeter: pointsPerMeter,
-            minimumLengthPoints: 76.0,
-            baseDistanceMeters: max(distanceMeters, minimumDistance),
-            minimumDistanceMeters: minimumDistance
-        )
-    }
-
     static func linearCopyCountProjection(
         basePoint: Point3D,
         direction: Vector3D,
@@ -510,8 +431,21 @@ private extension ViewportSpatialPreparedInteractionTarget {
         let tangentPoint = try finiteProjection(add(center, frame.tangent), project: project)
         let radial = vector(from: centerPoint, to: radialPoint)
         let tangent = vector(from: centerPoint, to: tangentPoint)
-        guard vectorLength(radial) > 1.0e-9, vectorLength(tangent) > 1.0e-9 else {
+        let radialLength = vectorLength(radial)
+        let tangentLength = vectorLength(tangent)
+        guard radialLength > 1.0e-9, tangentLength > 1.0e-9 else {
             throw RealityViewportSpatialBatch.invalid("Radial pattern projection is degenerate.")
+        }
+        // A basis this camera collapses onto one screen line cannot recover a
+        // rotation about the CAD axis, so the press is refused here rather than
+        // answered with a screen-polar angle once the drag has started.
+        let determinant = radial.dx * tangent.dy - radial.dy * tangent.dx
+        let determinantScale = max(radialLength * tangentLength, 1.0)
+        guard determinant.isFinite, determinantScale.isFinite,
+              abs(determinant) > determinantScale * 1.0e-9 else {
+            throw RealityViewportSpatialBatch.invalid(
+                "Radial pattern projection cannot recover an angle from collinear samples."
+            )
         }
         return .init(
             center: centerPoint,
@@ -533,22 +467,12 @@ private extension ViewportSpatialPreparedInteractionTarget {
         guard copyCount > 0 else {
             throw RealityViewportSpatialBatch.invalid("Angular copy count is not positive.")
         }
+        // `radialProjection` already refuses a collinear projected basis, which
+        // is the same condition this step needs to step an angle.
         let radial = try radialProjection(
             center: center, axis: axis, referencePoint: referencePoint,
             angleRadians: angleRadians, project: project
         )
-        let determinant = radial.radialVector.dx * radial.tangentVector.dy
-            - radial.radialVector.dy * radial.tangentVector.dx
-        let determinantScale = max(
-            vectorLength(radial.radialVector) * vectorLength(radial.tangentVector),
-            1.0
-        )
-        guard determinant.isFinite,
-              abs(determinant) > determinantScale * 1.0e-9 else {
-            throw RealityViewportSpatialBatch.invalid(
-                "Angular copy-count projection cannot recover an angle from collinear samples."
-            )
-        }
         return .init(
             center: radial.center,
             radialVector: radial.radialVector,

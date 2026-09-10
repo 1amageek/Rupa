@@ -247,24 +247,6 @@ struct ViewportIndependentCopyBodyDimensionDragState: Equatable {
     var valueMeters: Double
 }
 
-struct ViewportPatternArrayRadialAngleDragState: Equatable {
-    var target: ViewportPatternArrayRadialAngleHandleTarget
-    var startPoint: CGPoint
-    var angleRadians: Double
-}
-
-struct ViewportPatternArrayCopyCountDragState: Equatable {
-    var target: ViewportPatternArrayCopyCountHandleTarget
-    var startPoint: CGPoint
-    var copyCount: Int
-}
-
-struct ViewportPatternArrayCurveExtentDragState: Equatable {
-    var target: ViewportPatternArrayCurveExtentHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
 struct ViewportPatternArrayCurvePathPointDragState: Equatable {
     var target: ViewportPatternArrayCurvePathPointHandleTarget
     var startPoint: CGPoint
@@ -841,11 +823,7 @@ enum ViewportInteractionTarget: Equatable {
     case patternArrayLinearAxis(ViewportPatternArrayLinearAxisHandleTarget)
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceHandleTarget)
     case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionHandleTarget)
-    case patternArrayRadialAngle(ViewportPatternArrayRadialAngleHandleTarget)
-    case patternArrayCopyCount(ViewportPatternArrayCopyCountHandleTarget)
-    case patternArrayCurveExtent(ViewportPatternArrayCurveExtentHandleTarget)
     case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleTarget)
-    case patternArrayOutputMode(ViewportPatternArrayOutputModeHandleTarget)
     case constructionPlane(ViewportConstructionPlaneHandleTarget)
     case affordance(ViewportAffordanceTarget)
 }

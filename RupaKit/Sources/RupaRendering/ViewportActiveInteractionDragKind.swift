@@ -17,9 +17,6 @@ enum ViewportActiveInteractionDragKind: CaseIterable, Equatable, Hashable {
     case independentCopyExtrudeDistance
     case independentCopyBodyDimension
     case patternArrayLinearAxis
-    case patternArrayRadialAngle
-    case patternArrayCopyCount
-    case patternArrayCurveExtent
     case patternArrayCurvePathPoint
     case constructionPlane
     case sketchVertexOffset

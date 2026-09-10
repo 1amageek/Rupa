@@ -17,9 +17,6 @@ enum ViewportActiveInteractionDragState: Equatable {
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragState)
     case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragState)
     case patternArrayLinearAxis(ViewportPatternArrayLinearAxisDragState)
-    case patternArrayRadialAngle(ViewportPatternArrayRadialAngleDragState)
-    case patternArrayCopyCount(ViewportPatternArrayCopyCountDragState)
-    case patternArrayCurveExtent(ViewportPatternArrayCurveExtentDragState)
     case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointDragState)
     case constructionPlane(ViewportConstructionPlaneHandleDragState)
     case sketchVertexOffset(ViewportSketchVertexOffsetDragState)
@@ -64,12 +61,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .independentCopyBodyDimension
         case .patternArrayLinearAxis:
             .patternArrayLinearAxis
-        case .patternArrayRadialAngle:
-            .patternArrayRadialAngle
-        case .patternArrayCopyCount:
-            .patternArrayCopyCount
-        case .patternArrayCurveExtent:
-            .patternArrayCurveExtent
         case .patternArrayCurvePathPoint:
             .patternArrayCurvePathPoint
         case .constructionPlane:
@@ -121,12 +112,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .independentCopyBodyDimension(state.target)
         case .patternArrayLinearAxis(let state):
             .patternArrayLinearAxis(state.target)
-        case .patternArrayRadialAngle(let state):
-            .patternArrayRadialAngle(state.target)
-        case .patternArrayCopyCount(let state):
-            .patternArrayCopyCount(state.target)
-        case .patternArrayCurveExtent(let state):
-            .patternArrayCurveExtent(state.target)
         case .patternArrayCurvePathPoint(let state):
             .patternArrayCurvePathPoint(state.target)
         case .constructionPlane(let state):
@@ -210,18 +195,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? {
         if case .patternArrayLinearAxis(let state) = self { state } else { nil }
-    }
-
-    var patternArrayRadialAngle: ViewportPatternArrayRadialAngleDragState? {
-        if case .patternArrayRadialAngle(let state) = self { state } else { nil }
-    }
-
-    var patternArrayCopyCount: ViewportPatternArrayCopyCountDragState? {
-        if case .patternArrayCopyCount(let state) = self { state } else { nil }
-    }
-
-    var patternArrayCurveExtent: ViewportPatternArrayCurveExtentDragState? {
-        if case .patternArrayCurveExtent(let state) = self { state } else { nil }
     }
 
     var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? {

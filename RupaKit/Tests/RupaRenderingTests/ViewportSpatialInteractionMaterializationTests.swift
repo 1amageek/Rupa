@@ -167,21 +167,35 @@ func materializationRejectsDegenerateOrNonfiniteNativeProjection() throws {
 }
 
 @Test @MainActor
-func materializationUsesMinimumLinearInputWithoutCameraState() throws {
-    let source = ViewportPatternAffordanceSource.LinearAxisHandle(
+func materializationLeavesAxisOwnedRoutesProjectionFree() throws {
+    let linear = ViewportSpatialPreparedInteractionTarget.patternArrayLinearAxis(.init(
         sourceID: .init(), axisSlot: .first, title: "Axis",
-        basePoint: .origin, direction: .unitX, distanceMeters: 1.0e-9,
+        basePoint: .origin, direction: .unitX, distanceMeters: 0.5,
         displayDistanceMeters: nil, distanceMode: .spacing, state: .normal
-    )
-    let target = ViewportSpatialPreparedInteractionTarget.patternArrayLinearAxis(source)
-    let materialized = try target.materialize { point in
-        CGPoint(x: point.x * 100, y: point.z * 100)
+    ))
+    var projectedPoints: [Point3D] = []
+    let materialized = try linear.materialize { point in
+        projectedPoints.append(point)
+        return CGPoint(x: point.x * 100, y: point.z * 100)
     }
-    guard case .patternArrayLinearAxis(_, let projection) = materialized else {
-        Issue.record("The linear route did not produce a closed projected input.")
+    guard case .projectionFree(.patternArrayLinearAxis) = materialized else {
+        Issue.record("The axis-owned linear route must not be answered by the materialized owner.")
         return
     }
-    #expect(projection.minimumLengthPoints == 76)
-    #expect(projection.baseDistanceMeters >= projection.minimumDistanceMeters)
-    #expect(projection.pointsPerMeter == 100)
+    #expect(projectedPoints.isEmpty)
+}
+
+@Test @MainActor
+func materializationRefusesCollinearRadialBasisAtPress() throws {
+    let source = ViewportPatternAffordanceSource.RadialAngleHandle(
+        sourceID: .init(), title: "Angle", center: .origin, axis: .unitY,
+        referencePoint: .init(x: 2, y: 0, z: 0), angleRadians: 0.2,
+        displayAngleRadians: nil, angleMode: .spacing, state: .normal
+    )
+    let target = ViewportSpatialPreparedInteractionTarget.patternArrayRadialAngle(source)
+    // This camera collapses the radial and tangent samples onto one screen line,
+    // which cannot recover a rotation about the CAD axis.
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try target.materialize { CGPoint(x: $0.x + $0.z, y: 0) }
+    }
 }

@@ -3,22 +3,7 @@ import Testing
 @testable import RupaRendering
 
 @Test
-func inputMathClampsSignedLinearDistance() throws {
-    let projection = ViewportSpatialMaterializedInteractionTarget.LinearProjection(
-        basePoint: .zero,
-        projectedDirection: CGVector(dx: 1, dy: 0),
-        pointsPerMeter: 10,
-        minimumLengthPoints: 76,
-        baseDistanceMeters: 2,
-        minimumDistanceMeters: 1
-    )
-
-    #expect(try projection.distance(start: .zero, current: CGPoint(x: 5, y: 0)) == 2.5)
-    #expect(try projection.distance(start: .zero, current: CGPoint(x: -100, y: 0)) == 1)
-}
-
-@Test
-func inputMathPreservesRadialSignedDeltaAndPolarFallback() throws {
+func inputMathPreservesRadialSignedDeltaAndRefusesCollinearBasis() throws {
     let projection = ViewportSpatialMaterializedInteractionTarget.RadialProjection(
         center: .zero,
         radialVector: CGVector(dx: 10, dy: 0),
@@ -26,11 +11,16 @@ func inputMathPreservesRadialSignedDeltaAndPolarFallback() throws {
         baseAngleRadians: 0.1,
         minimumAngleRadians: 0.05
     )
-    let angle = try projection.angle(
+    let angle = try #require(try projection.angle(
         start: CGPoint(x: 10, y: 0),
         current: CGPoint(x: 0, y: 10)
-    )
+    ))
     #expect(abs(angle - (0.1 + .pi / 2.0)) < 1.0e-12)
+
+    // A pointer on the projected centre carries no direction, so the caller
+    // keeps the value it already holds instead of receiving a substitute.
+    #expect(try projection.angle(start: CGPoint(x: 10, y: 0), current: .zero) == nil)
+    #expect(try projection.angle(start: .zero, current: CGPoint(x: 0, y: 10)) == nil)
 
     let collinear = ViewportSpatialMaterializedInteractionTarget.RadialProjection(
         center: .zero,
@@ -39,11 +29,9 @@ func inputMathPreservesRadialSignedDeltaAndPolarFallback() throws {
         baseAngleRadians: 0.1,
         minimumAngleRadians: 0.05
     )
-    let polarAngle = try collinear.angle(
-        start: CGPoint(x: 10, y: 0),
-        current: CGPoint(x: 0, y: 10)
-    )
-    #expect(abs(polarAngle - (0.1 + .pi / 2.0)) < 1.0e-12)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try collinear.angle(start: CGPoint(x: 10, y: 0), current: CGPoint(x: 0, y: 10))
+    }
 }
 
 @Test
@@ -79,6 +67,7 @@ func inputMathUsesSignedAngularDeltaAndDensityDirection() throws {
         minimumAngleRadians: 0.05
     )
     #expect(try angular.count(start: CGPoint(x: 10, y: 0), current: CGPoint(x: 0, y: 10)) == 5)
+    #expect(try angular.count(start: CGPoint(x: 10, y: 0), current: .zero) == nil)
 
     let density = ViewportSpatialMaterializedInteractionTarget.AngularDensityProjection(
         anchorPoint: .zero,

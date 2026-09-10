@@ -60,12 +60,18 @@ private enum ViewportSpatialInteractionInputMathSupport {
         return delta
     }
 
+    /// The signed parameter of `point` on the projected radial basis.
+    ///
+    /// `nil` means the point carries no direction because it sits on the
+    /// projected centre, which leaves the caller's retained value unchanged. A
+    /// collinear basis is refused instead: the drag cannot recover a CAD angle
+    /// from it, and answering with a screen-polar angle would report a rotation
+    /// the drawn arc never had.
     static func projectedAngleParameter(
         center: CGPoint,
         radial: CGVector,
         tangent: CGVector,
-        point: CGPoint,
-        allowPolarFallback: Bool
+        point: CGPoint
     ) throws -> Double? {
         try validate(center, name: "Projected center")
         try validate(radial, name: "Projected radial vector")
@@ -87,20 +93,16 @@ private enum ViewportSpatialInteractionInputMathSupport {
             throw invalid("Projected radial basis scale is not finite.")
         }
 
-        if abs(determinant) > determinantScale * 1.0e-9 {
-            let cosine = (delta.dx * tangent.dy - delta.dy * tangent.dx) / determinant
-            let sine = (radial.dx * delta.dy - radial.dy * delta.dx) / determinant
-            let magnitude = hypot(cosine, sine)
-            if cosine.isFinite, sine.isFinite, magnitude.isFinite, magnitude > 1.0e-9 {
-                return atan2(sine, cosine)
-            }
-            return nil
-        }
-
-        guard allowPolarFallback else {
+        guard abs(determinant) > determinantScale * 1.0e-9 else {
             throw invalid("Projected radial basis is collinear.")
         }
-        return nil
+        let cosine = (delta.dx * tangent.dy - delta.dy * tangent.dx) / determinant
+        let sine = (radial.dx * delta.dy - radial.dy * delta.dx) / determinant
+        let magnitude = hypot(cosine, sine)
+        guard cosine.isFinite, sine.isFinite, magnitude.isFinite, magnitude > 1.0e-9 else {
+            return nil
+        }
+        return atan2(sine, cosine)
     }
 
     static func roundedInteger(_ value: Double, name: String) throws -> Int {
@@ -234,90 +236,27 @@ private enum ViewportSpatialInteractionInputMathSupport {
     }
 }
 
-extension ViewportSpatialMaterializedInteractionTarget.LinearProjection {
-    func distance(start: CGPoint, current: CGPoint) throws -> Double {
-        try ViewportSpatialInteractionInputMathSupport.validate(start, name: "Drag start")
-        try ViewportSpatialInteractionInputMathSupport.validate(current, name: "Drag current")
-        try ViewportSpatialInteractionInputMathSupport.validateDirection(
-            projectedDirection,
-            name: "Projected linear direction"
-        )
-        guard pointsPerMeter.isFinite, pointsPerMeter > 1.0e-9,
-              baseDistanceMeters.isFinite,
-              minimumDistanceMeters.isFinite, minimumDistanceMeters > 0.0,
-              minimumLengthPoints.isFinite, minimumLengthPoints >= 0.0 else {
-            throw ViewportSpatialInteractionInputMathSupport.invalid("Linear projection is invalid.")
-        }
-        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
-        try ViewportSpatialInteractionInputMathSupport.validate(delta, name: "Drag delta")
-        let viewportDistance = delta.dx * projectedDirection.dx + delta.dy * projectedDirection.dy
-        guard viewportDistance.isFinite else {
-            throw ViewportSpatialInteractionInputMathSupport.invalid("Projected linear distance is not finite.")
-        }
-        let modelDistance = Double(viewportDistance) / Double(pointsPerMeter)
-        guard modelDistance.isFinite else {
-            throw ViewportSpatialInteractionInputMathSupport.invalid("Linear model distance is not finite.")
-        }
-        let value = baseDistanceMeters + modelDistance
-        guard value.isFinite else {
-            throw ViewportSpatialInteractionInputMathSupport.invalid("Linear distance overflows.")
-        }
-        return max(value, minimumDistanceMeters)
-    }
-}
-
 extension ViewportSpatialMaterializedInteractionTarget.RadialProjection {
-    func angle(start: CGPoint, current: CGPoint) throws -> Double {
+    /// The rotated angle for this update, or `nil` when the pointer sits on the
+    /// projected centre and carries no direction to rotate towards.
+    func angle(start: CGPoint, current: CGPoint) throws -> Double? {
         guard baseAngleRadians.isFinite,
               minimumAngleRadians.isFinite,
               minimumAngleRadians > 0.0 else {
             throw ViewportSpatialInteractionInputMathSupport.invalid("Radial projection is invalid.")
         }
-        let startParameter = try ViewportSpatialInteractionInputMathSupport.projectedAngleParameter(
+        guard let startParameter = try ViewportSpatialInteractionInputMathSupport.projectedAngleParameter(
             center: center,
             radial: radialVector,
             tangent: tangentVector,
-            point: start,
-            allowPolarFallback: true
-        )
-        let currentParameter = try ViewportSpatialInteractionInputMathSupport.projectedAngleParameter(
+            point: start
+        ), let currentParameter = try ViewportSpatialInteractionInputMathSupport.projectedAngleParameter(
             center: center,
             radial: radialVector,
             tangent: tangentVector,
-            point: current,
-            allowPolarFallback: true
-        )
-        guard let startParameter, let currentParameter else {
-            try ViewportSpatialInteractionInputMathSupport.validate(start, name: "Drag start")
-            try ViewportSpatialInteractionInputMathSupport.validate(current, name: "Drag current")
-            let startVector = CGVector(dx: start.x - center.x, dy: start.y - center.y)
-            let currentVector = CGVector(dx: current.x - center.x, dy: current.y - center.y)
-            try ViewportSpatialInteractionInputMathSupport.validate(startVector, name: "Radial start vector")
-            try ViewportSpatialInteractionInputMathSupport.validate(currentVector, name: "Radial current vector")
-            guard ViewportSpatialInteractionInputMathSupport.length(startVector) > 1.0e-9,
-                  ViewportSpatialInteractionInputMathSupport.length(currentVector) > 1.0e-9 else {
-                return try ViewportSpatialInteractionInputMathSupport.normalizedSignedAngle(
-                    baseAngleRadians,
-                    minimum: minimumAngleRadians
-                )
-            }
-            let cross = startVector.dx * currentVector.dy - startVector.dy * currentVector.dx
-            let dot = startVector.dx * currentVector.dx + startVector.dy * currentVector.dy
-            guard cross.isFinite, dot.isFinite else {
-                throw ViewportSpatialInteractionInputMathSupport.invalid("Projected polar angle is not finite.")
-            }
-            let polarDelta = atan2(cross, dot)
-            guard polarDelta.isFinite else {
-                throw ViewportSpatialInteractionInputMathSupport.invalid("Projected polar angle is not finite.")
-            }
-            let value = baseAngleRadians + polarDelta
-            guard value.isFinite else {
-                throw ViewportSpatialInteractionInputMathSupport.invalid("Radial angle overflows.")
-            }
-            return try ViewportSpatialInteractionInputMathSupport.normalizedSignedAngle(
-                value,
-                minimum: minimumAngleRadians
-            )
+            point: current
+        ) else {
+            return nil
         }
         let delta = try ViewportSpatialInteractionInputMathSupport.normalizedAngleDelta(
             from: startParameter,
@@ -359,7 +298,9 @@ extension ViewportSpatialMaterializedInteractionTarget.LinearDensityProjection {
 }
 
 extension ViewportSpatialMaterializedInteractionTarget.AngularCopyCountProjection {
-    func count(start: CGPoint, current: CGPoint) throws -> Int {
+    /// The stepped copy count for this update, or `nil` when the pointer sits on
+    /// the projected centre and carries no direction to step along.
+    func count(start: CGPoint, current: CGPoint) throws -> Int? {
         guard stepAngleRadians.isFinite, abs(stepAngleRadians) > 1.0e-12,
               baseCopyCount > 0, minimumAngleRadians.isFinite, minimumAngleRadians > 0.0 else {
             throw ViewportSpatialInteractionInputMathSupport.invalid("Angular copy-count projection is invalid.")
@@ -368,16 +309,14 @@ extension ViewportSpatialMaterializedInteractionTarget.AngularCopyCountProjectio
             center: center,
             radial: radialVector,
             tangent: tangentVector,
-            point: start,
-            allowPolarFallback: false
+            point: start
         ), let currentParameter = try ViewportSpatialInteractionInputMathSupport.projectedAngleParameter(
             center: center,
             radial: radialVector,
             tangent: tangentVector,
-            point: current,
-            allowPolarFallback: false
+            point: current
         ) else {
-            throw ViewportSpatialInteractionInputMathSupport.invalid("Angular copy-count input is at the center.")
+            return nil
         }
         let deltaAngle = try ViewportSpatialInteractionInputMathSupport.normalizedAngleDelta(
             from: startParameter,

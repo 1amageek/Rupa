@@ -13,7 +13,8 @@ final class ViewportSpatialOverlayRevision {
         guard next.slotWidthMeters.isFinite,
               next.sketchVertexOffsetDistanceMeters.isFinite,
               next.edgeOffsetDistanceMeters.isFinite,
-              next.nativeAxisValue?.isFinite != false else {
+              next.nativeAxisValue?.isFinite != false,
+              next.nativePatternValue?.isFinite != false else {
             throw .init(code: .invalidLimit, message: "Spatial overlay guide dimensions must be finite.")
         }
         if key == next { return value }

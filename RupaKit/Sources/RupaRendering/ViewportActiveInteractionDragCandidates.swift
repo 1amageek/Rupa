@@ -20,9 +20,6 @@ struct ViewportActiveInteractionDragCandidates {
     var patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? = nil
     var independentCopyExtrudeDistance: ViewportIndependentCopyExtrudeDistanceDragState? = nil
     var independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? = nil
-    var patternArrayRadialAngle: ViewportPatternArrayRadialAngleDragState? = nil
-    var patternArrayCopyCount: ViewportPatternArrayCopyCountDragState? = nil
-    var patternArrayCurveExtent: ViewportPatternArrayCurveExtentDragState? = nil
     var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? = nil
     var constructionPlane: ViewportConstructionPlaneHandleDragState? = nil
 
@@ -68,12 +65,6 @@ struct ViewportActiveInteractionDragCandidates {
             independentCopyBodyDimension.map(ViewportActiveInteractionDragState.independentCopyBodyDimension)
         case .patternArrayLinearAxis:
             patternArrayLinearAxis.map(ViewportActiveInteractionDragState.patternArrayLinearAxis)
-        case .patternArrayRadialAngle:
-            patternArrayRadialAngle.map(ViewportActiveInteractionDragState.patternArrayRadialAngle)
-        case .patternArrayCopyCount:
-            patternArrayCopyCount.map(ViewportActiveInteractionDragState.patternArrayCopyCount)
-        case .patternArrayCurveExtent:
-            patternArrayCurveExtent.map(ViewportActiveInteractionDragState.patternArrayCurveExtent)
         case .patternArrayCurvePathPoint:
             patternArrayCurvePathPoint.map(ViewportActiveInteractionDragState.patternArrayCurvePathPoint)
         case .constructionPlane:

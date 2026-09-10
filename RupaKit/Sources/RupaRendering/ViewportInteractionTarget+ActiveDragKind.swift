@@ -1,5 +1,10 @@
 extension ViewportInteractionTarget {
-    var activeDragKind: ViewportActiveInteractionDragKind? {
+    /// The drag kind every interaction target finishes as.
+    ///
+    /// The mapping is total: the last target that resolved to no drag was the
+    /// pattern array output mode toggle, and the native pattern input owns that
+    /// click now. A target that cannot be dragged has no reason to exist here.
+    var activeDragKind: ViewportActiveInteractionDragKind {
         switch self {
         case .sketchCurveHandle:
             .sketchCurveHandle
@@ -41,16 +46,8 @@ extension ViewportInteractionTarget {
             .independentCopyExtrudeDistance
         case .independentCopyBodyDimension:
             .independentCopyBodyDimension
-        case .patternArrayRadialAngle:
-            .patternArrayRadialAngle
-        case .patternArrayCopyCount:
-            .patternArrayCopyCount
-        case .patternArrayCurveExtent:
-            .patternArrayCurveExtent
         case .patternArrayCurvePathPoint:
             .patternArrayCurvePathPoint
-        case .patternArrayOutputMode:
-            nil
         case .constructionPlane:
             .constructionPlane
         case .affordance:

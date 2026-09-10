@@ -23,9 +23,6 @@ struct ViewportActiveInteractionDrags: Equatable {
         patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? = nil,
         independentCopyExtrudeDistance: ViewportIndependentCopyExtrudeDistanceDragState? = nil,
         independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? = nil,
-        patternArrayRadialAngle: ViewportPatternArrayRadialAngleDragState? = nil,
-        patternArrayCopyCount: ViewportPatternArrayCopyCountDragState? = nil,
-        patternArrayCurveExtent: ViewportPatternArrayCurveExtentDragState? = nil,
         patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? = nil,
         constructionPlane: ViewportConstructionPlaneHandleDragState? = nil
     ) {
@@ -51,9 +48,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             patternArrayLinearAxis: patternArrayLinearAxis,
             independentCopyExtrudeDistance: independentCopyExtrudeDistance,
             independentCopyBodyDimension: independentCopyBodyDimension,
-            patternArrayRadialAngle: patternArrayRadialAngle,
-            patternArrayCopyCount: patternArrayCopyCount,
-            patternArrayCurveExtent: patternArrayCurveExtent,
             patternArrayCurvePathPoint: patternArrayCurvePathPoint,
             constructionPlane: constructionPlane
         ).firstActiveDrag
@@ -247,36 +241,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             setActiveDrag(
                 newValue.map(ViewportActiveInteractionDragState.independentCopyBodyDimension),
                 replacing: .independentCopyBodyDimension
-            )
-        }
-    }
-
-    var patternArrayRadialAngle: ViewportPatternArrayRadialAngleDragState? {
-        get { activeDrag?.patternArrayRadialAngle }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.patternArrayRadialAngle),
-                replacing: .patternArrayRadialAngle
-            )
-        }
-    }
-
-    var patternArrayCopyCount: ViewportPatternArrayCopyCountDragState? {
-        get { activeDrag?.patternArrayCopyCount }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.patternArrayCopyCount),
-                replacing: .patternArrayCopyCount
-            )
-        }
-    }
-
-    var patternArrayCurveExtent: ViewportPatternArrayCurveExtentDragState? {
-        get { activeDrag?.patternArrayCurveExtent }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.patternArrayCurveExtent),
-                replacing: .patternArrayCurveExtent
             )
         }
     }
