@@ -232,6 +232,44 @@ agree on the same row-major source values.
     projection and ray/plane contract and does not retain the former affine
     direction/determinant implementation.
 
+### CAD sub-shape identity on a body scene item
+
+A body scene item carries two independent things: the geometry the viewport
+draws for it, and the prepared CAD names its sub-shapes can be selected by. The
+second is owned here and is not derived from the first.
+
+`BodyDisplaySnapshotService` names a snapshot for every body feature the
+evaluation produced, and that snapshot carries the kernel mesh together with
+`Topology.meshFaceRuns`, which maps each contiguous run of emitted triangles to
+the `SelectionComponentID.generatedTopology` of the face that generated it.
+Those component IDs are the kernel's own stable sub-shape names. Whenever a
+snapshot exists for a feature, the body item built from that feature carries the
+snapshot's mesh and `ViewportBodyTopology(snapshot.topology)`. The two are
+written together or neither is written, because a run list indexes triangles of
+that mesh and is meaningless without it.
+
+This holds for the branches that draw the body as a profile-derived box as well
+as for the branches that draw the evaluated mesh. An extrude and a straight
+prism sweep display a box built from the sketch profile and the resolved depth,
+because that box is what an interactive depth or face drag can move before the
+kernel has re-evaluated. Choosing that display geometry does not make the box
+the body's identity: the feature still has an evaluated snapshot, and reading
+only `bodyID` and `subshapeID` from it while dropping the mesh and the face runs
+would deliver the most common CAD body to the viewport with no CAD sub-shape
+name at all, leaving the mounted frame's own triangles nothing to resolve to.
+
+The projected `body.face.*`, `body.edge.*`, and corner component IDs are the
+legacy pick index's names for sub-objects it derives from a bounding box. They
+remain owned by that resolver and are never written into a scene item. A
+consumer that must reach a `BodyFace` from a selection resolves a generated
+topology component through `GeneratedTopologySelectionResolver`, which is the
+single owner of that direction, so direct editing reaches the same face under
+either name.
+
+A face that evaluation gave no stable sub-shape identity contributes no run,
+and its triangles resolve to no component. That is a truthful absence of a CAD
+name, not a body without prepared topology.
+
 ## Runtime Flows
 
 ```mermaid
@@ -300,6 +338,7 @@ parallel projection, or a fabricated canvas point.
 | Shared clipping and depth | Near-crossing triangle/segment fixtures prove retained clipping and CPU screen/depth results; RealityKit GPU projection/depth parity is owned by RupaRendering. |
 | Grid projection | Parallel and perspective grid fixtures use the RealityViewport native-project-derived ray contract when mounted and the layout ray/plane contract off-scene, rejecting a parallel intersection without a second live camera. |
 | Frame identity | Rendering tests prove `snapshotID`, viewport revision, and overlay revision cannot be mixed in one displayed or hit-testable scene. |
+| CAD sub-shape identity on every evaluated body | A scene built from a document whose body is an extrude carries the evaluated snapshot's mesh and a non-empty `meshFaceRuns` whose component IDs are generated-topology names, and a triangle index inside a run resolves to that face; a feature with no evaluated snapshot carries neither mesh nor topology, proving the two are written together. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 
 Changes to source/evaluation identity or overlay reference contracts require

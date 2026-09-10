@@ -851,7 +851,13 @@ independent tessellator is never an alternative implementation.
    The native outcome is three-valued. `resolved` and `miss` both mean the
    native frame answered the query; `unsupported` means it could not, because no
    presentation is mounted or no CAD interaction node in the scene carries
-   prepared topology. An empty pixel is a `miss`, not `unsupported`: the frame
+   prepared topology. Which bodies carry it is not decided here: the scene
+   builder writes the evaluated snapshot's mesh and face runs onto every body
+   feature the evaluation named, under the
+   [scene item sub-shape identity contract](../RupaViewportScene/DESIGN.md#cad-sub-shape-identity-on-a-body-scene-item),
+   whatever geometry that item displays. A body reaching this query with no
+   prepared topology is therefore one evaluation gave no stable sub-shape
+   identity at all, not one whose display happens to be a projected box. An empty pixel is a `miss`, not `unsupported`: the frame
    answered, and nothing is drawn there. Face and edge scopes reach the legacy
    identity resolver only on `unsupported`, so neither a miss on a
    topology-backed scene nor a hover over empty space can be answered by a
@@ -1301,6 +1307,16 @@ independent tessellator is never an alternative implementation.
     size changes. Updating the finite coordinate strings is grid presentation
     formatting, not source formatting, and occurs only when that grid frame
     changes. All other camera updates retain the no-formatting guarantee.
+    A body item's overlay geometry is chosen by the interaction state, not by
+    whether the item carries a prepared mesh. While an edit state exists for a
+    feature, that state's world box corners are what the overlay draws, because
+    a drag moves a face or a depth before the kernel has re-evaluated and the
+    snapshot mesh is one evaluation behind the pointer. With no edit state the
+    snapshot mesh is drawn when the item carries one. The item carries its mesh
+    and face runs for the sake of selection identity under the
+    [scene item sub-shape identity contract](../RupaViewportScene/DESIGN.md#cad-sub-shape-identity-on-a-body-scene-item);
+    letting that carriage decide the preview would make an extrude's drag show
+    its pre-drag solid instead of the box the drag is moving.
 
 ### Lifecycle, cancellation, and bounds
 
@@ -1468,6 +1484,7 @@ tests and native GPU measurements.
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. `ViewportSketchTransformLifecycleTests` owns the sketch transform route. Producer tests prove that an interactive route registers exactly one record per handle — two translate axes, one rotate, four scale corners — and never a body affordance record; that the arrow, ring, and marker extents are the point lengths `BodyTransformMetrics` owns rather than any sketch measurement; that a non-interactive route draws the outline and registers nothing; that a pending mutation moves every emitted handle; and that an active value of the wrong kind, or a second active value, is refused. Value tests prove the world mutation and the `P^-1 * M_w * P * L` conversion for translate, rotate, and scale, and the typed refusals for a non-finite query answer, another role's query, a rotation point at the pivot, a scale factor at or below the floor, and a singular parent transform. Mounted Ortho and Persp tests prove press, drag, and finish through the input surface and cancel through real event routing, prove the committed corner moves away from the pivot, and prove that neither the body-move route nor the canvas fallback sees the gesture; the Ortho case views the sketch face-on, so it is also the counterexample the orthographic depth-window floor answers. A mounted Ortho test proves the route gate retires the press when it loses its callback. The drag target carries the baseline local frame it was measured against so the workspace owner can refuse a stale commit; that refusal belongs to `RupaUI` and is outside this module's verification. |
 | Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. `ViewportSketchTransformLifecycleTests` proves the sketch transform gizmo registers one record per handle only while the route is interactive, and that a pending mutation moves the emitted outline, arrows, arcs, corner handles, and centre marker to the mutated world geometry while the `scene` and `document` inputs the route reads are unchanged. |
 | Selection rectangle readiness | `Tests/RupaRenderingTests/ViewportSelectionDragFailurePolicyTests.swift` proves the policy publishes a resolved answer, retains the preview in silence for `frameNotReady`, and refuses every other typed failure — another `MeshSourcePresentationRenderError.Code`, and an error of an unrelated type — together with the code-and-message description the refusal reports. `Tests/RupaRenderingTests/ViewportSelectionDragFrameReadinessTests.swift` proves the producers those branches depend on: an idle plan cache answers `surfaceHit` and `occurrenceIDs` with `frameNotReady`, a cache holding a failure recorded for the queried identity rethrows that stored failure unchanged, an unmounted `RealityViewport` answers `surfaceHit`, `occurrenceIDs` and `cameraDepthInterval` with `frameNotReady` for a revision it never applied, and the same viewport mounted in a real window answers a revision other than the one it applied with a stale-revision refusal. The two `Viewport` call sites that dispatch on the policy are covered by source review, because the drag state they read is private SwiftUI `@State`; the mounted end-to-end drag belongs to the integration verification. |
+| Body preview geometry under an edit state | A spatial overlay fixture whose body item carries a snapshot mesh draws that mesh with no edit state and the edit state's world box corners while one exists, proving a prepared identity never decides what a drag previews. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 
