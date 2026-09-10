@@ -347,6 +347,7 @@ private func cornerFaceMesh(divisions: Int) -> ViewportBodyMesh {
     )
 }
 
+/// What the rectangle selects, which is the answer's confirmed list.
 private func resolve(
     in rect: CGRect = queryRect,
     frame: RectangleFrame = RectangleFrame(),
@@ -355,6 +356,26 @@ private func resolve(
     modelTransform: Transform3D = .identity,
     policy: ViewportSelectionHitPolicy = .all
 ) throws -> [SelectionComponent] {
+    try resolution(
+        in: rect,
+        frame: frame,
+        topology: topology,
+        mesh: mesh,
+        modelTransform: modelTransform,
+        policy: policy
+    ).confirmed
+}
+
+/// The whole answer, for a test that states what the query left unconfirmed as
+/// well as what it selects.
+private func resolution(
+    in rect: CGRect = queryRect,
+    frame: RectangleFrame = RectangleFrame(),
+    topology: ViewportBodyTopology? = nil,
+    mesh: ViewportBodyMesh? = nil,
+    modelTransform: Transform3D = .identity,
+    policy: ViewportSelectionHitPolicy = .all
+) throws -> ViewportRectangleResolution<SelectionComponent> {
     try ViewportNativeCADTopologyResolver.resolve(
         in: rect,
         topology: topology ?? bodyTopology(),
@@ -732,21 +753,23 @@ private func resolve(
     /// independence from its emission order. One face, one camera and one
     /// section window drawn at five densities present the frame with the same
     /// pixels, so the rectangle owes them the same answer — including behind a
-    /// window narrower than a grid cell, where the grid finds nothing at all.
+    /// window narrower than a grid cell, where no sample the grid takes stands
+    /// in the visible part and the run is named as unconfirmed instead.
     ///
-    /// The contract is the equality and not a particular answer: what a density
-    /// may not change is the result, and which windows the grid can reach at
-    /// all is `rectangleSampleGridDivisions`, a budget stated elsewhere.
+    /// The contract here is the equality, in both lists: what a density may not
+    /// change is the answer. Which windows the grid can reach at all is
+    /// `rectangleSampleGridDivisions`, a budget stated elsewhere, and that a run
+    /// it could not reach is named rather than dropped has its own test.
     @Test(.timeLimit(.minutes(1)))
     func rectangleAnswersAlikeForEveryTessellationOfOneFaceBehindANarrowWindow() throws {
-        var results: [[SelectionComponent]] = []
+        var results: [ViewportRectangleResolution<SelectionComponent>] = []
         for divisions in [1, 2, 5, 10, 25] {
             var frame = RectangleFrame()
             // Retains world `x <= 0.05`, the leftmost five screen points of the
             // face — a fifth of one grid cell.
             frame.section = (normal: Vector3D(x: -1, y: 0, z: 0), offset: -0.05)
             results.append(
-                try resolve(
+                try resolution(
                     in: faceRect,
                     frame: frame,
                     topology: frontFaceTopology(divisions: divisions),
@@ -757,8 +780,41 @@ private func resolve(
         }
         let expected = try #require(results.first)
         for result in results.dropFirst() {
-            #expect(result == expected)
+            #expect(result.confirmed == expected.confirmed)
+            #expect(result.unconfirmed == expected.unconfirmed)
         }
+    }
+
+    /// A run whose coverage met the rectangle and which no sample confirmed is
+    /// named as unconfirmed rather than dropped.
+    ///
+    /// The section leaves this face visible in a five-point window at the
+    /// rectangle's leading edge, where a grid cell is twenty-five wide, so every
+    /// cell middle stands in the part the section cut away and the frame refuses
+    /// every point it is asked about while plainly drawing the face inside the
+    /// rectangle. The answer therefore says the rectangle confirmed nothing
+    /// about this run; it does not say the run is absent, and a caller may not
+    /// read it as absence. `RupaRendering/DESIGN.md` owns that rule.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleNamesARunWhoseCoverageMetItAndWhichNoSampleConfirmed() throws {
+        var frame = RectangleFrame()
+        frame.section = (normal: Vector3D(x: -1, y: 0, z: 0), offset: -0.05)
+        // The window is genuinely visible: the frame draws this body's face in
+        // it, at a point inside the rectangle.
+        let drawn = try frame.surfaceHit(at: CGPoint(x: 202, y: 150))
+        let visible = try #require(drawn)
+        #expect(try frame.bodyDrawsTriangle(visible.triangle))
+
+        let resolved = try resolution(
+            in: faceRect,
+            frame: frame,
+            topology: frontFaceTopology(divisions: 2),
+            mesh: frontFaceMesh(divisions: 2),
+            policy: .face
+        )
+
+        #expect(resolved.confirmed.isEmpty)
+        #expect(resolved.unconfirmed == [.face(frontFaceComponentID)])
     }
 
     /// The completeness the grid does guarantee, stated across the same five
@@ -784,12 +840,12 @@ private func resolve(
     }
 
     /// A cell whose coverage misses its middle is asked about the middle of the
-    /// chord the coverage cuts on the ray towards it, not about the coverage's
-    /// nearest point. The nearest point of a face too small to reach a cell
-    /// middle lies on that face's own silhouette, where the frame is entitled to
-    /// answer with either of the faces meeting there.
+    /// first piece of coverage the ray towards it meets, not about the
+    /// coverage's nearest point. The nearest point of a face too small to reach
+    /// a cell middle lies on that face's own silhouette, where the frame is
+    /// entitled to answer with either of the faces meeting there.
     @Test(.timeLimit(.minutes(1)))
-    func rectangleAsksAboutTheChordMiddleWhenAFaceMissesTheCellMiddle() throws {
+    func rectangleAsksAboutTheFirstCoveragePieceWhenAFaceMissesTheCellMiddle() throws {
         for divisions in [1, 2, 4] {
             let frame = RectangleFrame()
             let components = try resolve(
@@ -802,9 +858,9 @@ private func resolve(
             let queries = frame.log.surfaceQueries
 
             // The coverage is 202...208 by 102...108 and the cell's middle is
-            // (212.5, 112.5), so the nearest point is the corner (208, 108) and
-            // the chord it opens leaves through (202, 102). Its middle is
-            // (205, 105).
+            // (212.5, 112.5), so the nearest point is the corner (208, 108).
+            // The coverage is convex, so the ray meets it in one piece, which
+            // leaves through (202, 102) and has middle (205, 105).
             #expect(components == [.face(frontFaceComponentID)])
             #expect(queries.count == 1)
             let sample = try #require(queries.first)

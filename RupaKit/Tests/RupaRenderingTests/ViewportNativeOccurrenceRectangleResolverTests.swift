@@ -99,6 +99,7 @@ private let middleOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.middle"
 private let trailingOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.trailing")
 private let nearPlaneOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.near-plane")
 private let coveringOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.covering")
+private let stripOccurrenceID = SceneOccurrenceID(rawValue: "occurrence.strips")
 
 /// The rectangle most tests drag, in screen points: `x` in 210...270 and `y` in
 /// 110...170, which is world `x` in 0.1...0.7 and `z` in 0.3...0.9.
@@ -172,6 +173,42 @@ private func nearPlaneRejectedSource() throws -> MeshSource {
     return try builder.build()
 }
 
+/// One occurrence whose coverage inside the rectangle is two strips with a gap
+/// between them, all of it inside the grid's first cell.
+///
+/// The near strip projects to screen `x` in 214...216 and the far one to
+/// 210...212, both to `y` in 112...123, so the cell's middle at (217.5, 117.5)
+/// lies outside the coverage and the ray towards the coverage's nearest point
+/// crosses the near strip, then the gap, then the far strip. `divisions` cuts
+/// each strip into that many quads along `z`, which changes the tessellation
+/// without changing the union.
+private func twoStripSource(named name: String, divisions: Int) throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: GeometrySourceID(rawValue: name))
+    try builder.reserveCapacity(
+        vertexCount: 8 * divisions, faceCount: 2 * divisions, cornerCount: 8 * divisions
+    )
+    for strip in [(minimum: 0.10, maximum: 0.12), (minimum: 0.14, maximum: 0.16)] {
+        for step in 0 ..< divisions {
+            let lower = 0.77 + 0.11 * Double(step) / Double(divisions)
+            let upper = 0.77 + 0.11 * Double(step + 1) / Double(divisions)
+            let first = try builder.addVertex(
+                GeometryPoint3D(x: strip.minimum, y: 0, z: lower)
+            )
+            let second = try builder.addVertex(
+                GeometryPoint3D(x: strip.maximum, y: 0, z: lower)
+            )
+            let third = try builder.addVertex(
+                GeometryPoint3D(x: strip.maximum, y: 0, z: upper)
+            )
+            let fourth = try builder.addVertex(
+                GeometryPoint3D(x: strip.minimum, y: 0, z: upper)
+            )
+            _ = try builder.addFace(vertexIDs: [first, second, third, fourth])
+        }
+    }
+    return try builder.build()
+}
+
 /// A square one world unit nearer the camera than the plane at `y = 0`, whose
 /// projection covers exactly `screenRect`.
 private func coveringSource(named name: String, screenRect: CGRect) throws -> MeshSource {
@@ -225,11 +262,22 @@ private func occurrenceViews(
     return views
 }
 
+/// What the rectangle selects, which is the answer's confirmed list.
 private func resolve(
     in rect: CGRect = queryRect,
     occurrences: [MeshSourcePresentationOccurrenceView],
     frame: OccurrenceRectangleFrame
 ) throws -> [SceneOccurrenceID] {
+    try resolution(in: rect, occurrences: occurrences, frame: frame).confirmed
+}
+
+/// The whole answer, for a test that states what the query left unconfirmed as
+/// well as what it selects.
+private func resolution(
+    in rect: CGRect = queryRect,
+    occurrences: [MeshSourcePresentationOccurrenceView],
+    frame: OccurrenceRectangleFrame
+) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
     try ViewportNativeOccurrenceRectangleResolver.occurrenceIDs(
         intersecting: rect,
         occurrences: occurrences,
@@ -260,8 +308,10 @@ private func resolve(
 
     /// Occlusion is the frame's answer, not a comparison this resolver makes.
     /// An occurrence standing directly behind another meets the same rectangle
-    /// and projects into it, and is still rejected because the frame draws the
-    /// nearer occurrence at the point it is asked about.
+    /// and projects into it, and is still not selected because the frame draws
+    /// the nearer occurrence at the point it is asked about. It is reported as
+    /// unconfirmed: the frame answered about the points it was asked about, and
+    /// a point oracle cannot turn that into absence.
     @Test(.timeLimit(.minutes(1)))
     func rectangleRejectsAnOccurrenceTheNearerOneCovers() throws {
         let views = try occurrenceViews([
@@ -276,9 +326,10 @@ private func resolve(
         ])
         let frame = OccurrenceRectangleFrame(drawn: [(200...300, frontOccurrenceID)])
 
-        let result = try resolve(occurrences: views, frame: frame)
+        let resolved = try resolution(occurrences: views, frame: frame)
 
-        #expect(result == [frontOccurrenceID])
+        #expect(resolved.confirmed == [frontOccurrenceID])
+        #expect(resolved.unconfirmed == [behindOccurrenceID])
         // Both candidates reach the frame: the covered one is rejected by the
         // answers it gets, not skipped before it is asked. The nearer one stops
         // at its first confirmed sample; the covered one is never confirmed and
@@ -303,9 +354,12 @@ private func resolve(
         ])
         let frame = OccurrenceRectangleFrame(drawn: [(200...300, frontOccurrenceID)])
 
-        let result = try resolve(occurrences: views, frame: frame)
+        let resolved = try resolution(occurrences: views, frame: frame)
 
-        #expect(result == [frontOccurrenceID])
+        #expect(resolved.confirmed == [frontOccurrenceID])
+        // The skipped candidate was never asked about, so it is absent rather
+        // than unconfirmed and appears in neither list.
+        #expect(resolved.unconfirmed.isEmpty)
         #expect(frame.log.surfaceQueries.count == 1)
         // The skipped candidate cost its eight bounding corners and nothing more.
         #expect(frame.log.projections.contains(Point3D(x: 3.5, y: 0.4, z: 0.8)) == false)
@@ -374,7 +428,12 @@ private func resolve(
         ])
         let frame = OccurrenceRectangleFrame(drawn: [(200 ... 300, nearPlaneOccurrenceID)])
 
-        #expect(try resolve(occurrences: views, frame: frame).isEmpty)
+        let resolved = try resolution(occurrences: views, frame: frame)
+
+        #expect(resolved.confirmed.isEmpty)
+        // No coverage reached the grid, so no sample was ever taken about this
+        // candidate and it is absent rather than unconfirmed.
+        #expect(resolved.unconfirmed.isEmpty)
         #expect(frame.log.surfaceQueries.isEmpty)
     }
 
@@ -420,6 +479,85 @@ private func resolve(
             queries.count
                 <= MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate
         )
+    }
+
+    /// A candidate whose visible coverage inside one cell is two strips with a
+    /// gap between them is selected, and is selected alike at a coarse and at a
+    /// fine tessellation.
+    ///
+    /// The cell's middle stands outside both strips, so the sample is taken
+    /// along the ray towards the coverage's nearest point. The middle of the
+    /// whole span, from that nearest point to the furthest crossing, falls in
+    /// the gap, where the frame draws nothing and must refuse; the middle of the
+    /// first piece the ray meets falls inside the near strip, which the frame
+    /// confirms. The two tessellations present the same union, so they receive
+    /// the same sample and the same answer — and the answer is a selection
+    /// rather than two matching empty lists.
+    @Test(.timeLimit(.minutes(1)), arguments: [1, 5])
+    func rectangleReportsACandidateWhoseVisibleStripsLeaveAGapAcrossOneCell(
+        stripDivisions: Int
+    ) throws {
+        let views = try occurrenceViews([
+            try planItem(
+                occurrenceID: stripOccurrenceID,
+                source: try twoStripSource(named: "mesh.strips", divisions: stripDivisions)
+            ),
+        ])
+        #expect(views.map(\.triangleCount) == [4 * stripDivisions])
+        // The frame draws the two strips and nothing in the gap between them.
+        let frame = OccurrenceRectangleFrame(drawn: [
+            (210 ... 212, stripOccurrenceID),
+            (214 ... 216, stripOccurrenceID),
+        ])
+
+        let resolved = try resolution(occurrences: views, frame: frame)
+
+        #expect(resolved.confirmed == [stripOccurrenceID])
+        #expect(resolved.unconfirmed.isEmpty)
+        // The coverage lies inside one cell, so the candidate has one sample,
+        // and it stands inside the near strip rather than in the gap at 213.
+        #expect(frame.log.surfaceQueries.count == 1)
+        let query = try #require(frame.log.surfaceQueries.first)
+        #expect(query.y == 117.5)
+        #expect(query.x > 214)
+        #expect(query.x < 216)
+    }
+
+    /// A candidate the frame draws only in a window narrower than a grid cell
+    /// is reported as unconfirmed rather than as absent.
+    ///
+    /// The nearer solid covers every point the grid asks about, so no sample
+    /// confirms the face behind it even though the frame plainly draws a strip
+    /// of that face inside the rectangle. The rectangle answers with what it
+    /// confirmed and names the candidate it could not judge, so no caller is
+    /// told the candidate is absent.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsACandidateVisibleOnlyInANarrowWindowAsUnconfirmed() throws {
+        // The covering solid starts five points inside the rectangle's leading
+        // edge and the cells are fifteen points wide, so every cell middle
+        // stands behind it while the frame still draws the face in 210...215.
+        let covered = CGRect(x: 215, y: 100, width: 200, height: 200)
+        let views = try occurrenceViews([
+            try planItem(
+                occurrenceID: frontOccurrenceID,
+                source: try squareSource(named: "mesh.front", offsetX: 0, depth: 0)
+            ),
+            try planItem(
+                occurrenceID: coveringOccurrenceID,
+                source: try coveringSource(named: "mesh.covering", screenRect: covered)
+            ),
+        ])
+        let frame = OccurrenceRectangleFrame(
+            drawn: [(200 ... 300, frontOccurrenceID)],
+            covered: (rect: covered, occurrenceID: coveringOccurrenceID)
+        )
+        // The window is genuinely visible: the frame draws the face there.
+        #expect(try frame.drawnOccurrenceID(at: CGPoint(x: 212, y: 140)) == frontOccurrenceID)
+
+        let resolved = try resolution(occurrences: views, frame: frame)
+
+        #expect(resolved.confirmed == [coveringOccurrenceID])
+        #expect(resolved.unconfirmed == [frontOccurrenceID])
     }
 
     /// The frame answering with an occurrence is admission evidence for that
@@ -523,8 +661,9 @@ private func resolve(
         #expect(views.map(\.triangleCount) == [2, 2, 2])
     }
 
-    /// An empty result is a valid answer. The frame drawing nothing inside the
-    /// rectangle is not a failure and is not fallen back on.
+    /// An empty confirmed list is a valid answer. The frame drawing nothing at
+    /// the points it was asked about is not a failure and is not fallen back
+    /// on. It is also not absence, so the candidate is named as unconfirmed.
     @Test(.timeLimit(.minutes(1)))
     func rectangleRejectsACandidateTheFrameAnswersWithNothing() throws {
         let views = try occurrenceViews([
@@ -535,7 +674,10 @@ private func resolve(
         ])
         let frame = OccurrenceRectangleFrame(drawn: [(200...300, nil)])
 
-        #expect(try resolve(occurrences: views, frame: frame).isEmpty)
+        let resolved = try resolution(occurrences: views, frame: frame)
+
+        #expect(resolved.confirmed.isEmpty)
+        #expect(resolved.unconfirmed == [frontOccurrenceID])
         // Nothing confirms the candidate, so it is refused on every sample it
         // has rather than on one representative point.
         #expect(

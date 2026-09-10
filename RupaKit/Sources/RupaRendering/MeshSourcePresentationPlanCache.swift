@@ -94,7 +94,7 @@ final class MeshSourcePresentationPlanCache {
         intersecting rect: CGRect,
         for identity: RealityViewportPreparationRequest.Identity,
         revision: UInt64
-    ) throws -> [SceneOccurrenceID] {
+    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
         try querySurface(for: identity).occurrenceIDs(intersecting: rect, revision: revision)
     }
 

@@ -21,28 +21,38 @@ import Foundation
 /// sampled at the same points.
 ///
 /// A cell's point is built from the cell's own middle. When the coverage
-/// contains the middle, the middle is the sample. Otherwise the sample is the
-/// midpoint of the chord the coverage cuts on the ray leaving the middle towards
-/// the coverage's nearest point. Projection onto a closed convex set is unique,
-/// so each fragment has one nearest point and the union's is the nearest of
-/// those; the chord's far end is the furthest any fragment reaches along that
-/// ray. Both are extrema over the union rather than first arrivals. Taking the
-/// chord's midpoint rather than the nearest point keeps the sample off the
-/// coverage's silhouette, where the frame is entitled to answer with either of
-/// the two faces meeting there.
+/// contains the middle, the middle is the sample. Otherwise the sample is taken
+/// on the ray leaving the middle towards the coverage's nearest point, and it is
+/// the middle of the first piece of coverage that ray meets. Projection onto a
+/// closed convex set is unique, so each fragment has one nearest point and the
+/// union's is the nearest of those; the distance to it is therefore the smallest
+/// ray parameter at which the coverage is met at all. The ray meets each
+/// fragment in a closed interval, and those intervals, joined wherever they
+/// touch, are the parameters the coverage occupies along it. The piece holding
+/// the nearest point is the first of them, and the sample is its middle. Both of
+/// that piece's ends are properties of the union rather than of any one
+/// fragment, so neither depends on how the union was cut. Taking a middle rather
+/// than the nearest point keeps the sample off the coverage's silhouette, where
+/// the frame is entitled to answer with either of the two faces meeting there.
+///
+/// Taking the first piece rather than the whole span from the nearest point to
+/// the furthest one is what makes the sample a point the candidate occupies. A
+/// coverage that is not convex — two visible strips of one face with a gap
+/// between them inside one cell — has a span whose middle can fall in that gap,
+/// and a query there is one the frame must refuse however much of the cell the
+/// candidate covers.
 ///
 /// Every sample lies inside its cell and therefore inside the rectangle, because
-/// the fragments are clipped to the cell, the cell is convex, and the middle,
-/// the nearest point and the chord's far end are all points of it. That is what
-/// makes the guarantee stated on
+/// the fragments are clipped to the cell, the cell is convex, and every point of
+/// every interval is a point of it. That is what makes the guarantee stated on
 /// `MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions` hold: an
 /// axis-aligned visible window whose sides span at least two cells contains a
 /// whole cell, whose coverage then contains its middle, so the window holds that
 /// cell's sample whatever the candidate's tessellation.
 ///
-/// The rule is sound and deliberately not complete. One sample per cell can miss
-/// a visible sliver thinner than a cell, and a coverage that is not convex can
-/// put the chord's midpoint in one of its own holes. A sample the candidate does
+/// The rule is sound and not complete, and what stays incomplete is the size of
+/// the window it can find rather than where a sample lands. One sample per cell
+/// can miss a visible sliver thinner than a cell. A sample the candidate does
 /// not occupy is refused by the frame, so what is lost is a candidate and never
 /// a wrong one — but no caller may read an unsampled region as invisible.
 /// `RupaRendering/DESIGN.md` owns that contract.
@@ -63,6 +73,31 @@ struct ViewportRectangleSampleGrid {
     /// broken by index, so the order is a function of `divisions` alone.
     let queryOrder: [Int]
 
+    /// How close two ray intervals must come to be read as one piece.
+    ///
+    /// Two fragments sharing an edge cross that edge's ray at one parameter in
+    /// exact arithmetic and at two parameters a rounding apart in floating
+    /// point, so without a tolerance a finely tessellated face presents as a run
+    /// of hairline pieces and is sampled in the first of them instead of in the
+    /// whole. The grid owns it because the rounding it absorbs is a function of
+    /// the coordinates the grid clips: it is `1e-6` of the rectangle's larger
+    /// side, far below one device pixel for any rectangle a pointer can drag and
+    /// far above the rounding of a crossing parameter computed at that
+    /// magnitude. `RupaRendering/DESIGN.md` owns the rule and names the two
+    /// tests that hold its failure directions.
+    let joinTolerance: Double
+
+    /// How many pieces of coverage one cell's ray tracks.
+    ///
+    /// A ray crossing more keeps the earliest of them. The piece holding the
+    /// nearest point has the smallest start by construction, so it is never the
+    /// one dropped: a cell past this bound still samples a point the candidate
+    /// occupies, and what it loses is only the guarantee that the piece it
+    /// reports is the same for every tessellation of the same coverage. The
+    /// bound belongs here rather than to the plan's limits because it bounds
+    /// this sampling rule's own working set and not a count of native queries.
+    static let maximumRayComponentsPerCell = 64
+
     init(
         rect: CGRect,
         divisions: Int = MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions
@@ -70,6 +105,8 @@ struct ViewportRectangleSampleGrid {
         let divisions = max(1, divisions)
         self.rect = rect
         self.divisions = divisions
+        let extent = max(abs(Double(rect.width)), abs(Double(rect.height)))
+        self.joinTolerance = extent.isFinite ? extent * 1.0e-6 : 0.0
         let middle = Double(divisions - 1) / 2.0
         self.queryOrder = (0 ..< (divisions * divisions)).sorted { lhs, rhs in
             let left = Self.squaredOffsetFromMiddle(lhs, divisions: divisions, middle: middle)
@@ -103,18 +140,18 @@ struct ViewportRectangleSampleGrid {
     ///
     /// `coverage` is asked for the candidate's convex screen fragments at most
     /// twice and must produce the same fragments each time. The first pass
-    /// anchors every cell against the union it received; the second measures the
-    /// chord through the anchors that did not land on a cell's middle, and is
-    /// skipped when every anchored cell holds its own middle — the case for a
-    /// candidate large enough to fill cells. Both passes are CPU clipping over
-    /// points the caller already projected, so the second costs no projection
-    /// and no native query.
+    /// anchors every cell against the union it received; the second measures,
+    /// along the ray each surviving anchor names, the intervals the coverage
+    /// occupies there, and is skipped when every anchored cell holds its own
+    /// middle — the case for a candidate large enough to fill cells. Both passes
+    /// are CPU clipping over points the caller already projected, so the second
+    /// costs no projection and no native query.
     func polygonSamples(
         _ coverage: (inout PolygonSink) throws -> Void
     ) rethrows -> [CGPoint] {
         var sink = PolygonSink(grid: self)
         try coverage(&sink)
-        if sink.beginChordPass() {
+        if sink.beginIntervalPass() {
             try coverage(&sink)
         }
         return sink.samples()
@@ -166,20 +203,23 @@ struct ViewportRectangleSampleGrid {
     /// The fragments are traversed twice. The first pass anchors every covered
     /// cell against the union it received: the cell's middle when the union
     /// holds it, and otherwise the union's nearest point to that middle. The
-    /// second pass measures how far the union reaches from the middle along the
-    /// anchored direction, so the sample can be the chord's midpoint instead of
-    /// a point of the union's silhouette. Both are extrema over the union, so
-    /// neither depends on how the union was cut into fragments.
+    /// second pass collects, along the anchored ray, the closed interval each
+    /// fragment occupies, and joins the intervals wherever they touch. The piece
+    /// holding the anchor is then the first of them and the sample is its
+    /// middle, so the sample is a point the union covers rather than a point of
+    /// its silhouette or of one of its gaps. Both ends of that piece are
+    /// properties of the union, so neither depends on how the union was cut into
+    /// fragments.
     struct PolygonSink {
         private let grid: ViewportRectangleSampleGrid
         private var anchors: [Anchor?]
-        private var chords: [Double]
-        private var isMeasuringChords = false
+        private var pieces: [[Piece]]
+        private var isMeasuringIntervals = false
 
         fileprivate init(grid: ViewportRectangleSampleGrid) {
             self.grid = grid
             self.anchors = [Anchor?](repeating: nil, count: grid.cellCount)
-            self.chords = []
+            self.pieces = []
         }
 
         /// Clips one convex screen polygon into every cell it meets.
@@ -209,8 +249,8 @@ struct ViewportRectangleSampleGrid {
             for row in rows {
                 for column in columns {
                     let index = row * grid.divisions + column
-                    if isMeasuringChords {
-                        measureChord(polygon, at: index)
+                    if isMeasuringIntervals {
+                        measureInterval(polygon, at: index)
                     } else {
                         anchor(polygon, at: index)
                     }
@@ -219,17 +259,23 @@ struct ViewportRectangleSampleGrid {
         }
 
         /// One sample per cell the candidate covered, in the grid's query order.
+        ///
+        /// A cell whose coverage holds its middle names that middle. Every other
+        /// cell names the middle of the first piece its ray meets, which the
+        /// interval pass seeded with the anchor itself, so the list is never
+        /// empty and its first entry is always the piece the anchor lies in.
         func samples() -> [CGPoint] {
             var result: [CGPoint] = []
             result.reserveCapacity(anchors.count)
             for index in grid.queryOrder {
                 guard let anchor = anchors[index] else { continue }
+                let middle = grid.middle(of: index)
                 guard anchor.distance > 0 else {
-                    result.append(grid.middle(of: index))
+                    result.append(middle)
                     continue
                 }
-                let middle = grid.middle(of: index)
-                let parameter = (anchor.distance + chords[index]) / 2.0
+                let piece = pieces[index][0]
+                let parameter = (piece.lower + piece.upper) / 2.0
                 result.append(
                     CGPoint(
                         x: middle.x + CGFloat(parameter * Double(anchor.direction.x)),
@@ -240,15 +286,18 @@ struct ViewportRectangleSampleGrid {
             return result
         }
 
-        /// Fixes each anchored cell's ray and opens the chord pass, answering
+        /// Fixes each anchored cell's ray and opens the interval pass, answering
         /// whether the fragments have to be traversed again.
         ///
         /// A cell whose coverage holds its middle is already answered, so a
         /// candidate that fills the cells it meets — the common case — skips the
-        /// second traversal entirely.
-        fileprivate mutating func beginChordPass() -> Bool {
-            isMeasuringChords = true
-            chords = [Double](repeating: 0.0, count: anchors.count)
+        /// second traversal entirely. Every other cell is seeded with the
+        /// degenerate interval at its anchor, so a piece holding the anchor
+        /// exists before any fragment is measured and the sample is a point of
+        /// the coverage even when no fragment interval survives.
+        fileprivate mutating func beginIntervalPass() -> Bool {
+            isMeasuringIntervals = true
+            pieces = [[Piece]](repeating: [], count: anchors.count)
             var isNeeded = false
             for index in anchors.indices {
                 guard var anchor = anchors[index] else { continue }
@@ -266,7 +315,7 @@ struct ViewportRectangleSampleGrid {
                 anchor.distance = distance
                 anchor.direction = CGPoint(x: CGFloat(dx / distance), y: CGFloat(dy / distance))
                 anchors[index] = anchor
-                chords[index] = distance
+                pieces[index] = [Piece(lower: distance, upper: distance)]
                 isNeeded = true
             }
             return isNeeded
@@ -292,21 +341,64 @@ struct ViewportRectangleSampleGrid {
             )
         }
 
-        private mutating func measureChord(_ polygon: [CGPoint], at index: Int) {
+        private mutating func measureInterval(_ polygon: [CGPoint], at index: Int) {
             guard let anchor = anchors[index], anchor.distance > 0 else { return }
             let clipped = ViewportRectangleSampleGrid.clipped(polygon, to: grid.cell(at: index))
-            guard let parameter = ViewportRectangleSampleGrid.exitParameter(
+            guard let interval = ViewportRectangleSampleGrid.rayInterval(
                 from: grid.middle(of: index), along: anchor.direction, through: clipped
-            ), parameter.isFinite else { return }
-            chords[index] = max(chords[index], parameter)
+            ) else { return }
+            join(Piece(lower: interval.lower, upper: interval.upper), at: index)
         }
+
+        /// Merges one fragment's interval into the cell's pieces, joining across
+        /// gaps no wider than `joinTolerance` and keeping the list ordered by
+        /// where each piece starts.
+        ///
+        /// A cell that would hold more pieces than
+        /// `maximumRayComponentsPerCell` drops the ones that start furthest
+        /// along the ray, never the piece the anchor lies in.
+        private mutating func join(_ interval: Piece, at index: Int) {
+            let tolerance = grid.joinTolerance
+            let current = pieces[index]
+            var lower = interval.lower
+            var upper = interval.upper
+            var merged: [Piece] = []
+            merged.reserveCapacity(current.count + 1)
+            var cursor = 0
+            while cursor < current.count, current[cursor].upper + tolerance < lower {
+                merged.append(current[cursor])
+                cursor += 1
+            }
+            while cursor < current.count, current[cursor].lower <= upper + tolerance {
+                lower = min(lower, current[cursor].lower)
+                upper = max(upper, current[cursor].upper)
+                cursor += 1
+            }
+            merged.append(Piece(lower: lower, upper: upper))
+            while cursor < current.count {
+                merged.append(current[cursor])
+                cursor += 1
+            }
+            let bound = ViewportRectangleSampleGrid.maximumRayComponentsPerCell
+            if merged.count > bound {
+                merged.removeLast(merged.count - bound)
+            }
+            pieces[index] = merged
+        }
+    }
+
+    /// One connected run of ray parameters the coverage occupies, in the
+    /// distance along a cell's ray.
+    fileprivate struct Piece {
+        var lower: Double
+        var upper: Double
     }
 
     /// One cell's nearest point of the candidate's coverage of it.
     ///
     /// `distanceSquared` is what the first pass compares; `distance` and
     /// `direction` are the ray the second pass measures along, and exist only
-    /// once `beginChordPass()` has fixed them.
+    /// once `beginIntervalPass()` has fixed them.
     fileprivate struct Anchor {
         var distanceSquared: Double
         var point: CGPoint
@@ -348,24 +440,31 @@ struct ViewportRectangleSampleGrid {
         return best
     }
 
-    /// How far along `direction` from `origin` the fragment last reaches, or nil
-    /// when the ray misses it. `direction` must be a unit vector, so the answer
-    /// is a distance.
+    /// The closed interval of ray parameters the fragment occupies, or nil when
+    /// the ray misses it. `direction` must be a unit vector, so the bounds are
+    /// distances.
     ///
-    /// The greatest crossing parameter over every edge, which needs no winding
-    /// and cannot double count: a ray leaving a convex fragment through a vertex
-    /// meets two edges at the same parameter, and a maximum is indifferent to
-    /// that. Taking the greatest of these over the fragments of a union gives
-    /// how far the union reaches, whatever the fragments were.
-    static func exitParameter(
+    /// The least and greatest crossing parameters over every edge, which need no
+    /// winding and cannot double count: a ray entering or leaving a convex
+    /// fragment through a vertex meets two edges at the same parameter, and an
+    /// extremum is indifferent to that. The origin lies outside the union the
+    /// caller measures, so every crossing is at a non-negative parameter and the
+    /// least of them is where the ray enters this fragment.
+    static func rayInterval(
         from origin: CGPoint, along direction: CGPoint, through fragment: [CGPoint]
-    ) -> Double? {
+    ) -> (lower: Double, upper: Double)? {
         guard fragment.isEmpty == false else { return nil }
         guard origin.x.isFinite, origin.y.isFinite else { return nil }
         let dx = Double(direction.x)
         let dy = Double(direction.y)
         guard dx.isFinite, dy.isFinite, dx != 0 || dy != 0 else { return nil }
-        var result: Double?
+        var lower: Double?
+        var upper: Double?
+        func admit(_ parameter: Double) {
+            guard parameter.isFinite, parameter >= 0 else { return }
+            lower = min(lower ?? parameter, parameter)
+            upper = max(upper ?? parameter, parameter)
+        }
         for index in fragment.indices {
             let start = fragment[index]
             let end = fragment[(index + 1) % fragment.count]
@@ -381,19 +480,18 @@ struct ViewportRectangleSampleGrid {
                 let alongRay = (wx * ey - wy * ex) / denominator
                 let alongEdge = (wx * dy - wy * dx) / denominator
                 guard alongRay.isFinite, alongEdge.isFinite else { continue }
-                guard alongRay >= 0, alongEdge >= 0, alongEdge <= 1 else { continue }
-                result = max(result ?? alongRay, alongRay)
+                guard alongEdge >= 0, alongEdge <= 1 else { continue }
+                admit(alongRay)
             } else {
                 // Parallel to the ray: the edge can only be met where it lies on
                 // the ray's own line, and then at its endpoints.
                 guard wx * dy - wy * dx == 0 else { continue }
-                let atStart = wx * dx + wy * dy
-                let atEnd = Double(end.x - origin.x) * dx + Double(end.y - origin.y) * dy
-                if atStart.isFinite, atStart >= 0 { result = max(result ?? atStart, atStart) }
-                if atEnd.isFinite, atEnd >= 0 { result = max(result ?? atEnd, atEnd) }
+                admit(wx * dx + wy * dy)
+                admit(Double(end.x - origin.x) * dx + Double(end.y - origin.y) * dy)
             }
         }
-        return result
+        guard let lower, let upper else { return nil }
+        return (lower, upper)
     }
 
     /// Whether a convex polygon of three or more points holds `target`.

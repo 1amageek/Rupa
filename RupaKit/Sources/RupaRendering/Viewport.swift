@@ -1835,9 +1835,9 @@ public struct Viewport: View {
     /// absence of a presentation occurrence rather than a refused query.
     private func presentationOccurrenceIDs(
         intersecting rect: CGRect
-    ) throws -> [SceneOccurrenceID] {
+    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
         guard presentationScene != nil else {
-            return []
+            return ViewportRectangleResolution(confirmed: [], unconfirmed: [])
         }
         return try presentationPlanCache.occurrenceIDs(
             intersecting: rect,
@@ -2132,7 +2132,7 @@ public struct Viewport: View {
                 }
                 return presentationSceneNodeIDByOccurrenceID[$0.occurrenceID] == sceneNodeID
             }
-            let components = try ViewportNativeCADTopologyResolver.resolve(
+            let resolution = try ViewportNativeCADTopologyResolver.resolve(
                 in: rect,
                 topology: topology,
                 mesh: mesh,
@@ -2146,8 +2146,11 @@ public struct Viewport: View {
                 retainsSectionedPoint: retainsSectionedPoint,
                 bodyDrawsTriangle: bodyDrawsTriangle
             )
+            // Only `confirmed` selects. A run the frame refused at every
+            // sample it was asked about is not proven absent, and this
+            // rectangle reports a selection rather than an absence.
             Self.appendRectangleSubshapeHits(
-                components,
+                resolution.confirmed,
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 into: &hits,
@@ -9944,7 +9947,12 @@ public struct Viewport: View {
         // resolves on its own asks the frame nothing.
         let visibleOccurrenceIDs: [SceneOccurrenceID]
         if requiresLegacy || selectionHitPolicy.allowsObjectHits {
-            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect)
+            // `confirmed` is what both consumers read. An unconfirmed
+            // occurrence is neither selected nor proven absent, so it can
+            // neither be reported as a selection nor delete a legacy hit;
+            // `RupaRendering/DESIGN.md` owns why widening either consumer
+            // would be wrong.
+            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect).confirmed
         } else {
             visibleOccurrenceIDs = []
         }

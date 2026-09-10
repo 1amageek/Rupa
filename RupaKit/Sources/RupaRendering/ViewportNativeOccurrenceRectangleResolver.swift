@@ -18,9 +18,15 @@ enum ViewportNativeOccurrenceRectangleResolver {
     /// The occurrences the mounted frame draws inside `rect`, in plan order and
     /// de-duplicated.
     ///
-    /// An empty result is a valid answer: the frame drew no occurrence inside
-    /// the rectangle. Readiness, camera revision and projection failures stay
-    /// typed and are propagated from the injected native queries.
+    /// An empty `confirmed` list is a valid answer: at every point the grid
+    /// asked about, the frame drew no occurrence this rectangle admits. It is
+    /// not the same statement as absence, so a candidate whose coverage
+    /// reached the grid and which no sample confirmed is reported as
+    /// `unconfirmed` rather than dropped — the frame answered about the points
+    /// it was asked about and not about the candidate. A candidate the bounds
+    /// test skipped, and one whose coverage never reached the grid, are absent
+    /// and appear in neither list. Readiness, camera revision and projection
+    /// failures stay typed and are propagated from the injected native queries.
     ///
     /// `occurrences` and `drawnOccurrenceID` must describe one plan. A query
     /// naming an occurrence the candidate list does not hold would mean the
@@ -40,9 +46,10 @@ enum ViewportNativeOccurrenceRectangleResolver {
     ///
     /// Cost per candidate: eight bounding-box projections, one projection per
     /// retained source position, at most two CPU clips per triangle — the grid
-    /// scans a candidate once to anchor its cells and once more to measure the
-    /// chord through the anchors that fell outside a cell's middle, both from
-    /// the same projections — and at most
+    /// scans a candidate once to anchor its cells and once more to measure, for
+    /// each anchor that fell outside a cell's middle, the intervals the
+    /// coverage occupies along that anchor's ray, both from the same
+    /// projections — and at most
     /// `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`
     /// native surface queries — never one per triangle. Every candidate here is
     /// a plan item, so across a plan the surface queries are bounded by that
@@ -55,7 +62,7 @@ enum ViewportNativeOccurrenceRectangleResolver {
         depthInterval: ClosedRange<Double>,
         projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double),
         drawnOccurrenceID: (CGPoint) throws -> SceneOccurrenceID?
-    ) throws -> [SceneOccurrenceID] {
+    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
               rect.width.isFinite, rect.height.isFinite,
               rect.width > 0.0, rect.height > 0.0 else {
@@ -72,6 +79,7 @@ enum ViewportNativeOccurrenceRectangleResolver {
         }
         let grid = ViewportRectangleSampleGrid(rect: rect)
         var admitted: Set<SceneOccurrenceID> = []
+        var sampled: Set<SceneOccurrenceID> = []
         for occurrence in occurrences {
             // An occurrence a previous query already named is drawn inside the
             // rectangle, so asking again could only repeat that answer.
@@ -112,6 +120,12 @@ enum ViewportNativeOccurrenceRectangleResolver {
                     sink.admit(screen)
                 }
             }
+            // The candidate's coverage reached the grid, so the frame was
+            // asked about it and its absence from `admitted` below is an
+            // answer about those points rather than about the candidate.
+            if samples.isEmpty == false {
+                sampled.insert(occurrence.occurrenceID)
+            }
             for sample in samples {
                 guard let drawn = try drawnOccurrenceID(sample) else { continue }
                 admitted.insert(drawn)
@@ -121,13 +135,22 @@ enum ViewportNativeOccurrenceRectangleResolver {
                 if drawn == occurrence.occurrenceID { break }
             }
         }
-        guard admitted.isEmpty == false else { return [] }
+        // One plan-order pass builds both lists, because a candidate a later
+        // query confirmed belongs in `confirmed` however its own samples read.
         var result: [SceneOccurrenceID] = []
         result.reserveCapacity(admitted.count)
+        var unconfirmed: [SceneOccurrenceID] = []
         var emitted: Set<SceneOccurrenceID> = []
-        for occurrence in occurrences where admitted.contains(occurrence.occurrenceID) {
-            guard emitted.insert(occurrence.occurrenceID).inserted else { continue }
-            result.append(occurrence.occurrenceID)
+        for occurrence in occurrences {
+            let occurrenceID = occurrence.occurrenceID
+            if admitted.contains(occurrenceID) {
+                guard emitted.insert(occurrenceID).inserted else { continue }
+                result.append(occurrenceID)
+                continue
+            }
+            guard sampled.contains(occurrenceID),
+                  emitted.insert(occurrenceID).inserted else { continue }
+            unconfirmed.append(occurrenceID)
         }
         guard result.count == admitted.count else {
             throw MeshSourcePresentationRenderError(
@@ -135,7 +158,7 @@ enum ViewportNativeOccurrenceRectangleResolver {
                 message: "The native frame drew an occurrence the queried plan does not hold."
             )
         }
-        return result
+        return ViewportRectangleResolution(confirmed: result, unconfirmed: unconfirmed)
     }
 
     /// Whether the rectangle can meet the occurrence at all, from the screen

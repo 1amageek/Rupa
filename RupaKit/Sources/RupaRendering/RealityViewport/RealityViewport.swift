@@ -880,13 +880,17 @@ final class RealityViewport {
     ///
     /// An empty result is a valid answer once the frame is mounted and holds
     /// geometry; readiness, camera revision, projection and provenance failures
-    /// remain typed. The bounded cost contract belongs to
-    /// `ViewportNativeOccurrenceRectangleResolver`.
-    func occurrenceIDs(intersecting rect: CGRect, revision: UInt64) throws -> [SceneOccurrenceID] {
+    /// remain typed. The two lists the answer carries, and the bounded cost
+    /// contract, belong to `ViewportNativeOccurrenceRectangleResolver`.
+    func occurrenceIDs(
+        intersecting rect: CGRect, revision: UInt64
+    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
         try validateMountedFrame(describing: "occurrence rectangle query")
         try validateAppliedRevision(revision, describing: "occurrence rectangle query")
         guard !entries.isEmpty, geometryRoot.isEnabled, let plan = surfaceResources?.plan else {
-            return []
+            // A mounted frame holding no geometry judged no candidate, so
+            // nothing here is unconfirmed.
+            return ViewportRectangleResolution(confirmed: [], unconfirmed: [])
         }
         var occurrences: [MeshSourcePresentationOccurrenceView] = []
         occurrences.reserveCapacity(plan.occurrences.count)

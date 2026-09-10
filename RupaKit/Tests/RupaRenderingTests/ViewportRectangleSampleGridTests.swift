@@ -36,8 +36,9 @@ private func samples(
 /// Two sample lists name the same points.
 ///
 /// Compared to a tolerance rather than exactly: two tessellations of one shape
-/// reach the same nearest point and the same chord end through different
-/// clipped fragments, so their last binary digits need not agree.
+/// reach the same nearest point and the same ends of the piece holding it
+/// through different clipped fragments, so their last binary digits need not
+/// agree.
 private func expectSamplesMatch(
     _ result: [CGPoint],
     _ expected: [CGPoint],
@@ -48,6 +49,39 @@ private func expectSamplesMatch(
         #expect(abs(point.x - other.x) < 0.000001, subject)
         #expect(abs(point.y - other.y) < 0.000001, subject)
     }
+}
+
+/// Whether `point` stands inside `polygon` and no nearer than `margin` to any
+/// of its edges.
+///
+/// Landing inside is what makes the mounted frame answer a sample with the
+/// candidate; landing on the silhouette is a point the frame may answer with
+/// either of the two surfaces meeting there, and landing outside is a point it
+/// must refuse. The tests below assert the first of the three, because what the
+/// rectangle owes a visible candidate is a query it can be found at.
+private func isInside(
+    _ point: CGPoint, _ polygon: [CGPoint], margin: CGFloat = 0.001
+) -> Bool {
+    guard polygon.count >= 3 else { return false }
+    var twiceArea: CGFloat = 0
+    for index in polygon.indices {
+        let start = polygon[index]
+        let end = polygon[(index + 1) % polygon.count]
+        twiceArea += start.x * end.y - end.x * start.y
+    }
+    guard twiceArea != 0 else { return false }
+    let orientation: CGFloat = twiceArea > 0 ? 1 : -1
+    for index in polygon.indices {
+        let start = polygon[index]
+        let end = polygon[(index + 1) % polygon.count]
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = (dx * dx + dy * dy).squareRoot()
+        guard length > 0 else { return false }
+        let side = dx * (point.y - start.y) - dy * (point.x - start.x)
+        guard orientation * side / length >= margin else { return false }
+    }
+    return true
 }
 
 /// Convex screen polygons that overlap each other, so several of them reach the
@@ -159,25 +193,94 @@ private let widerThanTwoCellWindows: [CGRect] = [
         #expect(samples(of: [right, left], on: grid) == [CGPoint(x: 15, y: 15)])
     }
 
-    /// A cell whose coverage misses its middle is sampled at the middle of the
-    /// chord the coverage cuts on the ray towards its nearest point, so the
-    /// sample stands inside the coverage and off its silhouette.
+    /// A cell whose coverage misses its middle is sampled inside the coverage,
+    /// off its silhouette, at the middle of the first piece the ray towards the
+    /// coverage's nearest point meets.
     ///
     /// The square `2...8` by `2...8` lies wholly inside the first cell, whose
     /// middle `(12.5, 12.5)` it does not contain. Its nearest point to that
     /// middle is the corner `(8, 8)`, the ray leaves the square at `(2, 2)`,
-    /// and the chord's middle is `(5, 5)` — the square's own centre, which no
-    /// single fragment of it needs to be centred on.
+    /// and that one piece's middle is `(5, 5)` — the square's own centre, which
+    /// no single fragment of it needs to be centred on.
     @Test(.timeLimit(.minutes(1)))
-    func gridSamplesTheChordMiddleWhenTheCoverageMissesTheCellMiddle() throws {
+    func gridSamplesInsideTheCoverageWhenItMissesTheCellMiddle() throws {
         let grid = makeGrid()
         let coverage = CGRect(x: 2, y: 2, width: 6, height: 6)
         for tessellation in tessellations(of: coverage) {
-            expectSamplesMatch(
-                samples(of: tessellation, on: grid),
-                [CGPoint(x: 5, y: 5)],
-                "chord middle"
-            )
+            let result = samples(of: tessellation, on: grid)
+            expectSamplesMatch(result, [CGPoint(x: 5, y: 5)], "one piece middle")
+            for sample in result {
+                #expect(isInside(sample, corners(of: coverage)))
+            }
+        }
+    }
+
+    /// A coverage that is not convex is sampled in the piece its nearest point
+    /// belongs to, and never in a gap between its pieces.
+    ///
+    /// Two strips of one candidate stand in the first cell, `1...3` and
+    /// `9...11` by `10...15`, and the cell's middle `(12.5, 12.5)` lies in
+    /// neither. The nearer strip's corner `(11, 12.5)` is the coverage's
+    /// nearest point, and the span from it to the far strip's far side has its
+    /// middle at `(6, 12.5)` — a place this candidate does not occupy, where
+    /// the frame must refuse it however much of the cell it covers. The first
+    /// piece the ray meets ends at `(9, 12.5)`, so the sample is `(10, 12.5)`
+    /// and the frame is asked about the candidate where the candidate is.
+    @Test(.timeLimit(.minutes(1)))
+    func gridSamplesInsideTheNearestPieceOfACoverageWithAGap() throws {
+        let grid = makeGrid()
+        let near = CGRect(x: 9, y: 10, width: 2, height: 5)
+        let far = CGRect(x: 1, y: 10, width: 2, height: 5)
+        let coarse = [corners(of: near), corners(of: far)]
+        let fine = triangulatedPolygons(of: near, rows: 3, columns: 3)
+            + triangulatedPolygons(of: far, rows: 3, columns: 3)
+        let tiled = tiledPolygons(of: near, rows: 2, columns: 4)
+            + tiledPolygons(of: far, rows: 4, columns: 2)
+
+        for tessellation in [coarse, fine, tiled, coarse.reversed(), fine.reversed()] {
+            let result = samples(of: tessellation, on: grid)
+            #expect(result.count == 1)
+            for sample in result {
+                #expect(isInside(sample, corners(of: near)) || isInside(sample, corners(of: far)))
+            }
+            expectSamplesMatch(result, [CGPoint(x: 10, y: 12.5)], "nearest piece middle")
+        }
+    }
+
+    /// Two fragments meeting on a shared edge are sampled as the one piece they
+    /// form, and never in the first hairline the edge's two crossing parameters
+    /// cut out of it.
+    ///
+    /// The quadrilateral below lies wholly inside the first cell and misses its
+    /// middle, so it is sampled along a ray. Cut into two triangles, that ray
+    /// crosses their shared diagonal at two parameters a rounding apart, which
+    /// without a join reads as a gap and puts the sample in a hairline at the
+    /// coverage's own corner — outside the shape once the rounding is added.
+    /// The join makes both tessellations name one piece, and its middle stands
+    /// inside the quadrilateral.
+    @Test(.timeLimit(.minutes(1)))
+    func gridSamplesFragmentsMeetingOnASharedEdgeAsOnePiece() throws {
+        let grid = makeGrid()
+        let quadrilateral = [
+            CGPoint(x: 1, y: 1), CGPoint(x: 4, y: 2),
+            CGPoint(x: 4, y: 7), CGPoint(x: 1, y: 7),
+        ]
+        let fan = [
+            [quadrilateral[0], quadrilateral[1], quadrilateral[2]],
+            [quadrilateral[0], quadrilateral[2], quadrilateral[3]],
+        ]
+
+        let whole = samples(of: [quadrilateral], on: grid)
+        #expect(whole.count == 1)
+        for sample in whole {
+            #expect(isInside(sample, quadrilateral))
+        }
+        for tessellation in [fan, fan.reversed()] {
+            let result = samples(of: tessellation, on: grid)
+            for sample in result {
+                #expect(isInside(sample, quadrilateral))
+            }
+            expectSamplesMatch(result, whole, "shared edge")
         }
     }
 

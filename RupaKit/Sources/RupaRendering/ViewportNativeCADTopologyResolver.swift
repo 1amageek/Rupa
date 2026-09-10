@@ -230,8 +230,9 @@ enum ViewportNativeCADTopologyResolver {
     /// unsampled region as invisible.
     ///
     /// A face's triangles are therefore scanned twice, once to anchor the cells
-    /// and once to measure the chord through the anchors that fell outside a
-    /// cell's middle, and both passes reuse the same projections. The samples
+    /// and once to measure, for each anchor that fell outside a cell's middle,
+    /// the intervals the coverage occupies along that anchor's ray, and both
+    /// passes reuse the same projections. The samples
     /// still cost at most `maxRectangleSurfaceQueryCountPerCandidate` native
     /// queries per sub-shape, and the frame is asked in the grid's query order
     /// only until one sample is confirmed.
@@ -264,7 +265,7 @@ enum ViewportNativeCADTopologyResolver {
         surfaceHit: (CGPoint) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
         retainsSectionedPoint: (Point3D) throws -> Bool,
         bodyDrawsTriangle: (MeshSourcePresentationTriangle) throws -> Bool
-    ) throws -> [SelectionComponent] {
+    ) throws -> ViewportRectangleResolution<SelectionComponent> {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
               rect.size.width.isFinite, rect.size.height.isFinite,
               rect.size.width > 0, rect.size.height > 0 else {
@@ -349,8 +350,13 @@ enum ViewportNativeCADTopologyResolver {
         }
 
         guard selectionHitPolicy.allowsFaceHits else {
-            return components
+            return ViewportRectangleResolution(confirmed: components, unconfirmed: [])
         }
+        // A run whose coverage reached the grid and which no sample confirmed
+        // is neither selected nor proven absent, so it is kept here rather than
+        // dropped. `RupaRendering/DESIGN.md` owns what the two lists mean.
+        var unconfirmedIDs: [SelectionComponentID] = []
+        var unconfirmedComponents: Set<SelectionComponentID> = []
         // The mesh positions belong to the whole body, so a position two runs
         // share is projected once and indexed twice. The table is allocated on
         // the first position a surviving run asks for and never before, so a
@@ -418,6 +424,7 @@ enum ViewportNativeCADTopologyResolver {
                     sink.admit(screen)
                 }
             }
+            var isAdmitted = false
             for sample in samples {
                 guard let surface = try surfaceHit(sample),
                       try bodyDrawsTriangle(surface.triangle) else { continue }
@@ -432,10 +439,21 @@ enum ViewportNativeCADTopologyResolver {
                 }
                 admitted.insert(run.componentID)
                 components.append(.face(run.componentID))
+                isAdmitted = true
                 break
             }
+            guard isAdmitted == false, samples.isEmpty == false else { continue }
+            guard unconfirmedComponents.insert(run.componentID).inserted else { continue }
+            unconfirmedIDs.append(run.componentID)
         }
-        return components
+        // A component two runs name is confirmed as soon as either run is, so
+        // the unconfirmed list is settled only after every run has been read.
+        var unconfirmed: [SelectionComponent] = []
+        unconfirmed.reserveCapacity(unconfirmedIDs.count)
+        for componentID in unconfirmedIDs where admitted.contains(componentID) == false {
+            unconfirmed.append(.face(componentID))
+        }
+        return ViewportRectangleResolution(confirmed: components, unconfirmed: unconfirmed)
     }
 
     /// One body mesh position as the rectangle's face path holds it: the world
