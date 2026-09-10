@@ -40,6 +40,10 @@ public struct Viewport: View {
         subsystem: "RupaRendering",
         category: "ViewportNativeGesture"
     )
+    private static let selectionRectangleLogger = Logger(
+        subsystem: "RupaRendering",
+        category: "ViewportSelectionRectangle"
+    )
 
     @State private var activeCanvasDrag: ViewportActiveDrag?
     @State private var activeInteractionDrags = ViewportActiveInteractionDrags()
@@ -9938,15 +9942,22 @@ public struct Viewport: View {
         guard let onSelectionDrag else {
             return
         }
-        var target: ViewportSelectionDragTarget
-        do {
-            target = try selectionDragTarget(from: start, to: end, size: size)
-        } catch {
-            // An unavailable frame cannot authorize a selection.
-            return
+        switch ViewportSelectionDragFailurePolicy.outcome(
+            for: Result { try selectionDragTarget(from: start, to: end, size: size) }
+        ) {
+        case .publishes(var target):
+            target.selectionIntent = selectionIntent
+            onSelectionDrag(target)
+        case .retainsPreview:
+            // No frame judged this rectangle, so the selection stays as the
+            // last answered frame left it. The caller's mouse-up clears the
+            // preview either way.
+            break
+        case let .refuses(error):
+            Self.selectionRectangleLogger.error(
+                "The rectangle selection was refused: \(ViewportSelectionDragFailurePolicy.refusalDescription(error), privacy: .public)"
+            )
         }
-        target.selectionIntent = selectionIntent
-        onSelectionDrag(target)
     }
 
     private func publishSelectionDragPreview(
@@ -9954,12 +9965,20 @@ public struct Viewport: View {
         to end: CGPoint,
         size: CGSize
     ) {
-        do {
-            publishSelectionDragPreview(
-                target: try selectionDragTarget(from: start, to: end, size: size)
+        switch ViewportSelectionDragFailurePolicy.outcome(
+            for: Result { try selectionDragTarget(from: start, to: end, size: size) }
+        ) {
+        case let .publishes(target):
+            publishSelectionDragPreview(target: target)
+        case .retainsPreview:
+            // A pointer move that outran preparation is not an operator error,
+            // so the preview the last answered frame produced is kept.
+            break
+        case let .refuses(error):
+            Self.selectionRectangleLogger.error(
+                "The rectangle selection preview was refused: \(ViewportSelectionDragFailurePolicy.refusalDescription(error), privacy: .public)"
             )
-        } catch {
-            // An unavailable frame cannot authorize a selection preview.
+            publishSelectionDragPreview(hits: [])
         }
     }
 

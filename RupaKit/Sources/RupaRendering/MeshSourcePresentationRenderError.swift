@@ -16,6 +16,13 @@ public struct MeshSourcePresentationRenderError: Error, Equatable, LocalizedErro
         case budgetExceeded
         case invalidLimit
         case resourceExhausted
+        /// No frame has judged this query yet: nothing is prepared, a
+        /// preparation is still in flight, the mounted frame belongs to another
+        /// scene or snapshot, or the native surface has no live content, no
+        /// RealityKit scene, or no applied camera revision. A caller that can
+        /// ask again should, because the state resolves itself; every other
+        /// code is an answer the caller must act on.
+        case frameNotReady
         case failed
         case transformFailure
         case sizeOverflow

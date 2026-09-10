@@ -228,15 +228,19 @@ final class MeshSourcePresentationPlanCache {
     private func querySurface(for identity: RealityViewportPreparationRequest.Identity) throws -> RealityViewport {
         if case let .failed(current, error) = state, current == identity { throw error }
         if let surface = queryAuthority(for: identity) { return surface }
+        // No frame has judged this identity: nothing is prepared, a preparation
+        // is in flight, or the state belongs to another scene or snapshot and
+        // the display has not caught up. A failure recorded for this identity
+        // is answered above and is never one of these.
         switch state {
         case .idle:
-            throw queryFailure("The native surface query is unavailable before preparation.")
+            throw notReadyFailure("The native surface query is unavailable before preparation.")
         case .preparing:
-            throw queryFailure("The native surface query is unavailable while preparation is in progress.")
+            throw notReadyFailure("The native surface query is unavailable while preparation is in progress.")
         case .ready:
-            throw queryFailure("The native surface query uses a stale preparation identity.")
+            throw notReadyFailure("The native surface query uses a stale preparation identity.")
         case .failed:
-            throw queryFailure("The native surface query uses a stale failed preparation identity.")
+            throw notReadyFailure("The native surface query uses a stale failed preparation identity.")
         }
     }
 
@@ -475,6 +479,12 @@ final class MeshSourcePresentationPlanCache {
                 state = .failed(identity: identity, error: error)
             }
         }
+    }
+
+    /// A query that arrived before any frame could judge this identity. The
+    /// caller may ask again; it must not read this as an answer.
+    private func notReadyFailure(_ message: String) -> MeshSourcePresentationRenderError {
+        .init(code: .frameNotReady, message: message)
     }
 
     private func queryFailure(_ message: String) -> MeshSourcePresentationRenderError {

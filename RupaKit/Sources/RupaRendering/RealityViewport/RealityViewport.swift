@@ -842,15 +842,8 @@ final class RealityViewport {
         guard point.x.isFinite, point.y.isFinite else {
             throw Self.queryFailure("The native surface query point is not finite.")
         }
-        guard appliedViewportRevision == revision else {
-            throw Self.queryFailure("The native surface query uses a stale camera revision.")
-        }
-        guard root.isEnabled, clipper.isEnabled, content != nil else {
-            throw Self.queryFailure("The native surface query is unavailable for the mounted frame.")
-        }
-        guard root.scene != nil else {
-            throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
-        }
+        try validateMountedFrame(describing: "surface query")
+        try validateAppliedRevision(revision, describing: "surface query")
         guard !entries.isEmpty else { return nil }
         guard geometryRoot.isEnabled else { return nil }
 
@@ -890,15 +883,8 @@ final class RealityViewport {
     /// remain typed. The bounded cost contract belongs to
     /// `ViewportNativeOccurrenceRectangleResolver`.
     func occurrenceIDs(intersecting rect: CGRect, revision: UInt64) throws -> [SceneOccurrenceID] {
-        guard appliedViewportRevision == revision else {
-            throw Self.queryFailure("The native occurrence rectangle query uses a stale camera revision.")
-        }
-        guard root.isEnabled, clipper.isEnabled, content != nil else {
-            throw Self.queryFailure("The native occurrence rectangle query is unavailable for the mounted frame.")
-        }
-        guard root.scene != nil else {
-            throw Self.queryFailure("The mounted native surface has no RealityKit scene.")
-        }
+        try validateMountedFrame(describing: "occurrence rectangle query")
+        try validateAppliedRevision(revision, describing: "occurrence rectangle query")
         guard !entries.isEmpty, geometryRoot.isEnabled, let plan = surfaceResources?.plan else {
             return []
         }
@@ -1270,17 +1256,55 @@ final class RealityViewport {
     }
 
     func isCameraReady(revision: UInt64) -> Bool {
-        appliedViewportRevision == revision && root.isEnabled && clipper.isEnabled
-            && root.scene != nil && content != nil && cameraCalibration != nil
+        do {
+            // `.zero` is finite, so this asks only about the frame itself.
+            try validateCameraQuery(point: .zero, revision: revision)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// The mount conditions every native query needs before a camera revision
+    /// can mean anything: this view is installed and un-withdrawn, its content
+    /// is live, and its entity graph belongs to a RealityKit scene.
+    ///
+    /// A frame failing these has drawn nothing and judged nothing, so the
+    /// refusal is not-ready rather than an answer the caller must act on. It is
+    /// checked before the applied revision because an unmounted frame has no
+    /// revision to be stale about.
+    private func validateMountedFrame(describing subject: String) throws {
+        guard root.isEnabled, clipper.isEnabled, content != nil else {
+            throw Self.notReadyFailure("The native \(subject) is unavailable for the mounted frame.")
+        }
+        guard root.scene != nil else {
+            throw Self.notReadyFailure("The mounted native surface has no RealityKit scene.")
+        }
+    }
+
+    /// Matches a query against the revision the mounted frame actually applied.
+    ///
+    /// A frame that has applied none is still arriving, so that is not-ready. A
+    /// frame that applied a different one drew pixels this query must not be
+    /// answered from, so that is a refusal.
+    private func validateAppliedRevision(_ revision: UInt64, describing subject: String) throws {
+        guard let applied = appliedViewportRevision else {
+            throw Self.notReadyFailure("The native \(subject) has no applied camera revision yet.")
+        }
+        guard applied == revision else {
+            throw Self.queryFailure("The native \(subject) uses a stale camera revision.")
+        }
     }
 
     private func validateCameraQuery(point: CGPoint, revision: UInt64) throws {
         guard point.x.isFinite, point.y.isFinite else {
             throw Self.queryFailure("The native camera query point is not finite.")
         }
-        guard isCameraReady(revision: revision) else {
-            throw Self.queryFailure("The native camera query requires an exact-ready mounted frame.")
+        try validateMountedFrame(describing: "camera query")
+        guard cameraCalibration != nil else {
+            throw Self.notReadyFailure("The native camera query has no calibrated mounted camera yet.")
         }
+        try validateAppliedRevision(revision, describing: "camera query")
     }
 
 
@@ -1497,5 +1521,11 @@ final class RealityViewport {
 
     private nonisolated static func queryFailure(_ message: String) -> MeshSourcePresentationRenderError {
         .init(code: .failed, message: message)
+    }
+
+    /// A query that arrived before any frame could judge it. The caller may ask
+    /// again; it must not read this as an answer.
+    private nonisolated static func notReadyFailure(_ message: String) -> MeshSourcePresentationRenderError {
+        .init(code: .frameNotReady, message: message)
     }
 }

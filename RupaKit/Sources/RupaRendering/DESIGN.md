@@ -985,11 +985,30 @@ independent tessellator is never an alternative implementation.
    rectangle. Raising the count tightens the guarantee and raises the query
    ceiling in proportion; lowering it does the reverse.
    The failure contract belongs to the drag, not to the resolver alone.
-   `Viewport.selectionDragTarget` throws, and both the preview publisher and the
-   drag handler answer a typed failure by publishing nothing, as the pointer
-   press ends a cancelled native gesture and the hover clears its canvas state.
-   A rectangle that could not be resolved changes no selection and never
-   publishes an empty answer that would read as an intentional deselection.
+   `Viewport.selectionDragTarget` throws, and the drag separates the two ways an
+   answer can be absent, because they are not the same event. A frame that has
+   not mounted yet has judged nothing: no preparation has started, a build is
+   still in flight, the display still shows another scene or snapshot, the
+   entity graph is not in a RealityKit scene, or the camera has applied no
+   revision at all. Those states report `frameNotReady`, and every native query
+   the rectangle reaches judges that readiness before it compares the camera
+   revision, so a frame that never mounted is never reported as a stale one. The
+   rectangle then keeps what the last answering frame said: the preview is
+   retained and the commit changes no selection, both without a report, because
+   a pointer move that outran preparation is not an operator error. Every other
+   typed failure is a refusal the operator must be able to see — a stale camera
+   revision, an unrepresentable projection, a non-finite input, malformed
+   provenance, or a failure recorded against this very identity — so the preview
+   is cleared and the failure is reported to `Logger`. Clearing the preview is
+   not a deselection: the preview target is a highlight the drag owns, and only
+   `onSelectionDrag` changes a selection. A rectangle that could not be resolved
+   therefore never commits an empty answer that would read as an intentional
+   deselection.
+   `ViewportSelectionDragFailurePolicy` owns that split as a pure function over
+   the `Result` of one rectangle answer, so the preview publisher and the drag
+   handler read one decision and neither forms its own. `Viewport` is a SwiftUI
+   `View` whose drag state is private, so the policy is where this contract is
+   proved and the two call sites are thin dispatch over it.
    The legacy rectangle resolver is narrowed, not removed. Face, edge, and
    vertex consult it when, and only when, the hit scene holds geometry the
    native path does not own: a CAD interaction body whose prepared topology
@@ -1076,8 +1095,9 @@ independent tessellator is never an alternative implementation.
    unready or absent presentation with an empty list, which the legacy filter
    read as "no occurrence is visible" and used to drop every legacy body hit.
    The native query reports readiness, camera revision, and projection failures
-   as typed errors instead, so `selectionDragTarget` throws and both publishers
-   report nothing. `all`, `object`, `region` and `sketch entity` therefore gain
+   as typed errors instead, so `selectionDragTarget` throws and the drag answers
+   by the readiness split above: a not-ready frame retains the preview in
+   silence, and a refused one clears the preview and reports. `all`, `object`, `region` and `sketch entity` therefore gain
    the throwing surface that face, edge and vertex already had through the CAD
    sub-shape rectangle. An empty result now means only what it says: the mounted
    frame drew no occurrence inside the rectangle. `Viewport` computes the set at
@@ -1418,6 +1438,15 @@ revision, cancellation, and RealityKit frame failure are explicit typed
 outcomes. They never fall back to parallel camera, empty geometry, old identity
 rendering, Canvas world drawing, or a guessed source ID.
 
+An unmounted or unprepared frame is a typed outcome distinct from all of those.
+`frameNotReady` names the states in which no frame has judged the query yet: the
+plan cache is idle, preparing, or holding another scene identity, and the native
+surface has no live content, no RealityKit scene, or no applied camera revision.
+Readiness is judged before the camera revision wherever both apply, so a frame
+that never mounted is never reported as a stale camera. A caller that can ask
+again treats `frameNotReady` as exactly that; a caller that cannot treats it as
+any other failure.
+
 RealityKit APIs that are MainActor-isolated are called only in their bounded
 native lifetime boundary. No `await` occurs while a mutex is held, no blocking
 GPU wait occurs on MainActor, and no detached task owns a native Entity.
@@ -1438,6 +1467,7 @@ tests and native GPU measurements.
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. `ViewportSketchTransformLifecycleTests` owns the sketch transform route. Producer tests prove that an interactive route registers exactly one record per handle — two translate axes, one rotate, four scale corners — and never a body affordance record; that the arrow, ring, and marker extents are the point lengths `BodyTransformMetrics` owns rather than any sketch measurement; that a non-interactive route draws the outline and registers nothing; that a pending mutation moves every emitted handle; and that an active value of the wrong kind, or a second active value, is refused. Value tests prove the world mutation and the `P^-1 * M_w * P * L` conversion for translate, rotate, and scale, and the typed refusals for a non-finite query answer, another role's query, a rotation point at the pivot, a scale factor at or below the floor, and a singular parent transform. Mounted Ortho and Persp tests prove press, drag, and finish through the input surface and cancel through real event routing, prove the committed corner moves away from the pivot, and prove that neither the body-move route nor the canvas fallback sees the gesture; the Ortho case views the sketch face-on, so it is also the counterexample the orthographic depth-window floor answers. A mounted Ortho test proves the route gate retires the press when it loses its callback. The drag target carries the baseline local frame it was measured against so the workspace owner can refuse a stale commit; that refusal belongs to `RupaUI` and is outside this module's verification. |
 | Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. `ViewportSketchTransformLifecycleTests` proves the sketch transform gizmo registers one record per handle only while the route is interactive, and that a pending mutation moves the emitted outline, arrows, arcs, corner handles, and centre marker to the mutated world geometry while the `scene` and `document` inputs the route reads are unchanged. |
+| Selection rectangle readiness | `Tests/RupaRenderingTests/ViewportSelectionDragFailurePolicyTests.swift` proves the policy publishes a resolved answer, retains the preview in silence for `frameNotReady`, and refuses every other typed failure — another `MeshSourcePresentationRenderError.Code`, and an error of an unrelated type — together with the code-and-message description the refusal reports. `Tests/RupaRenderingTests/ViewportSelectionDragFrameReadinessTests.swift` proves the producers those branches depend on: an idle plan cache answers `surfaceHit` and `occurrenceIDs` with `frameNotReady`, a cache holding a failure recorded for the queried identity rethrows that stored failure unchanged, an unmounted `RealityViewport` answers `surfaceHit`, `occurrenceIDs` and `cameraDepthInterval` with `frameNotReady` for a revision it never applied, and the same viewport mounted in a real window answers a revision other than the one it applied with a stale-revision refusal. The two `Viewport` call sites that dispatch on the policy are covered by source review, because the drag state they read is private SwiftUI `@State`; the mounted end-to-end drag belongs to the integration verification. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 
