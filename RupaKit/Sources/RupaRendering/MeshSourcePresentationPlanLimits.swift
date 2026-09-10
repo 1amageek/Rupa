@@ -51,18 +51,11 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// single candidate: at most one per grid cell.
     ///
     /// The occurrence rectangle has one candidate per plan item, so its
-    /// plan-wide ceiling is `maxRectangleSurfaceQueryCount`. The CAD sub-shape
+    /// plan-wide ceiling is this count times `maxItemCount`. The CAD sub-shape
     /// rectangle asks per sub-shape rather than per item, so this per-candidate
     /// ceiling is the bound that path states.
     public static var maxRectangleSurfaceQueryCountPerCandidate: Int {
         rectangleSampleGridDivisions * rectangleSampleGridDivisions
-    }
-
-    /// Native surface queries one selection rectangle update may spend across a
-    /// plan when every candidate is a plan item, as it is for the occurrence
-    /// rectangle: at most one per grid cell for each item.
-    public var maxRectangleSurfaceQueryCount: Int {
-        maxItemCount * Self.maxRectangleSurfaceQueryCountPerCandidate
     }
 
     public let maxItemCount: Int

@@ -1052,12 +1052,12 @@ independent tessellator is never an alternative implementation.
    clipping of every triangle into the grid, and at most one native surface
    query per grid cell. Across a plan those are bounded by
    `MeshSourcePresentationPlanLimits.standard` — 640 occurrences and 188,550
-   positions — and the surface queries by
-   `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCount`, never one
-   per triangle. This is a correctness contract for the same reason the sub-shape
-   bound is: a rectangle drag re-runs the query on every pointer move, and a
-   per-triangle native query would make one input event cost a function of
-   tessellation density.
+   positions — and the surface queries by that plan's item ceiling times
+   `maxRectangleSurfaceQueryCountPerCandidate`, never one per triangle. This is
+   a correctness contract for the same reason the sub-shape bound is: a
+   rectangle drag re-runs the query on every pointer move, and a per-triangle
+   native query would make one input event cost a function of tessellation
+   density.
    The result is returned in plan order, de-duplicated. Both consumers depend on
    that determinism for stability and not for meaning:
    `MeshSourcePresentationLegacyHitFilter` converts it to a set, and

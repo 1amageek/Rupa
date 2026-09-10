@@ -39,11 +39,10 @@ enum ViewportNativeOccurrenceRectangleResolver {
     /// retained source position, CPU clipping per triangle, and at most
     /// `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`
     /// native surface queries — never one per triangle. Every candidate here is
-    /// a plan item, so across a plan the surface queries are bounded by
-    /// `MeshSourcePresentationPlanLimits.standard.maxRectangleSurfaceQueryCount`
-    /// and the projections by that plan's own dimensions. The bound is a
-    /// correctness contract, not an optimization: a rectangle drag re-runs this
-    /// query on every pointer move.
+    /// a plan item, so across a plan the surface queries are bounded by that
+    /// same count times the plan's item ceiling, and the projections by that
+    /// plan's own dimensions. The bound is a correctness contract, not an
+    /// optimization: a rectangle drag re-runs this query on every pointer move.
     static func occurrenceIDs(
         intersecting rect: CGRect,
         occurrences: [MeshSourcePresentationOccurrenceView],
