@@ -354,8 +354,8 @@ independent tessellator is never an alternative implementation.
    record and matching mounted RealityKit projection, then creates the existing
    target/drag state only where its payload is projection-owner-free.
    Materialization is one exhaustive route switch
-   over the prepared value and may not invoke `ViewportLayout`, the legacy
-   projected candidate selectors, or source traversal. A missing/degenerate
+   over the prepared cases it owns and may not invoke `ViewportLayout`, the
+   legacy projected candidate selectors, or source traversal. A missing/degenerate
    native projection is typed frame unavailability, never placeholder geometry
    or legacy fallback. A legacy target/geometry that stores `ViewportLayout`
    is not reconstructed. Its materialized case instead stores only the finite
@@ -480,6 +480,65 @@ independent tessellator is never an alternative implementation.
    miss, typed failure, or cancellation. Every other route remains explicitly
    incomplete until migrated under the same authority rather than silently
    sharing these route claims.
+   Two closed native input values exist under this authority and own
+   disjoint prepared route sets. `ViewportNativeAxisInput` owns every route
+   whose drag is a signed delta along one retained world axis; it holds no
+   projected sample and re-queries the mounted camera on each update.
+   `ViewportSpatialMaterializedInteractionTarget` owns the routes whose
+   existing input math is defined on the pressed frame's screen basis; it
+   holds the finite projected samples taken once against that frame. A
+   prepared case is claimed by exactly one of them, so neither boundary
+   carries a case the other owns and neither may be consulted for a route
+   it does not claim. A prepared case belongs to the axis owner when its
+   drag reduces to one world-axis delta, to the materialized owner when its
+   drag needs that screen basis, and to neither when its drag resolves a
+   world point, which the world-point contract below covers.
+   The pattern affordance routes `patternArrayRadialAngle`,
+   `patternArrayCopyCount`, `patternArrayCurveExtent`, and
+   `patternArrayOutputMode` are native-enabled through the materialized
+   owner. Press materializes the leading prepared record exactly once
+   against the mounted, revision-checked camera projection and retains that
+   closed value with the record, base source identity, presentation
+   snapshot, selection set, and route availability. Each update evaluates
+   the retained projection with the shared input math and produces the
+   existing public callback value; it does not reproject, consult
+   `ViewportLayout`, or re-resolve the handle. A projected basis that is
+   degenerate at press is a typed refusal at press, not a screen-polar
+   substitute during the drag: the legacy radial geometry answered a
+   collapsed radial/tangent basis with a raw screen angle about the
+   projected centre, which reports a CAD angle the drawn arc never had, so
+   that fallback is prohibited rather than merely unused. Output mode
+   carries the projected label rect and commits on click with no drag
+   state. Once these routes are native-enabled, a native miss, a typed
+   query failure, or a leading record of another case ends the route with
+   no pattern hit; their legacy selectors, layout-bearing affordance
+   geometry, and candidate services are removed rather than left
+   unreachable.
+   The world-point routes `patternArrayCurvePathPoint`,
+   `constructionPlane`, `bridgeCurveEndpoint`, `sketchCurveHandle`,
+   `sketchDimension`, `sketchPointHandle`, `splineControlPoint`,
+   `polySplineSurfaceVertex`, `surfaceControlPoint`, `surfaceTrimEndpoint`,
+   and `surfaceTrimControlPoint` resolve their drag geometry from the same
+   mounted, revision-checked camera owner's world-plane query at the plane
+   the retained record names, and they retain the prepared record rather
+   than a materialized screen sample. A press-time materialized value on
+   such a route carries only what the handle's hit and preview need and is
+   never the drag authority, because a screen sample taken at press cannot
+   answer a world point after the camera moves. `ViewportLayout`
+   unprojection is prohibited here for the reason the axis routes refuse
+   the two-point chord: it is a second projection owner that can disagree
+   with the frame that drew the handle.
+   The profile affordance actions `profileCornerMove`, `profileFaceMove`,
+   and `profileEdgeChamfer` gain prepared records from the same producer
+   pass that already registers `profileEdgeFillet`, after which the
+   affordance route gate admits all ten actions and the affordance drag
+   derives its geometry from the mounted camera instead of a reconstructed
+   scene context.
+   When every route above is native-enabled,
+   `Viewport.resolvedInteractionTarget` and the legacy identity hit
+   fallback are removed, and the `ViewportInteractionTarget` cases and drag
+   functions that no native owner produces are removed with them; a case no
+   owner can reach is a defect of this migration, not a reserve path.
    The body transform affordance is native-enabled under this same authority.
    `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
    prepared interaction record at the point, and its `.affordance` case owns
