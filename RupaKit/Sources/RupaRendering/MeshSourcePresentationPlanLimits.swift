@@ -34,13 +34,20 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     ///
     /// This ceiling lives here because it bounds the native surface queries one
     /// rectangle update may spend, which is a budget of the same plan the other
-    /// ceilings bound. It is not a measured value: a convex fragment clipped to
-    /// a cell has its sample point inside that cell, and an axis-aligned window
-    /// spanning at least two cells always contains a whole one, so a candidate
+    /// ceilings bound. It is not a measured value. `ViewportRectangleSampleGrid`
+    /// samples each cell inside the candidate's coverage of it, and an
+    /// axis-aligned visible window spanning at least two cells always contains
+    /// a whole cell, whose middle that window then contains, so a candidate
     /// showing such a window inside the rectangle always has a sample in it
     /// whatever its tessellation. Four per axis makes that window a quarter of
-    /// the rectangle. Raising it tightens the guarantee and raises the query
-    /// ceiling in proportion; lowering it does the reverse.
+    /// the rectangle.
+    ///
+    /// It is also the only thing that decides which narrower windows the
+    /// rectangle can find at all: one sample per cell loses a visible sliver
+    /// thinner than a cell whatever the tessellation, so raising this count is
+    /// the only way to narrow that gap, and it raises the query ceiling in
+    /// proportion. Lowering it does the reverse. `RupaRendering/DESIGN.md` owns
+    /// that soundness-without-completeness contract.
     ///
     /// Unlike the plan dimensions below it, this is not caller-lowerable: the
     /// guarantee it states is a property of the sampling rule and not of one

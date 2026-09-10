@@ -1020,16 +1020,47 @@ independent tessellator is never an alternative implementation.
    The surviving projected polygon is then sampled on a grid rather than at one
    representative point. The rectangle is divided into
    `MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions` cells per
-   axis, and each cell keeps the largest fragment any triangle of the run
-   contributes there, ordered by that fragment's area and then by its own sample
-   point. That order is total, so a cell's sample is a maximum and not a first
-   arrival, and it does not depend on the order the triangles are emitted in.
-   The sample is the mean of the fragment's vertices, which lies inside the
-   fragment, inside the cell and therefore inside the rectangle. A run's samples
-   are queried from the middle of the rectangle outwards, and the scan stops at
-   the first sample the frame confirms. The run is admitted only when one native
-   surface query at one of its samples returns a triangle this body drew and
-   whose emission index resolves through this same run list back to this run.
+   axis, and each cell names one point of the candidate's projected coverage
+   inside it. That coverage is the union of the fragments the candidate's
+   triangles clip into the cell, and the point is a function of the union
+   alone: the fragments are how the union arrives, never part of what it is.
+   This is what the rectangle's independence from tessellation rests on, and it
+   is a stronger property than independence from emission order — the same
+   visible face drawn as two triangles and as a fine mesh presents the same
+   union and is therefore sampled at the same points.
+   A cell's point is built from the cell's own middle. When the coverage
+   contains that middle, the middle is the sample. Otherwise the sample is the
+   midpoint of the chord the coverage cuts on the ray that leaves the middle
+   towards the coverage's nearest point. Projection onto a closed convex set is
+   unique, so each fragment has exactly one nearest point, the union's nearest
+   point is the nearest of those, and the chord's far end is the furthest any
+   fragment reaches along that ray. Both are extrema over the union rather than
+   first arrivals, so neither depends on how the union was cut into fragments
+   nor on the order they arrived in. Taking the chord's midpoint rather than
+   the nearest point itself is what keeps the sample off the coverage's
+   silhouette, where the frame is entitled to answer with either of the two
+   faces that meet there and a nearest-point sample would decide a face by
+   coin flip. Every sample lies inside its cell and therefore inside the
+   rectangle, because the fragments are clipped to the cell, the cell is
+   convex, and the middle, the nearest point and the chord's far end are all
+   points of it.
+   The rule is sound and deliberately not complete. One sample per cell can
+   miss a visible sliver of the coverage thinner than a cell, and a coverage
+   that is not convex can put the chord's midpoint in one of its own holes. A
+   sample the candidate does not occupy is refused by the frame, so nothing is
+   admitted on a place it does not cover; what is lost is a candidate, never a
+   wrong one. Where the rule is complete is stated as a window: an
+   axis-aligned visible window whose sides span at least two cells contains a
+   whole cell, that cell's coverage contains its middle, and the middle is
+   therefore that cell's sample. No caller may read an unsampled region as
+   invisible, and the boundary between what this rule finds and what it misses
+   is `rectangleSampleGridDivisions`, a correctness budget rather than a
+   tuning value.
+   A run's samples are queried from the middle of the rectangle outwards, and
+   the scan stops at the first sample the frame confirms. The run is admitted
+   only when one native surface query at one of its samples returns a triangle
+   this body drew and whose emission index resolves through this same run list
+   back to this run.
    Both halves of that check are load-bearing. The half that asks whether the
    frame drew the triangle here is the occlusion and section test, since the
    frame draws only what survived the section and only what nothing nearer
@@ -1055,8 +1086,15 @@ independent tessellator is never an alternative implementation.
    `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`,
    and not a product of the plan's item ceiling. Clipping, the bounds test and
    the grid are CPU arithmetic over already projected points and call the frame
-   not at all, and that CPU scan now covers a surviving run's whole triangle
-   list rather than a prefix of it, which is what order independence costs.
+   not at all. That CPU scan covers a surviving run's whole triangle list
+   rather than a prefix of it, and it covers it twice rather than once: the
+   first pass anchors each cell against the union it received, and the second
+   measures the chord through the anchors the first pass could not place at a
+   cell middle. The second pass is skipped whenever every anchored cell already
+   holds its middle, which is the case for a body large enough to fill cells.
+   Both passes read the same projections, so the second costs clipping and no
+   native call. Two CPU clips per triangle instead of one is what independence
+   from tessellation costs, and it does not move the native query bound.
    This bound is a correctness contract rather than an optimization: a
    rectangle drag re-runs the query on every pointer move, and a per-triangle
    native projection would make the cost of one input event a function of
@@ -1065,13 +1103,16 @@ independent tessellator is never an alternative implementation.
    because it is what turns a rectangle update into a bounded number of native
    surface queries, which is a budget of the same plan that type's other
    ceilings bound. It is four per axis. That value follows from the guarantee
-   the grid makes and from nothing measured here. A convex fragment clipped to
-   a cell has its sample inside that cell, and an axis-aligned window whose
-   side spans at least two cells always contains a whole cell, so a candidate
-   showing such a window inside the rectangle always has a sample in it
-   whatever its tessellation. Four per axis makes that window a quarter of the
-   rectangle. Raising the count tightens the guarantee and raises the query
-   ceiling in proportion; lowering it does the reverse.
+   the grid makes and from nothing measured here. A cell's sample lies inside
+   that cell, and an axis-aligned window whose side spans at least two cells
+   always contains a whole cell, whose middle the window then contains, so a
+   candidate showing such a window inside the rectangle always has a sample in
+   it whatever its tessellation. Four per axis makes that window a quarter of
+   the rectangle. Raising the count tightens the guarantee and raises the query
+   ceiling in proportion; lowering it does the reverse. Raising it is also the
+   only way to narrow the windows this path can find: the rule loses a visible
+   sliver thinner than a cell whatever the candidate's tessellation, and that
+   is a budget decision, not a defect the sampling rule can close on its own.
    The failure contract belongs to the drag, not to the resolver alone.
    `Viewport.selectionDragTarget` throws, and the drag separates the two ways an
    answer can be absent, because they are not the same event. A frame that has
@@ -1206,7 +1247,10 @@ independent tessellator is never an alternative implementation.
    clipped-interval edge samples including an edge whose endpoints both lie
    outside and an edge occluded at one sample but visible at another, the run
    bounds test that skips no run a camera could not project, the grid samples
-   and their independence from triangle emission order, admission of a run whose
+   and their independence from triangle emission order, the same answer for one
+   face drawn at five tessellation densities behind one narrow section window
+   and again behind a window two cells wide, the sample a cell takes on the
+   chord when the coverage misses its middle, admission of a run whose
    only visible part lies away from the rectangle's middle, admission of a
    triangle that straddles the camera's near plane, the confirming surface query
    that rejects a triangle another body drew and a triangle belonging to a
@@ -1232,16 +1276,19 @@ independent tessellator is never an alternative implementation.
    candidates are real occurrence views taken from a built plan, so the
    retained shape the cost contract is stated against is the plan's own.
    `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` owns the
-   sampling kernel both rectangles share: that a cell's sample is a maximum
-   under the total order and not a first arrival, so the same fragment set
-   samples the same points whatever order the fragments arrive in; that equal
-   areas are broken by the sample point and never by arrival; that a window
-   wider and taller than two cells always receives a sample strictly inside it
-   whatever tessellation produced it, and never one outside it; that a candidate
-   covering the whole rectangle is sampled once per cell at each cell's middle,
-   from the middle of the rectangle outwards; and that a projected segment is
-   sampled once in the middle of the interval it spends in each cell it crosses,
-   including one whose endpoints both lie outside, and nowhere when it misses.
+   sampling kernel both rectangles share: that the same union answers the same
+   points whatever order its fragments arrive in and however the union was cut
+   into them, which is stated against two tessellations of one shape rather
+   than against two orderings of one tessellation; that a cell whose coverage
+   holds its middle is sampled at that middle; that a cell whose coverage does
+   not is sampled strictly inside a convex coverage, on the chord and not on
+   the nearest point; that a window wider and taller than two cells always
+   receives a sample strictly inside it whatever tessellation produced it, and
+   never one outside it; that a candidate covering the whole rectangle is
+   sampled once per cell at each cell's middle, from the middle of the rectangle
+   outwards; and that a projected segment is sampled once in the middle of the
+   interval it spends in each cell it crosses, including one whose endpoints
+   both lie outside, and nowhere when it misses.
    All three resolver suites drive their resolver through synthetic frame
    closures, so they prove its rules and not the mounted RealityKit frame. The
    occurrence rectangle stands in for `cameraDepthInterval`,

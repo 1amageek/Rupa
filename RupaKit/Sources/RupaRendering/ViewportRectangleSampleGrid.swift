@@ -11,21 +11,41 @@ import Foundation
 /// plainly visible inside the rectangle. This grid replaces that one point with
 /// a fixed set of them.
 ///
-/// The rectangle is divided into `divisions` cells per axis. A candidate's
-/// projected geometry is clipped into every cell it meets, and each cell keeps
-/// the largest fragment it received, ordered by that fragment's area and then
-/// by its own sample point. The order is total, so a cell's sample is a maximum
-/// and not a first arrival: it is a function of the fragment set alone and not
-/// of the order the fragments arrived in.
+/// The rectangle is divided into `divisions` cells per axis, and each cell names
+/// one point of the candidate's projected coverage of that cell. The coverage is
+/// the union of the fragments the candidate's triangles clip into the cell, and
+/// the point is a function of that union alone: the fragments are how the union
+/// arrives, never part of what it is. Independence from the tessellator follows,
+/// and it is stronger than independence from emission order — the same visible
+/// face drawn as two triangles and as a fine mesh presents the same union and is
+/// sampled at the same points.
 ///
-/// A fragment's sample is the mean of its vertices. A fragment is convex — it
-/// is a convex polygon clipped against a cell's four half-planes — so the mean
-/// lies inside the fragment, inside the cell, and therefore inside the
-/// rectangle. That is what makes the guarantee stated on
+/// A cell's point is built from the cell's own middle. When the coverage
+/// contains the middle, the middle is the sample. Otherwise the sample is the
+/// midpoint of the chord the coverage cuts on the ray leaving the middle towards
+/// the coverage's nearest point. Projection onto a closed convex set is unique,
+/// so each fragment has one nearest point and the union's is the nearest of
+/// those; the chord's far end is the furthest any fragment reaches along that
+/// ray. Both are extrema over the union rather than first arrivals. Taking the
+/// chord's midpoint rather than the nearest point keeps the sample off the
+/// coverage's silhouette, where the frame is entitled to answer with either of
+/// the two faces meeting there.
+///
+/// Every sample lies inside its cell and therefore inside the rectangle, because
+/// the fragments are clipped to the cell, the cell is convex, and the middle,
+/// the nearest point and the chord's far end are all points of it. That is what
+/// makes the guarantee stated on
 /// `MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions` hold: an
 /// axis-aligned visible window whose sides span at least two cells contains a
-/// whole cell, and that cell's sample lies inside the window whatever the
-/// candidate's tessellation.
+/// whole cell, whose coverage then contains its middle, so the window holds that
+/// cell's sample whatever the candidate's tessellation.
+///
+/// The rule is sound and deliberately not complete. One sample per cell can miss
+/// a visible sliver thinner than a cell, and a coverage that is not convex can
+/// put the chord's midpoint in one of its own holes. A sample the candidate does
+/// not occupy is refused by the frame, so what is lost is a candidate and never
+/// a wrong one — but no caller may read an unsampled region as invisible.
+/// `RupaRendering/DESIGN.md` owns that contract.
 ///
 /// Samples are reported from the middle of the rectangle outwards, so a
 /// candidate the user dragged the rectangle across is usually confirmed by its
@@ -72,9 +92,32 @@ struct ViewportRectangleSampleGrid {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
-    /// An accumulator over the fragments of one candidate.
-    func polygonSampler() -> PolygonSampler {
-        PolygonSampler(grid: self)
+    /// The middle of one cell, which is the point that cell's coverage is
+    /// measured against and the sample it names whenever the coverage holds it.
+    func middle(of index: Int) -> CGPoint {
+        let cell = cell(at: index)
+        return CGPoint(x: cell.midX, y: cell.midY)
+    }
+
+    /// One sample per cell the candidate covers, in the grid's query order.
+    ///
+    /// `coverage` is asked for the candidate's convex screen fragments at most
+    /// twice and must produce the same fragments each time. The first pass
+    /// anchors every cell against the union it received; the second measures the
+    /// chord through the anchors that did not land on a cell's middle, and is
+    /// skipped when every anchored cell holds its own middle — the case for a
+    /// candidate large enough to fill cells. Both passes are CPU clipping over
+    /// points the caller already projected, so the second costs no projection
+    /// and no native query.
+    func polygonSamples(
+        _ coverage: (inout PolygonSink) throws -> Void
+    ) rethrows -> [CGPoint] {
+        var sink = PolygonSink(grid: self)
+        try coverage(&sink)
+        if sink.beginChordPass() {
+            try coverage(&sink)
+        }
+        return sink.samples()
     }
 
     /// The parameters at which the grid samples a projected segment, in query
@@ -118,23 +161,35 @@ struct ViewportRectangleSampleGrid {
     }
 
     /// Accumulates the convex screen fragments of one candidate and reports one
-    /// sample per cell that received any.
-    struct PolygonSampler {
+    /// sample per cell the candidate covers.
+    ///
+    /// The fragments are traversed twice. The first pass anchors every covered
+    /// cell against the union it received: the cell's middle when the union
+    /// holds it, and otherwise the union's nearest point to that middle. The
+    /// second pass measures how far the union reaches from the middle along the
+    /// anchored direction, so the sample can be the chord's midpoint instead of
+    /// a point of the union's silhouette. Both are extrema over the union, so
+    /// neither depends on how the union was cut into fragments.
+    struct PolygonSink {
         private let grid: ViewportRectangleSampleGrid
-        private var best: [Fragment?]
+        private var anchors: [Anchor?]
+        private var chords: [Double]
+        private var isMeasuringChords = false
 
         fileprivate init(grid: ViewportRectangleSampleGrid) {
             self.grid = grid
-            self.best = [Fragment?](repeating: nil, count: grid.cellCount)
+            self.anchors = [Anchor?](repeating: nil, count: grid.cellCount)
+            self.chords = []
         }
 
         /// Clips one convex screen polygon into every cell it meets.
         ///
-        /// A polygon of fewer than three points, and a polygon a clip reduced
-        /// to a point or a segment, still name a place the candidate covers, so
-        /// they contribute a zero-area fragment. Any fragment with area beats
-        /// them, which is what keeps a degenerate touch from displacing a real
-        /// overlap.
+        /// A polygon of fewer than three points, and a polygon a clip reduced to
+        /// a point or a segment, still name a place the candidate covers, so
+        /// they take part like any other fragment. A degenerate fragment can
+        /// only win a cell by lying nearer that cell's middle or reaching
+        /// further along its ray than every other fragment, which is the same
+        /// comparison a fragment with area faces.
         mutating func admit(_ polygon: [CGPoint]) {
             guard polygon.isEmpty == false else { return }
             var minimum = polygon[0]
@@ -154,71 +209,251 @@ struct ViewportRectangleSampleGrid {
             for row in rows {
                 for column in columns {
                     let index = row * grid.divisions + column
-                    let clipped = ViewportRectangleSampleGrid.clipped(
-                        polygon, to: grid.cell(at: index)
-                    )
-                    guard let fragment = Fragment(clipped) else { continue }
-                    guard let current = best[index] else {
-                        best[index] = fragment
-                        continue
-                    }
-                    if fragment.precedes(current) {
-                        best[index] = fragment
+                    if isMeasuringChords {
+                        measureChord(polygon, at: index)
+                    } else {
+                        anchor(polygon, at: index)
                     }
                 }
             }
         }
 
-        /// One sample per cell that received a fragment, in the grid's query
-        /// order.
+        /// One sample per cell the candidate covered, in the grid's query order.
         func samples() -> [CGPoint] {
             var result: [CGPoint] = []
-            result.reserveCapacity(best.count)
+            result.reserveCapacity(anchors.count)
             for index in grid.queryOrder {
-                guard let fragment = best[index] else { continue }
-                result.append(fragment.point)
+                guard let anchor = anchors[index] else { continue }
+                guard anchor.distance > 0 else {
+                    result.append(grid.middle(of: index))
+                    continue
+                }
+                let middle = grid.middle(of: index)
+                let parameter = (anchor.distance + chords[index]) / 2.0
+                result.append(
+                    CGPoint(
+                        x: middle.x + CGFloat(parameter * Double(anchor.direction.x)),
+                        y: middle.y + CGFloat(parameter * Double(anchor.direction.y))
+                    )
+                )
             }
             return result
         }
 
-        private struct Fragment {
-            let area: Double
-            let point: CGPoint
-
-            init?(_ polygon: [CGPoint]) {
-                guard polygon.isEmpty == false else { return nil }
-                var sumX = 0.0
-                var sumY = 0.0
-                for point in polygon {
-                    sumX += Double(point.x)
-                    sumY += Double(point.y)
+        /// Fixes each anchored cell's ray and opens the chord pass, answering
+        /// whether the fragments have to be traversed again.
+        ///
+        /// A cell whose coverage holds its middle is already answered, so a
+        /// candidate that fills the cells it meets — the common case — skips the
+        /// second traversal entirely.
+        fileprivate mutating func beginChordPass() -> Bool {
+            isMeasuringChords = true
+            chords = [Double](repeating: 0.0, count: anchors.count)
+            var isNeeded = false
+            for index in anchors.indices {
+                guard var anchor = anchors[index] else { continue }
+                let middle = grid.middle(of: index)
+                let dx = Double(anchor.point.x - middle.x)
+                let dy = Double(anchor.point.y - middle.y)
+                let distance = (dx * dx + dy * dy).squareRoot()
+                guard distance.isFinite, distance > 0 else {
+                    // The nearest point is the middle to the last representable
+                    // digit, so the cell already names its own middle.
+                    anchor.distance = 0
+                    anchors[index] = anchor
+                    continue
                 }
-                let count = Double(polygon.count)
-                let point = CGPoint(x: CGFloat(sumX / count), y: CGFloat(sumY / count))
-                guard point.x.isFinite, point.y.isFinite else { return nil }
-                var twiceArea = 0.0
-                for index in polygon.indices {
-                    let current = polygon[index]
-                    let next = polygon[(index + 1) % polygon.count]
-                    twiceArea += Double(current.x) * Double(next.y)
-                        - Double(next.x) * Double(current.y)
-                }
-                let area = abs(twiceArea) / 2.0
-                guard area.isFinite else { return nil }
-                self.area = area
-                self.point = point
+                anchor.distance = distance
+                anchor.direction = CGPoint(x: CGFloat(dx / distance), y: CGFloat(dy / distance))
+                anchors[index] = anchor
+                chords[index] = distance
+                isNeeded = true
             }
+            return isNeeded
+        }
 
-            /// The total order a cell's sample is the maximum of: larger area
-            /// first, then the smaller sample point. Two fragments that tie on
-            /// all three name the same point, so the maximum is well defined
-            /// without an arrival order.
-            func precedes(_ other: Fragment) -> Bool {
-                if area != other.area { return area > other.area }
-                if point.x != other.point.x { return point.x < other.point.x }
-                return point.y < other.point.y
+        private mutating func anchor(_ polygon: [CGPoint], at index: Int) {
+            if let current = anchors[index], current.distanceSquared == 0 { return }
+            let clipped = ViewportRectangleSampleGrid.clipped(polygon, to: grid.cell(at: index))
+            guard let candidate = ViewportRectangleSampleGrid.nearest(
+                to: grid.middle(of: index), in: clipped
+            ) else { return }
+            guard let current = anchors[index] else {
+                anchors[index] = Anchor(
+                    distanceSquared: candidate.distanceSquared, point: candidate.point
+                )
+                return
+            }
+            guard ViewportRectangleSampleGrid.precedes(
+                candidate, (point: current.point, distanceSquared: current.distanceSquared)
+            ) else { return }
+            anchors[index] = Anchor(
+                distanceSquared: candidate.distanceSquared, point: candidate.point
+            )
+        }
+
+        private mutating func measureChord(_ polygon: [CGPoint], at index: Int) {
+            guard let anchor = anchors[index], anchor.distance > 0 else { return }
+            let clipped = ViewportRectangleSampleGrid.clipped(polygon, to: grid.cell(at: index))
+            guard let parameter = ViewportRectangleSampleGrid.exitParameter(
+                from: grid.middle(of: index), along: anchor.direction, through: clipped
+            ), parameter.isFinite else { return }
+            chords[index] = max(chords[index], parameter)
+        }
+    }
+
+    /// One cell's nearest point of the candidate's coverage of it.
+    ///
+    /// `distanceSquared` is what the first pass compares; `distance` and
+    /// `direction` are the ray the second pass measures along, and exist only
+    /// once `beginChordPass()` has fixed them.
+    fileprivate struct Anchor {
+        var distanceSquared: Double
+        var point: CGPoint
+        var distance: Double = 0
+        var direction: CGPoint = .zero
+    }
+
+    /// The point of one convex fragment nearest `target`, with its squared
+    /// distance, or nil when the fragment is empty.
+    ///
+    /// Projection onto a closed convex set is unique, so this is a property of
+    /// the fragment rather than of the order its vertices arrive in. Taking the
+    /// least of these over the fragments of a union gives the union's own
+    /// nearest point: every point of the union at the least distance is some
+    /// fragment's projection, and every fragment's projection is a point of the
+    /// union.
+    static func nearest(
+        to target: CGPoint, in fragment: [CGPoint]
+    ) -> (point: CGPoint, distanceSquared: Double)? {
+        guard fragment.isEmpty == false else { return nil }
+        guard fragment.allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
+        guard target.x.isFinite, target.y.isFinite else { return nil }
+        if fragment.count == 1 {
+            return (fragment[0], squaredDistance(from: target, to: fragment[0]))
+        }
+        if contains(target, in: fragment) { return (target, 0.0) }
+        var best: (point: CGPoint, distanceSquared: Double)?
+        for index in fragment.indices {
+            let start = fragment[index]
+            let end = fragment[(index + 1) % fragment.count]
+            let candidate = nearestOnSegment(to: target, from: start, to: end)
+            guard candidate.distanceSquared.isFinite else { continue }
+            guard let current = best else {
+                best = candidate
+                continue
+            }
+            if precedes(candidate, current) { best = candidate }
+        }
+        return best
+    }
+
+    /// How far along `direction` from `origin` the fragment last reaches, or nil
+    /// when the ray misses it. `direction` must be a unit vector, so the answer
+    /// is a distance.
+    ///
+    /// The greatest crossing parameter over every edge, which needs no winding
+    /// and cannot double count: a ray leaving a convex fragment through a vertex
+    /// meets two edges at the same parameter, and a maximum is indifferent to
+    /// that. Taking the greatest of these over the fragments of a union gives
+    /// how far the union reaches, whatever the fragments were.
+    static func exitParameter(
+        from origin: CGPoint, along direction: CGPoint, through fragment: [CGPoint]
+    ) -> Double? {
+        guard fragment.isEmpty == false else { return nil }
+        guard origin.x.isFinite, origin.y.isFinite else { return nil }
+        let dx = Double(direction.x)
+        let dy = Double(direction.y)
+        guard dx.isFinite, dy.isFinite, dx != 0 || dy != 0 else { return nil }
+        var result: Double?
+        for index in fragment.indices {
+            let start = fragment[index]
+            let end = fragment[(index + 1) % fragment.count]
+            guard start.x.isFinite, start.y.isFinite, end.x.isFinite, end.y.isFinite else {
+                return nil
+            }
+            let wx = Double(start.x - origin.x)
+            let wy = Double(start.y - origin.y)
+            let ex = Double(end.x - start.x)
+            let ey = Double(end.y - start.y)
+            let denominator = dx * ey - dy * ex
+            if denominator != 0 {
+                let alongRay = (wx * ey - wy * ex) / denominator
+                let alongEdge = (wx * dy - wy * dx) / denominator
+                guard alongRay.isFinite, alongEdge.isFinite else { continue }
+                guard alongRay >= 0, alongEdge >= 0, alongEdge <= 1 else { continue }
+                result = max(result ?? alongRay, alongRay)
+            } else {
+                // Parallel to the ray: the edge can only be met where it lies on
+                // the ray's own line, and then at its endpoints.
+                guard wx * dy - wy * dx == 0 else { continue }
+                let atStart = wx * dx + wy * dy
+                let atEnd = Double(end.x - origin.x) * dx + Double(end.y - origin.y) * dy
+                if atStart.isFinite, atStart >= 0 { result = max(result ?? atStart, atStart) }
+                if atEnd.isFinite, atEnd >= 0 { result = max(result ?? atEnd, atEnd) }
             }
         }
+        return result
+    }
+
+    /// Whether a convex polygon of three or more points holds `target`.
+    ///
+    /// Every edge turns the same way towards an interior point. A polygon a clip
+    /// degenerated to a segment or a point turns no way at all, and answers
+    /// false so the caller measures its edges instead of reading a whole line as
+    /// covered.
+    private static func contains(_ target: CGPoint, in polygon: [CGPoint]) -> Bool {
+        var isPositive = false
+        var isNegative = false
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            let cross = Double(end.x - start.x) * Double(target.y - start.y)
+                - Double(end.y - start.y) * Double(target.x - start.x)
+            if cross > 0 { isPositive = true }
+            if cross < 0 { isNegative = true }
+            if isPositive, isNegative { return false }
+        }
+        return isPositive != isNegative
+    }
+
+    private static func nearestOnSegment(
+        to target: CGPoint, from start: CGPoint, to end: CGPoint
+    ) -> (point: CGPoint, distanceSquared: Double) {
+        let dx = Double(end.x - start.x)
+        let dy = Double(end.y - start.y)
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 0 else {
+            return (start, squaredDistance(from: target, to: start))
+        }
+        let raw = (Double(target.x - start.x) * dx + Double(target.y - start.y) * dy)
+            / lengthSquared
+        let parameter = min(max(raw, 0.0), 1.0)
+        let point = CGPoint(
+            x: CGFloat(Double(start.x) + parameter * dx),
+            y: CGFloat(Double(start.y) + parameter * dy)
+        )
+        return (point, squaredDistance(from: target, to: point))
+    }
+
+    /// The total order a cell's anchor is the least of: nearer first, then the
+    /// smaller point. Two candidates that tie on all three name the same point,
+    /// so the least is well defined without an arrival order.
+    private static func precedes(
+        _ lhs: (point: CGPoint, distanceSquared: Double),
+        _ rhs: (point: CGPoint, distanceSquared: Double)
+    ) -> Bool {
+        if lhs.distanceSquared != rhs.distanceSquared {
+            return lhs.distanceSquared < rhs.distanceSquared
+        }
+        if lhs.point.x != rhs.point.x { return lhs.point.x < rhs.point.x }
+        return lhs.point.y < rhs.point.y
+    }
+
+    private static func squaredDistance(from lhs: CGPoint, to rhs: CGPoint) -> Double {
+        let dx = Double(lhs.x - rhs.x)
+        let dy = Double(lhs.y - rhs.y)
+        return dx * dx + dy * dy
     }
 
     /// The convex polygon `polygon` clipped against `rect`.

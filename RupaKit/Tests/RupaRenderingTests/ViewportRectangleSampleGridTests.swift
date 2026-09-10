@@ -26,11 +26,28 @@ private func samples(
     of polygons: [[CGPoint]],
     on grid: ViewportRectangleSampleGrid
 ) -> [CGPoint] {
-    var sampler = grid.polygonSampler()
-    for polygon in polygons {
-        sampler.admit(polygon)
+    grid.polygonSamples { sink in
+        for polygon in polygons {
+            sink.admit(polygon)
+        }
     }
-    return sampler.samples()
+}
+
+/// Two sample lists name the same points.
+///
+/// Compared to a tolerance rather than exactly: two tessellations of one shape
+/// reach the same nearest point and the same chord end through different
+/// clipped fragments, so their last binary digits need not agree.
+private func expectSamplesMatch(
+    _ result: [CGPoint],
+    _ expected: [CGPoint],
+    _ subject: Comment
+) {
+    #expect(result.count == expected.count, subject)
+    for (point, other) in zip(result, expected) {
+        #expect(abs(point.x - other.x) < 0.000001, subject)
+        #expect(abs(point.y - other.y) < 0.000001, subject)
+    }
 }
 
 /// Convex screen polygons that overlap each other, so several of them reach the
@@ -76,6 +93,18 @@ private func triangulatedPolygons(of rect: CGRect, rows: Int, columns: Int) -> [
     return result
 }
 
+/// The same rectangle presented at several densities: whole, tiled, and cut
+/// into triangles. Every entry is the same shape, so what the grid answers must
+/// not distinguish them.
+private func tessellations(of rect: CGRect) -> [[[CGPoint]]] {
+    var result: [[[CGPoint]]] = [[corners(of: rect)]]
+    for (rows, columns) in [(1, 2), (2, 3), (3, 2), (5, 5), (7, 1)] {
+        result.append(tiledPolygons(of: rect, rows: rows, columns: columns))
+        result.append(triangulatedPolygons(of: rect, rows: rows, columns: columns))
+    }
+    return result
+}
+
 /// Windows wider and taller than two cells, so each one wholly contains a cell.
 /// The last is deliberately off the cell boundaries.
 private let widerThanTwoCellWindows: [CGRect] = [
@@ -89,10 +118,10 @@ private let widerThanTwoCellWindows: [CGRect] = [
 // MARK: - Tests
 
 @Suite struct ViewportRectangleSampleGridTests {
-    /// A cell's sample is the maximum of the fragments it received under a
-    /// total order, not the first or the last of them, so the same candidate
-    /// answers the same rectangle whatever order its triangles are stored in.
-    /// This is what the rectangle's independence from tessellation rests on.
+    /// A cell's sample is built from the union of the fragments it received,
+    /// through extrema over that union rather than a first or a last arrival,
+    /// so the same candidate answers the same rectangle whatever order its
+    /// triangles are stored in.
     @Test(.timeLimit(.minutes(1)))
     func gridReportsTheSameSamplesWhateverOrderFragmentsArriveIn() throws {
         let grid = makeGrid()
@@ -108,14 +137,15 @@ private let widerThanTwoCellWindows: [CGRect] = [
         }
     }
 
-    /// Equal areas are not a tie the arrival order gets to settle. The smaller
-    /// sample point wins, so two fragments that cover a cell equally still name
-    /// one point.
+    /// A cell whose coverage holds its middle is sampled at that middle, even
+    /// when the coverage arrives as fragments none of which is centred there.
+    /// Neither fragment's own shape nor its area takes part in the answer.
     @Test(.timeLimit(.minutes(1)))
-    func gridBreaksAnAreaTieByTheSmallerSamplePoint() throws {
+    func gridSamplesTheCellMiddleWhenTheCoverageHoldsIt() throws {
         let grid = makeGrid(CGRect(x: 0, y: 0, width: 40, height: 40))
-        // Both stand wholly inside the cell `x, y` in 10...20, cover 32 square
-        // points each, and differ only in where they sit inside it.
+        // Both stand wholly inside the cell `x, y` in 10...20 and meet along
+        // `x == 15`, so their union holds that cell's middle `(15, 15)` while
+        // neither of them is centred on it.
         let left = [
             CGPoint(x: 11, y: 11), CGPoint(x: 15, y: 11),
             CGPoint(x: 15, y: 19), CGPoint(x: 11, y: 19),
@@ -125,8 +155,60 @@ private let widerThanTwoCellWindows: [CGRect] = [
             CGPoint(x: 19, y: 19), CGPoint(x: 15, y: 19),
         ]
 
-        #expect(samples(of: [left, right], on: grid) == [CGPoint(x: 13, y: 15)])
-        #expect(samples(of: [right, left], on: grid) == [CGPoint(x: 13, y: 15)])
+        #expect(samples(of: [left, right], on: grid) == [CGPoint(x: 15, y: 15)])
+        #expect(samples(of: [right, left], on: grid) == [CGPoint(x: 15, y: 15)])
+    }
+
+    /// A cell whose coverage misses its middle is sampled at the middle of the
+    /// chord the coverage cuts on the ray towards its nearest point, so the
+    /// sample stands inside the coverage and off its silhouette.
+    ///
+    /// The square `2...8` by `2...8` lies wholly inside the first cell, whose
+    /// middle `(12.5, 12.5)` it does not contain. Its nearest point to that
+    /// middle is the corner `(8, 8)`, the ray leaves the square at `(2, 2)`,
+    /// and the chord's middle is `(5, 5)` — the square's own centre, which no
+    /// single fragment of it needs to be centred on.
+    @Test(.timeLimit(.minutes(1)))
+    func gridSamplesTheChordMiddleWhenTheCoverageMissesTheCellMiddle() throws {
+        let grid = makeGrid()
+        let coverage = CGRect(x: 2, y: 2, width: 6, height: 6)
+        for tessellation in tessellations(of: coverage) {
+            expectSamplesMatch(
+                samples(of: tessellation, on: grid),
+                [CGPoint(x: 5, y: 5)],
+                "chord middle"
+            )
+        }
+    }
+
+    /// The rule reads the union of a candidate's fragments and never the
+    /// fragments themselves, so one shape answers alike however finely it was
+    /// cut up — including shapes narrower than a cell, which no cell middle
+    /// falls inside.
+    ///
+    /// Independence from the order fragments arrive in is a weaker property
+    /// than this one: it holds for any rule that is a function of the fragment
+    /// set, including rules that read a fragment's own shape.
+    @Test(.timeLimit(.minutes(1)))
+    func gridReportsTheSameSamplesHoweverTheUnionWasCutIntoFragments() throws {
+        let grid = makeGrid()
+        let shapes = widerThanTwoCellWindows + [
+            CGRect(x: 0, y: 0, width: 5, height: 100),
+            CGRect(x: 47, y: 3, width: 6, height: 94),
+            CGRect(x: 2, y: 2, width: 6, height: 6),
+        ]
+        for shape in shapes {
+            let cut = tessellations(of: shape)
+            let expected = try #require(cut.first.map { samples(of: $0, on: grid) })
+            #expect(expected.isEmpty == false)
+            for tessellation in cut.dropFirst() {
+                expectSamplesMatch(
+                    samples(of: tessellation, on: grid),
+                    expected,
+                    Comment(rawValue: "\(shape)")
+                )
+            }
+        }
     }
 
     /// The covering guarantee: a window the candidate is visible in, wider and

@@ -219,18 +219,22 @@ enum ViewportNativeCADTopologyResolver {
     /// again rather than interpolated.
     ///
     /// What survives is then sampled on `ViewportRectangleSampleGrid`, which
-    /// divides the rectangle into cells and keeps, per cell, the largest
-    /// fragment the candidate contributed there. A candidate is admitted when
-    /// the frame confirms it at any one of those samples. Two properties of
-    /// that rule are the reason it replaced a single representative point:
-    /// the per-cell maximum is a function of the fragment set and not of the
-    /// order the tessellator emitted its triangles, and a candidate showing an
-    /// axis-aligned window at least two cells wide inside the rectangle always
-    /// has a sample inside that window, so a section cut or a nearer solid
-    /// covering part of a face no longer loses the rest of it. The samples cost
-    /// at most `maxRectangleSurfaceQueryCountPerCandidate` native queries per
-    /// sub-shape, and the frame is asked in the grid's query order only until
-    /// one sample is confirmed.
+    /// owns the rule and states it in full: each cell names one point of the
+    /// candidate's projected coverage of that cell, as a function of that
+    /// coverage and not of the fragments it arrived in, so one visible face
+    /// answers alike however finely it was tessellated. A candidate is admitted
+    /// when the frame confirms it at any one of those samples, which is what
+    /// lets a section cut or a nearer solid take part of a face without losing
+    /// the rest of it. The rule is sound and not complete: a visible sliver
+    /// thinner than a cell can go unsampled, and this path never reads an
+    /// unsampled region as invisible.
+    ///
+    /// A face's triangles are therefore scanned twice, once to anchor the cells
+    /// and once to measure the chord through the anchors that fell outside a
+    /// cell's middle, and both passes reuse the same projections. The samples
+    /// still cost at most `maxRectangleSurfaceQueryCountPerCandidate` native
+    /// queries per sub-shape, and the frame is asked in the grid's query order
+    /// only until one sample is confirmed.
     ///
     /// A face's samples ask the frame which triangle it draws there. That one
     /// answer carries occlusion and section at once, because the frame draws
@@ -378,42 +382,43 @@ enum ViewportNativeCADTopologyResolver {
                 depthInterval: depthInterval,
                 projectWithDepth: projectWithDepth
             ) else { continue }
-            var sampler = grid.polygonSampler()
-            for triangleIndex in run.triangleRange {
-                let corners = try triangleVertexIndices(mesh: mesh, triangleIndex: triangleIndex)
-                var cornerVertices: [ViewportCameraDepthClip.Vertex] = []
-                cornerVertices.reserveCapacity(3)
-                for index in [corners.0, corners.1, corners.2] {
-                    let position = try projectedPosition(at: index)
-                    cornerVertices.append(
-                        ViewportCameraDepthClip.Vertex(
-                            point: position.world,
-                            depth: position.depth,
-                            projected: position.point
+            let samples = try grid.polygonSamples { sink in
+                for triangleIndex in run.triangleRange {
+                    let corners = try triangleVertexIndices(mesh: mesh, triangleIndex: triangleIndex)
+                    var cornerVertices: [ViewportCameraDepthClip.Vertex] = []
+                    cornerVertices.reserveCapacity(3)
+                    for index in [corners.0, corners.1, corners.2] {
+                        let position = try projectedPosition(at: index)
+                        cornerVertices.append(
+                            ViewportCameraDepthClip.Vertex(
+                                point: position.world,
+                                depth: position.depth,
+                                projected: position.point
+                            )
                         )
-                    )
-                }
-                let drawn = ViewportCameraDepthClip.clipped(cornerVertices, to: depthInterval)
-                guard drawn.count >= 3 else { continue }
-                var screen: [CGPoint] = []
-                screen.reserveCapacity(drawn.count)
-                for vertex in drawn {
-                    if let projected = vertex.projected {
-                        screen.append(projected)
-                        continue
                     }
-                    // A vertex the clip created has no projection yet, and a
-                    // vertex the camera does not answer for is dropped rather
-                    // than guessed: the remaining vertices still span a convex
-                    // subset of the drawn fragment, so the sample stays inside
-                    // it.
-                    guard let projected = try projectWithDepth(vertex.point).point else { continue }
-                    screen.append(projected)
+                    let drawn = ViewportCameraDepthClip.clipped(cornerVertices, to: depthInterval)
+                    guard drawn.count >= 3 else { continue }
+                    var screen: [CGPoint] = []
+                    screen.reserveCapacity(drawn.count)
+                    for vertex in drawn {
+                        if let projected = vertex.projected {
+                            screen.append(projected)
+                            continue
+                        }
+                        // A vertex the clip created has no projection yet, and a
+                        // vertex the camera does not answer for is dropped rather
+                        // than guessed: the remaining vertices still span a convex
+                        // subset of the drawn fragment, so the sample stays inside
+                        // it.
+                        guard let projected = try projectWithDepth(vertex.point).point else { continue }
+                        screen.append(projected)
+                    }
+                    guard screen.count >= 3 else { continue }
+                    sink.admit(screen)
                 }
-                guard screen.count >= 3 else { continue }
-                sampler.admit(screen)
             }
-            for sample in sampler.samples() {
+            for sample in samples {
                 guard let surface = try surfaceHit(sample),
                       try bodyDrawsTriangle(surface.triangle) else { continue }
                 guard let triangleIndex = Int(exactly: surface.triangle.faceID.rawValue) else {

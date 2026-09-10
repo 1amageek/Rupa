@@ -277,6 +277,76 @@ private let singleTriangleRun: [ViewportBodyTopology.MeshFaceRun] = [
     .init(componentID: frontFaceComponentID, triangleRange: 0 ..< 1)
 ]
 
+/// The rectangle the tessellation tests drag: exactly the projection of the
+/// body's front face, so every grid cell lies inside the face and the section
+/// window is the only thing deciding what the frame draws inside it.
+private let faceRect = CGRect(x: 200, y: 100, width: 100, height: 100)
+
+/// The front face, the unit square `x, z in [0, 1]`, drawn as `divisions` by
+/// `divisions` tiles of two triangles each.
+///
+/// Every density presents the same square to the same camera and the same
+/// section, so the frame draws the same pixels for all of them. What may not
+/// change with the density is the rectangle's answer.
+private func frontFaceMesh(divisions: Int) -> ViewportBodyMesh {
+    var positions: [Point3D] = []
+    positions.reserveCapacity((divisions + 1) * (divisions + 1))
+    for row in 0 ... divisions {
+        for column in 0 ... divisions {
+            positions.append(
+                Point3D(
+                    x: Double(column) / Double(divisions),
+                    y: 0,
+                    z: Double(row) / Double(divisions)
+                )
+            )
+        }
+    }
+    var indices: [UInt32] = []
+    indices.reserveCapacity(divisions * divisions * 6)
+    for row in 0 ..< divisions {
+        for column in 0 ..< divisions {
+            let corner = UInt32(row * (divisions + 1) + column)
+            let stride = UInt32(divisions + 1)
+            indices.append(contentsOf: [corner, corner + 1, corner + stride + 1])
+            indices.append(contentsOf: [corner, corner + stride + 1, corner + stride])
+        }
+    }
+    return ViewportBodyMesh(positions: positions, indices: indices)
+}
+
+/// The single run `frontFaceMesh(divisions:)` carries, with no edge or vertex
+/// to answer alongside it.
+private func frontFaceTopology(divisions: Int) -> ViewportBodyTopology {
+    ViewportBodyTopology(
+        faces: [],
+        edges: [],
+        vertices: [],
+        meshFaceRuns: [
+            .init(
+                componentID: frontFaceComponentID,
+                triangleRange: 0 ..< (2 * divisions * divisions)
+            )
+        ]
+    )
+}
+
+/// A face standing wholly inside the rectangle's first grid cell, drawn as
+/// `divisions` by `divisions` tiles.
+///
+/// It projects to the square `x` in 202...208 by `y` in 102...108, which does
+/// not contain that cell's middle `(212.5, 112.5)`, so the cell has to name a
+/// point of the coverage rather than its own middle.
+private func cornerFaceMesh(divisions: Int) -> ViewportBodyMesh {
+    let mesh = frontFaceMesh(divisions: divisions)
+    return ViewportBodyMesh(
+        positions: mesh.positions.map { point in
+            Point3D(x: 0.02 + point.x * 0.06, y: point.y, z: 0.92 + point.z * 0.06)
+        },
+        indices: mesh.indices
+    )
+}
+
 private func resolve(
     in rect: CGRect = queryRect,
     frame: RectangleFrame = RectangleFrame(),
@@ -655,6 +725,91 @@ private func resolve(
         }
         #expect(throws: MeshSourcePresentationRenderError.self) {
             _ = try resolve(in: CGRect(x: CGFloat.nan, y: 110, width: 60, height: 60))
+        }
+    }
+
+    /// Independence from the tessellator is not the same property as
+    /// independence from its emission order. One face, one camera and one
+    /// section window drawn at five densities present the frame with the same
+    /// pixels, so the rectangle owes them the same answer — including behind a
+    /// window narrower than a grid cell, where the grid finds nothing at all.
+    ///
+    /// The contract is the equality and not a particular answer: what a density
+    /// may not change is the result, and which windows the grid can reach at
+    /// all is `rectangleSampleGridDivisions`, a budget stated elsewhere.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleAnswersAlikeForEveryTessellationOfOneFaceBehindANarrowWindow() throws {
+        var results: [[SelectionComponent]] = []
+        for divisions in [1, 2, 5, 10, 25] {
+            var frame = RectangleFrame()
+            // Retains world `x <= 0.05`, the leftmost five screen points of the
+            // face — a fifth of one grid cell.
+            frame.section = (normal: Vector3D(x: -1, y: 0, z: 0), offset: -0.05)
+            results.append(
+                try resolve(
+                    in: faceRect,
+                    frame: frame,
+                    topology: frontFaceTopology(divisions: divisions),
+                    mesh: frontFaceMesh(divisions: divisions),
+                    policy: .face
+                )
+            )
+        }
+        let expected = try #require(results.first)
+        for result in results.dropFirst() {
+            #expect(result == expected)
+        }
+    }
+
+    /// The completeness the grid does guarantee, stated across the same five
+    /// densities: a visible window spanning more than two cells contains a whole
+    /// cell, so the face is selected whatever the tessellation.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleReportsAFaceBehindAWindowTwoCellsWideAtEveryTessellation() throws {
+        for divisions in [1, 2, 5, 10, 25] {
+            var frame = RectangleFrame()
+            // Retains world `x <= 0.55`, the leftmost 55 screen points of the
+            // face, where a grid cell is 25 wide.
+            frame.section = (normal: Vector3D(x: -1, y: 0, z: 0), offset: -0.55)
+            let components = try resolve(
+                in: faceRect,
+                frame: frame,
+                topology: frontFaceTopology(divisions: divisions),
+                mesh: frontFaceMesh(divisions: divisions),
+                policy: .face
+            )
+
+            #expect(components == [.face(frontFaceComponentID)])
+        }
+    }
+
+    /// A cell whose coverage misses its middle is asked about the middle of the
+    /// chord the coverage cuts on the ray towards it, not about the coverage's
+    /// nearest point. The nearest point of a face too small to reach a cell
+    /// middle lies on that face's own silhouette, where the frame is entitled to
+    /// answer with either of the faces meeting there.
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleAsksAboutTheChordMiddleWhenAFaceMissesTheCellMiddle() throws {
+        for divisions in [1, 2, 4] {
+            let frame = RectangleFrame()
+            let components = try resolve(
+                in: faceRect,
+                frame: frame,
+                topology: frontFaceTopology(divisions: divisions),
+                mesh: cornerFaceMesh(divisions: divisions),
+                policy: .face
+            )
+            let queries = frame.log.surfaceQueries
+
+            // The coverage is 202...208 by 102...108 and the cell's middle is
+            // (212.5, 112.5), so the nearest point is the corner (208, 108) and
+            // the chord it opens leaves through (202, 102). Its middle is
+            // (205, 105).
+            #expect(components == [.face(frontFaceComponentID)])
+            #expect(queries.count == 1)
+            let sample = try #require(queries.first)
+            #expect(abs(sample.x - 205) < 0.000001)
+            #expect(abs(sample.y - 105) < 0.000001)
         }
     }
 

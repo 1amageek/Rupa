@@ -31,12 +31,18 @@ enum ViewportNativeOccurrenceRectangleResolver {
     /// space and then sampled on `ViewportRectangleSampleGrid`, the same kernel
     /// the CAD sub-shape rectangle uses, so the two rectangles cannot disagree
     /// about what meeting the rectangle means. The grid is what keeps this
-    /// answer independent of the order the plan's triangles are stored in and
+    /// answer a function of the candidate's projected coverage rather than of
+    /// the order or the granularity of the triangles the plan stores it as, and
     /// keeps an occurrence whose middle is covered by a nearer solid selectable
-    /// by the part of it that is not.
+    /// by the part of it that is not. Its rule is sound and not complete: a
+    /// visible sliver thinner than a grid cell can go unsampled, and nothing
+    /// here reads an unsampled region as invisible.
     ///
     /// Cost per candidate: eight bounding-box projections, one projection per
-    /// retained source position, CPU clipping per triangle, and at most
+    /// retained source position, at most two CPU clips per triangle — the grid
+    /// scans a candidate once to anchor its cells and once more to measure the
+    /// chord through the anchors that fell outside a cell's middle, both from
+    /// the same projections — and at most
     /// `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`
     /// native surface queries — never one per triangle. Every candidate here is
     /// a plan item, so across a plan the surface queries are bounded by that
@@ -79,33 +85,34 @@ enum ViewportNativeOccurrenceRectangleResolver {
             let projected = try projectedPositions(
                 occurrence, projectWithDepth: projectWithDepth
             )
-            var sampler = grid.polygonSampler()
-            for index in 0..<occurrence.triangleCount {
-                let indices = occurrence.positionIndices(at: index)
-                let drawn = ViewportCameraDepthClip.clipped(
-                    [projected[indices.first], projected[indices.second], projected[indices.third]],
-                    to: depthInterval
-                )
-                guard drawn.count >= 3 else { continue }
-                var screen: [CGPoint] = []
-                screen.reserveCapacity(drawn.count)
-                for vertex in drawn {
-                    if let point = vertex.projected {
+            let samples = try grid.polygonSamples { sink in
+                for index in 0..<occurrence.triangleCount {
+                    let indices = occurrence.positionIndices(at: index)
+                    let drawn = ViewportCameraDepthClip.clipped(
+                        [projected[indices.first], projected[indices.second], projected[indices.third]],
+                        to: depthInterval
+                    )
+                    guard drawn.count >= 3 else { continue }
+                    var screen: [CGPoint] = []
+                    screen.reserveCapacity(drawn.count)
+                    for vertex in drawn {
+                        if let point = vertex.projected {
+                            screen.append(point)
+                            continue
+                        }
+                        // A vertex the depth clip created has no projection yet, and
+                        // one the camera does not answer for is dropped rather than
+                        // guessed: what remains still spans a convex subset of the
+                        // drawn fragment, so the sample stays inside it.
+                        guard let point = try projectWithDepth(vertex.point).point,
+                              point.x.isFinite, point.y.isFinite else { continue }
                         screen.append(point)
-                        continue
                     }
-                    // A vertex the depth clip created has no projection yet, and
-                    // one the camera does not answer for is dropped rather than
-                    // guessed: what remains still spans a convex subset of the
-                    // drawn fragment, so the sample stays inside it.
-                    guard let point = try projectWithDepth(vertex.point).point,
-                          point.x.isFinite, point.y.isFinite else { continue }
-                    screen.append(point)
+                    guard screen.count >= 3 else { continue }
+                    sink.admit(screen)
                 }
-                guard screen.count >= 3 else { continue }
-                sampler.admit(screen)
             }
-            for sample in sampler.samples() {
+            for sample in samples {
                 guard let drawn = try drawnOccurrenceID(sample) else { continue }
                 admitted.insert(drawn)
                 // Another occurrence covering this sample is still a real
