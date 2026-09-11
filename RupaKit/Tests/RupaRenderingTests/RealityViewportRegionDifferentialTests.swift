@@ -166,6 +166,9 @@ struct RealityViewportRegionDifferentialTests {
         var drawn = 0
         var agreements = 0
         var boundarySkips = 0
+        /// Why each excused pixel was excused, so a run reports the shared
+        /// side it sat on rather than only how many it excused.
+        var skips: [String] = []
         var unprojectable = 0
         var failures: [String] = []
         var maximumDepthDeviation = 0.0
@@ -232,13 +235,17 @@ struct RealityViewportRegionDifferentialTests {
     static let notchProbe = CGPoint(x: 243.5, y: 167)
     /// Layout points. A fifth of a device pixel at the mounted display scale.
     static let boundaryTolerance = 0.1
-    /// Every body edge in this fixture lands on a device-pixel boundary, so a
-    /// pixel centre is never closer than a quarter layout point to one. Only
-    /// an interior tessellation diagonal can therefore put a pixel inside the
-    /// boundary band, and only where the two rasterisers break the tie to
-    /// different triangles of the same quad. The ten mounted variants excuse
-    /// at most three of 7,680 pixels; this leaves an order of magnitude over
-    /// that and still rejects a systematic disagreement.
+    /// A pixel is excused only when both queries name triangles of one
+    /// occurrence that share a side and the pixel centre lies on that side's
+    /// projection, so this ceiling bounds how often the two rasterisers may
+    /// break such a tie differently rather than how often they may disagree
+    /// at all. The ten mounted variants excuse at most three of 7,680 pixels
+    /// and each run prints the side every excused pixel sat on. Measured:
+    /// an interior tessellation diagonal in every excused pixel but one, and
+    /// in the dense tessellation one side carrying a boundary identity that
+    /// two faces of that occurrence both cover. This ceiling leaves an order
+    /// of magnitude over that peak and still rejects a systematic
+    /// disagreement.
     static let maximumBoundarySkipFraction = 0.005
     /// The native query reports depth through a `Float` camera conversion,
     /// while the raster interpolates in `Double`, so the two agree to a few
@@ -804,53 +811,150 @@ struct RealityViewportRegionDifferentialTests {
         }
     }
 
-    /// The projected edges of one drawn triangle, memoised because the sweep
-    /// asks for the same triangle at every disagreeing pixel and a crossing
-    /// edge costs a bisection.
-    private func projectedBoundary(
-        of triangle: MeshSourcePresentationTriangle,
-        viewport: RealityViewport,
-        cache: inout [String: [(CGPoint, CGPoint)]]
-    ) throws -> [(CGPoint, CGPoint)] {
-        let key = name(triangle)
-        if let cached = cache[key] { return cached }
-        let corners = [
-            triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition
-        ]
-        var edges: [(CGPoint, CGPoint)] = []
-        edges.reserveCapacity(3)
-        for index in corners.indices {
-            if let edge = try projectedEdge(
-                from: corners[index],
-                to: corners[(index + 1) % corners.count],
-                viewport: viewport
-            ) {
-                edges.append(edge)
-            }
-        }
-        cache[key] = edges
-        return edges
+    /// One side of a drawn triangle, carrying the two vertex identities that
+    /// name it, the two world positions that draw it, and the boundary
+    /// identity the render plan gives it.
+    private struct TriangleSide {
+        let first: MeshVertexID
+        let second: MeshVertexID
+        let start: GeometryPoint3D
+        let end: GeometryPoint3D
+        /// nil for an interior tessellation diagonal, which is the only side
+        /// the two triangles of one quad can share.
+        let edgeID: MeshEdgeID?
     }
 
-    /// How far a layout point is from the projected boundary of one drawn
-    /// triangle, or nil when the mounted camera projects no part of it.
-    private func boundaryDistance(
-        of triangle: MeshSourcePresentationTriangle,
-        from point: CGPoint,
-        viewport: RealityViewport,
-        cache: inout [String: [(CGPoint, CGPoint)]]
-    ) throws -> Double? {
-        let edges = try projectedBoundary(
-            of: triangle, viewport: viewport, cache: &cache
-        )
-        guard !edges.isEmpty else { return nil }
-        var nearest = Double.infinity
-        for edge in edges {
-            nearest = min(
-                nearest, distance(from: point, toSegmentFrom: edge.0, to: edge.1)
+    /// A side two triangles of one occurrence have in common.
+    private struct SharedEdge {
+        let start: GeometryPoint3D
+        let end: GeometryPoint3D
+        let rasterEdgeID: MeshEdgeID?
+        let nativeEdgeID: MeshEdgeID?
+    }
+
+    /// Why the raster and the native query named different triangles at one
+    /// pixel centre.
+    private enum Disagreement {
+        /// The two answers are triangles of one occurrence that share a side,
+        /// and the pixel centre lies on the projection of that side, so which
+        /// of the two owns the pixel is a tie the two rasterisers are free to
+        /// break differently.
+        case sharedEdge(String)
+        /// The mounted camera projects no part of the shared side, so the
+        /// sweep cannot decide whether the pixel centre sits on it.
+        case unprojectable
+        /// The disagreement is an answer the region raster has to get right.
+        case mismatch(String)
+    }
+
+    /// The three sides of a drawn triangle, in the order
+    /// `MeshSourcePresentationTriangle` assigns boundary identities: 0-1, 1-2
+    /// and 2-0.
+    private func sides(
+        of triangle: MeshSourcePresentationTriangle
+    ) -> [TriangleSide] {
+        let ids = [
+            triangle.firstVertexID, triangle.secondVertexID, triangle.thirdVertexID
+        ]
+        let positions = [
+            triangle.firstPosition, triangle.secondPosition, triangle.thirdPosition
+        ]
+        let edgeIDs = [
+            triangle.firstEdgeID, triangle.secondEdgeID, triangle.thirdEdgeID
+        ]
+        return ids.indices.map { index in
+            let next = (index + 1) % ids.count
+            return TriangleSide(
+                first: ids[index],
+                second: ids[next],
+                start: positions[index],
+                end: positions[next],
+                edgeID: edgeIDs[index]
             )
         }
-        return nearest
+    }
+
+    /// The side two triangles have in common, or nil when they do not share
+    /// exactly two vertices.
+    ///
+    /// `MeshSourcePresentationRenderPlan.Occurrence.triangle(at:)` reads one
+    /// vertex identity buffer per occurrence through the triangle's own
+    /// indices, so the two triangles a quad is tessellated into report the
+    /// same `MeshVertexID` for the corners they share. Exactly two shared
+    /// corners is therefore exactly one shared side. Three would be one
+    /// triangle reported twice, which the caller has already excluded, and
+    /// fewer than two leaves no boundary a pixel centre could sit on.
+    private func sharedEdge(
+        between raster: MeshSourcePresentationTriangle,
+        and native: MeshSourcePresentationTriangle
+    ) -> SharedEdge? {
+        let rasterSides = sides(of: raster)
+        let nativeSides = sides(of: native)
+        let rasterIDs = Set(rasterSides.map(\.first))
+        let nativeIDs = Set(nativeSides.map(\.first))
+        guard rasterIDs.intersection(nativeIDs).count == 2 else { return nil }
+        for rasterSide in rasterSides {
+            let corners = Set([rasterSide.first, rasterSide.second])
+            for nativeSide in nativeSides
+            where Set([nativeSide.first, nativeSide.second]) == corners {
+                return SharedEdge(
+                    start: rasterSide.start,
+                    end: rasterSide.end,
+                    rasterEdgeID: rasterSide.edgeID,
+                    nativeEdgeID: nativeSide.edgeID
+                )
+            }
+        }
+        return nil
+    }
+
+    /// Which of the three a disagreement at one pixel centre is.
+    ///
+    /// Only a tie on a shared side is excusable. A pixel one query draws and
+    /// the other does not, a pixel two occurrences claim, and a pixel claimed
+    /// by two triangles that share no side are all answers a rectangle
+    /// selection depends on, so they are reported rather than excused.
+    private func classify(
+        raster: MeshSourcePresentationTriangle?,
+        native: MeshSourcePresentationTriangle?,
+        at point: CGPoint,
+        viewport: RealityViewport
+    ) throws -> Disagreement {
+        let drawn = raster.map { name($0) } ?? "none"
+        let hit = native.map { name($0) } ?? "none"
+        let pair = "raster=\(drawn) native=\(hit)"
+        guard let raster, let native else {
+            return .mismatch("one side empty \(pair)")
+        }
+        guard raster.occurrenceID == native.occurrenceID else {
+            return .mismatch("different occurrences \(pair)")
+        }
+        guard let shared = sharedEdge(between: raster, and: native) else {
+            return .mismatch("no shared side \(pair)")
+        }
+        guard let edge = try projectedEdge(
+            from: shared.start, to: shared.end, viewport: viewport
+        ) else {
+            return .unprojectable
+        }
+        let separation = distance(
+            from: point, toSegmentFrom: edge.0, to: edge.1
+        )
+        guard separation <= Self.boundaryTolerance else {
+            return .mismatch(
+                "\(separation) pt from the shared side of \(pair)"
+            )
+        }
+        let identities = "\(describe(shared.rasterEdgeID))/\(describe(shared.nativeEdgeID))"
+        return .sharedEdge(
+            "\(separation) pt from side \(identities) of \(pair)"
+        )
+    }
+
+    /// How an excused side reports its boundary identity. An interior
+    /// tessellation diagonal carries none.
+    private func describe(_ edgeID: MeshEdgeID?) -> String {
+        edgeID.map { "\($0)" } ?? "interior"
     }
 
     private func name(_ triangle: MeshSourcePresentationTriangle) -> String {
@@ -871,7 +975,6 @@ struct RealityViewportRegionDifferentialTests {
         let slabID = Self.occurrenceID(for: .slab)
         let straddleID = Self.occurrenceID(for: .straddle)
         var slabByRow: [Int: Int] = [:]
-        var boundaryCache: [String: [(CGPoint, CGPoint)]] = [:]
         for row in rows {
             for column in columns {
                 let point = CGPoint(
@@ -917,31 +1020,27 @@ struct RealityViewportRegionDifferentialTests {
                         result.maximumDepthDeviation, abs(depth - drawn.depth)
                     )
                 default:
-                    var candidates: [MeshSourcePresentationTriangle] = []
-                    if let fragment { candidates.append(fragment.triangle) }
-                    if let hit { candidates.append(hit.triangle) }
-                    var nearest: Double?
-                    var isProjectable = true
-                    for candidate in candidates {
-                        guard let separation = try boundaryDistance(
-                            of: candidate, from: point, viewport: viewport,
-                            cache: &boundaryCache
-                        ) else {
-                            isProjectable = false
-                            continue
-                        }
-                        nearest = min(nearest ?? separation, separation)
-                    }
-                    if !isProjectable {
-                        result.unprojectable += 1
-                    } else if let nearest, nearest <= Self.boundaryTolerance {
+                    switch try classify(
+                        raster: fragment?.triangle,
+                        native: hit?.triangle,
+                        at: point,
+                        viewport: viewport
+                    ) {
+                    case .sharedEdge(let description):
                         result.boundarySkips += 1
-                    } else if result.failures.count < 12 {
-                        let drawn = fragment.map { name($0.triangle) } ?? "none"
-                        let native = hit.map { name($0.triangle) } ?? "none"
-                        result.failures.append(
-                            "(\(column),\(row)) raster=\(drawn) native=\(native)"
-                        )
+                        if result.skips.count < 12 {
+                            result.skips.append(
+                                "(\(column),\(row)) \(description)"
+                            )
+                        }
+                    case .unprojectable:
+                        result.unprojectable += 1
+                    case .mismatch(let reason):
+                        if result.failures.count < 12 {
+                            result.failures.append(
+                                "(\(column),\(row)) \(reason)"
+                            )
+                        }
                     }
                 }
             }
@@ -1049,13 +1148,18 @@ struct RealityViewportRegionDifferentialTests {
             depthDeviation=\(sweep.maximumDepthDeviation) \
             slabRun=\(sweep.maximumSlabRun)
             """)
+        if !sweep.skips.isEmpty {
+            print(
+                "[region-differential] \(label) skipped \(sweep.skips.joined(separator: " | "))"
+            )
+        }
         #expect(
             sweep.failures.isEmpty,
-            "\(label): the raster and the native hit name different triangles away from any projected edge: \(sweep.failures.joined(separator: " | "))"
+            "\(label): the raster and the native hit disagree where no shared side of one occurrence explains it: \(sweep.failures.joined(separator: " | "))"
         )
         #expect(
             sweep.unprojectable == 0,
-            "\(label): \(sweep.unprojectable) pixels could not be classified because the camera declined to project a triangle vertex"
+            "\(label): \(sweep.unprojectable) pixels could not be classified because the camera projects no part of the shared side"
         )
         #expect(
             sweep.drawn == sweep.pixelCount,
