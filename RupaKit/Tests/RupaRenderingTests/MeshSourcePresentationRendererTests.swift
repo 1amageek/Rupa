@@ -1359,7 +1359,7 @@ func realityViewportSharesTranslatedResourcesWithoutSharingOccurrenceIdentity() 
         modelBounds: CGRect(x: 0, y: 0, width: 8, height: 1), size: CGSize(width: 640, height: 128),
         camera: .init(zoom: 0.8), basis: .axisFront(.z), verticalBounds: 0...1
     )
-    try viewport.applyCamera(layout: layout, revision: 1)
+    try viewport.applyCamera(layout: layout, displayScale: 2, revision: 1)
     let colors = [ColorRGBA(r: 1, g: 0, b: 0, a: 1), ColorRGBA(r: 0, g: 0, b: 1, a: 1),
                   ColorRGBA(r: 0, g: 1, b: 0, a: 1), ColorRGBA(r: 1, g: 0, b: 0, a: 1)]
     var materialColors: [SceneOccurrenceID: ColorRGBA] = [:]

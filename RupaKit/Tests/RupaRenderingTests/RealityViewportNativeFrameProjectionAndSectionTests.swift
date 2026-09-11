@@ -7,11 +7,11 @@ import SwiftUI
 import Testing
 @testable import RupaRendering
 
-/// Mounted-frame coverage for the two native queries the CAD topology resolver
-/// consumes but a synthetic frame cannot prove: which projection the frame was
-/// drawn with, and whether the frame retains a world point across the active
-/// section. Both are answered by the real `RealityView` camera, so a stub frame
-/// only exercises the resolver's use of them, never their truthfulness.
+/// Mounted-frame coverage for what only the real `RealityView` camera can
+/// prove: which projection the frame was drawn with, whether the frame retains
+/// a world point across the active section, and that the display scale the
+/// frame was mounted with reaches it and belongs to its frame key. A stub frame
+/// exercises a consumer's use of these answers, never their truthfulness.
 @Suite(.serialized)
 @MainActor
 struct RealityViewportNativeFrameProjectionAndSectionTests {
@@ -20,7 +20,11 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
         let window: NSWindow
     }
 
-    private func mount(perspective: Bool, suffix: String) async throws -> MountedFrame {
+    private func mount(
+        perspective: Bool,
+        displayScale: CGFloat,
+        suffix: String
+    ) async throws -> MountedFrame {
         _ = NSApplication.shared
         let plan = try MeshSourcePresentationRenderPlan(scene: planCacheScene(suffix: suffix))
         let batch = try RealityViewportSpatialBatch(
@@ -62,7 +66,9 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
                 retainedSide: .front,
                 sectionTolerance: 0,
                 onUpdateResult: { reportedError = $0 }
-            ).frame(width: size.width, height: size.height)
+            )
+            .frame(width: size.width, height: size.height)
+            .environment(\.displayScale, displayScale)
         )
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
@@ -93,7 +99,9 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func nativeFrameReportsTheProjectionItWasDrawnWith(perspective: Bool) async throws {
-        let frame = try await mount(perspective: perspective, suffix: "native-projection")
+        let frame = try await mount(
+            perspective: perspective, displayScale: 2, suffix: "native-projection"
+        )
         defer { unmount(frame) }
         let viewport = frame.viewport
 
@@ -111,7 +119,9 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func nativeFrameSeparatesSectionRemovalFromAnEmptyPixel(perspective: Bool) async throws {
-        let frame = try await mount(perspective: perspective, suffix: "native-section")
+        let frame = try await mount(
+            perspective: perspective, displayScale: 2, suffix: "native-section"
+        )
         defer { unmount(frame) }
         let viewport = frame.viewport
 
@@ -166,5 +176,55 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
         #expect(throws: MeshSourcePresentationRenderError.self) {
             try viewport.retainsSectionedPoint(kept, revision: 2)
         }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func nativeFrameKeyIncludesTheDisplayScaleItWasMountedWith() async throws {
+        let frame = try await mount(
+            perspective: false, displayScale: 3, suffix: "native-display-scale"
+        )
+        defer { unmount(frame) }
+        let viewport = frame.viewport
+        let layout = try #require(viewport.appliedLayout)
+        let renderOrigin = viewport.renderOrigin
+
+        // The mount is the only supplier of the device pixel grid, so the scale
+        // the frame reports is the one its environment was drawn with and not a
+        // module default.
+        #expect(viewport.appliedDisplayScale == 3)
+        #expect(
+            viewport.matchesAppliedFrame(
+                layout: layout, displayScale: 3, revision: 1, renderOrigin: renderOrigin
+            )
+        )
+
+        // Same points, same camera revision, different device pixel grid: a
+        // different frame, which must withhold rather than update synchronously.
+        #expect(
+            viewport.matchesAppliedFrame(
+                layout: layout, displayScale: 2, revision: 1, renderOrigin: renderOrigin
+            ) == false
+        )
+
+        // A frame that cannot state its device pixel grid is refused, and the
+        // refusal leaves the applied frame whole rather than half-replacing it.
+        for refused in [0, -2, CGFloat.nan, .infinity] {
+            #expect(throws: MeshSourcePresentationRenderError.self) {
+                try viewport.applyCamera(layout: layout, displayScale: refused, revision: 1)
+            }
+            #expect(
+                viewport.matchesAppliedFrame(
+                    layout: layout, displayScale: 3, revision: 1, renderOrigin: renderOrigin
+                )
+            )
+        }
+
+        viewport.invalidateCamera()
+        #expect(viewport.appliedDisplayScale == nil)
+        #expect(
+            viewport.matchesAppliedFrame(
+                layout: layout, displayScale: 3, revision: 1, renderOrigin: renderOrigin
+            ) == false
+        )
     }
 }

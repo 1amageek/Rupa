@@ -22,6 +22,7 @@ struct RealityViewportView: View {
     var onGridUpdateResult: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)? = nil
     let onUpdateResult: (MeshSourcePresentationRenderError?) -> Void
     @State private var mount = Mount()
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         RealityView { content in
@@ -35,10 +36,10 @@ struct RealityViewportView: View {
     }
 
     private func update(_ content: inout RealityViewCameraContent) {
-        let canUpdateSynchronously = mount.current?.appliedLayout == layout
-            && mount.current?.appliedViewportRevision == viewportRevision
-            && mount.current?.renderOrigin == viewport.renderOrigin
-            && mount.current?.project(viewport.renderOrigin) != nil
+        let canUpdateSynchronously = mount.current?.matchesAppliedFrame(
+            layout: layout, displayScale: displayScale, revision: viewportRevision,
+            renderOrigin: viewport.renderOrigin
+        ) == true
         if mount.current !== viewport {
             mount.detach()
             for entity in content.entities { content.remove(entity) }
@@ -52,7 +53,7 @@ struct RealityViewportView: View {
             guard gridRuler == nil || onGridUpdateResult != nil else {
                 throw MeshSourcePresentationRenderError(code: .failed, message: "Grid rendering requires a grid-status receiver.")
             }
-            try viewport.applyCamera(layout: layout, revision: viewportRevision)
+            try viewport.applyCamera(layout: layout, displayScale: displayScale, revision: viewportRevision)
             try viewport.applyAppearance(displayMode: displayMode, shading: shading,
                                          materialColors: materialColors, interaction: interaction,
                                          sectionPlane: sectionPlane, retainedSide: retainedSide, sectionTolerance: sectionTolerance)

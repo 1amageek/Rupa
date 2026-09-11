@@ -108,7 +108,7 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
     try nextViewport.applyCamera(layout: ViewportLayout(
         modelBounds: CGRect(x: 0, y: 0, width: 3, height: 1), size: CGSize(width: 64, height: 64),
         camera: .init(), basis: .axisFront(.z), verticalBounds: 0...1
-    ), revision: 1)
+    ), displayScale: 2, revision: 1)
     let device = try #require(MTLCreateSystemDefaultDevice())
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
         pixelFormat: .bgra8Unorm, width: 64, height: 64, mipmapped: false

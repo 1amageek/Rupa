@@ -19,6 +19,11 @@ final class RealityViewport {
     let renderOrigin: Point3D
     private(set) var appliedViewportRevision: UInt64?
     private(set) var appliedLayout: ViewportLayout?
+    /// The device pixels per point the applied frame was laid out against.
+    /// The layout above is stated in points, so this is the only thing that
+    /// tells the frame where a device pixel centre falls, and a frame that
+    /// has applied no camera reports none.
+    private(set) var appliedDisplayScale: CGFloat?
     private(set) var maximumNativeUploadDuration: Duration = .zero
     private var surfaceResources: SurfaceResources?
     private var spatialResources: RealityViewportSpatialResources?
@@ -472,7 +477,15 @@ final class RealityViewport {
         return try await MeshResource(from: mesh)
     }
 
-    func applyCamera(layout: ViewportLayout, revision: UInt64) throws {
+    /// Applies one camera frame. The display scale carries no default: the
+    /// mount reads it from the environment the frame is drawn in, and a frame
+    /// that cannot state its device pixel grid is refused rather than assumed.
+    /// That refusal is checked before anything is cleared, so it leaves the
+    /// frame already applied intact instead of half-applying this one.
+    func applyCamera(layout: ViewportLayout, displayScale: CGFloat, revision: UInt64) throws {
+        guard displayScale.isFinite, displayScale > 0 else {
+            throw Self.failure("The native camera requires a positive finite display scale.")
+        }
         cameraCalibration = nil
         cameraCalibrationDepth = nil
         let viewportCenter = CGPoint(x: layout.viewportSize.width / 2, y: layout.viewportSize.height / 2)
@@ -580,7 +593,28 @@ final class RealityViewport {
             camera.components.set(perspective)
         }
         appliedLayout = layout
+        appliedDisplayScale = displayScale
         appliedViewportRevision = revision
+    }
+
+    /// Whether this viewport has already applied exactly this camera and can
+    /// still project it. The mount asks before publishing a pending spatial
+    /// pass synchronously, so everything `applyCamera` installs belongs here,
+    /// the display scale included: a change to any of it is a different camera
+    /// and must withhold instead of reusing the installed one. This is the
+    /// applied-camera identity, which is narrower than the region raster frame
+    /// key; `DESIGN.md` owns both and states why they differ.
+    func matchesAppliedFrame(
+        layout: ViewportLayout,
+        displayScale: CGFloat,
+        revision: UInt64,
+        renderOrigin: Point3D
+    ) -> Bool {
+        appliedLayout == layout
+            && appliedDisplayScale == displayScale
+            && appliedViewportRevision == revision
+            && self.renderOrigin == renderOrigin
+            && project(renderOrigin) != nil
     }
 
     func applyAppearance(
@@ -807,6 +841,7 @@ final class RealityViewport {
         content = nil
         bindingOwner = nil
         appliedLayout = nil
+        appliedDisplayScale = nil
         appliedViewportRevision = nil
         cameraCalibration = nil
         cameraCalibrationDepth = nil
@@ -816,6 +851,7 @@ final class RealityViewport {
 
     func invalidateCamera() {
         appliedLayout = nil
+        appliedDisplayScale = nil
         appliedViewportRevision = nil
         cameraCalibration = nil
         cameraCalibrationDepth = nil

@@ -679,7 +679,7 @@ func nativeMaterialColorChangesWithoutGeometryReplacement() async throws {
     let layout = ViewportLayout(modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                                 size: CGSize(width: 96, height: 96), camera: .init(zoom: 0.6),
                                 basis: .axisFront(.z), verticalBounds: 0...0)
-    try viewport.applyCamera(layout: layout, revision: 1)
+    try viewport.applyCamera(layout: layout, displayScale: 2, revision: 1)
     let device = try #require(MTLCreateSystemDefaultDevice())
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
                                                               width: 96, height: 96, mipmapped: false)
@@ -1321,7 +1321,7 @@ func nativePresentationCachePreservesProjectionAndSourceFaceIdentity() async thr
                                     size: CGSize(width: 512, height: 384), camera: camera,
                                     basis: .isometric, verticalBounds: 0...0,
                                     fittingInsets: .init(top: 20, leading: 45, bottom: 70, trailing: 10))
-        try viewport.applyCamera(layout: layout, revision: 7)
+        try viewport.applyCamera(layout: layout, displayScale: 2, revision: 7)
         #expect(viewport.camera.components[ProjectiveTransformCameraComponent.self] == nil)
         switch projection {
         case .parallel:

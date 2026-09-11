@@ -114,10 +114,17 @@ the input owner may defer a retained release until publication, not query a
 display-only surface or infer readiness from the presence of an Entity.
 
 This cold-mount rule does not hide an already-mounted complete presentation on
-an unchanged camera layout/revision. A warm update first uses the existing
-native content synchronously; it defers and withholds presentation only if that
-attempt reports projection unavailable. Replacing a same-source overlay must be
-verified to publish without an intervening empty native frame.
+an unchanged camera. A warm update first uses the existing native content
+synchronously; it defers and withholds presentation only if that attempt
+reports projection unavailable. The applied-camera identity deciding this is
+what `applyCamera` installs: the layout, the display scale, the camera
+revision, and the render origin its projection rows were computed against. A
+changed display scale is therefore a different camera at an unchanged layout
+and revision, and withholds rather than reusing the installed one. This is not
+the region raster frame key below, which is wider because its answer also
+reads appearance-derived predicates this identity does not. Replacing a
+same-source overlay must be verified to publish without an intervening empty
+native frame.
 Each Mount identifies its binding by its own object identity. Rebinding the
 same native viewport transfers that identity with the content; an old Mount
 cannot unbind, place, or report status for the replacement binding. This is
@@ -1002,7 +1009,7 @@ of screen-baked dashes.
     |---|---|
     | applied camera revision | `appliedViewportRevision` |
     | applied layout | `appliedLayout` |
-    | display scale | the value the mount applied with that layout |
+    | display scale | `appliedDisplayScale` |
     | calibration generation | bumped whenever `cameraCalibration` is derived |
     | section half-space | `section`, or its absence |
     | back-face culling | `shading.isBackfaceCullingActive(in: mode)` |

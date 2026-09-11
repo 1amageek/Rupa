@@ -852,7 +852,7 @@ struct RealityViewportSpatialResourcesTests {
             let layout = ViewportLayout(modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
                                         size: CGSize(width: 400, height: 300), camera: camera,
                                         basis: .axisFront(.z), verticalBounds: 0...0)
-            try viewport.applyCamera(layout: layout, revision: zoom == 1 ? 1 : 2)
+            try viewport.applyCamera(layout: layout, displayScale: 2, revision: zoom == 1 ? 1 : 2)
             try viewport.applySection(plane: plane, side: .front, tolerance: 0)
             let settle = ContinuousClock.now.advanced(by: .seconds(5))
             var matched = false
@@ -909,7 +909,7 @@ struct RealityViewportSpatialResourcesTests {
         let layout = ViewportLayout(modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
                                     size: CGSize(width: 256, height: 256), camera: camera,
                                     basis: .axisFront(.z), verticalBounds: 0...0)
-        try viewport.applyCamera(layout: layout, revision: 1)
+        try viewport.applyCamera(layout: layout, displayScale: 2, revision: 1)
         let plane = SectionAnalysisResult.Plane(sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
                                                 origin: .origin, normal: .init(x: 1, y: 0, z: 0),
                                                 u: .init(x: 0, y: 1, z: 0), v: .init(x: 0, y: 0, z: 1))
