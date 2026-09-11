@@ -840,6 +840,33 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
                         #expect(surfaceHit.triangle.occurrenceID == triangle.occurrenceID)
                         #expect(surfaceHit.triangle.faceID == triangle.faceID)
                         #expect(surfaceHit.point.isApproximatelyEqual(to: world, tolerance: 1e-4))
+                        // The same mounted frame, asked as a region. Every term of the
+                        // raster's frame is rebuilt from this camera, so agreeing with
+                        // the point answer here is what makes a rectangle and a click
+                        // describe one drawing rather than two similar ones.
+                        let fragment = try #require(
+                            try cache.regionFragment(at: actual, for: identity, revision: revision)
+                        )
+                        #expect(fragment.triangle.occurrenceID == triangle.occurrenceID)
+                        #expect(fragment.triangle.faceID == triangle.faceID)
+                        let hitDepth = Double(-viewport.camera.convert(position: hit.position, from: nil).z)
+                        #expect(abs(fragment.depth - hitDepth) < 1e-2,
+                                "Region depth \(fragment.depth) disagrees with hit depth \(hitDepth)")
+                        var regionOccurrenceIDs: Set<SceneOccurrenceID> = []
+                        try cache.forEachRegionTriangle(
+                            intersecting: CGRect(origin: .zero, size: size),
+                            for: identity, revision: revision
+                        ) { regionOccurrenceIDs.insert($0.occurrenceID) }
+                        #expect(regionOccurrenceIDs == [triangle.occurrenceID])
+                        let probe = try cache.regionSegmentProbe(
+                            from: CGPoint(x: actual.x - 20, y: actual.y),
+                            to: CGPoint(x: actual.x + 20, y: actual.y),
+                            within: CGRect(x: actual.x - 20, y: actual.y - 1, width: 40, height: 2),
+                            startingAt: 0, for: identity, revision: revision
+                        )
+                        #expect(probe.stepCount > 0)
+                        let drawn = try #require(probe.drawn)
+                        #expect(drawn.triangle.occurrenceID == triangle.occurrenceID)
                         #expect(viewport.hitTest(actual, revision: revision - 1).isEmpty)
                         matched = true
                         break
@@ -898,6 +925,11 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     #expect(miss == nil)
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.surfaceHit(at: CGPoint(x: 0, y: 0), for: identity, revision: revision - 1)
+    }
+    // A region query answers the mounted frame's own revision only, exactly as
+    // the point query does.
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.regionFragment(at: CGPoint(x: 0, y: 0), for: identity, revision: revision - 1)
     }
     // An overlay-only rebuild keeps the mounted frame as the query authority,
     // so this resolves against the drawn pixels and reports a truthful miss.
@@ -1761,6 +1793,91 @@ private actor PlanBuildGate {
             arrivalWaiters[key, default: []].append(continuation)
         }
     }
+}
+
+/// The three region queries reach a frame through the same authority rule
+/// `surfaceHit` reaches one through.
+///
+/// They are new entry points onto an existing gate, and an entry point that
+/// answers from a frame the display is not showing — or from no frame at all —
+/// is how a selection rectangle silently disagrees with what the user sees. So
+/// every unavailable state is asserted for all three rather than only for the
+/// query that already had coverage. What a mounted frame then answers is the
+/// raster's own contract and is proved without a display elsewhere.
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func regionQueriesShareTheSurfaceQueryAuthority() async throws {
+    let scene = try planCacheScene(suffix: "region-authority")
+    let identity = planCacheIdentity(scene)
+    let rect = CGRect(x: 0, y: 0, width: 8, height: 8)
+    let cache = MeshSourcePresentationPlanCache()
+    defer { cache.teardown() }
+
+    func expectRegionQueriesUnavailable(
+        for queried: RealityViewportPreparationRequest.Identity,
+        _ state: Comment
+    ) {
+        #expect(throws: MeshSourcePresentationRenderError.self, state) {
+            try cache.forEachRegionTriangle(
+                intersecting: rect, for: queried, revision: 0
+            ) { _ in }
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self, state) {
+            try cache.regionFragment(at: .zero, for: queried, revision: 0)
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self, state) {
+            try cache.regionSegmentProbe(
+                from: .zero, to: CGPoint(x: 4, y: 4), within: rect,
+                startingAt: 0, for: queried, revision: 0
+            )
+        }
+    }
+
+    expectRegionQueriesUnavailable(
+        for: identity, "Nothing is prepared yet."
+    )
+
+    cache.prepare(for: scene)
+    #expect(cache.isPreparing(scene))
+    expectRegionQueriesUnavailable(
+        for: identity, "A preparation is in flight."
+    )
+
+    try await settlePlanCache(cache)
+    #expect(cache.surface(for: scene) != nil)
+    // Prepared is not mounted. The frame has drawn nothing, so it cannot say
+    // what any pixel shows.
+    expectRegionQueriesUnavailable(
+        for: identity, "The prepared frame is not mounted."
+    )
+
+    // A pending overlay revision names the same scene and snapshot, so the
+    // authority rule still resolves it to the prepared frame. It is refused
+    // for the reason the exact identity is refused: nothing has been drawn.
+    let pendingOverlay = planCacheIdentity(scene, overlayRevision: 9)
+    #expect(cache.displaySurface(for: pendingOverlay) != nil)
+    expectRegionQueriesUnavailable(
+        for: pendingOverlay, "An overlay revision no frame has drawn."
+    )
+
+    // A different scene shares no frame at all, and the authority rule
+    // withdraws before any mount question is asked.
+    let stale = planCacheIdentity(nil, overlayRevision: 9)
+    #expect(cache.displaySurface(for: stale) == nil)
+    expectRegionQueriesUnavailable(
+        for: stale, "The identity belongs to no prepared or displayed frame."
+    )
+
+    // The display record survives a rejection, so this asserts the recorded
+    // failure withdraws authority rather than the frame disappearing.
+    cache.reject(identity, error: .init(
+        code: .failed, message: "Rejected region authority fixture."
+    ))
+    #expect(cache.displaySurface(for: identity) != nil)
+    #expect(cache.failure(for: identity) != nil)
+    expectRegionQueriesUnavailable(
+        for: identity, "A failure is recorded for this identity."
+    )
 }
 
 @MainActor

@@ -37,7 +37,21 @@ final class RealityViewport {
     private var content: RealityViewCameraContent?
     private var bindingOwner: ObjectIdentifier?
     private var cameraCalibration: CameraCalibration?
+    /// The last calibration this frame derived, retained across the clearing
+    /// `applyCamera` performs so the generation below can compare one
+    /// derivation against the one before it.
+    private var derivedCameraCalibration: CameraCalibration?
+    /// Counts the times a derived calibration differed from the one before it.
+    ///
+    /// Every applied frame clears the calibration and derives it again,
+    /// including the appearance-only frames a selection drag republishes on
+    /// every pointer move, so counting derivations would discard the region
+    /// raster on every move. Counting differences is what makes this a
+    /// projection identity the raster can be keyed on.
+    private var calibrationGeneration: UInt64 = 0
     private var cameraCalibrationDepth: Double?
+    private var regionRasterKey: RealityViewportRegionFrameKey?
+    private var regionRasterState: RegionRasterState?
     private var appearance: Appearance?
     private var section: RealityViewportSectionHalfSpace?
     private var requestedSection: (plane: SectionAnalysisResult.Plane, side: SectionAnalysisRetainedSide, tolerance: Double)?
@@ -57,12 +71,24 @@ final class RealityViewport {
     /// A camera-local affine screen map sampled from the mounted native
     /// projection. Collision bounds are deliberately absent: this calibration
     /// is also the authority for empty-scene plane and axis queries.
-    private struct CameraCalibration {
+    private struct CameraCalibration: Equatable {
         let eye: SIMD3<Float>
+        /// Camera-plane units at `sampleDepth` to points. The point queries
+        /// need only the inverse below; the region raster projects rather than
+        /// unprojects, so it reads this one.
+        let mapping: CGAffineTransform
         let inverseMapping: CGAffineTransform
         let sampleDepth: Float
         let step: Float
         let perspective: Bool
+    }
+
+    /// What a frame key admitted, so a refused frame refuses every region
+    /// query it is asked while it remains mounted instead of re-deriving the
+    /// same refusal per pointer move.
+    private enum RegionRasterState {
+        case admitted(RealityViewportRegionRaster)
+        case refused(MeshSourcePresentationRenderError)
     }
 
     private struct NativeCameraRay {
@@ -827,10 +853,15 @@ final class RealityViewport {
         guard eye.x.isFinite, eye.y.isFinite, eye.z.isFinite else {
             throw Self.failure("The native camera eye is not finite.")
         }
-        cameraCalibration = CameraCalibration(
-            eye: eye, inverseMapping: inverse,
+        let calibration = CameraCalibration(
+            eye: eye, mapping: mapping, inverseMapping: inverse,
             sampleDepth: sampleDepth, step: step, perspective: isPerspective
         )
+        if derivedCameraCalibration != calibration {
+            derivedCameraCalibration = calibration
+            calibrationGeneration &+= 1
+        }
+        cameraCalibration = calibration
     }
 
     func unbind(owner: ObjectIdentifier? = nil) {
@@ -845,6 +876,7 @@ final class RealityViewport {
         appliedViewportRevision = nil
         cameraCalibration = nil
         cameraCalibrationDepth = nil
+        discardRegionRaster()
         appearance = nil
         root.removeFromParent()
     }
@@ -855,7 +887,16 @@ final class RealityViewport {
         appliedViewportRevision = nil
         cameraCalibration = nil
         cameraCalibrationDepth = nil
+        discardRegionRaster()
         root.isEnabled = false
+    }
+
+    /// Releases the region raster and the frame it was admitted for. The key
+    /// goes with it, so the next query builds rather than compares against a
+    /// key whose raster is gone.
+    private func discardRegionRaster() {
+        regionRasterKey = nil
+        regionRasterState = nil
     }
 
     /// Keep the native camera active while withholding an incomplete spatial frame.
@@ -938,6 +979,233 @@ final class RealityViewport {
             projectWithDepth: { try self.projectedPointWithDepth($0, revision: revision) },
             drawnOccurrenceID: { try self.surfaceHit(at: $0, revision: revision)?.triangle.occurrenceID }
         )
+    }
+
+    // MARK: - Region queries
+
+    /// Every distinct triangle this mounted frame draws inside `rect`, emitted
+    /// in the retained plan's order.
+    ///
+    /// The answer is the frame's own drawing decision at every device pixel of
+    /// the rectangle rather than a sample of it, so a visible sliver one pixel
+    /// wide is in it and a fully occluded surface is not, whatever the
+    /// tessellation. Mapping a triangle to CAD topology, and composing those
+    /// into a selection scope, belongs to the module resolver; this owner
+    /// reports only what it drew.
+    ///
+    /// Emission rather than a returned array is the contract: a hard-maximum
+    /// frame can draw every triangle it holds, and a caller that stops early
+    /// should not have paid to materialise the rest.
+    func forEachRegionTriangle(
+        intersecting rect: CGRect,
+        revision: UInt64,
+        _ body: (MeshSourcePresentationTriangle) throws -> Void
+    ) throws {
+        guard let raster = try regionRaster(
+            describing: "region rectangle query", revision: revision
+        ) else { return }
+        try raster.forEachRegionTriangle(intersecting: rect, body)
+    }
+
+    /// The triangle this mounted frame draws at one point, with the linear
+    /// view-space depth it draws it at.
+    ///
+    /// A nil answer is the frame drawing nothing there, which is what the
+    /// occlusion rule reads as an unoccluded pixel. The depth is reported
+    /// because only the raster interpolates it, and the consumer compares it
+    /// against its own candidate's depth.
+    func regionFragment(
+        at point: CGPoint, revision: UInt64
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        guard let raster = try regionRaster(
+            describing: "region fragment query", revision: revision
+        ) else { return nil }
+        return try raster.regionFragment(at: point)
+    }
+
+    /// Walks the device pixels a projected segment covers inside `rect` and
+    /// reports the first drawn one at or after `step`.
+    ///
+    /// The walk's pitch is this frame's own pixel lattice, so an edge's
+    /// admission depends on neither the zoom nor the tessellation. A consumer
+    /// rejecting the reported pixel resumes at the next step rather than
+    /// restarting the walk.
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int,
+        revision: UInt64
+    ) throws -> RealityViewportRegionSegmentProbe {
+        guard let raster = try regionRaster(
+            describing: "region segment query", revision: revision
+        ) else {
+            return RealityViewportRegionSegmentProbe(stepCount: 0, drawn: nil)
+        }
+        return try raster.regionSegmentProbe(
+            from: start, to: end, within: rect, startingAt: step
+        )
+    }
+
+    /// This mounted frame's region visibility raster, built at most once per
+    /// frame key, or `nil` when the frame draws no geometry at all.
+    ///
+    /// Readiness and revision are validated exactly as `surfaceHit` validates
+    /// them, and the empty frame answers empty for the same reason it does
+    /// there. That empty state is deliberately not cached: reaching the key
+    /// requires both a non-empty entry list and an enabled geometry root, so
+    /// caching the absence would need them as key members in a sense they are
+    /// not.
+    private func regionRaster(
+        describing subject: String, revision: UInt64
+    ) throws -> RealityViewportRegionRaster? {
+        try validateMountedFrame(describing: subject)
+        try validateAppliedRevision(revision, describing: subject)
+        guard !entries.isEmpty, geometryRoot.isEnabled,
+              let plan = surfaceResources?.plan else { return nil }
+        guard let applied = appliedViewportRevision,
+              let layout = appliedLayout,
+              let displayScale = appliedDisplayScale,
+              let calibration = cameraCalibration else {
+            throw Self.notReadyFailure(
+                "The native \(subject) has no calibrated mounted camera yet."
+            )
+        }
+        let key = RealityViewportRegionFrameKey(
+            appliedViewportRevision: applied,
+            appliedLayout: layout,
+            appliedDisplayScale: displayScale,
+            calibrationGeneration: calibrationGeneration,
+            section: section,
+            cullsBackfaces: cullsBackfaces,
+            geometryRootEnabled: geometryRoot.isEnabled
+        )
+        if key == regionRasterKey, let state = regionRasterState {
+            switch state {
+            case .admitted(let raster):
+                return raster
+            case .refused(let error):
+                throw error
+            }
+        }
+        // Released before the replacement is built, so two rasters never sit
+        // in memory at once.
+        discardRegionRaster()
+        let frame = try regionFrame(
+            calibration: calibration, layout: layout,
+            displayScale: displayScale, revision: revision
+        )
+        do {
+            let raster = try RealityViewportRegionRaster(frame: frame, plan: plan)
+            regionRasterKey = key
+            regionRasterState = .admitted(raster)
+            return raster
+        } catch let error as MeshSourcePresentationRenderError
+            where error.code == .resourceExhausted {
+            // A refused frame refuses every region query it is asked while it
+            // stays mounted, rather than re-deriving the same refusal once per
+            // pointer move.
+            regionRasterKey = key
+            regionRasterState = .refused(error)
+            throw error
+        }
+    }
+
+    /// Reconstructs this mounted frame's projection, clipping and visibility
+    /// as a value the raster replays without RealityKit.
+    ///
+    /// Every term comes from the same camera entity and the same calibration
+    /// the point queries read, which is what makes the region answer and the
+    /// point answer agree rather than merely resemble each other.
+    private func regionFrame(
+        calibration: CameraCalibration,
+        layout: ViewportLayout,
+        displayScale: CGFloat,
+        revision: UInt64
+    ) throws -> RealityViewportRegionFrame {
+        let native = camera.transformMatrix(relativeTo: nil)
+        let cameraToScene = simd_double4x4(
+            SIMD4<Double>(native.columns.0), SIMD4<Double>(native.columns.1),
+            SIMD4<Double>(native.columns.2), SIMD4<Double>(native.columns.3)
+        )
+        for column in 0..<4 {
+            for row in 0..<4 where !cameraToScene[column][row].isFinite {
+                throw Self.queryFailure(
+                    "The mounted native camera transform is not finite."
+                )
+            }
+        }
+        let determinant = cameraToScene.determinant
+        guard determinant.isFinite, determinant != 0 else {
+            throw Self.queryFailure(
+                "The mounted native camera transform is not invertible."
+            )
+        }
+        let forward = SIMD3<Double>(
+            camera.convert(direction: SIMD3<Float>(0, 0, -1), to: nil)
+        )
+        let length = simd_length(forward)
+        guard length.isFinite, length > 0 else {
+            throw Self.queryFailure(
+                "The mounted native camera reports no forward direction."
+            )
+        }
+        let scale = Double(displayScale)
+        guard scale.isFinite, scale > 0 else {
+            throw Self.queryFailure(
+                "The mounted frame has no positive display scale."
+            )
+        }
+        guard let pixelWidth = Self.devicePixelCount(
+            points: Double(layout.viewportSize.width), scale: scale
+        ), let pixelHeight = Self.devicePixelCount(
+            points: Double(layout.viewportSize.height), scale: scale
+        ) else {
+            throw Self.queryFailure(
+                "The mounted frame covers no device pixel centre."
+            )
+        }
+        let interval = try cameraDepthInterval(revision: revision)
+        let mapping = calibration.mapping
+        return RealityViewportRegionFrame(
+            viewMatrix: cameraToScene.inverse,
+            renderOrigin: SIMD3<Double>(
+                renderOrigin.x, renderOrigin.y, renderOrigin.z
+            ),
+            eye: SIMD3<Double>(calibration.eye),
+            forward: forward / length,
+            step: Double(calibration.step),
+            sampleDepth: Double(calibration.sampleDepth),
+            usesPerspectiveProjection: calibration.perspective,
+            planeToPoints: (
+                a: Double(mapping.a), b: Double(mapping.b),
+                c: Double(mapping.c), d: Double(mapping.d),
+                tx: Double(mapping.tx), ty: Double(mapping.ty)
+            ),
+            displayScale: scale,
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight,
+            nearDepth: interval.lowerBound,
+            farDepth: interval.upperBound,
+            section: section,
+            cullsBackfaces: cullsBackfaces
+        )
+    }
+
+    /// The device pixels whose centres lie inside a span that many points
+    /// wide, or `nil` when it holds none.
+    ///
+    /// A pixel centre sits at `index + 0.5`, so the count is how many
+    /// half-integers the span covers. The upper bound keeps the raster's own
+    /// charge, which multiplies this by a stride, inside `Int`.
+    private nonisolated static func devicePixelCount(
+        points: Double, scale: Double
+    ) -> Int? {
+        let extent = points * scale
+        guard extent.isFinite, extent > 0 else { return nil }
+        let count = (extent - 0.5).rounded(.up)
+        guard count >= 1, count <= Double(Int.max >> 8) else { return nil }
+        return Int(count)
     }
 
     // FIXME(INCOMPLETE_IMPLEMENTATION): These hits are the production input
@@ -1502,11 +1770,19 @@ final class RealityViewport {
         hits.filter { retains($0, rayDirection: rayDirection) }
     }
 
+    /// Whether the applied appearance draws front faces only.
+    ///
+    /// The native hit's own retention below and the region raster's
+    /// per-triangle cull read this one declaration, so the two cannot come to
+    /// disagree about which side of a surface the frame shows.
+    private var cullsBackfaces: Bool {
+        appearance.map { $0.shading.isBackfaceCullingActive(in: $0.mode) } ?? false
+    }
+
     private func retains(_ hit: CollisionCastHit, rayDirection: SIMD3<Float>) -> Bool {
         guard root.isEnabled, geometryRoot.isEnabled,
               rayDirection.x.isFinite, rayDirection.y.isFinite, rayDirection.z.isFinite,
               rayDirection != .zero else { return false }
-        let cullsBackfaces = appearance.map { $0.shading.isBackfaceCullingActive(in: $0.mode) } ?? false
         guard let triangle = triangle(for: hit) else { return false }
         if let section {
             guard section.retains(SIMD3<Double>(hit.position)) else { return false }

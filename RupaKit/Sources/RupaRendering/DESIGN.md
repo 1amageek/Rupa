@@ -1004,10 +1004,10 @@ independent tessellator is never an alternative implementation.
    below.
    Vertex is a probe of one pixel. A vertex is inside the rectangle when its
    projected point is, with no tolerance, which is the containment the
-   replaced pixel scan required. It is admitted when the triangle the frame
-   draws at the device pixel containing that projected point lies no further
-   behind the vertex's own depth than the resolver's relative `depthSlack`,
-   and when the section retains the vertex itself. That is exactly the
+   replaced pixel scan required. It is admitted when the section retains the
+   vertex itself and the frame draws nothing nearer than the vertex's own
+   depth at the device pixel containing that projected point, within the
+   resolver's relative `depthSlack`. That is exactly the
    section-then-occlusion rule a pointer vertex is admitted by, read at one
    pixel instead of at the pointer.
    Edge is a probe along a segment, and not a harvest of the edge identifiers
@@ -1021,11 +1021,16 @@ independent tessellator is never an alternative implementation.
    over one scalar, and the section is the same affine half-space the raster
    evaluates per fragment. The surviving interval is projected, intersected
    with the rectangle, and walked one device pixel at a time along its major
-   axis. The edge is admitted at the first pixel whose drawn triangle lies no
-   further behind the edge's depth there than `depthSlack`, and the walk
-   stops at that pixel. Walking pixels rather than sampling at a fixed pitch
-   is what makes a short edge's admission independent of zoom, and walking
-   the frame's own lattice is what makes it independent of tessellation.
+   axis. The edge is admitted at the first pixel where the frame draws
+   nothing nearer than the edge's own depth there, within `depthSlack`, and
+   the walk stops at that pixel; a pixel that draws nothing admits it, by the
+   same rule that makes an empty pixel hide nothing above. The frame reports
+   only the first pixel of the walk that draws anything, and the walk resumes
+   past a pixel whose drawn triangle occludes the edge, so the frame projects
+   the segment once per resumption and never once per pixel. Walking pixels
+   rather than sampling at a fixed pitch is what makes a short edge's
+   admission independent of zoom, and walking the frame's own lattice is what
+   makes it independent of tessellation.
    The camera's depth interval keeps one reader for every scope.
    `RealityViewport.cameraDepthInterval(revision:)` reports it,
    `projectedPointWithDepth(_:revision:)` reports a world point's depth

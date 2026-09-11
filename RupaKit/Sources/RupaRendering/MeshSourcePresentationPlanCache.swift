@@ -98,6 +98,53 @@ final class MeshSourcePresentationPlanCache {
         try querySurface(for: identity).occurrenceIDs(intersecting: rect, revision: revision)
     }
 
+    /// Emits the triangles the frame mounted for `identity` draws inside
+    /// `rect`, never a frame drawn for a different scene or snapshot.
+    ///
+    /// The rectangle is answered from the frame's own per-pixel visibility
+    /// rather than from samples of it, so the answer holds every triangle the
+    /// frame shows there and nothing it hides.
+    func forEachRegionTriangle(
+        intersecting rect: CGRect,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64,
+        _ body: (MeshSourcePresentationTriangle) throws -> Void
+    ) throws {
+        try querySurface(for: identity).forEachRegionTriangle(
+            intersecting: rect, revision: revision, body
+        )
+    }
+
+    /// The triangle the frame mounted for `identity` draws at one point, and
+    /// the depth it draws it at. A nil result is the frame drawing nothing
+    /// there, which is what an occlusion test reads as an unoccluded pixel.
+    func regionFragment(
+        at point: CGPoint,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        try querySurface(for: identity).regionFragment(
+            at: point, revision: revision
+        )
+    }
+
+    /// Walks a projected segment across the mounted frame's own device pixels
+    /// and reports the first drawn one at or after `step`, so a consumer
+    /// rejecting a pixel resumes the walk rather than restarting it.
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> RealityViewportRegionSegmentProbe {
+        try querySurface(for: identity).regionSegmentProbe(
+            from: start, to: end, within: rect,
+            startingAt: step, revision: revision
+        )
+    }
+
     /// Resolves the native priority order the mounted frame drew.
     func interactionRecords(
         at point: CGPoint,

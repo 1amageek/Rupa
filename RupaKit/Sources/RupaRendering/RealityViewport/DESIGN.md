@@ -1034,7 +1034,7 @@ of screen-baked dashes.
     | applied camera revision | `appliedViewportRevision` |
     | applied layout | `appliedLayout` |
     | display scale | `appliedDisplayScale` |
-    | calibration generation | bumped whenever `cameraCalibration` is derived |
+    | calibration generation | bumped when a derived `cameraCalibration` differs |
     | section half-space | `section`, or its absence |
     | back-face culling | `shading.isBackfaceCullingActive(in: mode)` |
     | geometry root enabled | `geometryRoot.isEnabled` |
@@ -1071,7 +1071,12 @@ of screen-baked dashes.
     frame, which is admitted again on its own terms. Rasterization stays lazy
     per 256-by-256-pixel tile, so the admitted cost is paid only for the tiles
     a rectangle actually touches; that is a latency property of the admitted
-    frame and not a second budget.
+    frame and not a second budget. Outside the charge sit three fixed
+    quantities the formula would only obscure: one 256-by-256 depth tile, one
+    bit per projected triangle, and one entry offset per tile, each a fixed
+    fraction of a charged term; the vertex scratch the build itself needs is
+    bounded by `maxPositionCount` times its own stride and is released before
+    any query is answered.
 
     Wall cost is stated, not budgeted. This component owns no per-event time
     budget, and the operation-time judgement belongs to the replacement
@@ -1087,9 +1092,21 @@ of screen-baked dashes.
 
     Queries. This owner vends three region queries and learns no CAD topology
     from them: the distinct triangles the frame draws inside a rectangle, the
-    triangle the frame draws at one device pixel, and the first drawn triangle
-    along a projected segment. Mapping a triangle to a CAD face, edge, vertex
-    or occurrence, and composing those into a selection scope, belongs to the
+    triangle the frame draws at one device pixel, and the first drawn
+    triangle along a projected segment. The two point-shaped answers carry
+    the depth the frame draws that triangle at, because the occlusion rule
+    consuming them compares it against the candidate's own depth and only the
+    raster interpolates it. The segment answer also carries how many
+    device-pixel steps the clipped segment spans and which step its answer
+    sits at, and it accepts the step to resume from, so a consumer rejecting
+    one drawn pixel continues the same walk instead of restarting it; a step
+    count of zero means the walk has no step to take, because the segment
+    leaves no pixel inside the rectangle or the frame draws nothing anywhere,
+    which is not the answer a walk finding nothing drawn gives. The rectangle
+    answer is delivered one triangle at a time in the plan's own order rather
+    than as a materialised set, because a hard-maximum frame can draw every
+    triangle it holds. Mapping a triangle to a CAD face, edge, vertex or
+    occurrence, and composing those into a selection scope, belongs to the
     module rectangle contract in
     [RupaRendering](../DESIGN.md#contracts-and-invariants).
 
