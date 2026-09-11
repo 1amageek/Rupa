@@ -853,7 +853,7 @@ private func surfacePixel(_ pixels: [UInt8], x: Int, y: Int) -> (blue: UInt8, gr
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererConsumesCADOnlyThroughTheConcreteProtocolPath() throws {
+func meshSourcePresentationRenderPlanConsumesCADOnlyThroughItsOwnTraversal() throws {
     let cadReference = GeometrySourceReference.cad(
         sourceID: "cad.presentation",
         outputID: "cad.output"
@@ -865,8 +865,7 @@ func meshSourcePresentationRendererConsumesCADOnlyThroughTheConcreteProtocolPath
     )
     let initialTelemetry = scene.copyTelemetry
     let sourceChunkIdentities = sourceChunkIdentitySummary(source)
-    let renderer: any MeshSourcePresentationRendering = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
 
     #expect(plan.itemCount == 1)
     #expect(plan.triangleCount == 2)
@@ -874,7 +873,7 @@ func meshSourcePresentationRendererConsumesCADOnlyThroughTheConcreteProtocolPath
     var cadCount = 0
     var sawTranslatedOrigin = false
     var sawTranslatedOppositeCorner = false
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         emittedCount += 1
         if triangle.sourceReference == cadReference {
             cadCount += 1
@@ -902,7 +901,7 @@ func meshSourcePresentationRendererConsumesCADOnlyThroughTheConcreteProtocolPath
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererConsumesMeshOnlyThroughTheSameTraversal() throws {
+func meshSourcePresentationRenderPlanConsumesMeshOnlyThroughTheSameTraversal() throws {
     let sourceReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
     )
@@ -910,13 +909,12 @@ func meshSourcePresentationRendererConsumesMeshOnlyThroughTheSameTraversal() thr
         references: [sourceReference],
         transforms: [.identity]
     )
-    let renderer: any MeshSourcePresentationRendering = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
 
     var emittedCount = 0
     var meshCount = 0
     var vertexIDSum: UInt64 = 0
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         emittedCount += 1
         if triangle.sourceReference == sourceReference {
             meshCount += 1
@@ -932,7 +930,7 @@ func meshSourcePresentationRendererConsumesMeshOnlyThroughTheSameTraversal() thr
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererUsesGeometryEarClippingForConcaveFaces() throws {
+func meshSourcePresentationRenderPlanUsesGeometryEarClippingForConcaveFaces() throws {
     let source = try presentationConcaveSource()
     let sourceReference = GeometrySourceReference.authoredMesh(source.identity)
     let (scene, _) = try presentationScene(
@@ -945,13 +943,12 @@ func meshSourcePresentationRendererUsesGeometryEarClippingForConcaveFaces() thro
     let faceID = try #require(source.faceIDs.first)
     let expectedTriangles = try source.triangulate(faceID: faceID)
     let expectedKeys = Set(expectedTriangles.map(triangleKey))
-    let renderer = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
 
     var actualKeys: Set<String> = []
     var triangleArea = 0.0
     var emittedCount = 0
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         emittedCount += 1
         actualKeys.insert(triangleKey(triangle))
         triangleArea += projectedTriangleArea(
@@ -975,14 +972,14 @@ func meshSourcePresentationRendererUsesGeometryEarClippingForConcaveFaces() thro
     #expect(sourceChunkIdentitySummary(scene.items[0].mesh) == initialChunkIdentities)
 
     var secondPassCount = 0
-    try renderer.render(plan: plan) { _ in
+    plan.forEachTriangle { _ in
         secondPassCount += 1
     }
     #expect(secondPassCount == emittedCount)
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererConsumesMixedSelectionsAndReusesSnapshotPlan() throws {
+func meshSourcePresentationRenderPlanConsumesMixedSelectionsAndReusesSnapshotPlan() throws {
     let meshReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
     )
@@ -994,15 +991,14 @@ func meshSourcePresentationRendererConsumesMixedSelectionsAndReusesSnapshotPlan(
         references: [cadReference, meshReference],
         transforms: [.identity, try translationTransform(x: -2, y: 0, z: 0)]
     )
-    let renderer: any MeshSourcePresentationRendering = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     let initialSourceChunkIdentities = sourceChunkIdentitySummary(source)
 
     var firstPassCount = 0
     var firstPassCadCount = 0
     var firstPassMeshCount = 0
     var firstPassPositionSum = GeometryPoint3D(x: 0, y: 0, z: 0)
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         firstPassCount += 1
         firstPassPositionSum.x += triangle.firstPosition.x
         firstPassPositionSum.y += triangle.firstPosition.y
@@ -1018,7 +1014,7 @@ func meshSourcePresentationRendererConsumesMixedSelectionsAndReusesSnapshotPlan(
 
     var secondPassCount = 0
     var secondPassPositionSum = GeometryPoint3D(x: 0, y: 0, z: 0)
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         secondPassCount += 1
         secondPassPositionSum.x += triangle.firstPosition.x
         secondPassPositionSum.y += triangle.firstPosition.y
@@ -1037,7 +1033,7 @@ func meshSourcePresentationRendererConsumesMixedSelectionsAndReusesSnapshotPlan(
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererRejectsAuthorityAndBufferFailuresAsTypedErrors() throws {
+func meshSourcePresentationRenderPlanRejectsAuthorityAndBufferFailuresAsTypedErrors() throws {
     let sourceReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
     )
@@ -1098,7 +1094,7 @@ func meshSourcePresentationRendererRejectsAuthorityAndBufferFailuresAsTypedError
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererMapsGeometryTriangulationFailures() throws {
+func meshSourcePresentationRenderPlanMapsGeometryTriangulationFailures() throws {
     let nonPlanarSource = try presentationNonPlanarSource()
     let nonPlanarReference = GeometrySourceReference.authoredMesh(nonPlanarSource.identity)
     let nonPlanarScene = try presentationScene(
@@ -1131,7 +1127,7 @@ func meshSourcePresentationRendererMapsGeometryTriangulationFailures() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererMapsFaceRangeArithmeticOverflow() throws {
+func meshSourcePresentationRenderPlanMapsFaceRangeArithmeticOverflow() throws {
     let (scene, source) = try presentationScene(
         references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))],
         transforms: [.identity]
@@ -1169,7 +1165,7 @@ func meshSourcePresentationRendererMapsFaceRangeArithmeticOverflow() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationRendererReportsTransformFailureDuringConstruction() throws {
+func meshSourcePresentationRenderPlanReportsTransformFailureDuringConstruction() throws {
     let sourceReference = GeometrySourceReference.authoredMesh(
         GeometrySourceID(rawValue: "mesh.presentation")
     )
@@ -1205,7 +1201,7 @@ func meshSourcePresentationRendererReportsTransformFailureDuringConstruction() t
     // and no partially transformed plan is ever published.
     var error: MeshSourcePresentationRenderError?
     do {
-        _ = try MeshSourcePresentationRenderer().makePlan(for: invalidTransformScene)
+        _ = try MeshSourcePresentationRenderPlan(scene: invalidTransformScene)
     } catch let caught as MeshSourcePresentationRenderError {
         error = caught
     }
@@ -1239,8 +1235,7 @@ func meshSourcePresentationRenderPlanUsesBoundedSourceOrderForHighSegmentCylinde
     ).scene
     let initialChunkIdentities = sourceChunkIdentitySummary(source)
     let start = Date()
-    let renderer = MeshSourcePresentationRenderer()
-    let plan = try renderer.makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     let elapsed = Date().timeIntervalSince(start)
 
     #expect(elapsed < 2.0)
@@ -1258,7 +1253,7 @@ func meshSourcePresentationRenderPlanUsesBoundedSourceOrderForHighSegmentCylinde
     #expect(scene.items[0].copyTelemetry == GeometryCopyTelemetry())
 
     var emittedCount = 0
-    try renderer.render(plan: plan) { triangle in
+    plan.forEachTriangle { triangle in
         emittedCount += 1
         #expect(triangle.sourceReference == sourceReference)
     }
@@ -1634,7 +1629,7 @@ func meshSourcePresentationRenderPlanTransformsEachSourceVertexExactlyOnce() thr
         references: [firstReference, secondReference],
         transforms: [.identity, translation]
     )
-    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
 
     // One transformed position per source vertex per occurrence, not one per
     // triangle corner: a shared corner is transformed once and then indexed.

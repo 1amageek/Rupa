@@ -108,19 +108,13 @@ func meshSourcePresentationCADAffordanceRejectsModelingAndPresentationCADFeature
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationBridgeSnapshotsTraverseRenderPickAndCADGateWithoutCopies() throws {
+func meshSourcePresentationBridgeSnapshotsTraverseRenderAndCADGateWithoutCopies() throws {
     let fixtures = [try bridgeCADFixture(), try bridgeMixedMeshFixture()]
-    let renderer: any MeshSourcePresentationRendering = MeshSourcePresentationRenderer()
-    let picker: any MeshSourcePresentationPicking = MeshSourcePresentationPicker()
     let resolver = MeshSourcePresentationCADAffordanceResolver()
 
     for fixture in fixtures {
         let item = try #require(fixture.scene.items.first)
-        let plan = try renderer.makePlan(for: fixture.scene)
-        let index = try picker.makeIndex(
-            for: fixture.scene,
-            navigation: fixture.navigation
-        )
+        let plan = try MeshSourcePresentationRenderPlan(scene: fixture.scene)
         let initialSceneTelemetry = fixture.scene.copyTelemetry
         let initialItemTelemetry = item.copyTelemetry
         let initialChunkIdentities = sourceChunkIdentitySummary(item.mesh)
@@ -129,18 +123,9 @@ func meshSourcePresentationBridgeSnapshotsTraverseRenderPickAndCADGateWithoutCop
         )
         var renderedTriangleCount = 0
 
-        try renderer.render(plan: plan) { triangle in
+        plan.forEachTriangle { triangle in
             #expect(triangle.occurrenceID == item.occurrenceID)
             #expect(triangle.sourceReference == item.reference)
-            let identity = try index.identity(for: triangle.occurrenceID)
-            let record = try picker.resolve(
-                identity: identity,
-                in: index,
-                expectedSnapshotID: fixture.scene.snapshotID
-            )
-            #expect(record.snapshotID == fixture.scene.snapshotID)
-            #expect(record.occurrenceID == triangle.occurrenceID)
-            #expect(record.sceneNodeID == sceneNodeID)
 
             let availability = resolver.resolve(
                 item: item,
@@ -151,11 +136,11 @@ func meshSourcePresentationBridgeSnapshotsTraverseRenderPickAndCADGateWithoutCop
             )
             if case .cad = item.reference {
                 guard case let .available(context) = availability else {
-                    Issue.record("The bridge CAD presentation must retain its exact affordance context through pick traversal.")
+                    Issue.record("The bridge CAD presentation must retain its exact affordance context through plan traversal.")
                     return
                 }
-                #expect(context.occurrenceID == record.occurrenceID)
-                #expect(context.sceneNodeID == record.sceneNodeID)
+                #expect(context.occurrenceID == triangle.occurrenceID)
+                #expect(context.sceneNodeID == sceneNodeID)
                 #expect(context.representationID == item.representationID)
                 #expect(context.sourceReference == triangle.sourceReference)
             } else {

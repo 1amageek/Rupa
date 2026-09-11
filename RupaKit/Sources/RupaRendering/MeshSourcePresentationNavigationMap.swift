@@ -44,8 +44,4 @@ public struct MeshSourcePresentationNavigationMap: Sendable {
     ) -> SceneNodeID? {
         sceneNodeIDsByOccurrence[occurrenceID]
     }
-
-    internal var occurrenceIDs: Dictionary<SceneOccurrenceID, SceneNodeID>.Keys {
-        sceneNodeIDsByOccurrence.keys
-    }
 }

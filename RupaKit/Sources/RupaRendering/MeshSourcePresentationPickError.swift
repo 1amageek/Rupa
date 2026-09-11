@@ -3,13 +3,7 @@ import Foundation
 public struct MeshSourcePresentationPickError: Error, Equatable, LocalizedError, Sendable {
     public enum Code: String, Equatable, Sendable {
         case invalidIdentity
-        case identityOverflow
-        case duplicateOccurrence
         case duplicateNavigationMapping
-        case missingNavigation
-        case staleNavigation
-        case unknownIdentity
-        case staleSnapshot
     }
 
     public let code: Code

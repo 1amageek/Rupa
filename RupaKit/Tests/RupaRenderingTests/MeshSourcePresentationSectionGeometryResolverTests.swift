@@ -59,60 +59,6 @@ func meshSourcePresentationSectionIgnoresDivergentCADBodyClassification() {
     #expect(hiddenCADResolver.polygon(for: visiblePresentationTriangle) != nil)
 }
 
-@MainActor
-@Test(.timeLimit(.minutes(1)))
-func meshSourcePresentationSectionGeometryCacheReusesPlaneResolutionUntilIdentityChanges() {
-    let sectionPlan = SectionAnalysisClippingPlan(retainedSide: .front, bodies: [])
-    let cache = MeshSourcePresentationSectionGeometryCache()
-    let sceneSnapshotKey = ViewportSceneSnapshotKey(
-        source: .document(id: DocumentID(), generation: DocumentGeneration(1)),
-        currentEvaluationGeneration: nil,
-        evaluationCacheGeneration: nil,
-        workspaceRenderState: ViewportWorkspaceRenderState(
-            revision: WorkspaceRevision(),
-            ruler: .standard(for: .millimeter)
-        ),
-        renderInvalidation: RenderInvalidation(),
-        sectionClippingPlan: sectionPlan,
-        objectDefinitions: []
-    )
-    let projectID = ProjectID(rawValue: "project.cached-section")
-    let firstKey = MeshSourcePresentationSectionGeometryCache.Key(
-        presentationSnapshotID: EvaluationSnapshotID(
-            projectID: projectID,
-            purpose: .presentation,
-            sourceRevision: DocumentTransactionRevision(1)
-        ),
-        sceneSnapshotKey: sceneSnapshotKey,
-        plane: sectionPlane(originX: 0.5),
-        toleranceMeters: 0.0
-    )
-    let build = {
-        MeshSourcePresentationSectionGeometryResolver(
-            sectionPlan: sectionPlan,
-            plane: sectionPlane(originX: 0.5),
-            toleranceMeters: 0.0
-        )
-    }
-
-    _ = cache.resolver(for: firstKey, build: build)
-    _ = cache.resolver(for: firstKey, build: build)
-    #expect(cache.buildCount == 1)
-
-    let secondKey = MeshSourcePresentationSectionGeometryCache.Key(
-        presentationSnapshotID: EvaluationSnapshotID(
-            projectID: projectID,
-            purpose: .presentation,
-            sourceRevision: DocumentTransactionRevision(2)
-        ),
-        sceneSnapshotKey: sceneSnapshotKey,
-        plane: sectionPlane(originX: 0.5),
-        toleranceMeters: 0.0
-    )
-    _ = cache.resolver(for: secondKey, build: build)
-    #expect(cache.buildCount == 2)
-}
-
 private func sectionPlane(originX: Double) -> SectionAnalysisResult.Plane {
     SectionAnalysisResult.Plane(
         sourceKind: .sketchPlane,

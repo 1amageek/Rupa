@@ -18,7 +18,7 @@ func measurementSurfaceHitRoundTripsWorldPointsInBothLenses() throws {
         projectID: projectID,
         items: [try screenHitItem(occurrenceID: "measurement.surface", source: source, transform: .identity)]
     )
-    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
         let layout = ViewportLayout(
             modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
@@ -66,7 +66,7 @@ func meshSourcePresentationScreenHitTesterSelectsNearestOverlappingOccurrenceWit
     )
     let initialTelemetry = scene.copyTelemetry
     let initialChunkIdentities = screenHitChunkIdentities(source)
-    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     let layout = ViewportLayout(
         modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
         size: CGSize(width: 400, height: 400),
@@ -112,7 +112,7 @@ func meshSourcePresentationScreenHitTesterMatchesHiddenAndClippedSectionGeometry
         basis: .isometric,
         verticalBounds: -1 ... 1
     )
-    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     let initialChunkIdentities = screenHitChunkIdentities(source)
     let hiddenResolver = screenHitSectionResolver(
         plane: SectionAnalysisResult.Plane(
@@ -188,7 +188,7 @@ func meshElementPickingKeepsSourceProvenanceAndRejectsTriangulationDiagonal() th
         projectID: projectID,
         items: [try screenHitItem(occurrenceID: "quad", source: source, transform: .identity)]
     )
-    let plan = try MeshSourcePresentationRenderer().makePlan(for: scene)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene)
     let layout = ViewportLayout(modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1), size: CGSize(width: 500, height: 500), basis: .isometric, verticalBounds: -1...1)
     let tester = MeshSourcePresentationScreenHitTester()
     let center = layout.project(Point3D(x: 0.5, y: 0, z: 0.5))

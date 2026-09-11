@@ -982,8 +982,7 @@ Viewport framing must use the ruler visible span for empty documents and a ruler
 | `ViewportCoordinateAxis+Style.swift` | Shared X/Y/Z labels and colors used by Canvas axes, Axis Gizmo, and transform affordances. |
 | `ViewportProjectedGrid.swift` | Unit-aware projected coordinate-grid and in-plane ruler line calculation. |
 | `UniversalViewportScene.swift` / `UniversalViewportSceneBuilder.swift` | Provider-neutral primary presentation scene built from purpose-selected evaluated occurrences, representation provenance, navigation, and optional exact CAD interaction context. (Owned by `RupaViewportScene`.) |
-| `MeshSourcePresentationRenderer.swift` | Draw-plan construction from immutable presentation MeshSource buffers without making CAD source the viewport authority. |
-| `MeshSourcePresentationPicker.swift` | Exact occurrence and representation picking over the same presentation geometry. |
+| `MeshSourcePresentationRenderPlan.swift` | Draw-plan construction from immutable presentation MeshSource buffers without making CAD source the viewport authority. |
 | `ViewportIdentityBufferRenderer.swift` / `ViewportIdentityHitResolver.swift` | Current offscreen identity-buffer rendering and hit resolution. |
 | `ViewportScene.swift` / `ViewportSceneBuilder.swift` | CAD-derived source affordance context used only when the project view proves an exact CAD interaction match. (Owned by `RupaViewportScene`.) |
 
