@@ -148,7 +148,7 @@ final class RealityViewportSpatialResources {
 
     func projectedHandleDistance(
         for entity: Entity, at point: CGPoint,
-        section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)? = nil,
+        section: RealityViewportSectionHalfSpace? = nil,
         project: (SIMD3<Float>) -> CGPoint?
     ) throws -> (distance: CGFloat, position: SIMD3<Float>?)? {
         if let record = fillCollisions[ObjectIdentifier(entity)] {
@@ -186,11 +186,14 @@ final class RealityViewportSpatialResources {
     }
 
     static func clippedLine(first: SIMD3<Float>, last: SIMD3<Float>,
-                            section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)?) throws
+                            section: RealityViewportSectionHalfSpace?) throws
         -> (first: SIMD3<Float>, last: SIMD3<Float>, lower: Float, upper: Float)? {
         guard let section else { return (first, last, 0, 1) }
-        let a = simd_dot(SIMD3<Double>(first), section.normal) - section.offset + section.tolerance
-        let b = simd_dot(SIMD3<Double>(last), section.normal) - section.offset + section.tolerance
+        // The half-space owns the distance and the tolerance. Shifting the
+        // distance by the tolerance puts the cut at zero, which is where this
+        // clip interpolates its crossing.
+        let a = section.signedDistance(to: SIMD3<Double>(first)) + section.tolerance
+        let b = section.signedDistance(to: SIMD3<Double>(last)) + section.tolerance
         guard a.isFinite, b.isFinite else {
             throw RealityViewportSpatialBatch.invalid("The native line section distance is not finite.")
         }

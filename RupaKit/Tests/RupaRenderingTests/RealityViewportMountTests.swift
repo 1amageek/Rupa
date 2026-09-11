@@ -173,7 +173,9 @@ struct RealityViewportMountTests {
         #expect(RealityViewportSpatialResources.lineHit(at: CGPoint(x: 10, y: 9),
             first: first, last: last, projectedFirst: .zero, projectedLast: CGPoint(x: 20, y: 0),
             tolerance: 8, firstDepth: 1, lastDepth: 3, perspective: true) == nil)
-        let section = (normal: SIMD3<Double>(1, 0, 0), offset: 1.2, tolerance: 0.0)
+        let section = RealityViewportSectionHalfSpace(
+            normal: SIMD3<Double>(1, 0, 0), offset: 1.2, tolerance: 0
+        )
         let retained = try #require(try RealityViewportSpatialResources.clippedLine(first: first, last: last, section: section))
         #expect(abs(retained.first.x - 1.2) < 0.00001)
         let nearDepth = 1 + 2 * retained.lower
@@ -187,10 +189,14 @@ struct RealityViewportMountTests {
         #expect(edgeHit.distance < 2)
         #expect(edgeHit.position == retained.first)
         #expect(try RealityViewportSpatialResources.clippedLine(first: first, last: last,
-            section: (normal: [1, 0, 0], offset: 3, tolerance: 0)) == nil)
+            section: RealityViewportSectionHalfSpace(
+                normal: [1, 0, 0], offset: 3, tolerance: 0
+            )) == nil)
         #expect(throws: MeshSourcePresentationRenderError.self) {
             try RealityViewportSpatialResources.clippedLine(first: first, last: last,
-                section: (normal: [Double.nan, 0, 0], offset: 0, tolerance: 0))
+                section: RealityViewportSectionHalfSpace(
+                    normal: [Double.nan, 0, 0], offset: 0, tolerance: 0
+                ))
         }
     }
 

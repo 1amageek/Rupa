@@ -1,8 +1,9 @@
 import CoreGraphics
 import RupaCore
 
-/// Clips candidate geometry against the mounted camera's depth interval, in
-/// world space.
+/// Clips candidate geometry in world space against the half-spaces of a scalar
+/// that varies affinely along it: the mounted camera's depth interval, and the
+/// signed distance of the frame's active section.
 ///
 /// A selection rectangle that dropped every triangle or edge with one vertex
 /// outside the camera's near and far planes would lose geometry the camera
@@ -28,6 +29,14 @@ import RupaCore
 /// every finite depth, so it contributes no constraint and has no crossing to
 /// interpolate; this owner skips it rather than refusing the interval, because
 /// refusing it would drop every candidate under the perspective camera.
+///
+/// A segment is clipped against every such half-space in its own parameter,
+/// through `AffineScalarBound` and `ParameterInterval`, which name a bound by
+/// the scalar's values at the segment's endpoints rather than by the plane that
+/// produced them. This owner therefore never learns whether it is narrowing
+/// against a camera or against a cut. A polygon is clipped against depth only,
+/// because the near plane is the one plane a projected triangle cannot be
+/// carried across.
 enum ViewportCameraDepthClip {
     /// Whether this owner can clip against `interval`.
     ///
@@ -37,6 +46,96 @@ enum ViewportCameraDepthClip {
     static func canClip(against interval: ClosedRange<Double>) -> Bool {
         guard interval.lowerBound.isFinite else { return false }
         return interval.upperBound.isFinite || interval.upperBound == .infinity
+    }
+
+    /// One half-space over a scalar that varies affinely along a segment.
+    ///
+    /// Depth is such a scalar under both cameras the viewport mounts, and so
+    /// is the signed distance of a section. Naming the bound by the scalar's
+    /// values instead of by the plane is what lets one narrowing rule serve
+    /// both: the caller evaluates its own scalar at the two endpoints and says
+    /// which side it keeps.
+    struct AffineScalarBound {
+        /// The scalar at parameter 0.
+        let start: Double
+        /// The scalar at parameter 1.
+        let end: Double
+        /// The value the half-space is bounded at.
+        let bound: Double
+        /// Whether the retained side is at or above `bound` rather than at or
+        /// below it. Both are inclusive, matching the inclusive near and far
+        /// admission a native hit already passes and the `>= -tolerance` a
+        /// section keeps.
+        let retainsValuesAtLeastBound: Bool
+
+        init(start: Double, end: Double, bound: Double, retainsValuesAtLeastBound: Bool) {
+            self.start = start
+            self.end = end
+            self.bound = bound
+            self.retainsValuesAtLeastBound = retainsValuesAtLeastBound
+        }
+    }
+
+    /// The part of a segment's `0...1` parameter that survives every bound
+    /// narrowed against it.
+    ///
+    /// Narrowing in place is what keeps a probe allocation-free: a segment is
+    /// clipped against near, far and the cut without building an array of
+    /// bounds or a polygon per bound, which matters because the rectangle
+    /// narrows one of these per candidate edge.
+    struct ParameterInterval {
+        /// The whole segment, before any bound has been narrowed against it.
+        static let whole = ParameterInterval(lower: 0, upper: 1)
+
+        private(set) var lower: Double
+        private(set) var upper: Double
+
+        /// Whether no parameter survives. An empty interval is a complete
+        /// answer -- the segment lies outside the half-space -- and is not the
+        /// refusal `narrow(by:)` reports.
+        var isEmpty: Bool { lower > upper }
+
+        private init(lower: Double, upper: Double) {
+            self.lower = lower
+            self.upper = upper
+        }
+
+        /// Narrows by one bound, reporting whether the bound was
+        /// representable.
+        ///
+        /// A non-finite endpoint, bound, or difference names no crossing, so
+        /// this answers `false` and leaves the interval untouched rather than
+        /// emptying it: the caller has to refuse such a segment instead of
+        /// reporting that the half-space excluded it.
+        mutating func narrow(by bound: AffineScalarBound) -> Bool {
+            guard bound.start.isFinite, bound.end.isFinite, bound.bound.isFinite else {
+                return false
+            }
+            let delta = bound.end - bound.start
+            guard delta.isFinite else { return false }
+            // scalar(parameter) = start + parameter * delta, so the half-space
+            // is one linear constraint whose direction follows the sign of
+            // `delta`. A constant scalar crosses nothing and either retains the
+            // whole segment or none of it.
+            guard delta != 0 else {
+                let retained = bound.retainsValuesAtLeastBound
+                    ? bound.start >= bound.bound
+                    : bound.start <= bound.bound
+                if retained == false {
+                    lower = 1
+                    upper = 0
+                }
+                return true
+            }
+            let crossing = (bound.bound - bound.start) / delta
+            guard crossing.isFinite else { return false }
+            if (delta > 0) == bound.retainsValuesAtLeastBound {
+                lower = max(lower, crossing)
+            } else {
+                upper = min(upper, crossing)
+            }
+            return true
+        }
     }
 
     /// One vertex of a candidate as it enters and leaves depth clipping.
@@ -78,40 +177,36 @@ enum ViewportCameraDepthClip {
     ///
     /// Depth is affine along the segment, so the interval is exact and the
     /// caller recovers its endpoints by interpolating the world positions.
+    ///
+    /// This is the depth specialisation of `ParameterInterval`: it supplies the
+    /// near and far bounds out of the frame's interval and collapses both an
+    /// unrepresentable bound and an emptied interval into nil, which is the
+    /// answer this signature has always given. `canClip(against:)` stays here
+    /// rather than moving inward, because naming a camera is a property of a
+    /// depth interval and not of an affine scalar.
     static func clippedParameterInterval(
         startDepth: Double,
         endDepth: Double,
         to interval: ClosedRange<Double>
     ) -> (lower: Double, upper: Double)? {
-        guard startDepth.isFinite, endDepth.isFinite, canClip(against: interval) else {
-            return nil
-        }
-        var constraints: [(bound: Double, retainsAbove: Bool)] = [(interval.lowerBound, true)]
+        guard canClip(against: interval) else { return nil }
+        var parameters = ParameterInterval.whole
+        guard parameters.narrow(by: AffineScalarBound(
+            start: startDepth,
+            end: endDepth,
+            bound: interval.lowerBound,
+            retainsValuesAtLeastBound: true
+        )) else { return nil }
         if interval.upperBound.isFinite {
-            constraints.append((interval.upperBound, false))
+            guard parameters.narrow(by: AffineScalarBound(
+                start: startDepth,
+                end: endDepth,
+                bound: interval.upperBound,
+                retainsValuesAtLeastBound: false
+            )) else { return nil }
         }
-        var lower = 0.0
-        var upper = 1.0
-        let delta = endDepth - startDepth
-        guard delta.isFinite else { return nil }
-        // depth(parameter) = startDepth + parameter * delta, so each plane is
-        // one linear constraint whose direction follows the sign of `delta`.
-        for (bound, retainsAbove) in constraints {
-            guard delta != 0 else {
-                let retained = retainsAbove ? startDepth >= bound : startDepth <= bound
-                if retained == false { return nil }
-                continue
-            }
-            let crossing = (bound - startDepth) / delta
-            guard crossing.isFinite else { return nil }
-            if (delta > 0) == retainsAbove {
-                lower = max(lower, crossing)
-            } else {
-                upper = min(upper, crossing)
-            }
-        }
-        guard lower <= upper else { return nil }
-        return (lower, upper)
+        guard parameters.isEmpty == false else { return nil }
+        return (parameters.lower, parameters.upper)
     }
 
     /// The point at `parameter` along the world segment from `start` to `end`,

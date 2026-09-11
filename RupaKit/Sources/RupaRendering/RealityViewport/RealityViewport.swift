@@ -39,7 +39,7 @@ final class RealityViewport {
     private var cameraCalibration: CameraCalibration?
     private var cameraCalibrationDepth: Double?
     private var appearance: Appearance?
-    private var section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)?
+    private var section: RealityViewportSectionHalfSpace?
     private var requestedSection: (plane: SectionAnalysisResult.Plane, side: SectionAnalysisRetainedSide, tolerance: Double)?
 
     private struct Appearance: Equatable {
@@ -705,7 +705,7 @@ final class RealityViewport {
         }
         if maximum.z < cut {
             geometryRoot.isEnabled = false
-            section = (z, offset, tolerance)
+            section = RealityViewportSectionHalfSpace(normal: z, offset: offset, tolerance: tolerance)
             return
         }
         // Only the cut-side bound represents a CAD boundary. Keep the other
@@ -736,7 +736,7 @@ final class RealityViewport {
         clipping.shouldClipChildren = true
         clipping.shouldClipSelf = false
         clipper.components.set(clipping)
-        section = (z, offset, tolerance)
+        section = RealityViewportSectionHalfSpace(normal: z, offset: offset, tolerance: tolerance)
     }
 
     func bind(_ content: RealityViewCameraContent, owner: ObjectIdentifier? = nil) {
@@ -994,7 +994,7 @@ final class RealityViewport {
             // Conservative descriptor queries clip their source geometry before
             // finding its nearest point; exact colliders use the native hit.
             if distance.position == nil, metadata.attachment == .sectionedGeometry, let section,
-               !Self.retains(SIMD3<Double>(position), section: section) {
+               !section.retains(SIMD3<Double>(position)) {
                 continue
             }
             if metadata.depth == .scene, let occluder, depth > occluder { continue }
@@ -1157,26 +1157,62 @@ final class RealityViewport {
         // behind the cut and a scene with no section both answer without the
         // predicate, so validating later would let an unrepresentable point
         // receive a plain `false` or `true` instead of the failure it owns.
+        let local = try nativeScenePosition(of: point)
+        guard geometryRoot.isEnabled else { return false }
+        guard let section else { return true }
+        return section.retains(local)
+    }
+
+    /// Reports the active section's signed distance at the two ends of a world
+    /// segment as one affine bound, or nil when the frame has no section.
+    ///
+    /// A probe that walks a segment would otherwise ask the point query once
+    /// per sample for a predicate that is affine along the whole segment. The
+    /// bound lets it narrow the segment's own parameter against the cut once,
+    /// before it walks anything, and `ViewportCameraDepthClip` narrows the same
+    /// parameter against the camera's depth interval.
+    ///
+    /// The evaluated scalar is vended, never the plane: a caller holding the
+    /// normal and offset could re-derive a cut this frame did not apply, and
+    /// the `renderOrigin` subtraction belongs to the frame that owns its
+    /// precision. The bound states the applied section whether or not the
+    /// geometry root is enabled, because a scene lying entirely behind its cut
+    /// disables the root and still has a section; that frame-level answer is
+    /// what `retainsSectionedPoint(_:revision:)` reports, and it is not a term
+    /// in one segment's parameter.
+    ///
+    /// The production reader is the region edge probe. Until that path exists
+    /// its own test is the only reader.
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D,
+        revision: UInt64
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        try validateCameraQuery(point: .zero, revision: revision)
+        // Both endpoints are validated before the scene state is read, for the
+        // same reason the point query validates before it: a frame with no
+        // section must not answer an unrepresentable segment with a plain nil.
+        let first = try nativeScenePosition(of: start)
+        let last = try nativeScenePosition(of: end)
+        guard let section else { return nil }
+        return ViewportCameraDepthClip.AffineScalarBound(
+            start: section.signedDistance(to: first),
+            end: section.signedDistance(to: last),
+            bound: -section.tolerance,
+            retainsValuesAtLeastBound: true
+        )
+    }
+
+    /// The `renderOrigin`-relative position of a CAD world point, or a typed
+    /// failure when native scene space cannot state it.
+    private func nativeScenePosition(of point: Point3D) throws -> SIMD3<Double> {
         let local = SIMD3<Double>(
             point.x - renderOrigin.x, point.y - renderOrigin.y, point.z - renderOrigin.z
         )
         guard local.x.isFinite, local.y.isFinite, local.z.isFinite else {
             throw Self.queryFailure("The world point cannot be represented in native scene space.")
         }
-        guard geometryRoot.isEnabled else { return false }
-        guard let section else { return true }
-        return Self.retains(local, section: section)
-    }
-
-    /// The single section admission predicate. `position` is in native scene
-    /// space, which is `renderOrigin`-relative, so every caller converts before
-    /// asking. Sharing one implementation keeps the drawn frame and the queries
-    /// that report about it from drifting apart.
-    private static func retains(
-        _ position: SIMD3<Double>,
-        section: (normal: SIMD3<Double>, offset: Double, tolerance: Double)
-    ) -> Bool {
-        simd_dot(position, section.normal) - section.offset >= -section.tolerance
+        return local
     }
 
     /// Intersects a screen point with a world plane using the exact mounted
@@ -1473,7 +1509,7 @@ final class RealityViewport {
         let cullsBackfaces = appearance.map { $0.shading.isBackfaceCullingActive(in: $0.mode) } ?? false
         guard let triangle = triangle(for: hit) else { return false }
         if let section {
-            guard Self.retains(SIMD3<Double>(hit.position), section: section) else { return false }
+            guard section.retains(SIMD3<Double>(hit.position)) else { return false }
         }
         if cullsBackfaces {
             let a = triangle.firstPosition

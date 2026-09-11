@@ -794,16 +794,39 @@ of screen-baked dashes.
 
    `retainsSectionedPoint(_:revision:)` reports whether the mounted frame keeps
    a world point on the kept side of the active section, applying the same
-   native-scene-space predicate that admits native surface hits: the
-   `renderOrigin`-relative distance along the section normal against its offset
-   and tolerance. Section clipping is observable through neither the depth
-   interval nor an empty pixel, because a removed point draws nothing exactly as
-   a silhouette point just outside the tessellated outline does. This query is
-   the authority that separates the two, so no caller re-derives the cut from a
-   section plane it did not apply. A frame whose geometry root is disabled
-   retains no point, a frame with no active section retains every representable
-   point, and a world point that cannot be represented in native scene space is
-   a typed presentation failure.
+   native-scene-space predicate that admits native surface hits.
+   `RealityViewportSectionHalfSpace` is that predicate's one owner. It holds
+   the kept side's unit normal, its offset from the native scene origin, and
+   its tolerance, and it states both the scalar `s(P) = dot(P, n) - offset`
+   over `renderOrigin`-relative positions and the rule that the frame keeps `P`
+   when `s(P) >= -tolerance`. Every reader of the cut evaluates that one scalar
+   and that one comparison -- this query, the native collision admission, the
+   prepared line clip, and the region raster and probes below -- so none of
+   them restates where the tolerance belongs. Section clipping is observable
+   through neither the depth interval nor an empty pixel, because a removed
+   point draws nothing exactly as a silhouette point just outside the
+   tessellated outline does. This query is the authority that separates the
+   two, so no caller re-derives the cut from a section plane it did not apply.
+   A frame whose geometry root is disabled retains no point, a frame with no
+   active section retains every representable point, and a world point that
+   cannot be represented in native scene space is a typed presentation failure.
+
+   `sectionParameterBound(from:to:revision:)` reports that scalar at a world
+   segment's two endpoints as one `ViewportCameraDepthClip.AffineScalarBound`,
+   or nil when the frame has no active section, so a probe narrows the
+   segment's own parameter against the cut once instead of evaluating the
+   predicate at every sample it would otherwise walk. It vends the evaluated
+   scalar and never the plane: a caller holding the normal and offset could
+   re-derive a cut the frame did not apply, and the `renderOrigin` subtraction
+   belongs to the frame that owns the precision of it. The bound states the
+   applied section whether or not the geometry root is enabled. A scene lying
+   entirely behind its cut disables the root and still has a section, so the
+   root is a frame-level answer, reported by
+   `retainsSectionedPoint(_:revision:)` and enforced by the region raster's
+   frame key and per-frame admission, rather than a term in one segment's
+   parameter; that state is the only one in which the two answers differ. The
+   production reader of this query is the region edge probe, and until that
+   path exists its own test is the only reader.
 
    Native collision uses `Scene.raycast` with that composed scene-space ray,
    `.all`, and the existing collision mask. Its required finite positive length
@@ -976,12 +999,13 @@ of screen-baked dashes.
 
     Visibility predicates. The raster applies exactly the predicates
     `retainedHits(_:rayDirection:)` applies to a native hit, and nothing else.
-    The section half-space is per fragment: `s(P) = dot(P - renderOrigin, n) -
-    offset` is affine in native scene space, so `s` interpolates by the same
-    rule as `d` does, and the fragment is retained when the interpolated `s`
-    is at least `-tolerance` at the pixel centre. This evaluates the same
-    predicate `retainsSectionedPoint(_:revision:)` states, at the exact point
-    sampled, so no polygon is clipped against the section plane. Back-face
+    The section half-space is per fragment: the `s` that
+    `RealityViewportSectionHalfSpace` states above is affine in native scene
+    space, so it interpolates by the same rule as `d` does, and the fragment
+    is retained when the interpolated `s` satisfies the kept-side comparison
+    that same type states. This evaluates the predicate
+    `retainsSectionedPoint(_:revision:)` reports, at the exact point sampled,
+    so no polygon is clipped against the section plane. Back-face
     classification is per triangle and exact, because `dot(n, Q - eye)` is
     equal for every `Q` in the triangle's plane: with `n = cross(ab, ac)` from
     the same three positions `retains` uses, a triangle is culled under the

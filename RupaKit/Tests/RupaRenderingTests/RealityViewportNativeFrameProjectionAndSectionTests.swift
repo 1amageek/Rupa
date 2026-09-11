@@ -9,9 +9,10 @@ import Testing
 
 /// Mounted-frame coverage for what only the real `RealityView` camera can
 /// prove: which projection the frame was drawn with, whether the frame retains
-/// a world point across the active section, and that the display scale the
-/// frame was mounted with reaches it and belongs to its frame key. A stub frame
-/// exercises a consumer's use of these answers, never their truthfulness.
+/// a world point across the active section, what the active section's scalar is
+/// at the ends of a world segment, and that the display scale the frame was
+/// mounted with reaches it and belongs to its frame key. A stub frame exercises
+/// a consumer's use of these answers, never their truthfulness.
 @Suite(.serialized)
 @MainActor
 struct RealityViewportNativeFrameProjectionAndSectionTests {
@@ -226,5 +227,119 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
                 layout: layout, displayScale: 3, revision: 1, renderOrigin: renderOrigin
             ) == false
         )
+    }
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func nativeFrameStatesTheSectionScalarAtASegmentsEnds(perspective: Bool) async throws {
+        let frame = try await mount(
+            perspective: perspective, displayScale: 2, suffix: "native-section-bound"
+        )
+        defer { unmount(frame) }
+        let viewport = frame.viewport
+
+        let removed = Point3D(x: 0.25, y: 0.5, z: 0.0)
+        let kept = Point3D(x: 0.75, y: 0.5, z: 0.0)
+
+        // A frame with no active section names no bound, and still owns the
+        // failure of a segment native scene space cannot state, which is why
+        // both endpoints are validated before the section is read.
+        #expect(try viewport.sectionParameterBound(from: removed, to: kept, revision: 1) == nil)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.sectionParameterBound(
+                from: Point3D(x: .nan, y: 0.5, z: 0.0), to: kept, revision: 1
+            )
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.sectionParameterBound(
+                from: removed, to: Point3D(x: 0.75, y: .infinity, z: 0.0), revision: 1
+            )
+        }
+
+        let section = SectionAnalysisResult.Plane(
+            sourceKind: .sketchPlane,
+            sourceID: nil,
+            sourceName: nil,
+            origin: .init(x: 0.5, y: 0, z: 0),
+            normal: .init(x: 1, y: 0, z: 0),
+            u: .init(x: 0, y: 1, z: 0),
+            v: .init(x: 0, y: 0, z: 1)
+        )
+        try viewport.applySection(plane: section, side: .front, tolerance: 0)
+
+        // The cut crosses the segment at its middle, and one narrowing of the
+        // segment's own parameter finds it without walking a sample.
+        let bound = try #require(
+            try viewport.sectionParameterBound(from: removed, to: kept, revision: 1)
+        )
+        var parameters = ViewportCameraDepthClip.ParameterInterval.whole
+        let narrowed = parameters.narrow(by: bound)
+        #expect(narrowed)
+        #expect(parameters.isEmpty == false)
+        #expect(parameters.lower == 0.5)
+        #expect(parameters.upper == 1)
+
+        // The crossing the bound reports is the one the point query agrees on:
+        // inside it the frame keeps the point, outside it the frame removes it.
+        let slack = 1.0e-6
+        let inside = try #require(
+            ViewportCameraDepthClip.interpolated(removed, kept, parameters.lower + slack)
+        )
+        let outside = try #require(
+            ViewportCameraDepthClip.interpolated(removed, kept, parameters.lower - slack)
+        )
+        let middle = try #require(
+            ViewportCameraDepthClip.interpolated(
+                removed, kept, (parameters.lower + parameters.upper) / 2
+            )
+        )
+        #expect(try viewport.retainsSectionedPoint(inside, revision: 1))
+        #expect(try viewport.retainsSectionedPoint(outside, revision: 1) == false)
+        #expect(try viewport.retainsSectionedPoint(middle, revision: 1))
+
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try viewport.sectionParameterBound(from: removed, to: kept, revision: 2)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aSceneEntirelyBehindItsCutStillStatesTheSectionScalar() async throws {
+        let frame = try await mount(
+            perspective: false, displayScale: 2, suffix: "native-section-behind"
+        )
+        defer { unmount(frame) }
+        let viewport = frame.viewport
+
+        // The drawn quad lies at z == 0, so a cut at z == 1 that keeps the far
+        // side puts the whole scene behind it. The frame disables its geometry
+        // root and still has a section, which is the one state in which the
+        // frame-level answer and the segment's scalar differ.
+        let section = SectionAnalysisResult.Plane(
+            sourceKind: .sketchPlane,
+            sourceID: nil,
+            sourceName: nil,
+            origin: .init(x: 0, y: 0, z: 1),
+            normal: .init(x: 0, y: 0, z: 1),
+            u: .init(x: 1, y: 0, z: 0),
+            v: .init(x: 0, y: 1, z: 0)
+        )
+        try viewport.applySection(plane: section, side: .front, tolerance: 0)
+
+        let behind = Point3D(x: 0.5, y: 0.5, z: 0.0)
+        let ahead = Point3D(x: 0.5, y: 0.5, z: 2.0)
+        #expect(try viewport.retainsSectionedPoint(behind, revision: 1) == false)
+        #expect(try viewport.retainsSectionedPoint(ahead, revision: 1) == false)
+
+        let bound = try #require(
+            try viewport.sectionParameterBound(from: behind, to: ahead, revision: 1)
+        )
+        #expect(bound.start == -1)
+        #expect(bound.end == 1)
+        #expect(bound.bound == 0)
+        #expect(bound.retainsValuesAtLeastBound)
+        var parameters = ViewportCameraDepthClip.ParameterInterval.whole
+        let narrowed = parameters.narrow(by: bound)
+        #expect(narrowed)
+        #expect(parameters.isEmpty == false)
+        #expect(parameters.lower == 0.5)
+        #expect(parameters.upper == 1)
     }
 }

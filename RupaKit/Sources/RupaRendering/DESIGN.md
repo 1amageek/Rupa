@@ -1039,6 +1039,29 @@ independent tessellator is never an alternative implementation.
    `canClip(against:)` rather than restating a finiteness rule, so no caller
    can decide that a perspective frame has no interval and answer an empty
    selection.
+   `ViewportCameraDepthClip` states that clip as a bound and an interval
+   rather than as a plane. `AffineScalarBound` carries a scalar's value at a
+   segment's two endpoints, the value the half-space is bounded at, and which
+   side of that value the caller keeps. `ParameterInterval` starts as the
+   whole segment and narrows in place by one bound at a time, so a probe clips
+   against near, far and the cut without allocating per bound, which is what
+   makes one interval per candidate edge affordable. Depth supplies its bounds
+   from the frame's interval; the section supplies one from
+   `RealityViewport.sectionParameterBound(from:to:revision:)`, which evaluates
+   the scalar the frame's section half-space owns. This owner never learns
+   which of the two it narrowed against. A bound it cannot represent is
+   reported apart from an interval a bound emptied, because a segment whose
+   scalar is not finite names no crossing and has to be refused rather than
+   reported as excluded.
+   Three invariants hold across that generalisation.
+   `clippedParameterInterval(startDepth:endDepth:to:)` keeps its signature and
+   its exact result for every input, so the depth clip is the clip it already
+   was; its test holds a frozen copy of the previous implementation as the
+   oracle it is compared against. The polygon clipper and its `Vertex` stay
+   depth-only and singular, because the only polygon clip the rectangle
+   performs is the perspective near clip the raster owns.
+   `interpolated(_:_:_:)` stays the single world interpolation, so a parameter
+   names the same point whichever scalar produced it.
    Answering a face from drawn triangles makes the recorded run list an input
    of this path alongside the raster. The scene builder writes the mesh face
    runs and the topology from one body display snapshot or writes neither, so
