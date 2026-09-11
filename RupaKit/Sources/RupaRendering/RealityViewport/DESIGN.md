@@ -812,9 +812,17 @@ of screen-baked dashes.
    space, and retained only when
    `-localZ` is within the active native component's near/far visibility
    interval before the existing section, back-face, and provenance filters run.
-   No CPU CAD projection, CPU triangle intersection, raw native-ray fallback,
-   or unbounded ray length is allowed. Results are valid only for the currently
-   displayed frame tuple and the prepared bounds/provenance of that tuple.
+   This prohibition scopes the point query: no CPU CAD projection, CPU
+   triangle intersection, raw native-ray fallback, or unbounded ray length may
+   answer where a ray hits. Results are valid only for the currently displayed
+   frame tuple and the prepared bounds/provenance of that tuple. The region
+   query in contract 10 is not an exception and not a second authority. It
+   answers an area, which `Scene.raycast` cannot be asked for at all, and it
+   answers it from the calibration this frame derived through
+   `RealityViewCameraContent.project(_:)`, the near/far interval native hits
+   are already admitted against, and the same section and back-face predicates
+   `retainedHits(_:rayDirection:)` applies, under a per-pixel equality with
+   this point query that a differential test proves.
 
    RK-4 first exposes the surface subset as one throwing internal query whose
    successful value is the nearest optional ordered result:
@@ -834,8 +842,10 @@ of screen-baked dashes.
    explicitly supplies that same revision. Projection with a stale/unapplied
    revision, disabled root, missing content, or nonfinite result is typed frame
    unavailability rather than an optional legacy fallback. This component does
-   not map indexes to CAD records. Rectangle selection remains a later RK-4
-   seam and does not weaken this surface contract.
+   not map indexes to CAD records. Rectangle selection is answered by the
+   region query in contract 10, which shares this surface contract's frame
+   tuple, readiness validation and visibility predicates rather than weakening
+   them.
 
    Production camera presentation uses
    RealityKit's built-in `PerspectiveCameraComponent` or
@@ -895,6 +905,172 @@ of screen-baked dashes.
    builder, either native resource path, attachment, or final assembly publishes
    none of the candidate. No independent overlay cache, worker, root
    publication, or asynchronous allocation lane is permitted.
+10. The mounted frame answers a region, not only a point. `Scene.raycast`
+    answers one ray per call, so an area assembled from point samples reports
+    only the identities its samples happened to land on, and a visible part
+    narrower than the sample spacing is reported as absent however the source
+    is tessellated. This owner therefore vends a region visibility raster of
+    the same retained plan through the same mounted camera. The point query of
+    contract 7 and this region query are two readings of one frame, not two
+    authorities, and the equality that fixes that is per pixel:
+
+    ```text
+    regionSurface(p) == surfaceHit(p)?.triangle
+    ```
+
+    for every device pixel centre `p` that does not project exactly onto a
+    shared triangle boundary, where a boundary centre is answered by whichever
+    of the coincident triangles the native ray happened to return first.
+    `Verification and Change Impact` owns the differential test that proves
+    this equality. A change on either side that breaks it is a defect in this
+    contract, not a tolerance to widen.
+
+    Reconstructed projection. The raster reprojects the plan's retained world
+    positions through the calibration this frame already derived from
+    `RealityViewCameraContent.project(_:)`. It samples no new projection and
+    installs no projection of its own. For a world point `P`, its camera-local
+    position is `L = camera.convert(P - renderOrigin, from: nil)` and its
+    native camera depth is `d = -L.z`, the same quantity native hits are
+    admitted on. Its camera-plane coordinate is `L.xy / step` under the
+    orthographic camera, whose projection does not depend on `d`, and
+    `L.xy * sampleDepth / (step * d)` under the perspective camera. The
+    perspective calibration sets `step` equal to `sampleDepth`, so that second
+    form reduces to `L.xy / d` today and stays exact if the basis step ever
+    stops being the sample depth. The screen point in points is that
+    coordinate under `calibration.inverseMapping.inverted()`, the forward
+    direction of the affine the calibration sampled. One view matrix taken
+    once per frame from the camera entity replaces the per-position
+    `camera.convert` call, because a hard-maximum plan holds 188,550
+    positions.
+
+    Screen coordinates, edge functions and every interpolated channel are
+    Double. Float32 cannot carry them: a perspective vertex clipped to the
+    shared minimum near distance projects past 1e9 pixels, where an edge
+    function's two products reach 1e18 and Float32's relative error leaves the
+    sign undetermined for a pixel one unit from the edge, while Double leaves
+    that error near 1e2 against an edge value near 1e9. Discarding such a
+    triangle instead of carrying it is prohibited, because that is the
+    vertex-admission rule this contract replaces. The view transform itself
+    stays the frame's own Float camera transform; only the projected
+    quantities are widened.
+
+    Pixel convention. Rectangles arrive in the same points space
+    `RealityViewCameraContent.project(_:)` returns and `surfaceHit` accepts.
+    The raster's sample lattice is device pixels: device pixel `(i, j)` has
+    its centre at `((i + 0.5) / displayScale, (j + 0.5) / displayScale)` in
+    points; a pixel belongs to a rectangle when that centre lies inside it
+    under the half-open rule `minX <= x < maxX` and `minY <= y < maxY`, so
+    abutting rectangles partition the lattice; and the raster samples the
+    triangle at that same centre. A segment probe walks one sample per unit
+    step along its major axis on the same lattice. The mount therefore
+    supplies the scale with the layout through
+    `applyCamera(layout:displayScale:revision:)`. No caller may default it,
+    and it is a member of the frame key below.
+
+    Visibility predicates. The raster applies exactly the predicates
+    `retainedHits(_:rayDirection:)` applies to a native hit, and nothing else.
+    The section half-space is per fragment: `s(P) = dot(P - renderOrigin, n) -
+    offset` is affine in native scene space, so `s` interpolates by the same
+    rule as `d` does, and the fragment is retained when the interpolated `s`
+    is at least `-tolerance` at the pixel centre. This evaluates the same
+    predicate `retainsSectionedPoint(_:revision:)` states, at the exact point
+    sampled, so no polygon is clipped against the section plane. Back-face
+    classification is per triangle and exact, because `dot(n, Q - eye)` is
+    equal for every `Q` in the triangle's plane: with `n = cross(ab, ac)` from
+    the same three positions `retains` uses, a triangle is culled under the
+    orthographic camera when `dot(n, forward) >= 0` and under the perspective
+    camera when `dot(n, P0 - eye) >= 0`, both in native scene space. Near and
+    far are the interval `cameraDepthInterval(revision:)` reports, tested
+    inclusively at the pixel centre to match the `depth >= near && depth <=
+    far` admission native hits already pass. The depth interpolation rule the
+    two readings share is owned by the module rectangle contract in
+    [RupaRendering](../DESIGN.md#contracts-and-invariants).
+
+    Near clipping. Only the perspective camera needs one, and it is the only
+    polygon clip the raster performs, because a vertex at or behind the near
+    plane has no finite camera-plane coordinate. A triangle straddling near is
+    clipped against that single plane in camera-local space into at most a
+    quadrilateral, so the projected triangle count is bounded by twice the
+    plan's triangle count regardless of how the clip falls. The orthographic
+    projection is affine in `d`, so nothing is clipped there and both depth
+    bounds are enforced per fragment.
+
+    Frame key and invalidation. The raster is derived state cached on the
+    frame, and its key is exactly the state its answer reads:
+
+    | Key member | Source |
+    |---|---|
+    | applied camera revision | `appliedViewportRevision` |
+    | applied layout | `appliedLayout` |
+    | display scale | the value the mount applied with that layout |
+    | calibration generation | bumped whenever `cameraCalibration` is derived |
+    | section half-space | `section`, or its absence |
+    | back-face culling | `shading.isBackfaceCullingActive(in: mode)` |
+    | geometry root enabled | `geometryRoot.isEnabled` |
+
+    The `Appearance` value itself is not a key member, and neither are its
+    selection, preview, hover or material-colour fields. A selection drag
+    republishes a new preview set on every pointer move, and none of those
+    fields change a pixel this raster reads, because `retains` reads only the
+    shading and display mode out of `Appearance`. `clipper.isEnabled` is not a
+    key member for the opposite reason: `validateMountedFrame` refuses a
+    disabled presentation as not-ready, so no answer that could be cached
+    exists while it is false. The retained plan and `renderOrigin` are fixed
+    for the frame's lifetime. A key member that changes discards the raster;
+    nothing else does, and the raster is never rebuilt inside a drag that
+    changed none of them.
+
+    Per-frame admission. The raster is admitted once per frame, before any
+    tile is rasterized, and the decision does not depend on the rectangle. One
+    binning pass over the projected triangles yields both charged quantities:
+
+    ```text
+    fragments = sum over projected triangles of
+                area(bbox(triangle) intersect viewport)
+    bytes     = projected triangle count * projected stride
+              + bin entry count * 4
+              + viewport device pixel count * 4
+    ```
+
+    charged against `MeshSourcePresentationPlanLimits.maxRegionFragmentCount`
+    and `maxRegionRetainedByteCount`, which that type owns. Charging the whole
+    viewport rather than the rectangle is what stops a drag from flipping
+    between answering and refusing as the rectangle grows: a frame admits
+    every rectangle or none. A camera change during a drag produces a new
+    frame, which is admitted again on its own terms. Rasterization stays lazy
+    per 256-by-256-pixel tile, so the admitted cost is paid only for the tiles
+    a rectangle actually touches; that is a latency property of the admitted
+    frame and not a second budget.
+
+    Wall cost is stated, not budgeted. This component owns no per-event time
+    budget, and the operation-time judgement belongs to the replacement
+    verification below. Measured on the stage-1 kernel, single threaded, a
+    synthetic plan at the hard maximum of 377,040 triangles over a 3200-by-2000
+    device-pixel viewport projects in about 9 ms and rasterizes the whole
+    viewport in 157 ms at one viewport of coverage, 219 ms at two, and 360 ms
+    at the densest admitted case; a 20,000-triangle plan projects in 0.7 ms
+    and rasterizes in 23 ms. An 8-by-400 sliver of the hard-maximum frame
+    rasterizes in 8 ms, because only the tiles it touches are built. These are
+    offscreen kernel numbers on synthetic geometry, and they are re-recorded
+    on the real mounted path before the sampling path is removed.
+
+    Queries. This owner vends three region queries and learns no CAD topology
+    from them: the distinct triangles the frame draws inside a rectangle, the
+    triangle the frame draws at one device pixel, and the first drawn triangle
+    along a projected segment. Mapping a triangle to a CAD face, edge, vertex
+    or occurrence, and composing those into a selection scope, belongs to the
+    module rectangle contract in
+    [RupaRendering](../DESIGN.md#contracts-and-invariants).
+
+    Failure. The region queries validate the mounted frame and the applied
+    revision exactly as the point query does, so an unmounted frame, a
+    disabled presentation, a missing scene and an unapplied revision are
+    not-ready, and a stale revision is a refusal. A mounted frame holding no
+    geometry, or whose geometry root is disabled, answers empty rather than
+    throwing, matching `surfaceHit`. A frame the admission refuses throws
+    `.resourceExhausted` for every region query while it remains the mounted
+    frame, so the consumer keeps its committed selection and reports the
+    refusal. No region query reports a partial answer as a complete one.
 
 ## Runtime Flows
 
@@ -1032,6 +1208,7 @@ latency for every allocator arrangement.
 | Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed, direction-relative, and world-directed `CameraPoint`, label, camera-path, and marker placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, a world-directed offset keeps its projected extent bounded by its point length under zoom and under a changed source scale while a direction along the view axis still projects shorter than one perpendicular to it, a marker's scaled collider stays centered on its resolved placement, a degenerate direction or negative point length is a typed admission failure, degenerate or behind-camera single-point/direction pairs and behind-camera resolved world-directed points become explicitly disabled without stale positions, and a fixed-offset `CameraLine` crossing the camera plane retains its native-clipped visible segments and collision provenance instead of disabling the polyline. Camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
 | Native dynamic grid | Fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare the complete native line classes, signed formatted labels, separation, and chrome exclusion with `ViewportProjectedGrid`. The same line `LowLevelMesh`, three material parts, surface resources, and non-grid spatial resources retain identity while world coverage and `TextComponent` values change. Invalid and combined line/label/item/position/byte boundaries preserve the previous grid and report typed failure without label truncation. Apple-GPU evidence confirms TextComponent visibility, constant point size, and annotation ordering; a maximum admitted grid plus camera-relative update remains within 8.333 ms and performs no scene/CAD traversal or application-owned asynchronous resource generation. |
 | Provenance | Face/edge/vertex/occurrence mappings survive entity/resource reuse; missing mapping is an explicit miss. |
+| Region visibility raster | Required and not yet recorded. A differential test must compare, for every device pixel of a rectangle, the triangle the region raster reports with the one `surfaceHit` reports through the same mounted frame, on a fixture with no coplanar overlap so that no pixel centre lands on a shared boundary, in Ortho and Persp, with and without a section, with and without back-face culling, and across two tessellations of the same body. A five-pixel-wide visible window, a fully occluded body, a non-convex silhouette, and a body straddling the perspective near plane must each be covered, and the reconstructed screen point and depth must match `projectedPointWithDepth(_:revision:)` at depths away from `sampleDepth`. A refused frame must throw `.resourceExhausted` from every region query while it stays mounted. The sampling path is not removed until these pass on the real mounted path with the wall costs of contract 10 re-recorded there. |
 | Failure and bounds | Owned-buffer count/byte admission, native resource-count bounds, opaque native resource/collision failure, measured peak memory, cancellation, and root-preservation tests pass without empty success. A lowered caller byte limit that admits the CPU plan but not checked grouping metadata fails with `.resourceExhausted` before grouping allocation. A finite `1e-100` world scale must pass the Double CPU plan, fail only when native Float preparation collapses its surface with `.invalidTransform`, publish no surface, and allow the next valid snapshot to recover to ready. The maximum single-upload fixture and its boundary refusal are recomputed after grouping admission is added rather than preserving old hard-coded counts. Current-process footprint evidence reports baseline/peak/retained/signed delta and sample count without being promoted to signed-App or exact opaque-allocation proof. |
 | MainActor copy budget | The derived 5,617,816-byte maximum single line payload is passed through the actual `RealityViewport.prepare` surface path; its SDK-required `LowLevelMesh` construction and scoped buffer copy signpost is at most 8.333 ms on the tested Apple GPU. |
 | Backend cutover | Production target has no custom Metal pipeline, identity renderer, spatial Canvas, or second scene/camera route. |

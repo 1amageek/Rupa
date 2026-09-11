@@ -968,198 +968,114 @@ independent tessellator is never an alternative implementation.
    sub-shape. Region and sketch entity keep their existing routes. The
    occurrence rectangle that answers `all` and `object` is a separate native
    query over the same mounted frame, described after the legacy residual below.
-   A vertex is inside the rectangle when its projected point is, with no
-   tolerance, which is the containment the replaced pixel scan required, and it
-   is then admitted by exactly the section-then-occlusion rule a pointer vertex
-   is.
-   An edge is clipped rather than sampled at a fixed pitch, because a pitch
-   would make a short edge's admission depend on zoom. It is first clipped in
-   world space against the mounted camera's depth interval, so an edge crossing
-   the near or far plane keeps the part the camera can draw instead of being
-   dropped whole. The surviving segment's endpoints are projected, and the
-   projected segment is clipped against each cell of the sampling grid described
-   below in its own screen parameter. Every cell the segment crosses contributes
-   the midpoint of its surviving interval, mapped back to the edge's world
-   parameter under the frame's own projection rule, and the edge is admitted at
-   the first of those samples the visibility rule accepts.
-   A face is answered from the drawn triangles, not from a face loop, because
-   the prepared loops omit a face whose outer loop has fewer than three points
-   and a loop centroid can land in an annular face's hole. Each recorded run is
-   first tested by projecting the eight corners of its world-space bounding box;
-   the run is skipped only when all eight project inside the camera's depth
-   interval and their screen bounds miss the rectangle, so a corner the camera
-   cannot answer widens the search instead of losing the face. A run that
-   survives projects each mesh position it references once and reuses that
-   projection for every later run of the same body, because the mesh is shared
-   across its runs and projecting per triangle would cost three native calls per
-   triangle instead of one per position. A run the bounds test skips projects
-   none of them.
-   Each triangle of a surviving run is clipped in world space against the
-   mounted camera's depth interval before it is projected. Depth is an affine
-   function of world position under both projection modes, so interpolating the
-   crossing in world space is exact rather than approximate, and a triangle
-   straddling the near or far plane keeps the part the camera draws. Only the
-   vertices the clip creates need a projection of their own; a triangle wholly
-   inside the interval reuses the body's projected positions and costs none.
-   Both clips read the mounted camera through two queries of its own.
-   `RealityViewport.cameraDepthInterval(revision:)` reports the interval, and
-   `projectedPointWithDepth(_:revision:)` reports a world point's depth whether
-   or not the interval admits it, together with the projection where the camera
-   can answer for it. `projectedPointWithinDepthRange(_:revision:)` is defined
-   in terms of those two, so the near and far planes have one reader and the
-   point path and the rectangle cannot disagree about the interval.
-   That interval's near bound is finite and positive, and its far bound is
-   either finite beyond it or unbounded, because the perspective camera the
-   frame mounts draws with an infinite far plane. An unbounded far plane
-   retains every finite depth, so it contributes no half-space and has no
-   crossing to interpolate; `ViewportCameraDepthClip` skips it and admits the
-   near clip alone. `ViewportCameraDepthClip.canClip(against:)` owns which
-   intervals name a camera at all, and both rectangle resolvers refuse through
-   it rather than restating a finiteness rule, so no caller can decide that a
-   perspective frame has no interval and answer an empty selection.
-   The surviving projected polygon is then sampled on a grid rather than at one
-   representative point. The rectangle is divided into
-   `MeshSourcePresentationPlanLimits.rectangleSampleGridDivisions` cells per
-   axis, and each cell names one point of the candidate's projected coverage
-   inside it. That coverage is the union of the fragments the candidate's
-   triangles clip into the cell, and the point is a function of the union
-   alone: the fragments are how the union arrives, never part of what it is.
-   This is what the rectangle's independence from tessellation rests on, and it
-   is a stronger property than independence from emission order — the same
-   visible face drawn as two triangles and as a fine mesh presents the same
-   union and is therefore sampled at the same points.
-   A cell's point is built from the cell's own middle. When the coverage
-   contains that middle, the middle is the sample. Otherwise the sample is
-   taken on the ray that leaves the middle towards the coverage's nearest
-   point, and it is the middle of the first piece of coverage that ray meets.
-   Projection onto a closed convex set is unique, so each fragment has exactly
-   one nearest point and the union's nearest point is the nearest of those;
-   the distance to it is therefore the smallest ray parameter at which the
-   coverage is met at all. The ray meets each fragment in a closed interval,
-   and those intervals, joined wherever they touch, are the parameters the
-   coverage occupies along it. The piece holding the nearest point is the
-   first of them, and the sample is its middle. Both ends of that piece are
-   properties of the union rather than of any one fragment, so neither depends
-   on how the union was cut into fragments nor on the order they arrived in.
-   Taking a middle rather than the nearest point itself is what keeps the
-   sample off the coverage's silhouette, where the frame is entitled to answer
-   with either of the two faces that meet there and a nearest-point sample
-   would decide a face by coin flip. Every sample lies inside its cell and
-   therefore inside the rectangle, because the fragments are clipped to the
-   cell, the cell is convex, and every point of every interval is a point of
-   it.
-   Taking the first piece rather than the whole span from the nearest point to
-   the furthest one is what makes the sample a point the candidate occupies. A
-   coverage that is not convex — two visible strips of one face with a gap
-   between them inside one cell — has a span whose middle can fall in that
-   gap, and a query there is one the frame must refuse however much of the
-   cell the candidate covers. Sampling the first piece spends every query on a
-   point the candidate can answer for.
-   Intervals are joined when they touch within `joinTolerance`, which the grid
-   derives from the rectangle it samples. Two fragments sharing an edge cross
-   that edge's ray at one parameter in exact arithmetic and at two parameters
-   a rounding apart in floating point, so without a tolerance a finely
-   tessellated face presents as a run of hairline pieces and is sampled in the
-   first of them instead of in the whole. The tolerance is owned here because
-   the rounding it absorbs is a function of the coordinates this grid clips.
-   Its admissible range is bounded below by that rounding and above by one
-   device pixel, and the rule is `1e-6` of the rectangle's larger side: far
-   below a pixel for any rectangle a pointer can drag, and far above the
-   rounding of a crossing parameter computed at that magnitude. Its two
-   failure directions are each held by a test — too small splits one face into
-   hairline pieces and samples it in the first, too large bridges a real gap
-   and samples a candidate where it is absent.
-   How many pieces one cell tracks is bounded by
-   `ViewportRectangleSampleGrid.maximumRayComponentsPerCell`, and a ray
-   crossing more keeps the earliest of them. The piece holding the nearest
-   point has the smallest start by construction, so it is never the one
-   dropped: a cell past that bound still samples a point the candidate
-   occupies, and what it loses is only the guarantee that the piece it reports
-   is the same for every tessellation of the same coverage. That bound belongs
-   to the grid rather than to the plan's limits because it bounds this
-   sampling rule's own working set and not a count of native queries.
-   The rule is sound and not complete, and what stays incomplete is the size
-   of the window it can find rather than where a sample lands. One sample per
-   cell can miss a visible sliver of the coverage thinner than a cell. A
-   sample the candidate does not occupy is refused by the frame, so nothing is
-   admitted on a place it does not cover; what is lost is a candidate, never a
-   wrong one. Where the rule is complete is stated as a window: an
-   axis-aligned visible window whose sides span at least two cells contains a
-   whole cell, that cell's coverage contains its middle, and the middle is
-   therefore that cell's sample. The boundary between what this rule finds and
-   what it misses is `rectangleSampleGridDivisions`, a correctness budget
-   rather than a tuning value.
-   A run's samples are queried from the middle of the rectangle outwards, and
-   the scan stops at the first sample the frame confirms. The run is admitted
-   only when one native surface query at one of its samples returns a triangle
-   this body drew and whose emission index resolves through this same run list
-   back to this run. A run whose coverage reached the grid and which no sample
-   confirmed is reported as unconfirmed rather than dropped, because the frame
-   answered about the points it was asked about and not about the run. No
-   caller may read an unsampled region as invisible, and this resolver is
-   where that distinction is made rather than left to be inferred from an
-   empty list. `ViewportRectangleResolution` carries the two lists and fixes
-   what they mean: confirmed selects, and unconfirmed is neither selected nor
-   proven absent.
-   Both halves of that check are load-bearing. The half that asks whether the
-   frame drew the triangle here is the occlusion and section test, since the
-   frame draws only what survived the section and only what nothing nearer
-   covers, so this branch needs no depth compare and no world point of its own.
-   The half that asks which run owns the returned index is not redundant with
-   it: mesh face identities are numbered per body, so another body's triangle
-   can carry an index that also names a run of this body, and without the first
-   half the rectangle would admit a face standing behind another solid.
-   Answering a face from drawn triangles makes the snapshot mesh positions an
-   input of this path alongside the run list. The scene builder writes the mesh
-   and the topology from one body display snapshot or writes neither, so
-   prepared topology without that mesh is malformed preparation and a typed
+   These three scopes are answered from the region visibility raster that
+   contract 10 of
+   [RealityViewport](RealityViewport/DESIGN.md#contracts-and-invariants)
+   states, and no longer from points this resolver chooses. That raster
+   reports the triangle the mounted frame draws at a device pixel, the
+   distinct triangles it draws inside a rectangle, and the first triangle it
+   draws along a projected segment, under the frame's own projection, depth
+   interval, section half-space and back-face rule. The rectangle therefore
+   states its answer as an equality over pixels rather than over samples: for
+   each scope, the set it returns is the union, over the device pixels of the
+   rectangle, of the identity that scope reads from the frame's answer at
+   that pixel. A visible part is reported because the frame draws it and not
+   because a sample landed on it, so tessellation, emission order and the
+   width of the visible window no longer enter the answer at all.
+   Nothing here projects, clips or depth-tests geometry of its own. The
+   bounds test, the per-position projection, the per-triangle world-space
+   depth clip and the per-cell sampling this path used to perform are the
+   raster's work now, stated once by that contract, and this resolver reads
+   only its answers.
+   Face is a harvest. Every triangle the raster reports inside the rectangle
+   whose source reference is `.cad` names a CAD body and a triangle emission
+   index, and that index resolves through the same recorded run list the
+   pointer path uses back to the run that emitted it and so to its
+   `SelectionComponentID`. A triangle carrying an `.authoredMesh` reference
+   names no CAD face and is skipped. A `.cad` triangle whose index no run of
+   its body names is a truthful miss for that triangle and not a failure of
+   the rectangle. The two halves the pointer path needed are both still
+   load-bearing, and the raster supplies the first: it reports only triangles
+   the frame draws, so occlusion, section and back face are already decided,
+   while the index-to-run lookup is what stops another body's triangle from
+   naming a run of this one.
+   Occurrence is that same harvest read at the plan's own identity instead of
+   at a CAD run, and it is described with the `all` and `object` rectangle
+   below.
+   Vertex is a probe of one pixel. A vertex is inside the rectangle when its
+   projected point is, with no tolerance, which is the containment the
+   replaced pixel scan required. It is admitted when the triangle the frame
+   draws at the device pixel containing that projected point lies no further
+   behind the vertex's own depth than the resolver's relative `depthSlack`,
+   and when the section retains the vertex itself. That is exactly the
+   section-then-occlusion rule a pointer vertex is admitted by, read at one
+   pixel instead of at the pointer.
+   Edge is a probe along a segment, and not a harvest of the edge identifiers
+   the drawn triangles carry. Those identifiers name the mesh edges lying on
+   a CAD edge, so harvesting them would admit an edge whenever an adjacent
+   face triangle is drawn anywhere inside the rectangle, including where the
+   edge itself is occluded or outside. The edge is instead clipped in its own
+   world parameter against the mounted camera's depth interval and against
+   the section half-space, so a parameter the frame cannot draw is never
+   walked; `ViewportCameraDepthClip` owns both clips as parameter intervals
+   over one scalar, and the section is the same affine half-space the raster
+   evaluates per fragment. The surviving interval is projected, intersected
+   with the rectangle, and walked one device pixel at a time along its major
+   axis. The edge is admitted at the first pixel whose drawn triangle lies no
+   further behind the edge's depth there than `depthSlack`, and the walk
+   stops at that pixel. Walking pixels rather than sampling at a fixed pitch
+   is what makes a short edge's admission independent of zoom, and walking
+   the frame's own lattice is what makes it independent of tessellation.
+   The camera's depth interval keeps one reader for every scope.
+   `RealityViewport.cameraDepthInterval(revision:)` reports it,
+   `projectedPointWithDepth(_:revision:)` reports a world point's depth
+   whether or not the interval admits it, and
+   `ViewportCameraDepthClip.canClip(against:)` owns which intervals name a
+   camera at all. That interval's near bound is finite and positive and its
+   far bound is either finite beyond it or unbounded, because the perspective
+   camera the frame mounts draws with an infinite far plane; an unbounded far
+   plane retains every finite depth and contributes no half-space. The
+   rectangle refuses an interval with no near plane through
+   `canClip(against:)` rather than restating a finiteness rule, so no caller
+   can decide that a perspective frame has no interval and answer an empty
+   selection.
+   Answering a face from drawn triangles makes the recorded run list an input
+   of this path alongside the raster. The scene builder writes the mesh face
+   runs and the topology from one body display snapshot or writes neither, so
+   prepared topology without those runs is malformed preparation and a typed
    failure, never a body whose faces the rectangle silently skips.
-   The rectangle therefore holds the cost class of the pointer query rather
-   than of the triangle count. Per body it costs at most eight projections per
-   recorded run, one projection per mesh position referenced by a run that
-   survives its bounds test, at most two further projections for each triangle
-   that straddles a clip plane, one projection per vertex, two per edge, and,
-   for each candidate sub-shape that reaches the frame, at most one native
-   surface query per grid cell. A body carries as many candidate sub-shapes as
-   it has recorded runs, edges and vertices, so the ceiling this path states is
-   the per-candidate one,
-   `MeshSourcePresentationPlanLimits.maxRectangleSurfaceQueryCountPerCandidate`,
-   and not a product of the plan's item ceiling. Clipping, the bounds test and
-   the grid are CPU arithmetic over already projected points and call the frame
-   not at all. That CPU scan covers a surviving run's whole triangle list
-   rather than a prefix of it, and it covers it twice rather than once: the
-   first pass anchors each cell against the union it received, and the second
-   measures, along the ray each surviving anchor names, the intervals the
-   coverage occupies there. The second pass is skipped whenever every anchored
-   cell already holds its middle, which is the case for a body large enough to
-   fill cells.
-   Both passes read the same projections, so the second costs clipping and no
-   native call. Two CPU clips per triangle instead of one is what independence
-   from tessellation costs, and it does not move the native query bound.
-   This bound is a correctness contract rather than an optimization: a
-   rectangle drag re-runs the query on every pointer move, and a per-triangle
-   native projection would make the cost of one input event a function of
-   tessellation density.
-   The grid's division count belongs to `MeshSourcePresentationPlanLimits`
-   because it is what turns a rectangle update into a bounded number of native
-   surface queries, which is a budget of the same plan that type's other
-   ceilings bound. It is four per axis. That value follows from the guarantee
-   the grid makes and from nothing measured here. A cell's sample lies inside
-   that cell, and an axis-aligned window whose side spans at least two cells
-   always contains a whole cell, whose middle the window then contains, so a
-   candidate showing such a window inside the rectangle always has a sample in
-   it whatever its tessellation. Four per axis makes that window a quarter of
-   the rectangle. Raising the count tightens the guarantee and raises the
-   query ceiling in proportion; lowering it does the reverse. Raising it is
-   also the only way this rule can narrow the windows it finds: one sample per
-   cell loses a visible sliver thinner than a cell whatever the candidate's
-   tessellation, and no rule for placing a sample inside a cell can reach a
-   region no cell is sampled in. Whether four stays, whether the count rises
-   against the query ceiling, and whether the rectangle should ask the frame
-   in some shape other than one point per candidate per cell, are one open
-   decision this design records and does not take. Until it is taken the count
-   is four and the window above is what this path guarantees; recording the
-   limitation here does not adopt the sliver miss as an intended semantic.
+   The rectangle therefore holds the cost class of the frame rather than of
+   the candidate count or of the triangle count, and that cost is charged
+   before any answer is produced. The raster is admitted once per frame
+   against `MeshSourcePresentationPlanLimits.maxRegionFragmentCount` and
+   `maxRegionRetainedByteCount`, over the whole viewport and independently of
+   the rectangle, so a frame admits every rectangle or none and a drag cannot
+   flip between answering and refusing as the rectangle grows. Contract 10 of
+   the component owns what those two quantities count.
+   Once a frame is admitted, this resolver's own cost is one pass over the
+   triangles the raster reports inside the rectangle for face and occurrence,
+   one pixel read per vertex, and at most one pixel read per device pixel a
+   projected edge spends inside the rectangle, with an early exit at the
+   first accepted pixel. It spends no native query per candidate and performs
+   no projection of its own, so the plan's item ceiling no longer multiplies
+   a per-candidate query count.
+   The query bound is therefore linear in the device pixels of the rectangle
+   and in the triangles the frame draws inside it, and is not a function of
+   how finely the source is tessellated beyond what the frame already draws.
+   A rectangle drag re-runs the query on every pointer move, so this is a
+   correctness contract and not an optimization: an input event whose cost
+   grew with tessellation density is the defect the replaced rule was written
+   to avoid, and the per-frame admission is what bounds that cost without
+   taking part in the answer.
+   The two ceilings live on `MeshSourcePresentationPlanLimits` because they
+   bound a working set derived from one presentation plan, which is what that
+   type's other ceilings bound; their owner, admissible range and revision
+   rule are stated there. Neither is a tuning value. A frame the admission
+   refuses answers no rectangle at all, which the failure contract below
+   turns into a refusal the operator sees, so lowering either one moves
+   frames from answering into refusing rather than into answering less
+   completely. No open decision about how finely the rectangle asks the frame
+   remains, because it no longer asks at points.
    The failure contract belongs to the drag, not to the resolver alone.
    `Viewport.selectionDragTarget` throws, and the drag separates the two ways an
    answer can be absent, because they are not the same event. A frame that has
@@ -1174,8 +1090,9 @@ independent tessellator is never an alternative implementation.
    a pointer move that outran preparation is not an operator error. Every other
    typed failure is a refusal the operator must be able to see — a stale camera
    revision, an unrepresentable projection, a non-finite input, malformed
-   provenance, or a failure recorded against this very identity — so the preview
-   is cleared and the failure is reported to `Logger`. Clearing the preview is
+   provenance, a frame whose region raster the admission refused, or a
+   failure recorded against this very identity — so the preview is cleared
+   and the failure is reported to `Logger`. Clearing the preview is
    not a deselection: the preview target is a highlight the drag owns, and only
    `onSelectionDrag` changes a selection. A rectangle that could not be resolved
    therefore never commits an empty answer that would read as an intentional
@@ -1202,15 +1119,6 @@ independent tessellator is never an alternative implementation.
    carrying prepared topology, the whole legacy rectangle path runs as before.
    The GPU identity buffer therefore survives this seam for that residual, and
    is removed only once those producers have seams of their own or are retired.
-   The resulting rectangle semantic differs from the buffer it replaces, which
-   admitted a sub-shape owning any front-most pixel inside the rectangle. The
-   departure is that the decision is taken at the grid's samples and not at
-   every pixel: a sub-shape occluded or sectioned away at every one of its
-   samples is a miss even when a part of it is visible inside the rectangle.
-   What the grid removes is the dependence of that miss on tessellation and on
-   emission order, since the samples are a function of the projected geometry
-   and the rectangle alone, and it bounds the miss by the guarantee above rather
-   than leaving it at a single point.
 
    The occurrence rectangle that answers `all` and `object` is its own native
    query, owned by `RealityViewport.occurrenceIDs(intersecting:revision:)` and
@@ -1222,52 +1130,31 @@ independent tessellator is never an alternative implementation.
    questions over one frame, gated separately by
    `selectionHitPolicy.allowsObjectHits` and by whether the legacy residual
    still runs.
-   A candidate occurrence is first tested by projecting the eight corners of its
-   world-space bounding box, under the same rule the CAD face runs use: it is
-   skipped only when the camera answers for all eight inside its depth interval
-   and their screen bounds miss the rectangle. A surviving candidate has each of
-   its retained world positions projected once — the shape
-   `MeshSourcePresentationOccurrenceView` exists for — and its triangles are
-   then clipped in world space against the camera's depth interval, projected,
-   and accumulated into the same sampling grid the CAD sub-shape rectangle uses,
-   so the two rectangles cannot disagree about where a candidate is sampled. The
-   candidate's samples are queried from the middle of the rectangle outwards and
-   the scan stops as soon as the frame answers with the candidate itself.
-   The surface query answers with the occurrence the frame draws at that pixel,
-   which carries two consequences. The occurrence it names is admitted whether
-   or not it is the candidate that asked, because the frame drawing it at a
-   pixel inside the rectangle is the admission evidence itself; a candidate
-   admitted that way is never asked again. And a candidate the frame answers
-   with a different occurrence, or with nothing, is not admitted. That single
-   answer is the section, occlusion and back-face test together: the frame draws
-   only what survived the section, only what nothing nearer covers, and only the
-   faces it retains, so this path adds no depth compare, no section predicate
-   and no culling filter of its own.
-   The stated limitation is the one the CAD face rectangle already carries, for
-   the same reason: the decision is taken at the grid's samples and not at
-   every pixel, so an occurrence the frame refused at all of them is not
-   admitted even when another part of it is visible inside the rectangle. The
-   samples are a function of the projected geometry and the rectangle alone,
-   so the answer does not depend on triangle emission order and a body either
-   selects or does not, consistently across a drag. Such a candidate is
-   reported as unconfirmed rather than dropped, on the same
-   `ViewportRectangleResolution` the sub-shape rectangle answers with. A point
-   oracle cannot say which of the two reasons produced it — the frame drew
-   another occurrence over every sample, or the visible part was narrower than
-   a cell — so unconfirmed is not a visibility signal and no consumer may read
-   it as one.
-   The cost is bounded by contract rather than by measurement. Per candidate:
-   eight bounding-box projections, one projection per retained source position,
-   at most two further projections per triangle that straddles a clip plane, CPU
-   clipping of every triangle into the grid, and at most one native surface
-   query per grid cell. Across a plan those are bounded by
-   `MeshSourcePresentationPlanLimits.standard` — 640 occurrences and 188,550
-   positions — and the surface queries by that plan's item ceiling times
-   `maxRectangleSurfaceQueryCountPerCandidate`, never one per triangle. This is
-   a correctness contract for the same reason the sub-shape bound is: a
-   rectangle drag re-runs the query on every pointer move, and a per-triangle
-   native query would make one input event cost a function of tessellation
-   density.
+   A candidate occurrence is not tested, projected or sampled by this path
+   either. The occurrence rectangle reads the same region visibility raster
+   and returns the distinct occurrence identities of the triangles the frame
+   draws inside the rectangle. A plan triangle carries its occurrence
+   identity already, so this is the face harvest read at the plan's own
+   identity, over one raster both rectangles share. Two rectangles over one
+   frame therefore cannot disagree about which pixels are covered or about
+   what is drawn at them.
+   The raster's answer is the section, occlusion and back-face test together:
+   it reports only what the frame draws, so this path adds no depth compare,
+   no section predicate and no culling filter of its own. An occurrence the
+   frame draws at one pixel inside the rectangle is admitted; one it draws at
+   no pixel inside the rectangle is not.
+   That removes the limitation this path used to state. A candidate the frame
+   draws only in a window narrower than any sampling cell is admitted,
+   because the pixels of that window are pixels of the rectangle and the
+   raster reports what is drawn at them. There is consequently no third
+   outcome: an occurrence is confirmed when the frame draws it inside the
+   rectangle, and is absent from the answer because the frame drew it nowhere
+   inside the rectangle, never because nothing asked about it.
+   `ViewportRectangleResolution.unconfirmed` had exactly one producer, the
+   sampling rule. This path never produces it, and the field's lifetime is
+   the sampling resolvers' own: both are removed once the replacement
+   verification below passes, and neither is kept as a channel with nothing
+   to carry.
    The result is returned in plan order, de-duplicated. Both consumers depend on
    that determinism for stability and not for meaning:
    `MeshSourcePresentationLegacyHitFilter` converts it to a set, and
@@ -1276,112 +1163,82 @@ independent tessellator is never an alternative implementation.
    The failure contract changes with this seam. The replaced query answered an
    unready or absent presentation with an empty list, which the legacy filter
    read as "no occurrence is visible" and used to drop every legacy body hit.
-   The native query reports readiness, camera revision, and projection failures
-   as typed errors instead, so `selectionDragTarget` throws and the drag answers
-   by the readiness split above: a not-ready frame retains the preview in
-   silence, and a refused one clears the preview and reports. `all`, `object`, `region` and `sketch entity` therefore gain
-   the throwing surface that face, edge and vertex already had through the CAD
-   sub-shape rectangle. A confirmed list that is empty now means only what it
-   says: at every point the grid asked about, the mounted frame drew no
-   occurrence this rectangle admits. `Viewport` computes the answer at most
-   once per rectangle update, reads `confirmed` from it, and passes that to
-   the legacy filter and to an object-scope drag, so the two consumers cannot
-   disagree, and the query does not run at all for a face, edge or vertex
-   rectangle the native path resolved with no legacy residual.
-   Reading `confirmed` there is a decision and not a default. Unconfirmed
-   cannot restore a legacy hit, because the two backends judge visibility
-   against different scenes and an unconfirmed candidate is exactly the case
-   where the native frame has not contradicted the identity buffer; admitting
-   it would let the buffer's occlusion outlive this seam wherever the
-   presentation sections geometry the legacy scene keeps. Nor may it be read
-   as absence. One production consequence follows, and it is the window the
-   sampling rule already states: a legacy-residual body — one carrying no
-   prepared topology, reachable only through the interim path
-   `Viewport.legacySelectionRectangleHits` — visible inside the rectangle only
-   in a window narrower than a grid cell has its legacy hit dropped in a
-   sub-shape scope. That consequence belongs to the open decision on
-   `rectangleSampleGridDivisions` above, and it disappears with the interim
-   path itself.
+   The native query reports readiness, camera revision, projection and
+   admission failures as typed errors instead, so `selectionDragTarget`
+   throws and the drag answers by the readiness split above: a not-ready
+   frame retains the preview in silence, and a refused one clears the preview
+   and reports. `all`, `object`, `region` and `sketch entity` therefore gain
+   the throwing surface that face, edge and vertex already had through the
+   CAD sub-shape rectangle. An empty answer now means only what it says: at
+   no device pixel of the rectangle did the mounted frame draw an occurrence
+   this rectangle admits. `Viewport` computes the answer at most once per
+   rectangle update and passes it to the legacy filter and to an object-scope
+   drag, so the two consumers cannot disagree, and the query does not run at
+   all for a face, edge or vertex rectangle the native path resolved with no
+   legacy residual.
+   A frame whose raster the admission refused answers no rectangle, in any
+   scope, while it stays mounted. That is the case the operator is told
+   about and the committed selection is kept: the drag reports the refusal
+   and changes no selection. An answer is complete or it is absent. The
+   rectangle never reports part of a frame as all of it, and never resolves
+   an unadmitted frame by falling back to points.
+   One production consequence of the legacy residual remains, and it is the
+   only incompleteness this path now carries: a legacy-residual body — one
+   carrying no prepared topology, reachable only through the interim path
+   `Viewport.legacySelectionRectangleHits` — is judged by the identity
+   buffer's own scene and not by the mounted frame. It disappears with the
+   interim path itself. No window of any width is lost for a body the native
+   path owns.
    `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
-   the behavioral evidence for this resolver: the rank-then-metric order across
-   bodies, the run lookup that names the CAD face of the drawn triangle
-   including its recorded-order scan, its truthful miss for a triangle no run
-   names and its typed failure for an unrepresentable identity, the orthographic
-   and perspective edge-parameter rules, rejection of vertices and edges the
-   section removed, silhouette retention over an empty pixel, and the `miss`
-   versus `unsupported` split.
-   `Tests/RupaRenderingTests/ViewportNativeCADRectangleResolverTests.swift` owns
-   the rectangle rules: zero-tolerance vertex containment, the per-cell
-   clipped-interval edge samples including an edge whose endpoints both lie
-   outside and an edge occluded at one sample but visible at another, the run
-   bounds test that skips no run a camera could not project, the grid samples
-   and their independence from triangle emission order, the same answer for one
-   face drawn at five tessellation densities behind one narrow section window
-   and again behind a window two cells wide, the sample a cell takes inside
-   the first piece of coverage its ray meets when the coverage misses its
-   middle, the report that names a run whose coverage met the rectangle and
-   which no sample confirmed, admission of a run whose only visible part
-   lies away from the rectangle's middle, admission of a
-   triangle that straddles the camera's near plane, the confirming surface query
-   that rejects a triangle another body drew and a triangle belonging to a
-   different run, rejection of the sub-shapes the section removed, the
-   de-duplication of one component named by two runs, the typed failure for an
-   unrepresentable identity, the unbounded far plane that still admits every
-   candidate the near clip keeps, the typed failure for an interval with no
-   near plane, and the absence of any rank order in the result.
+   the behavioral evidence for this resolver's point path: the rank-then-metric
+   order across bodies, the run lookup that names the CAD face of the drawn
+   triangle including its recorded-order scan, its truthful miss for a triangle
+   no run names and its typed failure for an unrepresentable identity, the
+   orthographic and perspective edge-parameter rules, rejection of vertices and
+   edges the section removed, silhouette retention over an empty pixel, and the
+   `miss` versus `unsupported` split.
+   The region path's evidence is required and not yet recorded, and it is two
+   different claims. That the raster is the frame is proved by the
+   component's differential test, which compares the raster's answer with
+   `surfaceHit` at every device pixel of a rectangle;
+   [RealityViewport](RealityViewport/DESIGN.md#verification-and-change-impact)
+   owns it and this design does not restate its cases. That each scope reads
+   the right identity out of that answer is proved here, on the mounted
+   frame: a face harvested from the triangles drawn inside the rectangle and
+   resolved through its body's runs, an `.authoredMesh` triangle skipped, a
+   `.cad` triangle whose index no run names missed truthfully, one component
+   named by two runs de-duplicated once, one shared feature placed twice
+   admitted at both placements, a vertex admitted at its own pixel and
+   rejected both behind a nearer surface and by the section, an edge admitted
+   at the first pixel of its projected interval the frame draws and rejected
+   when the frame draws something nearer along all of it, an edge crossing
+   the near plane admitted on the part the camera draws, and an interval with
+   no near plane refused.
+   The replacement criteria this seam has to meet are proved on that same
+   mounted path and not on synthetic frame closures: a visible part five
+   pixels wide, a back face, a fully occluded body, a non-convex silhouette,
+   an active section, several placements of one definition, and one body at
+   two tessellation densities, each answered identically under the
+   orthographic and the perspective camera. The same run records the
+   operation time of a rectangle drag there, which is what the offscreen wall
+   costs contract 10 states have to be re-recorded against before the
+   sampling path is removed.
+   `Tests/RupaRenderingTests/ViewportNativeCADRectangleResolverTests.swift`,
    `Tests/RupaRenderingTests/ViewportNativeOccurrenceRectangleResolverTests.swift`
-   owns the occurrence rectangle rules: a visible occurrence admitted, one fully
-   behind another rejected, a candidate whose bounds miss the rectangle skipped
-   with no surface query spent on it, no skip for a corner the camera cannot
-   project, the reuse that admits the occurrence a query names without asking
-   that occurrence again, admission of a candidate occluded at the rectangle's
-   middle but visible in a corner cell, admission of a candidate whose triangles
-   straddle the camera's near plane, results independent of triangle emission
-   order, at most one surface query per grid cell for a candidate that reaches
-   the frame, plan-order output independent of admission order, an occurrence
-   the frame answers with nothing rejected, the unbounded far plane that answers
-   exactly as a finite one does, the typed failure for a degenerate rectangle,
-   the typed failure for an interval with no near plane, the typed failure
-   for an answer naming an occurrence the queried plan does not hold, a
-   candidate whose two visible strips leave a gap across one cell admitted at
-   both a coarse and a fine tessellation, and a candidate visible only in a
-   window narrower than a cell reported as unconfirmed rather than as absent.
-   Its candidates are real occurrence views taken from a built plan, so the
-   retained shape the cost contract is stated against is the plan's own.
-   `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` owns the
-   sampling kernel both rectangles share: that the same union answers the same
-   points whatever order its fragments arrive in and however the union was cut
-   into them, which is stated against two tessellations of one shape rather
-   than against two orderings of one tessellation; that a cell whose coverage
-   holds its middle is sampled at that middle; that a cell whose coverage does
-   not is sampled strictly inside the coverage and not on its nearest point,
-   for a convex coverage and for one whose two strips leave a gap the span's
-   middle would fall in; that two fragments meeting on a shared edge are
-   sampled as the one piece they form and not in the first hairline of it;
-   that a window wider and taller than two cells always receives a sample
-   strictly inside it whatever tessellation produced it, and never one
-   outside it; that a candidate covering the whole rectangle is
-   sampled once per cell at each cell's middle, from the middle of the rectangle
-   outwards; and that a projected segment is sampled once in the middle of the
-   interval it spends in each cell it crosses, including one whose endpoints
-   both lie outside, and nowhere when it misses.
-   All three resolver suites drive their resolver through synthetic frame
-   closures, so they prove its rules and not the mounted RealityKit frame. The
-   occurrence rectangle stands in for `cameraDepthInterval`,
-   `projectedPointWithDepth` and the drawn-occurrence surface query. The first
-   two are this migration's own, so the point path does not own their
-   mounted-frame behaviour: the depth the near-plane clip reads for a point the
-   interval excludes is proven on a mounted frame only by the integration
-   verification of this migration. The two further frame answers the CAD
-   sub-shape closures stand in for are proven on a mounted frame by
+   and `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` own
+   the sampling rule this path replaces. They stay green, and the sampling
+   resolvers stay reachable, until the evidence above is recorded; they are
+   removed with the rule itself and are not extended in the meantime. No test
+   is rewritten to assert the sampling rule's window limitation as the region
+   path's behaviour.
+   The two mounted-frame answers the CAD sub-shape point path depends on are
+   proved by
    `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:
-   that `usesPerspectiveProjection(revision:)` reports the projection the frame
-   was actually drawn with under both cameras, and that
+   that `usesPerspectiveProjection(revision:)` reports the projection the
+   frame was actually drawn with under both cameras, and that
    `retainsSectionedPoint(_:revision:)` separates a point the active section
    removed from a point that merely draws no pixel, together with the stale
-   revision and unrepresentable point failures. The remaining mounted-frame
-   evidence for CAD sub-shape input is owned by that same integration
-   verification.
+   revision and unrepresentable point failures.
 
 ### Native shading and spatial content
 
