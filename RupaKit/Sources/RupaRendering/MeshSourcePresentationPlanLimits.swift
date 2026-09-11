@@ -30,65 +30,6 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// this layer never changes source fidelity to make geometry fit.
     public static let standard = hardMaximum
 
-    /// Cells per axis of the grid a selection rectangle samples a candidate on.
-    ///
-    /// This ceiling lives here because it bounds the native surface queries one
-    /// rectangle update may spend, which is a budget of the same plan the other
-    /// ceilings bound. It is not a measured value. `ViewportRectangleSampleGrid`
-    /// samples each cell inside the candidate's coverage of it, and an
-    /// axis-aligned visible window spanning at least two cells always contains
-    /// a whole cell, whose middle that window then contains, so a candidate
-    /// showing such a window inside the rectangle always has a sample in it
-    /// whatever its tessellation. Four per axis makes that window a quarter of
-    /// the rectangle.
-    ///
-    /// It is also the only thing that decides which narrower windows the
-    /// rectangle can find at all: one sample per cell loses a visible sliver
-    /// thinner than a cell whatever the tessellation, so raising this count is
-    /// the only way to narrow that gap, and it raises the query ceiling in
-    /// proportion. Lowering it does the reverse. `RupaRendering/DESIGN.md` owns
-    /// that soundness-without-completeness contract.
-    ///
-    /// Unlike the plan dimensions below it, this is not caller-lowerable: the
-    /// guarantee it states is a property of the sampling rule and not of one
-    /// caller's admission budget, so `validate()` does not read it.
-    ///
-    /// The region visibility raster below supersedes the rule this count
-    /// bounds, and loses the window limitation stated above with it, because
-    /// it reads every device pixel of the rectangle instead of sampling a
-    /// grid. That region path is the production rectangle path now, so this
-    /// count is deprecated together with `ViewportRectangleSampleGrid` and the
-    /// two sampling resolvers, and only those resolvers' own tests reach it.
-    /// It is removed with them in RK-4.3.5.6, once the region path's
-    /// replacement evidence passes on the mounted path, and this declaration
-    /// goes with them.
-    @available(
-        *, deprecated,
-        message: "The region visibility raster answers the selection rectangle. Removed with the sampling rule in RK-4.3.5.6."
-    )
-    public static let rectangleSampleGridDivisions = 4
-
-    /// Native surface queries one selection rectangle update may spend on a
-    /// single candidate: at most one per grid cell.
-    ///
-    /// The occurrence rectangle has one candidate per plan item, so its
-    /// plan-wide ceiling is this count times `maxItemCount`. The CAD sub-shape
-    /// rectangle asks per sub-shape rather than per item, so this per-candidate
-    /// ceiling is the bound that path states.
-    ///
-    /// The region path spends no native surface query per candidate, so this
-    /// ceiling has nothing to bound there. It follows
-    /// `rectangleSampleGridDivisions`: the region path is production now, so
-    /// this ceiling is deprecated with that count and removed with it in
-    /// RK-4.3.5.6.
-    @available(
-        *, deprecated,
-        message: "The region path spends no native surface query per candidate. Removed with rectangleSampleGridDivisions in RK-4.3.5.6."
-    )
-    public static var maxRectangleSurfaceQueryCountPerCandidate: Int {
-        rectangleSampleGridDivisions * rectangleSampleGridDivisions
-    }
-
     /// Fragments one frame's region visibility raster may charge.
     ///
     /// The raster answers a rectangle by reporting what the mounted frame
@@ -111,16 +52,16 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// straddling the perspective near plane. That measurement is an
     /// offscreen single-threaded kernel over synthetic geometry, not the
     /// mounted RealityKit path; it and the acceptance evidence it still owes
-    /// are recorded there before the sampling rule above is removed.
+    /// are recorded there.
     ///
     /// Raising it admits deeper overdraw at a proportional cost in the time
     /// one pointer move spends; lowering it moves frames from answering into
     /// refusing, never into answering less completely.
     ///
-    /// Like `rectangleSampleGridDivisions`, and unlike the plan dimensions,
-    /// neither region ceiling is caller-lowerable: each bounds what one
-    /// mounted frame's raster may charge rather than one caller's admission
-    /// budget, so `validate()` does not read them.
+    /// Unlike the plan dimensions above, neither region ceiling is
+    /// caller-lowerable: each bounds what one mounted frame's raster may
+    /// charge rather than one caller's admission budget, so `validate()` does
+    /// not read them.
     public static let maxRegionFragmentCount = 133_236_221
 
     /// Bytes one frame's region visibility raster may retain.

@@ -1178,11 +1178,11 @@ independent tessellator is never an alternative implementation.
    outcome: an occurrence is confirmed when the frame draws it inside the
    rectangle, and is absent from the answer because the frame drew it nowhere
    inside the rectangle, never because nothing asked about it.
-   `ViewportRectangleResolution.unconfirmed` had exactly one producer, the
-   sampling rule. This path never produces it, and the field's lifetime is
-   the sampling resolvers' own: both are removed once the replacement
-   verification below passes, and neither is kept as a channel with nothing
-   to carry.
+   The sampling rule's third outcome went with the rule. That rule reported
+   a candidate whose coverage reached the grid and that no sample confirmed
+   as neither selected nor proven absent, and `ViewportRectangleResolution`
+   carried that list. Both are removed, so no caller reads a channel with
+   nothing to carry.
    The result is returned in plan order, de-duplicated. Both consumers depend on
    that determinism for stability and not for meaning:
    `MeshSourcePresentationLegacyHitFilter` converts it to a set, and
@@ -1249,23 +1249,18 @@ independent tessellator is never an alternative implementation.
    two tessellation densities, each answered identically under the
    orthographic and the perspective camera. The same run records the
    operation time of a rectangle drag there, which is what the offscreen wall
-   costs contract 10 states have to be re-recorded against before the
-   sampling path is removed.
-   `Tests/RupaRenderingTests/ViewportNativeCADRectangleResolverTests.swift`,
-   `Tests/RupaRenderingTests/ViewportNativeOccurrenceRectangleResolverTests.swift`
-   and `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` own
-   the sampling rule this path replaces. They stay green, and the sampling
-   resolvers stay reachable, until the evidence above is recorded; they are
-   removed with the rule itself and are not extended in the meantime. The
-   two resolvers, `ViewportRectangleSampleGrid`, the two plan limits that
-   bound the sampling rule and `ViewportRectangleResolution`, whose only
-   producers they are, are marked deprecated from the change that makes this
-   path production, so those tests are the only thing that reaches them while
-   both exist and removal is all that is left to do to them. The deprecation
-   warnings those tests raise are that reachability stated, and are neither
-   silenced nor answered by marking the tests themselves: Swift Testing
-   refuses `@Suite` on a deprecated type. No test is rewritten to assert the
-   sampling rule's window limitation as the region path's behaviour.
+   costs contract 10 states are re-recorded against.
+   The sampling rule this path replaces is removed.
+   `ViewportRectangleSampleGrid`, the two sampling resolvers,
+   `ViewportNativeCADTopologyResolver.resolve(in:...)`, the two plan limits
+   that bounded the rule, `ViewportRectangleResolution` and the three test
+   files that owned the rule are gone. They were removed while this path was
+   already the only producer of a rectangle answer and no production caller
+   reached any of them, which is what makes that removal a dead-code removal
+   and not a behaviour change. The mounted evidence above was not recorded at
+   that point and is owed by this path alone, with no second rule to fall
+   back to. No test asserts the sampling rule's window limitation as the
+   region path's behaviour.
    The two mounted-frame answers the CAD sub-shape point path depends on are
    proved by
    `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:
