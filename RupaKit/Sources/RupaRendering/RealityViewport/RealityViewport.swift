@@ -948,37 +948,37 @@ final class RealityViewport {
     /// The occurrences this mounted frame draws inside `rect`, in the retained
     /// plan's order and de-duplicated.
     ///
-    /// The rectangle is answered from `surfaceResources.plan` — the plan this
-    /// frame itself drew — and from this frame's own projection and surface
-    /// query, so the geometry it projects and the pixels it samples can never
-    /// belong to two different plans. Section clipping, occlusion and back-face
-    /// retention come from the surface query itself, so this path adds no
-    /// filter of its own.
+    /// This is the region harvest read at the plan's own identity. A plan
+    /// triangle already carries the occurrence that placed it, so the rectangle
+    /// tests, projects and samples no occurrence of its own: an occurrence the
+    /// frame draws at one device pixel inside the rectangle is in the answer,
+    /// and one it draws at none is not. Section clipping, occlusion and
+    /// back-face retention are the frame's own drawing decision, so this path
+    /// adds no depth compare, no section predicate and no culling filter.
+    ///
+    /// Sharing one raster with the sub-shape rectangle is what keeps two
+    /// rectangles over one frame from disagreeing about which pixels are
+    /// covered or about what is drawn at them, and answering per pixel is what
+    /// admits an occurrence the frame draws only in a window narrower than any
+    /// sampling cell could resolve.
     ///
     /// An empty result is a valid answer once the frame is mounted and holds
-    /// geometry; readiness, camera revision, projection and provenance failures
-    /// remain typed. The two lists the answer carries, and the bounded cost
-    /// contract, belong to `ViewportNativeOccurrenceRectangleResolver`.
+    /// geometry, and it means the frame drew nothing inside the rectangle
+    /// rather than that nothing was asked about. Readiness, camera revision,
+    /// admission and provenance failures remain typed.
     func occurrenceIDs(
         intersecting rect: CGRect, revision: UInt64
-    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
-        try validateMountedFrame(describing: "occurrence rectangle query")
-        try validateAppliedRevision(revision, describing: "occurrence rectangle query")
-        guard !entries.isEmpty, geometryRoot.isEnabled, let plan = surfaceResources?.plan else {
-            // A mounted frame holding no geometry judged no candidate, so
-            // nothing here is unconfirmed.
-            return ViewportRectangleResolution(confirmed: [], unconfirmed: [])
+    ) throws -> [SceneOccurrenceID] {
+        var ids: [SceneOccurrenceID] = []
+        var admitted: Set<SceneOccurrenceID> = []
+        // Every occurrence the plan holds is a candidate, including one placing
+        // an authored mesh: this rectangle selects placements, and the CAD
+        // source reference only matters where a CAD sub-shape is being named.
+        try forEachRegionTriangle(intersecting: rect, revision: revision) { triangle in
+            guard admitted.insert(triangle.occurrenceID).inserted else { return }
+            ids.append(triangle.occurrenceID)
         }
-        var occurrences: [MeshSourcePresentationOccurrenceView] = []
-        occurrences.reserveCapacity(plan.occurrences.count)
-        plan.forEachOccurrence { occurrences.append($0) }
-        return try ViewportNativeOccurrenceRectangleResolver.occurrenceIDs(
-            intersecting: rect,
-            occurrences: occurrences,
-            depthInterval: try cameraDepthInterval(revision: revision),
-            projectWithDepth: { try self.projectedPointWithDepth($0, revision: revision) },
-            drawnOccurrenceID: { try self.surfaceHit(at: $0, revision: revision)?.triangle.occurrenceID }
-        )
+        return ids
     }
 
     // MARK: - Region queries
@@ -1449,8 +1449,10 @@ final class RealityViewport {
     /// what `retainsSectionedPoint(_:revision:)` reports, and it is not a term
     /// in one segment's parameter.
     ///
-    /// The production reader is the region edge probe. Until that path exists
-    /// its own test is the only reader.
+    /// The production reader is the region rectangle's edge rule, which narrows
+    /// one edge against this bound and against the camera depth interval before
+    /// it projects anything, and the plan cache forwards this query under the
+    /// same exact-ready identity and camera revision as the rest of that rule.
     func sectionParameterBound(
         from start: Point3D,
         to end: Point3D,

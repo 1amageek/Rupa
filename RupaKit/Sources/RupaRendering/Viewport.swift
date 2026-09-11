@@ -1835,9 +1835,9 @@ public struct Viewport: View {
     /// absence of a presentation occurrence rather than a refused query.
     private func presentationOccurrenceIDs(
         intersecting rect: CGRect
-    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
+    ) throws -> [SceneOccurrenceID] {
         guard presentationScene != nil else {
-            return ViewportRectangleResolution(confirmed: [], unconfirmed: [])
+            return []
         }
         return try presentationPlanCache.occurrenceIDs(
             intersecting: rect,
@@ -2055,43 +2055,63 @@ public struct Viewport: View {
     /// feature more than once share its face, edge and vertex identities.
     /// De-duplicating by `SelectionComponentID` alone would drop every
     /// placement after the first.
+    ///
+    /// Vertices and edges are resolved per body, because each is a candidate the
+    /// prepared topology names and the frame is asked about at that candidate's
+    /// own pixels. Faces are resolved the other way round, from the triangles
+    /// the frame draws inside the rectangle: the region raster reports those for
+    /// the whole scene in one pass, and each `.cad` triangle names the body that
+    /// emitted it and the emission index its recorded runs resolve. Harvesting
+    /// once for the scene is why a face the frame draws in a window narrower
+    /// than any candidate test could sample is still selected.
     private func presentationCADSubshapeRectangleHits(
         in rect: CGRect,
         in scene: ViewportScene
     ) throws -> NativeCADSubshapeRectangleResult {
         let identity = try presentationQueryIdentity()
         let revision = activeControlSession.revision
-        let project: (Point3D) throws -> (point: CGPoint, depth: Double)? = {
-            try presentationPlanCache.projectedPointWithinDepthRange(
+        let projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double) = {
+            try presentationPlanCache.projectedPointWithDepth(
                 $0, for: identity, revision: revision
             )
-        }
-        let surfaceHit: (CGPoint) throws -> (
-            triangle: MeshSourcePresentationTriangle, point: Point3D
-        )? = {
-            try presentationPlanCache.surfaceHit(at: $0, for: identity, revision: revision)
         }
         let retainsSectionedPoint: (Point3D) throws -> Bool = {
             try presentationPlanCache.retainsSectionedPoint($0, for: identity, revision: revision)
         }
-        let projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double) = {
-            try presentationPlanCache.projectedPointWithDepth(
-                $0, for: identity, revision: revision
+        let sectionParameterBound: (Point3D, Point3D) throws
+            -> ViewportCameraDepthClip.AffineScalarBound? = {
+            try presentationPlanCache.sectionParameterBound(
+                from: $0, to: $1, for: identity, revision: revision
+            )
+        }
+        let regionFragmentDepth: (CGPoint) throws -> Double? = {
+            try presentationPlanCache.regionFragment(
+                at: $0, for: identity, revision: revision
+            )?.depth
+        }
+        let regionSegmentProbe: (CGPoint, CGPoint, Int) throws
+            -> RealityViewportRegionSegmentProbe = {
+            try presentationPlanCache.regionSegmentProbe(
+                from: $0, to: $1, within: rect, startingAt: $2,
+                for: identity, revision: revision
             )
         }
         let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
             for: identity, revision: revision
         )
         // The interval belongs to the same mounted camera the projections come
-        // from, so a candidate crossing a clip plane contributes the part that
+        // from, so an edge crossing a clip plane is walked over the part that
         // camera draws instead of being dropped whole.
         let depthInterval = try presentationPlanCache.cameraDepthInterval(
             for: identity, revision: revision
         )
         var hits: [ViewportHit] = []
         var admitted: Set<SelectionTarget> = []
-        var resolvedTopology = false
         var requiresLegacyResidual = false
+        // The bodies the face harvest can name, keyed by the scene node a drawn
+        // triangle's occurrence resolves to. A placement absent here drew no
+        // prepared topology, so its triangles name no CAD face.
+        var bodies: [SceneNodeID: (featureID: FeatureID, topology: ViewportBodyTopology)] = [:]
         for item in scene.items {
             guard let sceneNodeID = item.sceneNodeID,
                   presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
@@ -2116,49 +2136,67 @@ public struct Viewport: View {
                    || component.surfaceTrimSpanDisplays.isEmpty == false {
                 requiresLegacyResidual = true
             }
-            guard let mesh = component.mesh else {
+            // The scene builder writes the recorded runs and the topology from
+            // one body display snapshot or writes neither, so faces without the
+            // runs that name them are malformed preparation. Without this the
+            // harvest would resolve none of those faces and report the body as
+            // holding nothing inside the rectangle.
+            guard topology.faces.isEmpty || topology.meshFaceRuns.isEmpty == false else {
                 throw MeshSourcePresentationRenderError(
                     code: .invalidSceneItem,
-                    message: "A CAD body prepared topology without the mesh its face runs index."
+                    message: "A CAD body prepared face topology without the mesh face runs that name it."
                 )
             }
-            resolvedTopology = true
-            // A run names a triangle of this body only. Another body's triangle,
-            // and any authored mesh triangle, numbers its faces independently
-            // and could land inside a run by coincidence.
-            let bodyDrawsTriangle: (MeshSourcePresentationTriangle) throws -> Bool = {
-                guard case .cad = $0.sourceReference else {
-                    return false
-                }
-                return presentationSceneNodeIDByOccurrenceID[$0.occurrenceID] == sceneNodeID
-            }
-            let resolution = try ViewportNativeCADTopologyResolver.resolve(
+            bodies[sceneNodeID] = (featureID: item.featureID, topology: topology)
+            let components = try ViewportNativeCADTopologyResolver.resolveRegion(
                 in: rect,
                 topology: topology,
-                mesh: mesh,
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: selectionHitPolicy,
                 usesPerspectiveProjection: usesPerspectiveProjection,
                 depthInterval: depthInterval,
-                project: project,
                 projectWithDepth: projectWithDepth,
-                surfaceHit: surfaceHit,
                 retainsSectionedPoint: retainsSectionedPoint,
-                bodyDrawsTriangle: bodyDrawsTriangle
+                sectionParameterBound: sectionParameterBound,
+                regionFragmentDepth: regionFragmentDepth,
+                regionSegmentProbe: regionSegmentProbe
             )
-            // Only `confirmed` selects. A run the frame refused at every
-            // sample it was asked about is not proven absent, and this
-            // rectangle reports a selection rather than an absence.
             Self.appendRectangleSubshapeHits(
-                resolution.confirmed,
+                components,
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 into: &hits,
                 admitted: &admitted
             )
         }
-        guard resolvedTopology else {
+        guard bodies.isEmpty == false else {
             return .unsupported
+        }
+        if selectionHitPolicy.allowsFaceHits {
+            // A triangle carries the occurrence that drew it, and mesh face
+            // identities are numbered per body, so resolving the occurrence
+            // first is what keeps another body's index from naming a run of
+            // this one. An authored mesh triangle names no CAD face at all.
+            try presentationPlanCache.forEachRegionTriangle(
+                intersecting: rect, for: identity, revision: revision
+            ) { triangle in
+                guard case .cad = triangle.sourceReference else { return }
+                guard let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
+                          triangle.occurrenceID
+                      ],
+                      let body = bodies[sceneNodeID] else { return }
+                guard let componentID = try ViewportNativeCADTopologyResolver
+                    .regionFaceComponentID(
+                        forTriangle: triangle, topology: body.topology
+                    ) else { return }
+                Self.appendRectangleSubshapeHit(
+                    .face(componentID),
+                    featureID: body.featureID,
+                    sceneNodeID: sceneNodeID,
+                    into: &hits,
+                    admitted: &admitted
+                )
+            }
         }
         return .resolved(hits: hits, requiresLegacyResidual: requiresLegacyResidual)
     }
@@ -2181,22 +2219,46 @@ public struct Viewport: View {
         admitted: inout Set<SelectionTarget>
     ) {
         for selectionComponent in components {
-            // The resolver reports face, edge and vertex components only; a
-            // component naming no generated sub-shape has no rectangle identity
-            // to report.
-            guard rectangleComponentID(selectionComponent) != nil else { continue }
-            let target = SelectionTarget(sceneNodeID: sceneNodeID, component: selectionComponent)
-            guard admitted.insert(target).inserted else { continue }
-            hits.append(
-                ViewportHit(
-                    featureID: featureID,
-                    sceneNodeID: sceneNodeID,
-                    kind: .body,
-                    pickingBackend: .native,
-                    selectionComponent: selectionComponent
-                )
+            appendRectangleSubshapeHit(
+                selectionComponent,
+                featureID: featureID,
+                sceneNodeID: sceneNodeID,
+                into: &hits,
+                admitted: &admitted
             )
         }
+    }
+
+    /// Appends the rectangle hit one admitted sub-shape contributes, refusing a
+    /// sub-shape this rectangle already reported.
+    ///
+    /// The face harvest reports one drawn triangle at a time, and a frame this
+    /// plan admits can draw hundreds of thousands of them inside a rectangle, so
+    /// the single form is what the harvest calls: gathering each triangle's
+    /// component into an array first would allocate once per drawn triangle for
+    /// an answer the `admitted` set collapses anyway.
+    static func appendRectangleSubshapeHit(
+        _ selectionComponent: SelectionComponent,
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID,
+        into hits: inout [ViewportHit],
+        admitted: inout Set<SelectionTarget>
+    ) {
+        // The resolver reports face, edge and vertex components only; a
+        // component naming no generated sub-shape has no rectangle identity
+        // to report.
+        guard rectangleComponentID(selectionComponent) != nil else { return }
+        let target = SelectionTarget(sceneNodeID: sceneNodeID, component: selectionComponent)
+        guard admitted.insert(target).inserted else { return }
+        hits.append(
+            ViewportHit(
+                featureID: featureID,
+                sceneNodeID: sceneNodeID,
+                kind: .body,
+                pickingBackend: .native,
+                selectionComponent: selectionComponent
+            )
+        )
     }
 
     /// Whether the native rectangle query already owns this legacy hit.
@@ -9947,12 +10009,11 @@ public struct Viewport: View {
         // resolves on its own asks the frame nothing.
         let visibleOccurrenceIDs: [SceneOccurrenceID]
         if requiresLegacy || selectionHitPolicy.allowsObjectHits {
-            // `confirmed` is what both consumers read. An unconfirmed
-            // occurrence is neither selected nor proven absent, so it can
-            // neither be reported as a selection nor delete a legacy hit;
-            // `RupaRendering/DESIGN.md` owns why widening either consumer
-            // would be wrong.
-            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect).confirmed
+            // The answer is the frame's own drawing decision at every device
+            // pixel of the rectangle, so an occurrence absent from it is one
+            // the frame drew nowhere inside the rectangle. There is no third
+            // outcome either consumer has to interpret.
+            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect)
         } else {
             visibleOccurrenceIDs = []
         }

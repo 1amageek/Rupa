@@ -62,6 +62,17 @@ import Foundation
 /// first query. That order decides only how many queries a candidate costs: a
 /// candidate is admitted when any one of its samples is confirmed, so the
 /// admission itself is the same for every order.
+///
+/// No production path reaches this grid. The region visibility raster answers
+/// the selection rectangle from what the mounted frame draws at every device
+/// pixel of it, so the sampling rule this grid states is reachable only from
+/// its own tests and from the two sampling resolvers, which are deprecated
+/// with it. RK-4.3.5.6 removes all three once the region path's replacement
+/// evidence passes on the mounted path.
+@available(
+    *, deprecated,
+    message: "The region visibility raster answers the selection rectangle. Removed with the two sampling resolvers in RK-4.3.5.6."
+)
 struct ViewportRectangleSampleGrid {
     /// The rectangle being sampled.
     let rect: CGRect

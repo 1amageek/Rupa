@@ -14,6 +14,17 @@ import RupaGeometry
 /// `depthInterval` and `drawnOccurrenceID` are the mounted frame's answers, and
 /// the frame draws only what survived the section, only what nothing nearer
 /// covers, and only the faces it retains.
+///
+/// No production path reaches this resolver.
+/// `RealityViewport.occurrenceIDs(intersecting:revision:)` harvests the region
+/// raster's own triangles instead, so the occurrence a frame draws only in a
+/// window narrower than a sampling cell is answered there and lost here. What
+/// is left reachable is this resolver's own tests, and RK-4.3.5.6 removes both
+/// once the region path's replacement evidence passes on the mounted path.
+@available(
+    *, deprecated,
+    message: "RealityViewport.occurrenceIDs(intersecting:revision:) harvests the region raster. Removed in RK-4.3.5.6."
+)
 enum ViewportNativeOccurrenceRectangleResolver {
     /// The occurrences the mounted frame draws inside `rect`, in plan order and
     /// de-duplicated.

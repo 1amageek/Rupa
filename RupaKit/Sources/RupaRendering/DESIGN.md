@@ -1256,9 +1256,16 @@ independent tessellator is never an alternative implementation.
    and `Tests/RupaRenderingTests/ViewportRectangleSampleGridTests.swift` own
    the sampling rule this path replaces. They stay green, and the sampling
    resolvers stay reachable, until the evidence above is recorded; they are
-   removed with the rule itself and are not extended in the meantime. No test
-   is rewritten to assert the sampling rule's window limitation as the region
-   path's behaviour.
+   removed with the rule itself and are not extended in the meantime. The
+   two resolvers, `ViewportRectangleSampleGrid`, the two plan limits that
+   bound the sampling rule and `ViewportRectangleResolution`, whose only
+   producers they are, are marked deprecated from the change that makes this
+   path production, so those tests are the only thing that reaches them while
+   both exist and removal is all that is left to do to them. The deprecation
+   warnings those tests raise are that reachability stated, and are neither
+   silenced nor answered by marking the tests themselves: Swift Testing
+   refuses `@Suite` on a deprecated type. No test is rewritten to assert the
+   sampling rule's window limitation as the region path's behaviour.
    The two mounted-frame answers the CAD sub-shape point path depends on are
    proved by
    `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:

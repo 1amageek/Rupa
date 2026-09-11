@@ -56,14 +56,16 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// The region visibility raster below supersedes the rule this count
     /// bounds, and loses the window limitation stated above with it, because
     /// it reads every device pixel of the rectangle instead of sampling a
-    /// grid. This count passes through three states and no two of them
-    /// overlap. It bounds the production rectangle path now, and is not
-    /// deprecated while it does. It becomes deprecated, together with
-    /// `ViewportRectangleSampleGrid` and the two sampling resolvers, at the
-    /// change that makes the region path the production rectangle path;
-    /// from then on only those resolvers' own tests reach it. It is removed
-    /// with them once the region path's replacement evidence passes on the
-    /// mounted path, and this declaration goes with them.
+    /// grid. That region path is the production rectangle path now, so this
+    /// count is deprecated together with `ViewportRectangleSampleGrid` and the
+    /// two sampling resolvers, and only those resolvers' own tests reach it.
+    /// It is removed with them in RK-4.3.5.6, once the region path's
+    /// replacement evidence passes on the mounted path, and this declaration
+    /// goes with them.
+    @available(
+        *, deprecated,
+        message: "The region visibility raster answers the selection rectangle. Removed with the sampling rule in RK-4.3.5.6."
+    )
     public static let rectangleSampleGridDivisions = 4
 
     /// Native surface queries one selection rectangle update may spend on a
@@ -76,9 +78,13 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     ///
     /// The region path spends no native surface query per candidate, so this
     /// ceiling has nothing to bound there. It follows
-    /// `rectangleSampleGridDivisions` through the same three states: it is
-    /// deprecated at the change that makes the region path production, and
-    /// removed with that count.
+    /// `rectangleSampleGridDivisions`: the region path is production now, so
+    /// this ceiling is deprecated with that count and removed with it in
+    /// RK-4.3.5.6.
+    @available(
+        *, deprecated,
+        message: "The region path spends no native surface query per candidate. Removed with rectangleSampleGridDivisions in RK-4.3.5.6."
+    )
     public static var maxRectangleSurfaceQueryCountPerCandidate: Int {
         rectangleSampleGridDivisions * rectangleSampleGridDivisions
     }

@@ -94,7 +94,7 @@ final class MeshSourcePresentationPlanCache {
         intersecting rect: CGRect,
         for identity: RealityViewportPreparationRequest.Identity,
         revision: UInt64
-    ) throws -> ViewportRectangleResolution<SceneOccurrenceID> {
+    ) throws -> [SceneOccurrenceID] {
         try querySurface(for: identity).occurrenceIDs(intersecting: rect, revision: revision)
     }
 
@@ -230,6 +230,21 @@ final class MeshSourcePresentationPlanCache {
         revision: UInt64
     ) throws -> Bool {
         try querySurface(for: identity).retainsSectionedPoint(point, revision: revision)
+    }
+
+    /// Reports the active section's signed distance at the ends of a world
+    /// segment as one affine bound, or nil when the frame has no section. The
+    /// region rectangle's edge rule narrows a segment against this bound once
+    /// instead of asking the point predicate per sample.
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        try querySurface(for: identity).sectionParameterBound(
+            from: start, to: end, revision: revision
+        )
     }
 
     /// Resolves a world plane through the exact-ready native camera owned by
