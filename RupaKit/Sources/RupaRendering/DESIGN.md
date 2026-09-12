@@ -1225,31 +1225,47 @@ independent tessellator is never an alternative implementation.
    orthographic and perspective edge-parameter rules, rejection of vertices and
    edges the section removed, silhouette retention over an empty pixel, and the
    `miss` versus `unsupported` split.
-   The region path's evidence is required and not yet recorded, and it is two
-   different claims. That the raster is the frame is proved by the
-   component's differential test, which compares the raster's answer with
-   `surfaceHit` at every device pixel of a rectangle;
+   The region path's evidence is recorded, and it is two different claims.
+   That the raster is the frame is proved by the component's differential
+   test, which compares the raster's answer with `surfaceHit` at every
+   device pixel of a rectangle;
    [RealityViewport](RealityViewport/DESIGN.md#verification-and-change-impact)
    owns it and this design does not restate its cases. That each scope reads
-   the right identity out of that answer is proved here, on the mounted
-   frame: a face harvested from the triangles drawn inside the rectangle and
-   resolved through its body's runs, an `.authoredMesh` triangle skipped, a
-   `.cad` triangle whose index no run names missed truthfully, one component
-   named by two runs de-duplicated once, one shared feature placed twice
-   admitted at both placements, a vertex admitted at its own pixel and
-   rejected both behind a nearer surface and by the section, an edge admitted
-   at the first pixel of its projected interval the frame draws and rejected
-   when the frame draws something nearer along all of it, an edge crossing
-   the near plane admitted on the part the camera draws, and an interval with
-   no near plane refused.
+   the right identity out of that answer is proved here by
+   `Tests/RupaRenderingTests/ViewportNativeCADRectangleSelectionTests.swift`,
+   on the mounted frame and through the production drag path: a face
+   harvested from the triangles drawn inside the rectangle and resolved
+   through its body's runs, an `.authoredMesh` triangle skipped by the
+   sub-shape query while the occurrence query still reports its occurrence,
+   a vertex admitted at its own pixel and rejected both behind a nearer
+   surface and by the section, and an edge admitted at the first pixel of
+   its projected interval the frame draws, admitted at a rectangle it only
+   straddles, and rejected when the frame draws something nearer along all
+   of it. Every hit is checked to carry the native picking backend, so a
+   legacy residual answer fails that test rather than passing it.
+   Four rules of this path are keyed where a mounted frame cannot vary them,
+   and each stays with the test that owns its input. A `.cad` triangle whose
+   index no run names is missed truthfully, which
+   `ViewportNativeCADTopologyResolverTests` proves; a mounted body names
+   every index it draws. One component named by two runs is de-duplicated
+   once and one shared feature placed twice is admitted at both placements,
+   which `ViewportRectangleSubshapeIdentityTests` proves against the
+   resolver's own input; a mounted feature carries one run per component and
+   one scene node per feature. An edge crossing the near plane is admitted
+   on the part the camera draws, which
+   `RealityViewportRegionDifferentialTests` proves against the frame itself.
+   The typed refusal of a camera interval with no near plane stays
+   defensive: `RealityViewport.cameraDepthInterval` throws it, and a mounted
+   RealityKit camera always carries an ordered near and far, so no test
+   reaches that branch and none claims to.
    The replacement criteria this seam has to meet are proved on that same
    mounted path and not on synthetic frame closures: a visible part five
    pixels wide, a back face, a fully occluded body, a non-convex silhouette,
-   an active section, several placements of one definition, and one body at
-   two tessellation densities, each answered identically under the
+   an active section, several occurrences drawn in one frame, and one body
+   at two tessellation densities, each answered identically under the
    orthographic and the perspective camera. The same run records the
-   operation time of a rectangle drag there, which is what the offscreen wall
-   costs contract 10 states are re-recorded against.
+   operation time of a rectangle drag there, and contract 10 now states that
+   measurement beside the offscreen wall costs it was re-recorded against.
    The sampling rule this path replaces is removed.
    `ViewportRectangleSampleGrid`, the two sampling resolvers,
    `ViewportNativeCADTopologyResolver.resolve(in:...)`, the two plan limits
@@ -1257,10 +1273,10 @@ independent tessellator is never an alternative implementation.
    files that owned the rule are gone. They were removed while this path was
    already the only producer of a rectangle answer and no production caller
    reached any of them, which is what makes that removal a dead-code removal
-   and not a behaviour change. The mounted evidence above was not recorded at
-   that point and is owed by this path alone, with no second rule to fall
-   back to. No test asserts the sampling rule's window limitation as the
-   region path's behaviour.
+   and not a behaviour change. The mounted evidence above was recorded after
+   that removal, by this path alone, with no second rule to fall back to. No
+   test asserts the sampling rule's window limitation as the region path's
+   behaviour.
    The two mounted-frame answers the CAD sub-shape point path depends on are
    proved by
    `Tests/RupaRenderingTests/RealityViewportNativeFrameProjectionAndSectionTests.swift`:
