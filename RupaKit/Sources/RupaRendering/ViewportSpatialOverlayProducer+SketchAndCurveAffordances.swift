@@ -2288,7 +2288,8 @@ extension ViewportSpatialOverlayProducer {
             .sketchDimension(.init(featureID: featureID, entityID: entityID, kind: kind))
         }
         func pointTarget(
-            _ handle: SketchEntityPointHandle
+            _ handle: SketchEntityPointHandle,
+            at point: CGPoint
         ) -> ViewportSpatialPreparedInteractionTarget? {
             guard let target = primitive.selectionTarget else { return nil }
             return .sketchPointHandle(.init(
@@ -2296,11 +2297,13 @@ extension ViewportSpatialOverlayProducer {
                 entityID: entityID,
                 target: target,
                 handle: handle,
-                sketchPlane: primitive.sketchPlane
+                sketchPlane: primitive.sketchPlane,
+                point: point
             ))
         }
         func curveTarget(
-            _ handle: ViewportSketchCurveHandleKind
+            _ handle: ViewportSketchCurveHandleKind,
+            at point: CGPoint
         ) -> ViewportSpatialPreparedInteractionTarget? {
             guard let target = primitive.selectionTarget else { return nil }
             switch sourcePrimitive {
@@ -2311,6 +2314,7 @@ extension ViewportSpatialOverlayProducer {
                     target: target,
                     handle: handle,
                     sketchPlane: primitive.sketchPlane,
+                    point: point,
                     center: center,
                     radiusMeters: radiusMeters,
                     startAngleRadians: nil,
@@ -2323,6 +2327,7 @@ extension ViewportSpatialOverlayProducer {
                     target: target,
                     handle: handle,
                     sketchPlane: primitive.sketchPlane,
+                    point: point,
                     center: center,
                     radiusMeters: radiusMeters,
                     startAngleRadians: startAngle,
@@ -2334,6 +2339,7 @@ extension ViewportSpatialOverlayProducer {
         }
         func dimensionTarget(
             _ kind: SketchEntityDimensionKind,
+            at point: CGPoint,
             baselineValue: Double,
             start: CGPoint? = nil,
             end: CGPoint? = nil,
@@ -2349,6 +2355,7 @@ extension ViewportSpatialOverlayProducer {
                 target: target,
                 kind: kind,
                 sketchPlane: primitive.sketchPlane,
+                point: point,
                 baselineValue: baselineValue,
                 start: start,
                 end: end,
@@ -2359,7 +2366,8 @@ extension ViewportSpatialOverlayProducer {
             ))
         }
         func splinePointTarget(
-            _ controlPointIndex: Int
+            _ controlPointIndex: Int,
+            at point: CGPoint
         ) -> ViewportSpatialPreparedInteractionTarget? {
             guard let target = primitive.selectionTarget else { return nil }
             return .splineControlPoint(.init(
@@ -2367,7 +2375,8 @@ extension ViewportSpatialOverlayProducer {
                 entityID: entityID,
                 target: target,
                 controlPointIndex: controlPointIndex,
-                sketchPlane: primitive.sketchPlane
+                sketchPlane: primitive.sketchPlane,
+                point: point
             ))
         }
         func directed(
@@ -2412,7 +2421,7 @@ extension ViewportSpatialOverlayProducer {
                 state: state,
                 identity: identity(.point),
                 markers: [.init(anchor: anchor, diameterPoints: 8)],
-                preparedTarget: pointTarget(.point)
+                preparedTarget: pointTarget(.point, at: point)
             ))
 
         case .line(_, let start, let end):
@@ -2435,7 +2444,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: identity(.lineStart),
                         markers: [.init(anchor: worldStart, diameterPoints: 8)],
-                        preparedTarget: pointTarget(.lineStart)
+                        preparedTarget: pointTarget(.lineStart, at: start)
                     ),
                     .init(
                         route: .curvePointControl,
@@ -2443,12 +2452,16 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: identity(.lineEnd),
                         markers: [.init(anchor: worldEnd, diameterPoints: 8)],
-                        preparedTarget: pointTarget(.lineEnd)
+                        preparedTarget: pointTarget(.lineEnd, at: end)
                     ),
                 ])
             }
             if primitive.showsDimensions {
                 let midpoint = midpoint(worldStart, worldEnd)
+                let displayedMidpoint = CGPoint(
+                    x: (start.x + end.x) * 0.5,
+                    y: (start.y + end.y) * 0.5
+                )
                 let toward = normalPoint(start: start, end: end)
                 let guide = SketchCurveCameraGuide(points: [
                     directed(anchor: midpoint, toward: toward),
@@ -2480,6 +2493,7 @@ extension ViewportSpatialOverlayProducer {
                         )],
                         preparedTarget: dimensionTarget(
                             .length,
+                            at: displayedMidpoint,
                             baselineValue: hypot(
                                 Double(sourceEnd.x - sourceStart.x),
                                 Double(sourceEnd.y - sourceStart.y)
@@ -2503,6 +2517,7 @@ extension ViewportSpatialOverlayProducer {
                         )],
                         preparedTarget: dimensionTarget(
                             .angle,
+                            at: displayedMidpoint,
                             baselineValue: atan2(
                                 Double(sourceEnd.y - sourceStart.y),
                                 Double(sourceEnd.x - sourceStart.x)
@@ -2537,7 +2552,7 @@ extension ViewportSpatialOverlayProducer {
                     state: state,
                     identity: identity(.circleCenter),
                     markers: [.init(anchor: worldCenter, diameterPoints: 8)],
-                    preparedTarget: pointTarget(.circleCenter)
+                    preparedTarget: pointTarget(.circleCenter, at: center)
                 ))
             }
             if primitive.showsCurveHandles {
@@ -2547,7 +2562,7 @@ extension ViewportSpatialOverlayProducer {
                     state: state,
                     identity: curveIdentity(.circleRadius),
                     markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)],
-                    preparedTarget: curveTarget(.circleRadius)
+                    preparedTarget: curveTarget(.circleRadius, at: radiusPoint)
                 ))
             }
             if primitive.showsDimensions {
@@ -2569,6 +2584,7 @@ extension ViewportSpatialOverlayProducer {
                         )],
                         preparedTarget: dimensionTarget(
                             .radius,
+                            at: radiusPoint,
                             baselineValue: sourceRadius,
                             center: sourceCenter,
                             radiusMeters: sourceRadius
@@ -2629,7 +2645,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: identity(.arcCenter),
                         markers: [.init(anchor: worldCenter, diameterPoints: 8)],
-                        preparedTarget: pointTarget(.arcCenter)
+                        preparedTarget: pointTarget(.arcCenter, at: center)
                     ),
                     .init(
                         route: .curvePointControl,
@@ -2637,7 +2653,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: identity(.arcStart),
                         markers: [.init(anchor: world(startPoint), diameterPoints: 8)],
-                        preparedTarget: pointTarget(.arcStart)
+                        preparedTarget: pointTarget(.arcStart, at: startPoint)
                     ),
                     .init(
                         route: .curvePointControl,
@@ -2645,7 +2661,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: identity(.arcEnd),
                         markers: [.init(anchor: world(endPoint), diameterPoints: 8)],
-                        preparedTarget: pointTarget(.arcEnd)
+                        preparedTarget: pointTarget(.arcEnd, at: endPoint)
                     ),
                 ])
             }
@@ -2657,7 +2673,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: curveIdentity(.arcRadius),
                         markers: [.init(anchor: worldRadiusPoint, diameterPoints: 8)],
-                        preparedTarget: curveTarget(.arcRadius)
+                        preparedTarget: curveTarget(.arcRadius, at: radiusPoint)
                     ),
                     .init(
                         route: .curvePointControl,
@@ -2665,7 +2681,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: curveIdentity(.arcStartAngle),
                         markers: [.init(anchor: world(startPoint), diameterPoints: 8)],
-                        preparedTarget: curveTarget(.arcStartAngle)
+                        preparedTarget: curveTarget(.arcStartAngle, at: startPoint)
                     ),
                     .init(
                         route: .curvePointControl,
@@ -2673,7 +2689,7 @@ extension ViewportSpatialOverlayProducer {
                         state: state,
                         identity: curveIdentity(.arcEndAngle),
                         markers: [.init(anchor: world(endPoint), diameterPoints: 8)],
-                        preparedTarget: curveTarget(.arcEndAngle)
+                        preparedTarget: curveTarget(.arcEndAngle, at: endPoint)
                     ),
                 ])
             }
@@ -2712,6 +2728,7 @@ extension ViewportSpatialOverlayProducer {
                         )],
                         preparedTarget: dimensionTarget(
                             .radius,
+                            at: radiusPoint,
                             baselineValue: sourceRadius,
                             center: sourceCenter,
                             radiusMeters: sourceRadius,
@@ -2734,6 +2751,7 @@ extension ViewportSpatialOverlayProducer {
                         )],
                         preparedTarget: dimensionTarget(
                             .angle,
+                            at: radiusPoint,
                             baselineValue: normalizedArcSpan(
                                 startAngle: sourceStartAngle,
                                 endAngle: sourceEndAngle
@@ -2782,7 +2800,7 @@ extension ViewportSpatialOverlayProducer {
                             controlPointIndex: index
                         )),
                         markers: [.init(anchor: point, diameterPoints: 8)],
-                        preparedTarget: splinePointTarget(index)
+                        preparedTarget: splinePointTarget(index, at: controlPoints[index])
                     ))
                 }
             }

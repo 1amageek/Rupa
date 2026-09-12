@@ -17,87 +17,87 @@ import Testing
     #expect(drags.nextFinishKind == .affordance)
 }
 
-@Test func viewportActiveInteractionDragsNextFinishKindFollowsViewportCommitPrecedence() {
+@Test func viewportActiveInteractionDragsNextFinishKindFollowsViewportCommitPrecedence() throws {
     let drags = ViewportActiveInteractionDrags(
         affordance: affordanceDragState(),
-        sketchCurveHandle: sketchCurveHandleDragState(),
-        sketchDimension: sketchDimensionDragState()
+        splineControlPointSlide: try splineControlPointSlideDragState(),
+        regionOffset: try regionOffsetDragState()
     )
 
-    #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.sketchCurveHandle)
+    #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.splineControlPointSlide)
 }
 
 @Test func viewportActiveInteractionDragKindFinishPrecedenceIsStableAndUnique() {
     let precedence = ViewportActiveInteractionDragKind.finishPrecedence
 
     #expect(precedence == ViewportActiveInteractionDragKind.allCases)
-    #expect(precedence.first == .sketchCurveHandle)
+    #expect(precedence.first == .splineControlPointSlide)
     #expect(precedence.last == .affordance)
     #expect(Set(precedence).count == precedence.count)
 }
 
-@Test func viewportActiveInteractionDragCandidatesUseFinishPrecedenceForFirstActiveDrag() {
+@Test func viewportActiveInteractionDragCandidatesUseFinishPrecedenceForFirstActiveDrag() throws {
     let candidates = ViewportActiveInteractionDragCandidates(
         affordance: affordanceDragState(),
-        sketchCurveHandle: sketchCurveHandleDragState(),
-        sketchDimension: sketchDimensionDragState()
+        splineControlPointSlide: try splineControlPointSlideDragState(),
+        regionOffset: try regionOffsetDragState()
     )
 
-    #expect(candidates.firstActiveDrag?.kind == .sketchCurveHandle)
+    #expect(candidates.firstActiveDrag?.kind == .splineControlPointSlide)
 }
 
-@Test func viewportActiveInteractionDragsKeepsOnlyOneActiveDragWhenSettingNewDrag() {
+@Test func viewportActiveInteractionDragsKeepsOnlyOneActiveDragWhenSettingNewDrag() throws {
     var drags = ViewportActiveInteractionDrags()
 
     drags.affordance = affordanceDragState()
-    drags.sketchCurveHandle = sketchCurveHandleDragState()
+    drags.splineControlPointSlide = try splineControlPointSlideDragState()
 
     #expect(drags.affordance == nil)
-    #expect(drags.sketchCurveHandle != nil)
+    #expect(drags.splineControlPointSlide != nil)
     #expect(drags.hasActiveDrag)
-    #expect(drags.nextFinishKind == .sketchCurveHandle)
+    #expect(drags.nextFinishKind == .splineControlPointSlide)
 }
 
-@Test func viewportActiveInteractionDragsClearsOnlyMatchingActiveDragWhenSettingNil() {
+@Test func viewportActiveInteractionDragsClearsOnlyMatchingActiveDragWhenSettingNil() throws {
     var drags = ViewportActiveInteractionDrags()
 
     drags.affordance = affordanceDragState()
-    drags.sketchCurveHandle = sketchCurveHandleDragState()
+    drags.splineControlPointSlide = try splineControlPointSlideDragState()
     drags.affordance = nil
 
-    #expect(drags.sketchCurveHandle != nil)
-    #expect(drags.nextFinishKind == .sketchCurveHandle)
+    #expect(drags.splineControlPointSlide != nil)
+    #expect(drags.nextFinishKind == .splineControlPointSlide)
 
-    drags.sketchCurveHandle = nil
+    drags.splineControlPointSlide = nil
 
     #expect(!drags.hasActiveDrag)
     #expect(drags.nextFinishKind == nil)
 }
 
-@Test func viewportActiveInteractionDragsInitializerUsesFinishPrecedenceForLegacyMultipleInputs() {
+@Test func viewportActiveInteractionDragsInitializerUsesFinishPrecedenceForLegacyMultipleInputs() throws {
     let drags = ViewportActiveInteractionDrags(
         affordance: affordanceDragState(),
-        sketchCurveHandle: sketchCurveHandleDragState(),
-        sketchDimension: sketchDimensionDragState()
+        splineControlPointSlide: try splineControlPointSlideDragState(),
+        regionOffset: try regionOffsetDragState()
     )
 
-    #expect(drags.sketchCurveHandle != nil)
-    #expect(drags.sketchDimension == nil)
+    #expect(drags.splineControlPointSlide != nil)
+    #expect(drags.regionOffset == nil)
     #expect(drags.affordance == nil)
-    #expect(drags.nextFinishKind == .sketchCurveHandle)
+    #expect(drags.nextFinishKind == .splineControlPointSlide)
 }
 
-@Test func viewportActiveInteractionDragsClearRemovesEveryDragWhenNoTargetIsPreserved() {
+@Test func viewportActiveInteractionDragsClearRemovesEveryDragWhenNoTargetIsPreserved() throws {
     var drags = ViewportActiveInteractionDrags(
         affordance: affordanceDragState(),
-        sketchCurveHandle: sketchCurveHandleDragState()
+        splineControlPointSlide: try splineControlPointSlideDragState()
     )
 
     drags.clear()
 
     #expect(!drags.hasActiveDrag)
     #expect(drags.affordance == nil)
-    #expect(drags.sketchCurveHandle == nil)
+    #expect(drags.splineControlPointSlide == nil)
 }
 
 @Test func viewportActiveInteractionDragsClearPreservesOnlyMatchingInteractionTarget() {
@@ -110,22 +110,25 @@ import Testing
     #expect(drags.hasActiveDrag)
 }
 
-@Test func viewportActiveInteractionDragsClearDoesNotPreserveDifferentTargetOfSameKind() {
-    let original = sketchCurveHandleDragState(entityID: SketchEntityID())
-    let replacement = sketchCurveHandleTarget(entityID: SketchEntityID())
-    var drags = ViewportActiveInteractionDrags(sketchCurveHandle: original)
+@Test func viewportActiveInteractionDragsClearDoesNotPreserveDifferentTargetOfSameKind() throws {
+    let original = try splineControlPointSlideDragState(entityID: SketchEntityID())
+    let replacement = try splineControlPointSlideHandleTarget(entityID: SketchEntityID())
+    var drags = ViewportActiveInteractionDrags(splineControlPointSlide: original)
 
-    drags.clear(except: .sketchCurveHandle(replacement))
+    drags.clear(except: .splineControlPointSlide(replacement))
 
-    #expect(drags.sketchCurveHandle == nil)
+    #expect(drags.splineControlPointSlide == nil)
     #expect(!drags.hasActiveDrag)
 }
 
-@Test func viewportInteractionTargetReportsActiveDragKindForDragTargets() {
-    let sketchTarget = sketchCurveHandleTarget()
+@Test func viewportInteractionTargetReportsActiveDragKindForDragTargets() throws {
+    let slideTarget = try splineControlPointSlideHandleTarget()
     let affordanceTarget = affordanceDragState().target
 
-    #expect(ViewportInteractionTarget.sketchCurveHandle(sketchTarget).activeDragKind == .sketchCurveHandle)
+    #expect(
+        ViewportInteractionTarget.splineControlPointSlide(slideTarget).activeDragKind
+            == .splineControlPointSlide
+    )
     #expect(ViewportInteractionTarget.affordance(affordanceTarget).activeDragKind == .affordance)
 }
 
@@ -147,13 +150,22 @@ import Testing
     #expect(request == .finish(.affordance))
 }
 
-@Test func viewportInteractionDragFinishResolverPrefersPendingTargetOverActiveDrag() {
+@Test func viewportInteractionDragFinishResolverPrefersPendingTargetOverActiveDrag() throws {
     let request = ViewportInteractionDragFinishResolver.request(
-        pendingTarget: .sketchCurveHandle(sketchCurveHandleTarget()),
+        pendingTarget: .splineControlPointSlide(try splineControlPointSlideHandleTarget()),
         activeInteractionDrags: ViewportActiveInteractionDrags(affordance: affordanceDragState())
     )
 
-    #expect(request == .finish(.sketchCurveHandle))
+    #expect(request == .finish(.splineControlPointSlide))
+}
+
+private struct ViewportActiveInteractionDragFixtureError: Error {}
+
+private func fixtureLayout() -> ViewportLayout {
+    ViewportLayout(
+        modelBounds: CGRect(x: -0.004, y: -0.004, width: 0.012, height: 0.012),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
 }
 
 private func affordanceDragState(featureID: FeatureID = FeatureID()) -> ViewportAffordanceDragState {
@@ -168,53 +180,61 @@ private func affordanceDragState(featureID: FeatureID = FeatureID()) -> Viewport
     )
 }
 
-private func sketchCurveHandleDragState(
+private func splineControlPointSlideHandleTarget(
     entityID: SketchEntityID = SketchEntityID()
-) -> ViewportSketchCurveHandleDragState {
-    ViewportSketchCurveHandleDragState(
-        target: sketchCurveHandleTarget(entityID: entityID),
-        startPoint: .zero,
-        radiusMeters: 2.0,
-        startAngleRadians: nil,
-        endAngleRadians: nil
-    )
-}
-
-private func sketchDimensionDragState(
-    entityID: SketchEntityID = SketchEntityID()
-) -> ViewportSketchDimensionDragState {
-    ViewportSketchDimensionDragState(
-        target: ViewportSketchDimensionTarget(
-            featureID: FeatureID(),
-            entityID: entityID,
-            target: SelectionTarget(sceneNodeID: SceneNodeID()),
-            kind: .length,
-            sketchPlane: .xy,
-            baselineValue: 1.0,
-            start: CGPoint(x: 0.0, y: 0.0),
-            end: CGPoint(x: 1.0, y: 0.0),
-            center: nil,
-            radiusMeters: nil,
-            startAngleRadians: nil,
-            endAngleRadians: nil
-        ),
-        startPoint: .zero,
-        value: 2.0
-    )
-}
-
-private func sketchCurveHandleTarget(
-    entityID: SketchEntityID = SketchEntityID()
-) -> ViewportSketchCurveHandleTarget {
-    ViewportSketchCurveHandleTarget(
+) throws -> ViewportSplineControlPointSlideHandleTarget {
+    guard let geometry = ViewportSplineControlPointSlideAffordanceGeometry(
+        controlPoints: [
+            CGPoint(x: 0.000, y: 0.000),
+            CGPoint(x: 0.002, y: 0.000),
+            CGPoint(x: 0.004, y: 0.000),
+        ],
+        selectedIndexes: [1],
+        direction: .positiveU,
+        layout: fixtureLayout()
+    ) else {
+        throw ViewportActiveInteractionDragFixtureError()
+    }
+    return ViewportSplineControlPointSlideHandleTarget(
         featureID: FeatureID(),
         entityID: entityID,
         target: SelectionTarget(sceneNodeID: SceneNodeID()),
-        handle: .circleRadius,
-        sketchPlane: .xy,
-        center: .zero,
-        radiusMeters: 1.0,
-        startAngleRadians: nil,
-        endAngleRadians: nil
+        controlPointIndexes: [1],
+        direction: .positiveU,
+        geometry: geometry
+    )
+}
+
+private func splineControlPointSlideDragState(
+    entityID: SketchEntityID = SketchEntityID()
+) throws -> ViewportSplineControlPointSlideDragState {
+    ViewportSplineControlPointSlideDragState(
+        target: try splineControlPointSlideHandleTarget(entityID: entityID),
+        startPoint: .zero,
+        distanceMeters: 0.001
+    )
+}
+
+private func regionOffsetDragState() throws -> ViewportRegionOffsetDragState {
+    guard let geometry = ViewportRegionOffsetAffordanceGeometry(
+        points: [
+            CGPoint(x: 0.000, y: 0.000),
+            CGPoint(x: 0.004, y: 0.000),
+            CGPoint(x: 0.004, y: 0.004),
+            CGPoint(x: 0.000, y: 0.004),
+        ],
+        layout: fixtureLayout()
+    ) else {
+        throw ViewportActiveInteractionDragFixtureError()
+    }
+    return ViewportRegionOffsetDragState(
+        target: ViewportRegionOffsetHandleTarget(
+            featureID: FeatureID(),
+            componentID: SelectionComponentID(rawValue: "profileRegion:0"),
+            target: SelectionTarget(sceneNodeID: SceneNodeID()),
+            geometry: geometry
+        ),
+        startPoint: .zero,
+        distanceMeters: 0.001
     )
 }

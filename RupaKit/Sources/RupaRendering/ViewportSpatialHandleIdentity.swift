@@ -130,10 +130,6 @@ extension ViewportInteractionTarget {
     var spatialIdentity: ViewportSpatialHandleIdentity {
         get throws {
         switch self {
-        case .sketchCurveHandle(let target): .sketchCurveHandle(target.identity)
-        case .sketchDimension(let target): .sketchDimension(target.identity)
-        case .sketchPointHandle(let target): .sketchPointHandle(target.identity)
-        case .splineControlPoint(let target): .splineControlPoint(target.identity)
         case .splineControlPointSlide(let target): .splineControlPointSlide(target.identity)
         case .polySplineSurfaceVertexSlide(let target): .polySplineSurfaceVertexSlide(target.identity)
         case .surfaceControlPointSlide(let target):

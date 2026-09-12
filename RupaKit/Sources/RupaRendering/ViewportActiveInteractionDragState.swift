@@ -1,12 +1,8 @@
 enum ViewportActiveInteractionDragState: Equatable {
-    case sketchCurveHandle(ViewportSketchCurveHandleDragState)
-    case sketchDimension(ViewportSketchDimensionDragState)
-    case sketchPointHandle(ViewportSketchPointHandleDragState)
     case splineControlPointSlide(ViewportSplineControlPointSlideDragState)
     case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideDragState)
     case surfaceControlPointSlide(ViewportSurfaceControlPointSlideDragState)
     case surfaceFrame(ViewportSurfaceFrameDragState)
-    case splineControlPoint(ViewportSplineControlPointDragState)
     case edgeOffset(ViewportEdgeOffsetDragState)
     case slotWidth(ViewportSlotWidthDragState)
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragState)
@@ -18,12 +14,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var kind: ViewportActiveInteractionDragKind {
         switch self {
-        case .sketchCurveHandle:
-            .sketchCurveHandle
-        case .sketchDimension:
-            .sketchDimension
-        case .sketchPointHandle:
-            .sketchPointHandle
         case .splineControlPointSlide:
             .splineControlPointSlide
         case .polySplineSurfaceVertexSlide:
@@ -32,8 +22,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .surfaceControlPointSlide
         case .surfaceFrame:
             .surfaceFrame
-        case .splineControlPoint:
-            .splineControlPoint
         case .edgeOffset:
             .edgeOffset
         case .slotWidth:
@@ -55,12 +43,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var interactionTarget: ViewportInteractionTarget {
         switch self {
-        case .sketchCurveHandle(let state):
-            .sketchCurveHandle(state.target)
-        case .sketchDimension(let state):
-            .sketchDimension(state.target)
-        case .sketchPointHandle(let state):
-            .sketchPointHandle(state.target)
         case .splineControlPointSlide(let state):
             .splineControlPointSlide(state.target)
         case .polySplineSurfaceVertexSlide(let state):
@@ -69,8 +51,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .surfaceControlPointSlide(state.target)
         case .surfaceFrame(let state):
             .surfaceFrame(state.target)
-        case .splineControlPoint(let state):
-            .splineControlPoint(state.target)
         case .edgeOffset(let state):
             .edgeOffset(state.target)
         case .slotWidth(let state):
@@ -90,18 +70,6 @@ enum ViewportActiveInteractionDragState: Equatable {
         }
     }
 
-    var sketchCurveHandle: ViewportSketchCurveHandleDragState? {
-        if case .sketchCurveHandle(let state) = self { state } else { nil }
-    }
-
-    var sketchDimension: ViewportSketchDimensionDragState? {
-        if case .sketchDimension(let state) = self { state } else { nil }
-    }
-
-    var sketchPointHandle: ViewportSketchPointHandleDragState? {
-        if case .sketchPointHandle(let state) = self { state } else { nil }
-    }
-
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? {
         if case .splineControlPointSlide(let state) = self { state } else { nil }
     }
@@ -116,10 +84,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var surfaceFrame: ViewportSurfaceFrameDragState? {
         if case .surfaceFrame(let state) = self { state } else { nil }
-    }
-
-    var splineControlPoint: ViewportSplineControlPointDragState? {
-        if case .splineControlPoint(let state) = self { state } else { nil }
     }
 
     var edgeOffset: ViewportEdgeOffsetDragState? {

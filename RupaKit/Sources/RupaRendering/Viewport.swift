@@ -335,26 +335,6 @@ public struct Viewport: View {
         nonmutating set { activeInteractionDrags.affordance = newValue }
     }
 
-    private var activeSketchCurveHandleDrag: ViewportSketchCurveHandleDragState? {
-        get { activeInteractionDrags.sketchCurveHandle }
-        nonmutating set { activeInteractionDrags.sketchCurveHandle = newValue }
-    }
-
-    private var activeSketchDimensionDrag: ViewportSketchDimensionDragState? {
-        get { activeInteractionDrags.sketchDimension }
-        nonmutating set { activeInteractionDrags.sketchDimension = newValue }
-    }
-
-    private var activeSketchPointHandleDrag: ViewportSketchPointHandleDragState? {
-        get { activeInteractionDrags.sketchPointHandle }
-        nonmutating set { activeInteractionDrags.sketchPointHandle = newValue }
-    }
-
-    private var activeSplineControlPointDrag: ViewportSplineControlPointDragState? {
-        get { activeInteractionDrags.splineControlPoint }
-        nonmutating set { activeInteractionDrags.splineControlPoint = newValue }
-    }
-
     private var activeSplineControlPointSlideDrag: ViewportSplineControlPointSlideDragState? {
         get { activeInteractionDrags.splineControlPointSlide }
         nonmutating set { activeInteractionDrags.splineControlPointSlide = newValue }
@@ -2973,68 +2953,18 @@ public struct Viewport: View {
     }
 
 
-    private func displayedSketchCurveRadius(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        fallbackRadiusMeters: Double
-    ) -> Double {
-        let identity = ViewportSketchCurveHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            handle: .circleRadius
-        )
-        guard activeSketchCurveHandleDrag?.target.identity == identity,
-              let radiusMeters = activeSketchCurveHandleDrag?.radiusMeters else {
-            let dimensionIdentity = ViewportSketchDimensionIdentity(
-                featureID: featureID,
-                entityID: entityID,
-                kind: .radius
-            )
-            guard activeSketchDimensionDrag?.target.identity == dimensionIdentity,
-                  let dimensionValue = activeSketchDimensionDrag?.value else {
-                return fallbackRadiusMeters
-            }
-            return dimensionValue
-        }
-        return radiusMeters
-    }
-
     private func displayedSketchDimensionLine(
         featureID: FeatureID,
         entityID: SketchEntityID,
         start: CGPoint,
         end: CGPoint
     ) -> (start: CGPoint, end: CGPoint) {
-        let identity = ViewportSketchDimensionIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            kind: .length
-        )
-        guard activeSketchDimensionDrag?.target.identity == identity,
-              let lengthValue = activeSketchDimensionDrag?.value else {
-            let angleIdentity = ViewportSketchDimensionIdentity(
-                featureID: featureID,
-                entityID: entityID,
-                kind: .angle
-            )
-            guard activeSketchDimensionDrag?.target.identity == angleIdentity,
-                  let angleValue = activeSketchDimensionDrag?.value else {
-                return (start, end)
-            }
-            let dx = end.x - start.x
-            let dy = end.y - start.y
-            let currentLength = hypot(dx, dy)
-            guard currentLength > 1.0e-12 else {
-                return (start, end)
-            }
-            let length = CGFloat(currentLength)
-            return (
-                start,
-                CGPoint(
-                    x: start.x + cos(CGFloat(angleValue)) * length,
-                    y: start.y + sin(CGFloat(angleValue)) * length
-                )
-            )
+        guard let preview = nativeWorldPointPreview,
+              case .sketchDimension(let value) = preview.value,
+              case .sketchDimension(let handle) = preview.target,
+              handle.featureID == featureID,
+              handle.entityID == entityID else {
+            return (start, end)
         }
         let dx = end.x - start.x
         let dy = end.y - start.y
@@ -3042,14 +2972,28 @@ public struct Viewport: View {
         guard currentLength > 1.0e-12 else {
             return (start, end)
         }
-        let length = CGFloat(max(lengthValue, 1.0e-9))
-        return (
-            start,
-            CGPoint(
-                x: start.x + dx / currentLength * length,
-                y: start.y + dy / currentLength * length
+        switch handle.kind {
+        case .length:
+            let length = CGFloat(value)
+            return (
+                start,
+                CGPoint(
+                    x: start.x + dx / currentLength * length,
+                    y: start.y + dy / currentLength * length
+                )
             )
-        )
+        case .angle:
+            let length = CGFloat(currentLength)
+            return (
+                start,
+                CGPoint(
+                    x: start.x + cos(CGFloat(value)) * length,
+                    y: start.y + sin(CGFloat(value)) * length
+                )
+            )
+        case .radius, .diameter:
+            return (start, end)
+        }
     }
 
     private func displayedSketchArcParameters(
@@ -3059,90 +3003,39 @@ public struct Viewport: View {
         startAngleRadians: Double,
         endAngleRadians: Double
     ) -> (radiusMeters: Double, startAngleRadians: Double, endAngleRadians: Double) {
-        guard let activeSketchCurveHandleDrag,
-              activeSketchCurveHandleDrag.target.featureID == featureID,
-              activeSketchCurveHandleDrag.target.entityID == entityID else {
-            let dimensionIdentity = ViewportSketchDimensionIdentity(
-                featureID: featureID,
-                entityID: entityID,
-                kind: .radius
-            )
-            guard activeSketchDimensionDrag?.target.identity == dimensionIdentity,
-                  let dimensionValue = activeSketchDimensionDrag?.value else {
-                let angleIdentity = ViewportSketchDimensionIdentity(
-                    featureID: featureID,
-                    entityID: entityID,
-                    kind: .angle
-                )
-                guard activeSketchDimensionDrag?.target.identity == angleIdentity,
-                      let angleValue = activeSketchDimensionDrag?.value else {
-                    return (radiusMeters, startAngleRadians, endAngleRadians)
-                }
-                return (radiusMeters, startAngleRadians, startAngleRadians + angleValue)
-            }
-            return (dimensionValue, startAngleRadians, endAngleRadians)
+        guard let preview = nativeWorldPointPreview else {
+            return (radiusMeters, startAngleRadians, endAngleRadians)
         }
-        return (
-            activeSketchCurveHandleDrag.radiusMeters ?? radiusMeters,
-            activeSketchCurveHandleDrag.startAngleRadians ?? startAngleRadians,
-            activeSketchCurveHandleDrag.endAngleRadians ?? endAngleRadians
-        )
+        switch (preview.target, preview.value) {
+        case (
+            .sketchCurveHandle(let handle),
+            .sketchCurveHandle(let previewRadius, let previewStart, let previewEnd)
+        ):
+            guard handle.featureID == featureID, handle.entityID == entityID else {
+                return (radiusMeters, startAngleRadians, endAngleRadians)
+            }
+            return (
+                previewRadius ?? radiusMeters,
+                previewStart ?? startAngleRadians,
+                previewEnd ?? endAngleRadians
+            )
+        case (.sketchDimension(let handle), .sketchDimension(let value)):
+            guard handle.featureID == featureID, handle.entityID == entityID else {
+                return (radiusMeters, startAngleRadians, endAngleRadians)
+            }
+            switch handle.kind {
+            case .radius:
+                return (value, startAngleRadians, endAngleRadians)
+            case .angle:
+                return (radiusMeters, startAngleRadians, startAngleRadians + value)
+            case .length, .diameter:
+                return (radiusMeters, startAngleRadians, endAngleRadians)
+            }
+        default:
+            return (radiusMeters, startAngleRadians, endAngleRadians)
+        }
     }
 
-
-    private func isSketchCurveHandleHighlighted(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        handle: ViewportSketchCurveHandleKind
-    ) -> Bool {
-        let identity = ViewportSketchCurveHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            handle: handle
-        )
-        return activeSketchCurveHandleDrag?.target.identity == identity
-            || hoveredSketchCurveHandle?.identity == identity
-    }
-
-    private func isSketchDimensionHighlighted(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        kind: SketchEntityDimensionKind
-    ) -> Bool {
-        let identity = ViewportSketchDimensionIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            kind: kind
-        )
-        return activeSketchDimensionDrag?.target.identity == identity
-            || hoveredSketchDimension?.identity == identity
-    }
-
-    private func circleRadiusHandlePoint(
-        center: CGPoint,
-        radiusMeters: Double
-    ) -> CGPoint {
-        pointOnSketchCircle(
-            center: center,
-            radiusMeters: radiusMeters,
-            angleRadians: 0.0
-        )
-    }
-
-    private func arcRadiusHandlePoint(
-        center: CGPoint,
-        radiusMeters: Double,
-        startAngleRadians: Double,
-        endAngleRadians: Double
-    ) -> CGPoint {
-        let midpointAngle = startAngleRadians
-            + normalizedArcSpan(startAngle: startAngleRadians, endAngle: endAngleRadians) / 2.0
-        return pointOnSketchCircle(
-            center: center,
-            radiusMeters: radiusMeters,
-            angleRadians: midpointAngle
-        )
-    }
 
     private func pointOnSketchCircle(
         center: CGPoint,
@@ -3156,69 +3049,11 @@ public struct Viewport: View {
         )
     }
 
-
-
-
-
-
-    private func dimensionLabelRect(for label: String, at point: CGPoint) -> CGRect {
-        let width = max(52.0, CGFloat(label.count) * 6.4 + 16.0)
-        let height: CGFloat = 22.0
-        return CGRect(
-            x: point.x - width / 2.0,
-            y: point.y - height / 2.0,
-            width: width,
-            height: height
-        )
-    }
-
-    private func lineDimensionMidpoint(start: CGPoint, end: CGPoint) -> CGPoint {
-        CGPoint(
-            x: (start.x + end.x) / 2.0,
-            y: (start.y + end.y) / 2.0
-        )
-    }
-
-    private func lineDimensionLabelPoint(start: CGPoint, end: CGPoint) -> CGPoint {
-        let midpoint = lineDimensionMidpoint(start: start, end: end)
-        let direction = normalizedVector(
-            from: start,
-            to: end,
-            fallback: CGVector(dx: 1.0, dy: 0.0)
-        )
-        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
-        return CGPoint(
-            x: midpoint.x + normal.dx * 26.0,
-            y: midpoint.y + normal.dy * 26.0
-        )
-    }
-
-    private func circleDimensionLabelPoint(radiusPoint: CGPoint) -> CGPoint {
-        CGPoint(x: radiusPoint.x + 34.0, y: radiusPoint.y - 18.0)
-    }
-
-    private func arcDimensionLabelPoint(center: CGPoint, radiusPoint: CGPoint) -> CGPoint {
-        let direction = normalizedVector(
-            from: center,
-            to: radiusPoint,
-            fallback: CGVector(dx: 1.0, dy: 0.0)
-        )
-        return CGPoint(
-            x: radiusPoint.x + direction.dx * 34.0,
-            y: radiusPoint.y + direction.dy * 34.0
-        )
-    }
-
     private func formattedViewportLength(_ meters: Double) -> String {
         ViewportLengthLabelFormatter.string(
             fromMeters: meters,
             preferredUnit: workspaceRuler.displayUnit
         )
-    }
-
-    private func formattedViewportAngle(_ radians: Double) -> String {
-        let degrees = radians * 180.0 / Double.pi
-        return "\(degrees.formatted(.number.precision(.fractionLength(0...1)))) deg"
     }
 
     private func normalizedVector(
@@ -3241,48 +3076,35 @@ public struct Viewport: View {
         handle: SketchEntityPointHandle,
         point: CGPoint
     ) -> CGPoint {
-        let identity = ViewportSketchPointHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            handle: handle
-        )
-        guard activeSketchPointHandleDrag?.target.identity == identity,
-              let viewportDelta = activeSketchPointHandleDrag?.viewportDelta else {
+        guard let preview = nativeWorldPointPreview,
+              case .sketchDisplayDelta(let displayDelta) = preview.value,
+              case .sketchPointHandle(let target) = preview.target,
+              target.featureID == featureID,
+              target.entityID == entityID,
+              target.handle == handle else {
             return point
         }
         return CGPoint(
-            x: point.x + viewportDelta.x,
-            y: point.y + viewportDelta.y
+            x: point.x + displayDelta.x,
+            y: point.y + displayDelta.y
         )
     }
 
-
-    private func isSketchPointHandleHighlighted(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        handle: SketchEntityPointHandle
-    ) -> Bool {
-        let identity = ViewportSketchPointHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            handle: handle
-        )
-        return activeSketchPointHandleDrag?.target.identity == identity
-            || hoveredSketchPointHandle?.identity == identity
-    }
 
     private func displayedSplineControlPoints(
         featureID: FeatureID,
         entityID: SketchEntityID,
         controlPoints: [CGPoint]
     ) -> [CGPoint] {
-        if let activeSplineControlPointDrag,
-           activeSplineControlPointDrag.target.featureID == featureID,
-           activeSplineControlPointDrag.target.entityID == entityID,
-           controlPoints.indices.contains(activeSplineControlPointDrag.target.controlPointIndex) {
+        if let preview = nativeWorldPointPreview,
+           case .sketchDisplayDelta(let displayDelta) = preview.value,
+           case .splineControlPoint(let target) = preview.target,
+           target.featureID == featureID,
+           target.entityID == entityID,
+           controlPoints.indices.contains(target.controlPointIndex) {
             var updatedControlPoints = controlPoints
-            updatedControlPoints[activeSplineControlPointDrag.target.controlPointIndex].x += activeSplineControlPointDrag.viewportDelta.x
-            updatedControlPoints[activeSplineControlPointDrag.target.controlPointIndex].y += activeSplineControlPointDrag.viewportDelta.y
+            updatedControlPoints[target.controlPointIndex].x += displayDelta.x
+            updatedControlPoints[target.controlPointIndex].y += displayDelta.y
             return updatedControlPoints
         }
 
@@ -3379,8 +3201,6 @@ public struct Viewport: View {
             controlPointIndex: controlPointIndex
         )
         return selectedControlPointIDs.contains(target)
-            || activeSplineControlPointDrag?.target.identity == target
-            || hoveredSplineControlPoint?.identity == target
     }
 
     private func splineSamplePoints(controlPoints: [CGPoint]) -> [CGPoint] {
@@ -5547,6 +5367,10 @@ public struct Viewport: View {
             value.dragMode == .planar && onSurfaceControlPointDrag != nil
         case .surfaceTrimEndpoint: onSurfaceTrimEndpointDrag != nil
         case .surfaceTrimControlPoint: onSurfaceTrimControlPointDrag != nil
+        case .sketchCurveHandle: onSketchCurveHandleDrag != nil
+        case .sketchDimension: onSketchDimensionDrag != nil
+        case .sketchPointHandle: onSketchPointHandleDrag != nil
+        case .splineControlPoint: onSplineControlPointDrag != nil
         default: false
         }
     }
@@ -6187,6 +6011,10 @@ public struct Viewport: View {
         case .surfaceControlPoint(let target): onSurfaceControlPointDrag?(target)
         case .surfaceTrimEndpoint(let target): onSurfaceTrimEndpointDrag?(target)
         case .surfaceTrimControlPoint(let target): onSurfaceTrimControlPointDrag?(target)
+        case .sketchCurveHandle(let target): onSketchCurveHandleDrag?(target)
+        case .sketchDimension(let target): onSketchDimensionDrag?(target)
+        case .sketchPointHandle(let target): onSketchPointHandleDrag?(target)
+        case .splineControlPoint(let target): onSplineControlPointDrag?(target)
         case nil: break
         }
     }
@@ -6269,14 +6097,14 @@ public struct Viewport: View {
         activeCanvasDrag = nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch curve, sketch point, sketch
-    // dimension, spline control point and body affordance routes still resolve
-    // from this legacy CPU projection when press/hover find no native record.
-    // Production reaches it from `beginViewportPress` and `hover` after the
-    // native frame declines the point. Completing RK-4 requires prepared
-    // records for those routes, after which this selector and its CPU gizmo
-    // geometry are removed; the migrated native axis, surface handle, body
-    // transform, pattern and world-point routes are never resolved here.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The body affordance routes -- vertex,
+    // face, edge and edge fillet -- still resolve from this legacy CPU
+    // projection when press/hover find no native record. Production reaches it
+    // from `beginViewportPress` and `hover` after the native frame declines the
+    // point. Completing RK-4 requires prepared records for those routes, after
+    // which this selector and its CPU gizmo geometry are removed; the migrated
+    // native axis, surface handle, sketch handle, body transform, pattern and
+    // world-point routes are never resolved here.
     private func resolvedInteractionTarget(
         at point: CGPoint,
         size: CGSize,
@@ -6287,18 +6115,6 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        if let target = selectedSketchCurveHandleTarget(at: point, sceneContext: sceneContext) {
-            return .sketchCurveHandle(target)
-        }
-        if let target = selectedSketchPointHandleTarget(at: point, sceneContext: sceneContext) {
-            return .sketchPointHandle(target)
-        }
-        if let target = selectedSketchDimensionTarget(at: point, sceneContext: sceneContext) {
-            return .sketchDimension(target)
-        }
-        if let target = selectedSplineControlPointTarget(at: point, sceneContext: sceneContext) {
-            return .splineControlPoint(target)
-        }
         if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
@@ -6337,14 +6153,6 @@ public struct Viewport: View {
     ) {
         clearActiveInteractionDrags(except: target)
         switch target {
-        case .sketchCurveHandle(let target):
-            updateSketchCurveHandleDrag(target: target, start: start, current: current, size: size)
-        case .sketchDimension(let target):
-            updateSketchDimensionDrag(target: target, start: start, current: current, size: size)
-        case .sketchPointHandle(let target):
-            updateSketchPointHandleDrag(target: target, start: start, current: current, size: size)
-        case .splineControlPoint(let target):
-            updateSplineControlPointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPointSlide(let target):
             updateSplineControlPointSlideDrag(target: target, start: start, current: current, size: size)
         case .polySplineSurfaceVertexSlide(let target):
@@ -6370,427 +6178,6 @@ public struct Viewport: View {
         case .affordance(let target):
             updateAffordanceDrag(target: target, start: start, current: current, size: size)
         }
-    }
-
-    private func selectedSketchCurveHandleTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSketchCurveHandleTarget? {
-        guard onSketchCurveHandleDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        var bestTarget: (target: ViewportSketchCurveHandleTarget, distance: CGFloat)?
-        for selectionTarget in selection.selectedTargets.reversed() {
-            guard case .sketchEntity = selectionTarget.component,
-                  let sketchTarget = sketchEntitySelectionTarget(for: selectionTarget),
-                  let item = scene.items.first(where: { $0.featureID == sketchTarget.featureID }),
-                  case .sketch(let primitives) = item.kind,
-                  let sketchPlane = sketchPlane(forFeatureID: sketchTarget.featureID) else {
-                continue
-            }
-            for primitive in primitives where primitive.entityID == sketchTarget.entityID {
-                for handle in sketchCurveHandles(for: primitive) {
-                    guard let projected = layout.projectedPoint(handle.point)?.point else { continue }
-                    let distance = point.distance(to: projected)
-                    guard distance <= handleTolerance else {
-                        continue
-                    }
-                    let candidate = ViewportSketchCurveHandleTarget(
-                        featureID: sketchTarget.featureID,
-                        entityID: sketchTarget.entityID,
-                        target: selectionTarget,
-                        handle: handle.handle,
-                        sketchPlane: sketchPlane,
-                        center: handle.center,
-                        radiusMeters: handle.radiusMeters,
-                        startAngleRadians: handle.startAngleRadians,
-                        endAngleRadians: handle.endAngleRadians
-                    )
-                    if let current = bestTarget {
-                        if distance < current.distance {
-                            bestTarget = (candidate, distance)
-                        }
-                    } else {
-                        bestTarget = (candidate, distance)
-                    }
-                }
-            }
-        }
-        return bestTarget?.target
-    }
-
-    private func selectedSketchDimensionTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSketchDimensionTarget? {
-        guard onSketchDimensionDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        var bestTarget: (target: ViewportSketchDimensionTarget, distance: CGFloat)?
-        for selectionTarget in selection.selectedTargets.reversed() {
-            guard case .sketchEntity = selectionTarget.component,
-                  let sketchTarget = sketchEntitySelectionTarget(for: selectionTarget),
-                  let item = scene.items.first(where: { $0.featureID == sketchTarget.featureID }),
-                  case .sketch(let primitives) = item.kind,
-                  let sketchPlane = sketchPlane(forFeatureID: sketchTarget.featureID) else {
-                continue
-            }
-            for primitive in primitives where primitive.entityID == sketchTarget.entityID {
-                for candidate in sketchDimensionCandidates(for: primitive, layout: layout) {
-                    let hitRect = candidate.rect.insetBy(dx: -4.0, dy: -4.0)
-                    guard hitRect.contains(point) else {
-                        continue
-                    }
-                    let distance = point.distance(to: CGPoint(x: candidate.rect.midX, y: candidate.rect.midY))
-                    let dimensionTarget = ViewportSketchDimensionTarget(
-                        featureID: sketchTarget.featureID,
-                        entityID: sketchTarget.entityID,
-                        target: selectionTarget,
-                        kind: candidate.kind,
-                        sketchPlane: sketchPlane,
-                        baselineValue: candidate.baselineValue,
-                        start: candidate.start,
-                        end: candidate.end,
-                        center: candidate.center,
-                        radiusMeters: candidate.radiusMeters,
-                        startAngleRadians: candidate.startAngleRadians,
-                        endAngleRadians: candidate.endAngleRadians
-                    )
-                    if let current = bestTarget {
-                        if distance < current.distance {
-                            bestTarget = (dimensionTarget, distance)
-                        }
-                    } else {
-                        bestTarget = (dimensionTarget, distance)
-                    }
-                }
-            }
-        }
-        return bestTarget?.target
-    }
-
-    private func sketchDimensionCandidates(
-        for primitive: ViewportSketchPrimitive,
-        layout: ViewportLayout
-    ) -> [ViewportSketchDimensionCandidate] {
-        switch primitive {
-        case .line(_, let start, let end):
-            guard let projectedStart = layout.projectedPoint(start)?.point,
-                  let projectedEnd = layout.projectedPoint(end)?.point else { return [] }
-            let length = hypot(Double(end.x - start.x), Double(end.y - start.y))
-            let angle = atan2(Double(end.y - start.y), Double(end.x - start.x))
-            let label = "L \(formattedViewportLength(length)) / A \(formattedViewportAngle(angle))"
-            let labelPoint = lineDimensionLabelPoint(start: projectedStart, end: projectedEnd)
-            let labelRect = dimensionLabelRect(for: label, at: labelPoint)
-            let lengthRect = CGRect(
-                x: labelRect.minX,
-                y: labelRect.minY,
-                width: labelRect.width / 2.0,
-                height: labelRect.height
-            )
-            let angleRect = CGRect(
-                x: labelRect.midX,
-                y: labelRect.minY,
-                width: labelRect.width / 2.0,
-                height: labelRect.height
-            )
-            return [
-                ViewportSketchDimensionCandidate(
-                    kind: .length,
-                    rect: lengthRect,
-                    baselineValue: length,
-                    start: start,
-                    end: end,
-                    center: nil,
-                    radiusMeters: nil,
-                    startAngleRadians: nil,
-                    endAngleRadians: nil
-                ),
-                ViewportSketchDimensionCandidate(
-                    kind: .angle,
-                    rect: angleRect,
-                    baselineValue: angle,
-                    start: start,
-                    end: end,
-                    center: nil,
-                    radiusMeters: nil,
-                    startAngleRadians: nil,
-                    endAngleRadians: nil
-                ),
-            ]
-        case .circle(_, let center, let radiusMeters):
-            guard let radiusPoint = layout.projectedPoint(
-                circleRadiusHandlePoint(center: center, radiusMeters: radiusMeters)
-            )?.point else { return [] }
-            let label = "R \(formattedViewportLength(radiusMeters))"
-            let labelPoint = circleDimensionLabelPoint(radiusPoint: radiusPoint)
-            return [
-                ViewportSketchDimensionCandidate(
-                    kind: .radius,
-                    rect: dimensionLabelRect(for: label, at: labelPoint),
-                    baselineValue: radiusMeters,
-                    start: nil,
-                    end: nil,
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: nil,
-                    endAngleRadians: nil
-                ),
-            ]
-        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
-            let span = normalizedArcSpan(startAngle: startAngle, endAngle: endAngle)
-            let radiusPoint = arcRadiusHandlePoint(
-                center: center,
-                radiusMeters: radiusMeters,
-                startAngleRadians: startAngle,
-                endAngleRadians: endAngle
-            )
-            guard let projectedCenter = layout.projectedPoint(center)?.point,
-                  let projectedRadius = layout.projectedPoint(radiusPoint)?.point else { return [] }
-            let label = "R \(formattedViewportLength(radiusMeters)) / A \(formattedViewportAngle(span))"
-            let labelPoint = arcDimensionLabelPoint(center: projectedCenter, radiusPoint: projectedRadius)
-            let labelRect = dimensionLabelRect(for: label, at: labelPoint)
-            let radiusRect = CGRect(
-                x: labelRect.minX,
-                y: labelRect.minY,
-                width: labelRect.width / 2.0,
-                height: labelRect.height
-            )
-            let angleRect = CGRect(
-                x: labelRect.midX,
-                y: labelRect.minY,
-                width: labelRect.width / 2.0,
-                height: labelRect.height
-            )
-            return [
-                ViewportSketchDimensionCandidate(
-                    kind: .radius,
-                    rect: radiusRect,
-                    baselineValue: radiusMeters,
-                    start: nil,
-                    end: nil,
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                ),
-                ViewportSketchDimensionCandidate(
-                    kind: .angle,
-                    rect: angleRect,
-                    baselineValue: span,
-                    start: nil,
-                    end: nil,
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                ),
-            ]
-        case .point, .spline:
-            return []
-        }
-    }
-
-    private func sketchCurveHandles(
-        for primitive: ViewportSketchPrimitive
-    ) -> [ViewportSketchCurveHandleCandidate] {
-        switch primitive {
-        case .circle(_, let center, let radiusMeters):
-            return [
-                ViewportSketchCurveHandleCandidate(
-                    handle: .circleRadius,
-                    point: circleRadiusHandlePoint(
-                        center: center,
-                        radiusMeters: radiusMeters
-                    ),
-                    center: center,
-                    radiusMeters: radiusMeters
-                ),
-            ]
-        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
-            return [
-                ViewportSketchCurveHandleCandidate(
-                    handle: .arcRadius,
-                    point: arcRadiusHandlePoint(
-                        center: center,
-                        radiusMeters: radiusMeters,
-                        startAngleRadians: startAngle,
-                        endAngleRadians: endAngle
-                    ),
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                ),
-                ViewportSketchCurveHandleCandidate(
-                    handle: .arcStartAngle,
-                    point: pointOnSketchCircle(
-                        center: center,
-                        radiusMeters: radiusMeters,
-                        angleRadians: startAngle
-                    ),
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                ),
-                ViewportSketchCurveHandleCandidate(
-                    handle: .arcEndAngle,
-                    point: pointOnSketchCircle(
-                        center: center,
-                        radiusMeters: radiusMeters,
-                        angleRadians: endAngle
-                    ),
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                ),
-            ]
-        case .point, .line, .spline:
-            return []
-        }
-    }
-
-    private func selectedSketchPointHandleTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSketchPointHandleTarget? {
-        guard onSketchPointHandleDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        for target in selection.selectedTargets.reversed() {
-            guard case .sketchEntity = target.component,
-                  let sketchTarget = sketchEntitySelectionTarget(for: target),
-                  allowsPointHandleInteraction(
-                    featureID: sketchTarget.featureID,
-                    entityID: sketchTarget.entityID
-                  ),
-                  let item = scene.items.first(where: { $0.featureID == sketchTarget.featureID }),
-                  case .sketch(let primitives) = item.kind,
-                  let sketchPlane = sketchPlane(forFeatureID: sketchTarget.featureID) else {
-                continue
-            }
-            for primitive in primitives where primitive.entityID == sketchTarget.entityID {
-                for handle in sketchPointHandles(for: primitive).reversed() {
-                    guard let projectedPoint = layout.projectedPoint(handle.point)?.point else { continue }
-                    guard point.distance(to: projectedPoint) <= handleTolerance else {
-                        continue
-                    }
-                    return ViewportSketchPointHandleTarget(
-                        featureID: sketchTarget.featureID,
-                        entityID: sketchTarget.entityID,
-                        target: target,
-                        handle: handle.handle,
-                        sketchPlane: sketchPlane
-                    )
-                }
-            }
-        }
-        return nil
-    }
-
-    private func sketchPointHandles(
-        for primitive: ViewportSketchPrimitive
-    ) -> [(handle: SketchEntityPointHandle, point: CGPoint)] {
-        switch primitive {
-        case .point(_, let point):
-            return [(handle: .point, point: point)]
-        case .line(_, let start, let end):
-            return [
-                (handle: .lineStart, point: start),
-                (handle: .lineEnd, point: end),
-            ]
-        case .circle(_, let center, _):
-            return [(handle: .circleCenter, point: center)]
-        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
-            return [
-                (handle: .arcCenter, point: center),
-                (
-                    handle: .arcStart,
-                    point: pointOnSketchCircle(
-                        center: center,
-                        radiusMeters: radiusMeters,
-                        angleRadians: startAngle
-                    )
-                ),
-                (
-                    handle: .arcEnd,
-                    point: pointOnSketchCircle(
-                        center: center,
-                        radiusMeters: radiusMeters,
-                        angleRadians: endAngle
-                    )
-                ),
-            ]
-        case .spline:
-            return []
-        }
-    }
-
-    private func sketchPlane(forFeatureID featureID: FeatureID) -> SketchPlane? {
-        guard let node = document.cadDocument.designGraph.nodes[featureID],
-              case .sketch(let sketch) = node.operation else {
-            return nil
-        }
-        return sketch.plane
-    }
-
-    private func selectedSplineControlPointTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSplineControlPointHandleTarget? {
-        guard onSplineControlPointDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        for target in selection.selectedTargets.reversed() {
-            guard case .sketchEntity = target.component,
-                  let sketchTarget = sketchEntitySelectionTarget(for: target),
-                  allowsPointHandleInteraction(
-                    featureID: sketchTarget.featureID,
-                    entityID: sketchTarget.entityID
-                  ),
-                  let item = scene.items.first(where: { $0.featureID == sketchTarget.featureID }),
-                  case .sketch(let primitives) = item.kind else {
-                continue
-            }
-            for primitive in primitives {
-                guard case .spline(
-                    let entityID,
-                    _,
-                    let controlPoints,
-                    let sketchPlane
-                ) = primitive,
-                      entityID == sketchTarget.entityID else {
-                    continue
-                }
-                for index in controlPoints.indices.reversed() {
-                    guard let projectedPoint = layout.projectedPoint(controlPoints[index])?.point else { continue }
-                    guard point.distance(to: projectedPoint) <= handleTolerance else {
-                        continue
-                    }
-                    return ViewportSplineControlPointHandleTarget(
-                        featureID: sketchTarget.featureID,
-                        entityID: entityID,
-                        target: target,
-                        controlPointIndex: index,
-                        sketchPlane: sketchPlane
-                    )
-                }
-            }
-        }
-        return nil
     }
 
     private func selectedPolySplineSurfaceVertexSlideAffordanceTarget(
@@ -7401,29 +6788,6 @@ public struct Viewport: View {
         }
     }
 
-    private func updateSplineControlPointDrag(
-        target: ViewportSplineControlPointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let startPoint = layout.canvasCoordinates(for: start),
-              let currentPoint = layout.canvasCoordinates(for: current) else { return }
-        activeSplineControlPointDrag = ViewportSplineControlPointDragState(
-            target: target,
-            startPoint: start,
-            viewportDelta: CGPoint(
-                x: currentPoint.x - startPoint.x,
-                y: currentPoint.y - startPoint.y
-            )
-        )
-    }
-
     private func updateSplineControlPointSlideDrag(
         target: ViewportSplineControlPointSlideHandleTarget,
         start: CGPoint,
@@ -7714,198 +7078,6 @@ public struct Viewport: View {
         )
     }
 
-    private func updateSketchPointHandleDrag(
-        target: ViewportSketchPointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let startPoint = layout.canvasCoordinates(for: start),
-              let currentPoint = layout.canvasCoordinates(for: current) else { return }
-        activeSketchPointHandleDrag = ViewportSketchPointHandleDragState(
-            target: target,
-            startPoint: start,
-            viewportDelta: CGPoint(
-                x: currentPoint.x - startPoint.x,
-                y: currentPoint.y - startPoint.y
-            )
-        )
-    }
-
-    private func updateSketchCurveHandleDrag(
-        target: ViewportSketchCurveHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let currentPoint = layout.canvasCoordinates(for: current) else { return }
-        let values = sketchCurveHandleValues(
-            target: target,
-            currentViewportPoint: currentPoint
-        )
-        activeSketchCurveHandleDrag = ViewportSketchCurveHandleDragState(
-            target: target,
-            startPoint: start,
-            radiusMeters: values.radiusMeters,
-            startAngleRadians: values.startAngleRadians,
-            endAngleRadians: values.endAngleRadians
-        )
-    }
-
-    private func updateSketchDimensionDrag(
-        target: ViewportSketchDimensionTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let startPoint = layout.canvasCoordinates(for: start),
-              let currentPoint = layout.canvasCoordinates(for: current) else { return }
-        let value = sketchDimensionValue(
-            target: target,
-            startViewportPoint: startPoint,
-            currentViewportPoint: currentPoint
-        )
-        activeSketchDimensionDrag = ViewportSketchDimensionDragState(
-            target: target,
-            startPoint: start,
-            value: value
-        )
-    }
-
-    private func sketchCurveHandleValues(
-        target: ViewportSketchCurveHandleTarget,
-        currentViewportPoint: CGPoint
-    ) -> (radiusMeters: Double?, startAngleRadians: Double?, endAngleRadians: Double?) {
-        let currentPoint = localSketchPoint(
-            fromViewportPoint: currentViewportPoint,
-            sketchPlane: target.sketchPlane
-        )
-        let center = localSketchPoint(
-            fromViewportPoint: target.center,
-            sketchPlane: target.sketchPlane
-        )
-        let dx = Double(currentPoint.x - center.x)
-        let dy = Double(currentPoint.y - center.y)
-        let radius = max(hypot(dx, dy), 1.0e-9)
-        let angle = atan2(dy, dx)
-        switch target.handle {
-        case .circleRadius, .arcRadius:
-            return (radius, nil, nil)
-        case .arcStartAngle:
-            return (nil, angle, nil)
-        case .arcEndAngle:
-            return (nil, nil, angle)
-        }
-    }
-
-    private func sketchDimensionValue(
-        target: ViewportSketchDimensionTarget,
-        startViewportPoint: CGPoint,
-        currentViewportPoint: CGPoint
-    ) -> Double {
-        switch target.kind {
-        case .length:
-            guard let lineStart = target.start,
-                  let lineEnd = target.end else {
-                return target.baselineValue
-            }
-            let start = localSketchPoint(fromViewportPoint: lineStart, sketchPlane: target.sketchPlane)
-            let end = localSketchPoint(fromViewportPoint: lineEnd, sketchPlane: target.sketchPlane)
-            let dx = end.x - start.x
-            let dy = end.y - start.y
-            let length = hypot(dx, dy)
-            guard length > 1.0e-12 else {
-                return target.baselineValue
-            }
-            let viewportDelta = CGPoint(
-                x: currentViewportPoint.x - startViewportPoint.x,
-                y: currentViewportPoint.y - startViewportPoint.y
-            )
-            let delta = localSketchDelta(
-                fromViewportDelta: viewportDelta,
-                sketchPlane: target.sketchPlane
-            )
-            let unitX = dx / length
-            let unitY = dy / length
-            return max(target.baselineValue + Double(delta.x * unitX + delta.y * unitY), 1.0e-9)
-        case .radius:
-            guard let center = target.center else {
-                return target.baselineValue
-            }
-            let current = localSketchPoint(
-                fromViewportPoint: currentViewportPoint,
-                sketchPlane: target.sketchPlane
-            )
-            let localCenter = localSketchPoint(
-                fromViewportPoint: center,
-                sketchPlane: target.sketchPlane
-            )
-            return max(hypot(Double(current.x - localCenter.x), Double(current.y - localCenter.y)), 1.0e-9)
-        case .diameter:
-            return target.baselineValue
-        case .angle:
-            if let lineStart = target.start,
-               let lineEnd = target.end {
-                let start = localSketchPoint(fromViewportPoint: lineStart, sketchPlane: target.sketchPlane)
-                let end = localSketchPoint(fromViewportPoint: lineEnd, sketchPlane: target.sketchPlane)
-                let dx = end.x - start.x
-                let dy = end.y - start.y
-                let length = hypot(dx, dy)
-                guard length > 1.0e-12 else {
-                    return target.baselineValue
-                }
-                let viewportDelta = CGPoint(
-                    x: currentViewportPoint.x - startViewportPoint.x,
-                    y: currentViewportPoint.y - startViewportPoint.y
-                )
-                let delta = localSketchDelta(
-                    fromViewportDelta: viewportDelta,
-                    sketchPlane: target.sketchPlane
-                )
-                let unitX = dx / length
-                let unitY = dy / length
-                let tangent = CGPoint(x: -unitY, y: unitX)
-                let tangentialDistance = Double(delta.x * tangent.x + delta.y * tangent.y)
-                return target.baselineValue + tangentialDistance / Double(length)
-            }
-            guard let radiusMeters = target.radiusMeters,
-                  let endAngle = target.endAngleRadians else {
-                return target.baselineValue
-            }
-            let viewportDelta = CGPoint(
-                x: currentViewportPoint.x - startViewportPoint.x,
-                y: currentViewportPoint.y - startViewportPoint.y
-            )
-            let delta = localSketchDelta(
-                fromViewportDelta: viewportDelta,
-                sketchPlane: target.sketchPlane
-            )
-            let tangent = CGPoint(
-                x: -sin(CGFloat(endAngle)),
-                y: cos(CGFloat(endAngle))
-            )
-            let tangentialDistance = Double(delta.x * tangent.x + delta.y * tangent.y)
-            let deltaAngle = tangentialDistance / max(radiusMeters, 1.0e-9)
-            let maximumPartialSpan = Double.pi * 2.0 - 1.0e-6
-            return min(max(target.baselineValue + deltaAngle, 1.0e-9), maximumPartialSpan)
-        }
-    }
-
     private func pick(
         at point: CGPoint,
         size: CGSize,
@@ -8035,14 +7207,6 @@ public struct Viewport: View {
     private func finishPendingInteractionClick(_ target: ViewportInteractionTarget) {
         pendingInteractionTarget = nil
         switch target {
-        case .sketchCurveHandle:
-            activeSketchCurveHandleDrag = nil
-        case .sketchDimension:
-            activeSketchDimensionDrag = nil
-        case .sketchPointHandle:
-            activeSketchPointHandleDrag = nil
-        case .splineControlPoint:
-            activeSplineControlPointDrag = nil
         case .splineControlPointSlide:
             activeSplineControlPointSlideDrag = nil
         case .polySplineSurfaceVertexSlide:
@@ -8168,12 +7332,6 @@ public struct Viewport: View {
         size: CGSize
     ) {
         switch finishKind {
-        case .sketchCurveHandle:
-            finishSketchCurveHandleDrag()
-        case .sketchDimension:
-            finishSketchDimensionDrag()
-        case .sketchPointHandle:
-            finishSketchPointHandleDrag()
         case .splineControlPointSlide:
             finishSplineControlPointSlideDrag()
         case .polySplineSurfaceVertexSlide:
@@ -8182,8 +7340,6 @@ public struct Viewport: View {
             finishSurfaceControlPointSlideDrag()
         case .surfaceFrame:
             finishSurfaceFrameDrag()
-        case .splineControlPoint:
-            finishSplineControlPointDrag()
         case .edgeOffset:
             finishEdgeOffsetDrag()
         case .slotWidth:
@@ -8200,42 +7356,6 @@ public struct Viewport: View {
             finishRegionOffsetDrag()
         case .affordance:
             finishAffordanceInteractionDrag(end: end, size: size)
-        }
-    }
-
-    private func finishSketchCurveHandleDrag() {
-        let target = committedSketchCurveHandleDragTarget()
-        activeSketchCurveHandleDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSketchCurveHandleDrag?(target)
-        }
-    }
-
-    private func finishSketchDimensionDrag() {
-        let target = committedSketchDimensionDragTarget()
-        activeSketchDimensionDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSketchDimensionDrag?(target)
-        }
-    }
-
-    private func finishSketchPointHandleDrag() {
-        let target = committedSketchPointHandleDragTarget()
-        activeSketchPointHandleDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSketchPointHandleDrag?(target)
-        }
-    }
-
-    private func finishSplineControlPointDrag() {
-        let target = committedSplineControlPointDragTarget()
-        activeSplineControlPointDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSplineControlPointDrag?(target)
         }
     }
 
@@ -8371,106 +7491,6 @@ public struct Viewport: View {
         for featureID in ghostFeatureIDs {
             editedBodies.removeValue(forKey: featureID)
         }
-    }
-
-    private func committedSketchCurveHandleDragTarget() -> ViewportSketchCurveHandleDragTarget? {
-        guard let activeSketchCurveHandleDrag else {
-            return nil
-        }
-        let changedRadius = hasChanged(
-            activeSketchCurveHandleDrag.radiusMeters,
-            from: activeSketchCurveHandleDrag.target.radiusMeters
-        )
-        let changedStartAngle = hasChanged(
-            activeSketchCurveHandleDrag.startAngleRadians,
-            from: activeSketchCurveHandleDrag.target.startAngleRadians
-        )
-        let changedEndAngle = hasChanged(
-            activeSketchCurveHandleDrag.endAngleRadians,
-            from: activeSketchCurveHandleDrag.target.endAngleRadians
-        )
-        guard changedRadius || changedStartAngle || changedEndAngle else {
-            return nil
-        }
-        return ViewportSketchCurveHandleDragTarget(
-            target: activeSketchCurveHandleDrag.target.target,
-            handle: activeSketchCurveHandleDrag.target.handle,
-            radiusMeters: changedRadius ? activeSketchCurveHandleDrag.radiusMeters : nil,
-            startAngleRadians: changedStartAngle ? activeSketchCurveHandleDrag.startAngleRadians : nil,
-            endAngleRadians: changedEndAngle ? activeSketchCurveHandleDrag.endAngleRadians : nil
-        )
-    }
-
-    private func hasChanged(_ candidate: Double?, from baseline: Double?) -> Bool {
-        guard let candidate, let baseline else {
-            return false
-        }
-        return abs(candidate - baseline) > 1.0e-12
-    }
-
-    private func committedSketchDimensionDragTarget() -> ViewportSketchDimensionDragTarget? {
-        guard let activeSketchDimensionDrag,
-              abs(activeSketchDimensionDrag.value - activeSketchDimensionDrag.target.baselineValue) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportSketchDimensionDragTarget(
-            target: activeSketchDimensionDrag.target.target,
-            kind: activeSketchDimensionDrag.target.kind,
-            value: sketchDimensionExpression(
-                for: activeSketchDimensionDrag.target.kind,
-                value: activeSketchDimensionDrag.value
-            )
-        )
-    }
-
-    private func sketchDimensionExpression(
-        for kind: SketchEntityDimensionKind,
-        value: Double
-    ) -> CADExpression {
-        switch kind {
-        case .length, .radius, .diameter:
-            return .length(value, .meter)
-        case .angle:
-            return .angle(value, .radian)
-        }
-    }
-
-    private func committedSketchPointHandleDragTarget() -> ViewportSketchPointHandleDragTarget? {
-        guard let activeSketchPointHandleDrag else {
-            return nil
-        }
-        let localDelta = localSketchDelta(
-            fromViewportDelta: activeSketchPointHandleDrag.viewportDelta,
-            sketchPlane: activeSketchPointHandleDrag.target.sketchPlane
-        )
-        guard abs(localDelta.x) > 1.0e-12 || abs(localDelta.y) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportSketchPointHandleDragTarget(
-            target: activeSketchPointHandleDrag.target.target,
-            handle: activeSketchPointHandleDrag.target.handle,
-            deltaX: Double(localDelta.x),
-            deltaY: Double(localDelta.y)
-        )
-    }
-
-    private func committedSplineControlPointDragTarget() -> ViewportSplineControlPointDragTarget? {
-        guard let activeSplineControlPointDrag else {
-            return nil
-        }
-        let localDelta = localSketchDelta(
-            fromViewportDelta: activeSplineControlPointDrag.viewportDelta,
-            sketchPlane: activeSplineControlPointDrag.target.sketchPlane
-        )
-        guard abs(localDelta.x) > 1.0e-12 || abs(localDelta.y) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportSplineControlPointDragTarget(
-            target: activeSplineControlPointDrag.target.target,
-            controlPointIndex: activeSplineControlPointDrag.target.controlPointIndex,
-            deltaX: Double(localDelta.x),
-            deltaY: Double(localDelta.y)
-        )
     }
 
     private func committedSplineControlPointSlideDragTarget() -> ViewportSplineControlPointSlideDragTarget? {
@@ -8650,30 +7670,6 @@ public struct Viewport: View {
             handle: activeSketchVertexOffsetDrag.target.handle,
             distance: distance
         )
-    }
-
-    private func localSketchDelta(
-        fromViewportDelta delta: CGPoint,
-        sketchPlane: SketchPlane
-    ) -> CGPoint {
-        switch sketchPlane {
-        case .xy, .yz, .plane:
-            return delta
-        case .zx:
-            return CGPoint(x: delta.y, y: delta.x)
-        }
-    }
-
-    private func localSketchPoint(
-        fromViewportPoint point: CGPoint,
-        sketchPlane: SketchPlane
-    ) -> CGPoint {
-        switch sketchPlane {
-        case .xy, .yz, .plane:
-            return point
-        case .zx:
-            return CGPoint(x: point.y, y: point.x)
-        }
     }
 
     /// Commits the transform gizmo's in-plane translate actions: the ghost
@@ -9333,34 +8329,6 @@ private extension Viewport {
         return target
     }
 
-    var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget? {
-        guard case .sketchCurveHandle(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredSketchDimension: ViewportSketchDimensionTarget? {
-        guard case .sketchDimension(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredSketchPointHandle: ViewportSketchPointHandleTarget? {
-        guard case .sketchPointHandle(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredSplineControlPoint: ViewportSplineControlPointHandleTarget? {
-        guard case .splineControlPoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
     var hoveredSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget? {
         guard case .splineControlPointSlide(let target) = hoveredInteractionTarget else {
             return nil
@@ -9443,42 +8411,6 @@ private extension Viewport {
     var pendingAffordance: ViewportAffordanceTarget? {
         get {
             guard case .affordance(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget? {
-        get {
-            guard case .sketchCurveHandle(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSketchDimension: ViewportSketchDimensionTarget? {
-        get {
-            guard case .sketchDimension(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSketchPointHandle: ViewportSketchPointHandleTarget? {
-        get {
-            guard case .sketchPointHandle(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSplineControlPoint: ViewportSplineControlPointHandleTarget? {
-        get {
-            guard case .splineControlPoint(let target) = pendingInteractionTarget else {
                 return nil
             }
             return target
@@ -9904,22 +8836,21 @@ extension Viewport {
             default: break
             }
         }
-        if let drag = activeSketchCurveHandleDrag {
-            overrides.append(.init(identity: .sketchCurveHandle(drag.target.identity),
-                                   radiusMeters: drag.radiusMeters,
-                                   startAngleRadians: drag.startAngleRadians,
-                                   endAngleRadians: drag.endAngleRadians))
-        }
-        if let drag = activeSketchDimensionDrag {
-            overrides.append(.init(identity: .sketchDimension(drag.target.identity), value: drag.value))
-        }
-        if let drag = activeSketchPointHandleDrag {
-            overrides.append(.init(identity: .sketchPointHandle(drag.target.identity),
-                                   deltaX: drag.viewportDelta.x, deltaY: drag.viewportDelta.y))
-        }
-        if let drag = activeSplineControlPointDrag {
-            overrides.append(.init(identity: .splineControlPoint(drag.target.identity),
-                                   deltaX: drag.viewportDelta.x, deltaY: drag.viewportDelta.y))
+        if let preview = nativeWorldPointPreview {
+            switch preview.value {
+            case .sketchCurveHandle(let radiusMeters, let startAngle, let endAngle):
+                overrides.append(.init(identity: preview.identity,
+                                       radiusMeters: radiusMeters,
+                                       startAngleRadians: startAngle,
+                                       endAngleRadians: endAngle))
+            case .sketchDimension(let value):
+                overrides.append(.init(identity: preview.identity, value: value))
+            case .sketchDisplayDelta(let displayDelta):
+                overrides.append(.init(identity: preview.identity,
+                                       deltaX: displayDelta.x, deltaY: displayDelta.y))
+            default:
+                break
+            }
         }
         if let drag = activeRegionOffsetDrag {
             overrides.append(.init(identity: .regionOffset(drag.target.identity), distanceMeters: drag.distanceMeters))

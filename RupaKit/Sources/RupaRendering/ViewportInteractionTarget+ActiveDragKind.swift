@@ -6,14 +6,6 @@ extension ViewportInteractionTarget {
     /// click now. A target that cannot be dragged has no reason to exist here.
     var activeDragKind: ViewportActiveInteractionDragKind {
         switch self {
-        case .sketchCurveHandle:
-            .sketchCurveHandle
-        case .sketchDimension:
-            .sketchDimension
-        case .sketchPointHandle:
-            .sketchPointHandle
-        case .splineControlPoint:
-            .splineControlPoint
         case .splineControlPointSlide:
             .splineControlPointSlide
         case .polySplineSurfaceVertexSlide:

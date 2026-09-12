@@ -591,6 +591,38 @@ independent tessellator is never an alternative implementation.
    drag: the legacy geometry dropped every update on such a handle while the
    handle stayed drawn and grabbable. A solved parameter pair that does not
    move is the ordinary no-commit case and not a failure.
+   The four sketch routes `sketchCurveHandle`, `sketchDimension`,
+   `sketchPointHandle`, and `splineControlPoint` move on the plane parallel
+   to the displayed canvas plane through the handle's own world point, for
+   the reason the two curve routes above state. The record names that point
+   in the sketch display space the producer drew it in, and
+   `record.modelTransform` states the placement that mapped it, so the owner
+   reads the drag as the displacement that transform inverts back into
+   display `x` and `z`. A camera canvas axis pair is not that displacement:
+   the two agree only where the placement maps the sketch frame onto the
+   plane the mode selected, and the record already names the mapping for
+   every placement.
+   The radius and the angles `sketchCurveHandle` answers, and the value the
+   `radius` dimension answers, are absolute, and the owner solves them from
+   the handle's own display point offset by that displacement rather than
+   from the pointer position the legacy selector read. A press away from the
+   handle no longer restates the value as the distance to the pointer, and a
+   gesture that has not moved answers the retained radius and angles
+   exactly. The remaining routes take the displacement itself, and the
+   commit maps it into sketch-local coordinates through the sketch plane's
+   canvas mapper, because the document commands name a sketch-local delta
+   while the drawn overlay names a display one. Angles stay sketch-local at
+   every step, as the retained record and the preview override already
+   state them.
+   A value the record cannot answer is a typed refusal at press rather than
+   a clamp during the drag: a length dimension without both endpoints or
+   with a degenerate baseline segment, a radius dimension without a centre,
+   an angular arc dimension without a radius or an end angle, a curve handle
+   whose retained radius is not positive, and the `diameter` kind the
+   producer never emits. A pointer that would solve a nonpositive radius or
+   length, or an arc span at or beyond a full turn, is refused for the same
+   reason -- the legacy geometry clamped both classes to `1.0e-9` and kept
+   drawing a handle whose committed value no longer followed it.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, after which the

@@ -49,6 +49,22 @@ struct ViewportNativeWorldPointInput: Sendable {
         /// pair from it at release rather than previewing one, because the
         /// overlay redraws those handles from the same displacement.
         case surfaceHandleLocalDelta(Vector3D)
+        /// The displacement a sketch handle has been dragged, stated in the
+        /// sketch display space the producer drew the handle in. The two
+        /// point routes commit it directly; the overlay redraws their
+        /// handles from the same displacement.
+        case sketchDisplayDelta(CGPoint)
+        /// The radius or the one arc angle a curve handle answers. The
+        /// handle kind decides which member is stated, and the others stay
+        /// `nil` so the release commits only what moved.
+        case sketchCurveHandle(
+            radiusMeters: Double?,
+            startAngleRadians: Double?,
+            endAngleRadians: Double?
+        )
+        /// The scalar a sketch dimension answers, in metres for a length or
+        /// radius and in radians for an angle.
+        case sketchDimension(Double)
     }
 
     /// The document mutation a released gesture authorizes.
@@ -60,6 +76,10 @@ struct ViewportNativeWorldPointInput: Sendable {
         case surfaceControlPoint(ViewportSurfaceControlPointDragTarget)
         case surfaceTrimEndpoint(ViewportSurfaceTrimEndpointDragTarget)
         case surfaceTrimControlPoint(ViewportSurfaceTrimControlPointDragTarget)
+        case sketchCurveHandle(ViewportSketchCurveHandleDragTarget)
+        case sketchDimension(ViewportSketchDimensionDragTarget)
+        case sketchPointHandle(ViewportSketchPointHandleDragTarget)
+        case splineControlPoint(ViewportSplineControlPointDragTarget)
     }
 
     /// A world move below this distance is numerical noise, so the release
@@ -78,6 +98,20 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// A trim tangent pair whose Gram determinant is at or below this spans no
     /// surface patch, so no parameter delta can be solved from it.
     static let minimumTrimGramDeterminant = 1.0e-18
+    /// A sketch radius, length, or angular span at or below this names no
+    /// geometry. The legacy selector clamped every one of them to this floor
+    /// and kept committing the clamped value, so a handle dragged onto its own
+    /// centre wrote a size the pointer never named.
+    static let minimumSketchValue = 1.0e-9
+    /// A dimension baseline segment at or below this names no direction to
+    /// project the drag onto.
+    static let minimumSketchSegmentLength = 1.0e-12
+    /// An arc dimension span at or above this closes the arc into a full
+    /// circle, which the legacy selector clamped to rather than refusing.
+    static let maximumSketchArcSpan = Double.pi * 2.0 - 1.0e-6
+    /// A sketch displacement or solved scalar this close to its baseline is
+    /// the gesture that did not move, so the release commits nothing.
+    static let minimumSketchChange = 1.0e-12
 
     let record: ViewportSpatialInteractionRecord
 
@@ -95,13 +129,18 @@ struct ViewportNativeWorldPointInput: Sendable {
         case .polySplineSurfaceVertex(let value): value.dragMode == .planar
         case .surfaceControlPoint(let value): value.dragMode == .planar
         case .surfaceTrimEndpoint, .surfaceTrimControlPoint: true
+        // Every sketch handle is drawn in the sketch display space the
+        // record's placement maps, so all four resolve a world point on the
+        // plane that placement puts the handle on.
+        case .sketchCurveHandle, .sketchDimension, .sketchPointHandle,
+             .splineControlPoint: true
         default: false
         }
     }
 
     init?(record: ViewportSpatialInteractionRecord) throws {
         guard Self.claims(record.target) else { return nil }
-        try Self.validate(record.target)
+        try Self.validate(record.target, modelTransform: record.modelTransform)
         self.record = record
     }
 
@@ -149,11 +188,43 @@ struct ViewportNativeWorldPointInput: Sendable {
                 localPoint: handle.point, modelTransform: handle.modelTransform,
                 displayedCanvas: displayedCanvas
             )
+        // The sketch records name their handle in sketch display space and
+        // the record's own placement states where the frame drew it, so the
+        // plane passes through that point for every placement.
+        case .sketchCurveHandle(let handle):
+            return try sketchHandlePlane(
+                point: handle.point, displayedCanvas: displayedCanvas
+            )
+        case .sketchDimension(let handle):
+            return try sketchHandlePlane(
+                point: handle.point, displayedCanvas: displayedCanvas
+            )
+        case .sketchPointHandle(let handle):
+            return try sketchHandlePlane(
+                point: handle.point, displayedCanvas: displayedCanvas
+            )
+        case .splineControlPoint(let handle):
+            return try sketchHandlePlane(
+                point: handle.point, displayedCanvas: displayedCanvas
+            )
         default:
             throw RealityViewportSpatialBatch.invalid(
                 "The world-point owner does not claim this prepared route."
             )
         }
+    }
+
+    /// The plane a sketch handle drags on: parallel to the displayed canvas
+    /// plane and through the world point the record's placement maps its
+    /// drawn sketch display point to.
+    private func sketchHandlePlane(
+        point: CGPoint, displayedCanvas: ViewportCanvasPlane
+    ) throws -> Query {
+        try Self.handlePlane(
+            localPoint: Self.sketchModelPoint(point),
+            modelTransform: record.modelTransform,
+            displayedCanvas: displayedCanvas
+        )
     }
 
     /// Turns one frame answer into this route's preview value.
@@ -275,6 +346,28 @@ struct ViewportNativeWorldPointInput: Sendable {
                 try Self.modelDelta(delta, in: handle.modelTransform)
             )
 
+        case .sketchPointHandle, .splineControlPoint:
+            return .sketchDisplayDelta(
+                try Self.sketchDisplayDelta(delta, in: record.modelTransform)
+            )
+
+        case .sketchCurveHandle(let handle):
+            let displayDelta = try Self.sketchDisplayDelta(
+                delta, in: record.modelTransform
+            )
+            return try Self.sketchCurveHandleValue(handle, at: CGPoint(
+                x: handle.point.x + displayDelta.x,
+                y: handle.point.y + displayDelta.y
+            ))
+
+        case .sketchDimension(let handle):
+            let displayDelta = try Self.sketchDisplayDelta(
+                delta, in: record.modelTransform
+            )
+            return try Self.sketchDimensionValue(
+                handle, displayDelta: displayDelta
+            )
+
         default:
             throw RealityViewportSpatialBatch.invalid(
                 "The world-point owner does not claim this prepared route."
@@ -374,10 +467,60 @@ struct ViewportNativeWorldPointInput: Sendable {
                 u: moved.u, v: moved.v
             ))
 
+        case (
+            .sketchCurveHandle(let handle),
+            .sketchCurveHandle(let radiusMeters, let startAngle, let endAngle)
+        ):
+            let movedRadius = Self.changed(radiusMeters, from: handle.radiusMeters)
+            let movedStart = Self.changed(startAngle, from: handle.startAngleRadians)
+            let movedEnd = Self.changed(endAngle, from: handle.endAngleRadians)
+            guard movedRadius || movedStart || movedEnd else { return nil }
+            return .sketchCurveHandle(ViewportSketchCurveHandleDragTarget(
+                target: handle.target,
+                handle: handle.handle,
+                radiusMeters: movedRadius ? radiusMeters : nil,
+                startAngleRadians: movedStart ? startAngle : nil,
+                endAngleRadians: movedEnd ? endAngle : nil
+            ))
+
+        case (.sketchDimension(let handle), .sketchDimension(let value)):
+            guard abs(value - handle.baselineValue) > Self.minimumSketchChange else {
+                return nil
+            }
+            return .sketchDimension(ViewportSketchDimensionDragTarget(
+                target: handle.target,
+                kind: handle.kind,
+                value: Self.sketchDimensionExpression(for: handle.kind, value: value)
+            ))
+
+        case (.sketchPointHandle(let handle), .sketchDisplayDelta(let displayDelta)):
+            guard let moved = Self.sketchLocalDelta(
+                displayDelta, sketchPlane: handle.sketchPlane
+            ) else { return nil }
+            return .sketchPointHandle(ViewportSketchPointHandleDragTarget(
+                target: handle.target,
+                handle: handle.handle,
+                deltaX: moved.x,
+                deltaY: moved.y
+            ))
+
+        case (.splineControlPoint(let handle), .sketchDisplayDelta(let displayDelta)):
+            guard let moved = Self.sketchLocalDelta(
+                displayDelta, sketchPlane: handle.sketchPlane
+            ) else { return nil }
+            return .splineControlPoint(ViewportSplineControlPointDragTarget(
+                target: handle.target,
+                controlPointIndex: handle.controlPointIndex,
+                deltaX: moved.x,
+                deltaY: moved.y
+            ))
+
         case (.constructionPlane, _), (.patternArrayCurvePathPoint, _),
              (.bridgeCurveEndpoint, _), (.polySplineSurfaceVertex, _),
              (.surfaceControlPoint, _), (.surfaceTrimEndpoint, _),
-             (.surfaceTrimControlPoint, _):
+             (.surfaceTrimControlPoint, _), (.sketchCurveHandle, _),
+             (.sketchDimension, _), (.sketchPointHandle, _),
+             (.splineControlPoint, _):
             throw RealityViewportSpatialBatch.invalid(
                 "A world-point value does not answer the pressed handle."
             )
@@ -390,7 +533,10 @@ struct ViewportNativeWorldPointInput: Sendable {
 
     // MARK: - Validation
 
-    private static func validate(_ target: ViewportSpatialPreparedInteractionTarget) throws {
+    private static func validate(
+        _ target: ViewportSpatialPreparedInteractionTarget,
+        modelTransform: Transform3D
+    ) throws {
         switch target {
         case .constructionPlane(_, let origin, let normal, let normalEnd, let corners):
             guard origin.isFinite, normal.isFinite, normalEnd.isFinite,
@@ -442,9 +588,115 @@ struct ViewportNativeWorldPointInput: Sendable {
                 u: handle.u, v: handle.v,
                 tangentU: handle.tangentU, tangentV: handle.tangentV
             )
+        case .sketchCurveHandle(let handle):
+            try validateSketchHandle(point: handle.point, modelTransform: modelTransform)
+            guard handle.center.x.isFinite, handle.center.y.isFinite else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch curve handle names no finite centre."
+                )
+            }
+            switch handle.handle {
+            case .circleRadius, .arcRadius:
+                guard handle.radiusMeters.isFinite,
+                      handle.radiusMeters > minimumSketchValue else {
+                    throw RealityViewportSpatialBatch.invalid(
+                        "A sketch curve radius handle names no positive radius."
+                    )
+                }
+            case .arcStartAngle, .arcEndAngle:
+                // A missing baseline angle would compare equal to every
+                // dragged angle, so the legacy route drew a handle that could
+                // never commit. Refuse the press instead.
+                guard let startAngle = handle.startAngleRadians,
+                      let endAngle = handle.endAngleRadians,
+                      startAngle.isFinite, endAngle.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid(
+                        "A sketch curve angle handle names no finite arc angles."
+                    )
+                }
+            }
+        case .sketchDimension(let handle):
+            try validateSketchHandle(point: handle.point, modelTransform: modelTransform)
+            try validateSketchDimension(handle)
+        case .sketchPointHandle(let handle):
+            try validateSketchHandle(point: handle.point, modelTransform: modelTransform)
+        case .splineControlPoint(let handle):
+            try validateSketchHandle(point: handle.point, modelTransform: modelTransform)
         default:
             throw RealityViewportSpatialBatch.invalid(
                 "The world-point owner does not claim this prepared route."
+            )
+        }
+    }
+
+    /// Validates a sketch handle's drawn point and the record's placement.
+    ///
+    /// Every sketch route carries a world displacement back into the sketch
+    /// display space, so a placement that cannot be inverted is refused at
+    /// press rather than answered with the unmapped world value.
+    private static func validateSketchHandle(
+        point: CGPoint, modelTransform: Transform3D
+    ) throws {
+        guard point.x.isFinite, point.y.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch handle point is not finite."
+            )
+        }
+        guard modelTransform.viewportTransformedPoint(
+            sketchModelPoint(point)
+        ).isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch handle placement is not finite."
+            )
+        }
+        guard modelTransform.viewportInverseTransformedVector(
+            Vector3D(x: 1.0, y: 0.0, z: 0.0)
+        ) != nil else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch handle placement cannot map a world delta into its display plane."
+            )
+        }
+    }
+
+    /// Validates the geometry a dimension needs before the gesture starts.
+    ///
+    /// The legacy selector answered its own baseline for each of these gaps,
+    /// which left a grabbable handle that silently committed nothing.
+    private static func validateSketchDimension(
+        _ handle: ViewportSketchDimensionTarget
+    ) throws {
+        guard handle.baselineValue.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch dimension baseline is not finite."
+            )
+        }
+        switch handle.kind {
+        case .length:
+            guard let start = handle.start, let end = handle.end else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch length dimension names no segment to measure."
+                )
+            }
+            _ = try sketchSegment(start: start, end: end, sketchPlane: handle.sketchPlane)
+        case .radius:
+            guard let center = handle.center, center.x.isFinite, center.y.isFinite else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch radius dimension names no centre to measure from."
+                )
+            }
+        case .angle:
+            if let start = handle.start, let end = handle.end {
+                _ = try sketchSegment(
+                    start: start, end: end, sketchPlane: handle.sketchPlane
+                )
+            } else {
+                _ = try sketchArcTangent(handle)
+            }
+        case .diameter:
+            // The affordance producer emits no diameter dimension, so a
+            // record naming one never came from a drawn handle.
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch diameter dimension has no drag geometry."
             )
         }
     }
@@ -564,7 +816,7 @@ struct ViewportNativeWorldPointInput: Sendable {
         Vector3D(x: rhs.x - lhs.x, y: rhs.y - lhs.y, z: rhs.z - lhs.z).length
     }
 
-    /// The plane a surface handle drags on: parallel to the displayed canvas
+    /// The plane a placed handle drags on: parallel to the displayed canvas
     /// plane and through the handle's own world point, so the grabbed handle
     /// stays under the pointer in perspective as well as in orthographic.
     private static func handlePlane(
@@ -629,5 +881,230 @@ struct ViewportNativeWorldPointInput: Sendable {
         guard abs(deltaU) > minimumSurfaceParameterChange
             || abs(deltaV) > minimumSurfaceParameterChange else { return nil }
         return (movedU, movedV)
+    }
+
+    // MARK: - Sketch Display Space
+
+    /// Lifts a sketch display point into the record's model space, where the
+    /// producer draws the sketch display axes as model `x` and `z`.
+    private static func sketchModelPoint(_ point: CGPoint) -> Point3D {
+        Point3D(x: Double(point.x), y: 0.0, z: Double(point.y))
+    }
+
+    /// Carries a world displacement back into the sketch display space the
+    /// record's placement mapped the drawn handle from.
+    private static func sketchDisplayDelta(
+        _ delta: Vector3D, in modelTransform: Transform3D
+    ) throws -> CGPoint {
+        guard let localDelta = modelTransform.viewportInverseTransformedVector(delta) else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch handle placement cannot map the world delta into its display plane."
+            )
+        }
+        guard localDelta.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch handle display delta is not finite."
+            )
+        }
+        return CGPoint(x: CGFloat(localDelta.x), y: CGFloat(localDelta.z))
+    }
+
+    /// Maps a display point onto the sketch's own axes.
+    ///
+    /// The mapper is a linear swap, so the same call carries a displacement.
+    private static func sketchLocalPoint(
+        _ point: CGPoint, sketchPlane: SketchPlane
+    ) -> Point2D {
+        SketchPlaneCanvasMapper(sketchPlane: sketchPlane).localPoint(
+            fromCanvas: Point2D(x: Double(point.x), y: Double(point.y))
+        )
+    }
+
+    /// The sketch-local displacement a release commits, or `nil` when the
+    /// gesture did not move the handle.
+    private static func sketchLocalDelta(
+        _ delta: CGPoint, sketchPlane: SketchPlane
+    ) -> Point2D? {
+        let local = sketchLocalPoint(delta, sketchPlane: sketchPlane)
+        guard abs(local.x) > minimumSketchChange
+            || abs(local.y) > minimumSketchChange else { return nil }
+        return local
+    }
+
+    /// The baseline segment a length or linear angle dimension measures, as a
+    /// sketch-local unit direction and the length the drag divides by.
+    private static func sketchSegment(
+        start: CGPoint, end: CGPoint, sketchPlane: SketchPlane
+    ) throws -> (unit: Point2D, length: Double) {
+        guard start.x.isFinite, start.y.isFinite,
+              end.x.isFinite, end.y.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch dimension baseline segment is not finite."
+            )
+        }
+        let localStart = sketchLocalPoint(start, sketchPlane: sketchPlane)
+        let localEnd = sketchLocalPoint(end, sketchPlane: sketchPlane)
+        let dx = localEnd.x - localStart.x
+        let dy = localEnd.y - localStart.y
+        let length = (dx * dx + dy * dy).squareRoot()
+        guard length > minimumSketchSegmentLength else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch dimension baseline segment names no direction to measure along."
+            )
+        }
+        return (Point2D(x: dx / length, y: dy / length), length)
+    }
+
+    /// The sketch-local tangent an arc angle dimension measures along, and the
+    /// radius that turns a tangential distance into an angle.
+    private static func sketchArcTangent(
+        _ handle: ViewportSketchDimensionTarget
+    ) throws -> (radiusMeters: Double, tangent: Point2D) {
+        guard let radiusMeters = handle.radiusMeters, radiusMeters.isFinite,
+              radiusMeters > minimumSketchValue else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch arc dimension names no positive radius."
+            )
+        }
+        guard let endAngle = handle.endAngleRadians, endAngle.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch arc dimension names no end angle."
+            )
+        }
+        return (radiusMeters, Point2D(x: -sin(endAngle), y: cos(endAngle)))
+    }
+
+    /// The radius or the arc angle a curve handle answers at the dragged
+    /// point, which is the handle's own drawn point offset by the queried
+    /// displacement rather than the pointer position.
+    private static func sketchCurveHandleValue(
+        _ handle: ViewportSketchCurveHandleTarget, at current: CGPoint
+    ) throws -> Value {
+        guard current.x.isFinite, current.y.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A dragged sketch curve handle point is not finite."
+            )
+        }
+        let localCurrent = sketchLocalPoint(current, sketchPlane: handle.sketchPlane)
+        let localCenter = sketchLocalPoint(handle.center, sketchPlane: handle.sketchPlane)
+        let dx = localCurrent.x - localCenter.x
+        let dy = localCurrent.y - localCenter.y
+        let radius = (dx * dx + dy * dy).squareRoot()
+        guard radius > minimumSketchValue else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch curve handle was dragged onto its own centre."
+            )
+        }
+        switch handle.handle {
+        case .circleRadius, .arcRadius:
+            return .sketchCurveHandle(
+                radiusMeters: radius, startAngleRadians: nil, endAngleRadians: nil
+            )
+        case .arcStartAngle:
+            return .sketchCurveHandle(
+                radiusMeters: nil,
+                startAngleRadians: atan2(dy, dx),
+                endAngleRadians: nil
+            )
+        case .arcEndAngle:
+            return .sketchCurveHandle(
+                radiusMeters: nil,
+                startAngleRadians: nil,
+                endAngleRadians: atan2(dy, dx)
+            )
+        }
+    }
+
+    /// The scalar a sketch dimension answers for one display displacement.
+    ///
+    /// Each value the legacy selector clamped to a floor is a typed refusal
+    /// here, because a clamped dimension keeps drawing a handle whose
+    /// committed value no longer follows the pointer.
+    private static func sketchDimensionValue(
+        _ handle: ViewportSketchDimensionTarget, displayDelta: CGPoint
+    ) throws -> Value {
+        let delta = sketchLocalPoint(displayDelta, sketchPlane: handle.sketchPlane)
+        switch handle.kind {
+        case .length:
+            guard let start = handle.start, let end = handle.end else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch length dimension names no segment to measure."
+                )
+            }
+            let segment = try sketchSegment(
+                start: start, end: end, sketchPlane: handle.sketchPlane
+            )
+            let moved = handle.baselineValue
+                + delta.x * segment.unit.x + delta.y * segment.unit.y
+            guard moved > minimumSketchValue else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch length dimension was dragged to a nonpositive length."
+                )
+            }
+            return .sketchDimension(moved)
+        case .radius:
+            guard let center = handle.center else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch radius dimension names no centre to measure from."
+                )
+            }
+            let current = CGPoint(
+                x: handle.point.x + displayDelta.x,
+                y: handle.point.y + displayDelta.y
+            )
+            let localCurrent = sketchLocalPoint(current, sketchPlane: handle.sketchPlane)
+            let localCenter = sketchLocalPoint(center, sketchPlane: handle.sketchPlane)
+            let dx = localCurrent.x - localCenter.x
+            let dy = localCurrent.y - localCenter.y
+            let radius = (dx * dx + dy * dy).squareRoot()
+            guard radius > minimumSketchValue else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch radius dimension was dragged onto its own centre."
+                )
+            }
+            return .sketchDimension(radius)
+        case .angle:
+            if let start = handle.start, let end = handle.end {
+                let segment = try sketchSegment(
+                    start: start, end: end, sketchPlane: handle.sketchPlane
+                )
+                let tangential = delta.y * segment.unit.x - delta.x * segment.unit.y
+                return .sketchDimension(
+                    handle.baselineValue + tangential / segment.length
+                )
+            }
+            let arc = try sketchArcTangent(handle)
+            let tangential = delta.x * arc.tangent.x + delta.y * arc.tangent.y
+            let moved = handle.baselineValue + tangential / arc.radiusMeters
+            guard moved > minimumSketchValue, moved < maximumSketchArcSpan else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A sketch arc dimension was dragged outside a partial turn."
+                )
+            }
+            return .sketchDimension(moved)
+        case .diameter:
+            throw RealityViewportSpatialBatch.invalid(
+                "A sketch diameter dimension has no drag geometry."
+            )
+        }
+    }
+
+    /// The unit a dimension kind states its committed value in.
+    private static func sketchDimensionExpression(
+        for kind: SketchEntityDimensionKind, value: Double
+    ) -> CADExpression {
+        switch kind {
+        case .length, .radius, .diameter:
+            return .length(value, .meter)
+        case .angle:
+            return .angle(value, .radian)
+        }
+    }
+
+    /// Whether a solved member differs from the record's retained baseline.
+    /// A member the handle kind does not answer stays `nil` and never commits.
+    private static func changed(_ candidate: Double?, from baseline: Double?) -> Bool {
+        guard let candidate, let baseline else { return false }
+        return abs(candidate - baseline) > minimumSketchChange
     }
 }

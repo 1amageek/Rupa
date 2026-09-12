@@ -141,12 +141,6 @@ struct ViewportConstructionPlaneHandleIdentity: Equatable, Sendable {
     var handle: ViewportConstructionPlaneHandleKind
 }
 
-struct ViewportSplineControlPointDragState: Equatable {
-    var target: ViewportSplineControlPointHandleTarget
-    var startPoint: CGPoint
-    var viewportDelta: CGPoint
-}
-
 struct ViewportSplineControlPointSlideDragState: Equatable {
     var target: ViewportSplineControlPointSlideHandleTarget
     var startPoint: CGPoint
@@ -213,29 +207,16 @@ struct ViewportSketchVertexOffsetDragState: Equatable {
     var distanceMeters: Double
 }
 
-struct ViewportSketchCurveHandleDragState: Equatable {
-    var target: ViewportSketchCurveHandleTarget
-    var startPoint: CGPoint
-    var radiusMeters: Double?
-    var startAngleRadians: Double?
-    var endAngleRadians: Double?
-}
-
-struct ViewportSketchCurveHandleCandidate: Equatable {
-    var handle: ViewportSketchCurveHandleKind
-    var point: CGPoint
-    var center: CGPoint
-    var radiusMeters: Double
-    var startAngleRadians: Double?
-    var endAngleRadians: Double?
-}
-
 struct ViewportSketchCurveHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
     var handle: ViewportSketchCurveHandleKind
     var sketchPlane: SketchPlane
+    /// The handle's own point in the sketch display space the producer
+    /// drew it in. The native world-point owner offsets it by the queried
+    /// displacement rather than reading an absolute pointer position.
+    var point: CGPoint
     var center: CGPoint
     var radiusMeters: Double
     var startAngleRadians: Double?
@@ -256,30 +237,15 @@ struct ViewportSketchCurveHandleIdentity: Equatable, Sendable {
     var handle: ViewportSketchCurveHandleKind
 }
 
-struct ViewportSketchDimensionDragState: Equatable {
-    var target: ViewportSketchDimensionTarget
-    var startPoint: CGPoint
-    var value: Double
-}
-
-struct ViewportSketchDimensionCandidate: Equatable {
-    var kind: SketchEntityDimensionKind
-    var rect: CGRect
-    var baselineValue: Double
-    var start: CGPoint?
-    var end: CGPoint?
-    var center: CGPoint?
-    var radiusMeters: Double?
-    var startAngleRadians: Double?
-    var endAngleRadians: Double?
-}
-
 struct ViewportSketchDimensionTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
     var kind: SketchEntityDimensionKind
     var sketchPlane: SketchPlane
+    /// The handle's own point in the sketch display space the producer
+    /// drew it in.
+    var point: CGPoint
     var baselineValue: Double
     var start: CGPoint?
     var end: CGPoint?
@@ -303,18 +269,15 @@ struct ViewportSketchDimensionIdentity: Equatable, Sendable {
     var kind: SketchEntityDimensionKind
 }
 
-struct ViewportSketchPointHandleDragState: Equatable {
-    var target: ViewportSketchPointHandleTarget
-    var startPoint: CGPoint
-    var viewportDelta: CGPoint
-}
-
 struct ViewportSketchPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var target: SelectionTarget
     var handle: SketchEntityPointHandle
     var sketchPlane: SketchPlane
+    /// The handle's own point in the sketch display space the producer
+    /// drew it in.
+    var point: CGPoint
 
     var identity: ViewportSketchPointHandleIdentity {
         ViewportSketchPointHandleIdentity(
@@ -337,6 +300,9 @@ struct ViewportSplineControlPointHandleTarget: Equatable, Sendable {
     var target: SelectionTarget
     var controlPointIndex: Int
     var sketchPlane: SketchPlane
+    /// The handle's own point in the sketch display space the producer
+    /// drew it in.
+    var point: CGPoint
 
     var identity: ViewportSplineControlPointIdentity {
         ViewportSplineControlPointIdentity(
@@ -753,10 +719,6 @@ struct ViewportAffordanceTarget: Equatable, Sendable {
 }
 
 enum ViewportInteractionTarget: Equatable {
-    case sketchCurveHandle(ViewportSketchCurveHandleTarget)
-    case sketchDimension(ViewportSketchDimensionTarget)
-    case sketchPointHandle(ViewportSketchPointHandleTarget)
-    case splineControlPoint(ViewportSplineControlPointHandleTarget)
     case splineControlPointSlide(ViewportSplineControlPointSlideHandleTarget)
     case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideHandleTarget)
     case surfaceControlPointSlide(ViewportSurfaceControlPointSlideHandleTarget)

@@ -3,10 +3,6 @@ struct ViewportActiveInteractionDrags: Equatable {
 
     init(
         affordance: ViewportAffordanceDragState? = nil,
-        sketchCurveHandle: ViewportSketchCurveHandleDragState? = nil,
-        sketchDimension: ViewportSketchDimensionDragState? = nil,
-        sketchPointHandle: ViewportSketchPointHandleDragState? = nil,
-        splineControlPoint: ViewportSplineControlPointDragState? = nil,
         splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil,
         polySplineSurfaceVertexSlide: ViewportPolySplineSurfaceVertexSlideDragState? = nil,
         surfaceControlPointSlide: ViewportSurfaceControlPointSlideDragState? = nil,
@@ -21,10 +17,6 @@ struct ViewportActiveInteractionDrags: Equatable {
     ) {
         activeDrag = ViewportActiveInteractionDragCandidates(
             affordance: affordance,
-            sketchCurveHandle: sketchCurveHandle,
-            sketchDimension: sketchDimension,
-            sketchPointHandle: sketchPointHandle,
-            splineControlPoint: splineControlPoint,
             splineControlPointSlide: splineControlPointSlide,
             polySplineSurfaceVertexSlide: polySplineSurfaceVertexSlide,
             surfaceControlPointSlide: surfaceControlPointSlide,
@@ -43,43 +35,6 @@ struct ViewportActiveInteractionDrags: Equatable {
         get { activeDrag?.affordance }
         set {
             setActiveDrag(newValue.map(ViewportActiveInteractionDragState.affordance), replacing: .affordance)
-        }
-    }
-
-    var sketchCurveHandle: ViewportSketchCurveHandleDragState? {
-        get { activeDrag?.sketchCurveHandle }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.sketchCurveHandle),
-                replacing: .sketchCurveHandle
-            )
-        }
-    }
-
-    var sketchDimension: ViewportSketchDimensionDragState? {
-        get { activeDrag?.sketchDimension }
-        set {
-            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.sketchDimension), replacing: .sketchDimension)
-        }
-    }
-
-    var sketchPointHandle: ViewportSketchPointHandleDragState? {
-        get { activeDrag?.sketchPointHandle }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.sketchPointHandle),
-                replacing: .sketchPointHandle
-            )
-        }
-    }
-
-    var splineControlPoint: ViewportSplineControlPointDragState? {
-        get { activeDrag?.splineControlPoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.splineControlPoint),
-                replacing: .splineControlPoint
-            )
         }
     }
 

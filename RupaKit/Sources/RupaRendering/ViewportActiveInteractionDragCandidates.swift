@@ -1,9 +1,5 @@
 struct ViewportActiveInteractionDragCandidates {
     var affordance: ViewportAffordanceDragState? = nil
-    var sketchCurveHandle: ViewportSketchCurveHandleDragState? = nil
-    var sketchDimension: ViewportSketchDimensionDragState? = nil
-    var sketchPointHandle: ViewportSketchPointHandleDragState? = nil
-    var splineControlPoint: ViewportSplineControlPointDragState? = nil
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil
     var polySplineSurfaceVertexSlide: ViewportPolySplineSurfaceVertexSlideDragState? = nil
     var surfaceControlPointSlide: ViewportSurfaceControlPointSlideDragState? = nil
@@ -22,12 +18,6 @@ struct ViewportActiveInteractionDragCandidates {
 
     func state(for kind: ViewportActiveInteractionDragKind) -> ViewportActiveInteractionDragState? {
         switch kind {
-        case .sketchCurveHandle:
-            sketchCurveHandle.map(ViewportActiveInteractionDragState.sketchCurveHandle)
-        case .sketchDimension:
-            sketchDimension.map(ViewportActiveInteractionDragState.sketchDimension)
-        case .sketchPointHandle:
-            sketchPointHandle.map(ViewportActiveInteractionDragState.sketchPointHandle)
         case .splineControlPointSlide:
             splineControlPointSlide.map(ViewportActiveInteractionDragState.splineControlPointSlide)
         case .polySplineSurfaceVertexSlide:
@@ -36,8 +26,6 @@ struct ViewportActiveInteractionDragCandidates {
             surfaceControlPointSlide.map(ViewportActiveInteractionDragState.surfaceControlPointSlide)
         case .surfaceFrame:
             surfaceFrame.map(ViewportActiveInteractionDragState.surfaceFrame)
-        case .splineControlPoint:
-            splineControlPoint.map(ViewportActiveInteractionDragState.splineControlPoint)
         case .edgeOffset:
             edgeOffset.map(ViewportActiveInteractionDragState.edgeOffset)
         case .slotWidth:
