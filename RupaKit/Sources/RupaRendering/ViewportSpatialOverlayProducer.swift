@@ -2388,6 +2388,23 @@ extension ViewportSpatialOverlayProducer {
         return path
     }
 
+    static func squarePath(radius: CGFloat) -> Path {
+        Path(CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+    }
+
+    static func circlePath(radius: CGFloat) -> Path {
+        Path(ellipseIn: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+    }
+
+    static func trianglePath(radius: CGFloat) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: 0, y: -radius))
+        path.addLine(to: CGPoint(x: radius, y: radius))
+        path.addLine(to: CGPoint(x: -radius, y: radius))
+        path.closeSubpath()
+        return path
+    }
+
     static func triangles(
         _ points: [Point3D],
         color: SIMD4<Float>,

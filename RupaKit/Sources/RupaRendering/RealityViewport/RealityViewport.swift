@@ -1208,17 +1208,20 @@ final class RealityViewport {
         return Int(count)
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): These hits are the production input
-    // authority only for the migrated routes. `Viewport.beginViewportPress` and
-    // `Viewport.hover` resolve the prepared axis handles and the body transform
-    // affordance from them; the sketch, curve, surface, pattern,
-    // construction-plane and profile routes still fall through to the legacy
-    // CPU selectors. RK-4.2.2/3 completes the cutover by preparing records for
-    // those routes. Rectangle selection does not wait on this method at all:
-    // `Viewport.selectionDragTarget` answers CAD face, edge and vertex
-    // rectangles from prepared topology, and the occurrence rectangle from
-    // `occurrenceIDs(intersecting:revision:)`, both through this same mounted
-    // frame.
+    /// Answers which prepared handle records a point reaches in this frame.
+    ///
+    /// These hits are the production input authority for every overlay handle.
+    /// `Viewport.beginViewportPress` and `Viewport.hover` resolve the axis,
+    /// world-point, pattern, sketch-transform and affordance routes from this
+    /// list alone, so no handle route carries a second projection or occlusion
+    /// rule. Click selection is a separate question that still carries one:
+    /// `Viewport.requiresLegacyHitFallback` names the scopes whose identity
+    /// query has not moved yet. A handle record is reachable exactly where the
+    /// same frame drew its collision footprint. Rectangle selection does not
+    /// wait on this method at all: `Viewport.selectionDragTarget` answers CAD
+    /// face, edge and vertex rectangles from prepared topology, and the
+    /// occurrence rectangle from `occurrenceIDs(intersecting:revision:)`, both
+    /// through this same mounted frame.
     func spatialHandleHits(at point: CGPoint, revision: UInt64) throws -> [UInt32] {
         guard point.x.isFinite, point.y.isFinite, appliedViewportRevision == revision,
               root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {

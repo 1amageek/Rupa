@@ -30,7 +30,10 @@ extension ViewportSpatialOverlayProducer {
         case constructionFace
         case bodyTransform
         case sketchTransform
+        case profileCorner
+        case profileFace
         case edgeFillet
+        case profileEdgeChamfer
     }
 
     enum SurfaceTransformAffordanceState: String, CaseIterable, Hashable, Sendable {
@@ -653,6 +656,24 @@ extension ViewportSpatialOverlayProducer {
             activeFamilies: &activeFamilies
         )
     }
+
+    /// Screen-fixed extents of the four profile affordances.
+    ///
+    /// A profile handle is reachable at the same screen size whatever the body
+    /// measures and however far the camera is, so its extent is a point length
+    /// owned here rather than a fraction of the body's projected span. The two
+    /// edge treatments share one anchor, so only the offsets along the inward
+    /// ray separate them, and the values satisfy
+    /// `chamferOffsetPoints - filletOffsetPoints >= 2 * hitTolerancePoints`
+    /// together with `2 * markRadiusPoints < chamferOffsetPoints -
+    /// filletOffsetPoints`: neither the reach nor the drawn mark of one crosses
+    /// the other. Changing one offset re-derives the other from those rules.
+    enum ProfileAffordanceMetrics {
+        static let markRadiusPoints: CGFloat = 8
+        static let hitTolerancePoints: CGFloat = 10
+        static let filletOffsetPoints: CGFloat = 18
+        static let chamferOffsetPoints: CGFloat = 38
+    }
 }
 
 private extension ViewportSpatialOverlayProducer {
@@ -899,7 +920,7 @@ private extension ViewportSpatialOverlayProducer {
             markers: &markers,
             meshes: &meshes
         )
-        try emitEdgeFillet(
+        try emitProfileAffordances(
             input: input,
             interactionRecords: &interactionRecords,
             checkpoint: checkpoint,
@@ -3084,7 +3105,7 @@ private extension ViewportSpatialOverlayProducer {
         return mutation
     }
 
-    static func emitEdgeFillet(
+    static func emitProfileAffordances(
         input: SurfaceTransformAffordanceSource.RawInput,
         interactionRecords: inout [ViewportSpatialInteractionRecord],
         checkpoint: (Int, Int, Int) throws -> Void,
@@ -3092,68 +3113,198 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
-        guard input.interactiveRoutes.contains(.edgeFillet) else { return }
         for target in input.selection.selectedTargets {
-            guard case .edge(let componentID) = target.component else { continue }
-            // The legacy interaction route omits generated or otherwise
-            // non-corner edges that cannot be filleted.  Preserve that
-            // disabled-result semantics while resolving generated corner
-            // edges through the same document authority when possible.
-            guard let edge = viewportBodyEdge(
-                for: componentID,
-                target: target,
-                document: input.document,
-                objectRegistry: input.objectRegistry
-            ) else { continue }
-            guard
-                  let item = sceneItem(for: target, input: input),
-                  case .body(let component) = item.kind,
-                  let topology = component.topology,
-                  let sourceEdge = topology.edges.first(where: { $0.componentID == componentID }) else {
-                throw RealityViewportSpatialBatch.invalid("Edge fillet selection is not backed by body topology.")
+            switch target.component {
+            case .vertex(let componentID):
+                guard input.interactiveRoutes.contains(.profileCorner) else { continue }
+                // A corner handle exists only where the document authority can
+                // name the selected vertex as a box corner.
+                guard let vertex = viewportBodyVertex(
+                    for: componentID,
+                    target: target,
+                    document: input.document,
+                    objectRegistry: input.objectRegistry
+                ) else { continue }
+                guard let item = sceneItem(for: target, input: input),
+                      case .body = item.kind else { continue }
+                let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+                try emitProfileHandle(
+                    route: .profileCorner,
+                    action: .profileCornerMove(target, vertex),
+                    target: target,
+                    item: item,
+                    edit: edit,
+                    anchor: edit.worldPoint(edit.position(for: vertex)),
+                    offsetPoints: nil,
+                    path: squarePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
+                    input: input,
+                    interactionRecords: &interactionRecords,
+                    checkpoint: checkpoint,
+                    cameraLines: &cameraLines,
+                    cameraPaths: &cameraPaths,
+                    markers: &markers
+                )
+            case .face(let componentID):
+                guard input.interactiveRoutes.contains(.profileFace) else { continue }
+                guard let face = viewportBodyFace(
+                    for: componentID,
+                    target: target,
+                    document: input.document,
+                    objectRegistry: input.objectRegistry
+                ) else { continue }
+                guard ViewportProfileFaceDragMapping.supports(face) else { continue }
+                guard let item = sceneItem(for: target, input: input),
+                      case .body = item.kind else { continue }
+                let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+                try emitProfileHandle(
+                    route: .profileFace,
+                    action: .profileFaceMove(target, face),
+                    target: target,
+                    item: item,
+                    edit: edit,
+                    anchor: edit.worldPoint(edit.position(for: face)),
+                    offsetPoints: nil,
+                    path: circlePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
+                    input: input,
+                    interactionRecords: &interactionRecords,
+                    checkpoint: checkpoint,
+                    cameraLines: &cameraLines,
+                    cameraPaths: &cameraPaths,
+                    markers: &markers
+                )
+            case .edge(let componentID):
+                let wantsFillet = input.interactiveRoutes.contains(.edgeFillet)
+                let wantsChamfer = input.interactiveRoutes.contains(.profileEdgeChamfer)
+                guard wantsFillet || wantsChamfer else { continue }
+                // The legacy interaction route omits generated or otherwise
+                // non-corner edges that cannot carry an edge treatment.
+                // Preserve that disabled-result semantics while resolving
+                // generated corner edges through the same document authority
+                // when possible.
+                guard let edge = viewportBodyEdge(
+                    for: componentID,
+                    target: target,
+                    document: input.document,
+                    objectRegistry: input.objectRegistry
+                ) else { continue }
+                guard
+                      let item = sceneItem(for: target, input: input),
+                      case .body(let component) = item.kind,
+                      let topology = component.topology,
+                      let sourceEdge = topology.edges.first(where: { $0.componentID == componentID }) else {
+                    throw RealityViewportSpatialBatch.invalid(
+                        "Edge treatment selection is not backed by body topology."
+                    )
+                }
+                let start = item.modelTransform.viewportTransformedPoint(sourceEdge.start)
+                let end = item.modelTransform.viewportTransformedPoint(sourceEdge.end)
+                let anchor = midpoint(start, end)
+                let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+                if wantsFillet {
+                    try emitProfileHandle(
+                        route: .edgeFillet,
+                        action: .profileEdgeFillet(target, edge),
+                        target: target,
+                        item: item,
+                        edit: edit,
+                        anchor: anchor,
+                        offsetPoints: ProfileAffordanceMetrics.filletOffsetPoints,
+                        path: diamondPath(radius: ProfileAffordanceMetrics.markRadiusPoints),
+                        input: input,
+                        interactionRecords: &interactionRecords,
+                        checkpoint: checkpoint,
+                        cameraLines: &cameraLines,
+                        cameraPaths: &cameraPaths,
+                        markers: &markers
+                    )
+                }
+                if wantsChamfer {
+                    try emitProfileHandle(
+                        route: .profileEdgeChamfer,
+                        action: .profileEdgeChamfer(target, edge),
+                        target: target,
+                        item: item,
+                        edit: edit,
+                        anchor: anchor,
+                        offsetPoints: ProfileAffordanceMetrics.chamferOffsetPoints,
+                        path: trianglePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
+                        input: input,
+                        interactionRecords: &interactionRecords,
+                        checkpoint: checkpoint,
+                        cameraLines: &cameraLines,
+                        cameraPaths: &cameraPaths,
+                        markers: &markers
+                    )
+                }
+            case .object, .sketchEntity, .region, .constructionPlane:
+                continue
             }
-            let start = item.modelTransform.viewportTransformedPoint(sourceEdge.start)
-            let end = item.modelTransform.viewportTransformedPoint(sourceEdge.end)
-            let anchor = midpoint(start, end)
-            let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+        }
+    }
+
+    /// Registers one profile handle and draws the mark that reaches it.
+    ///
+    /// A prepared record is reachable only through the collision geometry its
+    /// drawing builds, so the record and the mark are emitted together. A nil
+    /// `offsetPoints` draws the mark on the anchor itself; a non-nil one moves
+    /// it along the ray toward the body centre and draws the leader line that
+    /// ties it back.
+    private static func emitProfileHandle(
+        route: SurfaceTransformAffordanceRoute,
+        action: ViewportAffordanceAction,
+        target: SelectionTarget,
+        item: ViewportSceneItem,
+        edit: ViewportObjectEditState,
+        anchor: Point3D,
+        offsetPoints: CGFloat?,
+        path: Path,
+        input: SurfaceTransformAffordanceSource.RawInput,
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
+        checkpoint: (Int, Int, Int) throws -> Void,
+        cameraLines: inout [SurfaceTransformAffordanceSource.CameraLine],
+        cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
+        markers: inout [SurfaceTransformAffordanceSource.Marker]
+    ) throws {
+        let affordanceTarget = ViewportAffordanceTarget(
+            featureID: item.featureID,
+            selectionTarget: target,
+            action: action
+        )
+        let member = ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
+            occurrenceID: item.id,
+            featureID: item.featureID,
+            sceneNodeID: item.sceneNodeID,
+            modelTransform: item.modelTransform,
+            edit: edit
+        )
+        let prepared = ViewportSpatialPreparedInteractionTarget.affordance(
+            target: affordanceTarget,
+            members: [member],
+            groupEdit: nil
+        )
+        _ = try handleIndex(
+            for: prepared,
+            occurrenceID: item.id,
+            modelTransform: item.modelTransform,
+            in: &interactionRecords
+        )
+        let identity = ViewportSpatialHandleIdentity.affordance(affordanceTarget)
+        let state = state(for: identity, input: input)
+        let placement: SurfaceTransformAffordanceSource.DirectedPoint
+        if let offsetPoints {
             let toward = edit.worldPoint(edit.centerPoint)
-            let affordanceTarget = ViewportAffordanceTarget(
-                featureID: item.featureID,
-                selectionTarget: target,
-                action: .profileEdgeFillet(target, edge)
-            )
-            let member = ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
-                occurrenceID: item.id,
-                featureID: item.featureID,
-                sceneNodeID: item.sceneNodeID,
-                modelTransform: item.modelTransform,
-                edit: edit
-            )
-            let prepared = ViewportSpatialPreparedInteractionTarget.affordance(
-                target: affordanceTarget,
-                members: [member],
-                groupEdit: nil
-            )
-            _ = try handleIndex(
-                for: prepared,
-                occurrenceID: item.id,
-                modelTransform: item.modelTransform,
-                in: &interactionRecords
-            )
-            let identity = ViewportSpatialHandleIdentity.affordance(affordanceTarget)
-            let state = state(for: identity, input: input)
-            let directed = SurfaceTransformAffordanceSource.DirectedPoint(
+            placement = .init(
                 anchor: anchor,
                 toward: toward == anchor ? anchor + .unitY : toward,
-                parallel: 18,
+                parallel: offsetPoints,
                 perpendicular: 0
             )
             try appendCameraLine(
                 .init(
-                    route: .edgeFillet,
+                    route: route,
                     points: [
                         .init(anchor: anchor, toward: anchor, usesFixedOffset: true),
-                        directed,
+                        placement,
                     ],
                     color: editColor,
                     family: .transform,
@@ -3164,37 +3315,39 @@ private extension ViewportSpatialOverlayProducer {
                 to: &cameraLines,
                 checkpoint: checkpoint
             )
-            try appendCameraPath(
+        } else {
+            placement = .init(anchor: anchor, toward: anchor, usesFixedOffset: true)
+        }
+        try appendCameraPath(
+            .init(
+                route: route,
+                path: path,
+                placement: placement,
+                color: editColor,
+                family: .transform,
+                identity: identity,
+                state: state,
+                hitTolerancePoints: Float(ProfileAffordanceMetrics.hitTolerancePoints),
+                occurrenceID: item.id
+            ),
+            to: &cameraPaths,
+            checkpoint: checkpoint
+        )
+        if activeValue(for: identity, input: input) != nil {
+            try appendMarker(
                 .init(
-                    route: .edgeFillet,
-                    path: diamondPath(radius: 8),
-                    placement: directed,
+                    route: route,
+                    anchor: anchor,
+                    shape: .sphere,
+                    diameterPoints: Float(ProfileAffordanceMetrics.markRadiusPoints),
                     color: editColor,
                     family: .transform,
-                    identity: identity,
-                    state: state,
-                    hitTolerancePoints: 10.0,
-                    occurrenceID: item.id
+                    identity: nil,
+                    state: .active
                 ),
-                to: &cameraPaths,
+                to: &markers,
                 checkpoint: checkpoint
             )
-            if activeValue(for: identity, input: input) != nil {
-                try appendMarker(
-                    .init(
-                        route: .edgeFillet,
-                        anchor: anchor,
-                        shape: .sphere,
-                        diameterPoints: 8,
-                        color: editColor,
-                        family: .transform,
-                        identity: nil,
-                        state: .active
-                    ),
-                    to: &markers,
-                    checkpoint: checkpoint
-                )
-            }
         }
     }
 
@@ -3230,6 +3383,79 @@ private extension ViewportSpatialOverlayProducer {
             case .rightBottom: return .rightBottom
             case .rightTop: return .rightTop
             case .leftTop: return .leftTop
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    static func viewportBodyFace(for componentID: SelectionComponentID) -> ViewportBodyFace? {
+        switch componentID {
+        case .bodyFaceFront: .front
+        case .bodyFaceBack: .back
+        case .bodyFaceTop: .top
+        case .bodyFaceBottom: .bottom
+        case .bodyFaceLeft: .left
+        case .bodyFaceRight: .right
+        case .bodyFaceSide: .side
+        default: nil
+        }
+    }
+
+    static func viewportBodyFace(
+        for componentID: SelectionComponentID,
+        target: SelectionTarget,
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) -> ViewportBodyFace? {
+        if let direct = viewportBodyFace(for: componentID) {
+            return direct
+        }
+        guard componentID.generatedTopologySubshapeID != nil else { return nil }
+        do {
+            let resolved = try GeneratedTopologySelectionResolver().bodyFace(
+                for: target,
+                in: document,
+                objectRegistry: objectRegistry,
+                operationName: "Viewport generated topology selection"
+            )
+            switch resolved {
+            case .front: return .front
+            case .back: return .back
+            case .top: return .top
+            case .bottom: return .bottom
+            case .left: return .left
+            case .right: return .right
+            case .side: return .side
+            }
+        } catch {
+            return nil
+        }
+    }
+
+    static func viewportBodyVertex(
+        for componentID: SelectionComponentID,
+        target: SelectionTarget,
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) -> ViewportBodyVertex? {
+        guard componentID.generatedTopologySubshapeID != nil else { return nil }
+        do {
+            let resolved = try GeneratedTopologySelectionResolver().cornerVertex(
+                for: target,
+                in: document,
+                objectRegistry: objectRegistry,
+                operationName: "Viewport generated topology selection"
+            )
+            switch resolved {
+            case .frontBottomLeft: return .frontBottomLeft
+            case .frontBottomRight: return .frontBottomRight
+            case .frontTopRight: return .frontTopRight
+            case .frontTopLeft: return .frontTopLeft
+            case .backBottomLeft: return .backBottomLeft
+            case .backBottomRight: return .backBottomRight
+            case .backTopRight: return .backTopRight
+            case .backTopLeft: return .backTopLeft
             }
         } catch {
             return nil

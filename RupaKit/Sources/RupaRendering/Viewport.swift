@@ -760,7 +760,7 @@ public struct Viewport: View {
                 .overlay {
                     ViewportInputSurface(
                         onPress: { point, size, _ in
-                            beginViewportPress(at: point, size: size)
+                            beginViewportPress(at: point)
                         },
                         onPick: { point, size, intent in
                             pick(at: point, size: size, selectionIntent: intent)
@@ -1686,6 +1686,9 @@ public struct Viewport: View {
         if onPatternArrayCurvePathPointDrag != nil { key.availableRoutes |= 1 << 20 }
         if onPatternArrayOutputModeChange != nil { key.availableRoutes |= 1 << 21 }
         if onSketchTransformCommit != nil { key.availableRoutes |= 1 << 22 }
+        if onVertexDrag != nil { key.availableRoutes |= 1 << 23 }
+        if onFaceDrag != nil { key.availableRoutes |= 1 << 24 }
+        if onEdgeChamferDrag != nil { key.availableRoutes |= 1 << 25 }
         return key
     }
 
@@ -3495,22 +3498,6 @@ public struct Viewport: View {
         return surface.point
     }
 
-    private func edgeFilletHandlePoint(
-        projection: ViewportBodyProjection,
-        edge: ViewportBodyEdge
-    ) -> CGPoint {
-        let segment = projection.segment(for: edge)
-        let center = CGPoint(
-            x: (segment.start.x + segment.end.x) / 2.0,
-            y: (segment.start.y + segment.end.y) / 2.0
-        )
-        let direction = edgeInwardDirection(projection: projection, edge: edge)
-        return CGPoint(
-            x: center.x + direction.dx * 18.0,
-            y: center.y + direction.dy * 18.0
-        )
-    }
-
     private func edgeInwardDirection(
         projection: ViewportBodyProjection,
         edge: ViewportBodyEdge
@@ -5302,23 +5289,6 @@ public struct Viewport: View {
         ).first
     }
 
-    /// Whether the native record owns the production route for this affordance
-    /// action.
-    ///
-    /// The producer registers a record only while the route is interactive, and
-    /// this re-check keeps the claim honest for the frame the pointer actually
-    /// meets. Actions with no native handle stay with the legacy profile
-    /// selectors, so an unclaimed action falls through instead of ending the
-    /// interaction with nothing.
-    private func nativeAffordanceRouteEnabled(_ action: ViewportAffordanceAction) -> Bool {
-        switch action {
-        case .translate, .oneSidedScale, .centerScale, .rotate, .vertexMove, .faceMove:
-            allowsObjectAffordances
-        case .profileCornerMove, .profileFaceMove, .profileEdgeChamfer, .profileEdgeFillet:
-            false
-        }
-    }
-
     private func nativeAxisRouteEnabled(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
         switch target {
         case .splineControlPointSlide: onSplineControlPointSlideDrag != nil
@@ -6019,7 +5989,7 @@ public struct Viewport: View {
         }
     }
 
-    private func beginViewportPress(at point: CGPoint, size: CGSize) {
+    private func beginViewportPress(at point: CGPoint) {
         if measurementToolActive {
             clearPendingCanvasInteractionTargets()
             activeCanvasDrag = nil
@@ -6074,8 +6044,7 @@ public struct Viewport: View {
                     beginNativeWorldPointPress(record: record, at: point)
                     return
                 }
-                if case .affordance(let target, let members, let groupEdit) = record.target,
-                   nativeAffordanceRouteEnabled(target.action) {
+                if case .affordance(let target, let members, let groupEdit) = record.target {
                     setPendingInteractionTarget(.affordance(target))
                     pendingNativeAffordance = ViewportNativeAffordanceClaim(
                         target: target, members: members, groupEdit: groupEdit
@@ -6088,46 +6057,6 @@ public struct Viewport: View {
             nativeInputGesture = .cancelled
             return
         }
-        guard let target = resolvedInteractionTarget(at: point, size: size) else {
-            clearPendingCanvasInteractionTargets()
-            return
-        }
-        clearPendingCanvasInteractionTargets()
-        setPendingInteractionTarget(target)
-        activeCanvasDrag = nil
-    }
-
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The body affordance routes -- vertex,
-    // face, edge and edge fillet -- still resolve from this legacy CPU
-    // projection when press/hover find no native record. Production reaches it
-    // from `beginViewportPress` and `hover` after the native frame declines the
-    // point. Completing RK-4 requires prepared records for those routes, after
-    // which this selector and its CPU gizmo geometry are removed; the migrated
-    // native axis, surface handle, sketch handle, body transform, pattern and
-    // world-point routes are never resolved here.
-    private func resolvedInteractionTarget(
-        at point: CGPoint,
-        size: CGSize,
-        sceneContext: ViewportSceneContext? = nil
-    ) -> ViewportInteractionTarget? {
-        let sceneContext = sceneContext ?? makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .affordance(target)
-        }
-        if let target = selectedFaceAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .affordance(target)
-        }
-        if let target = selectedEdgeFilletAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .affordance(target)
-        }
-        if let target = selectedEdgeAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .affordance(target)
-        }
-        return nil
     }
 
     private func setPendingInteractionTarget(_ target: ViewportInteractionTarget) {
@@ -6349,120 +6278,6 @@ public struct Viewport: View {
             return nil
         }
         return distance
-    }
-
-    private func selectedVertexAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportAffordanceTarget? {
-        guard onVertexDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        for target in selection.selectedTargets.reversed() {
-            guard case .vertex = target.component,
-                  let vertexTarget = vertexSelectionTarget(for: target),
-                  let item = scene.items.first(where: { $0.featureID == vertexTarget.featureID }),
-                  let projection = bodyProjection(for: item, layout: layout) else {
-                continue
-            }
-            let handlePoint = projection.point(for: vertexTarget.vertex)
-            guard point.distance(to: handlePoint) <= handleTolerance else {
-                continue
-            }
-            return ViewportAffordanceTarget(
-                featureID: vertexTarget.featureID,
-                action: .profileCornerMove(target, vertexTarget.vertex)
-            )
-        }
-        return nil
-    }
-
-    private func selectedFaceAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportAffordanceTarget? {
-        guard onFaceDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        for target in selection.selectedTargets.reversed() {
-            guard case .face = target.component,
-                  let faceTarget = faceSelectionTarget(for: target),
-                  ViewportProfileFaceDragMapping.supports(faceTarget.face),
-                  let item = scene.items.first(where: { $0.featureID == faceTarget.featureID }),
-                  let projection = bodyProjection(for: item, layout: layout) else {
-                continue
-            }
-            let footprint = projection.footprint(for: faceTarget.face)
-            guard footprint.contains(point, tolerance: 8.0) else {
-                continue
-            }
-            return ViewportAffordanceTarget(
-                featureID: faceTarget.featureID,
-                action: .profileFaceMove(target, faceTarget.face)
-            )
-        }
-        return nil
-    }
-
-    private func selectedEdgeAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportAffordanceTarget? {
-        guard onEdgeChamferDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        for target in selection.selectedTargets.reversed() {
-            guard case .edge = target.component,
-                  let edgeTarget = edgeSelectionTarget(for: target),
-                  let item = scene.items.first(where: { $0.featureID == edgeTarget.featureID }),
-                  let projection = bodyProjection(for: item, layout: layout) else {
-                continue
-            }
-            let segment = projection.segment(for: edgeTarget.edge)
-            guard point.distanceToSegment(start: segment.start, end: segment.end) <= 10.0 else {
-                continue
-            }
-            return ViewportAffordanceTarget(
-                featureID: edgeTarget.featureID,
-                action: .profileEdgeChamfer(target, edgeTarget.edge)
-            )
-        }
-        return nil
-    }
-
-    private func selectedEdgeFilletAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportAffordanceTarget? {
-        guard onEdgeFilletDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        for target in selection.selectedTargets.reversed() {
-            guard case .edge = target.component,
-                  let edgeTarget = edgeSelectionTarget(for: target),
-                  let item = scene.items.first(where: { $0.featureID == edgeTarget.featureID }),
-                  let projection = bodyProjection(for: item, layout: layout) else {
-                continue
-            }
-            let handlePoint = edgeFilletHandlePoint(projection: projection, edge: edgeTarget.edge)
-            guard point.distance(to: handlePoint) <= 10.0 else {
-                continue
-            }
-            return ViewportAffordanceTarget(
-                featureID: edgeTarget.featureID,
-                action: .profileEdgeFillet(target, edgeTarget.edge)
-            )
-        }
-        return nil
     }
 
     private func selectedRegionOffsetAffordanceTarget(
@@ -6705,7 +6520,6 @@ public struct Viewport: View {
             basis: currentProjectionBasis,
             usesDragPreviewDocument: false
         )
-        let scene = sceneContext.scene
         let layout = sceneContext.layout
         let selectedFeatureIDs = selectedObjectFeatureIDs()
 
@@ -6728,31 +6542,16 @@ public struct Viewport: View {
             )
             activeAffordanceDrag = dragState
         } else {
-            let selectedBodyItems = selectedBodyItems(in: scene)
-            let targetIsSelectionGroup = selectedBodyItems.count > 1
-                && selectedBodyItems.contains { $0.featureID == target.featureID }
-            let baseEdits: [FeatureID: ViewportObjectEditState]
-            let baseGroupEdit: ViewportObjectEditState?
-            if targetIsSelectionGroup {
-                baseEdits = bodyEditStates(for: selectedBodyItems)
-                baseGroupEdit = selectionGroupEditState(for: Array(baseEdits.values))
-            } else {
-                guard let item = selectedBodyItem(for: target, in: scene),
-                      case .body = item.kind else {
-                    return
-                }
-                baseEdits = [
-                    target.featureID: editedBodies[target.featureID] ?? ViewportObjectEditState(item: item)
-                ]
-                baseGroupEdit = nil
-            }
-            dragState = ViewportAffordanceDragState(
-                target: target,
-                startPoint: start,
-                baseEdits: baseEdits,
-                baseGroupEdit: baseGroupEdit
-            )
-            activeAffordanceDrag = dragState
+            // Every affordance handle is a prepared record, so a drag with no
+            // claim and no drag in flight has no baseline to measure from.
+            // Refusing here keeps the bodies where the last committed edit
+            // left them instead of moving them from a guessed start.
+            reportNativeGestureFailure(MeshSourcePresentationRenderError(
+                code: .failed,
+                message: "An affordance drag arrived without a native claim or an active drag."
+            ))
+            clearPendingCanvasInteractionTargets()
+            return
         }
 
         if updateEdgeTreatmentDragPreview(
@@ -8063,8 +7862,7 @@ public struct Viewport: View {
                     }
                     return
                 }
-                if case .affordance(let target, _, _) = record.target,
-                   nativeAffordanceRouteEnabled(target.action) {
+                if case .affordance(let target, _, _) = record.target {
                     hoveredNativeHandleIdentity = nil
                     setHoveredInteractionTarget(.affordance(target))
                     hoveredCanvasHit = nil
@@ -8086,14 +7884,6 @@ public struct Viewport: View {
         )
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
-        if let target = resolvedInteractionTarget(at: point, size: size, sceneContext: sceneContext) {
-            setHoveredInteractionTarget(target)
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            onPresentationOccurrenceHover?(nil)
-            clearHoverCallbacks()
-            return
-        }
         clearHoverInteractionTargets()
         let presentationOccurrenceID: SceneOccurrenceID?
         var nativeCADResult = NativeCADSubshapeResult.unsupported
@@ -8926,6 +8716,9 @@ extension Viewport {
         // presentations and therefore no sketch selection can meet.
         if onSketchTransformCommit != nil { interactive.insert(.sketchTransform) }
         if onEdgeFilletDrag != nil { interactive.insert(.edgeFillet) }
+        if onVertexDrag != nil { interactive.insert(.profileCorner) }
+        if onFaceDrag != nil { interactive.insert(.profileFace) }
+        if onEdgeChamferDrag != nil { interactive.insert(.profileEdgeChamfer) }
         routes.formUnion(interactive)
         var active: [Active] = []
         let comparison = modifierFlags.containsControl

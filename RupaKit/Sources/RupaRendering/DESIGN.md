@@ -625,15 +625,55 @@ independent tessellator is never an alternative implementation.
    drawing a handle whose committed value no longer followed it.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
-   pass that already registers `profileEdgeFillet`, after which the
-   affordance route gate admits all ten actions and the affordance drag
-   derives its geometry from the mounted camera instead of a reconstructed
-   scene context.
-   When every route above is native-enabled,
-   `Viewport.resolvedInteractionTarget` and the legacy identity hit
-   fallback are removed, and the `ViewportInteractionTarget` cases and drag
-   functions that no native owner produces are removed with them; a case no
-   owner can reach is a defect of this migration, not a reserve path.
+   pass that already registers `profileEdgeFillet`, and the affordance
+   route gate in the viewport is removed with them. A record drawn at the
+   pressed point is the authority that admits the press: the producer
+   emits a profile record only while the matching drag callback is bound,
+   and that binding is part of the overlay change key, so a second gate
+   beside the frame could only restate or contradict the frame that
+   answered.
+   Each of the three gains a drawn mark, because a prepared handle is
+   reachable only through the collision geometry its drawing builds: the
+   legacy corner, face and chamfer tests drew nothing and were reachable
+   only because the legacy selector hit-tested a reconstructed projection
+   instead of the frame.
+   The four profile handles hold point lengths that do not follow the
+   body's projected span, for the reason the body transform metrics state.
+   `profileCornerMove` and `profileFaceMove` draw on their own anchor --
+   the edit box corner, and the edit box face centre -- with no offset,
+   because the only ray that could separate a handle from its anchor is
+   the one toward the body centre, and that ray has no screen direction
+   exactly when the face turns toward the camera. An offset that vanishes
+   for the commonest face would take the handle with it: a placement whose
+   projected direction is degenerate resolves to nothing, and the frame
+   disables the entity rather than drawing it somewhere else.
+   The two edge treatments instead share one anchor, the midpoint of the
+   selected body topology edge, so an offset along that ray is the only
+   thing that separates them: 18 pt for `profileEdgeFillet` and 38 pt for
+   `profileEdgeChamfer`, each with a 10 pt reach. `38 - 18 >= 10 + 10`
+   holds the two reaches apart and the drawn marks span `8 + 8 < 20`, so
+   neither crosses the other, and changing one offset re-derives the other
+   from that rule.
+   A corner or face handle therefore lands on the same point as the
+   transform `vertexMove` or `faceMove` handle when one body carries both
+   an object selection and a subshape selection. The frame's hit order
+   decides that press and the transform pass runs first, which is the
+   order the viewport already answers with while the legacy selectors are
+   still in place.
+   The four legacy profile selectors and `Viewport.resolvedInteractionTarget`
+   are removed here rather than left unused, because the legacy face and
+   edge tests accept the whole projected face footprint and the whole
+   projected edge segment, so their reach grows and shrinks with the
+   camera distance that the fixed point lengths above exist to remove.
+   `Viewport.updateAffordanceDrag` therefore materializes its baseline
+   only from the press claim or from the drag already in flight, and an
+   affordance target carrying neither is a typed refusal, because no owner
+   outside the prepared record produces one after this change.
+   When every route above is native-enabled, the legacy identity hit
+   fallback is removed as well, and the `ViewportInteractionTarget` cases
+   and drag functions that no native owner produces are removed with it; a
+   case no owner can reach is a defect of this migration, not a reserve
+   path.
    The body transform affordance is native-enabled under this same authority.
    `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
    prepared interaction record at the point, and its `.affordance` case owns

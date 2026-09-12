@@ -379,9 +379,17 @@ final class RealityViewportSpatialResources {
         return (start, end)
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Production affordance input still uses
-    // legacy selectors until RK-4.2 connects explicit descriptor footprints and
-    // prepared semantic targets to this frame-local native identity table.
+    /// Records the frame-local provenance of a drawn entity.
+    ///
+    /// The index means nothing outside the frame that built it, and
+    /// `handleIndex(for:)` is its only reader: it walks up from a descendant
+    /// until it finds a registered ancestor or reaches a root. Input
+    /// reachability is a separate matter. `spatialHandleHits` resolves a hit
+    /// through `handleMetadata(for:)`, which reads the collision tables the
+    /// marker, label, line and camera-path footprints populate, so an entity
+    /// registered here is still unreachable without one. Passing nil leaves the
+    /// entity out of this table, which is what an entity with no prepared
+    /// record wants.
     private func register(_ entity: Entity, handleIndex: UInt32?) {
         if let handleIndex { handleIndices[ObjectIdentifier(entity)] = handleIndex }
     }
@@ -938,9 +946,11 @@ final class RealityViewportSpatialResources {
             result.markers.append((entity, marker))
             result.register(entity, handleIndex: marker.handleIndex)
             result.root(for: marker.attachment).addChild(entity)
-            // FIXME(INCOMPLETE_IMPLEMENTATION): A handle without an explicit
-            // footprint is metadata-only until RK-4.2.2 maps its existing input
-            // route. Production remains on legacy selectors until RK-4.2.3.
+            // A marker carries a footprint only where the producer asked for
+            // one. State markers that repeat an identity while its drag is in
+            // flight omit the tolerance deliberately: the grabbable handle is
+            // drawn separately, so these stay decoration instead of adding a
+            // second footprint for the same record.
             if let index = marker.handleIndex, let tolerance = marker.hitTolerancePoints, tolerance > 0 {
                 if result.sphereCollision == nil { result.sphereCollision = .generateSphere(radius: 0.5) }
                 guard let sphereCollision = result.sphereCollision else {
