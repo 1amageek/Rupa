@@ -89,7 +89,7 @@ private func sample(from start: Point3D, by delta: Vector3D) -> ViewportNativeWo
 
 private let worldPointRuler = RulerConfiguration.standard(for: .millimeter)
 
-@Test func worldPointOwnerClaimsExactlyItsThreePreparedRoutes() throws {
+@Test func worldPointOwnerClaimsThePlacedPointRoutesAndNotTheMeasuredOnes() throws {
     #expect(ViewportNativeWorldPointInput.claims(try constructionPlaneRecord(handle: .origin).target))
     #expect(ViewportNativeWorldPointInput.claims(try patternRecord().target))
     #expect(ViewportNativeWorldPointInput.claims(try bridgeRecord().target))

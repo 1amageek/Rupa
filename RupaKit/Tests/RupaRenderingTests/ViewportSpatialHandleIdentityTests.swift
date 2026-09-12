@@ -14,20 +14,20 @@ import Testing
     var target = ViewportSurfaceControlPointHandleTarget(
         featureID: featureID, target: reference(point: .origin, uIndex: 1),
         point: .origin, modelTransform: .identity, dragMode: .planar)
-    let planar = try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity
+    let planar = try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity
     target.target = reference(point: .init(x: 10, y: 20, z: 30), uIndex: 1)
     target.point = .init(x: 4, y: 5, z: 6)
-    #expect(try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity == planar)
+    #expect(try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity == planar)
     target.dragMode = .axis(.x)
-    let xAxis = try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity
+    let xAxis = try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity
     #expect(xAxis != planar)
     target.dragMode = .localAxis(.u, direction: .unitX)
-    let localU = try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity
+    let localU = try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity
     #expect(localU != xAxis)
     target.dragMode = .localAxis(.u, direction: .unitZ)
-    #expect(try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity == localU)
+    #expect(try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity == localU)
     target.target = reference(point: .origin, uIndex: 3)
-    #expect(try ViewportInteractionTarget.surfaceControlPoint(target).spatialIdentity != localU)
+    #expect(try ViewportSpatialPreparedInteractionTarget.surfaceControlPoint(target).spatialIdentity != localU)
 
     target.target = reference(point: .origin, uIndex: 1)
     var table: [ViewportSpatialInteractionRecord] = []

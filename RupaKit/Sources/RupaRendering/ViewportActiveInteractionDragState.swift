@@ -7,10 +7,6 @@ enum ViewportActiveInteractionDragState: Equatable {
     case surfaceControlPointSlide(ViewportSurfaceControlPointSlideDragState)
     case surfaceFrame(ViewportSurfaceFrameDragState)
     case splineControlPoint(ViewportSplineControlPointDragState)
-    case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragState)
-    case surfaceControlPoint(ViewportSurfaceControlPointDragState)
-    case surfaceTrimEndpoint(ViewportSurfaceTrimEndpointDragState)
-    case surfaceTrimControlPoint(ViewportSurfaceTrimControlPointDragState)
     case edgeOffset(ViewportEdgeOffsetDragState)
     case slotWidth(ViewportSlotWidthDragState)
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragState)
@@ -38,14 +34,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .surfaceFrame
         case .splineControlPoint:
             .splineControlPoint
-        case .polySplineSurfaceVertex:
-            .polySplineSurfaceVertex
-        case .surfaceControlPoint:
-            .surfaceControlPoint
-        case .surfaceTrimEndpoint:
-            .surfaceTrimEndpoint
-        case .surfaceTrimControlPoint:
-            .surfaceTrimControlPoint
         case .edgeOffset:
             .edgeOffset
         case .slotWidth:
@@ -83,14 +71,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .surfaceFrame(state.target)
         case .splineControlPoint(let state):
             .splineControlPoint(state.target)
-        case .polySplineSurfaceVertex(let state):
-            .polySplineSurfaceVertex(state.target)
-        case .surfaceControlPoint(let state):
-            .surfaceControlPoint(state.target)
-        case .surfaceTrimEndpoint(let state):
-            .surfaceTrimEndpoint(state.target)
-        case .surfaceTrimControlPoint(let state):
-            .surfaceTrimControlPoint(state.target)
         case .edgeOffset(let state):
             .edgeOffset(state.target)
         case .slotWidth(let state):
@@ -140,22 +120,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var splineControlPoint: ViewportSplineControlPointDragState? {
         if case .splineControlPoint(let state) = self { state } else { nil }
-    }
-
-    var polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? {
-        if case .polySplineSurfaceVertex(let state) = self { state } else { nil }
-    }
-
-    var surfaceControlPoint: ViewportSurfaceControlPointDragState? {
-        if case .surfaceControlPoint(let state) = self { state } else { nil }
-    }
-
-    var surfaceTrimEndpoint: ViewportSurfaceTrimEndpointDragState? {
-        if case .surfaceTrimEndpoint(let state) = self { state } else { nil }
-    }
-
-    var surfaceTrimControlPoint: ViewportSurfaceTrimControlPointDragState? {
-        if case .surfaceTrimControlPoint(let state) = self { state } else { nil }
     }
 
     var edgeOffset: ViewportEdgeOffsetDragState? {

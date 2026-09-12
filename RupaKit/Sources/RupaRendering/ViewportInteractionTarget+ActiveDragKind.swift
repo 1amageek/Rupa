@@ -16,18 +16,10 @@ extension ViewportInteractionTarget {
             .splineControlPoint
         case .splineControlPointSlide:
             .splineControlPointSlide
-        case .polySplineSurfaceVertex:
-            .polySplineSurfaceVertex
         case .polySplineSurfaceVertexSlide:
             .polySplineSurfaceVertexSlide
-        case .surfaceControlPoint:
-            .surfaceControlPoint
         case .surfaceControlPointSlide:
             .surfaceControlPointSlide
-        case .surfaceTrimEndpoint:
-            .surfaceTrimEndpoint
-        case .surfaceTrimControlPoint:
-            .surfaceTrimControlPoint
         case .surfaceFrame:
             .surfaceFrame
         case .regionOffset:

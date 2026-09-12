@@ -2102,40 +2102,6 @@ func viewportSceneBuilderEvaluatesDisplaysAndPicksKernelProjectedCurveWithoutCac
 }
 
 @MainActor
-@Test func viewportSurfaceVertexAxisDragMappingProjectsOntoSelectedAxis() async throws {
-    let horizontalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
-        axisVector: CGVector(dx: 2.0, dy: 0.0),
-        start: CGPoint(x: 10.0, y: 10.0),
-        current: CGPoint(x: 20.0, y: 10.0)
-    )
-    let orthogonalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
-        axisVector: CGVector(dx: 2.0, dy: 0.0),
-        start: CGPoint(x: 10.0, y: 10.0),
-        current: CGPoint(x: 10.0, y: 20.0)
-    )
-    let diagonalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
-        axisVector: CGVector(dx: 3.0, dy: 4.0),
-        start: CGPoint(x: 0.0, y: 0.0),
-        current: CGPoint(x: 6.0, y: 8.0)
-    )
-    let yDelta = ViewportSurfaceVertexAxisDragMapping.delta(axis: .y, amount: -1.25)
-    let localDelta = ViewportSurfaceVertexAxisDragMapping.delta(
-        direction: Vector3D(x: 0.0, y: -1.0, z: 0.0),
-        amount: 0.75
-    )
-
-    #expect(abs(horizontalAmount - 5.0) < 1.0e-12)
-    #expect(abs(orthogonalAmount) < 1.0e-12)
-    #expect(abs(diagonalAmount - 2.0) < 1.0e-12)
-    #expect(yDelta.x == 0.0)
-    #expect(yDelta.y == -1.25)
-    #expect(yDelta.z == 0.0)
-    #expect(localDelta.x == 0.0)
-    #expect(localDelta.y == -0.75)
-    #expect(localDelta.z == 0.0)
-}
-
-@MainActor
 @Test func viewportSceneBuilderPreservesFilletArcPrimitive() async throws {
     let session = EditorSession()
     let sketchResult = try session.execute(

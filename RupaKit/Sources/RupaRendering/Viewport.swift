@@ -360,26 +360,6 @@ public struct Viewport: View {
         nonmutating set { activeInteractionDrags.splineControlPointSlide = newValue }
     }
 
-    private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState? {
-        get { activeInteractionDrags.polySplineSurfaceVertex }
-        nonmutating set { activeInteractionDrags.polySplineSurfaceVertex = newValue }
-    }
-
-    private var activeSurfaceControlPointDrag: ViewportSurfaceControlPointDragState? {
-        get { activeInteractionDrags.surfaceControlPoint }
-        nonmutating set { activeInteractionDrags.surfaceControlPoint = newValue }
-    }
-
-    private var activeSurfaceTrimEndpointDrag: ViewportSurfaceTrimEndpointDragState? {
-        get { activeInteractionDrags.surfaceTrimEndpoint }
-        nonmutating set { activeInteractionDrags.surfaceTrimEndpoint = newValue }
-    }
-
-    private var activeSurfaceTrimControlPointDrag: ViewportSurfaceTrimControlPointDragState? {
-        get { activeInteractionDrags.surfaceTrimControlPoint }
-        nonmutating set { activeInteractionDrags.surfaceTrimControlPoint = newValue }
-    }
-
     private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState? {
         get { activeInteractionDrags.polySplineSurfaceVertexSlide }
         nonmutating set { activeInteractionDrags.polySplineSurfaceVertexSlide = newValue }
@@ -3563,61 +3543,6 @@ public struct Viewport: View {
         )
     }
 
-
-
-
-
-
-
-
-
-
-
-    private var surfaceControlPointAxisViewportLength: CGFloat {
-        48.0
-    }
-
-
-
-
-    private var polySplineSurfaceVertexAxisViewportLength: CGFloat {
-        52.0
-    }
-
-    private var polySplineSurfaceVertexLocalAxisViewportLength: CGFloat {
-        62.0
-    }
-
-    private func polySplineSurfaceVertexLocalAxisEndpoint(
-        target: ViewportPolySplineSurfaceVertexHandleTarget,
-        direction: Vector3D,
-        viewportLength: CGFloat,
-        layout: ViewportLayout
-    ) -> CGPoint? {
-        target.geometry.localAxisEndpoint(
-            direction: direction,
-            viewportLength: viewportLength,
-            layout: layout
-        )
-    }
-
-    private func polySplineSurfaceVertexLocalDirection(
-        localAxis: ViewportPolySplineSurfaceVertexLocalAxis,
-        target: ViewportPolySplineSurfaceVertexHandleTarget,
-        topologyVertices: [ViewportBodyTopology.Vertex]
-    ) -> Vector3D? {
-        guard let parsedTarget = PolySplineSurfaceVertexTarget.parse(componentID: target.componentID),
-              parsedTarget.featureID == target.featureID else {
-            return nil
-        }
-        return ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
-            for: parsedTarget,
-            direction: localAxis.slideDirection,
-            topologyVertices: topologyVertices,
-            patches: polySplinePatchDescriptorsByFeatureID()
-        )
-    }
-
     private func sceneItem(
         for target: SelectionTarget,
         in scene: ViewportScene
@@ -5587,6 +5512,14 @@ public struct Viewport: View {
         case .patternArrayLinearAxis: onPatternArrayLinearAxisDrag != nil
         case .independentCopyExtrudeDistance: onIndependentCopyExtrudeDistanceDrag != nil
         case .independentCopyBodyDimension: onIndependentCopyBodyDimensionDrag != nil
+        // Only the axis and local-axis handles of these two routes reduce to
+        // one world-axis delta. Their planar handle is the world-point
+        // owner's, so the gate mirrors that split rather than enabling the
+        // whole case.
+        case .polySplineSurfaceVertex(let value):
+            value.dragMode != .planar && onPolySplineSurfaceVertexDrag != nil
+        case .surfaceControlPoint(let value):
+            value.dragMode != .planar && onSurfaceControlPointDrag != nil
         default: false
         }
     }
@@ -5608,6 +5541,12 @@ public struct Viewport: View {
         case .constructionPlane: onConstructionPlaneHandleDrag != nil
         case .patternArrayCurvePathPoint: onPatternArrayCurvePathPointDrag != nil
         case .bridgeCurveEndpoint: onBridgeCurveEndpointDrag != nil
+        case .polySplineSurfaceVertex(let value):
+            value.dragMode == .planar && onPolySplineSurfaceVertexDrag != nil
+        case .surfaceControlPoint(let value):
+            value.dragMode == .planar && onSurfaceControlPointDrag != nil
+        case .surfaceTrimEndpoint: onSurfaceTrimEndpointDrag != nil
+        case .surfaceTrimControlPoint: onSurfaceTrimControlPointDrag != nil
         default: false
         }
     }
@@ -5920,6 +5859,8 @@ public struct Viewport: View {
         case .patternArrayLinearAxis(let target): onPatternArrayLinearAxisDrag?(target)
         case .independentCopyExtrudeDistance(let target): onIndependentCopyExtrudeDistanceDrag?(target)
         case .independentCopyBodyDimension(let target): onIndependentCopyBodyDimensionDrag?(target)
+        case .polySplineSurfaceVertex(let target): onPolySplineSurfaceVertexDrag?(target)
+        case .surfaceControlPoint(let target): onSurfaceControlPointDrag?(target)
         }
     }
 
@@ -6192,6 +6133,22 @@ public struct Viewport: View {
         return (preview.identity, endpoint, parameter)
     }
 
+    /// The open world-point gesture's surface handle displacement, stated in
+    /// the record's own model space.
+    ///
+    /// The prepared case travels with the delta because the four surface
+    /// routes differ in whether the overlay draws the original placement for
+    /// comparison, and that choice belongs to the route rather than the value.
+    private var nativeSurfaceHandlePreview: (
+        identity: ViewportSpatialHandleIdentity,
+        target: ViewportSpatialPreparedInteractionTarget,
+        delta: Vector3D
+    )? {
+        guard let preview = nativeWorldPointPreview,
+              case .surfaceHandleLocalDelta(let delta) = preview.value else { return nil }
+        return (preview.identity, preview.target, delta)
+    }
+
     private func resumeNativeWorldPointFinish() {
         guard case .worldPoint(let press) = nativeInputGesture,
               let finish = press.finish else { return }
@@ -6226,6 +6183,10 @@ public struct Viewport: View {
         case .constructionPlane(let target): onConstructionPlaneHandleDrag?(target)
         case .patternArrayCurvePathPoint(let target): onPatternArrayCurvePathPointDrag?(target)
         case .bridgeCurveEndpoint(let target): onBridgeCurveEndpointDrag?(target)
+        case .polySplineSurfaceVertex(let target): onPolySplineSurfaceVertexDrag?(target)
+        case .surfaceControlPoint(let target): onSurfaceControlPointDrag?(target)
+        case .surfaceTrimEndpoint(let target): onSurfaceTrimEndpointDrag?(target)
+        case .surfaceTrimControlPoint(let target): onSurfaceTrimControlPointDrag?(target)
         case nil: break
         }
     }
@@ -6308,14 +6269,14 @@ public struct Viewport: View {
         activeCanvasDrag = nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch, curve, surface, pattern
-    // and profile affordance routes still resolve from this legacy CPU
-    // projection when press/hover find no native record. Production reaches it
-    // from `beginViewportPress` and `hover` after the native frame declines the
-    // point. Completing RK-4 requires prepared records for those routes, after
-    // which this selector and its CPU gizmo geometry are removed; the migrated
-    // native axis, body transform and world-point routes are never resolved
-    // here.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch curve, sketch point, sketch
+    // dimension, spline control point and body affordance routes still resolve
+    // from this legacy CPU projection when press/hover find no native record.
+    // Production reaches it from `beginViewportPress` and `hover` after the
+    // native frame declines the point. Completing RK-4 requires prepared
+    // records for those routes, after which this selector and its CPU gizmo
+    // geometry are removed; the migrated native axis, surface handle, body
+    // transform, pattern and world-point routes are never resolved here.
     private func resolvedInteractionTarget(
         at point: CGPoint,
         size: CGSize,
@@ -6337,18 +6298,6 @@ public struct Viewport: View {
         }
         if let target = selectedSplineControlPointTarget(at: point, sceneContext: sceneContext) {
             return .splineControlPoint(target)
-        }
-        if let target = selectedPolySplineSurfaceVertexTarget(at: point, sceneContext: sceneContext) {
-            return .polySplineSurfaceVertex(target)
-        }
-        if let target = selectedSurfaceControlPointTarget(at: point, sceneContext: sceneContext) {
-            return .surfaceControlPoint(target)
-        }
-        if let target = selectedSurfaceTrimEndpointTarget(at: point, sceneContext: sceneContext) {
-            return .surfaceTrimEndpoint(target)
-        }
-        if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
-            return .surfaceTrimControlPoint(target)
         }
         if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
@@ -6398,18 +6347,10 @@ public struct Viewport: View {
             updateSplineControlPointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPointSlide(let target):
             updateSplineControlPointSlideDrag(target: target, start: start, current: current, size: size)
-        case .polySplineSurfaceVertex(let target):
-            updatePolySplineSurfaceVertexDrag(target: target, start: start, current: current, size: size)
         case .polySplineSurfaceVertexSlide(let target):
             updatePolySplineSurfaceVertexSlideDrag(target: target, start: start, current: current, size: size)
-        case .surfaceControlPoint(let target):
-            updateSurfaceControlPointDrag(target: target, start: start, current: current, size: size)
         case .surfaceControlPointSlide(let target):
             updateSurfaceControlPointSlideDrag(target: target, start: start, current: current, size: size)
-        case .surfaceTrimEndpoint(let target):
-            updateSurfaceTrimEndpointDrag(target: target, start: start, current: current, size: size)
-        case .surfaceTrimControlPoint(let target):
-            updateSurfaceTrimControlPointDrag(target: target, start: start, current: current, size: size)
         case .surfaceFrame(let target):
             updateSurfaceFrameDrag(target: target, start: start, current: current, size: size)
         case .regionOffset(let target):
@@ -6852,157 +6793,6 @@ public struct Viewport: View {
         return nil
     }
 
-    private func selectedPolySplineSurfaceVertexTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPolySplineSurfaceVertexHandleTarget? {
-        guard onPolySplineSurfaceVertexDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
-        let handleTolerance: CGFloat = 12.0
-        for target in polySplineSurfaceVertexHandleTargets(in: scene) {
-            if let localAxisHit = polySplineSurfaceVertexLocalAxisHit(
-                at: point,
-                target: target,
-                topologyVertices: topologyVertices,
-                layout: layout
-            ) {
-                return ViewportPolySplineSurfaceVertexHandleTarget(
-                    featureID: target.featureID,
-                    target: target.target,
-                    componentID: target.componentID,
-                    point: target.point,
-                    modelTransform: target.modelTransform,
-                    dragMode: .localAxis(localAxisHit.axis, direction: localAxisHit.direction)
-                )
-            }
-            if let axis = polySplineSurfaceVertexAxisHit(
-                at: point,
-                target: target,
-                layout: layout
-            ) {
-                return ViewportPolySplineSurfaceVertexHandleTarget(
-                    featureID: target.featureID,
-                    target: target.target,
-                    componentID: target.componentID,
-                    point: target.point,
-                    modelTransform: target.modelTransform,
-                    dragMode: .axis(axis)
-                )
-            }
-        }
-        for target in polySplineSurfaceVertexHandleTargets(in: scene) {
-            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
-                continue
-            }
-            guard point.distance(to: projectedPoint) <= handleTolerance else {
-                continue
-            }
-            return target
-        }
-        return nil
-    }
-
-    private func selectedSurfaceControlPointTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSurfaceControlPointHandleTarget? {
-        guard onSurfaceControlPointDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        for target in surfaceControlPointHandleTargets(in: scene) {
-            if let axis = surfaceControlPointAxisHit(
-                at: point,
-                target: target,
-                layout: layout
-            ) {
-                return ViewportSurfaceControlPointHandleTarget(
-                    featureID: target.featureID,
-                    target: target.target,
-                    point: target.point,
-                    modelTransform: target.modelTransform,
-                    dragMode: .axis(axis)
-                )
-            }
-        }
-        for target in surfaceControlPointHandleTargets(in: scene) {
-            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
-                continue
-            }
-            guard point.distance(to: projectedPoint) <= handleTolerance else {
-                continue
-            }
-            return target
-        }
-        return nil
-    }
-
-    private func selectedSurfaceTrimEndpointTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSurfaceTrimEndpointHandleTarget? {
-        guard onSurfaceTrimEndpointDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        var nearest: (target: ViewportSurfaceTrimEndpointHandleTarget, distance: CGFloat)?
-        for target in surfaceTrimEndpointHandleTargets(in: scene) {
-            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
-                continue
-            }
-            let distance = point.distance(to: projectedPoint)
-            guard distance <= handleTolerance else {
-                continue
-            }
-            if let current = nearest {
-                if distance < current.distance {
-                    nearest = (target, distance)
-                }
-            } else {
-                nearest = (target, distance)
-            }
-        }
-        return nearest?.target
-    }
-
-    private func selectedSurfaceTrimControlPointTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportSurfaceTrimControlPointHandleTarget? {
-        guard onSurfaceTrimControlPointDrag != nil else {
-            return nil
-        }
-        let scene = sceneContext.scene
-        let layout = sceneContext.layout
-        let handleTolerance: CGFloat = 12.0
-        var nearest: (target: ViewportSurfaceTrimControlPointHandleTarget, distance: CGFloat)?
-        for target in surfaceTrimControlPointHandleTargets(in: scene) {
-            guard let projectedPoint = target.geometry.projectedPoint(layout: layout) else {
-                continue
-            }
-            let distance = point.distance(to: projectedPoint)
-            guard distance <= handleTolerance else {
-                continue
-            }
-            if let current = nearest {
-                if distance < current.distance {
-                    nearest = (target, distance)
-                }
-            } else {
-                nearest = (target, distance)
-            }
-        }
-        return nearest?.target
-    }
-
     private func selectedPolySplineSurfaceVertexSlideAffordanceTarget(
         at point: CGPoint,
         sceneContext: ViewportSceneContext
@@ -7172,268 +6962,6 @@ public struct Viewport: View {
             return nil
         }
         return distance
-    }
-
-    private func polySplineSurfaceVertexHandleTargets(
-        in scene: ViewportScene
-    ) -> [ViewportPolySplineSurfaceVertexHandleTarget] {
-        selection.selectedTargets.reversed().compactMap { target in
-            guard case .vertex(let componentID) = target.component,
-                  isPolySplineSurfaceVertex(componentID),
-                  let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-                  reference.kind == .body,
-                  let featureID = reference.featureID,
-                  let item = scene.items.first(where: { $0.featureID == featureID }),
-                  case .body(let component) = item.kind,
-                  let vertex = component.topology?.vertices.first(where: { $0.componentID == componentID }) else {
-                return nil
-            }
-            return ViewportPolySplineSurfaceVertexHandleTarget(
-                featureID: featureID,
-                target: target,
-                componentID: componentID,
-                point: vertex.point,
-                modelTransform: item.modelTransform,
-                dragMode: .planar
-            )
-        }
-    }
-
-    private func surfaceControlPointHandleTargets(
-        in scene: ViewportScene
-    ) -> [ViewportSurfaceControlPointHandleTarget] {
-        selection.selectedReferences.reversed().compactMap { reference in
-            guard case .surface(.controlPoint) = reference else {
-                return nil
-            }
-            for item in scene.items {
-                guard case .body(let component) = item.kind,
-                      let display = component.surfaceControlPointDisplays.first(where: { display in
-                          display.selectionReference == reference
-                      }) else {
-                    continue
-                }
-                return ViewportSurfaceControlPointHandleTarget(
-                    featureID: item.featureID,
-                    target: reference,
-                    point: display.point,
-                    modelTransform: item.modelTransform,
-                    dragMode: .planar
-                )
-            }
-            return nil
-        }
-    }
-
-    private func surfaceTrimEndpointHandleTargets(
-        in scene: ViewportScene
-    ) -> [ViewportSurfaceTrimEndpointHandleTarget] {
-        selection.selectedReferences.reversed().flatMap { reference -> [ViewportSurfaceTrimEndpointHandleTarget] in
-            guard case .surface(.trim) = reference else {
-                return []
-            }
-            for item in scene.items {
-                guard case .body(let component) = item.kind else {
-                    continue
-                }
-                let displays = component.surfaceTrimEndpointDisplays.filter { display in
-                    display.selectionReference == reference
-                }
-                guard displays.isEmpty == false else {
-                    continue
-                }
-                return displays.map { display in
-                    ViewportSurfaceTrimEndpointHandleTarget(
-                        featureID: item.featureID,
-                        target: reference,
-                        endpoint: display.endpoint,
-                        point: display.point,
-                        u: display.u,
-                        v: display.v,
-                        tangentU: display.tangentU,
-                        tangentV: display.tangentV,
-                        modelTransform: item.modelTransform
-                    )
-                }
-            }
-            return []
-        }
-    }
-
-    private func bridgeCurveEndpointHandleTargets(
-        in scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportBridgeCurveEndpointHandleTarget] {
-        ViewportBridgeCurveEndpointAffordanceService().candidatesOrEmpty(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        ).map(\.target)
-    }
-
-    private func surfaceTrimControlPointHandleTargets(
-        in scene: ViewportScene
-    ) -> [ViewportSurfaceTrimControlPointHandleTarget] {
-        selection.selectedReferences.reversed().flatMap { reference -> [ViewportSurfaceTrimControlPointHandleTarget] in
-            guard case .surface(.trim) = reference else {
-                return []
-            }
-            for item in scene.items {
-                guard case .body(let component) = item.kind else {
-                    continue
-                }
-                let displays = component.surfaceTrimControlPointDisplays.filter { display in
-                    display.selectionReference == reference
-                }
-                guard displays.isEmpty == false else {
-                    continue
-                }
-                return displays.map { display in
-                    ViewportSurfaceTrimControlPointHandleTarget(
-                        featureID: item.featureID,
-                        target: reference,
-                        controlPointIndex: display.controlPointIndex,
-                        point: display.point,
-                        u: display.u,
-                        v: display.v,
-                        tangentU: display.tangentU,
-                        tangentV: display.tangentV,
-                        modelTransform: item.modelTransform
-                    )
-                }
-            }
-            return []
-        }
-    }
-
-    private func polySplineSurfaceVertexAxisHit(
-        at point: CGPoint,
-        target: ViewportPolySplineSurfaceVertexHandleTarget,
-        layout: ViewportLayout
-    ) -> ViewportCoordinateAxis? {
-        guard let center = target.geometry.projectedPoint(layout: layout) else {
-            return nil
-        }
-        var nearest: (axis: ViewportCoordinateAxis, distance: CGFloat)?
-        for axis in ViewportCoordinateAxis.allCases {
-            guard let endpoint = target.geometry.axisEndpoint(
-                axis: axis,
-                viewportLength: polySplineSurfaceVertexAxisViewportLength,
-                layout: layout
-            ),
-                  let distance = polySplineSurfaceVertexHandleHitDistance(
-                      at: point,
-                      center: center,
-                      endpoint: endpoint
-                  ) else {
-                continue
-            }
-            if nearest.map({ distance < $0.distance }) ?? true {
-                nearest = (axis, distance)
-            }
-        }
-        return nearest?.axis
-    }
-
-    private func surfaceControlPointAxisHit(
-        at point: CGPoint,
-        target: ViewportSurfaceControlPointHandleTarget,
-        layout: ViewportLayout
-    ) -> ViewportCoordinateAxis? {
-        guard let center = target.geometry.projectedPoint(layout: layout) else {
-            return nil
-        }
-        var nearest: (axis: ViewportCoordinateAxis, distance: CGFloat)?
-        for axis in ViewportCoordinateAxis.allCases {
-            guard let endpoint = target.geometry.axisEndpoint(
-                axis: axis,
-                viewportLength: surfaceControlPointAxisViewportLength,
-                layout: layout
-            ),
-                  let distance = polySplineSurfaceVertexHandleHitDistance(
-                      at: point,
-                      center: center,
-                      endpoint: endpoint
-                  ) else {
-                continue
-            }
-            if nearest.map({ distance < $0.distance }) ?? true {
-                nearest = (axis, distance)
-            }
-        }
-        return nearest?.axis
-    }
-
-    private func polySplineSurfaceVertexLocalAxisHit(
-        at point: CGPoint,
-        target: ViewportPolySplineSurfaceVertexHandleTarget,
-        topologyVertices: [ViewportBodyTopology.Vertex],
-        layout: ViewportLayout
-    ) -> ViewportPolySplineSurfaceVertexLocalAxisHit? {
-        guard let center = target.geometry.projectedPoint(layout: layout) else {
-            return nil
-        }
-        var nearest: (hit: ViewportPolySplineSurfaceVertexLocalAxisHit, distance: CGFloat)?
-        for localAxis in ViewportPolySplineSurfaceVertexLocalAxis.allCases {
-            guard let direction = polySplineSurfaceVertexLocalDirection(
-                localAxis: localAxis,
-                target: target,
-                topologyVertices: topologyVertices
-            ),
-                  let endpoint = polySplineSurfaceVertexLocalAxisEndpoint(
-                      target: target,
-                      direction: direction,
-                      viewportLength: polySplineSurfaceVertexLocalAxisViewportLength,
-                      layout: layout
-                  ),
-                  let distance = polySplineSurfaceVertexHandleHitDistance(
-                      at: point,
-                      center: center,
-                      endpoint: endpoint
-                  ) else {
-                continue
-            }
-            let hit = ViewportPolySplineSurfaceVertexLocalAxisHit(
-                axis: localAxis,
-                direction: direction
-            )
-            if nearest.map({ distance < $0.distance }) ?? true {
-                nearest = (hit, distance)
-            }
-        }
-        return nearest?.hit
-    }
-
-    private func polySplineSurfaceVertexHandleHitDistance(
-        at point: CGPoint,
-        center: CGPoint,
-        endpoint: CGPoint
-    ) -> CGFloat? {
-        let handleGap: CGFloat = 16.0
-        let handleTolerance: CGFloat = 8.0
-        let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
-        let length = vector.length
-        guard length > handleGap + 1.0 else {
-            return nil
-        }
-        let direction = vector.normalized
-        let segmentStart = CGPoint(
-            x: center.x + direction.dx * handleGap,
-            y: center.y + direction.dy * handleGap
-        )
-        let distance = min(
-            point.distance(to: endpoint),
-            point.distanceToSegment(start: segmentStart, end: endpoint)
-        )
-        guard distance <= handleTolerance else {
-            return nil
-        }
-        return distance
-    }
-
-    private func isPolySplineSurfaceVertex(_ componentID: SelectionComponentID) -> Bool {
-        PolySplineSurfaceVertexTarget.parse(componentID: componentID) != nil
     }
 
     private func selectedVertexAffordanceTarget(
@@ -7996,156 +7524,6 @@ public struct Viewport: View {
         )
     }
 
-    private func updatePolySplineSurfaceVertexDrag(
-        target: ViewportPolySplineSurfaceVertexHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        let delta: Point3D
-        switch target.dragMode {
-        case .planar:
-            guard let value = target.geometry.localPlanarDelta(
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        case .axis(let axis):
-            guard let value = target.geometry.localDelta(
-                axis: axis,
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        case .localAxis(_, let direction):
-            guard let value = target.geometry.localDelta(
-                direction: direction,
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        }
-        activePolySplineSurfaceVertexDrag = ViewportPolySplineSurfaceVertexDragState(
-            target: target,
-            startPoint: start,
-            delta: delta
-        )
-    }
-
-    private func updateSurfaceControlPointDrag(
-        target: ViewportSurfaceControlPointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        let delta: Point3D
-        switch target.dragMode {
-        case .planar:
-            guard let value = target.geometry.localPlanarDelta(
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        case .axis(let axis):
-            guard let value = target.geometry.localDelta(
-                axis: axis,
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        case .localAxis(_, let direction):
-            guard let value = target.geometry.localDelta(
-                direction: direction,
-                start: start,
-                current: current,
-                layout: layout
-            ) else {
-                return
-            }
-            delta = value
-        }
-        activeSurfaceControlPointDrag = ViewportSurfaceControlPointDragState(
-            target: target,
-            startPoint: start,
-            delta: delta
-        )
-    }
-
-    private func updateSurfaceTrimEndpointDrag(
-        target: ViewportSurfaceTrimEndpointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let delta = target.geometry.localPlanarDelta(
-            start: start,
-            current: current,
-            layout: layout
-        ) else {
-            return
-        }
-        activeSurfaceTrimEndpointDrag = ViewportSurfaceTrimEndpointDragState(
-            target: target,
-            startPoint: start,
-            delta: delta
-        )
-    }
-
-    private func updateSurfaceTrimControlPointDrag(
-        target: ViewportSurfaceTrimControlPointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let delta = target.geometry.localPlanarDelta(
-            start: start,
-            current: current,
-            layout: layout
-        ) else {
-            return
-        }
-        activeSurfaceTrimControlPointDrag = ViewportSurfaceTrimControlPointDragState(
-            target: target,
-            startPoint: start,
-            delta: delta
-        )
-    }
-
     private func updateRegionOffsetDrag(
         target: ViewportRegionOffsetHandleTarget,
         start: CGPoint,
@@ -8667,18 +8045,10 @@ public struct Viewport: View {
             activeSplineControlPointDrag = nil
         case .splineControlPointSlide:
             activeSplineControlPointSlideDrag = nil
-        case .polySplineSurfaceVertex:
-            activePolySplineSurfaceVertexDrag = nil
         case .polySplineSurfaceVertexSlide:
             activePolySplineSurfaceVertexSlideDrag = nil
-        case .surfaceControlPoint:
-            activeSurfaceControlPointDrag = nil
         case .surfaceControlPointSlide:
             activeSurfaceControlPointSlideDrag = nil
-        case .surfaceTrimEndpoint:
-            activeSurfaceTrimEndpointDrag = nil
-        case .surfaceTrimControlPoint:
-            activeSurfaceTrimControlPointDrag = nil
         case .surfaceFrame:
             activeSurfaceFrameDrag = nil
         case .regionOffset:
@@ -8814,14 +8184,6 @@ public struct Viewport: View {
             finishSurfaceFrameDrag()
         case .splineControlPoint:
             finishSplineControlPointDrag()
-        case .polySplineSurfaceVertex:
-            finishPolySplineSurfaceVertexDrag()
-        case .surfaceControlPoint:
-            finishSurfaceControlPointDrag()
-        case .surfaceTrimEndpoint:
-            finishSurfaceTrimEndpointDrag()
-        case .surfaceTrimControlPoint:
-            finishSurfaceTrimControlPointDrag()
         case .edgeOffset:
             finishEdgeOffsetDrag()
         case .slotWidth:
@@ -8886,15 +8248,6 @@ public struct Viewport: View {
         }
     }
 
-    private func finishPolySplineSurfaceVertexDrag() {
-        let target = committedPolySplineSurfaceVertexDragTarget()
-        activePolySplineSurfaceVertexDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onPolySplineSurfaceVertexDrag?(target)
-        }
-    }
-
     private func finishPolySplineSurfaceVertexSlideDrag() {
         let target = committedPolySplineSurfaceVertexSlideDragTarget()
         activePolySplineSurfaceVertexSlideDrag = nil
@@ -8904,39 +8257,12 @@ public struct Viewport: View {
         }
     }
 
-    private func finishSurfaceControlPointDrag() {
-        let target = committedSurfaceControlPointDragTarget()
-        activeSurfaceControlPointDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSurfaceControlPointDrag?(target)
-        }
-    }
-
     private func finishSurfaceControlPointSlideDrag() {
         let target = committedSurfaceControlPointSlideDragTarget()
         activeSurfaceControlPointSlideDrag = nil
         activeCanvasDrag = nil
         if let target {
             onSurfaceControlPointSlideDrag?(target)
-        }
-    }
-
-    private func finishSurfaceTrimEndpointDrag() {
-        let target = committedSurfaceTrimEndpointDragTarget()
-        activeSurfaceTrimEndpointDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSurfaceTrimEndpointDrag?(target)
-        }
-    }
-
-    private func finishSurfaceTrimControlPointDrag() {
-        let target = committedSurfaceTrimControlPointDragTarget()
-        activeSurfaceTrimControlPointDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onSurfaceTrimControlPointDrag?(target)
         }
     }
 
@@ -9207,138 +8533,6 @@ public struct Viewport: View {
             axis: activeSurfaceFrameDrag.target.axis,
             distance: distance
         )
-    }
-
-    private func committedPolySplineSurfaceVertexDragTarget() -> ViewportPolySplineSurfaceVertexDragTarget? {
-        guard let activePolySplineSurfaceVertexDrag else {
-            return nil
-        }
-        let delta = activePolySplineSurfaceVertexDrag.delta
-        guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportPolySplineSurfaceVertexDragTarget(
-            target: activePolySplineSurfaceVertexDrag.target.target,
-            deltaX: delta.x,
-            deltaY: delta.y,
-            deltaZ: delta.z
-        )
-    }
-
-    private func committedSurfaceControlPointDragTarget() -> ViewportSurfaceControlPointDragTarget? {
-        guard let activeSurfaceControlPointDrag else {
-            return nil
-        }
-        let delta = activeSurfaceControlPointDrag.delta
-        guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportSurfaceControlPointDragTarget(
-            target: activeSurfaceControlPointDrag.target.target,
-            deltaX: delta.x,
-            deltaY: delta.y,
-            deltaZ: delta.z
-        )
-    }
-
-    private func committedSurfaceTrimEndpointDragTarget() -> ViewportSurfaceTrimEndpointDragTarget? {
-        guard let activeSurfaceTrimEndpointDrag else {
-            return nil
-        }
-        let delta = activeSurfaceTrimEndpointDrag.delta
-        guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12 else {
-            return nil
-        }
-        guard let movedUV = movedSurfaceTrimEndpointUV(
-            target: activeSurfaceTrimEndpointDrag.target,
-            delta: delta
-        ) else {
-            return nil
-        }
-        return ViewportSurfaceTrimEndpointDragTarget(
-            target: activeSurfaceTrimEndpointDrag.target.target,
-            endpoint: activeSurfaceTrimEndpointDrag.target.endpoint,
-            u: movedUV.u,
-            v: movedUV.v
-        )
-    }
-
-    private func committedSurfaceTrimControlPointDragTarget() -> ViewportSurfaceTrimControlPointDragTarget? {
-        guard let activeSurfaceTrimControlPointDrag else {
-            return nil
-        }
-        let delta = activeSurfaceTrimControlPointDrag.delta
-        guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12 else {
-            return nil
-        }
-        guard let movedUV = movedSurfaceTrimControlPointUV(
-            target: activeSurfaceTrimControlPointDrag.target,
-            delta: delta
-        ) else {
-            return nil
-        }
-        return ViewportSurfaceTrimControlPointDragTarget(
-            target: activeSurfaceTrimControlPointDrag.target.target,
-            controlPointIndex: activeSurfaceTrimControlPointDrag.target.controlPointIndex,
-            u: movedUV.u,
-            v: movedUV.v
-        )
-    }
-
-    private func movedSurfaceTrimEndpointUV(
-        target: ViewportSurfaceTrimEndpointHandleTarget,
-        delta: Point3D
-    ) -> (u: Double, v: Double)? {
-        movedSurfaceTrimUV(
-            u: target.u,
-            v: target.v,
-            tangentU: target.tangentU,
-            tangentV: target.tangentV,
-            delta: delta
-        )
-    }
-
-    private func movedSurfaceTrimControlPointUV(
-        target: ViewportSurfaceTrimControlPointHandleTarget,
-        delta: Point3D
-    ) -> (u: Double, v: Double)? {
-        movedSurfaceTrimUV(
-            u: target.u,
-            v: target.v,
-            tangentU: target.tangentU,
-            tangentV: target.tangentV,
-            delta: delta
-        )
-    }
-
-    private func movedSurfaceTrimUV(
-        u: Double,
-        v: Double,
-        tangentU: Vector3D,
-        tangentV: Vector3D,
-        delta: Point3D
-    ) -> (u: Double, v: Double)? {
-        let move = Vector3D(x: delta.x, y: delta.y, z: delta.z)
-        let uu = tangentU.dot(tangentU)
-        let uv = tangentU.dot(tangentV)
-        let vv = tangentV.dot(tangentV)
-        let determinant = uu * vv - uv * uv
-        guard determinant.isFinite,
-              abs(determinant) > 1.0e-18 else {
-            return nil
-        }
-        let moveU = move.dot(tangentU)
-        let moveV = move.dot(tangentV)
-        let deltaU = (moveU * vv - moveV * uv) / determinant
-        let deltaV = (uu * moveV - uv * moveU) / determinant
-        let movedU = u + deltaU
-        let movedV = v + deltaV
-        guard movedU.isFinite,
-              movedV.isFinite,
-              abs(movedU - u) > 1.0e-12 || abs(movedV - v) > 1.0e-12 else {
-            return nil
-        }
-        return (movedU, movedV)
     }
 
     private func committedRegionOffsetDragTarget() -> ViewportRegionOffsetDragTarget? {
@@ -10174,13 +9368,6 @@ private extension Viewport {
         return target
     }
 
-    var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget? {
-        guard case .polySplineSurfaceVertex(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
     var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget? {
         guard case .polySplineSurfaceVertexSlide(let target) = hoveredInteractionTarget else {
             return nil
@@ -10188,29 +9375,8 @@ private extension Viewport {
         return target
     }
 
-    var hoveredSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget? {
-        guard case .surfaceControlPoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
     var hoveredSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget? {
         guard case .surfaceControlPointSlide(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget? {
-        guard case .surfaceTrimEndpoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget? {
-        guard case .surfaceTrimControlPoint(let target) = hoveredInteractionTarget else {
             return nil
         }
         return target
@@ -10328,15 +9494,6 @@ private extension Viewport {
         }
     }
 
-    var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget? {
-        get {
-            guard case .polySplineSurfaceVertex(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
     var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget? {
         get {
             guard case .polySplineSurfaceVertexSlide(let target) = pendingInteractionTarget else {
@@ -10346,36 +9503,9 @@ private extension Viewport {
         }
     }
 
-    var pendingSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget? {
-        get {
-            guard case .surfaceControlPoint(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
     var pendingSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget? {
         get {
             guard case .surfaceControlPointSlide(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget? {
-        get {
-            guard case .surfaceTrimEndpoint(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget? {
-        get {
-            guard case .surfaceTrimControlPoint(let target) = pendingInteractionTarget else {
                 return nil
             }
             return target
@@ -10873,6 +10003,17 @@ extension Viewport {
             case .polySplineSurfaceVertexSlide, .surfaceControlPointSlide, .surfaceFrame:
                 active.append(.init(identity: press.input.record.identity, distance: value,
                                     showsOriginalComparison: comparison))
+            case .polySplineSurfaceVertex, .surfaceControlPoint:
+                // These two draw a moved handle rather than a signed distance,
+                // so the axis value is turned back into the model-space
+                // displacement the overlay redraws from.
+                guard let delta = press.input.localDelta(for: value) else {
+                    throw RealityViewportSpatialBatch.invalid(
+                        "An axis-mode surface handle has no local drag direction."
+                    )
+                }
+                active.append(.init(identity: press.input.record.identity, delta: delta,
+                                    showsOriginalComparison: comparison))
             default: break
             }
         }
@@ -10882,24 +10023,6 @@ extension Viewport {
         }
         if let drag = activeAffordanceDrag {
             active.append(.init(identity: .affordance(drag.target)))
-        }
-        if let drag = activePolySplineSurfaceVertexDrag {
-            active.append(.init(identity: try ViewportInteractionTarget.polySplineSurfaceVertex(drag.target).spatialIdentity,
-                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z),
-                                showsOriginalComparison: comparison))
-        }
-        if let drag = activeSurfaceControlPointDrag {
-            active.append(.init(identity: try ViewportInteractionTarget.surfaceControlPoint(drag.target).spatialIdentity,
-                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z),
-                                showsOriginalComparison: comparison))
-        }
-        if let drag = activeSurfaceTrimEndpointDrag {
-            active.append(.init(identity: try ViewportInteractionTarget.surfaceTrimEndpoint(drag.target).spatialIdentity,
-                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z)))
-        }
-        if let drag = activeSurfaceTrimControlPointDrag {
-            active.append(.init(identity: try ViewportInteractionTarget.surfaceTrimControlPoint(drag.target).spatialIdentity,
-                                delta: Vector3D(x: drag.delta.x, y: drag.delta.y, z: drag.delta.z)))
         }
         if let drag = activePolySplineSurfaceVertexSlideDrag {
             active.append(.init(identity: .polySplineSurfaceVertexSlide(drag.target.identity),
@@ -10912,6 +10035,18 @@ extension Viewport {
         if let drag = activeSurfaceFrameDrag {
             active.append(.init(identity: try ViewportInteractionTarget.surfaceFrame(drag.target).spatialIdentity,
                                 distance: drag.distanceMeters))
+        }
+        if let preview = nativeSurfaceHandlePreview {
+            switch preview.target {
+            case .polySplineSurfaceVertex, .surfaceControlPoint:
+                active.append(.init(identity: preview.identity, delta: preview.delta,
+                                    showsOriginalComparison: comparison))
+            default:
+                // The two trim routes draw no original-placement comparison,
+                // because their handles are redrawn at solved parameters
+                // rather than at an offset copy of the original point.
+                active.append(.init(identity: preview.identity, delta: preview.delta))
+            }
         }
         if let preview = nativeConstructionPlanePreview {
             active.append(.init(identity: preview.identity,

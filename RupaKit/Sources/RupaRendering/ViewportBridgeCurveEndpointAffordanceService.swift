@@ -27,24 +27,6 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
         }
     }
 
-    func candidatesOrEmpty(
-        document: DesignDocument,
-        scene: ViewportScene,
-        selection: SelectionModel,
-        layout: ViewportLayout
-    ) -> [ViewportBridgeCurveEndpointAffordanceCandidate] {
-        do {
-            return try candidates(
-                document: document,
-                scene: scene,
-                selection: selection,
-                layout: layout
-            )
-        } catch {
-            return []
-        }
-    }
-
     func target(
         at point: CGPoint,
         candidates: [ViewportBridgeCurveEndpointAffordanceCandidate],

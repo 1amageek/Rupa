@@ -5,10 +5,6 @@ struct ViewportActiveInteractionDragCandidates {
     var sketchPointHandle: ViewportSketchPointHandleDragState? = nil
     var splineControlPoint: ViewportSplineControlPointDragState? = nil
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil
-    var polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? = nil
-    var surfaceControlPoint: ViewportSurfaceControlPointDragState? = nil
-    var surfaceTrimEndpoint: ViewportSurfaceTrimEndpointDragState? = nil
-    var surfaceTrimControlPoint: ViewportSurfaceTrimControlPointDragState? = nil
     var polySplineSurfaceVertexSlide: ViewportPolySplineSurfaceVertexSlideDragState? = nil
     var surfaceControlPointSlide: ViewportSurfaceControlPointSlideDragState? = nil
     var surfaceFrame: ViewportSurfaceFrameDragState? = nil
@@ -42,14 +38,6 @@ struct ViewportActiveInteractionDragCandidates {
             surfaceFrame.map(ViewportActiveInteractionDragState.surfaceFrame)
         case .splineControlPoint:
             splineControlPoint.map(ViewportActiveInteractionDragState.splineControlPoint)
-        case .polySplineSurfaceVertex:
-            polySplineSurfaceVertex.map(ViewportActiveInteractionDragState.polySplineSurfaceVertex)
-        case .surfaceControlPoint:
-            surfaceControlPoint.map(ViewportActiveInteractionDragState.surfaceControlPoint)
-        case .surfaceTrimEndpoint:
-            surfaceTrimEndpoint.map(ViewportActiveInteractionDragState.surfaceTrimEndpoint)
-        case .surfaceTrimControlPoint:
-            surfaceTrimControlPoint.map(ViewportActiveInteractionDragState.surfaceTrimControlPoint)
         case .edgeOffset:
             edgeOffset.map(ViewportActiveInteractionDragState.edgeOffset)
         case .slotWidth:

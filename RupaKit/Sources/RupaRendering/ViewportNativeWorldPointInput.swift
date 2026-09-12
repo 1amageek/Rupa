@@ -3,8 +3,8 @@ import RupaCore
 import RupaViewportScene
 import SwiftCAD
 
-/// Native input owner for the three handle gestures whose drag geometry is a
-/// world point rather than a screen distance or angle.
+/// Native input owner for the handle gestures whose drag geometry is a world
+/// point rather than a screen distance or angle.
 ///
 /// The prepared record is captured at press and never re-read from a later
 /// frame. `query(displayedCanvas:)` names the single plane the mounted camera
@@ -44,6 +44,11 @@ struct ViewportNativeWorldPointInput: Sendable {
         case constructionPlane(origin: Point3D, normal: Vector3D)
         case patternArrayCurvePathPoint(Point3D)
         case bridgeCurveEndpoint(endpoint: BridgeCurveEndpoint, parameter: Double)
+        /// The displacement a surface handle has been dragged, stated in the
+        /// record's own model space. The trim routes solve their parameter
+        /// pair from it at release rather than previewing one, because the
+        /// overlay redraws those handles from the same displacement.
+        case surfaceHandleLocalDelta(Vector3D)
     }
 
     /// The document mutation a released gesture authorizes.
@@ -51,6 +56,10 @@ struct ViewportNativeWorldPointInput: Sendable {
         case constructionPlane(ViewportConstructionPlaneDragTarget)
         case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointDragTarget)
         case bridgeCurveEndpoint(ViewportBridgeCurveEndpointDragTarget)
+        case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragTarget)
+        case surfaceControlPoint(ViewportSurfaceControlPointDragTarget)
+        case surfaceTrimEndpoint(ViewportSurfaceTrimEndpointDragTarget)
+        case surfaceTrimControlPoint(ViewportSurfaceTrimControlPointDragTarget)
     }
 
     /// A world move below this distance is numerical noise, so the release
@@ -62,6 +71,13 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// A normal handle dragged this close to its origin names no direction, so
     /// the update is refused instead of reporting an arbitrary plane.
     static let minimumNormalLength = 1.0e-10
+    /// A surface parameter move below this is numerical noise. The surface
+    /// domain is not normalized the way a curve parameter is, so this floor
+    /// matches the world one rather than `minimumParameterChange`.
+    static let minimumSurfaceParameterChange = 1.0e-12
+    /// A trim tangent pair whose Gram determinant is at or below this spans no
+    /// surface patch, so no parameter delta can be solved from it.
+    static let minimumTrimGramDeterminant = 1.0e-18
 
     let record: ViewportSpatialInteractionRecord
 
@@ -72,6 +88,13 @@ struct ViewportNativeWorldPointInput: Sendable {
     static func claims(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
         switch target {
         case .constructionPlane, .patternArrayCurvePathPoint, .bridgeCurveEndpoint: true
+        // These two cases draw one handle per drag mode, so the record the
+        // press resolved already names which handle was grabbed. The axis and
+        // local-axis handles move along one world axis and belong to the axis
+        // owner; only the planar handle resolves a world point.
+        case .polySplineSurfaceVertex(let value): value.dragMode == .planar
+        case .surfaceControlPoint(let value): value.dragMode == .planar
+        case .surfaceTrimEndpoint, .surfaceTrimControlPoint: true
         default: false
         }
     }
@@ -105,6 +128,26 @@ struct ViewportNativeWorldPointInput: Sendable {
             return .worldPlane(
                 origin: Self.worldPoint(of: handle, modelTransform: modelTransform),
                 normal: try Self.canvasNormal(displayedCanvas)
+            )
+        case .polySplineSurfaceVertex(let handle):
+            return try Self.handlePlane(
+                localPoint: handle.point, modelTransform: handle.modelTransform,
+                displayedCanvas: displayedCanvas
+            )
+        case .surfaceControlPoint(let handle):
+            return try Self.handlePlane(
+                localPoint: handle.point, modelTransform: handle.modelTransform,
+                displayedCanvas: displayedCanvas
+            )
+        case .surfaceTrimEndpoint(let handle):
+            return try Self.handlePlane(
+                localPoint: handle.point, modelTransform: handle.modelTransform,
+                displayedCanvas: displayedCanvas
+            )
+        case .surfaceTrimControlPoint(let handle):
+            return try Self.handlePlane(
+                localPoint: handle.point, modelTransform: handle.modelTransform,
+                displayedCanvas: displayedCanvas
             )
         default:
             throw RealityViewportSpatialBatch.invalid(
@@ -212,6 +255,26 @@ struct ViewportNativeWorldPointInput: Sendable {
                 endpoint: projection.endpoint, parameter: projection.parameter
             )
 
+        case .polySplineSurfaceVertex(let handle):
+            return .surfaceHandleLocalDelta(
+                try Self.modelDelta(delta, in: handle.modelTransform)
+            )
+
+        case .surfaceControlPoint(let handle):
+            return .surfaceHandleLocalDelta(
+                try Self.modelDelta(delta, in: handle.modelTransform)
+            )
+
+        case .surfaceTrimEndpoint(let handle):
+            return .surfaceHandleLocalDelta(
+                try Self.modelDelta(delta, in: handle.modelTransform)
+            )
+
+        case .surfaceTrimControlPoint(let handle):
+            return .surfaceHandleLocalDelta(
+                try Self.modelDelta(delta, in: handle.modelTransform)
+            )
+
         default:
             throw RealityViewportSpatialBatch.invalid(
                 "The world-point owner does not claim this prepared route."
@@ -278,7 +341,43 @@ struct ViewportNativeWorldPointInput: Sendable {
                 sourceID: handle.sourceID, role: handle.role, endpoint: endpoint
             ))
 
-        case (.constructionPlane, _), (.patternArrayCurvePathPoint, _), (.bridgeCurveEndpoint, _):
+        case (.polySplineSurfaceVertex(let handle), .surfaceHandleLocalDelta(let delta)):
+            guard Self.moves(delta) else { return nil }
+            return .polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragTarget(
+                target: handle.target, deltaX: delta.x, deltaY: delta.y, deltaZ: delta.z
+            ))
+
+        case (.surfaceControlPoint(let handle), .surfaceHandleLocalDelta(let delta)):
+            guard Self.moves(delta) else { return nil }
+            return .surfaceControlPoint(ViewportSurfaceControlPointDragTarget(
+                target: handle.target, deltaX: delta.x, deltaY: delta.y, deltaZ: delta.z
+            ))
+
+        case (.surfaceTrimEndpoint(let handle), .surfaceHandleLocalDelta(let delta)):
+            guard Self.moves(delta) else { return nil }
+            guard let moved = try Self.movedTrimUV(
+                u: handle.u, v: handle.v, tangentU: handle.tangentU,
+                tangentV: handle.tangentV, delta: delta
+            ) else { return nil }
+            return .surfaceTrimEndpoint(ViewportSurfaceTrimEndpointDragTarget(
+                target: handle.target, endpoint: handle.endpoint, u: moved.u, v: moved.v
+            ))
+
+        case (.surfaceTrimControlPoint(let handle), .surfaceHandleLocalDelta(let delta)):
+            guard Self.moves(delta) else { return nil }
+            guard let moved = try Self.movedTrimUV(
+                u: handle.u, v: handle.v, tangentU: handle.tangentU,
+                tangentV: handle.tangentV, delta: delta
+            ) else { return nil }
+            return .surfaceTrimControlPoint(ViewportSurfaceTrimControlPointDragTarget(
+                target: handle.target, controlPointIndex: handle.controlPointIndex,
+                u: moved.u, v: moved.v
+            ))
+
+        case (.constructionPlane, _), (.patternArrayCurvePathPoint, _),
+             (.bridgeCurveEndpoint, _), (.polySplineSurfaceVertex, _),
+             (.surfaceControlPoint, _), (.surfaceTrimEndpoint, _),
+             (.surfaceTrimControlPoint, _):
             throw RealityViewportSpatialBatch.invalid(
                 "A world-point value does not answer the pressed handle."
             )
@@ -319,6 +418,30 @@ struct ViewportNativeWorldPointInput: Sendable {
                     "A bridge curve endpoint placement is not finite."
                 )
             }
+        case .polySplineSurfaceVertex(let handle):
+            try validateHandle(
+                localPoint: handle.point, modelTransform: handle.modelTransform
+            )
+        case .surfaceControlPoint(let handle):
+            try validateHandle(
+                localPoint: handle.point, modelTransform: handle.modelTransform
+            )
+        case .surfaceTrimEndpoint(let handle):
+            try validateHandle(
+                localPoint: handle.point, modelTransform: handle.modelTransform
+            )
+            try validateTrimParameters(
+                u: handle.u, v: handle.v,
+                tangentU: handle.tangentU, tangentV: handle.tangentV
+            )
+        case .surfaceTrimControlPoint(let handle):
+            try validateHandle(
+                localPoint: handle.point, modelTransform: handle.modelTransform
+            )
+            try validateTrimParameters(
+                u: handle.u, v: handle.v,
+                tangentU: handle.tangentU, tangentV: handle.tangentV
+            )
         default:
             throw RealityViewportSpatialBatch.invalid(
                 "The world-point owner does not claim this prepared route."
@@ -353,6 +476,67 @@ struct ViewportNativeWorldPointInput: Sendable {
         )
     }
 
+    /// Validates a surface handle's drawn point and its placement.
+    ///
+    /// The placement must be invertible because every one of these routes
+    /// commits a model-space displacement. Whether it inverts depends only on
+    /// the transform's linear part, so the probe direction is arbitrary.
+    private static func validateHandle(
+        localPoint: Point3D, modelTransform: Transform3D
+    ) throws {
+        guard localPoint.isFinite,
+              modelTransform.viewportTransformedPoint(localPoint).isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface handle placement is not finite."
+            )
+        }
+        guard modelTransform.viewportInverseTransformedVector(
+            Vector3D(x: 1.0, y: 0.0, z: 0.0)
+        ) != nil else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface handle placement cannot map a world delta into model space."
+            )
+        }
+    }
+
+    /// Validates a trim handle's retained parameter pair and tangent basis at
+    /// press.
+    ///
+    /// A degenerate tangent pair is refused here rather than dropped update by
+    /// update, because a handle that can never resolve must not stay drawn and
+    /// grabbable for the length of a gesture that commits nothing.
+    private static func validateTrimParameters(
+        u: Double, v: Double, tangentU: Vector3D, tangentV: Vector3D
+    ) throws {
+        guard u.isFinite, v.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface trim handle parameter is not finite."
+            )
+        }
+        _ = try trimGram(tangentU: tangentU, tangentV: tangentV)
+    }
+
+    private static func trimGram(
+        tangentU: Vector3D, tangentV: Vector3D
+    ) throws -> (uu: Double, uv: Double, vv: Double, determinant: Double) {
+        guard tangentU.isFinite, tangentV.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface trim handle tangent is not finite."
+            )
+        }
+        let uu = tangentU.dot(tangentU)
+        let uv = tangentU.dot(tangentV)
+        let vv = tangentV.dot(tangentV)
+        let determinant = uu * vv - uv * uv
+        guard determinant.isFinite,
+              abs(determinant) > minimumTrimGramDeterminant else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface trim handle tangent pair spans no surface patch."
+            )
+        }
+        return (uu, uv, vv, determinant)
+    }
+
     private static func canvasNormal(_ plane: ViewportCanvasPlane) throws -> Vector3D {
         guard let normal = plane.normal, normal.isFinite, normal.length > minimumNormalLength else {
             throw RealityViewportSpatialBatch.invalid(
@@ -378,5 +562,72 @@ struct ViewportNativeWorldPointInput: Sendable {
 
     private static func distance(_ lhs: Vector3D, _ rhs: Vector3D) -> Double {
         Vector3D(x: rhs.x - lhs.x, y: rhs.y - lhs.y, z: rhs.z - lhs.z).length
+    }
+
+    /// The plane a surface handle drags on: parallel to the displayed canvas
+    /// plane and through the handle's own world point, so the grabbed handle
+    /// stays under the pointer in perspective as well as in orthographic.
+    private static func handlePlane(
+        localPoint: Point3D,
+        modelTransform: Transform3D,
+        displayedCanvas: ViewportCanvasPlane
+    ) throws -> Query {
+        .worldPlane(
+            origin: modelTransform.viewportTransformedPoint(localPoint),
+            normal: try canvasNormal(displayedCanvas)
+        )
+    }
+
+    /// Carries a world displacement back into the record's model space.
+    ///
+    /// Every surface handle callback is authored in that space, so a
+    /// placement that cannot be inverted is refused rather than answered with
+    /// the unmapped world value.
+    private static func modelDelta(
+        _ delta: Vector3D, in modelTransform: Transform3D
+    ) throws -> Vector3D {
+        guard let localDelta = modelTransform.viewportInverseTransformedVector(delta) else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface handle placement cannot map the world delta into model space."
+            )
+        }
+        guard localDelta.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A surface handle model-space delta is not finite."
+            )
+        }
+        return localDelta
+    }
+
+    private static func moves(_ delta: Vector3D) -> Bool {
+        abs(delta.x) > minimumWorldChange
+            || abs(delta.y) > minimumWorldChange
+            || abs(delta.z) > minimumWorldChange
+    }
+
+    /// Solves a model-space displacement against a trim handle's tangent pair
+    /// for the parameter pair the release commits.
+    ///
+    /// Returns `nil` only when the solved pair does not move, which is the
+    /// ordinary no-commit case. A tangent basis that cannot be solved is a
+    /// typed refusal, raised here and at press.
+    private static func movedTrimUV(
+        u: Double, v: Double, tangentU: Vector3D, tangentV: Vector3D, delta: Vector3D
+    ) throws -> (u: Double, v: Double)? {
+        let gram = try trimGram(tangentU: tangentU, tangentV: tangentV)
+        let moveU = delta.dot(tangentU)
+        let moveV = delta.dot(tangentV)
+        let deltaU = (moveU * gram.vv - moveV * gram.uv) / gram.determinant
+        let deltaV = (gram.uu * moveV - gram.uv * moveU) / gram.determinant
+        let movedU = u + deltaU
+        let movedV = v + deltaV
+        guard movedU.isFinite, movedV.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "A solved surface trim parameter is not finite."
+            )
+        }
+        guard abs(deltaU) > minimumSurfaceParameterChange
+            || abs(deltaV) > minimumSurfaceParameterChange else { return nil }
+        return (movedU, movedV)
     }
 }

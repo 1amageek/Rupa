@@ -1367,11 +1367,7 @@ private extension ViewportSpatialOverlayProducer {
     }
 
     static func axisVector(_ axis: ViewportCoordinateAxis) -> Vector3D {
-        switch axis {
-        case .x: .unitX
-        case .y: .unitY
-        case .z: .unitZ
-        }
+        axis.unitVector
     }
 
     static func modelAxis(_ axis: ViewportCoordinateAxis) -> Vector3D {

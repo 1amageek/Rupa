@@ -135,15 +135,9 @@ extension ViewportInteractionTarget {
         case .sketchPointHandle(let target): .sketchPointHandle(target.identity)
         case .splineControlPoint(let target): .splineControlPoint(target.identity)
         case .splineControlPointSlide(let target): .splineControlPointSlide(target.identity)
-        case .polySplineSurfaceVertex(let target):
-            .polySplineSurfaceVertex(featureID: target.featureID, componentID: target.componentID,
-                                     role: .init(target.dragMode))
         case .polySplineSurfaceVertexSlide(let target): .polySplineSurfaceVertexSlide(target.identity)
-        case .surfaceControlPoint(let target): .surfaceControlPoint(.init(target.target), role: .init(target.dragMode))
         case .surfaceControlPointSlide(let target):
             .surfaceControlPointSlide(try ViewportSpatialReferenceAddress.project(target.targets), direction: target.direction)
-        case .surfaceTrimEndpoint(let target): .surfaceTrimEndpoint(.init(target.target), endpoint: target.endpoint)
-        case .surfaceTrimControlPoint(let target): .surfaceTrimControlPoint(.init(target.target), index: target.controlPointIndex)
         case .surfaceFrame(let target):
             .surfaceFrame(try ViewportSpatialReferenceAddress.project(target.targets), displayID: target.displayID, axis: target.axis)
         case .regionOffset(let target): .regionOffset(target.identity)

@@ -17,14 +17,23 @@ struct ViewportNativeAxisInput: Sendable {
         case patternArrayLinearAxis(ViewportPatternArrayLinearAxisDragTarget)
         case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragTarget)
         case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragTarget)
+        case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragTarget)
+        case surfaceControlPoint(ViewportSurfaceControlPointDragTarget)
     }
 
     let record: ViewportSpatialInteractionRecord
     let axis: ViewportSpatialPreparedInteractionTarget.Axis
     let sourceUnitsPerWorldMetre: Double
+    /// The model-space direction the two surface handle routes move along.
+    ///
+    /// Those two commit a displacement rather than a measured quantity, so the
+    /// axis value alone does not name what moved. Every other route leaves
+    /// this empty.
+    let handleLocalDirection: Vector3D?
 
     init?(record: ViewportSpatialInteractionRecord) throws {
         let axis: ViewportSpatialPreparedInteractionTarget.Axis
+        var handleLocalDirection: Vector3D?
         switch record.target {
         case .splineControlPointSlide(_, _, _, _, _, let value):
             axis = value
@@ -48,6 +57,18 @@ struct ViewportNativeAxisInput: Sendable {
             axis = try Self.patternAxis(origin: value.basePoint, direction: value.axis, value: value.distanceMeters)
         case .independentCopyBodyDimension(let value):
             axis = try Self.patternAxis(origin: value.basePoint, direction: value.axis, value: value.valueMeters)
+        case .polySplineSurfaceVertex(let value):
+            // The planar handle of this route moves in a plane, so it belongs
+            // to the world-point owner rather than to this one.
+            guard let localDirection = value.dragMode.localDirection else { return nil }
+            handleLocalDirection = localDirection
+            axis = try Self.handleAxis(localPoint: value.point, localDirection: localDirection,
+                                       modelTransform: value.modelTransform)
+        case .surfaceControlPoint(let value):
+            guard let localDirection = value.dragMode.localDirection else { return nil }
+            handleLocalDirection = localDirection
+            axis = try Self.handleAxis(localPoint: value.point, localDirection: localDirection,
+                                       modelTransform: value.modelTransform)
         default:
             return nil
         }
@@ -75,6 +96,18 @@ struct ViewportNativeAxisInput: Sendable {
         self.record = record
         self.axis = axis
         self.sourceUnitsPerWorldMetre = sourceUnitsPerWorldMetre
+        self.handleLocalDirection = handleLocalDirection
+    }
+
+    /// The model-space displacement an axis value stands for, for the two
+    /// surface handle routes. Every other route has no displacement to state
+    /// and answers with nothing.
+    func localDelta(for value: Double) -> Vector3D? {
+        guard let direction = handleLocalDirection, value.isFinite else { return nil }
+        let delta = Vector3D(x: direction.x * value, y: direction.y * value,
+                             z: direction.z * value)
+        guard delta.isFinite else { return nil }
+        return delta
     }
 
     func value(forWorldDelta worldDelta: Double) throws -> Double {
@@ -88,7 +121,8 @@ struct ViewportNativeAxisInput: Sendable {
 
         switch record.target {
         case .splineControlPointSlide, .polySplineSurfaceVertexSlide,
-             .surfaceControlPointSlide, .surfaceFrame, .regionOffset:
+             .surfaceControlPointSlide, .surfaceFrame, .regionOffset,
+             .polySplineSurfaceVertex, .surfaceControlPoint:
             return sourceDelta
         case .edgeOffset, .sketchVertexOffset:
             return try Self.positiveValue(axis.baseValue, adding: sourceDelta)
@@ -185,6 +219,30 @@ struct ViewportNativeAxisInput: Sendable {
             guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
             return .sketchVertexOffset(.init(target: target, handle: handle, distance: value))
 
+        case .polySplineSurfaceVertex(let handle):
+            guard let delta = localDelta(for: value) else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "The axis-mode surface handle has no local drag direction."
+                )
+            }
+            guard Self.moves(delta) else { return nil }
+            return .polySplineSurfaceVertex(.init(
+                target: handle.target,
+                deltaX: delta.x, deltaY: delta.y, deltaZ: delta.z
+            ))
+
+        case .surfaceControlPoint(let handle):
+            guard let delta = localDelta(for: value) else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "The axis-mode surface handle has no local drag direction."
+                )
+            }
+            guard Self.moves(delta) else { return nil }
+            return .surfaceControlPoint(.init(
+                target: handle.target,
+                deltaX: delta.x, deltaY: delta.y, deltaZ: delta.z
+            ))
+
         case .patternArrayLinearAxis(let target):
             return .patternArrayLinearAxis(.init(sourceID: target.sourceID, axisSlot: target.axisSlot, distance: value))
 
@@ -205,6 +263,33 @@ struct ViewportNativeAxisInput: Sendable {
         default:
             throw RealityViewportSpatialBatch.invalid("The prepared record is not a world-axis operation.")
         }
+    }
+
+    /// The world axis a model-space handle direction traces through a handle's
+    /// own placement.
+    ///
+    /// The base value is zero because these handles commit a displacement
+    /// rather than a measured quantity, and the source scale is left to the
+    /// common path so one rule converts world metres back into model units.
+    private static func handleAxis(
+        localPoint: Point3D,
+        localDirection: Vector3D,
+        modelTransform: Transform3D
+    ) throws -> ViewportSpatialPreparedInteractionTarget.Axis {
+        let origin = modelTransform.viewportTransformedPoint(localPoint)
+        let direction = modelTransform.viewportTransformedVector(localDirection)
+        guard origin.isFinite, direction.isFinite else {
+            throw RealityViewportSpatialBatch.invalid(
+                "The surface handle has no finite world axis."
+            )
+        }
+        return .init(origin: origin, direction: direction, baseValue: 0)
+    }
+
+    /// Whether a model-space displacement is larger than numerical noise on any
+    /// component. A drag that moves nothing commits nothing.
+    private static func moves(_ delta: Vector3D) -> Bool {
+        abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12
     }
 
     private static func patternAxis(origin: Point3D, direction: Vector3D, value: Double) throws -> ViewportSpatialPreparedInteractionTarget.Axis {

@@ -8,10 +8,6 @@ struct ViewportActiveInteractionDrags: Equatable {
         sketchPointHandle: ViewportSketchPointHandleDragState? = nil,
         splineControlPoint: ViewportSplineControlPointDragState? = nil,
         splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil,
-        polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? = nil,
-        surfaceControlPoint: ViewportSurfaceControlPointDragState? = nil,
-        surfaceTrimEndpoint: ViewportSurfaceTrimEndpointDragState? = nil,
-        surfaceTrimControlPoint: ViewportSurfaceTrimControlPointDragState? = nil,
         polySplineSurfaceVertexSlide: ViewportPolySplineSurfaceVertexSlideDragState? = nil,
         surfaceControlPointSlide: ViewportSurfaceControlPointSlideDragState? = nil,
         surfaceFrame: ViewportSurfaceFrameDragState? = nil,
@@ -30,10 +26,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             sketchPointHandle: sketchPointHandle,
             splineControlPoint: splineControlPoint,
             splineControlPointSlide: splineControlPointSlide,
-            polySplineSurfaceVertex: polySplineSurfaceVertex,
-            surfaceControlPoint: surfaceControlPoint,
-            surfaceTrimEndpoint: surfaceTrimEndpoint,
-            surfaceTrimControlPoint: surfaceTrimControlPoint,
             polySplineSurfaceVertexSlide: polySplineSurfaceVertexSlide,
             surfaceControlPointSlide: surfaceControlPointSlide,
             surfaceFrame: surfaceFrame,
@@ -97,46 +89,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             setActiveDrag(
                 newValue.map(ViewportActiveInteractionDragState.splineControlPointSlide),
                 replacing: .splineControlPointSlide
-            )
-        }
-    }
-
-    var polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? {
-        get { activeDrag?.polySplineSurfaceVertex }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.polySplineSurfaceVertex),
-                replacing: .polySplineSurfaceVertex
-            )
-        }
-    }
-
-    var surfaceControlPoint: ViewportSurfaceControlPointDragState? {
-        get { activeDrag?.surfaceControlPoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.surfaceControlPoint),
-                replacing: .surfaceControlPoint
-            )
-        }
-    }
-
-    var surfaceTrimEndpoint: ViewportSurfaceTrimEndpointDragState? {
-        get { activeDrag?.surfaceTrimEndpoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.surfaceTrimEndpoint),
-                replacing: .surfaceTrimEndpoint
-            )
-        }
-    }
-
-    var surfaceTrimControlPoint: ViewportSurfaceTrimControlPointDragState? {
-        get { activeDrag?.surfaceTrimControlPoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.surfaceTrimControlPoint),
-                replacing: .surfaceTrimControlPoint
             )
         }
     }

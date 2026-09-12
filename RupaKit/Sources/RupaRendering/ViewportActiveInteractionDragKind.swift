@@ -7,10 +7,6 @@ enum ViewportActiveInteractionDragKind: CaseIterable, Equatable, Hashable {
     case surfaceControlPointSlide
     case surfaceFrame
     case splineControlPoint
-    case polySplineSurfaceVertex
-    case surfaceControlPoint
-    case surfaceTrimEndpoint
-    case surfaceTrimControlPoint
     case edgeOffset
     case slotWidth
     case independentCopyExtrudeDistance

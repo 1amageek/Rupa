@@ -153,30 +153,6 @@ struct ViewportSplineControlPointSlideDragState: Equatable {
     var distanceMeters: Double
 }
 
-struct ViewportPolySplineSurfaceVertexDragState: Equatable {
-    var target: ViewportPolySplineSurfaceVertexHandleTarget
-    var startPoint: CGPoint
-    var delta: Point3D
-}
-
-struct ViewportSurfaceControlPointDragState: Equatable {
-    var target: ViewportSurfaceControlPointHandleTarget
-    var startPoint: CGPoint
-    var delta: Point3D
-}
-
-struct ViewportSurfaceTrimEndpointDragState: Equatable {
-    var target: ViewportSurfaceTrimEndpointHandleTarget
-    var startPoint: CGPoint
-    var delta: Point3D
-}
-
-struct ViewportSurfaceTrimControlPointDragState: Equatable {
-    var target: ViewportSurfaceTrimControlPointHandleTarget
-    var startPoint: CGPoint
-    var delta: Point3D
-}
-
 struct ViewportPolySplineSurfaceVertexSlideDragState: Equatable {
     var target: ViewportPolySplineSurfaceVertexSlideHandleTarget
     var startPoint: CGPoint
@@ -499,13 +475,6 @@ struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable, Sendable {
     var point: Point3D
     var modelTransform: Transform3D
     var dragMode: ViewportPolySplineSurfaceVertexDragMode
-
-    var geometry: ViewportPlanarHandleDragGeometry {
-        ViewportPlanarHandleDragGeometry(
-            localPoint: point,
-            modelTransform: modelTransform
-        )
-    }
 }
 
 struct ViewportSurfaceControlPointHandleTarget: Equatable, Sendable {
@@ -517,13 +486,6 @@ struct ViewportSurfaceControlPointHandleTarget: Equatable, Sendable {
 
     var identity: ViewportSurfaceControlPointHandleIdentity {
         ViewportSurfaceControlPointHandleIdentity(target: target)
-    }
-
-    var geometry: ViewportPlanarHandleDragGeometry {
-        ViewportPlanarHandleDragGeometry(
-            localPoint: point,
-            modelTransform: modelTransform
-        )
     }
 }
 
@@ -544,13 +506,6 @@ struct ViewportSurfaceTrimEndpointHandleTarget: Equatable, Sendable {
 
     var identity: ViewportSurfaceTrimEndpointHandleIdentity {
         ViewportSurfaceTrimEndpointHandleIdentity(target: target, endpoint: endpoint)
-    }
-
-    var geometry: ViewportPlanarHandleDragGeometry {
-        ViewportPlanarHandleDragGeometry(
-            localPoint: point,
-            modelTransform: modelTransform
-        )
     }
 }
 
@@ -576,23 +531,11 @@ struct ViewportSurfaceTrimControlPointHandleTarget: Equatable, Sendable {
             controlPointIndex: controlPointIndex
         )
     }
-
-    var geometry: ViewportPlanarHandleDragGeometry {
-        ViewportPlanarHandleDragGeometry(
-            localPoint: point,
-            modelTransform: modelTransform
-        )
-    }
 }
 
 struct ViewportSurfaceTrimControlPointHandleIdentity: Equatable, Sendable {
     var target: SelectionReference
     var controlPointIndex: Int
-}
-
-struct ViewportPolySplineSurfaceVertexLocalAxisHit: Equatable {
-    var axis: ViewportPolySplineSurfaceVertexLocalAxis
-    var direction: Vector3D
 }
 
 enum ViewportPolySplineSurfaceVertexLocalAxis: CaseIterable, Equatable {
@@ -623,10 +566,39 @@ enum ViewportPolySplineSurfaceVertexLocalAxis: CaseIterable, Equatable {
     }
 }
 
+extension ViewportCoordinateAxis {
+    /// The unit vector this axis names, stated in whichever space the caller's
+    /// own values are stated in. Owning it here keeps the world, model and
+    /// handle routes from each carrying their own copy of the mapping.
+    var unitVector: Vector3D {
+        switch self {
+        case .x: .unitX
+        case .y: .unitY
+        case .z: .unitZ
+        }
+    }
+}
+
 enum ViewportPolySplineSurfaceVertexDragMode: Equatable, Sendable {
     case planar
     case axis(ViewportCoordinateAxis)
     case localAxis(ViewportPolySplineSurfaceVertexLocalAxis, direction: Vector3D)
+
+    /// The single model-space direction this drag mode moves the handle along.
+    ///
+    /// The planar mode has none because it moves within a plane rather than
+    /// along a line, which is what separates the axis input owner from the
+    /// world-point one for these two routes.
+    var localDirection: Vector3D? {
+        switch self {
+        case .planar:
+            nil
+        case .axis(let axis):
+            axis.unitVector
+        case .localAxis(_, let direction):
+            direction
+        }
+    }
 
     var axis: ViewportCoordinateAxis? {
         switch self {
@@ -786,12 +758,8 @@ enum ViewportInteractionTarget: Equatable {
     case sketchPointHandle(ViewportSketchPointHandleTarget)
     case splineControlPoint(ViewportSplineControlPointHandleTarget)
     case splineControlPointSlide(ViewportSplineControlPointSlideHandleTarget)
-    case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexHandleTarget)
     case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideHandleTarget)
-    case surfaceControlPoint(ViewportSurfaceControlPointHandleTarget)
     case surfaceControlPointSlide(ViewportSurfaceControlPointSlideHandleTarget)
-    case surfaceTrimEndpoint(ViewportSurfaceTrimEndpointHandleTarget)
-    case surfaceTrimControlPoint(ViewportSurfaceTrimControlPointHandleTarget)
     case surfaceFrame(ViewportSurfaceFrameHandleTarget)
     case regionOffset(ViewportRegionOffsetHandleTarget)
     case edgeOffset(ViewportEdgeOffsetHandleTarget)

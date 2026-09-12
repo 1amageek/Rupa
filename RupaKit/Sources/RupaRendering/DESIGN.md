@@ -480,8 +480,20 @@ independent tessellator is never an alternative implementation.
    miss, typed failure, or cancellation. Every other route remains explicitly
    incomplete until migrated under the same authority rather than silently
    sharing these route claims.
-   Three closed native input values exist under this authority and own
-   disjoint prepared route sets. `ViewportNativeAxisInput` owns every route
+   The same lifecycle also owns the axis and local-axis drag modes of
+   `polySplineSurfaceVertex` and `surfaceControlPoint`. An axis-mode record
+   states its leg as a unit direction in the record's own model space, so the
+   owner queries the world image of that direction through
+   `record.modelTransform` and converts the returned world delta with the
+   same source-units-per-world-metre factor stated above. The commit value is
+   the model-space displacement those routes' existing public callbacks take,
+   which is the converted magnitude times that same unit direction; a
+   component the leg does not move stays exactly zero. This replaces a screen
+   chord projected onto the handle's drawn leg, so under perspective the two
+   disagree by design, for the reason this document already states for the
+   other axis routes.
+   Each closed native input value under this authority owns a disjoint
+   prepared route set. `ViewportNativeAxisInput` owns every route
    whose drag is a signed delta along one retained world axis; it holds no
    projected sample and re-queries the mounted camera on each update.
    `ViewportNativePatternInput` owns the routes whose existing input math
@@ -490,12 +502,16 @@ independent tessellator is never an alternative implementation.
    samples taken once against that frame. `ViewportNativeWorldPointInput`
    owns the routes whose drag resolves a world point; like the axis owner
    it retains only the prepared record and re-queries the mounted camera on
-   each update. A prepared case is claimed by exactly one of the three, so
-   no boundary carries a case another owns and none may be consulted for a
-   route it does not claim. A prepared case belongs to the axis owner when
-   its drag reduces to one world-axis delta, to the pattern owner when its
-   drag needs that screen basis, and to the world-point owner when its drag
-   resolves a world point under the contract below.
+   each update. A prepared record is claimed by exactly one owner, so no
+   boundary carries a record another owns and none may be consulted for a
+   record it does not claim. A record belongs to the axis owner when its drag
+   reduces to one world-axis delta, to the pattern owner when its drag needs
+   that screen basis, and to the world-point owner when its drag resolves a
+   world point under the contract below. Where a prepared case carries its
+   own drag mode the mode selects the owner, because that case draws one
+   handle per mode and the record the press resolved already names which one
+   was grabbed. Press consults the axis owner first, so a record that owner
+   claims never reaches a later claim test.
    The pattern affordance routes `patternArrayRadialAngle`,
    `patternArrayCopyCount`, `patternArrayCurveExtent`, and
    `patternArrayOutputMode` are native-enabled through the pattern
@@ -526,8 +542,9 @@ independent tessellator is never an alternative implementation.
    The world-point routes `patternArrayCurvePathPoint`,
    `constructionPlane`, `bridgeCurveEndpoint`, `sketchCurveHandle`,
    `sketchDimension`, `sketchPointHandle`, `splineControlPoint`,
-   `polySplineSurfaceVertex`, `surfaceControlPoint`, `surfaceTrimEndpoint`,
-   and `surfaceTrimControlPoint` resolve their drag geometry from the same
+   `surfaceTrimEndpoint`, `surfaceTrimControlPoint`, and the planar drag mode
+   of `polySplineSurfaceVertex` and `surfaceControlPoint` resolve their drag
+   geometry from the same
    mounted, revision-checked camera owner's world-plane query at the plane
    the retained record names, and they retain the prepared record rather
    than a materialized screen sample. A press-time materialized value on
@@ -560,6 +577,20 @@ independent tessellator is never an alternative implementation.
    axis pair. A query refusal ends the gesture and reports, and a frame
    that has judged nothing yet leaves the standing drag value in place, by
    the readiness split this document already states.
+   The four surface handle routes move on the plane parallel to the displayed
+   canvas plane through the handle's own world point, for the reason the two
+   curve routes above state. Their callbacks take a model-space displacement,
+   so the owner carries the queried world displacement back through
+   `record.modelTransform` and refuses a placement it cannot invert rather
+   than committing the unmapped world value. The two trim routes then solve
+   that model-space displacement against the retained surface tangent pair
+   for a parameter delta; the builder states those tangents in the same model
+   space, so no second conversion applies. A tangent pair whose Gram
+   determinant is nonfinite or at or below `1.0e-18` spans no surface patch,
+   and that is a typed refusal at press rather than a silent no-op during the
+   drag: the legacy geometry dropped every update on such a handle while the
+   handle stayed drawn and grabbable. A solved parameter pair that does not
+   move is the ordinary no-commit case and not a failure.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, after which the
