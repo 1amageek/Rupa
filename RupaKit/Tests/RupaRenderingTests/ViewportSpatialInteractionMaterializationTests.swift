@@ -7,25 +7,6 @@ import Testing
 @testable import RupaRendering
 
 @Test @MainActor
-func materializationPreservesTransformedBridgeTangent() throws {
-    let handle = BridgeCurveEndpointHandle(
-        sourceID: .init(), featureID: .init(), bridgeEntityID: .init(), role: .first,
-        endpoint: .init(reference: .lineEnd(.init())), point: .init(x: 1, y: 2),
-        outgoingTangent: .init(x: 1, y: 1), referenceDescription: "Test", pointReference: nil)
-    let transform = Transform3D(matrix: try Matrix4x4(values: [
-        0, 0, -3, 10, 0, 1, 0, 0, 2, 0, 0, 20, 0, 0, 0, 1
-    ]))
-    let target = ViewportSpatialPreparedInteractionTarget.bridgeCurveEndpoint(handle: handle, modelTransform: transform)
-    let input = try target.materialize { CGPoint(x: $0.x, y: $0.z) }
-    guard case .bridgeCurveEndpoint(_, _, let projection) = input else {
-        Issue.record("Missing bridge input"); return
-    }
-    #expect(projection.projectedPoint == CGPoint(x: 4, y: 22))
-    #expect(abs(projection.projectedTangentDirection.dx + 3 / sqrt(13.0)) < 1.0e-9)
-    #expect(abs(projection.projectedTangentDirection.dy - 2 / sqrt(13.0)) < 1.0e-9)
-}
-
-@Test @MainActor
 func materializationUsesCurveLengthAndRequestedExtent() throws {
     let points: [Point3D] = [.origin, .init(x: 1, y: 0, z: 0), .init(x: 1, y: 0, z: 3)]
     let extent = ViewportSpatialPreparedInteractionTarget.patternArrayCurveExtent(.init(

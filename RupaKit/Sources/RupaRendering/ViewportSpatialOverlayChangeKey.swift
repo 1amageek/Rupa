@@ -19,6 +19,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var pendingHandle: ViewportSpatialHandleIdentity?
     var nativeAxisValue: Double?
     var nativePatternValue: ViewportNativePatternInput.Value?
+    var nativeWorldPointValue: ViewportNativeWorldPointInput.Value?
     var sketchTransformMutation: Transform3D?
     var hoveredHit: ViewportHit?
     var creation: Creation?

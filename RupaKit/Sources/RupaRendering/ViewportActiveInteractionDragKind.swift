@@ -2,7 +2,6 @@ enum ViewportActiveInteractionDragKind: CaseIterable, Equatable, Hashable {
     case sketchCurveHandle
     case sketchDimension
     case sketchPointHandle
-    case bridgeCurveEndpoint
     case splineControlPointSlide
     case polySplineSurfaceVertexSlide
     case surfaceControlPointSlide
@@ -17,8 +16,6 @@ enum ViewportActiveInteractionDragKind: CaseIterable, Equatable, Hashable {
     case independentCopyExtrudeDistance
     case independentCopyBodyDimension
     case patternArrayLinearAxis
-    case patternArrayCurvePathPoint
-    case constructionPlane
     case sketchVertexOffset
     case regionOffset
     case affordance

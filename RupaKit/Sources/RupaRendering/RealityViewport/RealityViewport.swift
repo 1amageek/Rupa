@@ -1498,11 +1498,55 @@ final class RealityViewport {
         let normal = SIMD3<Double>(planeNormal.x, planeNormal.y, planeNormal.z)
         let normalLength = simd_length(normal)
         guard normal.x.isFinite, normal.y.isFinite, normal.z.isFinite,
-              normalLength.isFinite, normalLength > 0,
-              planeOrigin.x.isFinite, planeOrigin.y.isFinite, planeOrigin.z.isFinite else {
+              normalLength.isFinite, normalLength > 0 else {
             throw Self.queryFailure("The native camera plane is not finite and valid.")
         }
-        let unitNormal = normal / normalLength
+        return try planeIntersection(
+            at: point, planeOrigin: planeOrigin, unitNormal: normal / normalLength
+        )
+    }
+
+    /// Intersects a screen point with the plane through `anchor` perpendicular
+    /// to the direction the mounted frame is looking along.
+    ///
+    /// The frame states that direction from the camera entity it installed
+    /// instead of accepting one, because an animated projection transition
+    /// changes the applied basis while the session revision stays put: a
+    /// normal a caller sampled outside this frame can name a plane the frame
+    /// never drew, which is why `matchesAppliedFrame` compares the applied
+    /// layout and not the revision alone.
+    func viewPlaneIntersection(
+        at point: CGPoint,
+        through anchor: Point3D,
+        revision: UInt64
+    ) throws -> Point3D {
+        try validateCameraQuery(point: point, revision: revision)
+        let forward = SIMD3<Double>(
+            camera.convert(direction: SIMD3<Float>(0, 0, -1), to: nil)
+        )
+        let length = simd_length(forward)
+        guard forward.x.isFinite, forward.y.isFinite, forward.z.isFinite,
+              length.isFinite, length > 0 else {
+            throw Self.queryFailure(
+                "The mounted native camera reports no forward direction."
+            )
+        }
+        return try planeIntersection(
+            at: point, planeOrigin: anchor, unitNormal: forward / length
+        )
+    }
+
+    /// The shared plane solve. `unitNormal` is already validated finite and
+    /// unit length by the query that named the plane.
+    private func planeIntersection(
+        at point: CGPoint,
+        planeOrigin: Point3D,
+        unitNormal: SIMD3<Double>
+    ) throws -> Point3D {
+        guard planeOrigin.x.isFinite, planeOrigin.y.isFinite,
+              planeOrigin.z.isFinite else {
+            throw Self.queryFailure("The native camera plane is not finite and valid.")
+        }
         let ray = try nativeCameraRay(through: point)
         let origin = SIMD3<Double>(ray.origin)
         let rawDirection = SIMD3<Double>(ray.direction)

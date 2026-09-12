@@ -106,10 +106,29 @@ public struct Viewport: View {
         var value: ViewportNativePatternInput.Value?
     }
 
+    /// One open world-point gesture.
+    ///
+    /// The press owns the prepared record for the whole drag, and each update
+    /// asks the mounted camera for both ends of the gesture against the same
+    /// revision, so a camera move cannot mix two projections into one drag.
+    /// The release waits for a mounted frame the same way the sketch transform
+    /// route does, because the value it commits is read from that frame.
+    private struct NativeWorldPointPress {
+        let input: ViewportNativeWorldPointInput
+        let source: ViewportSourceIdentity
+        let snapshotID: EvaluationSnapshotID?
+        let selectedTargets: [SelectionTarget]
+        let selectedReferences: [SelectionReference]
+        let start: CGPoint
+        var value: ViewportNativeWorldPointInput.Value?
+        var finish: (point: CGPoint, revision: UInt64)?
+    }
+
     private enum NativeInputGesture {
         case active(NativeAxisPress)
         case sketchTransform(SketchTransformPress)
         case pattern(NativePatternPress)
+        case worldPoint(NativeWorldPointPress)
         // Consume the rest of a refused gesture, including its mouse-up.
         case cancelled
     }
@@ -331,11 +350,6 @@ public struct Viewport: View {
         nonmutating set { activeInteractionDrags.sketchPointHandle = newValue }
     }
 
-    private var activeBridgeCurveEndpointDrag: ViewportBridgeCurveEndpointDragState? {
-        get { activeInteractionDrags.bridgeCurveEndpoint }
-        nonmutating set { activeInteractionDrags.bridgeCurveEndpoint = newValue }
-    }
-
     private var activeSplineControlPointDrag: ViewportSplineControlPointDragState? {
         get { activeInteractionDrags.splineControlPoint }
         nonmutating set { activeInteractionDrags.splineControlPoint = newValue }
@@ -414,16 +428,6 @@ public struct Viewport: View {
     private var activeIndependentCopyBodyDimensionDrag: ViewportIndependentCopyBodyDimensionDragState? {
         get { activeInteractionDrags.independentCopyBodyDimension }
         nonmutating set { activeInteractionDrags.independentCopyBodyDimension = newValue }
-    }
-
-    private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState? {
-        get { activeInteractionDrags.patternArrayCurvePathPoint }
-        nonmutating set { activeInteractionDrags.patternArrayCurvePathPoint = newValue }
-    }
-
-    private var activeConstructionPlaneHandleDrag: ViewportConstructionPlaneHandleDragState? {
-        get { activeInteractionDrags.constructionPlane }
-        nonmutating set { activeInteractionDrags.constructionPlane = newValue }
     }
 
     public init(
@@ -757,6 +761,7 @@ public struct Viewport: View {
                                 if error == nil {
                                     resumeNativeAxisFinish()
                                     resumeSketchTransformFinish()
+                                    resumeNativeWorldPointFinish()
                                 } else if presentationSurface.appliedViewportRevision == nil {
                                     cancelNativeInputGesture()
                                 }
@@ -1669,6 +1674,7 @@ public struct Viewport: View {
         case .active(let press): key.nativeAxisValue = press.value
         case .sketchTransform(let press): key.sketchTransformMutation = press.mutation
         case .pattern(let press): key.nativePatternValue = press.value
+        case .worldPoint(let press): key.nativeWorldPointValue = press.value
         case .cancelled, nil: break
         }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
@@ -2550,81 +2556,6 @@ public struct Viewport: View {
         }
         return match
     }
-
-
-
-
-
-
-    private func displayedConstructionPlaneHandleTarget(
-        _ target: ViewportConstructionPlaneHandleTarget,
-        layout: ViewportLayout
-    ) -> ViewportConstructionPlaneHandleTarget? {
-        guard let activeConstructionPlaneHandleDrag,
-              activeConstructionPlaneHandleDrag.target.constructionPlaneID == target.constructionPlaneID,
-              let basis = constructionPlaneBasis(
-                  origin: activeConstructionPlaneHandleDrag.origin,
-                  normal: activeConstructionPlaneHandleDrag.normal
-              ) else {
-            return target
-        }
-
-        let guideLength = max(pointDistance(target.normalEnd, target.origin), 1.0e-9)
-        let halfExtent = max(guideLength * 1.7, 1.0e-9)
-        let origin = basis.origin
-        let normalEnd = pointOffsetBy(origin, scale(basis.normal, by: guideLength))
-        let negativeU = scale(basis.u, by: -halfExtent)
-        let positiveU = scale(basis.u, by: halfExtent)
-        let negativeV = scale(basis.v, by: -halfExtent)
-        let positiveV = scale(basis.v, by: halfExtent)
-        let corners = [
-            pointOffsetBy(pointOffsetBy(origin, negativeU), negativeV),
-            pointOffsetBy(pointOffsetBy(origin, positiveU), negativeV),
-            pointOffsetBy(pointOffsetBy(origin, positiveU), positiveV),
-            pointOffsetBy(pointOffsetBy(origin, negativeU), positiveV),
-        ]
-        guard let projectedOrigin = layout.projectedPoint(origin)?.point,
-              let projectedNormalEnd = layout.projectedPoint(normalEnd)?.point else { return nil }
-        return ViewportConstructionPlaneHandleTarget(
-            constructionPlaneID: target.constructionPlaneID,
-            sceneNodeID: target.sceneNodeID,
-            handle: target.handle,
-            origin: origin,
-            normal: basis.normal,
-            normalEnd: normalEnd,
-            corners: corners,
-            projectedOrigin: projectedOrigin,
-            projectedNormalEnd: projectedNormalEnd
-        )
-    }
-
-    private func constructionPlaneBasis(
-        origin: Point3D,
-        normal: Vector3D
-    ) -> (origin: Point3D, normal: Vector3D, u: Vector3D, v: Vector3D)? {
-        do {
-            let unitNormal = try normal.normalized(tolerance: 1.0e-12)
-            let helper = abs(unitNormal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
-            let u = try helper.cross(unitNormal).normalized(tolerance: 1.0e-12)
-            let v = unitNormal.cross(u)
-            return (origin, unitNormal, u, v)
-        } catch {
-            return nil
-        }
-    }
-
-
-
-
-    private func isConstructionPlaneHandleHighlighted(
-        _ target: ViewportConstructionPlaneHandleTarget
-    ) -> Bool {
-        hoveredConstructionPlaneHandle?.identity == target.identity
-            || pendingConstructionPlaneHandle?.identity == target.identity
-            || activeConstructionPlaneHandleDrag?.target.identity == target.identity
-    }
-
-
 
     private var snapOverlayContext: ViewportSnapOverlayContext {
         ViewportSnapOverlayContext(activeCanvasDrag: activeCanvasDrag)
@@ -4005,30 +3936,6 @@ public struct Viewport: View {
 
 
 
-
-
-
-
-
-
-
-    private func patternArrayCurvePathPointProjectedPath(
-        target: ViewportPatternArrayCurvePathPointHandleTarget,
-        layout: ViewportLayout
-    ) -> Path {
-        let points = target.pathPoints.enumerated().map { index, point in
-            if activePatternArrayCurvePathPointDrag?.target.sourceID == target.sourceID,
-               activePatternArrayCurvePathPointDrag?.target.pointIndex == index,
-               let activePoint = activePatternArrayCurvePathPointDrag?.point {
-                return activePoint
-            }
-            return point
-        }
-        return projectedPath(points, layout: layout)
-    }
-
-
-
     private func drawablePatternArrayOutputs(
         _ outputs: [ViewportPatternArrayPreview.Output]
     ) -> [ViewportPatternArrayPreview.Output] {
@@ -4737,21 +4644,6 @@ public struct Viewport: View {
         return nil
     }
 
-
-    private func patternArrayCurvePathPointAffordanceCandidates(
-        scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> [ViewportPatternArrayCurvePathPointAffordanceCandidate] {
-        guard onPatternArrayCurvePathPointDrag != nil else {
-            return []
-        }
-        return ViewportPatternArrayCurvePathPointAffordanceService().candidates(
-            document: document,
-            scene: scene,
-            selection: selection,
-            layout: layout
-        )
-    }
 
     private func sketchVertexOffsetAffordanceCandidates(
         targets: [ViewportSketchVertexOffsetSourceTarget],
@@ -5518,6 +5410,7 @@ public struct Viewport: View {
             switch nativeInputGesture {
             case .sketchTransform: updateSketchTransformGesture(current: current)
             case .pattern: updateNativePatternGesture(current: current)
+            case .worldPoint: updateNativeWorldPointGesture(current: current)
             case .active, .cancelled, nil: _ = updateNativeAxisGesture(current: current)
             }
             return
@@ -5708,6 +5601,17 @@ public struct Viewport: View {
         }
     }
 
+    private func nativeWorldPointRouteEnabled(
+        _ target: ViewportSpatialPreparedInteractionTarget
+    ) -> Bool {
+        switch target {
+        case .constructionPlane: onConstructionPlaneHandleDrag != nil
+        case .patternArrayCurvePathPoint: onPatternArrayCurvePathPointDrag != nil
+        case .bridgeCurveEndpoint: onBridgeCurveEndpointDrag != nil
+        default: false
+        }
+    }
+
     private var hoveredSpatialHandleIdentity: ViewportSpatialHandleIdentity? {
         get throws { try hoveredNativeHandleIdentity ?? hoveredInteractionTarget?.spatialIdentity }
     }
@@ -5718,6 +5622,7 @@ public struct Viewport: View {
             case .active(let press): return press.input.record.identity
             case .sketchTransform(let press): return press.identity
             case .pattern(let press): return press.input.record.identity
+            case .worldPoint(let press): return press.input.identity
             case .cancelled, nil: return try pendingInteractionTarget?.spatialIdentity
             }
         }
@@ -5913,6 +5818,7 @@ public struct Viewport: View {
         switch nativeInputGesture {
         case .active(let press): press.finish?.revision
         case .sketchTransform(let press): press.finish?.revision
+        case .worldPoint(let press): press.finish?.revision
         // The pattern owner reads its retained projection, so its release
         // never waits on a later frame.
         case .pattern, .cancelled, nil: nil
@@ -5937,6 +5843,10 @@ public struct Viewport: View {
             press.finish = (point, activeControlSession.revision)
             nativeInputGesture = .sketchTransform(press)
             resumeSketchTransformFinish()
+        case .worldPoint(var press):
+            press.finish = (point, activeControlSession.revision)
+            nativeInputGesture = .worldPoint(press)
+            resumeNativeWorldPointFinish()
         case .pattern:
             // The release point is the last sample of the gesture. The input
             // surface reports no drag preview at it, so a release that left the
@@ -6127,6 +6037,199 @@ public struct Viewport: View {
         onSketchTransformCommit?(target)
     }
 
+    /// Opens a world-point gesture from the prepared record the mounted frame
+    /// answered this press with.
+    ///
+    /// The record is validated once here, so a degenerate handle is refused at
+    /// the press instead of producing a preview that no later update can
+    /// resolve.
+    private func beginNativeWorldPointPress(
+        record: ViewportSpatialInteractionRecord, at point: CGPoint
+    ) {
+        do {
+            guard let input = try ViewportNativeWorldPointInput(record: record) else {
+                nativeInputGesture = .cancelled
+                return
+            }
+            nativeInputGesture = .worldPoint(.init(
+                input: input,
+                source: sourceIdentity,
+                snapshotID: presentationScene?.snapshotID,
+                selectedTargets: selection.selectedTargets,
+                selectedReferences: selection.selectedReferences,
+                start: point
+            ))
+            activeCanvasDrag = nil
+        } catch {
+            reportNativeGestureFailure(error)
+            nativeInputGesture = .cancelled
+        }
+    }
+
+    /// Reads the mounted frame once for the single plane this role names.
+    ///
+    /// The plane is named per update from the projection mode in force now,
+    /// and both ends of the sample resolve against one revision, so a camera
+    /// move during the drag cannot mix two projections into one delta.
+    private func nativeWorldPointSample(
+        for input: ViewportNativeWorldPointInput,
+        from start: CGPoint,
+        to current: CGPoint
+    ) throws -> ViewportNativeWorldPointInput.Sample {
+        let identity = try presentationQueryIdentity()
+        let revision = activeControlSession.revision
+        switch try input.query(
+            displayedCanvas: ViewportCanvasPlane.displayed(for: currentProjectionBasis)
+        ) {
+        case .worldPlane(let origin, let normal):
+            let from = try presentationPlanCache.worldPlaneIntersection(
+                at: start,
+                planeOrigin: origin,
+                planeNormal: normal,
+                for: identity,
+                revision: revision
+            )
+            let to = try presentationPlanCache.worldPlaneIntersection(
+                at: current,
+                planeOrigin: origin,
+                planeNormal: normal,
+                for: identity,
+                revision: revision
+            )
+            return .init(start: from, current: to)
+        case .viewPlane(let anchor):
+            // Only the mounted frame knows the direction it is looking along,
+            // so the view plane is resolved there rather than reconstructed
+            // from a projection basis this view happens to hold.
+            let from = try presentationPlanCache.viewPlaneIntersection(
+                at: start, through: anchor, for: identity, revision: revision
+            )
+            let to = try presentationPlanCache.viewPlaneIntersection(
+                at: current, through: anchor, for: identity, revision: revision
+            )
+            return .init(start: from, current: to)
+        }
+    }
+
+    private func nativeWorldPointValue(
+        for input: ViewportNativeWorldPointInput,
+        from start: CGPoint,
+        to current: CGPoint
+    ) throws -> ViewportNativeWorldPointInput.Value {
+        try input.value(
+            for: try nativeWorldPointSample(for: input, from: start, to: current),
+            document: document,
+            ruler: workspaceRuler,
+            snapOptions: snapResolutionOptions
+        )
+    }
+
+    @discardableResult
+    private func updateNativeWorldPointGesture(current: CGPoint) -> Bool {
+        guard case .worldPoint(var press) = nativeInputGesture else { return false }
+        guard press.source == sourceIdentity,
+              press.snapshotID == presentationScene?.snapshotID,
+              press.selectedTargets == selection.selectedTargets,
+              press.selectedReferences == selection.selectedReferences,
+              press.finish == nil || press.finish?.revision == activeControlSession.revision,
+              nativeWorldPointRouteEnabled(press.input.record.target) else {
+            cancelNativeInputGesture()
+            return false
+        }
+        do {
+            press.value = try nativeWorldPointValue(
+                for: press.input, from: press.start, to: current
+            )
+            nativeInputGesture = .worldPoint(press)
+            return true
+        } catch {
+            // A frame that is not yet mounted for this revision and a role's own
+            // refusal raise the same error type, so an open drag cannot tell
+            // them apart. It keeps the last preview and authorizes nothing; the
+            // release point resolves the gesture and reports its refusal there.
+            return false
+        }
+    }
+
+    /// The open world-point gesture's prepared route and resolved preview.
+    ///
+    /// The record and the value are read as one pair, so a preview can never be
+    /// attributed to a handle other than the pressed one.
+    private var nativeWorldPointPreview: (
+        identity: ViewportSpatialHandleIdentity,
+        target: ViewportSpatialPreparedInteractionTarget,
+        value: ViewportNativeWorldPointInput.Value
+    )? {
+        guard case .worldPoint(let press) = nativeInputGesture,
+              let value = press.value else { return nil }
+        return (press.input.identity, press.input.record.target, value)
+    }
+
+    private var nativeConstructionPlanePreview: (
+        identity: ViewportSpatialHandleIdentity, origin: Point3D, normal: Vector3D
+    )? {
+        guard let preview = nativeWorldPointPreview,
+              case .constructionPlane(let origin, let normal) = preview.value else { return nil }
+        return (preview.identity, origin, normal)
+    }
+
+    private var nativeCurvePathPointPreview: ViewportPatternArrayCurvePathPointDragTarget? {
+        guard let preview = nativeWorldPointPreview,
+              case .patternArrayCurvePathPoint(let source) = preview.target,
+              case .patternArrayCurvePathPoint(let point) = preview.value else { return nil }
+        return .init(sourceID: source.sourceID, pointIndex: source.pointIndex, point: point)
+    }
+
+    private var nativeBridgeCurveEndpointPreview: (
+        identity: ViewportSpatialHandleIdentity,
+        endpoint: BridgeCurveEndpoint,
+        parameter: Double
+    )? {
+        guard let preview = nativeWorldPointPreview,
+              case .bridgeCurveEndpoint(let endpoint, let parameter) = preview.value else {
+            return nil
+        }
+        return (preview.identity, endpoint, parameter)
+    }
+
+    private func resumeNativeWorldPointFinish() {
+        guard case .worldPoint(let press) = nativeInputGesture,
+              let finish = press.finish else { return }
+        guard finish.revision == activeControlSession.revision,
+              press.source == sourceIdentity,
+              press.snapshotID == presentationScene?.snapshotID,
+              press.selectedTargets == selection.selectedTargets,
+              press.selectedReferences == selection.selectedReferences,
+              nativeWorldPointRouteEnabled(press.input.record.target) else {
+            cancelNativeInputGesture()
+            return
+        }
+        let commit: ViewportNativeWorldPointInput.Commit?
+        do {
+            let identity = try presentationPreparation.get()
+            if let failure = presentationPlanCache.failure(for: identity) { throw failure }
+            guard presentationPlanCache.hasReadyCamera(for: identity, revision: finish.revision) else { return }
+            let value = try nativeWorldPointValue(
+                for: press.input, from: press.start, to: finish.point
+            )
+            commit = try press.input.commit(value: value, document: document)
+        } catch {
+            // The frame answered for this revision, so the refusal belongs to
+            // the gesture and never reaches the document mutation callbacks.
+            reportNativeGestureFailure(error)
+            commit = nil
+        }
+        // Release input ownership before calling external mutation callbacks.
+        clearPendingCanvasInteractionTargets()
+        activeCanvasDrag = nil
+        switch commit {
+        case .constructionPlane(let target): onConstructionPlaneHandleDrag?(target)
+        case .patternArrayCurvePathPoint(let target): onPatternArrayCurvePathPointDrag?(target)
+        case .bridgeCurveEndpoint(let target): onBridgeCurveEndpointDrag?(target)
+        case nil: break
+        }
+    }
+
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
         if measurementToolActive {
             clearPendingCanvasInteractionTargets()
@@ -6174,6 +6277,14 @@ public struct Viewport: View {
                     beginNativePatternPress(record: record, at: point)
                     return
                 }
+                if ViewportNativeWorldPointInput.claims(record.target) {
+                    guard nativeWorldPointRouteEnabled(record.target) else {
+                        nativeInputGesture = .cancelled
+                        return
+                    }
+                    beginNativeWorldPointPress(record: record, at: point)
+                    return
+                }
                 if case .affordance(let target, let members, let groupEdit) = record.target,
                    nativeAffordanceRouteEnabled(target.action) {
                     setPendingInteractionTarget(.affordance(target))
@@ -6197,13 +6308,13 @@ public struct Viewport: View {
         activeCanvasDrag = nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch, curve, surface, pattern,
-    // construction-plane and profile affordance routes still resolve from this
-    // legacy CPU projection when press/hover find no native record. Production
-    // reaches it from `beginViewportPress` and `hover` after the native frame
-    // declines the point. Completing RK-4 requires prepared records for those
-    // routes, after which this selector and its CPU gizmo geometry are removed;
-    // the migrated native axis and body transform routes are never resolved
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The sketch, curve, surface, pattern
+    // and profile affordance routes still resolve from this legacy CPU
+    // projection when press/hover find no native record. Production reaches it
+    // from `beginViewportPress` and `hover` after the native frame declines the
+    // point. Completing RK-4 requires prepared records for those routes, after
+    // which this selector and its CPU gizmo geometry are removed; the migrated
+    // native axis, body transform and world-point routes are never resolved
     // here.
     private func resolvedInteractionTarget(
         at point: CGPoint,
@@ -6224,10 +6335,6 @@ public struct Viewport: View {
         if let target = selectedSketchDimensionTarget(at: point, sceneContext: sceneContext) {
             return .sketchDimension(target)
         }
-        if onBridgeCurveEndpointDrag != nil,
-           let target = selectedBridgeCurveEndpointTarget(at: point, sceneContext: sceneContext) {
-            return .bridgeCurveEndpoint(target)
-        }
         if let target = selectedSplineControlPointTarget(at: point, sceneContext: sceneContext) {
             return .splineControlPoint(target)
         }
@@ -6242,12 +6349,6 @@ public struct Viewport: View {
         }
         if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimControlPoint(target)
-        }
-        if let target = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, sceneContext: sceneContext) {
-            return .patternArrayCurvePathPoint(target)
-        }
-        if let target = selectedConstructionPlaneHandleTarget(at: point, sceneContext: sceneContext) {
-            return .constructionPlane(target)
         }
         if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
@@ -6293,8 +6394,6 @@ public struct Viewport: View {
             updateSketchDimensionDrag(target: target, start: start, current: current, size: size)
         case .sketchPointHandle(let target):
             updateSketchPointHandleDrag(target: target, start: start, current: current, size: size)
-        case .bridgeCurveEndpoint(let target):
-            updateBridgeCurveEndpointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPoint(let target):
             updateSplineControlPointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPointSlide(let target):
@@ -6327,10 +6426,6 @@ public struct Viewport: View {
             updateIndependentCopyExtrudeDistanceDrag(target: target, start: start, current: current)
         case .independentCopyBodyDimension(let target):
             updateIndependentCopyBodyDimensionDrag(target: target, start: start, current: current)
-        case .patternArrayCurvePathPoint(let target):
-            updatePatternArrayCurvePathPointDrag(target: target, start: start, current: current, size: size)
-        case .constructionPlane(let target):
-            updateConstructionPlaneHandleDrag(target: target, start: start, current: current, size: size)
         case .affordance(let target):
             updateAffordanceDrag(target: target, start: start, current: current, size: size)
         }
@@ -6876,20 +6971,6 @@ public struct Viewport: View {
             }
         }
         return nearest?.target
-    }
-
-    private func selectedBridgeCurveEndpointTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportBridgeCurveEndpointHandleTarget? {
-        let service = ViewportBridgeCurveEndpointAffordanceService()
-        let candidates = service.candidatesOrEmpty(
-            document: document,
-            scene: sceneContext.scene,
-            selection: selection,
-            layout: sceneContext.layout
-        )
-        return service.target(at: point, candidates: candidates)
     }
 
     private func selectedSurfaceTrimControlPointTarget(
@@ -7547,42 +7628,6 @@ public struct Viewport: View {
         return nil
     }
 
-
-    private func selectedPatternArrayCurvePathPointAffordanceTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportPatternArrayCurvePathPointHandleTarget? {
-        guard onPatternArrayCurvePathPointDrag != nil else {
-            return nil
-        }
-        let candidates = patternArrayCurvePathPointAffordanceCandidates(
-            scene: sceneContext.scene,
-            layout: sceneContext.layout
-        )
-        for candidate in candidates.reversed() {
-            if point.distance(to: candidate.projectedPoint) <= 13.0 {
-                return candidate.target
-            }
-        }
-        return nil
-    }
-
-    private func selectedConstructionPlaneHandleTarget(
-        at point: CGPoint,
-        sceneContext: ViewportSceneContext
-    ) -> ViewportConstructionPlaneHandleTarget? {
-        guard onConstructionPlaneHandleDrag != nil else {
-            return nil
-        }
-        return ViewportConstructionPlaneHandleGeometry().target(
-            at: point,
-            document: document,
-            ruler: workspaceRuler,
-            selection: selection,
-            layout: sceneContext.layout
-        )
-    }
-
     private func selectedSketchVertexOffsetAffordanceTarget(
         at point: CGPoint,
         sceneContext: ViewportSceneContext
@@ -7851,77 +7896,6 @@ public struct Viewport: View {
         )
     }
 
-    private func updateBridgeCurveEndpointDrag(
-        target: ViewportBridgeCurveEndpointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let delta = target.geometry.localPlanarDelta(
-            start: start,
-            current: current,
-            layout: layout
-        ) else {
-            return
-        }
-        let nearPoint = Point2D(
-            x: target.point.x + delta.x,
-            y: target.point.y + delta.z
-        )
-        let projection: BridgeCurveEndpointParameterProjection
-        do {
-            projection = try BridgeCurveEndpointParameterProjectionService().projection(
-                for: target.endpoint,
-                featureID: target.featureID,
-                near: nearPoint,
-                in: document
-            )
-        } catch {
-            activeBridgeCurveEndpointDrag = nil
-            return
-        }
-        guard let projectedPoint = projectedBridgeCurveEndpointPoint(
-            projection.point,
-            modelTransform: target.modelTransform,
-            layout: layout
-        ) else {
-            return
-        }
-        guard let projectedTangentTip = ViewportBridgeCurveEndpointAffordanceService.projectedTangentTip(
-            point: projection.point,
-            outgoingTangent: projection.outgoingTangent,
-            modelTransform: target.modelTransform,
-            layout: layout
-        ) else {
-            return
-        }
-        activeBridgeCurveEndpointDrag = ViewportBridgeCurveEndpointDragState(
-            target: target,
-            startPoint: start,
-            endpoint: projection.endpoint,
-            parameter: projection.parameter,
-            projectedPoint: projectedPoint,
-            projectedTangentTip: projectedTangentTip
-        )
-    }
-
-    private func projectedBridgeCurveEndpointPoint(
-        _ point: Point2D,
-        modelTransform: Transform3D,
-        layout: ViewportLayout
-    ) -> CGPoint? {
-        layout.projectedPoint(modelTransform.viewportTransformedPoint(Point3D(
-            x: point.x,
-            y: 0.0,
-            z: point.y
-        )))?.point
-    }
-
     private func updateSplineControlPointSlideDrag(
         target: ViewportSplineControlPointSlideHandleTarget,
         start: CGPoint,
@@ -8019,43 +7993,6 @@ public struct Viewport: View {
             target: target,
             startPoint: start,
             distanceMeters: distanceMeters
-        )
-    }
-
-    private func updateConstructionPlaneHandleDrag(
-        target: ViewportConstructionPlaneHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let dragTarget = ViewportConstructionPlaneHandleGeometry().draggedTarget(
-            target: target,
-            start: start,
-            current: current,
-            layout: layout
-        ) else {
-            activeConstructionPlaneHandleDrag = nil
-            return
-        }
-        let snappedTarget = ViewportConstructionPlaneDragSnapResolver().snappedTarget(
-            dragTarget,
-            sourceTarget: target,
-            screenPoint: current,
-            document: document,
-            ruler: workspaceRuler,
-            options: snapResolutionOptions,
-            layout: layout
-        )
-        activeConstructionPlaneHandleDrag = ViewportConstructionPlaneHandleDragState(
-            target: target,
-            startPoint: start,
-            origin: snappedTarget.origin,
-            normal: snappedTarget.normal
         )
     }
 
@@ -8356,30 +8293,6 @@ public struct Viewport: View {
             valueMeters: target.geometry.axisDistance(
                 start: start,
                 current: current
-            )
-        )
-    }
-
-    private func updatePatternArrayCurvePathPointDrag(
-        target: ViewportPatternArrayCurvePathPointHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        size: CGSize
-    ) {
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let startPoint = layout.canvasCoordinates(for: start),
-              let currentPoint = layout.canvasCoordinates(for: current) else { return }
-        activePatternArrayCurvePathPointDrag = ViewportPatternArrayCurvePathPointDragState(
-            target: target,
-            startPoint: start,
-            point: Point3D(
-                x: target.basePoint.x + Double(currentPoint.x - startPoint.x),
-                y: target.basePoint.y,
-                z: target.basePoint.z + Double(currentPoint.y - startPoint.y)
             )
         )
     }
@@ -8750,9 +8663,6 @@ public struct Viewport: View {
             activeSketchDimensionDrag = nil
         case .sketchPointHandle:
             activeSketchPointHandleDrag = nil
-        case .bridgeCurveEndpoint:
-            activeBridgeCurveEndpointDrag = nil
-            activeCanvasDrag = nil
         case .splineControlPoint:
             activeSplineControlPointDrag = nil
         case .splineControlPointSlide:
@@ -8785,11 +8695,6 @@ public struct Viewport: View {
             activeIndependentCopyExtrudeDistanceDrag = nil
         case .independentCopyBodyDimension:
             activeIndependentCopyBodyDimensionDrag = nil
-        case .patternArrayCurvePathPoint:
-            activePatternArrayCurvePathPointDrag = nil
-        case .constructionPlane:
-            activeConstructionPlaneHandleDrag = nil
-            activeCanvasDrag = nil
         case .affordance:
             clearAffordanceGhostEdits()
             activeAffordanceDrag = nil
@@ -8899,8 +8804,6 @@ public struct Viewport: View {
             finishSketchDimensionDrag()
         case .sketchPointHandle:
             finishSketchPointHandleDrag()
-        case .bridgeCurveEndpoint:
-            finishBridgeCurveEndpointDrag()
         case .splineControlPointSlide:
             finishSplineControlPointSlideDrag()
         case .polySplineSurfaceVertexSlide:
@@ -8929,10 +8832,6 @@ public struct Viewport: View {
             finishIndependentCopyBodyDimensionDrag()
         case .patternArrayLinearAxis:
             finishPatternArrayLinearAxisDrag()
-        case .patternArrayCurvePathPoint:
-            finishPatternArrayCurvePathPointDrag()
-        case .constructionPlane:
-            finishConstructionPlaneHandleDrag()
         case .sketchVertexOffset:
             finishSketchVertexOffsetDrag()
         case .regionOffset:
@@ -8966,16 +8865,6 @@ public struct Viewport: View {
         activeCanvasDrag = nil
         if let target {
             onSketchPointHandleDrag?(target)
-        }
-    }
-
-    private func finishBridgeCurveEndpointDrag() {
-        let target = committedBridgeCurveEndpointDragTarget()
-        activeBridgeCurveEndpointDrag = nil
-        activeCanvasDrag = nil
-        publishSelectionDragPreview(hits: [])
-        if let target {
-            onBridgeCurveEndpointDrag?(target)
         }
     }
 
@@ -9123,24 +9012,6 @@ public struct Viewport: View {
         }
     }
 
-    private func finishPatternArrayCurvePathPointDrag() {
-        let target = committedPatternArrayCurvePathPointDragTarget()
-        activePatternArrayCurvePathPointDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onPatternArrayCurvePathPointDrag?(target)
-        }
-    }
-
-    private func finishConstructionPlaneHandleDrag() {
-        let target = committedConstructionPlaneHandleDragTarget()
-        activeConstructionPlaneHandleDrag = nil
-        activeCanvasDrag = nil
-        if let target {
-            onConstructionPlaneHandleDrag?(target)
-        }
-    }
-
     private func finishAffordanceInteractionDrag(end: CGPoint, size: CGSize) {
         let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
         let bodyMoveDragTarget = committedBodyMoveDragTarget()
@@ -9274,40 +9145,6 @@ public struct Viewport: View {
             deltaX: Double(localDelta.x),
             deltaY: Double(localDelta.y)
         )
-    }
-
-    private func committedBridgeCurveEndpointDragTarget() -> ViewportBridgeCurveEndpointDragTarget? {
-        guard let activeBridgeCurveEndpointDrag else {
-            return nil
-        }
-        let currentParameter = resolvedBridgeCurveEndpointParameter(
-            activeBridgeCurveEndpointDrag.target.endpoint,
-            featureID: activeBridgeCurveEndpointDrag.target.featureID
-        )
-        if let currentParameter,
-           abs(currentParameter - activeBridgeCurveEndpointDrag.parameter) <= 1.0e-8 {
-            return nil
-        }
-        return ViewportBridgeCurveEndpointDragTarget(
-            sourceID: activeBridgeCurveEndpointDrag.target.sourceID,
-            role: activeBridgeCurveEndpointDrag.target.role,
-            endpoint: activeBridgeCurveEndpointDrag.endpoint
-        )
-    }
-
-    private func resolvedBridgeCurveEndpointParameter(
-        _ endpoint: BridgeCurveEndpoint,
-        featureID: FeatureID
-    ) -> Double? {
-        do {
-            return try BridgeCurveEndpointParameterProjectionService().parameter(
-                for: endpoint,
-                featureID: featureID,
-                in: document
-            )
-        } catch {
-            return nil
-        }
     }
 
     private func committedSplineControlPointSlideDragTarget() -> ViewportSplineControlPointSlideDragTarget? {
@@ -9603,101 +9440,6 @@ public struct Viewport: View {
             sourceID: activePatternArrayLinearAxisDrag.target.sourceID,
             axisSlot: activePatternArrayLinearAxisDrag.target.axisSlot,
             distance: distance
-        )
-    }
-
-    private func committedPatternArrayCurvePathPointDragTarget() -> ViewportPatternArrayCurvePathPointDragTarget? {
-        guard let activePatternArrayCurvePathPointDrag else {
-            return nil
-        }
-        let point = activePatternArrayCurvePathPointDrag.point
-        guard point.x.isFinite,
-              point.y.isFinite,
-              point.z.isFinite,
-              patternArrayCurvePathPointDistance(
-                point,
-                activePatternArrayCurvePathPointDrag.target.basePoint
-              ) > 1.0e-12 else {
-            return nil
-        }
-        return ViewportPatternArrayCurvePathPointDragTarget(
-            sourceID: activePatternArrayCurvePathPointDrag.target.sourceID,
-            pointIndex: activePatternArrayCurvePathPointDrag.target.pointIndex,
-            point: point
-        )
-    }
-
-    private func patternArrayCurvePathPointDistance(
-        _ lhs: Point3D,
-        _ rhs: Point3D
-    ) -> Double {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        let dz = lhs.z - rhs.z
-        return (dx * dx + dy * dy + dz * dz).squareRoot()
-    }
-
-    private func committedConstructionPlaneHandleDragTarget() -> ViewportConstructionPlaneDragTarget? {
-        guard let activeConstructionPlaneHandleDrag else {
-            return nil
-        }
-        switch activeConstructionPlaneHandleDrag.target.handle {
-        case .origin:
-            guard pointDistance(
-                activeConstructionPlaneHandleDrag.origin,
-                activeConstructionPlaneHandleDrag.target.origin
-            ) > 1.0e-12 else {
-                return nil
-            }
-        case .normal:
-            guard vectorDistance(
-                activeConstructionPlaneHandleDrag.normal,
-                activeConstructionPlaneHandleDrag.target.normal
-            ) > 1.0e-12 else {
-                return nil
-            }
-        }
-        return ViewportConstructionPlaneDragTarget(
-            constructionPlaneID: activeConstructionPlaneHandleDrag.target.constructionPlaneID,
-            sceneNodeID: activeConstructionPlaneHandleDrag.target.sceneNodeID,
-            handle: activeConstructionPlaneHandleDrag.target.handle,
-            origin: activeConstructionPlaneHandleDrag.origin,
-            normal: activeConstructionPlaneHandleDrag.normal
-        )
-    }
-
-    private func pointDistance(_ lhs: Point3D, _ rhs: Point3D) -> Double {
-        vectorDistance(vector(from: rhs, to: lhs), Vector3D(x: 0.0, y: 0.0, z: 0.0))
-    }
-
-    private func vectorDistance(_ lhs: Vector3D, _ rhs: Vector3D) -> Double {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        let dz = lhs.z - rhs.z
-        return (dx * dx + dy * dy + dz * dz).squareRoot()
-    }
-
-    private func vector(from start: Point3D, to end: Point3D) -> Vector3D {
-        Vector3D(
-            x: end.x - start.x,
-            y: end.y - start.y,
-            z: end.z - start.z
-        )
-    }
-
-    private func pointOffsetBy(_ point: Point3D, _ vector: Vector3D) -> Point3D {
-        Point3D(
-            x: point.x + vector.x,
-            y: point.y + vector.y,
-            z: point.z + vector.z
-        )
-    }
-
-    private func scale(_ vector: Vector3D, by scalar: Double) -> Vector3D {
-        Vector3D(
-            x: vector.x * scalar,
-            y: vector.y * scalar,
-            z: vector.z * scalar
         )
     }
 
@@ -10124,6 +9866,13 @@ public struct Viewport: View {
                     }
                     return
                 }
+                if ViewportNativeWorldPointInput.claims(record.target) {
+                    clearCanvasHover()
+                    if nativeWorldPointRouteEnabled(record.target) {
+                        hoveredNativeHandleIdentity = record.identity
+                    }
+                    return
+                }
                 if case .affordance(let target, _, _) = record.target,
                    nativeAffordanceRouteEnabled(target.action) {
                     hoveredNativeHandleIdentity = nil
@@ -10411,13 +10160,6 @@ private extension Viewport {
         return target
     }
 
-    var hoveredBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget? {
-        guard case .bridgeCurveEndpoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
     var hoveredSplineControlPoint: ViewportSplineControlPointHandleTarget? {
         guard case .splineControlPoint(let target) = hoveredInteractionTarget else {
             return nil
@@ -10529,20 +10271,6 @@ private extension Viewport {
         }
         return target
     }
-
-    var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
-        guard case .patternArrayCurvePathPoint(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
-
-    var hoveredConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget? {
-        guard case .constructionPlane(let target) = hoveredInteractionTarget else {
-            return nil
-        }
-        return target
-    }
 }
 
 private extension Viewport {
@@ -10576,15 +10304,6 @@ private extension Viewport {
     var pendingSketchPointHandle: ViewportSketchPointHandleTarget? {
         get {
             guard case .sketchPointHandle(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget? {
-        get {
-            guard case .bridgeCurveEndpoint(let target) = pendingInteractionTarget else {
                 return nil
             }
             return target
@@ -10729,24 +10448,6 @@ private extension Viewport {
     var pendingIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget? {
         get {
             guard case .independentCopyBodyDimension(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
-        get {
-            guard case .patternArrayCurvePathPoint(let target) = pendingInteractionTarget else {
-                return nil
-            }
-            return target
-        }
-    }
-
-    var pendingConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget? {
-        get {
-            guard case .constructionPlane(let target) = pendingInteractionTarget else {
                 return nil
             }
             return target
@@ -10932,7 +10633,6 @@ extension Viewport {
         // joined the remaining legacy drag states.
         let legacyPatternIdentities: [ViewportSpatialHandleIdentity?] = [
             activePatternArrayLinearAxisDrag.map { .patternArrayLinearAxis($0.target.identity) },
-            activePatternArrayCurvePathPointDrag.map { .patternArrayCurvePathPoint($0.target.identity) },
             activeIndependentCopyExtrudeDistanceDrag.map { .independentCopyExtrudeDistance($0.target.identity) },
             activeIndependentCopyBodyDimensionDrag.map { .independentCopyBodyDimension($0.target.identity) },
         ]
@@ -10949,9 +10649,7 @@ extension Viewport {
         let activeCopyCount: ViewportPatternArrayCopyCountDragTarget? = nativeCopyCount
         let activeCurveExtent: ViewportPatternArrayCurveExtentDragTarget? = nativeCurveExtent
         let activeCurvePathPoint: ViewportPatternArrayCurvePathPointDragTarget? =
-            activePatternArrayCurvePathPointDrag.map {
-                .init(sourceID: $0.target.sourceID, pointIndex: $0.target.pointIndex, point: $0.point)
-            }
+            nativeCurvePathPointPreview
         let activeIndependentCopyExtrude: ViewportIndependentCopyExtrudeDistanceDragTarget? =
             nativeIndependentExtrude ?? activeIndependentCopyExtrudeDistanceDrag.map {
                 .init(sourceID: $0.target.sourceID, outputIndex: $0.target.outputIndex,
@@ -11109,9 +10807,10 @@ extension Viewport {
             overrides.append(.init(identity: .splineControlPointSlide(drag.target.identity),
                                    distanceMeters: drag.distanceMeters))
         }
-        if let drag = activeBridgeCurveEndpointDrag {
-            overrides.append(.init(identity: .bridgeCurveEndpoint(drag.target.identity),
-                                   bridgeEndpoint: drag.endpoint, bridgeParameter: drag.parameter))
+        if let preview = nativeBridgeCurveEndpointPreview {
+            overrides.append(.init(identity: preview.identity,
+                                   bridgeEndpoint: preview.endpoint,
+                                   bridgeParameter: preview.parameter))
         }
         return .init(
             document: document, scene: scene, selection: selection,
@@ -11214,9 +10913,9 @@ extension Viewport {
             active.append(.init(identity: try ViewportInteractionTarget.surfaceFrame(drag.target).spatialIdentity,
                                 distance: drag.distanceMeters))
         }
-        if let drag = activeConstructionPlaneHandleDrag {
-            active.append(.init(identity: .constructionPlane(drag.target.identity),
-                                origin: drag.origin, normal: drag.normal))
+        if let preview = nativeConstructionPlanePreview {
+            active.append(.init(identity: preview.identity,
+                                origin: preview.origin, normal: preview.normal))
         }
         let constructionFace: SelectionTarget?
         if showsConstructionHighlight, let hit = hoveredCanvasHit,

@@ -792,6 +792,21 @@ of screen-baked dashes.
    the mounted calibration under the same readiness and revision validation as
    the projection queries and reconstructs no projection of its own.
 
+   `worldPlaneIntersection(at:planeOrigin:planeNormal:revision:)` answers
+   where a screen point meets a plane the caller names, which is correct
+   exactly when that plane is camera-independent.
+   `viewPlaneIntersection(at:through:revision:)` answers the same question for
+   the plane through a world anchor perpendicular to the direction this frame
+   is looking along, and it states that direction from the camera entity it
+   installed rather than accepting one. A caller cannot supply it: the applied
+   basis animates through a projection transition while the session revision
+   stays put, so a normal sampled outside this frame can name a plane the
+   frame never drew, and `matchesAppliedFrame` compares the applied layout for
+   that same reason. Both queries share the readiness, revision and
+   finiteness validation of the projection queries, and both refuse a ray
+   parallel to the plane and a plane behind the ray rather than substituting
+   a nearest point.
+
    `retainsSectionedPoint(_:revision:)` reports whether the mounted frame keeps
    a world point on the kept side of the active section, applying the same
    native-scene-space predicate that admits native surface hits.

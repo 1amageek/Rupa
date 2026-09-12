@@ -3,12 +3,6 @@ import RupaCore
 import RupaViewportScene
 
 struct ViewportConstructionPlaneHandleGeometry: Sendable {
-    var tolerance: Double
-
-    init(tolerance: Double = 1.0e-10) {
-        self.tolerance = tolerance
-    }
-
     func targets(
         document: DesignDocument,
         ruler: RulerConfiguration,
@@ -38,81 +32,6 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
         }
 
         return targets
-    }
-
-    func target(
-        at point: CGPoint,
-        document: DesignDocument,
-        ruler: RulerConfiguration,
-        selection: SelectionModel,
-        layout: ViewportLayout
-    ) -> ViewportConstructionPlaneHandleTarget? {
-        var nearest: (target: ViewportConstructionPlaneHandleTarget, distance: CGFloat)?
-        for target in targets(
-            document: document,
-            ruler: ruler,
-            selection: selection,
-            layout: layout
-        ) {
-            guard let distance = hitDistance(point: point, target: target),
-                  distance <= hitTolerance(for: target.handle) else {
-                continue
-            }
-            if nearest.map({ distance < $0.distance }) ?? true {
-                nearest = (target, distance)
-            }
-        }
-        return nearest?.target
-    }
-
-    func draggedTarget(
-        target: ViewportConstructionPlaneHandleTarget,
-        start: CGPoint,
-        current: CGPoint,
-        layout: ViewportLayout
-    ) -> ViewportConstructionPlaneDragTarget? {
-        switch target.handle {
-        case .origin:
-            guard let delta = screenPlaneDelta(
-                start: start,
-                current: current,
-                referencePoint: target.origin,
-                layout: layout
-            ) else {
-                return nil
-            }
-            return ViewportConstructionPlaneDragTarget(
-                constructionPlaneID: target.constructionPlaneID,
-                sceneNodeID: target.sceneNodeID,
-                handle: target.handle,
-                origin: pointOffsetBy(target.origin, delta),
-                normal: target.normal
-            )
-        case .normal:
-            guard let delta = screenPlaneDelta(
-                start: start,
-                current: current,
-                referencePoint: target.normalEnd,
-                layout: layout
-            ) else {
-                return nil
-            }
-            let movedEnd = pointOffsetBy(target.normalEnd, delta)
-            let normal = vector(from: target.origin, to: movedEnd)
-            guard normal.length > tolerance,
-                  normal.x.isFinite,
-                  normal.y.isFinite,
-                  normal.z.isFinite else {
-                return nil
-            }
-            return ViewportConstructionPlaneDragTarget(
-                constructionPlaneID: target.constructionPlaneID,
-                sceneNodeID: target.sceneNodeID,
-                handle: target.handle,
-                origin: target.origin,
-                normal: normal
-            )
-        }
     }
 
     private func planeModel(
@@ -181,85 +100,6 @@ struct ViewportConstructionPlaneHandleGeometry: Sendable {
     ) -> Double {
         let modelSpan = max(Double(max(layout.modelBounds.width, layout.modelBounds.height)), guideLength)
         return max(guideLength * 1.7, modelSpan * 0.14)
-    }
-
-    private func hitDistance(
-        point: CGPoint,
-        target: ViewportConstructionPlaneHandleTarget
-    ) -> CGFloat? {
-        switch target.handle {
-        case .origin:
-            return point.distance(to: target.projectedOrigin)
-        case .normal:
-            return min(
-                point.distance(to: target.projectedNormalEnd),
-                point.distanceToSegment(start: target.projectedOrigin, end: target.projectedNormalEnd)
-            )
-        }
-    }
-
-    private func hitTolerance(
-        for handle: ViewportConstructionPlaneHandleKind
-    ) -> CGFloat {
-        switch handle {
-        case .origin:
-            return 12.0
-        case .normal:
-            return 14.0
-        }
-    }
-
-    private func screenPlaneDelta(
-        start: CGPoint,
-        current: CGPoint,
-        referencePoint: Point3D,
-        layout: ViewportLayout
-    ) -> Vector3D? {
-        guard let startPoint = screenPlanePoint(
-            at: start,
-            referencePoint: referencePoint,
-            layout: layout
-        ),
-        let currentPoint = screenPlanePoint(
-            at: current,
-            referencePoint: referencePoint,
-            layout: layout
-        ) else {
-            return nil
-        }
-        return vector(from: startPoint, to: currentPoint)
-    }
-
-    private func screenPlanePoint(
-        at point: CGPoint,
-        referencePoint: Point3D,
-        layout: ViewportLayout
-    ) -> Point3D? {
-        guard let viewNormal = layout.basis.viewNormal else {
-            return nil
-        }
-        guard let rayOrigin = layout.displayedCanvasWorldPoint(for: point) else {
-            return nil
-        }
-        let denominator = viewNormal.dot(viewNormal)
-        guard denominator.isFinite,
-              denominator > tolerance else {
-            return nil
-        }
-        let offset = vector(from: rayOrigin, to: referencePoint)
-        let distance = offset.dot(viewNormal) / denominator
-        guard distance.isFinite else {
-            return nil
-        }
-        return pointOffsetBy(rayOrigin, scale(viewNormal, by: distance))
-    }
-
-    private func vector(from start: Point3D, to end: Point3D) -> Vector3D {
-        Vector3D(
-            x: end.x - start.x,
-            y: end.y - start.y,
-            z: end.z - start.z
-        )
     }
 
     private func pointOffsetBy(_ point: Point3D, _ vector: Vector3D) -> Point3D {

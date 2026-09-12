@@ -141,26 +141,10 @@ struct ViewportConstructionPlaneHandleIdentity: Equatable, Sendable {
     var handle: ViewportConstructionPlaneHandleKind
 }
 
-struct ViewportConstructionPlaneHandleDragState: Equatable {
-    var target: ViewportConstructionPlaneHandleTarget
-    var startPoint: CGPoint
-    var origin: Point3D
-    var normal: Vector3D
-}
-
 struct ViewportSplineControlPointDragState: Equatable {
     var target: ViewportSplineControlPointHandleTarget
     var startPoint: CGPoint
     var viewportDelta: CGPoint
-}
-
-struct ViewportBridgeCurveEndpointDragState: Equatable {
-    var target: ViewportBridgeCurveEndpointHandleTarget
-    var startPoint: CGPoint
-    var endpoint: BridgeCurveEndpoint
-    var parameter: Double
-    var projectedPoint: CGPoint
-    var projectedTangentTip: CGPoint
 }
 
 struct ViewportSplineControlPointSlideDragState: Equatable {
@@ -245,12 +229,6 @@ struct ViewportIndependentCopyBodyDimensionDragState: Equatable {
     var target: ViewportIndependentCopyBodyDimensionHandleTarget
     var startPoint: CGPoint
     var valueMeters: Double
-}
-
-struct ViewportPatternArrayCurvePathPointDragState: Equatable {
-    var target: ViewportPatternArrayCurvePathPointHandleTarget
-    var startPoint: CGPoint
-    var point: Point3D
 }
 
 struct ViewportSketchVertexOffsetDragState: Equatable {
@@ -806,7 +784,6 @@ enum ViewportInteractionTarget: Equatable {
     case sketchCurveHandle(ViewportSketchCurveHandleTarget)
     case sketchDimension(ViewportSketchDimensionTarget)
     case sketchPointHandle(ViewportSketchPointHandleTarget)
-    case bridgeCurveEndpoint(ViewportBridgeCurveEndpointHandleTarget)
     case splineControlPoint(ViewportSplineControlPointHandleTarget)
     case splineControlPointSlide(ViewportSplineControlPointSlideHandleTarget)
     case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexHandleTarget)
@@ -823,8 +800,6 @@ enum ViewportInteractionTarget: Equatable {
     case patternArrayLinearAxis(ViewportPatternArrayLinearAxisHandleTarget)
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceHandleTarget)
     case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionHandleTarget)
-    case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleTarget)
-    case constructionPlane(ViewportConstructionPlaneHandleTarget)
     case affordance(ViewportAffordanceTarget)
 }
 

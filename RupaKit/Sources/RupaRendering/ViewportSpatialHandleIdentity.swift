@@ -133,7 +133,6 @@ extension ViewportInteractionTarget {
         case .sketchCurveHandle(let target): .sketchCurveHandle(target.identity)
         case .sketchDimension(let target): .sketchDimension(target.identity)
         case .sketchPointHandle(let target): .sketchPointHandle(target.identity)
-        case .bridgeCurveEndpoint(let target): .bridgeCurveEndpoint(target.identity)
         case .splineControlPoint(let target): .splineControlPoint(target.identity)
         case .splineControlPointSlide(let target): .splineControlPointSlide(target.identity)
         case .polySplineSurfaceVertex(let target):
@@ -154,8 +153,6 @@ extension ViewportInteractionTarget {
         case .patternArrayLinearAxis(let target): .patternArrayLinearAxis(target.identity)
         case .independentCopyExtrudeDistance(let target): .independentCopyExtrudeDistance(target.identity)
         case .independentCopyBodyDimension(let target): .independentCopyBodyDimension(target.identity)
-        case .patternArrayCurvePathPoint(let target): .patternArrayCurvePathPoint(target.identity)
-        case .constructionPlane(let target): .constructionPlane(target.identity)
         case .affordance(let target): .affordance(target)
         }
         }

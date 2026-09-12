@@ -480,20 +480,22 @@ independent tessellator is never an alternative implementation.
    miss, typed failure, or cancellation. Every other route remains explicitly
    incomplete until migrated under the same authority rather than silently
    sharing these route claims.
-   Two closed native input values exist under this authority and own
+   Three closed native input values exist under this authority and own
    disjoint prepared route sets. `ViewportNativeAxisInput` owns every route
    whose drag is a signed delta along one retained world axis; it holds no
    projected sample and re-queries the mounted camera on each update.
    `ViewportNativePatternInput` owns the routes whose existing input math
    is defined on the pressed frame's screen basis; it retains one
    `ViewportSpatialMaterializedInteractionTarget`, the finite projected
-   samples taken once against that frame. A prepared case is claimed by
-   exactly one of them, so neither boundary carries a case the other owns
-   and neither may be consulted for a route it does not claim. A prepared
-   case belongs to the axis owner when its drag reduces to one world-axis
-   delta, to the pattern owner when its drag needs that screen basis, and
-   to neither when its drag resolves a world point, which the world-point
-   contract below covers.
+   samples taken once against that frame. `ViewportNativeWorldPointInput`
+   owns the routes whose drag resolves a world point; like the axis owner
+   it retains only the prepared record and re-queries the mounted camera on
+   each update. A prepared case is claimed by exactly one of the three, so
+   no boundary carries a case another owns and none may be consulted for a
+   route it does not claim. A prepared case belongs to the axis owner when
+   its drag reduces to one world-axis delta, to the pattern owner when its
+   drag needs that screen basis, and to the world-point owner when its drag
+   resolves a world point under the contract below.
    The pattern affordance routes `patternArrayRadialAngle`,
    `patternArrayCopyCount`, `patternArrayCurveExtent`, and
    `patternArrayOutputMode` are native-enabled through the pattern
@@ -535,6 +537,29 @@ independent tessellator is never an alternative implementation.
    unprojection is prohibited here for the reason the axis routes refuse
    the two-point chord: it is a second projection owner that can disagree
    with the frame that drew the handle.
+   A record that names no plane of its own takes the plane its handle was
+   drawn against, and the owner names that plane without reading a value
+   the frame did not apply. `constructionPlane` moves on the view plane
+   through the anchor its handle moves -- the record's origin for the
+   origin handle, its normal end for the normal handle -- and the mounted
+   camera states that plane from its own installed forward, because an
+   animated projection transition changes the applied basis while leaving
+   the session revision unchanged. `patternArrayCurvePathPoint` and
+   `bridgeCurveEndpoint` move on the plane parallel to the displayed
+   canvas plane the projection mode selects, placed through the handle's
+   own world point rather than through the world origin: the canvas plane
+   as such passes through the origin, and under perspective a drag solved
+   there answers a point at the wrong depth, so the handle would not stay
+   under the pointer that grabbed it. A transition interpolates directions
+   and preserves the mode, so that selection is the one basis-derived
+   value a caller may still name outside the frame. The drag value is the
+   world displacement between the two plane points one revision answers
+   for the pressed and the current screen position, never a rebuilt pair
+   of plane axis coordinates: a route whose plane is not spanned by world
+   X and Z moves along the plane it was drawn on rather than along a fixed
+   axis pair. A query refusal ends the gesture and reports, and a frame
+   that has judged nothing yet leaves the standing drag value in place, by
+   the readiness split this document already states.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, after which the

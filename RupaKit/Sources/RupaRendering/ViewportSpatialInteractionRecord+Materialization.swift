@@ -67,41 +67,12 @@ enum ViewportSpatialMaterializedInteractionTarget: Sendable {
         let minimumDistanceMeters: Double
     }
 
-    struct CurvePathPointProjection: Sendable {
-        let projectedPathPoints: [CGPoint]
-        let projectedPoint: CGPoint
-        let projectedActivePoint: CGPoint?
-    }
-
-    struct BridgeCurveEndpointProjection: Sendable {
-        let projectedPoint: CGPoint
-        let projectedTangentDirection: CGVector
-    }
-
-    struct ConstructionPlaneProjection: Sendable {
-        let projectedOrigin: CGPoint
-        let projectedNormalEnd: CGPoint
-    }
-
     struct OutputModeProjection: Sendable {
         let center: CGPoint
         let hitRect: CGRect
     }
 
     case projectionFree(ViewportSpatialPreparedInteractionTarget)
-    case bridgeCurveEndpoint(
-        handle: BridgeCurveEndpointHandle,
-        modelTransform: Transform3D,
-        projection: BridgeCurveEndpointProjection
-    )
-    case constructionPlane(
-        identity: ViewportConstructionPlaneHandleIdentity,
-        origin: Point3D,
-        normal: Vector3D,
-        normalEnd: Point3D,
-        corners: [Point3D],
-        projection: ConstructionPlaneProjection
-    )
     case patternArrayRadialAngle(
         source: ViewportPatternAffordanceSource.RadialAngleHandle,
         projection: RadialProjection
@@ -129,10 +100,6 @@ enum ViewportSpatialMaterializedInteractionTarget: Sendable {
     case patternArrayCurveExtent(
         source: ViewportPatternAffordanceSource.CurveExtentHandle,
         projection: CurveExtentProjection
-    )
-    case patternArrayCurvePathPoint(
-        source: ViewportPatternAffordanceSource.CurvePathPointHandle,
-        projection: CurvePathPointProjection
     )
     case patternArrayOutputMode(
         source: ViewportPatternAffordanceSource.OutputModeHandle,
@@ -169,51 +136,9 @@ extension ViewportSpatialPreparedInteractionTarget {
              .surfaceTrimEndpoint, .surfaceTrimControlPoint, .surfaceFrame,
              .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
              .sketchTransform, .affordance, .patternArrayLinearAxis,
-             .independentCopyExtrudeDistance, .independentCopyBodyDimension:
+             .independentCopyExtrudeDistance, .independentCopyBodyDimension,
+             .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint:
             return .projectionFree(self)
-
-        case .bridgeCurveEndpoint(let handle, let modelTransform):
-            let localPoint = Point3D(x: handle.point.x, y: 0.0, z: handle.point.y)
-            let worldPoint = modelTransform.viewportTransformedPoint(localPoint)
-            let localTangent = Vector3D(x: handle.outgoingTangent.x, y: 0.0, z: handle.outgoingTangent.y)
-            let tangent = modelTransform.viewportTransformedVector(localTangent)
-            let tangentLength = Self.vectorLength(tangent)
-            guard tangentLength.isFinite, tangentLength > 1.0e-12 else {
-                throw RealityViewportSpatialBatch.invalid("Bridge curve endpoint tangent is degenerate.")
-            }
-            let unitTangent = Self.scale(tangent, by: 1.0 / tangentLength)
-            let projectedPoint = try Self.finiteProjection(worldPoint, project: project)
-            let projectedTangentTip = try Self.finiteProjection(
-                Self.add(worldPoint, unitTangent), project: project
-            )
-            let projectedDirection = Self.vector(from: projectedPoint, to: projectedTangentTip)
-            guard Self.vectorLength(projectedDirection) > 1.0e-9 else {
-                throw RealityViewportSpatialBatch.invalid("Bridge curve endpoint projection is degenerate.")
-            }
-            return .bridgeCurveEndpoint(
-                handle: handle,
-                modelTransform: modelTransform,
-                projection: .init(
-                    projectedPoint: projectedPoint,
-                    projectedTangentDirection: Self.normalized(projectedDirection)
-                )
-            )
-
-        case .constructionPlane(let identity, let origin, let normal, let normalEnd, let corners):
-            guard Self.finite(origin), Self.finite(normal), Self.finite(normalEnd), corners.allSatisfy({ Self.finite($0) }) else {
-                throw RealityViewportSpatialBatch.invalid("Construction-plane materialization is not finite.")
-            }
-            return .constructionPlane(
-                identity: identity,
-                origin: origin,
-                normal: normal,
-                normalEnd: normalEnd,
-                corners: corners,
-                projection: .init(
-                    projectedOrigin: try Self.finiteProjection(origin, project: project),
-                    projectedNormalEnd: try Self.finiteProjection(normalEnd, project: project)
-                )
-            )
 
         case .patternArrayRadialAngle(let source):
             return .patternArrayRadialAngle(
@@ -303,21 +228,6 @@ extension ViewportSpatialPreparedInteractionTarget {
                     baseDistanceMeters: baseDistance,
                     totalLengthMeters: path.totalLengthMeters,
                     minimumDistanceMeters: minimumDistance
-                )
-            )
-
-        case .patternArrayCurvePathPoint(let source):
-            guard source.pointIndex >= 0, source.pointIndex < source.pathPoints.count else {
-                throw RealityViewportSpatialBatch.invalid("Pattern curve point index is out of bounds.")
-            }
-            let projectedPathPoints = try Self.projectedPath(source.pathPoints, project: project)
-            let projectedActivePoint = try source.activePoint.map { try Self.finiteProjection($0, project: project) }
-            return .patternArrayCurvePathPoint(
-                source: source,
-                projection: .init(
-                    projectedPathPoints: projectedPathPoints,
-                    projectedPoint: projectedPathPoints[source.pointIndex],
-                    projectedActivePoint: projectedActivePoint
                 )
             )
 

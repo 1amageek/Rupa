@@ -2,7 +2,6 @@ enum ViewportActiveInteractionDragState: Equatable {
     case sketchCurveHandle(ViewportSketchCurveHandleDragState)
     case sketchDimension(ViewportSketchDimensionDragState)
     case sketchPointHandle(ViewportSketchPointHandleDragState)
-    case bridgeCurveEndpoint(ViewportBridgeCurveEndpointDragState)
     case splineControlPointSlide(ViewportSplineControlPointSlideDragState)
     case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideDragState)
     case surfaceControlPointSlide(ViewportSurfaceControlPointSlideDragState)
@@ -17,8 +16,6 @@ enum ViewportActiveInteractionDragState: Equatable {
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragState)
     case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragState)
     case patternArrayLinearAxis(ViewportPatternArrayLinearAxisDragState)
-    case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointDragState)
-    case constructionPlane(ViewportConstructionPlaneHandleDragState)
     case sketchVertexOffset(ViewportSketchVertexOffsetDragState)
     case regionOffset(ViewportRegionOffsetDragState)
     case affordance(ViewportAffordanceDragState)
@@ -31,8 +28,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .sketchDimension
         case .sketchPointHandle:
             .sketchPointHandle
-        case .bridgeCurveEndpoint:
-            .bridgeCurveEndpoint
         case .splineControlPointSlide:
             .splineControlPointSlide
         case .polySplineSurfaceVertexSlide:
@@ -61,10 +56,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .independentCopyBodyDimension
         case .patternArrayLinearAxis:
             .patternArrayLinearAxis
-        case .patternArrayCurvePathPoint:
-            .patternArrayCurvePathPoint
-        case .constructionPlane:
-            .constructionPlane
         case .sketchVertexOffset:
             .sketchVertexOffset
         case .regionOffset:
@@ -82,8 +73,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .sketchDimension(state.target)
         case .sketchPointHandle(let state):
             .sketchPointHandle(state.target)
-        case .bridgeCurveEndpoint(let state):
-            .bridgeCurveEndpoint(state.target)
         case .splineControlPointSlide(let state):
             .splineControlPointSlide(state.target)
         case .polySplineSurfaceVertexSlide(let state):
@@ -112,10 +101,6 @@ enum ViewportActiveInteractionDragState: Equatable {
             .independentCopyBodyDimension(state.target)
         case .patternArrayLinearAxis(let state):
             .patternArrayLinearAxis(state.target)
-        case .patternArrayCurvePathPoint(let state):
-            .patternArrayCurvePathPoint(state.target)
-        case .constructionPlane(let state):
-            .constructionPlane(state.target)
         case .sketchVertexOffset(let state):
             .sketchVertexOffset(state.target)
         case .regionOffset(let state):
@@ -135,10 +120,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var sketchPointHandle: ViewportSketchPointHandleDragState? {
         if case .sketchPointHandle(let state) = self { state } else { nil }
-    }
-
-    var bridgeCurveEndpoint: ViewportBridgeCurveEndpointDragState? {
-        if case .bridgeCurveEndpoint(let state) = self { state } else { nil }
     }
 
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? {
@@ -195,14 +176,6 @@ enum ViewportActiveInteractionDragState: Equatable {
 
     var patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? {
         if case .patternArrayLinearAxis(let state) = self { state } else { nil }
-    }
-
-    var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? {
-        if case .patternArrayCurvePathPoint(let state) = self { state } else { nil }
-    }
-
-    var constructionPlane: ViewportConstructionPlaneHandleDragState? {
-        if case .constructionPlane(let state) = self { state } else { nil }
     }
 
     var sketchVertexOffset: ViewportSketchVertexOffsetDragState? {

@@ -262,6 +262,21 @@ final class MeshSourcePresentationPlanCache {
         )
     }
 
+    /// Resolves the plane through `anchor` perpendicular to the direction the
+    /// mounted frame is looking along. The frame states that direction from
+    /// the camera entity it installed, so a caller never names a view plane
+    /// the frame did not draw.
+    func viewPlaneIntersection(
+        at point: CGPoint,
+        through anchor: Point3D,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> Point3D {
+        try querySurface(for: identity).viewPlaneIntersection(
+            at: point, through: anchor, revision: revision
+        )
+    }
+
     func worldAxisParameter(
         at point: CGPoint,
         axisOrigin: Point3D,

@@ -12,8 +12,6 @@ extension ViewportInteractionTarget {
             .sketchDimension
         case .sketchPointHandle:
             .sketchPointHandle
-        case .bridgeCurveEndpoint:
-            .bridgeCurveEndpoint
         case .splineControlPoint:
             .splineControlPoint
         case .splineControlPointSlide:
@@ -46,10 +44,6 @@ extension ViewportInteractionTarget {
             .independentCopyExtrudeDistance
         case .independentCopyBodyDimension:
             .independentCopyBodyDimension
-        case .patternArrayCurvePathPoint:
-            .patternArrayCurvePathPoint
-        case .constructionPlane:
-            .constructionPlane
         case .affordance:
             .affordance
         }

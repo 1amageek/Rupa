@@ -3,7 +3,6 @@ struct ViewportActiveInteractionDragCandidates {
     var sketchCurveHandle: ViewportSketchCurveHandleDragState? = nil
     var sketchDimension: ViewportSketchDimensionDragState? = nil
     var sketchPointHandle: ViewportSketchPointHandleDragState? = nil
-    var bridgeCurveEndpoint: ViewportBridgeCurveEndpointDragState? = nil
     var splineControlPoint: ViewportSplineControlPointDragState? = nil
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil
     var polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? = nil
@@ -20,8 +19,6 @@ struct ViewportActiveInteractionDragCandidates {
     var patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? = nil
     var independentCopyExtrudeDistance: ViewportIndependentCopyExtrudeDistanceDragState? = nil
     var independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? = nil
-    var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? = nil
-    var constructionPlane: ViewportConstructionPlaneHandleDragState? = nil
 
     var firstActiveDrag: ViewportActiveInteractionDragState? {
         ViewportActiveInteractionDragKind.finishPrecedence.compactMap(state(for:)).first
@@ -35,8 +32,6 @@ struct ViewportActiveInteractionDragCandidates {
             sketchDimension.map(ViewportActiveInteractionDragState.sketchDimension)
         case .sketchPointHandle:
             sketchPointHandle.map(ViewportActiveInteractionDragState.sketchPointHandle)
-        case .bridgeCurveEndpoint:
-            bridgeCurveEndpoint.map(ViewportActiveInteractionDragState.bridgeCurveEndpoint)
         case .splineControlPointSlide:
             splineControlPointSlide.map(ViewportActiveInteractionDragState.splineControlPointSlide)
         case .polySplineSurfaceVertexSlide:
@@ -65,10 +60,6 @@ struct ViewportActiveInteractionDragCandidates {
             independentCopyBodyDimension.map(ViewportActiveInteractionDragState.independentCopyBodyDimension)
         case .patternArrayLinearAxis:
             patternArrayLinearAxis.map(ViewportActiveInteractionDragState.patternArrayLinearAxis)
-        case .patternArrayCurvePathPoint:
-            patternArrayCurvePathPoint.map(ViewportActiveInteractionDragState.patternArrayCurvePathPoint)
-        case .constructionPlane:
-            constructionPlane.map(ViewportActiveInteractionDragState.constructionPlane)
         case .sketchVertexOffset:
             sketchVertexOffset.map(ViewportActiveInteractionDragState.sketchVertexOffset)
         case .regionOffset:

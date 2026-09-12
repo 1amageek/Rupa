@@ -1,17 +1,20 @@
-import CoreGraphics
 import RupaCore
 import RupaViewportScene
 import SwiftCAD
 
 struct ViewportConstructionPlaneDragSnapResolver: Sendable {
+    /// Snaps a dragged construction-plane handle onto the document's snap
+    /// candidates.
+    ///
+    /// The dragged target already carries the origin the gesture started from,
+    /// because a normal handle rotates about its plane's origin rather than
+    /// moving it, so no separate source target is needed. Snapping is a
+    /// document query, so it names no screen point and no viewport layout.
     func snappedTarget(
         _ target: ViewportConstructionPlaneDragTarget,
-        sourceTarget: ViewportConstructionPlaneHandleTarget,
-        screenPoint: CGPoint,
         document: DesignDocument,
         ruler: RulerConfiguration,
-        options: SnapResolutionOptions?,
-        layout: ViewportLayout
+        options: SnapResolutionOptions?
     ) -> ViewportConstructionPlaneDragTarget {
         guard let options else {
             return target
@@ -21,11 +24,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
         case .origin:
             guard let snappedOrigin = snappedWorldPoint(
                 rawWorldPoint: target.origin,
-                screenPoint: screenPoint,
                 document: document,
                 ruler: ruler,
                 options: options,
-                layout: layout,
                 allowsPlanarFallback: true
             ) else {
                 return target
@@ -38,19 +39,17 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
                 normal: target.normal
             )
         case .normal:
-            let rawNormalEnd = pointOffsetBy(sourceTarget.origin, target.normal)
+            let rawNormalEnd = pointOffsetBy(target.origin, target.normal)
             guard let snappedNormalEnd = snappedWorldPoint(
                 rawWorldPoint: rawNormalEnd,
-                screenPoint: screenPoint,
                 document: document,
                 ruler: ruler,
                 options: options,
-                layout: layout,
                 allowsPlanarFallback: false
             ) else {
                 return target
             }
-            let snappedNormal = vector(from: sourceTarget.origin, to: snappedNormalEnd)
+            let snappedNormal = vector(from: target.origin, to: snappedNormalEnd)
             guard snappedNormal.length > 1.0e-12,
                   snappedNormal.isFinite else {
                 return target
@@ -67,11 +66,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
 
     private func snappedWorldPoint(
         rawWorldPoint: Point3D,
-        screenPoint: CGPoint,
         document: DesignDocument,
         ruler: RulerConfiguration,
         options: SnapResolutionOptions,
-        layout: ViewportLayout,
         allowsPlanarFallback: Bool
     ) -> Point3D? {
         let queryPoint = snapQueryPoint(

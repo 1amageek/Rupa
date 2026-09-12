@@ -6,7 +6,6 @@ struct ViewportActiveInteractionDrags: Equatable {
         sketchCurveHandle: ViewportSketchCurveHandleDragState? = nil,
         sketchDimension: ViewportSketchDimensionDragState? = nil,
         sketchPointHandle: ViewportSketchPointHandleDragState? = nil,
-        bridgeCurveEndpoint: ViewportBridgeCurveEndpointDragState? = nil,
         splineControlPoint: ViewportSplineControlPointDragState? = nil,
         splineControlPointSlide: ViewportSplineControlPointSlideDragState? = nil,
         polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? = nil,
@@ -22,16 +21,13 @@ struct ViewportActiveInteractionDrags: Equatable {
         sketchVertexOffset: ViewportSketchVertexOffsetDragState? = nil,
         patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? = nil,
         independentCopyExtrudeDistance: ViewportIndependentCopyExtrudeDistanceDragState? = nil,
-        independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? = nil,
-        patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? = nil,
-        constructionPlane: ViewportConstructionPlaneHandleDragState? = nil
+        independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? = nil
     ) {
         activeDrag = ViewportActiveInteractionDragCandidates(
             affordance: affordance,
             sketchCurveHandle: sketchCurveHandle,
             sketchDimension: sketchDimension,
             sketchPointHandle: sketchPointHandle,
-            bridgeCurveEndpoint: bridgeCurveEndpoint,
             splineControlPoint: splineControlPoint,
             splineControlPointSlide: splineControlPointSlide,
             polySplineSurfaceVertex: polySplineSurfaceVertex,
@@ -47,9 +43,7 @@ struct ViewportActiveInteractionDrags: Equatable {
             sketchVertexOffset: sketchVertexOffset,
             patternArrayLinearAxis: patternArrayLinearAxis,
             independentCopyExtrudeDistance: independentCopyExtrudeDistance,
-            independentCopyBodyDimension: independentCopyBodyDimension,
-            patternArrayCurvePathPoint: patternArrayCurvePathPoint,
-            constructionPlane: constructionPlane
+            independentCopyBodyDimension: independentCopyBodyDimension
         ).firstActiveDrag
     }
 
@@ -83,16 +77,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             setActiveDrag(
                 newValue.map(ViewportActiveInteractionDragState.sketchPointHandle),
                 replacing: .sketchPointHandle
-            )
-        }
-    }
-
-    var bridgeCurveEndpoint: ViewportBridgeCurveEndpointDragState? {
-        get { activeDrag?.bridgeCurveEndpoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.bridgeCurveEndpoint),
-                replacing: .bridgeCurveEndpoint
             )
         }
     }
@@ -241,26 +225,6 @@ struct ViewportActiveInteractionDrags: Equatable {
             setActiveDrag(
                 newValue.map(ViewportActiveInteractionDragState.independentCopyBodyDimension),
                 replacing: .independentCopyBodyDimension
-            )
-        }
-    }
-
-    var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? {
-        get { activeDrag?.patternArrayCurvePathPoint }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.patternArrayCurvePathPoint),
-                replacing: .patternArrayCurvePathPoint
-            )
-        }
-    }
-
-    var constructionPlane: ViewportConstructionPlaneHandleDragState? {
-        get { activeDrag?.constructionPlane }
-        set {
-            setActiveDrag(
-                newValue.map(ViewportActiveInteractionDragState.constructionPlane),
-                replacing: .constructionPlane
             )
         }
     }
