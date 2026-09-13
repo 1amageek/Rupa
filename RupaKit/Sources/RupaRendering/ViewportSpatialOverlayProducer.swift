@@ -2190,7 +2190,14 @@ enum ViewportSpatialOverlayProducer {
         return selectedFeatures.contains(item.featureID)
     }
 
-    private static func sketchPrimitiveWorldPoints(
+    /// The world points the frame draws a sketch primitive's polyline through.
+    ///
+    /// It is internal because the native sketch entity query measures a pointer
+    /// against these same points. A curve the frame samples and a curve a query
+    /// idealises are different curves, and between two samples the difference
+    /// is larger than the hit tolerance, so the query reads the producer that
+    /// drew what is on screen rather than re-deriving a sampling of its own.
+    static func sketchPrimitiveWorldPoints(
         _ primitive: ViewportSketchPrimitive
     ) throws -> [Point3D] {
         switch primitive {

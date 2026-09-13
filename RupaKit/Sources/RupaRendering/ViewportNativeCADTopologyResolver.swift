@@ -94,37 +94,14 @@ enum ViewportNativeCADTopologyResolver {
         if selectionHitPolicy.allowsEdgeHits {
             var best: (component: SelectionComponent, candidate: ViewportNativeHitCandidate)?
             for edge in topology.edges {
-                let worldStart = world(edge.start, modelTransform: modelTransform)
-                let worldEnd = world(edge.end, modelTransform: modelTransform)
-                guard let start = try probe.projectedPointWithinDepthRange(worldStart),
-                      let end = try probe.projectedPointWithinDepthRange(worldEnd) else { continue }
-                let parameter = segmentParameter(for: point, from: start.point, to: end.point)
-                let nearest = CGPoint(
-                    x: start.point.x + (end.point.x - start.point.x) * parameter,
-                    y: start.point.y + (end.point.y - start.point.y) * parameter
-                )
-                let distance = Double(hypot(point.x - nearest.x, point.y - nearest.y))
-                guard distance <= Double(tolerance),
-                      distance < (best?.candidate.metric ?? .infinity) else {
-                    continue
-                }
-                // The nearest point is found on screen, but the section and
-                // occlusion questions are about a point on the edge. Recover
-                // the edge's own parameter under the frame's projection and let
-                // the native camera report that point's depth, so no depth on
-                // this path is interpolated by a rule the frame does not use.
-                guard let edgeParameter = probe.worldParameter(
-                    forScreenParameter: Double(parameter),
-                    startDepth: start.depth,
-                    endDepth: end.depth
+                guard let distance = try segmentCandidate(
+                    at: point,
+                    worldStart: world(edge.start, modelTransform: modelTransform),
+                    worldEnd: world(edge.end, modelTransform: modelTransform),
+                    tolerance: tolerance,
+                    nearerThan: best?.candidate.metric ?? .infinity,
+                    probe: probe
                 ) else { continue }
-                let worldPoint = Point3D(
-                    x: worldStart.x + (worldEnd.x - worldStart.x) * edgeParameter,
-                    y: worldStart.y + (worldEnd.y - worldStart.y) * edgeParameter,
-                    z: worldStart.z + (worldEnd.z - worldStart.z) * edgeParameter
-                )
-                guard let projected = try probe.projectedPointWithinDepthRange(worldPoint),
-                      try isVisible(worldPoint, projected, probe: probe) else { continue }
                 best = (
                     .edge(edge.componentID),
                     ViewportNativeHitCandidate(rank: .edge, metric: distance)
@@ -326,6 +303,66 @@ enum ViewportNativeCADTopologyResolver {
 
     private static func world(_ point: Point3D, modelTransform: Transform3D) -> Point3D {
         ViewportLayout.transformedPoint(point, by: modelTransform)
+    }
+
+    /// The projected distance from `point` to the drawn segment between two
+    /// world endpoints, or nil when this frame does not admit that segment.
+    ///
+    /// This is the edge family's whole admission rule in one place: measure
+    /// against the segment the frame drew, recover the segment's own parameter
+    /// under the frame's projection so the depth asked about is a depth the
+    /// frame reports, then apply the shared section and occlusion rule. A CAD
+    /// edge and a sketch entity's polyline are the same question asked of
+    /// different geometry, so they ask it here rather than each carrying a copy
+    /// that could drift into admitting what the other refuses.
+    ///
+    /// `bound` is the distance a nearer candidate already achieved. A segment
+    /// that cannot beat it costs two projections and no visibility query, which
+    /// is what keeps a polyline sampled into many segments from asking the frame
+    /// once per segment.
+    static func segmentCandidate(
+        at point: CGPoint,
+        worldStart: Point3D,
+        worldEnd: Point3D,
+        tolerance: CGFloat,
+        nearerThan bound: Double,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> Double? {
+        guard let start = try probe.projectedPointWithinDepthRange(worldStart),
+              let end = try probe.projectedPointWithinDepthRange(worldEnd) else {
+            return nil
+        }
+        let parameter = segmentParameter(for: point, from: start.point, to: end.point)
+        let nearest = CGPoint(
+            x: start.point.x + (end.point.x - start.point.x) * parameter,
+            y: start.point.y + (end.point.y - start.point.y) * parameter
+        )
+        let distance = Double(hypot(point.x - nearest.x, point.y - nearest.y))
+        guard distance <= Double(tolerance), distance < bound else {
+            return nil
+        }
+        // The nearest point is found on screen, but the section and occlusion
+        // questions are about a point on the segment. Recover the segment's own
+        // parameter under the frame's projection and let the native camera
+        // report that point's depth, so no depth on this path is interpolated
+        // by a rule the frame does not use.
+        guard let worldParameter = probe.worldParameter(
+            forScreenParameter: Double(parameter),
+            startDepth: start.depth,
+            endDepth: end.depth
+        ) else {
+            return nil
+        }
+        let worldPoint = Point3D(
+            x: worldStart.x + (worldEnd.x - worldStart.x) * worldParameter,
+            y: worldStart.y + (worldEnd.y - worldStart.y) * worldParameter,
+            z: worldStart.z + (worldEnd.z - worldStart.z) * worldParameter
+        )
+        guard let projected = try probe.projectedPointWithinDepthRange(worldPoint),
+              try isVisible(worldPoint, projected, probe: probe) else {
+            return nil
+        }
+        return distance
     }
 
     /// Admits a sub-shape point only when the mounted frame still retains it

@@ -9,9 +9,9 @@ import RupaViewportScene
 /// The two resolvers split by family, not by projection: both answer through
 /// `ViewportNativeFrameProbe` and both produce `ViewportNativeHitCandidate`, so
 /// no two families can disagree about what the frame draws where. This one
-/// keeps the occurrence and the surface handle displays, and, as their seams
-/// land, the curve segment, sketch entity, sketch control point and sketch
-/// region families.
+/// keeps the occurrence, the surface handle displays, the sketch entity and
+/// the sketch control point families, and, as their seams land, the curve
+/// segment and sketch region families.
 enum ViewportNativeOverlayHitResolver {
     /// The occurrence the mounted frame draws at the pointer's own pixel.
     ///
@@ -143,5 +143,135 @@ enum ViewportNativeOverlayHitResolver {
             ),
             ViewportNativeHitCandidate(rank: .vertex, metric: best.distance)
         )
+    }
+
+    /// The nearest sketch entity or spline control point of one sketch item
+    /// within `tolerance` of the pointer.
+    ///
+    /// A sketch entity is answered as the polyline the frame drew, segment by
+    /// segment, through `ViewportNativeCADTopologyResolver.segmentCandidate`,
+    /// so the section and occlusion rule here is the CAD edge family's and not
+    /// a second copy of it. The points come from the overlay producer that
+    /// emitted that polyline, because between two of its samples an idealised
+    /// curve deviates further than the hit tolerance and the answer has to be
+    /// about the curve on screen. The frame draws the polyline at scene depth,
+    /// so a body in front of it hides it — which the replaced identity buffer
+    /// did not do, having recorded sketch geometry with no depth at all.
+    ///
+    /// A sketch entity that is a single point is drawn as a marker at
+    /// annotation depth, and a spline's control points are too, so those are
+    /// admitted by projection, tolerance and the section alone. Control point
+    /// admission reads `sketchControlPointHitPolicy`, the gate the replaced
+    /// pick index was built with, and never whether a control point is drawn at
+    /// this moment: the frame draws them only for a selected or hovered entity,
+    /// so reading that would make selecting one depend on having selected it.
+    ///
+    /// The endpoint handle of a line, arc or circle is not answered. No pick
+    /// index ever recorded one, so no healthy production frame ever selected
+    /// one, and this path does not invent one.
+    ///
+    /// The two scopes are separate gates. `sketchEntity` admits a control
+    /// point, and either it or `object` admits an entity, which is exactly the
+    /// gate `ViewportSelectionHitPolicy` states, so the scope that reaches a
+    /// sketch is unchanged by moving the query onto the frame.
+    static func sketchEntity(
+        at point: CGPoint,
+        item: ViewportSceneItem,
+        primitives: [ViewportSketchPrimitive],
+        selectionHitPolicy: ViewportSelectionHitPolicy,
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy,
+        tolerance: CGFloat,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+        let admitsEntities = selectionHitPolicy.allowsObjectHits
+            || selectionHitPolicy.allowsSketchEntityHits
+        let admitsControlPoints = selectionHitPolicy.allowsSketchEntityHits
+        guard admitsEntities || admitsControlPoints else { return nil }
+        var best: (hit: ViewportHit, candidate: ViewportNativeHitCandidate)?
+        func hit(_ entityID: SketchEntityID, controlPointIndex: Int?) -> ViewportHit {
+            ViewportHit(
+                featureID: item.featureID,
+                sceneNodeID: item.sceneNodeID,
+                kind: item.kind.selectableKind,
+                pickingBackend: .native,
+                sketchEntityID: entityID,
+                sketchControlPointIndex: controlPointIndex
+            )
+        }
+        func admit(_ candidate: ViewportNativeHitCandidate, _ hit: @autoclosure () -> ViewportHit) {
+            guard best.map({ candidate.precedes($0.candidate) }) ?? true else { return }
+            best = (hit(), candidate)
+        }
+        /// Projected distance to a world point the frame draws at annotation
+        /// depth, or nil when the pointer is outside the tolerance or the
+        /// section removed the point.
+        func markerDistance(_ worldPoint: Point3D) throws -> Double? {
+            guard let projected = try probe.projectedPointWithinDepthRange(worldPoint) else {
+                return nil
+            }
+            let distance = Double(
+                hypot(point.x - projected.point.x, point.y - projected.point.y)
+            )
+            guard distance <= Double(tolerance),
+                  try probe.retainsSectionedPoint(worldPoint) else { return nil }
+            return distance
+        }
+        for primitive in primitives {
+            let entityID = primitive.entityID
+            if admitsControlPoints,
+               case .spline(_, _, let controlPoints, _) = primitive,
+               sketchControlPointHitPolicy.allows(
+                   featureID: item.featureID,
+                   entityID: entityID
+               ) {
+                for (index, controlPoint) in controlPoints.enumerated() {
+                    // The affordance producer draws the control net through the
+                    // item's model transform, so the query maps them the same
+                    // way it maps them on screen.
+                    let worldPoint = ViewportLayout.transformedPoint(
+                        Point3D(
+                            x: Double(controlPoint.x),
+                            y: 0.0,
+                            z: Double(controlPoint.y)
+                        ),
+                        by: item.modelTransform
+                    )
+                    guard let distance = try markerDistance(worldPoint) else { continue }
+                    admit(
+                        ViewportNativeHitCandidate(rank: .vertex, metric: distance),
+                        hit(entityID, controlPointIndex: index)
+                    )
+                }
+            }
+            guard admitsEntities else { continue }
+            let points = try ViewportSpatialOverlayProducer.sketchPrimitiveWorldPoints(primitive)
+            guard let first = points.first else { continue }
+            if points.count == 1 {
+                guard let distance = try markerDistance(first) else { continue }
+                admit(
+                    ViewportNativeHitCandidate(rank: .edge, metric: distance),
+                    hit(entityID, controlPointIndex: nil)
+                )
+                continue
+            }
+            var nearest = Double.infinity
+            for index in points.indices.dropLast() {
+                guard let distance = try ViewportNativeCADTopologyResolver.segmentCandidate(
+                    at: point,
+                    worldStart: points[index],
+                    worldEnd: points[index + 1],
+                    tolerance: tolerance,
+                    nearerThan: nearest,
+                    probe: probe
+                ) else { continue }
+                nearest = distance
+            }
+            guard nearest.isFinite else { continue }
+            admit(
+                ViewportNativeHitCandidate(rank: .edge, metric: nearest),
+                hit(entityID, controlPointIndex: nil)
+            )
+        }
+        return best
     }
 }

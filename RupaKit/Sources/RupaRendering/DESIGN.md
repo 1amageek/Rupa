@@ -1204,7 +1204,8 @@ independent tessellator is never an alternative implementation.
    | sketch region | face | `.annotation` | the clipped boundary contains it |
    | CAD edge | edge | `.scene` | section, then no nearer surface |
    | curve segment | edge | `.scene` | section, then no nearer surface |
-   | sketch entity | edge | `.scene` | section, then no nearer surface |
+   | sketch entity polyline | edge | `.scene` | section, then no nearer surface |
+   | sketch entity point | edge | `.annotation` | section alone |
    | CAD vertex | vertex | `.scene` | section, then no nearer surface |
    | sketch control point | vertex | `.annotation` | section alone |
    | surface knot, span, trim knot, trim span | vertex | `.annotation` | section alone |
@@ -1245,9 +1246,38 @@ independent tessellator is never an alternative implementation.
    The sketch families are exactly what production emits. A sketch entity is
    its own evaluated polyline at edge rank, and its control points are at
    vertex rank and only for a spline, which is the one primitive either
-   replaced rule ever emitted control point geometry for. The endpoint handle a
-   line, arc or circle would carry appears in neither, so this path does not
-   invent one.
+   replaced rule ever emitted control point geometry for. The endpoint handle
+   a line, arc or circle would carry is in neither the GPU plan nor this path.
+   The CPU tester does answer one, so what stops being answered there is what
+   the resolver behind a failed GPU pick answered and not what a healthy
+   production frame ever did. This path does not invent one either.
+   Each sketch family takes its world points from the producer that drew it. A
+   polyline is the overlay producer's own evaluation — two endpoints for a
+   line, forty-nine samples around a circle, twenty-five along an arc, and a
+   spline's evaluated points — so a pointer between two samples is measured
+   against the segment the frame drew and not against an ideal curve the frame
+   never drew. Spline control points are the affordance producer's, which maps
+   them through the scene item's model transform. The two mappings differ only
+   in that transform, which a sketch item carries as the identity, and each
+   stays with the producer that owns what is on screen rather than being
+   re-derived here.
+   A sketch entity is occlusion-tested here and was not before. The frame
+   draws the polyline at scene depth, so a body in front of it hides it,
+   whereas the identity buffer recorded sketch geometry with no depth at all
+   and answered it through anything drawn over it. An entity that is a single
+   point is drawn as a marker instead, and control points are markers too, so
+   both keep annotation depth and are admitted by projection, tolerance and
+   the section alone, which is the surface handle rule above. Each family's
+   admission is read from how the frame emits it and from nothing else, which
+   is why one family splits across two rows of the table above rather than
+   being averaged into one. Which sketch items can be asked at all is the
+   frame's own suppression rule: an item whose source feature is selected, by
+   feature or by scene node, or is being edited, is not drawn and is not
+   queried, because the body replaced it on screen. Control point admission is
+   the sketch control point hit policy, the same gate the pick index was built
+   with, and never whether a control point is drawn at this moment: the frame
+   draws them only for a selected or hovered entity, so reading that would
+   make selecting one depend on having selected it.
    The region family clips before it projects. A sketch region's boundary is a
    planar polygon in world space, so each boundary edge is clipped against the
    section's affine half-space, and under a perspective frame against the
@@ -1302,18 +1332,18 @@ independent tessellator is never an alternative implementation.
    `requiresLegacyHitFallback` names exactly which. That routing and the
    `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
    the last of those scopes.
-   One interim residual is not a miss. The curve segment, sketch entity,
-   sketch control point and sketch region families still belong to the legacy
-   resolver, and they outrank `object`, so a pointer the occurrence family wins
-   is one this path cannot yet order correctly: a curve segment or sketch
-   entity drawn at that same pointer would have won it. That pointer is
-   therefore asked of the legacy resolver as well, and a non-body answer it
-   returns is preferred over the native occurrence. A pointer a CAD sub-shape
-   or a surface handle display wins is not, because those families are already
+   One interim residual is not a miss. The curve segment and sketch region
+   families still belong to the legacy resolver, and they outrank `object`, so
+   a pointer the occurrence family wins is one this path cannot yet order
+   correctly: a curve segment drawn at that same pointer would have won it.
+   That pointer is therefore asked of the legacy resolver as well, and an
+   answer it returns that is neither a body nor a sketch entity is preferred
+   over the native occurrence. A pointer a CAD sub-shape, a surface handle
+   display or a sketch entity wins is not, because those families are already
    native here and a legacy answer could only contradict them. The legacy
    overlay answer is not occlusion-tested against the frame, which is exactly
    what the replaced rule did, so preferring it preserves the current behaviour
-   rather than choosing a new one; it is removed with the sketch and curve
+   rather than choosing a new one; it is removed with the region and curve
    seams and the occurrence then answers those pointers alone.
    The surface handle displays are native on the point path before they are on
    the rectangle path, and the two are narrowed by separate seams, so for that
@@ -1614,6 +1644,20 @@ independent tessellator is never an alternative implementation.
    scope forbids vertex hits, refusal where the section removed the display's
    point, and admission where a drawn surface stands in front of it, which is
    the rule these displays are drawn under and not an oversight.
+   It also owns the two sketch families, against inputs a mounted frame cannot
+   vary: an entity answered as the drawn polyline and not as an ideal curve,
+   which a pointer inside a circle's chord proves by being admitted where the
+   ideal arc is further away than the tolerance; the polyline refused behind a
+   drawn surface and admitted in front of one, which is the depth rule the
+   replaced identity buffer did not apply at all; the section asked about the
+   point on the segment rather than about its endpoints; a single-point entity
+   admitted through a drawn surface, which is the annotation-depth rule; a
+   spline control point outranking the polyline under it, following the item's
+   model transform, and read from the control point hit policy rather than
+   from whether the frame draws it now; the endpoint handle of a line, arc or
+   circle answered by neither family; the nearer of two entities winning; and
+   both scope gates, with `object` admitting an entity but no control point
+   and `sketchEntity` admitting both.
    `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
    owns the same rule on the mounted frame and through the production click
    path: the occurrence the frame draws at the pointer is selected under the
@@ -1633,6 +1677,21 @@ independent tessellator is never an alternative implementation.
    not the face beneath it, and an empty pixel under the `vertex` scope selects
    nothing. That last case is the native miss and not a routed one, because the
    `vertex` scope no longer routes a miss to the legacy resolver.
+   `Tests/RupaRenderingTests/ViewportNativeSketchEntityScopePointSelectionTests.swift`
+   owns the sketch entity family on the mounted frame and through the
+   production click path: the line the frame draws under the pointer is
+   selected under the `sketchEntity` scope and under `all`, the same line is
+   refused where a drawn body covers it, it is refused where the section
+   removed it, and an empty pixel selects nothing, which is a native miss and
+   not a routed one because the `sketchEntity` scope no longer routes one. It
+   also owns the frame's suppression rule, which no resolver-level input can
+   express because the rule is the viewport's: a scene built the general way,
+   a rectangle sketch then an extrude that consumes it, leaves the profile a
+   drawn item of its own, and a pointer on the one profile edge that stands
+   clear of the body selects it until the body's scene node is selected, after
+   which the same pointer answers nothing in the `sketchEntity`, `object` and
+   `all` scopes alike. Every hit is checked to carry the native picking
+   backend.
    The region path's evidence is recorded, and it is two different claims.
    That the raster is the frame is proved by the component's differential
    test, which compares the raster's answer with `surfaceHit` at every

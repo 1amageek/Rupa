@@ -526,3 +526,412 @@ func nativeOverlaySurfaceHandleOutranksTheFaceAndOccurrenceBeneathIt() throws {
     #expect(handle.precedes(occurrence))
     #expect(occurrence.precedes(handle) == false)
 }
+
+// MARK: - Sketch entities and spline control points
+
+/// Thrown by a frame query the sketch families must not ask.
+private struct SketchQueryNotAsked: Error {}
+
+/// A top view of the sketch plane.
+///
+/// The camera looks down `-y`, so a world point projects to
+/// `(200 + 100x, 200 - 100z)` at camera depth `y + 10`. The overlay producer
+/// places a sketch at `y == 0`, so every point of one sits at depth 10 and a
+/// surface the frame draws nearer than that is in front of it.
+private struct SketchFrame: ViewportNativeFrameProbe {
+    /// Camera depth of the surface the frame draws over every pixel, or nil
+    /// when it draws no surface anywhere.
+    var surfaceDepth: Double?
+    /// The active section keeps world points whose `x` is at most this. The
+    /// polyline rule asks the section about a point it interpolated along a
+    /// segment rather than about the endpoints, so this is a half-space and
+    /// not a list of removed points.
+    var sectionKeepsXUpTo = Double.infinity
+    /// World points the camera's depth interval rejects.
+    var depthRejects: [Point3D] = []
+
+    let usesPerspectiveProjection = false
+
+    func projectedPointWithinDepthRange(
+        _ point: Point3D
+    ) throws -> (point: CGPoint, depth: Double)? {
+        guard depthRejects.contains(point) == false else { return nil }
+        return (
+            CGPoint(x: 200 + point.x * 100, y: 200 - point.z * 100),
+            point.y + 10
+        )
+    }
+
+    func retainsSectionedPoint(_ point: Point3D) throws -> Bool {
+        point.x <= sectionKeepsXUpTo
+    }
+
+    func surfaceHit(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        guard let surfaceDepth else { return nil }
+        return (drawnTriangle(), Point3D(x: 0, y: surfaceDepth - 10, z: 0))
+    }
+
+    func projectedPointWithDepth(
+        _ point: Point3D
+    ) throws -> (point: CGPoint?, depth: Double) {
+        throw SketchQueryNotAsked()
+    }
+
+    func regionFragment(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        throw SketchQueryNotAsked()
+    }
+
+    func cameraDepthInterval() throws -> ClosedRange<Double> {
+        throw SketchQueryNotAsked()
+    }
+
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        throw SketchQueryNotAsked()
+    }
+
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int
+    ) throws -> RealityViewportRegionSegmentProbe {
+        throw SketchQueryNotAsked()
+    }
+}
+
+private let sketchFeatureID = FeatureID()
+
+/// The screen point `SketchFrame` projects a sketch-plane position to.
+private func sketchScreen(_ point: CGPoint) -> CGPoint {
+    CGPoint(x: 200 + point.x * 100, y: 200 - point.y * 100)
+}
+
+/// The sketch scene item the families hang from.
+///
+/// It carries no scene node, which is what a sketch item is in production, and
+/// empty `modelBounds`: the rule is the projected polyline and the pointer,
+/// never a projected box.
+private func sketchItem(
+    _ primitives: [ViewportSketchPrimitive],
+    modelTransform: Transform3D = .identity
+) -> ViewportSceneItem {
+    ViewportSceneItem(
+        id: "sketch.native",
+        featureID: sketchFeatureID,
+        modelTransform: modelTransform,
+        modelBounds: .zero,
+        kind: .sketch(primitives: primitives)
+    )
+}
+
+private func sketchAnswer(
+    at point: CGPoint,
+    primitives: [ViewportSketchPrimitive],
+    selectionHitPolicy: ViewportSelectionHitPolicy = .sketchEntity,
+    sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+    modelTransform: Transform3D = .identity,
+    tolerance: CGFloat = 8,
+    probe: SketchFrame = SketchFrame()
+) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+    let item = sketchItem(primitives, modelTransform: modelTransform)
+    return try ViewportNativeOverlayHitResolver.sketchEntity(
+        at: point,
+        item: item,
+        primitives: primitives,
+        selectionHitPolicy: selectionHitPolicy,
+        sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+        tolerance: tolerance,
+        probe: probe
+    )
+}
+
+private func sketchLine(
+    _ entityID: SketchEntityID,
+    from start: CGPoint = CGPoint(x: 0, y: 0),
+    to end: CGPoint = CGPoint(x: 1, y: 0)
+) -> ViewportSketchPrimitive {
+    .line(entityID: entityID, start: start, end: end)
+}
+
+private func sketchSpline(
+    _ entityID: SketchEntityID,
+    controlPoints: [CGPoint] = [CGPoint(x: 0.5, y: 0)]
+) -> ViewportSketchPrimitive {
+    .spline(
+        entityID: entityID,
+        points: [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0)],
+        controlPoints: controlPoints,
+        sketchPlane: .xy
+    )
+}
+
+@Test
+func nativeOverlaySketchEntityAnswersTheLineTheFrameDrew() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 203),
+        primitives: [sketchLine(entityID)]
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+    #expect(answer.hit.sketchControlPointIndex == nil)
+    #expect(answer.hit.sketchPointHandle == nil)
+    #expect(answer.hit.featureID == sketchFeatureID)
+    #expect(answer.hit.sceneNodeID == nil)
+    #expect(answer.hit.kind == .sketch)
+    #expect(answer.hit.pickingBackend == .native)
+    #expect(answer.candidate.rank == .edge)
+    #expect(abs(answer.candidate.metric - 3) < 1e-9)
+}
+
+@Test
+func nativeOverlaySketchEntityRefusesAPointerOutsideTheTolerance() throws {
+    #expect(try sketchAnswer(
+        at: CGPoint(x: 250, y: 209),
+        primitives: [sketchLine(SketchEntityID())]
+    ) == nil)
+}
+
+/// The frame draws a sketch polyline at scene depth, so a body in front of it
+/// hides it. The replaced identity buffer recorded sketch geometry with no
+/// depth at all and answered through anything drawn over it.
+@Test
+func nativeOverlaySketchEntityRefusesAPolylineTheFrameDrewASurfaceInFrontOf() throws {
+    #expect(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchLine(SketchEntityID())],
+        probe: SketchFrame(surfaceDepth: 9)
+    ) == nil)
+}
+
+/// A surface the frame drew *behind* the polyline is not an occluder, so the
+/// rule is a depth comparison and not the presence of a drawn surface.
+@Test
+func nativeOverlaySketchEntityAdmitsAPolylineInFrontOfTheDrawnSurface() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchLine(entityID)],
+        probe: SketchFrame(surfaceDepth: 11)
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+}
+
+/// The section is asked about the point on the segment the pointer is nearest
+/// to, not about the segment's endpoints: one pointer on this line is kept and
+/// another, on the same unclipped segment, is removed.
+@Test
+func nativeOverlaySketchEntityAsksTheSectionAboutThePointOnTheSegment() throws {
+    let entityID = SketchEntityID()
+    let probe = SketchFrame(sectionKeepsXUpTo: 0.4)
+    let kept = try #require(try sketchAnswer(
+        at: CGPoint(x: 220, y: 200),
+        primitives: [sketchLine(entityID)],
+        probe: probe
+    ))
+    #expect(kept.hit.sketchEntityID == entityID)
+    #expect(try sketchAnswer(
+        at: CGPoint(x: 280, y: 200),
+        primitives: [sketchLine(entityID)],
+        probe: probe
+    ) == nil)
+}
+
+/// A segment whose endpoint the camera's depth interval rejects is not
+/// measured against at all, rather than being measured against a projection the
+/// frame does not report.
+@Test
+func nativeOverlaySketchEntityRefusesASegmentTheDepthIntervalRejects() throws {
+    #expect(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchLine(SketchEntityID())],
+        probe: SketchFrame(depthRejects: [Point3D(x: 1, y: 0, z: 0)])
+    ) == nil)
+}
+
+/// A circle is measured against the forty-nine sample polyline the overlay
+/// producer draws, not against the ideal circle.
+///
+/// The two differ by more than the hit tolerance at this radius: a pointer on
+/// the chord between two samples is on the curve the frame drew and is
+/// admitted, and a pointer on the ideal arc midway between the same two samples
+/// is 8.56 points from it and is refused. A query that idealised the curve
+/// would answer these exactly the other way round.
+@Test
+func nativeOverlaySketchEntityMeasuresACircleAgainstTheDrawnChord() throws {
+    let entityID = SketchEntityID()
+    let radius = 40.0
+    let circle = ViewportSketchPrimitive.circle(
+        entityID: entityID, center: CGPoint(x: 0, y: 0), radiusMeters: radius
+    )
+    // The producer's own sample spacing: forty-eight steps around the circle.
+    let step = Double.pi / 24.0
+    let first = CGPoint(x: radius, y: 0)
+    let second = CGPoint(x: radius * cos(step), y: radius * sin(step))
+    let chordMidpoint = CGPoint(
+        x: (first.x + second.x) / 2, y: (first.y + second.y) / 2
+    )
+    let arcMidpoint = CGPoint(
+        x: radius * cos(step / 2), y: radius * sin(step / 2)
+    )
+    let answer = try #require(try sketchAnswer(
+        at: sketchScreen(chordMidpoint), primitives: [circle]
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+    #expect(answer.candidate.rank == .edge)
+    #expect(answer.candidate.metric < 1e-9)
+    #expect(try sketchAnswer(
+        at: sketchScreen(arcMidpoint), primitives: [circle]
+    ) == nil)
+}
+
+/// An entity that is a single point is drawn as a marker at annotation depth,
+/// so a surface in front of it does not hide it. It enters at edge rank, which
+/// is the rank its family has.
+@Test
+func nativeOverlaySketchEntityAdmitsAPointEntityThroughADrawnSurface() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 202, y: 200),
+        primitives: [.point(entityID: entityID, point: CGPoint(x: 0, y: 0))],
+        probe: SketchFrame(surfaceDepth: 9)
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+    #expect(answer.hit.sketchControlPointIndex == nil)
+    #expect(answer.candidate.rank == .edge)
+    #expect(abs(answer.candidate.metric - 2) < 1e-9)
+}
+
+/// A control point and the polyline under it are compared by rank, so a pointer
+/// that named both resolves to the control point.
+@Test
+func nativeOverlaySketchControlPointOutranksThePolylineUnderIt() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchSpline(entityID)]
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+    #expect(answer.hit.sketchControlPointIndex == 0)
+    #expect(answer.candidate.rank == .vertex)
+}
+
+/// Control point admission is the hit policy the replaced pick index was built
+/// with, so a policy that admits none leaves the polyline to answer.
+@Test
+func nativeOverlaySketchControlPointReadsTheControlPointHitPolicy() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchSpline(entityID)],
+        sketchControlPointHitPolicy: .none
+    ))
+    #expect(answer.hit.sketchControlPointIndex == nil)
+    #expect(answer.candidate.rank == .edge)
+    let only = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchSpline(entityID)],
+        sketchControlPointHitPolicy: .only([.init(
+            featureID: sketchFeatureID, entityID: entityID
+        )])
+    ))
+    #expect(only.hit.sketchControlPointIndex == 0)
+}
+
+/// A control point is measured where the affordance producer draws it, through
+/// the scene item's model transform, while the polyline is measured where the
+/// overlay producer draws it. Each family reads the producer that owns what is
+/// on screen; production sketch items carry the identity transform, so the two
+/// mappings coincide there.
+@Test
+func nativeOverlaySketchControlPointFollowsTheItemModelTransform() throws {
+    let entityID = SketchEntityID()
+    let transform = try ViewportWorldTransformAlgebra.translation(
+        Vector3D(x: 0, y: 0, z: 0.5)
+    )
+    let answer = try #require(try sketchAnswer(
+        at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+        primitives: [sketchSpline(entityID)],
+        modelTransform: transform
+    ))
+    #expect(answer.hit.sketchControlPointIndex == 0)
+    #expect(answer.candidate.rank == .vertex)
+    #expect(answer.candidate.metric < 1e-9)
+}
+
+/// `object` and `sketchEntity` both reach an entity and only `sketchEntity`
+/// reaches a control point, which is the gate `ViewportSelectionHitPolicy`
+/// states, so the scope that reaches a sketch is unchanged by moving the query
+/// onto the frame.
+@Test
+func nativeOverlaySketchFamiliesKeepTheirScopeGates() throws {
+    let entityID = SketchEntityID()
+    let object = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 200),
+        primitives: [sketchSpline(entityID)],
+        selectionHitPolicy: .object
+    ))
+    #expect(object.hit.sketchEntityID == entityID)
+    #expect(object.hit.sketchControlPointIndex == nil)
+    #expect(object.candidate.rank == .edge)
+    for policy in [ViewportSelectionHitPolicy.sketchEntity, .all] {
+        let answer = try #require(try sketchAnswer(
+            at: CGPoint(x: 250, y: 200),
+            primitives: [sketchSpline(entityID)],
+            selectionHitPolicy: policy
+        ), "\(policy) reaches a control point")
+        #expect(answer.hit.sketchControlPointIndex == 0)
+        #expect(answer.candidate.rank == .vertex)
+    }
+}
+
+@Test
+func nativeOverlaySketchEntityRefusesAScopeThatReachesNoSketch() throws {
+    let entityID = SketchEntityID()
+    for policy in [ViewportSelectionHitPolicy.face, .edge, .vertex, .region] {
+        #expect(try sketchAnswer(
+            at: CGPoint(x: 250, y: 200),
+            primitives: [sketchSpline(entityID)],
+            selectionHitPolicy: policy
+        ) == nil, "\(policy) reaches no sketch")
+    }
+}
+
+/// A pointer on a line's endpoint answers the line at edge rank. No pick index
+/// ever recorded an endpoint handle, so this path does not invent a
+/// vertex-ranked one for the endpoint to win the pointer with.
+@Test
+func nativeOverlaySketchEntityInventsNoEndpointHandle() throws {
+    let entityID = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: sketchScreen(CGPoint(x: 1, y: 0)),
+        primitives: [sketchLine(entityID)]
+    ))
+    #expect(answer.hit.sketchEntityID == entityID)
+    #expect(answer.hit.sketchPointHandle == nil)
+    #expect(answer.hit.sketchControlPointIndex == nil)
+    #expect(answer.candidate.rank == .edge)
+}
+
+/// Two entities within the tolerance are ordered by their distance to the
+/// pointer, so the nearer polyline answers.
+@Test
+func nativeOverlaySketchEntityAnswersTheNearerOfTwoEntities() throws {
+    let near = SketchEntityID()
+    let far = SketchEntityID()
+    let answer = try #require(try sketchAnswer(
+        at: CGPoint(x: 250, y: 202),
+        primitives: [
+            sketchLine(far, from: CGPoint(x: 0, y: -0.05), to: CGPoint(x: 1, y: -0.05)),
+            sketchLine(near),
+        ]
+    ))
+    #expect(answer.hit.sketchEntityID == near)
+    #expect(abs(answer.candidate.metric - 2) < 1e-9)
+}
