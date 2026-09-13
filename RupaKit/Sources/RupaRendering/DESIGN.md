@@ -1165,12 +1165,129 @@ independent tessellator is never an alternative implementation.
    whatever geometry that item displays. A body reaching this query with no
    prepared topology is therefore one evaluation gave no stable sub-shape
    identity at all, not one whose display happens to be a projected box. An empty pixel is a `miss`, not `unsupported`: the frame
-   answered, and nothing is drawn there. Face and edge scopes reach the legacy
-   identity resolver only on `unsupported`, so neither a miss on a
+   answered, and nothing is drawn there.
+   No scope reaches a second hit rule on a miss. Every scope this viewport
+   offers is answered from one mounted frame, so neither a miss on a
    topology-backed scene nor a hover over empty space can be answered by a
-   second, differently projected hit rule. The scopes that still have no native
-   input path — object, vertex, region, sketch entity, and the unscoped query —
-   remain routed to the legacy resolver on a miss until their own seams land.
+   second, differently projected hit rule, and `unsupported` remains the only
+   outcome that leaves this path at all.
+   Two owners carry that. `ViewportNativeFrameProbe` is the single reader of
+   the mounted frame. It projects a world point with and without its depth,
+   reports whether the active section retains a point, reports the depth of the
+   surface the frame draws at a projected point, reports which projection the
+   frame was drawn with, reports the camera's depth interval and the section's
+   affine bound over a world segment, and maps a projected position back to a
+   world parameter on that segment. Nothing else on this path asks the frame
+   anything. `ViewportNativeCADTopologyResolver` keeps the CAD sub-shape
+   families, and `ViewportNativeOverlayHitResolver` answers the families the
+   scene draws as overlays — curve segment, sketch entity, sketch control
+   point, sketch region, the four surface handle displays, and the occurrence
+   — with both reading the frame only through that probe. One frame therefore
+   answers every family, and no two families can disagree about what is drawn
+   where.
+   Whether a family is occlusion-tested is a property of how the frame draws
+   it and not of what a query would prefer.
+   `RealityViewportSpatialBatch.Depth` owns that distinction: `.scene`
+   emission reads and writes the depth buffer, `.annotation` emission does
+   neither and is always drawn in front. A family emitted at `.scene` is
+   admitted only where the frame draws nothing nearer at the candidate's own
+   projected point, by the same section-then-occlusion rule stated above; a
+   family emitted at `.annotation` is admitted on the section alone. This
+   reads the family's emission rule and never the current frame's drawn state,
+   because some overlays are drawn only for what is already selected and
+   asking what is drawn now would make the answer depend on itself.
+
+   | Family | Rank | Emission depth | Admission after projection |
+   |---|---|---|---|
+   | occurrence | object | frame surface | the frame draws it at the pointer |
+   | CAD face | face | frame surface | the frame draws its triangle |
+   | sketch region | face | `.annotation` | the clipped boundary contains it |
+   | CAD edge | edge | `.scene` | section, then no nearer surface |
+   | curve segment | edge | `.scene` | section, then no nearer surface |
+   | sketch entity | edge | `.scene` | section, then no nearer surface |
+   | CAD vertex | vertex | `.scene` | section, then no nearer surface |
+   | sketch control point | vertex | `.annotation` | section alone |
+   | surface knot, span, trim knot, trim span | vertex | `.annotation` | section alone |
+
+   Admitted candidates are ordered by rank, then by projected distance to the
+   pointer, then by a stable emission order. `Candidate.Rank` gains `.object`
+   as its weakest case, so a pointer that named a sub-shape never resolves to
+   the occurrence carrying it. The replaced GPU rule ordered by these same four
+   ranks and then by drawn depth and emission order, and that depth tiebreak is
+   deliberately not carried over: it was that renderer's only occlusion
+   mechanism, since its curve, sketch and region draw items were emitted with
+   no depth at all, whereas here section and occlusion are admission steps that
+   run before any ordering. Ordering by distance to the pointer after admission
+   is what the CAD families already did.
+   Tolerance has one owner. The resolver's `tolerance`, eight points by
+   default, is the neighbourhood every point and curve family is tested in. The
+   replaced rules used three values for that one question — four points for a
+   curve or sketch line and six for a point handle in the GPU plan, eight and a
+   ten-point floor in the CPU tester — so this is an operational value chosen
+   to have a single owner and not a correctness constant. It widens the curve
+   and sketch-line neighbourhood from four points and the point-handle
+   neighbourhood from six. The rectangle path is unaffected, because a
+   rectangle admits a point by strict containment with no tolerance at all.
+   The sketch families are exactly what production emits. A sketch entity is
+   its own evaluated polyline at edge rank, and its control points are at
+   vertex rank and only for a spline, which is the one primitive either
+   replaced rule ever emitted control point geometry for. The endpoint handle a
+   line, arc or circle would carry appears in neither, so this path does not
+   invent one.
+   The region family clips before it projects. A sketch region's boundary is a
+   planar polygon in world space, so each boundary edge is clipped against the
+   section's affine half-space, and under a perspective frame against the
+   camera interval's near bound, before the surviving polygon is projected; the
+   point query is then containment of the pointer in that projected polygon.
+   Clipping a planar polygon by a half-space leaves it planar and projection
+   preserves containment, so this is exact and not a tolerance. A surviving
+   boundary vertex the frame cannot project is a typed refusal and never a
+   skipped edge, because dropping one would silently shrink the region the
+   answer is computed over.
+   The occurrence family has no bounding box. An occurrence is a candidate
+   where the mounted frame draws it at the pointer's own pixel, which is what
+   the rectangle's occurrence harvest reads at every pixel it covers. The
+   replaced rule projected a candidate's bounds and tested containment, so it
+   admitted an occurrence wherever that box covered the pointer even where the
+   frame drew nothing there.
+   A body carrying no prepared face, edge or vertex target is a miss for those
+   three scopes, and this path does not reconstruct the projected bounding-box
+   sub-objects the replaced rules answered it with. Those sub-objects were not
+   a projection of anything. `ViewportLayout.bodyProjection` projects one
+   footprint and fabricates the opposite face by offsetting that same
+   two-dimensional rectangle along the view basis, by a screen distance clamped
+   between twelve and fifty-four points, so no world geometry corresponds to
+   the faces, edges and vertices composed from its corners and no frame can
+   reproduce them. Answering those scopes from the frame would therefore be a
+   new geometric contract rather than the one being replaced, and the bodies
+   needing it are exactly the ones evaluation gave no stable sub-shape identity
+   to: a feature with no evaluated body at all, a B-spline surface displayed
+   from its own control net whose sub-object identity its surface handle
+   displays already own, and an evaluated body whose kernel registered no face,
+   edge or vertex sub-shape.
+   The `SelectionComponentID` values those hits carried are unaffected.
+   `body.face.front` and its siblings name an editable body face that the
+   document's direct editing resolver still resolves and that
+   `WorkspaceSelectionTargetResolver` still maps a body face to. Only the
+   fabricated pick geometry is gone, and two production behaviours go with it:
+   the construction highlight and the construction sketch plane that a hover
+   derives from `ViewportHit.bodyFace` no longer arise on such a body, where
+   the shipped rule raised them only there. The accessibility markers that
+   synthesize the same hits for every body from that same fabricated projection
+   are a separate producer with a separate owner, so
+   `ViewportLayout.bodyProjection` outlives this seam.
+   The point path's failure contract is the drag's readiness split read at one
+   pointer. A frame that has not mounted reports `frameNotReady`, which retains
+   the existing selection and reports nothing, because a pointer that outran
+   preparation is not an operator error. Every other typed failure is a refusal
+   the operator must be able to see and is reported to `Logger` without
+   changing a selection. A miss is neither: it is the frame's answer that
+   nothing this scope admits is drawn at the pointer.
+   Until every scope's seam has landed, the scopes named here as native but not
+   yet implemented stay routed to the legacy resolver on a miss, and
+   `requiresLegacyHitFallback` names exactly which. That routing and the
+   `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
+   the last of those scopes.
 
    Rectangle selection uses this same resolver and this same frame under the
    bounded exception above. It is a set query, not a nearest query: the
