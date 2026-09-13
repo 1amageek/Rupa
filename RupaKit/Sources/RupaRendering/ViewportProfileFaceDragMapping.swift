@@ -4,6 +4,25 @@ struct ViewportProfileFaceDragMapping: Equatable, Sendable {
         distance(for: face, xDelta: 1.0, yDelta: 1.0, zDelta: 1.0) != nil
     }
 
+    /// The one model axis a face's distance is read from.
+    ///
+    /// `distance` uses exactly one of the three deltas per face, so a caller
+    /// measures that axis and leaves the other two at zero rather than asking
+    /// the frame for three answers and refusing unless all three resolve. Every
+    /// axis-front camera has one axis that projects to a point, and requiring
+    /// all three made a face solvable along its own axis unsolvable whenever a
+    /// different axis was the degenerate one.
+    static func axis(for face: ViewportBodyFace) -> ViewportCoordinateAxis {
+        switch face {
+        case .front, .back:
+            return .y
+        case .right, .side, .left:
+            return .x
+        case .top, .bottom:
+            return .z
+        }
+    }
+
     static func distance(
         for face: ViewportBodyFace,
         xDelta: Double,

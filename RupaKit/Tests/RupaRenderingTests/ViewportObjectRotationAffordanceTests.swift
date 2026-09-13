@@ -4,67 +4,7 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
-@Test func rotationAffordanceFollowsCursorAroundZAxis() throws {
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02),
-        size: CGSize(width: 800.0, height: 600.0)
-    )
-    let state = ViewportObjectEditState(
-        xMin: -0.005,
-        xMax: 0.005,
-        yMin: 0.0,
-        yMax: 0.01,
-        zMin: -0.005,
-        zMax: 0.005
-    )
-    let center = Point3D(x: 0.0, y: 0.005, z: 0.0)
-    let projectedCenter = layout.project(center)
-    let epsilon = 0.001
-    let xDirection = screenDirection(
-        from: projectedCenter,
-        to: layout.project(Point3D(x: epsilon, y: 0.005, z: 0.0))
-    )
-    let yDirection = screenDirection(
-        from: projectedCenter,
-        to: layout.project(Point3D(x: 0.0, y: 0.005 + epsilon, z: 0.0))
-    )
-    let radius: CGFloat = 60.0
-    let start = CGPoint(
-        x: projectedCenter.x + xDirection.dx * radius,
-        y: projectedCenter.y + xDirection.dy * radius
-    )
-    let current = CGPoint(
-        x: projectedCenter.x + yDirection.dx * radius,
-        y: projectedCenter.y + yDirection.dy * radius
-    )
-
-    let next = try #require(state.applying(
-        action: .rotate(.z),
-        start: start,
-        current: current,
-        layout: layout
-    ))
-
-    // The cursor moved from the projected +X direction to the projected +Y
-    // direction, a quarter turn following x -> y, so the object's x axis must
-    // rotate onto +Y. The previous sign inversion rotated it onto -Y instead
-    // (the object spun against the cursor).
-    #expect(abs(Double(next.orientation.xAxis.y) - 1.0) < 1.0e-9)
-    #expect(abs(Double(next.orientation.xAxis.x)) < 1.0e-9)
-    #expect(abs(Double(next.orientation.yAxis.x) + 1.0) < 1.0e-9)
-}
-
-private func screenDirection(from start: CGPoint, to end: CGPoint) -> CGVector {
-    let dx = end.x - start.x
-    let dy = end.y - start.y
-    let length = (dx * dx + dy * dy).squareRoot()
-    guard length > 0.0 else {
-        return CGVector(dx: 0.0, dy: 0.0)
-    }
-    return CGVector(dx: dx / length, dy: dy / length)
-}
-
-@Test func objectEditProjectionUsesTheFullPerspectivePointAndRejectsInvisibleDrags() throws {
+@Test func objectEditProjectionUsesTheFullPerspectivePoint() throws {
     let layout = ViewportLayout(
         modelBounds: CGRect(x: -2, y: -2, width: 4, height: 4),
         size: CGSize(width: 800, height: 600),
@@ -89,7 +29,6 @@ private func screenDirection(from start: CGPoint, to end: CGPoint) -> CGVector {
         zMin: CGFloat(hidden.z) - 0.01, zMax: CGFloat(hidden.z) + 0.01
     )
     #expect(invisible.projectedPoint(invisible.centerPoint, layout: layout) == nil)
-    #expect(invisible.applying(action: .translate(.x), start: .zero, current: CGPoint(x: 20, y: 0), layout: layout) == nil)
 }
 
 @Test func placementFootprintHighlightMatchesClickPlacement() throws {
@@ -151,33 +90,4 @@ private func screenDirection(from start: CGPoint, to end: CGPoint) -> CGVector {
     #expect(abs(projectedPoints[0].point.y + 0.023) < 1.0e-12)
     #expect(abs(projectedPoints[2].point.x - 0.033) < 1.0e-12)
     #expect(abs(projectedPoints[2].point.y + 0.017) < 1.0e-12)
-}
-
-@Test func profileCornerDragFollowsCursorWithoutCrossBleed() throws {
-    // Dragging exactly along the projected x axis must not move the corner in
-    // z: the former independent per-axis projections cross-bled on the
-    // non-orthogonal isometric screen axes and the corner drifted off-cursor.
-    let layout = ViewportLayout(
-        modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02),
-        size: CGSize(width: 800.0, height: 600.0)
-    )
-    let state = ViewportObjectEditState(
-        xMin: -0.005,
-        xMax: 0.005,
-        yMin: 0.0,
-        yMax: 0.01,
-        zMin: -0.005,
-        zMax: 0.005
-    )
-    let origin = layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0))
-    let alongX = layout.project(Point3D(x: 0.002, y: 0.0, z: 0.0))
-    let alongZ = layout.project(Point3D(x: 0.0, y: 0.0, z: 0.003))
-
-    let xDelta = try #require(state.profileCornerDragDelta(start: origin, current: alongX, layout: layout))
-    let zDelta = try #require(state.profileCornerDragDelta(start: origin, current: alongZ, layout: layout))
-
-    #expect(abs(Double(xDelta.x) - 0.002) < 1.0e-9)
-    #expect(abs(Double(xDelta.y)) < 1.0e-9)
-    #expect(abs(Double(zDelta.y) - 0.003) < 1.0e-9)
-    #expect(abs(Double(zDelta.x)) < 1.0e-9)
 }

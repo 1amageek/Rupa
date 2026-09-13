@@ -18,12 +18,13 @@ enum ViewportSelectionDragOutcome {
     case refuses(any Error)
 }
 
-/// The single reader of a rectangle answer's failure classification.
+/// How a rectangle answer's failure classification reaches this route.
 ///
 /// `Viewport` is a SwiftUI `View` whose drag state is private, so the rule
 /// lives here as a pure function and both call sites — the preview publisher
 /// and the drag handler — dispatch on the same decision instead of each
-/// forming its own.
+/// forming its own. The classification itself belongs to
+/// `ViewportNativeQueryFailure`, which the affordance drag routes read too.
 enum ViewportSelectionDragFailurePolicy {
     static func outcome(
         for result: Result<ViewportSelectionDragTarget, any Error>
@@ -32,20 +33,16 @@ enum ViewportSelectionDragFailurePolicy {
         case let .success(target):
             return .publishes(target)
         case let .failure(error):
-            guard let render = error as? MeshSourcePresentationRenderError,
-                  render.code == .frameNotReady else {
+            guard let transient = ViewportNativeQueryFailure.transient(error) else {
                 return .refuses(error)
             }
-            return .retainsPreview(render)
+            return .retainsPreview(transient)
         }
     }
 
     /// How a refusal reads in the log: the typed code the frame answered with,
     /// and the message that names the condition behind it.
     static func refusalDescription(_ error: any Error) -> String {
-        guard let render = error as? MeshSourcePresentationRenderError else {
-            return String(describing: error)
-        }
-        return "\(render.code.rawValue): \(render.message)"
+        ViewportNativeQueryFailure.description(error)
     }
 }

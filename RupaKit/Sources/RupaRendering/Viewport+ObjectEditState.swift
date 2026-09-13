@@ -2,6 +2,7 @@ import Foundation
 import RupaCore
 import SwiftUI
 import RupaViewportScene
+import SwiftCAD
 
 struct ViewportVertexHandle: Equatable {
     var vertex: ViewportBodyVertex
@@ -106,45 +107,6 @@ struct ViewportObjectOrientation: Equatable, Sendable {
     }
 }
 
-struct ViewportProjectedBox {
-    var minXMinYMinZ: CGPoint
-    var maxXMinYMinZ: CGPoint
-    var minXMaxYMinZ: CGPoint
-    var maxXMaxYMinZ: CGPoint
-    var minXMinYMaxZ: CGPoint
-    var maxXMinYMaxZ: CGPoint
-    var minXMaxYMaxZ: CGPoint
-    var maxXMaxYMaxZ: CGPoint
-
-    var faces: [[CGPoint]] {
-        [
-            [minXMinYMinZ, minXMinYMaxZ, minXMaxYMaxZ, minXMaxYMinZ],
-            [maxXMinYMinZ, maxXMaxYMinZ, maxXMaxYMaxZ, maxXMinYMaxZ],
-            [minXMinYMinZ, maxXMinYMinZ, maxXMinYMaxZ, minXMinYMaxZ],
-            [minXMaxYMinZ, minXMaxYMaxZ, maxXMaxYMaxZ, maxXMaxYMinZ],
-            [minXMinYMinZ, minXMaxYMinZ, maxXMaxYMinZ, maxXMinYMinZ],
-            [minXMinYMaxZ, maxXMinYMaxZ, maxXMaxYMaxZ, minXMaxYMaxZ],
-        ]
-    }
-
-    var edges: [(start: CGPoint, end: CGPoint)] {
-        [
-            (minXMinYMinZ, maxXMinYMinZ),
-            (minXMinYMinZ, minXMaxYMinZ),
-            (maxXMinYMinZ, maxXMaxYMinZ),
-            (minXMaxYMinZ, maxXMaxYMinZ),
-            (minXMinYMaxZ, maxXMinYMaxZ),
-            (minXMinYMaxZ, minXMaxYMaxZ),
-            (maxXMinYMaxZ, maxXMaxYMaxZ),
-            (minXMaxYMaxZ, maxXMaxYMaxZ),
-            (minXMinYMinZ, minXMinYMaxZ),
-            (maxXMinYMinZ, maxXMinYMaxZ),
-            (minXMaxYMinZ, minXMaxYMaxZ),
-            (maxXMaxYMinZ, maxXMaxYMaxZ),
-        ]
-    }
-}
-
 struct ViewportObjectEditState: Equatable, Sendable {
     var xMin: CGFloat
     var xMax: CGFloat
@@ -206,36 +168,45 @@ struct ViewportObjectEditState: Equatable, Sendable {
         )
     }
 
+    /// Solves one affordance action against the mounted frame that drew its
+    /// handle.
+    ///
+    /// `nil` means the pointer carried no direction the action could read, so
+    /// the caller keeps the value it already had. A refusal is thrown, because
+    /// a drag that cannot measure must not leave a handle following the pointer
+    /// against a baseline nothing answered.
+    @MainActor
     func applying(
         action: ViewportAffordanceAction,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> ViewportObjectEditState? {
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> ViewportObjectEditState? {
         var next = self
         switch action {
         case .translate(let axis):
-            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
-            next.translate(axis, by: amount)
+            next.translate(axis, by: try dragAmount(
+                axis: axis, origin: centerPoint, start: start, current: current, measure: measure))
         case .oneSidedScale(let axis):
-            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
-            next.resizePositive(axis, by: amount)
+            next.resizePositive(axis, by: try dragAmount(
+                axis: axis, origin: centerPoint, start: start, current: current, measure: measure))
         case .centerScale(let axis):
-            guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
-            next.resizeFromCenter(axis, by: amount)
+            next.resizeFromCenter(axis, by: try dragAmount(
+                axis: axis, origin: centerPoint, start: start, current: current, measure: measure))
         case .rotate(let axis):
-            guard let amount = rotationAmount(axis: axis, start: start, current: current, layout: layout) else { return nil }
+            guard let amount = try rotationAmount(
+                axis: axis, start: start, current: current, measure: measure) else { return nil }
             next.rotate(axis, by: amount)
         case .vertexMove(let vertex):
-            guard next.moveVertex(vertex, start: start, current: current, layout: layout) else { return nil }
+            try next.moveVertex(vertex, start: start, current: current, measure: measure)
         case .profileCornerMove(_, let vertex):
-            guard next.moveProfileCorner(vertex, start: start, current: current, layout: layout) else { return nil }
+            try next.moveProfileCorner(vertex, start: start, current: current, measure: measure)
         case .profileFaceMove(_, let face):
-            guard next.moveFace(face, start: start, current: current, layout: layout) else { return nil }
+            try next.moveFace(face, start: start, current: current, measure: measure)
         case .profileEdgeChamfer, .profileEdgeFillet:
             break
         case .faceMove(let face):
-            guard next.moveFace(face, start: start, current: current, layout: layout) else { return nil }
+            try next.moveFace(face, start: start, current: current, measure: measure)
         }
         next.normalize()
         return next
@@ -342,81 +313,29 @@ struct ViewportObjectEditState: Equatable, Sendable {
         }
     }
 
+    /// The model point of one profile edge's midpoint.
+    ///
+    /// The profile edges run along `y`, so the midpoint is the box corner in
+    /// `x` and `z` taken at the centre of the extrusion, which is the point the
+    /// overlay producer draws the edge treatment handles from.
+    func position(for edge: ViewportBodyEdge) -> ViewportModelPoint3D {
+        switch edge {
+        case .leftBottom:
+            ViewportModelPoint3D(x: xMin, y: centerY, z: zMin)
+        case .rightBottom:
+            ViewportModelPoint3D(x: xMax, y: centerY, z: zMin)
+        case .rightTop:
+            ViewportModelPoint3D(x: xMax, y: centerY, z: zMax)
+        case .leftTop:
+            ViewportModelPoint3D(x: xMin, y: centerY, z: zMax)
+        }
+    }
+
     func projectedPoint(
         _ point: ViewportModelPoint3D,
         layout: ViewportLayout
     ) -> CGPoint? {
         projectedPoint(x: point.x, y: point.y, z: point.z, layout: layout)
-    }
-
-    func projectedAxisBasis(layout: ViewportLayout) -> ViewportProjectionBasis? {
-        guard let x = projectedAxisDirection(.x, layout: layout),
-              let y = projectedAxisDirection(.y, layout: layout),
-              let z = projectedAxisDirection(.z, layout: layout) else { return nil }
-        return ViewportProjectionBasis(
-            mode: .orbit,
-            xDirection: x,
-            yDirection: y,
-            zDirection: z
-        )
-    }
-
-    func projectedAxisDirection(
-        _ axis: ViewportCoordinateAxis,
-        layout: ViewportLayout
-    ) -> CGVector? {
-        projectedAxisVector(axis, layout: layout)?.normalized
-    }
-
-    func modelLength(
-        forViewportLength length: CGFloat,
-        axis: ViewportCoordinateAxis,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let vector = projectedAxisVector(axis, layout: layout), vector.length > 1.0e-9 else { return nil }
-        let result = length / vector.length
-        return result.isFinite ? result : nil
-    }
-
-    func projectedCube(
-        center: ViewportModelPoint3D, sideLength: CGFloat, layout: ViewportLayout
-    ) -> ViewportProjectedBox? {
-        let half = sideLength / 2
-        return projectedBox(
-            minimum: ViewportModelPoint3D(x: center.x - half, y: center.y - half, z: center.z - half),
-            maximum: ViewportModelPoint3D(x: center.x + half, y: center.y + half, z: center.z + half),
-            layout: layout
-        )
-    }
-
-    func projectedBox(layout: ViewportLayout) -> ViewportProjectedBox? {
-        projectedBox(
-            minimum: ViewportModelPoint3D(x: xMin, y: yMin, z: zMin),
-            maximum: ViewportModelPoint3D(x: xMax, y: yMax, z: zMax),
-            layout: layout
-        )
-    }
-
-    private func projectedBox(
-        minimum: ViewportModelPoint3D, maximum: ViewportModelPoint3D, layout: ViewportLayout
-    ) -> ViewportProjectedBox? {
-        var points: [CGPoint] = []
-        points.reserveCapacity(8)
-        for index in 0..<8 {
-            guard let point = projectedPoint(
-                x: index & 1 == 0 ? minimum.x : maximum.x,
-                y: index & 2 == 0 ? minimum.y : maximum.y,
-                z: index & 4 == 0 ? minimum.z : maximum.z,
-                layout: layout
-            ) else { return nil }
-            points.append(point)
-        }
-        return ViewportProjectedBox(
-            minXMinYMinZ: points[0], maxXMinYMinZ: points[1],
-            minXMaxYMinZ: points[2], maxXMaxYMinZ: points[3],
-            minXMinYMaxZ: points[4], maxXMinYMaxZ: points[5],
-            minXMaxYMaxZ: points[6], maxXMaxYMaxZ: points[7]
-        )
     }
 
     private func projectedFootprint(y: CGFloat, layout: ViewportLayout) -> ViewportProjectedRect? {
@@ -444,18 +363,32 @@ struct ViewportObjectEditState: Equatable, Sendable {
         }
     }
 
+    /// The world direction of one model axis.
+    ///
+    /// `worldPoint` maps a model point as `centre + orientation.applied(p -
+    /// centre)`, and `ViewportObjectOrientation.rotate` turns the basis rather
+    /// than scaling it, so that map is an isometry: one model unit is one world
+    /// metre and the three model axes stay orthonormal in world space. A drag
+    /// therefore states its world axis here instead of probing the frame with a
+    /// projected offset point.
+    func worldAxis(_ axis: ViewportCoordinateAxis) -> Vector3D {
+        let unit: ViewportModelVector3D
+        switch axis {
+        case .x:
+            unit = ViewportModelVector3D(x: 1.0, y: 0.0, z: 0.0)
+        case .y:
+            unit = ViewportModelVector3D(x: 0.0, y: 1.0, z: 0.0)
+        case .z:
+            unit = ViewportModelVector3D(x: 0.0, y: 0.0, z: 1.0)
+        }
+        let rotated = orientation.applied(to: unit)
+        return Vector3D(x: Double(rotated.x), y: Double(rotated.y), z: Double(rotated.z))
+    }
+
     private func projectedPoint(
         x: CGFloat, y: CGFloat, z: CGFloat, layout: ViewportLayout
     ) -> CGPoint? {
         layout.projectedPoint(worldPoint(ViewportModelPoint3D(x: x, y: y, z: z)))?.point
-    }
-
-    private func projectedAxisVector(
-        _ axis: ViewportCoordinateAxis, layout: ViewportLayout
-    ) -> CGVector? {
-        guard let start = projectedPoint(centerPoint, layout: layout),
-              let end = projectedPoint(centerPoint.offset(axis: axis, amount: 1), layout: layout) else { return nil }
-        return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
     private func rotatedPoint(x: CGFloat, y: CGFloat, z: CGFloat) -> (x: CGFloat, y: CGFloat, z: CGFloat) {
@@ -511,19 +444,20 @@ struct ViewportObjectEditState: Equatable, Sendable {
         orientation.rotate(axis, by: amount)
     }
 
+    @MainActor
     private mutating func moveFace(
         _ face: ViewportBodyFace,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> Bool {
-        let axis: ViewportCoordinateAxis
-        switch face {
-        case .front, .back: axis = .y
-        case .top, .bottom: axis = .z
-        case .left, .right, .side: axis = .x
-        }
-        guard let amount = dragAmount(axis: axis, start: start, current: current, layout: layout) else { return false }
+        measure: some ViewportAffordanceMeasuring
+    ) throws {
+        let amount = try dragAmount(
+            axis: ViewportProfileFaceDragMapping.axis(for: face),
+            origin: position(for: face),
+            start: start,
+            current: current,
+            measure: measure
+        )
         switch face {
         case .front:
             yMin += amount
@@ -538,18 +472,28 @@ struct ViewportObjectEditState: Equatable, Sendable {
         case .right, .side:
             xMax += amount
         }
-        return true
     }
 
+    @MainActor
     private mutating func moveVertex(
         _ vertex: ViewportBodyVertex,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> Bool {
-        guard let xAmount = dragAmount(axis: .x, start: start, current: current, layout: layout),
-              let yAmount = dragAmount(axis: .y, start: start, current: current, layout: layout),
-              let zAmount = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return false }
+        measure: some ViewportAffordanceMeasuring
+    ) throws {
+        // One view-plane displacement resolved on the orthonormal world axes.
+        // Projecting the screen displacement onto each axis independently
+        // cross-bleeds wherever the projected axes are not orthogonal on
+        // screen, which is the defect the profile corner route was already
+        // repaired for, and it left the dragged vertex behind the pointer in
+        // isometric views.
+        let anchor = worldPoint(position(for: vertex))
+        let from = try measure.viewPlanePoint(at: start, through: anchor)
+        let to = try measure.viewPlanePoint(at: current, through: anchor)
+        let delta = try Self.displacement(from: from, to: to)
+        let xAmount = CGFloat(delta.dot(worldAxis(.x)))
+        let yAmount = CGFloat(delta.dot(worldAxis(.y)))
+        let zAmount = CGFloat(delta.dot(worldAxis(.z)))
         if vertex.usesMinX {
             xMin += xAmount
         } else {
@@ -565,16 +509,17 @@ struct ViewportObjectEditState: Equatable, Sendable {
         } else {
             zMax += zAmount
         }
-        return true
     }
 
+    @MainActor
     private mutating func moveProfileCorner(
         _ vertex: ViewportBodyVertex,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> Bool {
-        guard let delta = profileCornerDragDelta(start: start, current: current, layout: layout) else { return false }
+        measure: some ViewportAffordanceMeasuring
+    ) throws {
+        let delta = try profileCornerDragDelta(
+            vertex, start: start, current: current, measure: measure)
         if vertex.usesMinX {
             xMin += delta.x
         } else {
@@ -585,144 +530,212 @@ struct ViewportObjectEditState: Equatable, Sendable {
         } else {
             zMax += delta.y
         }
-        return true
     }
 
+    /// The corner displacement in the profile sketch plane, as sketch `x` and
+    /// sketch `y`, which are world `x` and world `z`.
+    @MainActor
     func profileCornerDragDelta(
+        _ vertex: ViewportBodyVertex,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> (x: CGFloat, y: CGFloat)? {
-        // Solve the 2x2 system delta = a * vx + b * vz instead of projecting
-        // the screen delta onto each axis independently: the projected x/z
-        // axes are not orthogonal on screen in isometric views, so independent
-        // projections cross-bleed (dragging along the x grid direction also
-        // moved the corner in z) and the corner drifted off the cursor.
-        guard let xVector = projectedAxisVector(.x, layout: layout),
-              let zVector = projectedAxisVector(.z, layout: layout) else { return nil }
-        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
-        let determinant = xVector.dx * zVector.dy - xVector.dy * zVector.dx
-        let degenerateDeterminant = 1.0e-6 * xVector.length * zVector.length
-        guard abs(determinant) > degenerateDeterminant else {
-            return nil
-        }
-        let xAmount = (delta.dx * zVector.dy - delta.dy * zVector.dx) / determinant
-        let zAmount = (xVector.dx * delta.dy - xVector.dy * delta.dx) / determinant
-        return (x: xAmount, y: zAmount)
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> (x: CGFloat, y: CGFloat) {
+        let delta = try profilePlaneDisplacement(
+            origin: position(for: vertex), start: start, current: current, measure: measure)
+        return (x: delta.x, y: delta.z)
     }
 
+    @MainActor
     func profileFaceDragDistance(
         _ face: ViewportBodyFace,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
-              let yDelta = dragAmount(axis: .y, start: start, current: current, layout: layout),
-              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> CGFloat? {
+        // The mapping reads exactly one of the three deltas per face, so the
+        // axis is chosen from the face first and only that axis is measured.
+        // Asking for all three and refusing unless all three resolved made a
+        // face solvable along its own axis unsolvable whenever a different axis
+        // was degenerate on screen, and every axis-front camera has one.
+        let axis = ViewportProfileFaceDragMapping.axis(for: face)
+        let amount = Double(try dragAmount(
+            axis: axis,
+            origin: position(for: face),
+            start: start,
+            current: current,
+            measure: measure
+        ))
         guard let distance = ViewportProfileFaceDragMapping.distance(
             for: face,
-            xDelta: Double(xDelta),
-            yDelta: Double(yDelta),
-            zDelta: Double(zDelta)
+            xDelta: axis == .x ? amount : 0.0,
+            yDelta: axis == .y ? amount : 0.0,
+            zDelta: axis == .z ? amount : 0.0
         ) else {
             return nil
         }
         return CGFloat(distance)
     }
 
+    @MainActor
     func profileEdgeChamferDistance(
         _ edge: ViewportBodyEdge,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
-              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> CGFloat? {
+        let delta = try profilePlaneDisplacement(
+            origin: position(for: edge), start: start, current: current, measure: measure)
         guard let distance = ViewportProfileEdgeChamferMapping.distance(
             for: edge,
-            xDelta: Double(xDelta),
-            zDelta: Double(zDelta)
+            xDelta: Double(delta.x),
+            zDelta: Double(delta.z)
         ) else {
             return nil
         }
         return CGFloat(distance)
     }
 
+    @MainActor
     func profileEdgeFilletRadius(
         _ edge: ViewportBodyEdge,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let xDelta = dragAmount(axis: .x, start: start, current: current, layout: layout),
-              let zDelta = dragAmount(axis: .z, start: start, current: current, layout: layout) else { return nil }
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> CGFloat? {
+        let delta = try profilePlaneDisplacement(
+            origin: position(for: edge), start: start, current: current, measure: measure)
         guard let radius = ViewportProfileEdgeFilletMapping.radius(
             for: edge,
-            xDelta: Double(xDelta),
-            zDelta: Double(zDelta)
+            xDelta: Double(delta.x),
+            zDelta: Double(delta.z)
         ) else {
             return nil
         }
         return CGFloat(radius)
     }
 
+    /// The signed metres travelled along one model axis, measured on the axis
+    /// through `origin`.
+    @MainActor
     private func dragAmount(
         axis: ViewportCoordinateAxis,
+        origin: ViewportModelPoint3D,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let axisVector = projectedAxisVector(axis, layout: layout), axisVector.length > 1.0e-9 else { return nil }
-        let direction = axisVector.normalized
-        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
-        let amount = (delta.dx * direction.dx + delta.dy * direction.dy) / axisVector.length
-        return amount.isFinite ? amount : nil
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> CGFloat {
+        let delta = try measure.worldAxisDelta(
+            from: start,
+            to: current,
+            axisOrigin: worldPoint(origin),
+            axisDirection: worldAxis(axis)
+        )
+        guard delta.isFinite else {
+            throw Self.measurementFailure("The affordance world-axis delta is not finite.")
+        }
+        return CGFloat(delta)
     }
 
+    /// The displacement between two samples of the profile sketch plane,
+    /// resolved on world `x` and world `z`.
+    @MainActor
+    private func profilePlaneDisplacement(
+        origin: ViewportModelPoint3D,
+        start: CGPoint,
+        current: CGPoint,
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> (x: CGFloat, z: CGFloat) {
+        let planeOrigin = worldPoint(origin)
+        let planeNormal = worldAxis(.y)
+        let from = try measure.worldPlanePoint(
+            at: start, planeOrigin: planeOrigin, planeNormal: planeNormal)
+        let to = try measure.worldPlanePoint(
+            at: current, planeOrigin: planeOrigin, planeNormal: planeNormal)
+        let delta = try Self.displacement(from: from, to: to)
+        return (x: CGFloat(delta.dot(worldAxis(.x))), z: CGFloat(delta.dot(worldAxis(.z))))
+    }
+
+    private static func displacement(from start: Point3D, to end: Point3D) throws -> Vector3D {
+        let delta = end - start
+        guard delta.isFinite else {
+            throw measurementFailure("The affordance world displacement is not finite.")
+        }
+        return delta
+    }
+
+    /// The signed rotation between two samples of the rotation plane.
+    ///
+    /// The two answers are kept rather than their difference, because an angle
+    /// is the difference of two absolute directions from the pivot and one
+    /// displacement cannot state it.
+    @MainActor
     private func rotationAmount(
         axis: ViewportCoordinateAxis,
         start: CGPoint,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> CGFloat? {
-        guard let center = projectedPoint(centerPoint, layout: layout),
-              let plane = rotationPlaneDirections(for: axis, layout: layout) else { return nil }
-        let startAngle = rotationPlaneAngle(for: start, center: center, plane: plane)
-        let currentAngle = rotationPlaneAngle(for: current, center: center, plane: plane)
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> CGFloat? {
+        let pivot = worldPoint(centerPoint)
+        let normal = worldAxis(axis)
+        let from = try measure.worldPlanePoint(
+            at: start, planeOrigin: pivot, planeNormal: normal)
+        let to = try measure.worldPlanePoint(
+            at: current, planeOrigin: pivot, planeNormal: normal)
+        let plane = rotationPlaneAxes(for: axis)
+        guard let startAngle = try Self.rotationAngle(of: from, about: pivot, plane: plane),
+              let currentAngle = try Self.rotationAngle(of: to, about: pivot, plane: plane) else {
+            return nil
+        }
         return normalizedRotationDelta(from: startAngle, to: currentAngle)
     }
 
-    private func rotationPlaneDirections(
-        for axis: ViewportCoordinateAxis,
-        layout: ViewportLayout
-    ) -> (first: CGVector, second: CGVector)? {
-        guard let x = projectedAxisDirection(.x, layout: layout),
-              let y = projectedAxisDirection(.y, layout: layout),
-              let z = projectedAxisDirection(.z, layout: layout) else { return nil }
+    /// The ordered world basis of one rotation plane, matching the sign
+    /// convention `ViewportObjectOrientation.rotate` turns the basis with.
+    private func rotationPlaneAxes(
+        for axis: ViewportCoordinateAxis
+    ) -> (first: Vector3D, second: Vector3D) {
         switch axis {
         case .x:
-            return (y, z)
+            (worldAxis(.y), worldAxis(.z))
         case .y:
-            return (z, x)
+            (worldAxis(.z), worldAxis(.x))
         case .z:
-            return (x, y)
+            (worldAxis(.x), worldAxis(.y))
         }
     }
 
-    private func rotationPlaneAngle(
-        for point: CGPoint,
-        center: CGPoint,
-        plane: (first: CGVector, second: CGVector)
-    ) -> CGFloat {
-        let vector = CGVector(dx: point.x - center.x, dy: point.y - center.y)
-        let determinant = plane.first.dx * plane.second.dy - plane.first.dy * plane.second.dx
-        guard abs(determinant) > 1.0e-6 else {
-            return atan2(vector.dy, vector.dx)
+    /// `nil` means the sample carries no direction because it sits on the
+    /// pivot, which leaves the caller's retained value unchanged. The basis is
+    /// orthonormal because the orientation is a rigid rotation, so the collinear
+    /// case the screen-space form fell back on cannot arise here; a camera that
+    /// sees the rotation plane edge-on is refused by the frame instead.
+    private static func rotationAngle(
+        of point: Point3D,
+        about pivot: Point3D,
+        plane: (first: Vector3D, second: Vector3D)
+    ) throws -> CGFloat? {
+        let radial = point - pivot
+        guard radial.isFinite else {
+            throw measurementFailure("The affordance rotation sample is not finite.")
         }
-        let firstAmount = (vector.dx * plane.second.dy - vector.dy * plane.second.dx) / determinant
-        let secondAmount = (plane.first.dx * vector.dy - plane.first.dy * vector.dx) / determinant
-        return atan2(secondAmount, firstAmount)
+        let first = radial.dot(plane.first)
+        let second = radial.dot(plane.second)
+        guard first.isFinite, second.isFinite else {
+            throw measurementFailure("The affordance rotation basis parameters are not finite.")
+        }
+        guard hypot(first, second) > Self.retainedRadiusFloor else { return nil }
+        return CGFloat(atan2(second, first))
+    }
+
+    /// A sample this close to the pivot carries no direction. One nanometre is
+    /// far below any CAD tolerance this module works at.
+    private static let retainedRadiusFloor: Double = 1.0e-9
+
+    private static func measurementFailure(
+        _ message: String
+    ) -> MeshSourcePresentationRenderError {
+        MeshSourcePresentationRenderError(code: .failed, message: message)
     }
 
     private func normalizedRotationDelta(from startAngle: CGFloat, to currentAngle: CGFloat) -> CGFloat {

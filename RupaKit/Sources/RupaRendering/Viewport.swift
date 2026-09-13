@@ -6105,7 +6105,7 @@ public struct Viewport: View {
         case .independentCopyBodyDimension(let target):
             updateIndependentCopyBodyDimensionDrag(target: target, start: start, current: current)
         case .affordance(let target):
-            updateAffordanceDrag(target: target, start: start, current: current, size: size)
+            updateAffordanceDrag(target: target, start: start, current: current)
         }
     }
 
@@ -6437,20 +6437,59 @@ public struct Viewport: View {
         }
     }
 
+    /// The mounted frame every affordance drag measures against.
+    ///
+    /// The preparation identity and the control revision are read once per
+    /// update or commit, so both ends of a two-point sample resolve against one
+    /// camera and a camera move cannot mix two projections into one
+    /// displacement.
+    private func affordanceMeasure() throws -> ViewportNativeAffordanceMeasure {
+        ViewportNativeAffordanceMeasure(
+            planCache: presentationPlanCache,
+            identity: try presentationQueryIdentity(),
+            revision: activeControlSession.revision
+        )
+    }
+
+    /// How a drag update answers a native query it could not resolve.
+    ///
+    /// A frame that has not judged this identity yet is the transient case the
+    /// next pointer move can ask again about, so the last answered ghost edit
+    /// stays, nothing is reported, and nothing is authorized. Every other code
+    /// is an answer: the pending interaction is cleared, because a drag that
+    /// cannot measure must not leave a handle following the pointer against a
+    /// baseline nothing answered.
+    private func refuseAffordanceDragUpdate(_ error: any Error) {
+        guard ViewportNativeQueryFailure.isTransient(error) == false else {
+            return
+        }
+        reportNativeGestureFailure(error)
+        clearPendingCanvasInteractionTargets()
+    }
+
+    /// How a commit answers a native query it could not resolve.
+    ///
+    /// A drag that has ended has no later frame to ask, so a frame that never
+    /// judged it is an answer too and every failure clears the interaction.
+    private func refuseAffordanceDragCommit(_ error: any Error) {
+        reportNativeGestureFailure(error)
+        clearPendingCanvasInteractionTargets()
+    }
+
     private func updateEdgeTreatmentDragPreview(
         target: ViewportAffordanceTarget,
         dragState: ViewportAffordanceDragState,
         current: CGPoint,
-        layout: ViewportLayout
-    ) -> Bool {
+        measure: some ViewportAffordanceMeasuring
+    ) throws -> Bool {
         switch target.action {
         case .profileEdgeChamfer(let selectionTarget, let edge):
             guard let baseEdit = dragState.baseEdits[target.featureID],
-                  let distance = baseEdit.profileEdgeChamferDistance(
+                  let distance = try baseEdit.profileEdgeChamferDistance(
                       edge,
                       start: dragState.startPoint,
                       current: current,
-                      layout: layout
+                      measure: measure
                   ),
                   distance > 1.0e-12 else {
                 clearDragPreviewDocument()
@@ -6465,11 +6504,11 @@ public struct Viewport: View {
             return true
         case .profileEdgeFillet(let selectionTarget, let edge):
             guard let baseEdit = dragState.baseEdits[target.featureID],
-                  let radius = baseEdit.profileEdgeFilletRadius(
+                  let radius = try baseEdit.profileEdgeFilletRadius(
                       edge,
                       start: dragState.startPoint,
                       current: current,
-                      layout: layout
+                      measure: measure
                   ),
                   radius > 1.0e-12 else {
                 clearDragPreviewDocument()
@@ -6511,18 +6550,8 @@ public struct Viewport: View {
     private func updateAffordanceDrag(
         target: ViewportAffordanceTarget,
         start: CGPoint,
-        current: CGPoint,
-        size: CGSize
+        current: CGPoint
     ) {
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis,
-            usesDragPreviewDocument: false
-        )
-        let layout = sceneContext.layout
-        let selectedFeatureIDs = selectedObjectFeatureIDs()
-
         let dragState: ViewportAffordanceDragState
         if let activeAffordanceDrag,
            activeAffordanceDrag.target == target {
@@ -6554,36 +6583,41 @@ public struct Viewport: View {
             return
         }
 
-        if updateEdgeTreatmentDragPreview(
-            target: target,
-            dragState: dragState,
-            current: current,
-            layout: layout
-        ) {
-            return
-        }
-
-        if let baseGroupEdit = dragState.baseGroupEdit {
-            guard let nextGroupEdit = baseGroupEdit.applying(
-                action: target.action,
-                start: dragState.startPoint,
+        do {
+            let measure = try affordanceMeasure()
+            if try updateEdgeTreatmentDragPreview(
+                target: target,
+                dragState: dragState,
                 current: current,
-                layout: layout
-            ) else { return }
-            for (featureID, baseEdit) in dragState.baseEdits {
-                editedBodies[featureID] = baseEdit.transformedFromGroup(
-                    baseGroup: baseGroupEdit,
-                    targetGroup: nextGroupEdit
-                )
+                measure: measure
+            ) {
+                return
             }
-        } else if let baseEdit = dragState.baseEdits[target.featureID] {
-            guard let next = baseEdit.applying(
-                action: target.action,
-                start: dragState.startPoint,
-                current: current,
-                layout: layout
-            ) else { return }
-            editedBodies[target.featureID] = next
+
+            if let baseGroupEdit = dragState.baseGroupEdit {
+                guard let nextGroupEdit = try baseGroupEdit.applying(
+                    action: target.action,
+                    start: dragState.startPoint,
+                    current: current,
+                    measure: measure
+                ) else { return }
+                for (featureID, baseEdit) in dragState.baseEdits {
+                    editedBodies[featureID] = baseEdit.transformedFromGroup(
+                        baseGroup: baseGroupEdit,
+                        targetGroup: nextGroupEdit
+                    )
+                }
+            } else if let baseEdit = dragState.baseEdits[target.featureID] {
+                guard let next = try baseEdit.applying(
+                    action: target.action,
+                    start: dragState.startPoint,
+                    current: current,
+                    measure: measure
+                ) else { return }
+                editedBodies[target.featureID] = next
+            }
+        } catch {
+            refuseAffordanceDragUpdate(error)
         }
     }
 
@@ -7048,7 +7082,7 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             return
         }
-        if finishInteractionDragIfNeeded(end: end, size: size) {
+        if finishInteractionDragIfNeeded(end: end) {
             return
         }
         defer {
@@ -7106,7 +7140,7 @@ public struct Viewport: View {
         onCanvasDrag(drag)
     }
 
-    private func finishInteractionDragIfNeeded(end: CGPoint, size: CGSize) -> Bool {
+    private func finishInteractionDragIfNeeded(end: CGPoint) -> Bool {
         let hasPendingTarget = pendingInteractionTarget != nil
         let request = ViewportInteractionDragFinishResolver.request(
             pendingTarget: pendingInteractionTarget,
@@ -7120,15 +7154,14 @@ public struct Viewport: View {
         case .none:
             return false
         case .finish(let finishKind):
-            finishInteractionDrag(finishKind, end: end, size: size)
+            finishInteractionDrag(finishKind, end: end)
             return true
         }
     }
 
     private func finishInteractionDrag(
         _ finishKind: ViewportActiveInteractionDragKind,
-        end: CGPoint,
-        size: CGSize
+        end: CGPoint
     ) {
         switch finishKind {
         case .splineControlPointSlide:
@@ -7154,7 +7187,7 @@ public struct Viewport: View {
         case .regionOffset:
             finishRegionOffsetDrag()
         case .affordance:
-            finishAffordanceInteractionDrag(end: end, size: size)
+            finishAffordanceInteractionDrag(end: end)
         }
     }
 
@@ -7257,13 +7290,25 @@ public struct Viewport: View {
         }
     }
 
-    private func finishAffordanceInteractionDrag(end: CGPoint, size: CGSize) {
+    private func finishAffordanceInteractionDrag(end: CGPoint) {
         let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
         let bodyMoveDragTarget = committedBodyMoveDragTarget()
-        let vertexDragTarget = committedVertexDragTarget(to: end, size: size)
-        let faceDragTarget = committedFaceDragTarget(to: end, size: size)
-        let edgeChamferDragTarget = committedEdgeChamferDragTarget(to: end, size: size)
-        let edgeFilletDragTarget = committedEdgeFilletDragTarget(to: end, size: size)
+        let vertexDragTarget: (featureID: FeatureID, target: ViewportVertexDragTarget)?
+        let faceDragTarget: (featureID: FeatureID, target: ViewportFaceDragTarget)?
+        let edgeChamferDragTarget: (featureID: FeatureID, target: ViewportEdgeChamferDragTarget)?
+        let edgeFilletDragTarget: (featureID: FeatureID, target: ViewportEdgeFilletDragTarget)?
+        do {
+            // Each route asks the frame only after its own action guard passes,
+            // so a translate commit, which measures nothing, never requires one.
+            vertexDragTarget = try committedVertexDragTarget(to: end)
+            faceDragTarget = try committedFaceDragTarget(to: end)
+            edgeChamferDragTarget = try committedEdgeChamferDragTarget(to: end)
+            edgeFilletDragTarget = try committedEdgeFilletDragTarget(to: end)
+        } catch {
+            activeCanvasDrag = nil
+            refuseAffordanceDragCommit(error)
+            return
+        }
         activeAffordanceDrag = nil
         activeCanvasDrag = nil
         clearDragPreviewDocument()
@@ -7501,24 +7546,20 @@ public struct Viewport: View {
     }
 
     private func committedVertexDragTarget(
-        to end: CGPoint,
-        size: CGSize
-    ) -> (featureID: FeatureID, target: ViewportVertexDragTarget)? {
+        to end: CGPoint
+    ) throws -> (featureID: FeatureID, target: ViewportVertexDragTarget)? {
         guard let activeAffordanceDrag,
-              case .profileCornerMove(let target, _) = activeAffordanceDrag.target.action,
+              case .profileCornerMove(let target, let vertex) = activeAffordanceDrag.target.action,
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let delta = baseEdit.profileCornerDragDelta(
+        let measure = try affordanceMeasure()
+        let delta = try baseEdit.profileCornerDragDelta(
+            vertex,
             start: activeAffordanceDrag.startPoint,
             current: end,
-            layout: layout
-        ) else { return nil }
+            measure: measure
+        )
         guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 else {
             return nil
         }
@@ -7533,24 +7574,19 @@ public struct Viewport: View {
     }
 
     private func committedFaceDragTarget(
-        to end: CGPoint,
-        size: CGSize
-    ) -> (featureID: FeatureID, target: ViewportFaceDragTarget)? {
+        to end: CGPoint
+    ) throws -> (featureID: FeatureID, target: ViewportFaceDragTarget)? {
         guard let activeAffordanceDrag,
               case .profileFaceMove(let target, let face) = activeAffordanceDrag.target.action,
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        guard let distance = baseEdit.profileFaceDragDistance(
+        let measure = try affordanceMeasure()
+        guard let distance = try baseEdit.profileFaceDragDistance(
             face,
             start: activeAffordanceDrag.startPoint,
             current: end,
-            layout: layout
+            measure: measure
         ) else {
             return nil
         }
@@ -7567,25 +7603,19 @@ public struct Viewport: View {
     }
 
     private func committedEdgeChamferDragTarget(
-        to end: CGPoint,
-        size: CGSize
-    ) -> (featureID: FeatureID, target: ViewportEdgeChamferDragTarget)? {
+        to end: CGPoint
+    ) throws -> (featureID: FeatureID, target: ViewportEdgeChamferDragTarget)? {
         guard let activeAffordanceDrag,
               case .profileEdgeChamfer(let target, let edge) = activeAffordanceDrag.target.action,
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis,
-            usesDragPreviewDocument: false
-        )
-        guard let distance = baseEdit.profileEdgeChamferDistance(
+        let measure = try affordanceMeasure()
+        guard let distance = try baseEdit.profileEdgeChamferDistance(
             edge,
             start: activeAffordanceDrag.startPoint,
             current: end,
-            layout: layout
+            measure: measure
         ) else {
             return nil
         }
@@ -7602,25 +7632,19 @@ public struct Viewport: View {
     }
 
     private func committedEdgeFilletDragTarget(
-        to end: CGPoint,
-        size: CGSize
-    ) -> (featureID: FeatureID, target: ViewportEdgeFilletDragTarget)? {
+        to end: CGPoint
+    ) throws -> (featureID: FeatureID, target: ViewportEdgeFilletDragTarget)? {
         guard let activeAffordanceDrag,
               case .profileEdgeFillet(let target, let edge) = activeAffordanceDrag.target.action,
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis,
-            usesDragPreviewDocument: false
-        )
-        guard let radius = baseEdit.profileEdgeFilletRadius(
+        let measure = try affordanceMeasure()
+        guard let radius = try baseEdit.profileEdgeFilletRadius(
             edge,
             start: activeAffordanceDrag.startPoint,
             current: end,
-            layout: layout
+            measure: measure
         ) else {
             return nil
         }

@@ -803,12 +803,96 @@ independent tessellator is never an alternative implementation.
    native axis route reports the same way rather than dropping an unanswered
    value at mouse-up, and neither route ever turns a refusal into a committed
    value.
-   The profile corner, profile face, edge chamfer, and edge fillet affordance
-   actions are outside these claims and stay on their legacy selectors until
-   RK-4.2.2/3 prepares records for them. Rectangle selection no longer waits on
-   a later seam: its CAD sub-shape rules are owned by invariant 8, and the
-   legacy rectangle resolver is reached only for the residual geometry named
-   there.
+   Every affordance drag measures on the mounted frame.
+   `Viewport.updateAffordanceDrag`, the edge treatment drag preview, and the
+   profile corner, profile face, edge chamfer, and edge fillet commit routes
+   take their quantities from `MeshSourcePresentationPlanCache` queries made
+   against the preparation identity the press validated, not from a
+   `ViewportLayout` rebuilt inside this view. The measuring surface is a
+   `@MainActor` protocol with three requirements, each one already solved by
+   the frame that drew the handle: the signed metres between two screen
+   points along a retained world axis, the world point where a screen point
+   meets a retained world plane, and the world point where a screen point
+   meets the plane through an anchor perpendicular to the direction the frame
+   looks along. It exposes no point projection, and none may be added.
+   A projection primitive is what the legacy measurement was built from: it
+   offset a model point by one unit, projected the offset point and the
+   centre, and read the screen vector between them. That probe is a
+   metre-long ray inside a body whose own extent is centimetres, and the
+   standard perspective camera stands a comparable centimetre distance from
+   it, so the probe point falls behind the eye and every quantity derived
+   from it resolves to nothing. Removing the primitive removes the class of
+   defect rather than one instance of it.
+   The probe is unnecessary as well as unsound. `ViewportObjectEditState`
+   maps a model point to world as `centre + orientation.applied(p - centre)`,
+   and `ViewportObjectOrientation.rotate` turns the basis rather than scaling
+   it, so that map is an isometry: one model unit is one world metre and the
+   three model axes stay orthonormal in world space. A query's world axis is
+   therefore `orientation.applied(unit(axis))` and its world origin is the
+   edit box point the handle is drawn on, both stated without asking the
+   frame anything.
+   Each action names the one query its role owns.
+
+   | Action | Query | Retained geometry |
+   |---|---|---|
+   | `translate`, `oneSidedScale`, `centerScale` | world axis delta | box centre; the action's world axis |
+   | `faceMove`, `profileFaceMove` | world axis delta | the face centre; the face's own world axis |
+   | `vertexMove` | two view plane points | the world point of the box corner |
+   | `profileCornerMove` | two world plane points | the world box corner; normal world `y` |
+   | `profileEdgeChamfer`, `profileEdgeFillet` | two world plane points | the world edge midpoint; normal world `y` |
+   | `rotate` | two world plane points | box centre; normal the rotation axis |
+
+   The two-point routes take the displacement between the two answers and
+   resolve it on the retained orthonormal world axes: `vertexMove` on all
+   three, `profileCornerMove` and the two edge treatments on world `x` and
+   `z`, which is the profile sketch plane those commits are expressed in.
+   `rotate` is the exception that keeps both answers rather than their
+   difference, because an angle is the difference of two absolute directions
+   from the pivot and one displacement cannot state it.
+   `profileFaceMove` asks along one axis because its mapping uses one.
+   `ViewportProfileFaceDragMapping` reads exactly one of the three deltas per
+   face, so the axis is chosen from the face first and only that axis is
+   measured. The previous form asked for all three and refused unless all
+   three resolved, which made a face solvable along its own axis unsolvable
+   whenever a different axis was degenerate on screen, and every axis-front
+   camera has one such axis. The mapping keeps the three-delta signature its
+   own tests pin, and states the face-to-axis rule the caller now reads.
+   A degenerate query is a typed refusal scoped to the axis or plane actually
+   asked for. The frame refuses a world axis collinear with the view ray and
+   a world plane the ray runs along, so the `z` axis of an axis-front `z`
+   camera refuses while the two axes that camera draws still answer.
+   `ViewportObjectEditState` no longer answers a screen-polar angle when a
+   rotation basis projects collinearly: that fallback reported a rotation the
+   drawn arc never had, which is the condition
+   `ViewportSpatialInteractionInputMath` already refuses. A pointer at the
+   pivot is not that condition -- it carries no direction, so the drag keeps
+   its retained value and authorizes nothing.
+   Absence and refusal are separate events here, split by the rule rectangle
+   selection already uses: a `MeshSourcePresentationRenderError` whose code is
+   `frameNotReady` is the transient case a caller should ask again about, and
+   every other code is an answer the caller must act on. One owner states that
+   classification and both readers -- the rectangle selection policy and these
+   drag routes -- dispatch on it. A drag update that meets `frameNotReady`
+   keeps the last answered ghost edit, reports nothing, and authorizes
+   nothing. Any other failure, during an update or at commit, reports through
+   this module's gesture logger and clears the pending interaction, because a
+   drag that cannot measure must not leave a handle following the pointer
+   against a baseline nothing answered.
+   A commit that answers no mutation is not a refusal. An outward edge
+   treatment drag, which the chamfer and fillet mappings answer with no
+   distance, and a solved quantity below the commit floor both leave the
+   document untouched and report nothing, exactly as they did before. Only a
+   failed measurement reports.
+   `vertexMove` changes observably here. It previously projected the screen
+   displacement onto each model axis independently, which cross-bleeds
+   wherever the projected axes are not orthogonal on screen -- the defect
+   `profileCornerMove` was already repaired for -- so the dragged vertex
+   drifted off the pointer in isometric views. Resolving one view-plane
+   displacement on the orthonormal world axes instead keeps the vertex under
+   the pointer, and its test states that rather than the old decomposition.
+   Rectangle selection does not wait on a later seam: its CAD sub-shape rules
+   are owned by invariant 8, and the legacy rectangle resolver is reached only
+   for the residual geometry named there.
    The closed
    `ViewportSpatialHandleIdentity: Equatable, Sendable` enum contains only
    stable source/selection addresses and semantic handle roles; it contains no
@@ -1720,6 +1804,7 @@ tests and native GPU measurements.
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. `ViewportSketchTransformLifecycleTests` owns the sketch transform route. Producer tests prove that an interactive route registers exactly one record per handle — two translate axes, one rotate, four scale corners — and never a body affordance record; that the arrow, ring, and marker extents are the point lengths `BodyTransformMetrics` owns rather than any sketch measurement; that a non-interactive route draws the outline and registers nothing; that a pending mutation moves every emitted handle; and that an active value of the wrong kind, or a second active value, is refused. Value tests prove the world mutation and the `P^-1 * M_w * P * L` conversion for translate, rotate, and scale, and the typed refusals for a non-finite query answer, another role's query, a rotation point at the pivot, a scale factor at or below the floor, and a singular parent transform. Mounted Ortho and Persp tests prove press, drag, and finish through the input surface and cancel through real event routing, prove the committed corner moves away from the pivot, and prove that neither the body-move route nor the canvas fallback sees the gesture; the Ortho case views the sketch face-on, so it is also the counterexample the orthographic depth-window floor answers. A mounted Ortho test proves the route gate retires the press when it loses its callback. The drag target carries the baseline local frame it was measured against so the workspace owner can refuse a stale commit; that refusal belongs to `RupaUI` and is outside this module's verification. The selected CAD face's `exactWorldPoint` is proved behaviorally on the press and drag routes: in a mounted CAD presentation a pixel where the selected face is occluded by the same body's nearer face yields no `modelWorldPoint`, and a pixel that face itself draws yields the surface point the frame drew. Hover consumes the same private admission helper as its only exact-point supplier, so source review covers hover rather than a separate mounted case. |
 | Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. `ViewportSketchTransformLifecycleTests` proves the sketch transform gizmo registers one record per handle only while the route is interactive, and that a pending mutation moves the emitted outline, arrows, arcs, corner handles, and centre marker to the mutated world geometry while the `scene` and `document` inputs the route reads are unchanged. |
 | Selection rectangle readiness | `Tests/RupaRenderingTests/ViewportSelectionDragFailurePolicyTests.swift` proves the policy publishes a resolved answer, retains the preview in silence for `frameNotReady`, and refuses every other typed failure — another `MeshSourcePresentationRenderError.Code`, and an error of an unrelated type — together with the code-and-message description the refusal reports. `Tests/RupaRenderingTests/ViewportSelectionDragFrameReadinessTests.swift` proves the producers those branches depend on: an idle plan cache answers `surfaceHit` and `occurrenceIDs` with `frameNotReady`, a cache holding a failure recorded for the queried identity rethrows that stored failure unchanged, an unmounted `RealityViewport` answers `surfaceHit`, `occurrenceIDs` and `cameraDepthInterval` with `frameNotReady` for a revision it never applied, and the same viewport mounted in a real window answers a revision other than the one it applied with a stale-revision refusal. The two `Viewport` call sites that dispatch on the policy are covered by source review, because the drag state they read is private SwiftUI `@State`; the mounted end-to-end drag belongs to the integration verification. |
+| Affordance drag measurement | Value tests solve each action against a fake measuring surface that records the queries it was asked and answers them from a stated camera, proving the world axis and world origin each action names, the orthonormal decomposition of the two-point routes, the absolute-pair form of `rotate`, and the typed refusals for a degenerate axis, a degenerate plane -- which is the edge-on rotation plane the removed screen-polar fallback answered anyway -- and a non-finite answer, plus the retained-value answer for a pointer at the pivot and the rule that only an unjudged frame counts as transient. A mapping test pins `ViewportProfileFaceDragMapping`'s face-to-axis rule against its three-delta distance for every face, so the single-axis form stays equivalent to the form its own tests pin. `Tests/RupaRenderingTests/ViewportNativeProfileAffordancePressTests.swift` drives nine mounted handle-and-camera cases -- profile face, profile corner, edge fillet, and edge chamfer under a parallel isometric and under a standard perspective camera, plus profile face under an axis-front camera whose projection collapses one world axis -- through the real press, preview, and release route with the drag end taken as the projection of a stated world displacement, and requires every case to commit on its own callback for the pressed target with a non-zero quantity while no other profile route and no canvas drag answers that round; the perspective cases are the counterexample the removed one-metre axis probe answered with nothing, and the axis-front case is the counterexample the all-three-axes face form refused. Each case contrasts that against a gesture on empty space whose press and whose release are both searched on the construction plane the canvas drag itself resolves on -- the release outward until its screen travel clears the viewport's drag threshold -- so an empty gesture is a routing answer rather than a point the camera cannot solve. A tenth mounted test moves the camera between the claimed drag's baseline and its release and requires the commit, the other profile routes, and the canvas owner to stay silent while the next gesture routes again, which is the stale-revision refusal rather than a not-ready wait. Source review still covers the update failure branch, because the drag state it reads is private SwiftUI `@State`. |
 | Body preview geometry under an edit state | A spatial overlay fixture whose body item carries a snapshot mesh draws that mesh with no edit state and the edit state's world box corners while one exists, proving a prepared identity never decides what a drag previews. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
