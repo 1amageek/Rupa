@@ -18,7 +18,7 @@ private enum RectangleSelectionFixtureError: Error {
     case missingModelingRepresentation
 }
 
-private struct RectangleSelectionFixture {
+struct RectangleSelectionFixture {
     let document: DesignDocument
     let presentationScene: UniversalViewportScene
     let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
@@ -38,7 +38,7 @@ private struct RectangleSelectionFixture {
 
 /// The screen geometry of the CAD body, measured with the same layout the
 /// mounted viewport builds for the supplied scene and presentation bounds.
-private struct RectangleSelectionScreenGeometry {
+struct RectangleSelectionScreenGeometry {
     let layout: ViewportLayout
     let silhouette: CGRect
     let vertexPoints: [SelectionComponentID: CGPoint]
@@ -46,7 +46,7 @@ private struct RectangleSelectionScreenGeometry {
     let worldBounds: (minX: Double, maxX: Double, minY: Double, maxY: Double, minZ: Double, maxZ: Double)
 }
 
-private let rectangleSelectionViewportSize = CGSize(width: 800, height: 600)
+let rectangleSelectionViewportSize = CGSize(width: 800, height: 600)
 private let rectangleSelectionWorldTolerance = 1.0e-6
 
 // MARK: - Fixture invariants
@@ -432,7 +432,7 @@ private func rectangleSelectionDrags(
 // MARK: - Screen geometry
 
 @MainActor
-private func rectangleSelectionScreenGeometry(
+func rectangleSelectionScreenGeometry(
     fixture: RectangleSelectionFixture,
     control: ViewportControlSession
 ) throws -> RectangleSelectionScreenGeometry {
@@ -539,7 +539,7 @@ private func rectangleSelectionEdgeID(
     return nil
 }
 
-private func rectangleSelectionFrontFaceComponentID(
+func rectangleSelectionFrontFaceComponentID(
     fixture: RectangleSelectionFixture,
     geometry: RectangleSelectionScreenGeometry
 ) -> SelectionComponentID? {
@@ -578,7 +578,7 @@ private func rectangleSelectionVertexComponentIDs(
 // MARK: - Fixture construction
 
 @MainActor
-private func rectangleSelectionFixture() throws -> RectangleSelectionFixture {
+func rectangleSelectionFixture() throws -> RectangleSelectionFixture {
     let session = EditorSession()
     _ = session.createDefaultExtrudedRectangle()
     guard let cadFeatureID = session.document.cadDocument.designGraph.order.last else {

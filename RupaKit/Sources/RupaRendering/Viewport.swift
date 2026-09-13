@@ -1815,17 +1815,19 @@ public struct Viewport: View {
         )
     }
 
-    /// CAD sub-shape scopes resolve through the mounted native frame. `.vertex`
-    /// still reaches the legacy resolver for surface knot, span and trim
-    /// handles, which have no prepared native counterpart yet.
+    /// CAD sub-shape scopes and the occurrence resolve through the mounted
+    /// native frame. `.vertex` still reaches the legacy resolver for surface
+    /// knot, span and trim handles, and `.object` and `.all` still reach it for
+    /// the curve and sketch families, which have no prepared native counterpart
+    /// yet.
     private var usesNativeCADSubshapeHits: Bool {
         guard presentationScene != nil else {
             return false
         }
         switch selectionHitPolicy {
-        case .all, .face, .edge, .vertex:
+        case .all, .object, .face, .edge, .vertex:
             return true
-        case .object, .region, .sketchEntity:
+        case .region, .sketchEntity:
             return false
         }
     }
@@ -1834,23 +1836,24 @@ public struct Viewport: View {
     /// scopes that still lack a native input path re-ask the legacy identity
     /// resolver. Face and edge scopes never reach it, including over an empty
     /// pixel, which the native frame answers as a miss.
-    // FIXME(INCOMPLETE_IMPLEMENTATION): `.all`, `.vertex`, `.object`, `.region`
+    // FIXME(INCOMPLETE_IMPLEMENTATION): `.all`, `.object`, `.vertex`, `.region`
     // and `.sketchEntity` still reach the legacy identity resolver, which
     // projects, occludes and clips with its own GPU rule instead of the mounted
     // native frame, so two selection judgements remain live.
     //
     // Production path: `resolvedViewportHit(_:at:in:layout:presentationOccurrenceID:)`
-    // routes a native `.miss` into `legacyViewportHit` for `.all` and
-    // `.vertex`, and `.all` is the default hover scope. `.object`, `.region`
-    // and `.sketchEntity` never run the native query at all, because
+    // routes a native `.miss` into `legacyViewportHit` for `.all`, `.object` and
+    // `.vertex`, and `.all` is the default hover scope. `.region` and
+    // `.sketchEntity` never run the native query at all, because
     // `usesNativeCADSubshapeHits` excludes them, so they reach the same bridge
-    // through `.unsupported`.
+    // through `.unsupported`. `.all` and `.object` also reach it after a native
+    // occurrence answer, which `legacyOverlayAnswer(_:)` records separately.
     //
     // Do not treat the input cutover as complete while this returns true for
     // any scope: surface knot, span and trim handles need a native path, and
-    // the object, region and sketch-entity scopes need a prepared native
-    // identity, before the legacy resolver and this property can be deleted
-    // together. Rectangle selection no longer waits on this property; it asks
+    // the region and sketch-entity scopes need a prepared native identity,
+    // before the legacy resolver and this property can be deleted together.
+    // Rectangle selection no longer waits on this property; it asks
     // `presentationCADSubshapeRectangleHits(in:in:)` for the CAD sub-shape
     // scopes.
     private var requiresLegacyHitFallback: Bool {
@@ -1872,15 +1875,21 @@ public struct Viewport: View {
     /// instead of being answered by a second, differently projected hit rule.
     /// An empty pixel is a `miss`, not `unsupported`: the native frame did
     /// answer, and nothing is drawn there.
+    ///
+    /// `resolvedOccurrence` is a complete native answer that the interim overlay
+    /// residual still has to be ordered against, and it is separated from
+    /// `resolved` for that reason alone. A sub-shape answer is final.
     private enum NativeCADSubshapeResult {
         case resolved(ViewportHit)
+        case resolvedOccurrence(ViewportHit)
         case miss
         case unsupported
     }
 
-    /// Resolves a CAD face, edge or vertex from prepared B-Rep topology using
-    /// the same native ray and projection that drew the frame. The identity is
-    /// always the prepared `SelectionComponentID`, never a render-mesh element.
+    /// Resolves a CAD face, edge or vertex from prepared B-Rep topology, or the
+    /// occurrence the frame draws, using the same native ray and projection that
+    /// drew the frame. A sub-shape identity is always the prepared
+    /// `SelectionComponentID`, never a render-mesh element.
     ///
     /// Every CAD interaction body with prepared topology is a candidate, not
     /// only the body the pointer draws. A pixel just outside the tessellated
@@ -1890,8 +1899,15 @@ public struct Viewport: View {
     /// legacy identity resolver. `visibleSurface` is the native surface hit at
     /// the pointer; its triangle provenance answers the face query for the body
     /// it belongs to and is nil over an empty pixel. Candidates from different
-    /// bodies are compared through `Candidate.precedes`, so the nearest
-    /// projected sub-shape wins and equal candidates keep stable scene order.
+    /// bodies are compared through `ViewportNativeHitCandidate.precedes`, so the
+    /// nearest projected sub-shape wins and equal candidates keep stable scene
+    /// order.
+    ///
+    /// The occurrence enters that same comparison at its weakest rank, so a
+    /// pointer that named a sub-shape never resolves to the occurrence carrying
+    /// it. It is admitted from the drawn triangle alone and is not gated on the
+    /// depth that answers the face query: a frame that drew the pointer's pixel
+    /// has already answered which occurrence is there.
     private func presentationCADSubshapeHit(
         at point: CGPoint,
         visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
@@ -1918,7 +1934,15 @@ public struct Viewport: View {
             visibleSceneNodeID = sceneNodeID
             visibleFace = (faceID: visibleSurface.triangle.faceID, depth: depth)
         }
-        var best: (hit: ViewportHit, candidate: ViewportNativeCADTopologyResolver.Candidate)?
+        var best: (hit: ViewportHit, candidate: ViewportNativeHitCandidate)?
+        if let visibleSurface {
+            best = ViewportNativeOverlayHitResolver.occurrence(
+                drawnBy: visibleSurface.triangle,
+                navigation: presentationSceneNodeIDByOccurrenceID,
+                items: scene.items,
+                selectionHitPolicy: selectionHitPolicy
+            )
+        }
         var resolvedTopology = false
         for item in scene.items {
             guard let sceneNodeID = item.sceneNodeID,
@@ -1953,9 +1977,14 @@ public struct Viewport: View {
             )
         }
         if let best {
-            return .resolved(best.hit)
+            return best.candidate.rank == .object
+                ? .resolvedOccurrence(best.hit)
+                : .resolved(best.hit)
         }
-        return resolvedTopology ? .miss : .unsupported
+        // The occurrence family needs no prepared topology, so a scope that
+        // admits it has a supported query on any mounted frame and reports an
+        // empty pixel as the miss it is.
+        return resolvedTopology || selectionHitPolicy.allowsObjectHits ? .miss : .unsupported
     }
 
     /// Selection scopes whose rectangle the native frame answers from prepared
@@ -2228,6 +2257,17 @@ public struct Viewport: View {
         switch result {
         case .resolved(let hit):
             return hit
+        case .resolvedOccurrence(let hit):
+            guard requiresLegacyHitFallback else {
+                return hit
+            }
+            let legacy = legacyViewportHit(
+                at: point,
+                in: scene,
+                layout: layout,
+                presentationOccurrenceID: presentationOccurrenceID
+            )
+            return legacyOverlayAnswer(legacy) ?? hit
         case .miss where requiresLegacyHitFallback == false:
             return nil
         case .miss, .unsupported:
@@ -2238,6 +2278,39 @@ public struct Viewport: View {
                 presentationOccurrenceID: presentationOccurrenceID
             )
         }
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The native occurrence answer is complete,
+    // but the overlay families that outrank it — curve segment, sketch entity,
+    // sketch control point, sketch region and the four surface handle displays —
+    // are still answered by the pre-RealityKit identity resolver, so a pointer
+    // the occurrence wins has to be ordered against a second, differently
+    // projected hit rule. That legacy answer is not occlusion-tested against the
+    // mounted frame, so a sketch line behind a body can still win the pointer;
+    // this preserves the behaviour the replaced rule already had and does not
+    // introduce it.
+    //
+    // Production path: `resolvedViewportHit(_:at:in:layout:presentationOccurrenceID:)`
+    // on the `.object` and `.all` scopes, which are the select tool's object
+    // scope and the default hover scope.
+    //
+    // Do not treat the object scope as cut over while this exists. It is deleted
+    // when the surface handle, sketch and curve seams land and those families are
+    // produced by `ViewportNativeOverlayHitResolver` as candidates this query
+    // orders itself, not when the occurrence alone passes its tests.
+    private func legacyOverlayAnswer(_ hit: ViewportHit?) -> ViewportHit? {
+        guard let hit else {
+            return nil
+        }
+        // A legacy body answer is either the occurrence, which the native frame
+        // now owns, or a sub-shape of it, which the native CAD resolver already
+        // declined at this pointer; re-admitting either would restore the
+        // projected-bounds rule this seam replaced. A surface handle is a body
+        // answer only because it is drawn on one.
+        guard hit.kind != .body || hit.selectionReference != nil else {
+            return nil
+        }
+        return hit
     }
 
     // FIXME(INCOMPLETE_IMPLEMENTATION): This is the interim bridge to the

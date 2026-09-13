@@ -26,33 +26,6 @@ enum ViewportNativeCADTopologyResolver {
     /// topology resolver tests.
     static let depthSlack: Double = 1.0e-3
 
-    /// A ranked sub-shape candidate.
-    ///
-    /// `rank` keeps the scope order the viewport asks for — a vertex wins over
-    /// an edge, and an edge over a face — and `metric` orders candidates of the
-    /// same rank: projected point distance for a vertex or edge, and the camera
-    /// depth of the drawn surface for a face. The caller compares candidates
-    /// from different bodies through this order, so the nearest projected
-    /// sub-shape wins across the scene instead of the first body that happens
-    /// to answer. Only the one body the native frame draws at the pointer is
-    /// given a surface hit, so at most one face candidate exists per query and
-    /// the face metric never has to order two bodies against each other.
-    struct Candidate {
-        enum Rank: Int {
-            case vertex
-            case edge
-            case face
-        }
-
-        let component: SelectionComponent
-        let rank: Rank
-        let metric: Double
-
-        func precedes(_ other: Candidate) -> Bool {
-            rank == other.rank ? metric < other.metric : rank.rawValue < other.rank.rawValue
-        }
-    }
-
     /// A nil result is a valid miss after projection and visibility run.
     /// Readiness, camera revision and projection failures stay typed and are
     /// propagated from the frame probe.
@@ -81,7 +54,7 @@ enum ViewportNativeCADTopologyResolver {
         visibleSurface: (faceID: MeshFaceID, depth: Double)?,
         tolerance: CGFloat = 8,
         probe: some ViewportNativeFrameProbe
-    ) throws -> Candidate? {
+    ) throws -> ViewportNativeHitCandidate? {
         guard point.x.isFinite, point.y.isFinite, tolerance.isFinite, tolerance >= 0 else {
             throw MeshSourcePresentationRenderError(
                 code: .invalidSceneItem,
@@ -90,7 +63,7 @@ enum ViewportNativeCADTopologyResolver {
         }
 
         if selectionHitPolicy.allowsVertexHits {
-            var best: Candidate?
+            var best: ViewportNativeHitCandidate?
             for vertex in topology.vertices {
                 let worldPoint = world(vertex.point, modelTransform: modelTransform)
                 guard let projected = try probe.projectedPointWithinDepthRange(worldPoint) else {
@@ -99,7 +72,7 @@ enum ViewportNativeCADTopologyResolver {
                 let distance = Double(hypot(point.x - projected.point.x, point.y - projected.point.y))
                 guard distance <= Double(tolerance), distance < (best?.metric ?? .infinity),
                       try isVisible(worldPoint, projected, probe: probe) else { continue }
-                best = Candidate(
+                best = ViewportNativeHitCandidate(
                     component: .vertex(vertex.componentID),
                     rank: .vertex,
                     metric: distance
@@ -111,7 +84,7 @@ enum ViewportNativeCADTopologyResolver {
         }
 
         if selectionHitPolicy.allowsEdgeHits {
-            var best: Candidate?
+            var best: ViewportNativeHitCandidate?
             for edge in topology.edges {
                 let worldStart = world(edge.start, modelTransform: modelTransform)
                 let worldEnd = world(edge.end, modelTransform: modelTransform)
@@ -143,7 +116,7 @@ enum ViewportNativeCADTopologyResolver {
                 )
                 guard let projected = try probe.projectedPointWithinDepthRange(worldPoint),
                       try isVisible(worldPoint, projected, probe: probe) else { continue }
-                best = Candidate(
+                best = ViewportNativeHitCandidate(
                     component: .edge(edge.componentID),
                     rank: .edge,
                     metric: distance
@@ -176,7 +149,7 @@ enum ViewportNativeCADTopologyResolver {
         guard let componentID = topology.componentID(forTriangle: triangleIndex) else {
             return nil
         }
-        return Candidate(
+        return ViewportNativeHitCandidate(
             component: .face(componentID),
             rank: .face,
             metric: visibleSurface.depth
@@ -214,10 +187,10 @@ enum ViewportNativeCADTopologyResolver {
     /// Resolves the prepared CAD vertices and edges of one body that the
     /// mounted frame draws inside a screen rectangle.
     ///
-    /// This is a set query over one region, not a nearest query, so `Candidate`
-    /// and its rank-then-metric order have no role here. The result follows the
-    /// recorded topology order — vertices, then edges — and is de-duplicated by
-    /// prepared identity.
+    /// This is a set query over one region, not a nearest query, so
+    /// `ViewportNativeHitCandidate` and its rank-then-metric order have no role
+    /// here. The result follows the recorded topology order — vertices, then
+    /// edges — and is de-duplicated by prepared identity.
     ///
     /// Faces are not resolved here. A face is admitted by the triangles the
     /// frame draws inside the rectangle, and the region raster reports those

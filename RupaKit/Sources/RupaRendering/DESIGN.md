@@ -1210,15 +1210,21 @@ independent tessellator is never an alternative implementation.
    | surface knot, span, trim knot, trim span | vertex | `.annotation` | section alone |
 
    Admitted candidates are ordered by rank, then by projected distance to the
-   pointer, then by a stable emission order. `Candidate.Rank` gains `.object`
-   as its weakest case, so a pointer that named a sub-shape never resolves to
-   the occurrence carrying it. The replaced GPU rule ordered by these same four
-   ranks and then by drawn depth and emission order, and that depth tiebreak is
-   deliberately not carried over: it was that renderer's only occlusion
-   mechanism, since its curve, sketch and region draw items were emitted with
-   no depth at all, whereas here section and occlusion are admission steps that
-   run before any ordering. Ordering by distance to the pointer after admission
-   is what the CAD families already did.
+   pointer, then by a stable emission order. `ViewportNativeHitCandidate` owns
+   that vocabulary rather than either resolver, because both resolvers produce
+   candidates that are compared against the other's, and the rank a family
+   carries is a property of the family and not of the resolver that happened to
+   answer for it. Its `Rank` carries `.object` as its weakest case, so a pointer
+   that named a sub-shape never resolves to the occurrence carrying it. An
+   occurrence's metric is zero: it is admitted at the pointer's own pixel, so it
+   has no distance to the pointer to be ordered by, and it is never ordered
+   against a sub-shape of its own rank. The replaced GPU rule ordered by these
+   same four ranks and then by drawn depth and emission order, and that depth
+   tiebreak is deliberately not carried over: it was that renderer's only
+   occlusion mechanism, since its curve, sketch and region draw items were
+   emitted with no depth at all, whereas here section and occlusion are
+   admission steps that run before any ordering. Ordering by distance to the
+   pointer after admission is what the CAD families already did.
    Tolerance has one owner. The resolver's `tolerance`, eight points by
    default, is the neighbourhood every point and curve family is tested in. The
    replaced rules used three values for that one question — four points for a
@@ -1288,22 +1294,34 @@ independent tessellator is never an alternative implementation.
    `requiresLegacyHitFallback` names exactly which. That routing and the
    `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
    the last of those scopes.
+   One interim residual is not a miss. The overlay families still belong to the
+   legacy resolver, and they outrank `object`, so a pointer the occurrence
+   family wins is one this path cannot yet order correctly: a curve segment or
+   sketch entity drawn at that same pointer would have won it. That pointer is
+   therefore asked of the legacy resolver as well, and a non-body answer it
+   returns is preferred over the native occurrence. A pointer a CAD sub-shape
+   wins is not, because those families are already native here and a legacy
+   answer could only contradict them. The legacy overlay answer is not
+   occlusion-tested against the frame, which is exactly what the replaced rule
+   did, so preferring it preserves the current behaviour rather than choosing a
+   new one; it is removed with the sketch and curve seams and the occurrence
+   then answers those pointers alone.
 
    Rectangle selection uses this same resolver and this same frame under the
    bounded exception above. It is a set query, not a nearest query: the
-   rectangle entry point returns every CAD sub-shape of one body that meets the
-   rectangle, so `Candidate.rank` and its projected-distance metric have no role
-   and no candidate precedes another. `Viewport` walks the CAD interaction
-   bodies in scene order and each body's topology in recorded order. The two
-   de-duplications sit at different scopes and use different identities. Within
-   one body the resolver refuses a `SelectionComponentID` it already reported,
-   because one CAD face can own more than one recorded run. Across the scene
-   `Viewport` refuses a `SelectionTarget`, the `SceneNodeID` and
-   `SelectionComponent` pair the selection already names an editable sub-shape
-   by, because scene items that place one shared feature carry identical
-   sub-shape component identities and de-duplicating by component alone would
-   report only the first placement. The covered scopes are exactly face, edge,
-   and vertex.
+   rectangle entry point returns every CAD sub-shape of one body that meets
+   the rectangle, so `ViewportNativeHitCandidate.rank` and its
+   projected-distance metric have no role and no candidate precedes another.
+   `Viewport` walks the CAD interaction bodies in scene order and each body's
+   topology in recorded order. The two de-duplications sit at different
+   scopes and use different identities. Within one body the resolver refuses
+   a `SelectionComponentID` it already reported, because one CAD face can own
+   more than one recorded run. Across the scene `Viewport` refuses a
+   `SelectionTarget`, the `SceneNodeID` and `SelectionComponent` pair the
+   selection already names an editable sub-shape by, because scene items that
+   place one shared feature carry identical sub-shape component identities
+   and de-duplicating by component alone would report only the first
+   placement. The covered scopes are exactly face, edge, and vertex.
    The `all` and `object` scopes are deliberately not covered: the legacy
    rectangle filter already drops every body hit wherever object hits are
    allowed, so a rectangle there selects whole occurrences and never a
@@ -1567,6 +1585,23 @@ independent tessellator is never an alternative implementation.
    orthographic and perspective edge-parameter rules, rejection of vertices and
    edges the section removed, silhouette retention over an empty pixel, and the
    `miss` versus `unsupported` split.
+   `Tests/RupaRenderingTests/ViewportNativeOverlayHitResolverTests.swift` owns
+   the occurrence family's rule against the resolver's own input: an occurrence
+   admitted only where the frame drew a triangle, refused where the scope
+   forbids object hits, where no navigation names a scene node, and where no
+   scene item carries it, and ordered behind a sub-shape of every other rank at
+   the same pointer. No input to it carries a bounding box, which is how the
+   replaced rule's admission cannot be reconstructed here.
+   `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
+   owns the same rule on the mounted frame and through the production click
+   path: the occurrence the frame draws at the pointer is selected under the
+   `object` scope, an authored-mesh occurrence that carries no prepared CAD
+   topology is selected there too, an empty pixel selects nothing, and a pointer
+   over a CAD face under the `all` scope still resolves to the face. Every hit
+   is checked to carry the native picking backend. The empty-pixel case states
+   the production result and not yet the native miss: the object scope still
+   routes a miss through the interim legacy fallback, so that pointer's answer
+   becomes evidence for the native miss only once the fallback is deleted.
    The region path's evidence is recorded, and it is two different claims.
    That the raster is the frame is proved by the component's differential
    test, which compares the raster's answer with `surfaceHit` at every
