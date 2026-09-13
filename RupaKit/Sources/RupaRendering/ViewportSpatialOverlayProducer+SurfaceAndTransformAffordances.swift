@@ -674,6 +674,25 @@ extension ViewportSpatialOverlayProducer {
         static let filletOffsetPoints: CGFloat = 18
         static let chamferOffsetPoints: CGFloat = 38
     }
+
+    /// Screen-fixed extents of the body transform affordance.
+    ///
+    /// A transform handle is reachable at the same screen size whatever the
+    /// body measures and however far the camera is, so its extent is a point
+    /// length owned here rather than a fraction of the body span. The values
+    /// satisfy the separation rule that the footprints of adjacent handles on
+    /// one axis cannot overlap: 95 - 72 >= 10 + 8 and 132 - 95 >= 10 + 10.
+    /// Changing one length re-derives the others from that rule and from the
+    /// tolerances the emit site passes; the ordering itself is the invariant.
+    enum BodyTransformMetrics {
+        static let rotationRadiusPoints: CGFloat = 72
+        static let centerScalePoints: CGFloat = 95
+        static let axisLengthPoints: CGFloat = 132
+        /// Twelve segments bound the quarter-arc sagitta at
+        /// `72 * (1 - cos 3.75 degrees)` = 0.154 pt, below the ring's own line
+        /// width, so the count follows from the fixed radius.
+        static let rotationSegmentCount = 12
+    }
 }
 
 private extension ViewportSpatialOverlayProducer {
@@ -2599,26 +2618,6 @@ private extension ViewportSpatialOverlayProducer {
             )
         }
     }
-
-    /// Screen-fixed extents of the body transform affordance.
-    ///
-    /// A transform handle is reachable at the same screen size whatever the
-    /// body measures and however far the camera is, so its extent is a point
-    /// length owned here rather than a fraction of the body span. The values
-    /// satisfy the separation rule that the footprints of adjacent handles on
-    /// one axis cannot overlap: 95 - 72 >= 10 + 8 and 132 - 95 >= 10 + 10.
-    /// Changing one length re-derives the others from that rule and from the
-    /// tolerances the emit site passes; the ordering itself is the invariant.
-    enum BodyTransformMetrics {
-        static let rotationRadiusPoints: CGFloat = 72
-        static let centerScalePoints: CGFloat = 95
-        static let axisLengthPoints: CGFloat = 132
-        /// Twelve segments bound the quarter-arc sagitta at
-        /// `72 * (1 - cos 3.75 degrees)` = 0.154 pt, below the ring's own line
-        /// width, so the count follows from the fixed radius.
-        static let rotationSegmentCount = 12
-    }
-
     static func emitBodyTransform(
         featureID: FeatureID,
         selectionTarget: SelectionTarget?,
