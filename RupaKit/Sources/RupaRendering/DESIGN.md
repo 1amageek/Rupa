@@ -1214,7 +1214,15 @@ independent tessellator is never an alternative implementation.
    that vocabulary rather than either resolver, because both resolvers produce
    candidates that are compared against the other's, and the rank a family
    carries is a property of the family and not of the resolver that happened to
-   answer for it. Its `Rank` carries `.object` as its weakest case, so a pointer
+   answer for it. It carries that ordering and nothing else: a candidate is a
+   rank and a metric, and the identity of what was hit stays with the resolver
+   that owns it, because the families do not share one identity type -- a CAD
+   sub-shape is a prepared `SelectionComponent`, a surface handle display is a
+   `SelectionReference`, and a sketch control point is an entity identity and
+   an index. Each resolver therefore returns the `ViewportHit` it formed
+   alongside the candidate that orders it, and nothing widens the candidate to
+   hold whichever identity a new family happens to carry.
+   Its `Rank` carries `.object` as its weakest case, so a pointer
    that named a sub-shape never resolves to the occurrence carrying it. An
    occurrence's metric is zero: it is admitted at the pointer's own pixel, so it
    has no distance to the pointer to be ordered by, and it is never ordered
@@ -1294,18 +1302,24 @@ independent tessellator is never an alternative implementation.
    `requiresLegacyHitFallback` names exactly which. That routing and the
    `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
    the last of those scopes.
-   One interim residual is not a miss. The overlay families still belong to the
-   legacy resolver, and they outrank `object`, so a pointer the occurrence
-   family wins is one this path cannot yet order correctly: a curve segment or
-   sketch entity drawn at that same pointer would have won it. That pointer is
+   One interim residual is not a miss. The curve segment, sketch entity,
+   sketch control point and sketch region families still belong to the legacy
+   resolver, and they outrank `object`, so a pointer the occurrence family wins
+   is one this path cannot yet order correctly: a curve segment or sketch
+   entity drawn at that same pointer would have won it. That pointer is
    therefore asked of the legacy resolver as well, and a non-body answer it
    returns is preferred over the native occurrence. A pointer a CAD sub-shape
-   wins is not, because those families are already native here and a legacy
-   answer could only contradict them. The legacy overlay answer is not
-   occlusion-tested against the frame, which is exactly what the replaced rule
-   did, so preferring it preserves the current behaviour rather than choosing a
-   new one; it is removed with the sketch and curve seams and the occurrence
-   then answers those pointers alone.
+   or a surface handle display wins is not, because those families are already
+   native here and a legacy answer could only contradict them. The legacy
+   overlay answer is not occlusion-tested against the frame, which is exactly
+   what the replaced rule did, so preferring it preserves the current behaviour
+   rather than choosing a new one; it is removed with the sketch and curve
+   seams and the occurrence then answers those pointers alone.
+   The surface handle displays are native on the point path before they are on
+   the rectangle path, and the two are narrowed by separate seams, so for that
+   interval one frame answers a knot at a pointer and the legacy identity
+   buffer answers the same knot inside a rectangle. The rectangle residual
+   below states that window and the seam that closes it.
 
    Rectangle selection uses this same resolver and this same frame under the
    bounded exception above. It is a set query, not a nearest query: the
@@ -1592,6 +1606,14 @@ independent tessellator is never an alternative implementation.
    scene item carries it, and ordered behind a sub-shape of every other rank at
    the same pointer. No input to it carries a bounding box, which is how the
    replaced rule's admission cannot be reconstructed here.
+   It also owns the surface handle display families the same resolver answers:
+   a knot, span, trim-knot or trim-span display admitted where the pointer is
+   within the resolver's tolerance of its projected point, the nearest of them
+   winning at a pointer several are near, each hit carrying the display's own
+   `SelectionReference` and never a `SelectionComponent`, refusal where the
+   scope forbids vertex hits, refusal where the section removed the display's
+   point, and admission where a drawn surface stands in front of it, which is
+   the rule these displays are drawn under and not an oversight.
    `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
    owns the same rule on the mounted frame and through the production click
    path: the occurrence the frame draws at the pointer is selected under the
@@ -1602,6 +1624,15 @@ independent tessellator is never an alternative implementation.
    the production result and not yet the native miss: the object scope still
    routes a miss through the interim legacy fallback, so that pointer's answer
    becomes evidence for the native miss only once the fallback is deleted.
+   `Tests/RupaRenderingTests/ViewportNativeVertexScopePointSelectionTests.swift`
+   owns the surface handle displays on the mounted frame and through the
+   production click path: a pointer over a knot selects it under the `vertex`
+   scope, a knot the body would occlude is selected there too because the
+   display is drawn in front of the body, a knot the section removed selects
+   nothing, a pointer over a knot under the `all` scope selects the knot and
+   not the face beneath it, and an empty pixel under the `vertex` scope selects
+   nothing. That last case is the native miss and not a routed one, because the
+   `vertex` scope no longer routes a miss to the legacy resolver.
    The region path's evidence is recorded, and it is two different claims.
    That the raster is the frame is proved by the component's differential
    test, which compares the raster's answer with `surfaceHit` at every

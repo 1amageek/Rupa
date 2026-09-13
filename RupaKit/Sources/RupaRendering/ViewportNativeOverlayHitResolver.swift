@@ -1,3 +1,4 @@
+import CoreGraphics
 import RupaCore
 import RupaCoreTypes
 import RupaViewportScene
@@ -8,8 +9,9 @@ import RupaViewportScene
 /// The two resolvers split by family, not by projection: both answer through
 /// `ViewportNativeFrameProbe` and both produce `ViewportNativeHitCandidate`, so
 /// no two families can disagree about what the frame draws where. This one
-/// keeps the occurrence and, as their seams land, the curve segment, sketch
-/// entity, sketch control point, sketch region and surface handle displays.
+/// keeps the occurrence and the surface handle displays, and, as their seams
+/// land, the curve segment, sketch entity, sketch control point and sketch
+/// region families.
 enum ViewportNativeOverlayHitResolver {
     /// The occurrence the mounted frame draws at the pointer's own pixel.
     ///
@@ -49,7 +51,97 @@ enum ViewportNativeOverlayHitResolver {
                 pickingBackend: .native,
                 selectionComponent: .object
             ),
-            ViewportNativeHitCandidate(component: .object, rank: .object, metric: 0)
+            ViewportNativeHitCandidate(rank: .object, metric: 0)
+        )
+    }
+
+    /// Whether a body carries any of the four surface handle display families.
+    ///
+    /// The caller asks this to decide whether the native path has a family to
+    /// answer for at all, which is a different question from whether the
+    /// pointer hit one. A scene whose bodies carry handles but no prepared
+    /// topology is still a scene the `vertex` scope is answered natively on, so
+    /// an empty pixel there is a miss and not an unsupported query.
+    static func carriesSurfaceHandleDisplays(_ component: ViewportBodyComponent) -> Bool {
+        component.surfaceTrimKnotDisplays.isEmpty == false
+            || component.surfaceTrimSpanDisplays.isEmpty == false
+            || component.surfaceKnotDisplays.isEmpty == false
+            || component.surfaceSpanDisplays.isEmpty == false
+    }
+
+    /// The nearest surface handle display of one body within `tolerance` of the
+    /// pointer.
+    ///
+    /// These four families — a surface knot, a surface span, a trim knot and a
+    /// trim span — are the parametric handles a B-spline surface draws, and the
+    /// identity each carries is a `SelectionReference` the preparation assigned,
+    /// never a render-mesh element and never a `SelectionComponent`. They enter
+    /// the viewport's comparison at vertex rank, which is the rank the `vertex`
+    /// scope asks for and the rank that wins over the face beneath them.
+    ///
+    /// Admission is projection, tolerance and the section, and deliberately not
+    /// occlusion. The frame draws these displays at annotation depth, which
+    /// reads no depth buffer, so a handle on the far side of its own body is
+    /// visible on screen and has to stay selectable; testing it against the
+    /// drawn surface would refuse a handle the user can see. The section is a
+    /// different question: the frame attaches these displays to the sectioned
+    /// root, so a handle the section removed is not drawn and is not admitted.
+    ///
+    /// Ties are broken by the recorded order of the families — trim knots, trim
+    /// spans, knots, then spans — which is the order the replaced CPU tester
+    /// asked them in, so a pointer equidistant from two handles keeps the answer
+    /// it had.
+    static func surfaceHandle(
+        at point: CGPoint,
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        selectionHitPolicy: ViewportSelectionHitPolicy,
+        tolerance: CGFloat,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+        guard selectionHitPolicy.allowsVertexHits,
+              let sceneNodeID = item.sceneNodeID else {
+            return nil
+        }
+        var best: (reference: SelectionReference, distance: Double)?
+        func admit(_ reference: SelectionReference, at modelPoint: Point3D) throws {
+            let worldPoint = ViewportLayout.transformedPoint(
+                modelPoint,
+                by: item.modelTransform
+            )
+            guard let projected = try probe.projectedPointWithinDepthRange(worldPoint) else {
+                return
+            }
+            let distance = Double(
+                hypot(point.x - projected.point.x, point.y - projected.point.y)
+            )
+            guard distance <= Double(tolerance),
+                  distance < (best?.distance ?? .infinity),
+                  try probe.retainsSectionedPoint(worldPoint) else { return }
+            best = (reference, distance)
+        }
+        for display in component.surfaceTrimKnotDisplays {
+            try admit(display.selectionReference, at: display.point)
+        }
+        for display in component.surfaceTrimSpanDisplays {
+            try admit(display.selectionReference, at: display.point)
+        }
+        for display in component.surfaceKnotDisplays {
+            try admit(display.selectionReference, at: display.point)
+        }
+        for display in component.surfaceSpanDisplays {
+            try admit(display.selectionReference, at: display.point)
+        }
+        guard let best else { return nil }
+        return (
+            ViewportHit(
+                featureID: item.featureID,
+                sceneNodeID: sceneNodeID,
+                kind: item.kind.selectableKind,
+                pickingBackend: .native,
+                selectionReference: best.reference
+            ),
+            ViewportNativeHitCandidate(rank: .vertex, metric: best.distance)
         )
     }
 }

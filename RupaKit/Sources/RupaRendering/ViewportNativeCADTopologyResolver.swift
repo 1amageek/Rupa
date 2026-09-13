@@ -26,6 +26,14 @@ enum ViewportNativeCADTopologyResolver {
     /// topology resolver tests.
     static let depthSlack: Double = 1.0e-3
 
+    /// The screen neighbourhood a point or curve family is tested in.
+    ///
+    /// It is one operational value with one owner, not a correctness constant,
+    /// and the overlay resolver's point families are given this same value by
+    /// the viewport so no two native families disagree about how near a pointer
+    /// has to be. Owner: this resolver.
+    static let pointTolerance: CGFloat = 8
+
     /// A nil result is a valid miss after projection and visibility run.
     /// Readiness, camera revision and projection failures stay typed and are
     /// propagated from the frame probe.
@@ -52,9 +60,9 @@ enum ViewportNativeCADTopologyResolver {
         modelTransform: Transform3D,
         selectionHitPolicy: ViewportSelectionHitPolicy,
         visibleSurface: (faceID: MeshFaceID, depth: Double)?,
-        tolerance: CGFloat = 8,
+        tolerance: CGFloat = pointTolerance,
         probe: some ViewportNativeFrameProbe
-    ) throws -> ViewportNativeHitCandidate? {
+    ) throws -> (component: SelectionComponent, candidate: ViewportNativeHitCandidate)? {
         guard point.x.isFinite, point.y.isFinite, tolerance.isFinite, tolerance >= 0 else {
             throw MeshSourcePresentationRenderError(
                 code: .invalidSceneItem,
@@ -63,19 +71,19 @@ enum ViewportNativeCADTopologyResolver {
         }
 
         if selectionHitPolicy.allowsVertexHits {
-            var best: ViewportNativeHitCandidate?
+            var best: (component: SelectionComponent, candidate: ViewportNativeHitCandidate)?
             for vertex in topology.vertices {
                 let worldPoint = world(vertex.point, modelTransform: modelTransform)
                 guard let projected = try probe.projectedPointWithinDepthRange(worldPoint) else {
                     continue
                 }
                 let distance = Double(hypot(point.x - projected.point.x, point.y - projected.point.y))
-                guard distance <= Double(tolerance), distance < (best?.metric ?? .infinity),
+                guard distance <= Double(tolerance),
+                      distance < (best?.candidate.metric ?? .infinity),
                       try isVisible(worldPoint, projected, probe: probe) else { continue }
-                best = ViewportNativeHitCandidate(
-                    component: .vertex(vertex.componentID),
-                    rank: .vertex,
-                    metric: distance
+                best = (
+                    .vertex(vertex.componentID),
+                    ViewportNativeHitCandidate(rank: .vertex, metric: distance)
                 )
             }
             if let best {
@@ -84,7 +92,7 @@ enum ViewportNativeCADTopologyResolver {
         }
 
         if selectionHitPolicy.allowsEdgeHits {
-            var best: ViewportNativeHitCandidate?
+            var best: (component: SelectionComponent, candidate: ViewportNativeHitCandidate)?
             for edge in topology.edges {
                 let worldStart = world(edge.start, modelTransform: modelTransform)
                 let worldEnd = world(edge.end, modelTransform: modelTransform)
@@ -96,7 +104,8 @@ enum ViewportNativeCADTopologyResolver {
                     y: start.point.y + (end.point.y - start.point.y) * parameter
                 )
                 let distance = Double(hypot(point.x - nearest.x, point.y - nearest.y))
-                guard distance <= Double(tolerance), distance < (best?.metric ?? .infinity) else {
+                guard distance <= Double(tolerance),
+                      distance < (best?.candidate.metric ?? .infinity) else {
                     continue
                 }
                 // The nearest point is found on screen, but the section and
@@ -116,10 +125,9 @@ enum ViewportNativeCADTopologyResolver {
                 )
                 guard let projected = try probe.projectedPointWithinDepthRange(worldPoint),
                       try isVisible(worldPoint, projected, probe: probe) else { continue }
-                best = ViewportNativeHitCandidate(
-                    component: .edge(edge.componentID),
-                    rank: .edge,
-                    metric: distance
+                best = (
+                    .edge(edge.componentID),
+                    ViewportNativeHitCandidate(rank: .edge, metric: distance)
                 )
             }
             if let best {
@@ -149,10 +157,9 @@ enum ViewportNativeCADTopologyResolver {
         guard let componentID = topology.componentID(forTriangle: triangleIndex) else {
             return nil
         }
-        return ViewportNativeHitCandidate(
-            component: .face(componentID),
-            rank: .face,
-            metric: visibleSurface.depth
+        return (
+            .face(componentID),
+            ViewportNativeHitCandidate(rank: .face, metric: visibleSurface.depth)
         )
     }
 

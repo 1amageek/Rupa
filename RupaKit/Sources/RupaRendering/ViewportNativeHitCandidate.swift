@@ -1,5 +1,3 @@
-import RupaCore
-
 /// A ranked candidate answered from the mounted native frame.
 ///
 /// Both native hit resolvers produce these and the viewport compares them
@@ -22,6 +20,13 @@ import RupaCore
 /// An occurrence carries a metric of zero. It is admitted at the pointer's own
 /// pixel and has no distance to the pointer to be ordered by, and one query
 /// never produces two of them, because one pixel draws one occurrence.
+///
+/// A candidate carries the order and nothing else. The identity of what was
+/// hit stays with the resolver that owns the family, because the families do
+/// not share one identity type: a CAD sub-shape is a prepared
+/// `SelectionComponent` and a surface handle display is a `SelectionReference`.
+/// Each resolver therefore returns the `ViewportHit` it formed alongside the
+/// candidate that orders it, and no new family widens this type.
 struct ViewportNativeHitCandidate {
     enum Rank: Int {
         case vertex
@@ -30,7 +35,6 @@ struct ViewportNativeHitCandidate {
         case object
     }
 
-    let component: SelectionComponent
     let rank: Rank
     let metric: Double
 

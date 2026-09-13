@@ -689,7 +689,7 @@ func rectangleSelectionFixture() throws -> RectangleSelectionFixture {
 /// Mirrors the production admission rule that `MainView` applies before it
 /// hands a scene node to the viewport as an exact CAD interaction target.
 @MainActor
-private func exactPresentationCADSceneNodeIDs(
+func exactPresentationCADSceneNodeIDs(
     scene: UniversalViewportScene,
     sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID],
     document: DesignDocument,
