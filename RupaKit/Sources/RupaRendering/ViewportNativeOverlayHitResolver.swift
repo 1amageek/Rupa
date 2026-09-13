@@ -9,9 +9,9 @@ import RupaViewportScene
 /// The two resolvers split by family, not by projection: both answer through
 /// `ViewportNativeFrameProbe` and both produce `ViewportNativeHitCandidate`, so
 /// no two families can disagree about what the frame draws where. This one
-/// keeps the occurrence, the surface handle displays, the sketch entity and
-/// the sketch control point families, and, as their seams land, the curve
-/// segment and sketch region families.
+/// keeps the occurrence, the surface handle displays, the sketch entity, the
+/// sketch control point and the sketch region families, and, as its seam
+/// lands, the curve segment family.
 enum ViewportNativeOverlayHitResolver {
     /// The occurrence the mounted frame draws at the pointer's own pixel.
     ///
@@ -273,5 +273,193 @@ enum ViewportNativeOverlayHitResolver {
             )
         }
         return best
+    }
+
+    /// The sketch region of one sketch item whose drawn boundary contains the
+    /// pointer.
+    ///
+    /// This family clips before it projects. A region's boundary is a planar
+    /// polygon in world space, so the whole polygon is narrowed against the
+    /// frame's section and then against the frame's camera depth interval, and
+    /// only what survives is projected; the query is then containment of the
+    /// pointer in that projected boundary. Clipping a planar polygon by a
+    /// half-space leaves it planar and projection preserves containment, so
+    /// this is exact and carries no tolerance, which is why no `tolerance`
+    /// reaches here.
+    ///
+    /// Both clips are `ViewportCameraDepthClip`, the owner the rectangle
+    /// already narrows every candidate edge with, so the point and the
+    /// rectangle cannot disagree about where the cut removes geometry or where
+    /// the camera stops drawing. That owner names no plane of its own, so the
+    /// perspective camera's infinite far plane contributes nothing and nothing
+    /// here asks which projection drew the frame.
+    ///
+    /// The boundary is not assumed convex: one extracted profile's boundary
+    /// can be concave, and clipping a concave polygon against a single
+    /// half-space leaves collinear vertices along the bound rather than
+    /// splitting it, which the even-odd containment below reads correctly. A
+    /// boundary either clip leaves with fewer than three vertices bounds no
+    /// area and contains no pointer.
+    ///
+    /// A boundary vertex the clip retained and the frame cannot project is a
+    /// typed refusal and never a skipped edge, because dropping one would
+    /// silently shrink the region the answer is computed over.
+    ///
+    /// Two regions can both contain one pointer, because one profile's
+    /// boundary can lie inside another's, so the nearer projected centroid
+    /// wins — the tiebreak the replaced CPU rule resolved that with.
+    static func sketchRegion(
+        at point: CGPoint,
+        item: ViewportSceneItem,
+        selectionHitPolicy: ViewportSelectionHitPolicy,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+        guard selectionHitPolicy.allowsRegionHits, item.sketchRegions.isEmpty == false else {
+            return nil
+        }
+        let depthInterval = try probe.cameraDepthInterval()
+        var best: (componentID: SelectionComponentID, distance: Double)?
+        for region in item.sketchRegions {
+            guard region.points.count >= 3 else { continue }
+            // The overlay producer maps a region's boundary to world space
+            // this way, so the query is asked about the polygon on screen.
+            let worldPoints = region.points.map { ViewportSpatialOverlayProducer.point($0) }
+            var boundary: [ViewportCameraDepthClip.Vertex] = []
+            boundary.reserveCapacity(worldPoints.count)
+            for worldPoint in worldPoints {
+                let projected = try probe.projectedPointWithDepth(worldPoint)
+                boundary.append(
+                    ViewportCameraDepthClip.Vertex(
+                        point: worldPoint,
+                        depth: projected.depth,
+                        projected: projected.point
+                    )
+                )
+            }
+            if let section = try sectionHalfSpace(over: worldPoints, probe: probe) {
+                guard let retained = ViewportCameraDepthClip.clipped(
+                    boundary,
+                    againstHalfSpaceOf: section.scalars,
+                    bound: section.bound,
+                    retainingValuesAtLeastBound: section.retainsValuesAtLeastBound
+                ) else {
+                    throw MeshSourcePresentationRenderError(
+                        code: .invalidSceneItem,
+                        message: "Sketch region boundary section distances are invalid."
+                    )
+                }
+                boundary = retained
+            }
+            guard let visible = ViewportCameraDepthClip.clipped(boundary, to: depthInterval) else {
+                throw MeshSourcePresentationRenderError(
+                    code: .invalidSceneItem,
+                    message: "Sketch region boundary camera depths are invalid."
+                )
+            }
+            guard visible.count >= 3 else { continue }
+            var projectedBoundary: [CGPoint] = []
+            projectedBoundary.reserveCapacity(visible.count)
+            for vertex in visible {
+                if let projected = vertex.projected {
+                    projectedBoundary.append(projected)
+                    continue
+                }
+                guard let projected = try probe.projectedPointWithDepth(vertex.point).point else {
+                    throw MeshSourcePresentationRenderError(
+                        code: .invalidSceneItem,
+                        message: "Sketch region boundary vertex the clip retained cannot be projected."
+                    )
+                }
+                projectedBoundary.append(projected)
+            }
+            guard contains(point, in: projectedBoundary) else { continue }
+            let center = centroid(of: projectedBoundary)
+            let distance = Double(hypot(point.x - center.x, point.y - center.y))
+            guard distance < (best?.distance ?? .infinity) else { continue }
+            best = (region.componentID, distance)
+        }
+        guard let best else { return nil }
+        return (
+            ViewportHit(
+                featureID: item.featureID,
+                sceneNodeID: item.sceneNodeID,
+                kind: item.kind.selectableKind,
+                pickingBackend: .native,
+                selectionComponent: .region(best.componentID)
+            ),
+            ViewportNativeHitCandidate(rank: .face, metric: best.distance)
+        )
+    }
+
+    /// The active section's signed distance at every boundary point, with the
+    /// half-space those distances are read against, or nil when the frame has
+    /// no section.
+    ///
+    /// The frame answers a segment, and a segment's two endpoints are two
+    /// boundary points, so the distances are asked two at a time rather than
+    /// one query per point.
+    private static func sectionHalfSpace(
+        over points: [Point3D],
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (scalars: [Double], bound: Double, retainsValuesAtLeastBound: Bool)? {
+        var scalars: [Double] = []
+        scalars.reserveCapacity(points.count)
+        var halfSpace: ViewportCameraDepthClip.AffineScalarBound?
+        var index = points.startIndex
+        while index < points.endIndex {
+            let next = min(index + 1, points.endIndex - 1)
+            guard let bound = try probe.sectionParameterBound(
+                from: points[index],
+                to: points[next]
+            ) else { return nil }
+            scalars.append(bound.start)
+            if next > index {
+                scalars.append(bound.end)
+            }
+            halfSpace = bound
+            index += 2
+        }
+        guard let halfSpace else { return nil }
+        return (scalars, halfSpace.bound, halfSpace.retainsValuesAtLeastBound)
+    }
+
+    /// Even-odd containment of a point in a projected polygon.
+    ///
+    /// This is the rule the replaced CPU tester used, kept because the clip
+    /// above can leave a concave boundary and a winding rule would read a
+    /// self-touching one differently.
+    private static func contains(_ point: CGPoint, in polygon: [CGPoint]) -> Bool {
+        guard polygon.count >= 3 else { return false }
+        var isInside = false
+        for index in polygon.indices {
+            let current = polygon[index]
+            let previous = polygon[(index + polygon.count - 1) % polygon.count]
+            // The two vertices straddle the pointer's row, so their ordinates
+            // differ and the crossing below has a finite denominator.
+            guard (current.y > point.y) != (previous.y > point.y) else { continue }
+            let crossingX = (previous.x - current.x) * (point.y - current.y)
+                / (previous.y - current.y)
+                + current.x
+            if point.x < crossingX {
+                isInside.toggle()
+            }
+        }
+        return isInside
+    }
+
+    /// The mean of a projected polygon's vertices.
+    ///
+    /// It is the same centre the replaced CPU rule broke a tie between two
+    /// containing regions with, so a pointer inside two nested profiles keeps
+    /// the answer it had.
+    private static func centroid(of polygon: [CGPoint]) -> CGPoint {
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        for vertex in polygon {
+            x += vertex.x
+            y += vertex.y
+        }
+        let count = CGFloat(polygon.count)
+        return CGPoint(x: x / count, y: y / count)
     }
 }

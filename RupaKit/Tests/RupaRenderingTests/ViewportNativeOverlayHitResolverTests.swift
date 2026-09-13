@@ -935,3 +935,319 @@ func nativeOverlaySketchEntityAnswersTheNearerOfTwoEntities() throws {
     #expect(answer.hit.sketchEntityID == near)
     #expect(abs(answer.candidate.metric - 2) < 1e-9)
 }
+
+// MARK: - Sketch regions
+
+/// Thrown by a frame query the sketch region rule must not ask.
+///
+/// The rule clips a world boundary and projects what survives, so a probe that
+/// answered `surfaceHit` or `projectedPointWithinDepthRange` would let an
+/// occlusion test or a second projection rule slip into a family that has
+/// neither. Every case below runs against a probe that fails rather than
+/// answers them.
+private struct RegionQueryNotAsked: Error {}
+
+/// A top view of the sketch plane that answers the three queries the region
+/// rule asks.
+///
+/// It projects the way `SketchFrame` does — a world point lands at
+/// `(200 + 100x, 200 - 100z)` at camera depth `y + 10` — so a region the
+/// overlay producer places at `y == 0` is drawn at depth 10.
+private struct RegionFrame: ViewportNativeFrameProbe {
+    /// The camera's depth interval. The default keeps everything a top view
+    /// draws, so a case that removes a region has to say so.
+    var depthInterval: ClosedRange<Double> = 0...Double.infinity
+    /// The active section keeps world points whose `x` is at most this, in the
+    /// shape the mounted frame reports one: a signed distance per endpoint and
+    /// a bound the retained side is at least. `nil` is a frame with no cut.
+    var sectionKeepsXUpTo: Double?
+    /// Sketch-plane positions the frame reports a non-finite depth for.
+    var nonFiniteDepths: [CGPoint] = []
+    /// Sketch-plane positions the frame cannot project.
+    var unprojectable: [CGPoint] = []
+
+    let usesPerspectiveProjection = false
+
+    func projectedPointWithDepth(
+        _ point: Point3D
+    ) throws -> (point: CGPoint?, depth: Double) {
+        let plane = CGPoint(x: point.x, y: point.z)
+        let depth = nonFiniteDepths.contains(plane) ? Double.nan : point.y + 10
+        guard unprojectable.contains(plane) == false else {
+            return (nil, depth)
+        }
+        return (CGPoint(x: 200 + point.x * 100, y: 200 - point.z * 100), depth)
+    }
+
+    func cameraDepthInterval() throws -> ClosedRange<Double> {
+        depthInterval
+    }
+
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        guard let sectionKeepsXUpTo else { return nil }
+        return ViewportCameraDepthClip.AffineScalarBound(
+            start: sectionKeepsXUpTo - start.x,
+            end: sectionKeepsXUpTo - end.x,
+            bound: 0,
+            retainsValuesAtLeastBound: true
+        )
+    }
+
+    func projectedPointWithinDepthRange(
+        _ point: Point3D
+    ) throws -> (point: CGPoint, depth: Double)? {
+        throw RegionQueryNotAsked()
+    }
+
+    func retainsSectionedPoint(_ point: Point3D) throws -> Bool {
+        throw RegionQueryNotAsked()
+    }
+
+    func surfaceHit(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        throw RegionQueryNotAsked()
+    }
+
+    func regionFragment(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        throw RegionQueryNotAsked()
+    }
+
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int
+    ) throws -> RealityViewportRegionSegmentProbe {
+        throw RegionQueryNotAsked()
+    }
+}
+
+/// A unit square on the sketch plane, drawn at `(200, 100)...(300, 200)`.
+private let regionSquarePoints = [
+    CGPoint(x: 0, y: 0),
+    CGPoint(x: 1, y: 0),
+    CGPoint(x: 1, y: 1),
+    CGPoint(x: 0, y: 1),
+]
+
+/// An L with its notch in the `x > 1, y > 1` quadrant, which a convex hull of
+/// the same boundary would cover.
+private let regionConcavePoints = [
+    CGPoint(x: 0, y: 0),
+    CGPoint(x: 2, y: 0),
+    CGPoint(x: 2, y: 1),
+    CGPoint(x: 1, y: 1),
+    CGPoint(x: 1, y: 2),
+    CGPoint(x: 0, y: 2),
+]
+
+private func sketchRegion(
+    _ identifier: String,
+    points: [CGPoint]
+) -> ViewportSketchRegion {
+    ViewportSketchRegion(
+        componentID: SelectionComponentID(rawValue: identifier),
+        points: points
+    )
+}
+
+private func regionAnswer(
+    at point: CGPoint,
+    regions: [ViewportSketchRegion],
+    selectionHitPolicy: ViewportSelectionHitPolicy = .region,
+    probe: RegionFrame = RegionFrame()
+) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+    let item = ViewportSceneItem(
+        id: "sketch.native",
+        featureID: sketchFeatureID,
+        modelBounds: .zero,
+        kind: .sketch(primitives: []),
+        sketchRegions: regions
+    )
+    return try ViewportNativeOverlayHitResolver.sketchRegion(
+        at: point,
+        item: item,
+        selectionHitPolicy: selectionHitPolicy,
+        probe: probe
+    )
+}
+
+@Test
+func nativeOverlaySketchRegionAnswersAPointerInsideItsDrawnBoundary() throws {
+    let answer = try #require(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+        regions: [sketchRegion("region.square", points: regionSquarePoints)]
+    ))
+    #expect(answer.hit.selectionComponent == .region(
+        SelectionComponentID(rawValue: "region.square")
+    ))
+    #expect(answer.hit.featureID == sketchFeatureID)
+    #expect(answer.hit.sceneNodeID == nil)
+    #expect(answer.hit.kind == .sketch)
+    #expect(answer.hit.pickingBackend == .native)
+    #expect(answer.candidate.rank == .face)
+    #expect(answer.candidate.metric == 0)
+}
+
+/// The rule is containment and not a tolerance, so a pointer just outside the
+/// boundary is refused rather than admitted at a small distance.
+@Test
+func nativeOverlaySketchRegionRefusesAPointerOutsideItsDrawnBoundary() throws {
+    #expect(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 1.02, y: 0.5)),
+        regions: [sketchRegion("region.square", points: regionSquarePoints)]
+    ) == nil)
+}
+
+/// A concave boundary answers the pointers in both of its arms.
+@Test
+func nativeOverlaySketchRegionAnswersBothArmsOfAConcaveBoundary() throws {
+    for plane in [CGPoint(x: 1.5, y: 0.5), CGPoint(x: 0.5, y: 1.5)] {
+        let answer = try #require(try regionAnswer(
+            at: sketchScreen(plane),
+            regions: [sketchRegion("region.concave", points: regionConcavePoints)]
+        ))
+        #expect(answer.hit.selectionComponent == .region(
+            SelectionComponentID(rawValue: "region.concave")
+        ), "\(plane) lies in an arm")
+    }
+}
+
+/// The notch of the same boundary is refused, which containment of its convex
+/// hull would have admitted.
+@Test
+func nativeOverlaySketchRegionRefusesTheNotchOfAConcaveBoundary() throws {
+    #expect(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 1.5, y: 1.5)),
+        regions: [sketchRegion("region.concave", points: regionConcavePoints)]
+    ) == nil)
+}
+
+/// The section cuts the boundary before it is projected, so the surviving side
+/// answers and the removed side does not — a pointer the whole square would
+/// have contained.
+@Test
+func nativeOverlaySketchRegionAnswersOnlyTheSideTheSectionKeeps() throws {
+    let probe = RegionFrame(sectionKeepsXUpTo: 0.5)
+    let regions = [sketchRegion("region.square", points: regionSquarePoints)]
+    let kept = try #require(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 0.25, y: 0.5)),
+        regions: regions,
+        probe: probe
+    ))
+    #expect(kept.hit.selectionComponent == .region(
+        SelectionComponentID(rawValue: "region.square")
+    ))
+    #expect(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 0.75, y: 0.5)),
+        regions: regions,
+        probe: probe
+    ) == nil)
+}
+
+/// A section that removes the whole boundary leaves no area, so the pointer it
+/// used to contain answers nothing.
+@Test
+func nativeOverlaySketchRegionRefusesARegionTheSectionRemovesEntirely() throws {
+    #expect(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+        regions: [sketchRegion("region.square", points: regionSquarePoints)],
+        probe: RegionFrame(sectionKeepsXUpTo: -1)
+    ) == nil)
+}
+
+/// The camera's depth interval narrows the same boundary, so a region drawn
+/// nearer than the interval starts answers nothing.
+@Test
+func nativeOverlaySketchRegionRefusesARegionTheCameraDepthIntervalRemoves() throws {
+    #expect(try regionAnswer(
+        at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+        regions: [sketchRegion("region.square", points: regionSquarePoints)],
+        probe: RegionFrame(depthInterval: 20...Double.infinity)
+    ) == nil)
+}
+
+/// A boundary vertex the frame answers a non-finite depth for is a typed
+/// refusal. Skipping it would answer the pointer over a boundary smaller than
+/// the one the region has.
+@Test
+func nativeOverlaySketchRegionRefusesABoundaryWithANonFiniteDepth() {
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try regionAnswer(
+            at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+            regions: [sketchRegion("region.square", points: regionSquarePoints)],
+            probe: RegionFrame(nonFiniteDepths: [CGPoint(x: 1, y: 1)])
+        )
+    }
+}
+
+/// A boundary vertex the clip retained and the frame cannot project is the same
+/// typed refusal, and not a boundary quietly closed over the gap.
+@Test
+func nativeOverlaySketchRegionRefusesABoundaryVertexItCannotProject() {
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try regionAnswer(
+            at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
+            regions: [sketchRegion("region.square", points: regionSquarePoints)],
+            probe: RegionFrame(unprojectable: [CGPoint(x: 1, y: 1)])
+        )
+    }
+}
+
+/// One profile's boundary can lie inside another's, so a pointer both contain
+/// is resolved by the nearer projected centroid and not by scene order.
+@Test
+func nativeOverlaySketchRegionAnswersTheNearerCentroidOfTwoNestedRegions() throws {
+    let outer = sketchRegion("region.outer", points: [
+        CGPoint(x: 0, y: 0),
+        CGPoint(x: 4, y: 0),
+        CGPoint(x: 4, y: 4),
+        CGPoint(x: 0, y: 4),
+    ])
+    let inner = sketchRegion("region.inner", points: [
+        CGPoint(x: 1, y: 1),
+        CGPoint(x: 2, y: 1),
+        CGPoint(x: 2, y: 2),
+        CGPoint(x: 1, y: 2),
+    ])
+    for regions in [[outer, inner], [inner, outer]] {
+        let answer = try #require(try regionAnswer(
+            at: sketchScreen(CGPoint(x: 1.5, y: 1.5)),
+            regions: regions
+        ))
+        #expect(answer.hit.selectionComponent == .region(
+            SelectionComponentID(rawValue: "region.inner")
+        ), "the inner centroid is nearer whichever order the scene lists")
+        #expect(answer.candidate.metric == 0)
+    }
+}
+
+/// The scopes that admit a region reach the family; the scopes that do not
+/// answer nothing, whatever the frame draws.
+@Test
+func nativeOverlaySketchRegionAnswersOnlyTheScopesThatAdmitARegion() throws {
+    let regions = [sketchRegion("region.square", points: regionSquarePoints)]
+    let pointer = sketchScreen(CGPoint(x: 0.5, y: 0.5))
+    for policy in [ViewportSelectionHitPolicy.region, .all] {
+        #expect(try regionAnswer(
+            at: pointer,
+            regions: regions,
+            selectionHitPolicy: policy
+        ) != nil, "\(policy) admits a region hit")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.object, .face, .edge, .vertex, .sketchEntity,
+    ] {
+        #expect(try regionAnswer(
+            at: pointer,
+            regions: regions,
+            selectionHitPolicy: policy
+        ) == nil, "\(policy) admits no region hit")
+    }
+}

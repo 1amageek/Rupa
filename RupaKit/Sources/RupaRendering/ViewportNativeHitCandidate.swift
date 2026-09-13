@@ -17,6 +17,12 @@
 /// pointer is given a surface hit, so at most one face candidate exists per
 /// query and the face metric never has to order two bodies against each other.
 ///
+/// A sketch region is the one other family at face rank, and it carries a
+/// projected distance where a CAD face carries a depth. The two are never
+/// ordered against each other: the `region` scope admits no face, and the
+/// `all` scope does not generate a region candidate yet. Giving both families
+/// one metric belongs to the seam that makes `all` generate every family.
+///
 /// An occurrence carries a metric of zero. It is admitted at the pointer's own
 /// pixel and has no distance to the pointer to be ordered by, and one query
 /// never produces two of them, because one pixel draws one occurrence.

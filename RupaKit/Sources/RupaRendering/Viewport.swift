@@ -1815,20 +1815,12 @@ public struct Viewport: View {
         )
     }
 
-    /// CAD sub-shape scopes, the sketch families and the occurrence resolve
-    /// through the mounted native frame. `.object` and `.all` still reach the
-    /// legacy resolver for the curve family, which has no prepared native
+    /// Every selection scope asks the mounted native frame once a presentation
+    /// scene is mounted. `.object` and `.all` still reach the legacy resolver
+    /// afterwards for the curve family, which has no prepared native
     /// counterpart yet.
     private var usesNativeCADSubshapeHits: Bool {
-        guard presentationScene != nil else {
-            return false
-        }
-        switch selectionHitPolicy {
-        case .all, .object, .face, .edge, .vertex, .sketchEntity:
-            return true
-        case .region:
-            return false
-        }
+        presentationScene != nil
     }
 
     /// Once the native frame has answered for a topology-backed scene, only the
@@ -1838,30 +1830,29 @@ public struct Viewport: View {
     /// A scene the native query cannot answer for at all still reaches the
     /// legacy resolver past this property; `NativeCADSubshapeResult.unsupported`
     /// owns that rule and names its condition.
-    // FIXME(INCOMPLETE_IMPLEMENTATION): `.all`, `.object` and `.region` still
-    // reach the legacy identity resolver, which projects, occludes and clips
-    // with its own GPU rule instead of the mounted native frame, so two
-    // selection judgements remain live.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): `.all` and `.object` still reach the
+    // legacy identity resolver, which projects, occludes and clips with its own
+    // GPU rule instead of the mounted native frame, so two selection judgements
+    // remain live.
     //
     // Production path: `resolvedViewportHit(_:at:in:layout:presentationOccurrenceID:)`
     // routes a native `.miss` into `legacyViewportHit` for `.all` and
-    // `.object`, and `.all` is the default hover scope. `.region` never runs
-    // the native query at all, because `usesNativeCADSubshapeHits` excludes it,
-    // so it reaches the same bridge through `.unsupported`. `.all` and
-    // `.object` also reach it after a native occurrence answer, which
-    // `legacyOverlayAnswer(_:)` records separately.
+    // `.object`, and `.all` is the default hover scope. Both also reach it
+    // after a native occurrence answer, which `legacyOverlayAnswer(_:)`
+    // records separately.
     //
     // Do not treat the input cutover as complete while this returns true for
-    // any scope: the curve family needs a native path and the region scope
-    // needs a prepared native identity before the legacy resolver and this
-    // property can be deleted together. Rectangle selection no longer waits on
-    // this property; it asks `presentationCADSubshapeRectangleHits(in:in:)` for
-    // the CAD sub-shape scopes.
+    // any scope: the curve family needs a native path, and `.all` has to
+    // generate every family — the sketch region included — as a candidate it
+    // orders itself, before the legacy resolver and this property can be
+    // deleted together. Rectangle selection no longer waits on this property;
+    // it asks `presentationCADSubshapeRectangleHits(in:in:)` for the CAD
+    // sub-shape scopes.
     private var requiresLegacyHitFallback: Bool {
         switch selectionHitPolicy {
-        case .face, .edge, .vertex, .sketchEntity:
+        case .face, .edge, .vertex, .region, .sketchEntity:
             return false
-        case .all, .object, .region:
+        case .all, .object:
             return true
         }
     }
@@ -1950,12 +1941,27 @@ public struct Viewport: View {
             )
         }
         var carriesNativeFamily = false
-        // Either gate the sketch families use: `object` or `sketchEntity`
-        // reaches an entity and `sketchEntity` alone reaches a control point,
-        // so their union is the wider of the two.
+        // Either gate the sketch entity families use: `object` or
+        // `sketchEntity` reaches an entity and `sketchEntity` alone reaches a
+        // control point, so their union is the wider of the two.
         let admitsSketchFamilies = selectionHitPolicy.allowsObjectHits
             || selectionHitPolicy.allowsSketchEntityHits
-        let suppressedSketchFeatureIDs = admitsSketchFamilies
+        // FIXME(INCOMPLETE_IMPLEMENTATION): the sketch region family is native
+        // here for the `region` scope alone, although the resolver answers it
+        // from the mounted frame for any scope that admits a region.
+        //
+        // Production path: `.all` admits region hits and reaches this function,
+        // but this gate withholds the family from it, so an `.all` pointer over
+        // a region is still answered by the legacy identity resolver through
+        // `legacyOverlayAnswer(_:)`, on its own projection and with no section
+        // or occlusion test.
+        //
+        // Do not treat the region family as cut over while this narrows the
+        // scope. It is replaced by `selectionHitPolicy.allowsRegionHits` when
+        // `.all` generates every family as a candidate it orders itself, which
+        // is the same seam that deletes the legacy overlay answer.
+        let admitsNativeSketchRegions = selectionHitPolicy == .region
+        let suppressedSketchFeatureIDs = admitsSketchFamilies || admitsNativeSketchRegions
             ? frameSuppressedSketchFeatureIDs(in: scene)
             : []
         let sketchControlPoints: ViewportSketchControlPointHitPolicy = admitsSketchFamilies
@@ -1965,7 +1971,10 @@ public struct Viewport: View {
             // A sketch item carries no scene node and no body component, so it
             // is answered before the body families rather than through them.
             if case .sketch(let primitives) = item.kind {
-                guard admitsSketchFamilies, !primitives.isEmpty else { continue }
+                let queriesEntities = admitsSketchFamilies && !primitives.isEmpty
+                let queriesRegions = admitsNativeSketchRegions
+                    && !item.sketchRegions.isEmpty
+                guard queriesEntities || queriesRegions else { continue }
                 carriesNativeFamily = true
                 // A sketch the frame suppressed — because the body it feeds is
                 // selected or being edited — is not drawn and is not asked
@@ -1979,16 +1988,29 @@ public struct Viewport: View {
                 guard !suppressedSketchFeatureIDs.contains(item.featureID) else {
                     continue
                 }
-                if let sketch = try ViewportNativeOverlayHitResolver.sketchEntity(
-                    at: point,
-                    item: item,
-                    primitives: primitives,
-                    selectionHitPolicy: selectionHitPolicy,
-                    sketchControlPointHitPolicy: sketchControlPoints,
-                    tolerance: ViewportNativeCADTopologyResolver.pointTolerance,
-                    probe: probe
-                ), best.map({ sketch.candidate.precedes($0.candidate) }) ?? true {
+                if queriesEntities,
+                   let sketch = try ViewportNativeOverlayHitResolver.sketchEntity(
+                       at: point,
+                       item: item,
+                       primitives: primitives,
+                       selectionHitPolicy: selectionHitPolicy,
+                       sketchControlPointHitPolicy: sketchControlPoints,
+                       tolerance: ViewportNativeCADTopologyResolver.pointTolerance,
+                       probe: probe
+                   ), best.map({ sketch.candidate.precedes($0.candidate) }) ?? true {
                     best = sketch
+                }
+                // A region is the only family the frame draws for a sketch
+                // that carries no primitive of its own, so it is asked
+                // independently of the entity query above rather than after it.
+                if queriesRegions,
+                   let region = try ViewportNativeOverlayHitResolver.sketchRegion(
+                       at: point,
+                       item: item,
+                       selectionHitPolicy: selectionHitPolicy,
+                       probe: probe
+                   ), best.map({ region.candidate.precedes($0.candidate) }) ?? true {
+                    best = region
                 }
                 continue
             }
@@ -2369,7 +2391,8 @@ public struct Viewport: View {
     /// all. The legacy resolver tests none of that, so its answer in either
     /// family can only reinstate what this frame says is not on screen. A
     /// sketch region carries no entity identity and is the one sketch family
-    /// still answered there.
+    /// still answered there, which only `.all` reaches: the `region` scope
+    /// answers it natively and never routes past a native answer.
     ///
     /// `unsupported` does not pass through here: the native query answered for
     /// no family on that scene, so the legacy resolver is the only answer there
@@ -2384,10 +2407,12 @@ public struct Viewport: View {
     }
 
     // FIXME(INCOMPLETE_IMPLEMENTATION): The native occurrence answer is complete,
-    // but the overlay families that outrank it — curve segment and sketch
-    // region — are still answered by the pre-RealityKit identity resolver, so a
-    // pointer the occurrence wins has to be ordered against a second,
-    // differently projected hit rule. That legacy answer is not
+    // but the overlay families that outrank it are still answered here by the
+    // pre-RealityKit identity resolver, so a pointer the occurrence wins has to
+    // be ordered against a second, differently projected hit rule. The curve
+    // segment family has no native path at all; the sketch region family has
+    // one, but `presentationCADSubshapeHit(at:visibleSurface:in:)` generates it
+    // as a candidate only for the `region` scope. That legacy answer is not
     // occlusion-tested against the mounted frame, so a curve behind a body can
     // still win the pointer; this preserves the behaviour the replaced rule
     // already had and does not introduce it.
@@ -2397,9 +2422,9 @@ public struct Viewport: View {
     // scope and the default hover scope.
     //
     // Do not treat the object scope as cut over while this exists. It is deleted
-    // when the region and curve seams land and those families are produced by
-    // `ViewportNativeOverlayHitResolver` as candidates this query orders itself,
-    // not when the occurrence alone passes its tests.
+    // when the curve seam lands and `.all` generates every family — the region
+    // included — through `ViewportNativeOverlayHitResolver` as candidates this
+    // query orders itself, not when the occurrence alone passes its tests.
     private func legacyOverlayAnswer(_ hit: ViewportHit?) -> ViewportHit? {
         guard let hit else {
             return nil

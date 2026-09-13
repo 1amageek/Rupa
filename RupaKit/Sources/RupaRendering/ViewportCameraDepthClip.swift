@@ -34,9 +34,10 @@ import RupaCore
 /// through `AffineScalarBound` and `ParameterInterval`, which name a bound by
 /// the scalar's values at the segment's endpoints rather than by the plane that
 /// produced them. This owner therefore never learns whether it is narrowing
-/// against a camera or against a cut. A polygon is clipped against depth only,
-/// because the near plane is the one plane a projected triangle cannot be
-/// carried across.
+/// against a camera or against a cut. A polygon is clipped the same way, by
+/// the scalar its caller supplies at each vertex, so a boundary narrowed by a
+/// cut and then by the camera is narrowed by one rule twice rather than by two
+/// rules that could disagree.
 enum ViewportCameraDepthClip {
     /// Whether this owner can clip against `interval`.
     ///
@@ -155,21 +156,90 @@ enum ViewportCameraDepthClip {
         }
     }
 
-    /// The part of a convex world polygon whose depth lies inside `interval`.
+    /// The part of a world polygon whose depth lies inside `interval`, or nil
+    /// when the interval or a vertex depth is not one this owner can clip.
     ///
-    /// An empty result means the camera draws none of the polygon. A polygon
-    /// wholly inside the interval is returned unchanged, so a caller that
-    /// already projected its vertices spends no further native call on it.
-    static func clipped(_ polygon: [Vertex], to interval: ClosedRange<Double>) -> [Vertex] {
-        guard polygon.count >= 3, canClip(against: interval) else { return [] }
-        for vertex in polygon where !vertex.depth.isFinite {
-            return []
-        }
-        let near = clipped(polygon, against: interval.lowerBound, retainingDepthsAbove: true)
-        guard near.count >= 3 else { return [] }
+    /// A result with fewer than three vertices means the camera draws none of
+    /// the polygon. A polygon wholly inside the interval is returned
+    /// unchanged, so a caller that already projected its vertices spends no
+    /// further native call on it.
+    ///
+    /// The polygon is not assumed convex. Clipping against a single half-space
+    /// leaves a concave boundary concave, with collinear vertices along the
+    /// bound rather than a split, which is a boundary a containment test still
+    /// reads correctly.
+    static func clipped(_ polygon: [Vertex], to interval: ClosedRange<Double>) -> [Vertex]? {
+        guard canClip(against: interval) else { return nil }
+        guard let near = clipped(
+            polygon,
+            againstHalfSpaceOf: polygon.map(\.depth),
+            bound: interval.lowerBound,
+            retainingValuesAtLeastBound: true
+        ) else { return nil }
+        guard near.count >= 3 else { return near }
         guard interval.upperBound.isFinite else { return near }
-        let far = clipped(near, against: interval.upperBound, retainingDepthsAbove: false)
-        return far.count >= 3 ? far : []
+        return clipped(
+            near,
+            againstHalfSpaceOf: near.map(\.depth),
+            bound: interval.upperBound,
+            retainingValuesAtLeastBound: false
+        )
+    }
+
+    /// The part of a world polygon whose affine scalar lies on the retained
+    /// side of `bound`, or nil when it is not one this owner can clip.
+    ///
+    /// `scalars` carries the caller's own scalar at each vertex in the
+    /// polygon's order, which is what lets one clipping rule serve both the
+    /// camera's depth and a section's signed distance without this owner
+    /// learning which it is narrowing against.
+    ///
+    /// A result with fewer than three vertices bounds no area. A scalar,
+    /// depth or bound that is not finite is a refusal instead, because a
+    /// caller cannot tell a polygon the half-space removed from one the frame
+    /// could not describe, and answering a query over a silently dropped
+    /// boundary would report it as absent.
+    static func clipped(
+        _ polygon: [Vertex],
+        againstHalfSpaceOf scalars: [Double],
+        bound: Double,
+        retainingValuesAtLeastBound: Bool
+    ) -> [Vertex]? {
+        guard polygon.count == scalars.count, bound.isFinite else { return nil }
+        guard polygon.allSatisfy({ $0.depth.isFinite }) else { return nil }
+        guard scalars.allSatisfy(\.isFinite) else { return nil }
+        guard polygon.count >= 3 else { return [] }
+        var result: [Vertex] = []
+        result.reserveCapacity(polygon.count + 1)
+        for index in polygon.indices {
+            let previousIndex = (index + polygon.count - 1) % polygon.count
+            let current = polygon[index]
+            let previous = polygon[previousIndex]
+            let retainsCurrent = retains(
+                scalars[index],
+                bound: bound,
+                atLeast: retainingValuesAtLeastBound
+            )
+            let retainsPrevious = retains(
+                scalars[previousIndex],
+                bound: bound,
+                atLeast: retainingValuesAtLeastBound
+            )
+            if retainsCurrent != retainsPrevious,
+               let crossing = crossing(
+                   previous,
+                   scalars[previousIndex],
+                   current,
+                   scalars[index],
+                   bound: bound
+               ) {
+                result.append(crossing)
+            }
+            if retainsCurrent {
+                result.append(current)
+            }
+        }
+        return result
     }
 
     /// The parameter interval of a world segment whose depth lies inside
@@ -230,45 +300,34 @@ enum ViewportCameraDepthClip {
         return point
     }
 
-    /// Sutherland–Hodgman against one depth half-space.
-    private static func clipped(
-        _ polygon: [Vertex],
-        against bound: Double,
-        retainingDepthsAbove: Bool
-    ) -> [Vertex] {
-        var result: [Vertex] = []
-        result.reserveCapacity(polygon.count + 1)
-        for index in polygon.indices {
-            let current = polygon[index]
-            let previous = polygon[(index + polygon.count - 1) % polygon.count]
-            let retainsCurrent = retains(current.depth, bound: bound, above: retainingDepthsAbove)
-            let retainsPrevious = retains(previous.depth, bound: bound, above: retainingDepthsAbove)
-            if retainsCurrent {
-                if retainsPrevious == false, let crossing = crossing(previous, current, bound: bound) {
-                    result.append(crossing)
-                }
-                result.append(current)
-            } else if retainsPrevious, let crossing = crossing(previous, current, bound: bound) {
-                result.append(crossing)
-            }
-        }
-        return result
+    private static func retains(_ value: Double, bound: Double, atLeast: Bool) -> Bool {
+        atLeast ? value >= bound : value <= bound
     }
 
-    private static func retains(_ depth: Double, bound: Double, above: Bool) -> Bool {
-        above ? depth >= bound : depth <= bound
-    }
-
-    /// The crossing of a segment with one depth plane.
+    /// The crossing of a segment with one half-space bound.
     ///
     /// The caller forms it only for a segment with one retained and one
-    /// rejected endpoint, so the depths differ there; the guard keeps the
+    /// rejected endpoint, so the scalars differ there; the guard keeps the
     /// function total rather than describing a reachable case.
-    private static func crossing(_ start: Vertex, _ end: Vertex, bound: Double) -> Vertex? {
-        let delta = end.depth - start.depth
+    ///
+    /// The crossing's depth is interpolated rather than measured. Depth is
+    /// affine in world position under both projections the viewport mounts, so
+    /// this is exact, and it is what lets a caller narrow a boundary by a
+    /// section and then by the camera without asking the frame for a depth in
+    /// between.
+    private static func crossing(
+        _ start: Vertex,
+        _ startScalar: Double,
+        _ end: Vertex,
+        _ endScalar: Double,
+        bound: Double
+    ) -> Vertex? {
+        let delta = endScalar - startScalar
         guard delta != 0, delta.isFinite else { return nil }
-        let parameter = (bound - start.depth) / delta
+        let parameter = (bound - startScalar) / delta
         guard let point = interpolated(start.point, end.point, parameter) else { return nil }
-        return Vertex(point: point, depth: bound, projected: nil)
+        let depth = start.depth + (end.depth - start.depth) * parameter
+        guard depth.isFinite else { return nil }
+        return Vertex(point: point, depth: depth, projected: nil)
     }
 }

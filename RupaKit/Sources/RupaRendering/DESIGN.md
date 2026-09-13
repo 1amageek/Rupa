@@ -1279,15 +1279,40 @@ independent tessellator is never an alternative implementation.
    draws them only for a selected or hovered entity, so reading that would
    make selecting one depend on having selected it.
    The region family clips before it projects. A sketch region's boundary is a
-   planar polygon in world space, so each boundary edge is clipped against the
-   section's affine half-space, and under a perspective frame against the
-   camera interval's near bound, before the surviving polygon is projected; the
-   point query is then containment of the pointer in that projected polygon.
-   Clipping a planar polygon by a half-space leaves it planar and projection
-   preserves containment, so this is exact and not a tolerance. A surviving
-   boundary vertex the frame cannot project is a typed refusal and never a
-   skipped edge, because dropping one would silently shrink the region the
-   answer is computed over.
+   planar polygon in world space, so the whole polygon is clipped against the
+   section's affine half-space and then against the frame's depth interval,
+   and only the surviving polygon is projected; the point query is then
+   containment of the pointer in that projected polygon. Clipping a planar
+   polygon by a half-space leaves it planar and projection preserves
+   containment, so this is exact and not a tolerance. A surviving boundary
+   vertex the frame cannot project is a typed refusal and never a skipped
+   edge, because dropping one would silently shrink the region the answer is
+   computed over.
+   Both clips are `ViewportCameraDepthClip`, the owner every candidate edge of
+   the rectangle is already narrowed by, so the point and the rectangle cannot
+   disagree about where the camera stops drawing or where the cut removes
+   geometry. That owner takes the interval the frame reports and names no
+   plane of its own, so under the perspective camera's infinite far plane it
+   contributes the near bound alone, which is why nothing here asks which
+   projection drew the frame. A boundary scalar or bound the frame reports as
+   non-finite is a refusal there and not an exclusion, because those are
+   different answers.
+   A region boundary is not assumed convex. One extracted profile's boundary
+   can be concave, and clipping a concave polygon against a single half-space
+   leaves collinear vertices along the bound rather than splitting the
+   polygon, which the even-odd containment test over the result reads
+   correctly. A boundary either clip leaves with fewer than three vertices
+   bounds no area and contains no pointer, which is the answer the replaced
+   rule gave a degenerate boundary too.
+   A region's metric is the projected distance from the pointer to its clipped
+   boundary's centroid. Two regions can both contain one pointer, because one
+   profile's boundary can lie inside another's, and this is the tiebreak the
+   replaced CPU rule resolved that with. It is a pixel distance carried at
+   face rank where a CAD face carries a camera depth, and the two are never
+   ordered against each other: the `region` scope admits no face, and the
+   `all` scope does not generate this family as a candidate at all yet. Making
+   one metric order both families is the `all` scope's own seam, stated in the
+   residual below.
    The occurrence family has no bounding box. An occurrence is a candidate
    where the mounted frame draws it at the pointer's own pixel, which is what
    the rectangle's occurrence harvest reads at every pixel it covers. The
@@ -1332,19 +1357,22 @@ independent tessellator is never an alternative implementation.
    `requiresLegacyHitFallback` names exactly which. That routing and the
    `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
    the last of those scopes.
-   One interim residual is not a miss. The curve segment and sketch region
-   families still belong to the legacy resolver, and they outrank `object`, so
-   a pointer the occurrence family wins is one this path cannot yet order
-   correctly: a curve segment drawn at that same pointer would have won it.
-   That pointer is therefore asked of the legacy resolver as well, and an
-   answer it returns that is neither a body nor a sketch entity is preferred
-   over the native occurrence. A pointer a CAD sub-shape, a surface handle
-   display or a sketch entity wins is not, because those families are already
-   native here and a legacy answer could only contradict them. The legacy
-   overlay answer is not occlusion-tested against the frame, which is exactly
-   what the replaced rule did, so preferring it preserves the current behaviour
-   rather than choosing a new one; it is removed with the region and curve
-   seams and the occurrence then answers those pointers alone.
+   One interim residual is not a miss. The curve segment family still belongs
+   to the legacy resolver, and the region family answers the `region` scope
+   here but is not generated as a candidate under `all` yet; both outrank
+   `object`, so a pointer the occurrence family wins under `all` is one this
+   path cannot yet order correctly: a curve segment or a region drawn at that
+   same pointer would have won it. That pointer is therefore asked of the
+   legacy resolver as well, and an answer it returns that is neither a body
+   nor a sketch entity is preferred over the native occurrence. A pointer a
+   CAD sub-shape, a surface handle display or a sketch entity wins is not,
+   because those families are already native here and a legacy answer could
+   only contradict them. The legacy overlay answer is not occlusion-tested
+   against the frame, which is exactly what the replaced rule did, so
+   preferring it preserves the current behaviour rather than choosing a new
+   one; it is removed when the curve seam lands and `all` generates every
+   family as a candidate it orders itself, and the occurrence then answers
+   those pointers alone.
    The surface handle displays are native on the point path before they are on
    the rectangle path, and the two are narrowed by separate seams, so for that
    interval one frame answers a knot at a pointer and the legacy identity
@@ -1658,6 +1686,20 @@ independent tessellator is never an alternative implementation.
    circle answered by neither family; the nearer of two entities winning; and
    both scope gates, with `object` admitting an entity but no control point
    and `sketchEntity` admitting both.
+   It also owns the sketch region family, whose rule is clipping and not
+   tolerance: a pointer inside a region's projected boundary admitted and one
+   outside it refused; a concave boundary answering the pointers in its arms
+   and refusing the pointer in its notch, which containment of a convex hull
+   would have admitted; a region the section cuts answering the pointer on the
+   surviving side and refusing the pointer on the removed side, and a region
+   the section removes entirely answering nothing; a region the camera's depth
+   interval removes answering nothing; a boundary vertex the frame cannot
+   project raised as a typed failure rather than skipped, which a boundary the
+   frame answers a non-finite depth for proves; the nearer centroid winning at
+   a pointer two nested regions both contain; and the scope gate, with
+   `region` and `all` admitting a region and the other scopes admitting none,
+   which is the resolver's own gate and not the narrower one the point query
+   applies above it.
    `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
    owns the same rule on the mounted frame and through the production click
    path: the occurrence the frame draws at the pointer is selected under the
@@ -1692,6 +1734,22 @@ independent tessellator is never an alternative implementation.
    which the same pointer answers nothing in the `sketchEntity`, `object` and
    `all` scopes alike. Every hit is checked to carry the native picking
    backend.
+   `Tests/RupaRenderingTests/ViewportNativeRegionScopePointSelectionTests.swift`
+   owns the sketch region family on the mounted frame and through the
+   production click path: a pointer inside the region the frame drew is
+   selected under the `region` scope, a pointer outside it selects nothing,
+   and that empty answer is a native miss and not a routed one because the
+   `region` scope no longer routes one. It also owns the frame's suppression
+   rule for this family, which the producer applies to regions and entities
+   alike: once the body's scene node is selected, the profile is no longer
+   drawn and the same pointer answers nothing. That case needs a second
+   region: under the `region` scope nothing but a region can prove the mounted
+   frame answers, so the sketch the extrude consumed cannot be the only one
+   the scene carries. The fixture asserts first that the scene it builds
+   carries two sketches with one region each and one body naming the profile
+   as its source, so a later change to profile extraction cannot turn these
+   cases into vacuous ones. Every hit is checked to carry the native picking
+   backend and to name the region's prepared `SelectionComponent`.
    The region path's evidence is recorded, and it is two different claims.
    That the raster is the frame is proved by the component's differential
    test, which compares the raster's answer with `surfaceHit` at every
