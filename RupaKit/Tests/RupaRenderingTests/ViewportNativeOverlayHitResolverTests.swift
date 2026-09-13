@@ -1514,3 +1514,729 @@ func nativeOverlayCurveAnswersOnlyTheScopesThatAdmitAnObject() throws {
         ) == nil, "\(policy) admits no curve hit")
     }
 }
+
+// MARK: - Rectangle frame
+
+private struct RectangleQueryNotAsked: Error {}
+
+/// A top view of the sketch plane that answers the four queries the rectangle
+/// rules ask.
+///
+/// It projects the way `SketchFrame` and `RegionFrame` do — a world point
+/// lands at `(200 + 100x, 200 - 100z)` at camera depth `y + 10` — so a marker
+/// or a polyline the overlay producer places at `y == 0` is drawn at depth 10.
+///
+/// Every query a point gesture uses is a refusal here, and so is
+/// `cameraDepthInterval`. A rectangle reads the camera's interval once for the
+/// whole gesture and hands it to each family, and a family that read a drawn
+/// fragment under a marker, or asked the frame for the interval again, would
+/// throw instead of answering.
+private struct RectangleFrame: ViewportNativeFrameProbe {
+    /// The camera depth of the fragment the frame draws over the rectangle,
+    /// or nil for a frame that draws nothing there.
+    var surfaceDepth: Double?
+    /// Steps of a walk the frame draws no fragment at. These are step indices
+    /// of the segment probe's own walk and not pixel positions, and a polyline
+    /// with several spans walks each of them from zero again.
+    var clearSteps: Range<Int> = 0..<0
+    /// The active section keeps world points whose `x` is at most this, in the
+    /// two shapes the mounted frame reports one: a retained-point answer for a
+    /// marker, and a signed distance per endpoint with the bound the retained
+    /// side is at least for a segment. `nil` is a frame with no cut.
+    var sectionKeepsXUpTo: Double?
+    /// Sketch-plane positions the frame cannot project.
+    var unprojectable: [CGPoint] = []
+    /// Sketch-plane positions the frame reports a non-finite depth for.
+    var nonFiniteDepths: [CGPoint] = []
+
+    let usesPerspectiveProjection = false
+
+    func projectedPointWithDepth(
+        _ point: Point3D
+    ) throws -> (point: CGPoint?, depth: Double) {
+        let plane = CGPoint(x: point.x, y: point.z)
+        let depth = nonFiniteDepths.contains(plane) ? Double.nan : point.y + 10
+        guard unprojectable.contains(plane) == false else {
+            return (nil, depth)
+        }
+        return (CGPoint(x: 200 + point.x * 100, y: 200 - point.z * 100), depth)
+    }
+
+    func retainsSectionedPoint(_ point: Point3D) throws -> Bool {
+        guard let sectionKeepsXUpTo else { return true }
+        return point.x <= sectionKeepsXUpTo
+    }
+
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        guard let sectionKeepsXUpTo else { return nil }
+        return ViewportCameraDepthClip.AffineScalarBound(
+            start: sectionKeepsXUpTo - start.x,
+            end: sectionKeepsXUpTo - end.x,
+            bound: 0,
+            retainsValuesAtLeastBound: true
+        )
+    }
+
+    /// The mounted raster's walk at unit display scale.
+    ///
+    /// It clips the screen segment to the rectangle, lays `stepCount` samples
+    /// along what survives at the Chebyshev extent the raster uses, and reports
+    /// the first sample at or after `step` that the frame draws a fragment at.
+    /// The reported fraction is the parameter along the segment the caller
+    /// gave, not along the part the rectangle kept, which is what the caller
+    /// recovers a world point with.
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int
+    ) throws -> RealityViewportRegionSegmentProbe {
+        guard step >= 0 else { throw RectangleQueryNotAsked() }
+        guard let span = rectangleClippedSpan(
+            from: start, to: end, within: rect
+        ) else {
+            return RealityViewportRegionSegmentProbe(stepCount: 0, drawn: nil)
+        }
+        let head = CGPoint(
+            x: start.x + (end.x - start.x) * span.lower,
+            y: start.y + (end.y - start.y) * span.lower
+        )
+        let tail = CGPoint(
+            x: start.x + (end.x - start.x) * span.upper,
+            y: start.y + (end.y - start.y) * span.upper
+        )
+        let extent = max(abs(tail.x - head.x), abs(tail.y - head.y))
+        let stepCount = Int(Double(extent).rounded(.down)) + 1
+        guard let surfaceDepth else {
+            return RealityViewportRegionSegmentProbe(
+                stepCount: stepCount, drawn: nil
+            )
+        }
+        for current in step..<max(stepCount, step)
+        where clearSteps.contains(current) == false {
+            let offset = (Double(current) + 0.5) / Double(stepCount)
+            return RealityViewportRegionSegmentProbe(
+                stepCount: stepCount,
+                drawn: RealityViewportRegionSegmentProbe.Drawn(
+                    step: current,
+                    fraction: span.lower + (span.upper - span.lower) * offset,
+                    triangle: drawnTriangle(),
+                    depth: surfaceDepth
+                )
+            )
+        }
+        return RealityViewportRegionSegmentProbe(
+            stepCount: stepCount, drawn: nil
+        )
+    }
+
+    func projectedPointWithinDepthRange(
+        _ point: Point3D
+    ) throws -> (point: CGPoint, depth: Double)? {
+        throw RectangleQueryNotAsked()
+    }
+
+    func surfaceHit(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        throw RectangleQueryNotAsked()
+    }
+
+    func regionFragment(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        throw RectangleQueryNotAsked()
+    }
+
+    func cameraDepthInterval() throws -> ClosedRange<Double> {
+        throw RectangleQueryNotAsked()
+    }
+}
+
+/// The parameter span of a screen segment lying inside a rectangle, or nil
+/// when none of it does.
+///
+/// This is the Liang-Barsky narrowing the mounted raster performs before it
+/// walks, written out so the probe above reports the step count and the
+/// fractions the raster reports.
+private func rectangleClippedSpan(
+    from start: CGPoint,
+    to end: CGPoint,
+    within rect: CGRect
+) -> (lower: Double, upper: Double)? {
+    var lower = 0.0
+    var upper = 1.0
+    let dx = Double(end.x - start.x)
+    let dy = Double(end.y - start.y)
+    func narrow(_ p: Double, _ q: Double) -> Bool {
+        guard p != 0 else { return q >= 0 }
+        let parameter = q / p
+        if p < 0 {
+            lower = max(lower, parameter)
+        } else {
+            upper = min(upper, parameter)
+        }
+        return lower <= upper
+    }
+    guard narrow(-dx, Double(start.x - rect.minX)),
+          narrow(dx, Double(rect.maxX - start.x)),
+          narrow(-dy, Double(start.y - rect.minY)),
+          narrow(dy, Double(rect.maxY - start.y)) else { return nil }
+    return (lower, upper)
+}
+
+/// The rectangle the families below are asked about.
+///
+/// It covers screen `210...290` by `150...230`, which `RectangleFrame` draws
+/// the sketch plane's `x` in `0.1...0.9` and `z` in `-0.3...0.5` inside.
+private let rectangleRect = CGRect(x: 210, y: 150, width: 80, height: 80)
+
+/// A world position on the plane `RectangleFrame` draws at camera depth 10.
+private func rectanglePoint(_ x: Double, _ z: Double) -> Point3D {
+    Point3D(x: x, y: 0, z: z)
+}
+
+/// The whole camera interval, which is what a mounted frame reports for a
+/// parallel camera and what the dispatcher hands every family.
+private let rectangleDepthInterval = 0.0...Double.infinity
+
+// MARK: - Rectangle surface handles
+
+private func handleRectangleHits(
+    _ component: ViewportBodyComponent,
+    rect: CGRect = rectangleRect,
+    selectionHitPolicy: ViewportSelectionHitPolicy = .vertex,
+    depthInterval: ClosedRange<Double> = rectangleDepthInterval,
+    probe: RectangleFrame = RectangleFrame(),
+    sceneNodeID: SceneNodeID? = handleSceneNodeID
+) throws -> [ViewportHit] {
+    try ViewportNativeOverlayHitResolver.surfaceHandles(
+        in: rect,
+        item: handleItem(component, sceneNodeID: sceneNodeID),
+        component: component,
+        selectionHitPolicy: selectionHitPolicy,
+        depthInterval: depthInterval,
+        probe: probe
+    )
+}
+
+/// One display of each handle family, drawn inside the rectangle at
+/// `(220, 180)`, `(230, 170)`, `(240, 160)` and `(250, 200)`.
+private func handleRectangleComponent() -> ViewportBodyComponent {
+    handleComponent(
+        knots: [handleKnot(0, at: rectanglePoint(0.4, 0.4))],
+        spans: [handleSpan(0, at: rectanglePoint(0.5, 0.0))],
+        trimKnots: [handleTrimKnot(0, at: rectanglePoint(0.2, 0.2))],
+        trimSpans: [handleTrimSpan(0, at: rectanglePoint(0.3, 0.3))]
+    )
+}
+
+/// The rectangle admits every handle family the body draws inside it, and the
+/// frame it asks draws a surface it never reads.
+///
+/// A handle is drawn at annotation depth, in front of whatever the frame drew
+/// under it, so this rule reads no fragment at all. `RectangleFrame` refuses
+/// `surfaceHit` and `regionFragment`, so a rule that compared a handle against
+/// a drawn depth would throw here rather than answer.
+@Test
+func nativeOverlayRectangleAdmitsEverySurfaceHandleFamilyItEncloses() throws {
+    let hits = try handleRectangleHits(handleRectangleComponent())
+    #expect(hits.count == 4)
+    let references = Set(hits.compactMap(\.selectionReference))
+    #expect(references == Set<SelectionReference>([
+        .surface(.knot(SurfaceKnotReference(
+            surface: handleSurface, direction: .u, knotIndex: 0
+        ))),
+        .surface(.span(SurfaceSpanReference(
+            surface: handleSurface, direction: .u, spanIndex: 0
+        ))),
+        .surface(.trimKnot(SurfaceTrimKnotReference(
+            trim: handleTrim, knotIndex: 0
+        ))),
+        .surface(.trimSpan(SurfaceTrimSpanReference(
+            trim: handleTrim, spanIndex: 0
+        ))),
+    ]))
+    #expect(hits.allSatisfy { $0.sceneNodeID == handleSceneNodeID })
+    #expect(hits.allSatisfy { $0.pickingBackend == .native })
+}
+
+/// The rectangle is the drawn marker's own bounds and carries no tolerance.
+///
+/// The replaced rule padded a rectangle by the pointer radius before it read a
+/// handle, so a handle two points outside an edge was selected by a drag that
+/// never covered it. `290` is the rectangle's maximum abscissa, which
+/// `CGRect.contains` excludes, so `289` is the last abscissa admitted.
+@Test
+func nativeOverlayRectangleRefusesASurfaceHandleJustOutsideIt() throws {
+    #expect(try handleRectangleHits(handleComponent(
+        knots: [handleKnot(0, at: rectanglePoint(0.89, 0.2))]
+    )).count == 1)
+    #expect(try handleRectangleHits(handleComponent(
+        knots: [handleKnot(0, at: rectanglePoint(0.92, 0.2))]
+    )).isEmpty)
+    #expect(try handleRectangleHits(handleComponent(
+        knots: [handleKnot(0, at: rectanglePoint(1.5, 0.2))]
+    )).isEmpty)
+}
+
+/// A handle the frame does not draw is not admitted, whichever of the frame's
+/// two reasons removed it.
+///
+/// The section removes the world point, and the camera's depth interval
+/// excludes the depth the frame draws it at. The interval is the one the
+/// dispatcher passes, never one the family asks the frame for.
+@Test
+func nativeOverlayRectangleRefusesASurfaceHandleTheFrameDoesNotDraw() throws {
+    let component = handleComponent(
+        knots: [handleKnot(0, at: rectanglePoint(0.4, 0.4))]
+    )
+    #expect(try handleRectangleHits(
+        component, probe: RectangleFrame(sectionKeepsXUpTo: -1)
+    ).isEmpty)
+    #expect(try handleRectangleHits(
+        component, depthInterval: 20...30
+    ).isEmpty)
+}
+
+/// Two displays naming one handle are one answer.
+///
+/// A rectangle names what the operator enclosed, and a second display of the
+/// same knot is the same thing enclosed twice.
+@Test
+func nativeOverlayRectangleNamesASurfaceHandleIdentityOnce() throws {
+    let hits = try handleRectangleHits(handleComponent(knots: [
+        handleKnot(0, at: rectanglePoint(0.2, 0.2)),
+        handleKnot(0, at: rectanglePoint(0.4, 0.4)),
+    ]))
+    #expect(hits.count == 1)
+}
+
+/// Handles are a vertex sub-shape, so only a scope admitting a vertex reaches
+/// them.
+///
+/// `.all` admits a vertex and therefore admits handles here. Whether a body
+/// contributes any family at all is the dispatcher's rule and not this one's,
+/// so this scope reaching the family is the correct answer for it.
+@Test
+func nativeOverlayRectangleAdmitsSurfaceHandlesOnlyUnderAVertexScope() throws {
+    let component = handleRectangleComponent()
+    for policy in [ViewportSelectionHitPolicy.vertex, .all] {
+        #expect(try handleRectangleHits(
+            component, selectionHitPolicy: policy
+        ).isEmpty == false, "\(policy) admits handle hits")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.object, .face, .edge, .region, .sketchEntity,
+    ] {
+        #expect(try handleRectangleHits(
+            component, selectionHitPolicy: policy
+        ).isEmpty, "\(policy) admits no handle hit")
+    }
+}
+
+/// A handle answers as a component of its scene node, so a body without one
+/// contributes nothing rather than an unaddressable hit.
+@Test
+func nativeOverlayRectangleAdmitsNoSurfaceHandleWithoutASceneNode() throws {
+    #expect(try handleRectangleHits(
+        handleRectangleComponent(), sceneNodeID: nil
+    ).isEmpty)
+}
+
+// MARK: - Rectangle sketch entities
+
+private func sketchRectangleHits(
+    _ primitives: [ViewportSketchPrimitive],
+    rect: CGRect = rectangleRect,
+    selectionHitPolicy: ViewportSelectionHitPolicy = .sketchEntity,
+    sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+    depthInterval: ClosedRange<Double> = rectangleDepthInterval,
+    probe: RectangleFrame = RectangleFrame()
+) throws -> [ViewportHit] {
+    try ViewportNativeOverlayHitResolver.sketchEntities(
+        in: rect,
+        item: sketchItem(primitives),
+        primitives: primitives,
+        selectionHitPolicy: selectionHitPolicy,
+        sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+        depthInterval: depthInterval,
+        probe: probe
+    )
+}
+
+/// The rectangle admits the polyline the frame drew across it, and refuses one
+/// it drew elsewhere.
+///
+/// The line runs from `(200, 200)` to `(300, 200)`, so the rectangle keeps the
+/// parameters `0.1...0.9` of it and the walk has pixels to take. A rectangle
+/// the line leaves no pixel inside has none, which is a refusal and not an
+/// undrawn walk.
+@Test
+func nativeOverlayRectangleAdmitsTheSketchPolylineTheFrameDrew() throws {
+    let entityID = SketchEntityID()
+    let hits = try sketchRectangleHits([sketchLine(entityID)])
+    #expect(hits.count == 1)
+    #expect(hits.first?.sketchEntityID == entityID)
+    #expect(hits.first?.sketchControlPointIndex == nil)
+    #expect(hits.first?.pickingBackend == .native)
+    #expect(try sketchRectangleHits(
+        [sketchLine(entityID)],
+        rect: CGRect(x: 210, y: 300, width: 80, height: 80)
+    ).isEmpty)
+}
+
+/// A polyline the frame draws a nearer surface over the whole of is refused,
+/// while the spline's control point on the same primitive is still admitted.
+///
+/// The two are drawn at different depths on purpose. The frame draws the
+/// polyline at scene depth 10 and a fragment at depth 5 over every pixel of
+/// it, so the walk exhausts its pixels and refuses. The control point is drawn
+/// at annotation depth over the same fragment, so the same gesture keeps it.
+/// A rule that read one depth for the whole family would answer both the same
+/// way.
+@Test
+func nativeOverlayRectangleRefusesAnOccludedPolylineAndKeepsItsPoint() throws {
+    let entityID = SketchEntityID()
+    let primitives = [sketchSpline(entityID)]
+    let occluded = try sketchRectangleHits(
+        primitives, probe: RectangleFrame(surfaceDepth: 5)
+    )
+    #expect(occluded.count == 1)
+    #expect(occluded.first?.sketchControlPointIndex == 0)
+    let clear = try sketchRectangleHits(primitives)
+    #expect(clear.count == 2)
+    #expect(clear.filter { $0.sketchControlPointIndex == nil }.count == 1)
+}
+
+/// A polyline the frame leaves visible over part of the rectangle is admitted.
+///
+/// The walk crosses 81 device pixels here and the frame draws a nearer surface
+/// over all but five of them. The rule is the presence of one pixel the frame
+/// does not hide the polyline at, not the width of the window, and a rule that
+/// sampled the segment at a fixed pitch would step over a window this size.
+@Test
+func nativeOverlayRectangleAdmitsASketchPolylineThroughAClearWindow() throws {
+    let entityID = SketchEntityID()
+    let hits = try sketchRectangleHits(
+        [sketchLine(entityID)],
+        probe: RectangleFrame(surfaceDepth: 5, clearSteps: 40..<45)
+    )
+    #expect(hits.count == 1)
+    #expect(hits.first?.sketchEntityID == entityID)
+    #expect(hits.first?.sketchControlPointIndex == nil)
+}
+
+/// An entity whose polyline crosses the rectangle over several spans is one
+/// answer, because a rectangle names what it enclosed and not how many spans
+/// of it lie inside.
+@Test
+func nativeOverlayRectangleNamesASketchEntityOnceAcrossItsSpans() throws {
+    let entityID = SketchEntityID()
+    let hits = try sketchRectangleHits([.spline(
+        entityID: entityID,
+        points: [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 0.5, y: 0),
+            CGPoint(x: 1, y: 0),
+        ],
+        controlPoints: [],
+        sketchPlane: .xy
+    )])
+    #expect(hits.count == 1)
+}
+
+/// A single-point entity is a marker and is drawn at annotation depth, so the
+/// rectangle keeps it over a surface it refuses the polylines under.
+@Test
+func nativeOverlayRectangleAdmitsASinglePointSketchEntity() throws {
+    let entityID = SketchEntityID()
+    let primitives: [ViewportSketchPrimitive] = [
+        .point(entityID: entityID, point: CGPoint(x: 0.5, y: 0))
+    ]
+    let hits = try sketchRectangleHits(
+        primitives, probe: RectangleFrame(surfaceDepth: 5)
+    )
+    #expect(hits.count == 1)
+    #expect(hits.first?.sketchEntityID == entityID)
+    #expect(hits.first?.sketchControlPointIndex == nil)
+}
+
+/// A sketch entity is an object and a control point is a sketch sub-shape, so
+/// the two reach the rectangle under different scopes.
+///
+/// A scope that admits an object reaches the entity, a scope that admits a
+/// sketch entity reaches both, and the body sub-shape scopes reach neither.
+@Test
+func nativeOverlayRectangleSeparatesSketchEntitiesFromControlPoints() throws {
+    let entityID = SketchEntityID()
+    let primitives = [sketchSpline(entityID)]
+    let objectHits = try sketchRectangleHits(
+        primitives, selectionHitPolicy: .object
+    )
+    #expect(objectHits.count == 1)
+    #expect(objectHits.first?.sketchControlPointIndex == nil)
+    for policy in [ViewportSelectionHitPolicy.sketchEntity, .all] {
+        let hits = try sketchRectangleHits(
+            primitives, selectionHitPolicy: policy
+        )
+        #expect(hits.count == 2, "\(policy) admits both sketch families")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.face, .edge, .vertex, .region,
+    ] {
+        #expect(try sketchRectangleHits(
+            primitives, selectionHitPolicy: policy
+        ).isEmpty, "\(policy) admits no sketch family")
+    }
+}
+
+/// A sketch entity the frame does not draw is not admitted, whichever of the
+/// frame's two reasons removed it.
+///
+/// The section removes the whole polyline, which is an empty parameter
+/// interval and not a refusal, and the camera's depth interval excludes the
+/// depth the frame draws it at. The interval is the one the dispatcher passes.
+@Test
+func nativeOverlayRectangleRefusesASketchEntityTheFrameDoesNotDraw() throws {
+    let primitives = [sketchLine(SketchEntityID())]
+    #expect(try sketchRectangleHits(
+        primitives, probe: RectangleFrame(sectionKeepsXUpTo: -1)
+    ).isEmpty)
+    #expect(try sketchRectangleHits(
+        primitives, depthInterval: 20...30
+    ).isEmpty)
+}
+
+// MARK: - Rectangle sketch regions
+
+private func regionRectangleHits(
+    _ regions: [ViewportSketchRegion],
+    rect: CGRect = rectangleRect,
+    selectionHitPolicy: ViewportSelectionHitPolicy = .region,
+    depthInterval: ClosedRange<Double> = rectangleDepthInterval,
+    probe: RegionFrame = RegionFrame()
+) throws -> [ViewportHit] {
+    let item = ViewportSceneItem(
+        id: "sketch.native",
+        featureID: sketchFeatureID,
+        modelBounds: .zero,
+        kind: .sketch(primitives: []),
+        sketchRegions: regions
+    )
+    return try ViewportNativeOverlayHitResolver.sketchRegions(
+        in: rect,
+        item: item,
+        selectionHitPolicy: selectionHitPolicy,
+        depthInterval: depthInterval,
+        probe: probe
+    )
+}
+
+/// A region and a rectangle meet by area in three ways, and each is an answer.
+///
+/// The square is drawn at `(200, 100)...(300, 200)`. The default rectangle
+/// crosses its boundary, the second lies wholly inside it, and the third
+/// encloses it. A rule that only crossed boundaries would miss the second, and
+/// one that only tested the rectangle's centre would miss the third.
+@Test
+func nativeOverlayRectangleAdmitsARegionItMeetsByArea() throws {
+    let regions = [sketchRegion("region.square", points: regionSquarePoints)]
+    for rect in [
+        rectangleRect,
+        CGRect(x: 220, y: 120, width: 40, height: 40),
+        CGRect(x: 150, y: 50, width: 200, height: 200),
+    ] {
+        let hits = try regionRectangleHits(regions, rect: rect)
+        #expect(hits.count == 1, "\(rect) meets the square")
+        #expect(
+            hits.first?.selectionComponent
+                == .region(SelectionComponentID(rawValue: "region.square"))
+        )
+    }
+}
+
+/// A rectangle inside a concave region's notch meets no area of it.
+///
+/// The L is drawn with its notch at `(300, 0)...(400, 100)`, which its
+/// bounding box covers and its area does not. A rule reading a projected box,
+/// or a convex hull, would answer this rectangle with the region.
+@Test
+func nativeOverlayRectangleRefusesARegionItMeetsOnlyByBounds() throws {
+    let regions = [sketchRegion("region.concave", points: regionConcavePoints)]
+    for rect in [
+        CGRect(x: 310, y: 10, width: 80, height: 80),
+        CGRect(x: 500, y: 500, width: 50, height: 50),
+    ] {
+        #expect(
+            try regionRectangleHits(regions, rect: rect).isEmpty,
+            "\(rect) meets no area of the L"
+        )
+    }
+}
+
+/// The rectangle clips a region against the depth interval it was given and
+/// never against one it asks the frame for.
+///
+/// The frame here reports a camera interval that draws no region at all. A
+/// family that read it would refuse; the dispatcher reads the interval once
+/// for the gesture and this family answers under that one.
+@Test
+func nativeOverlayRectangleClipsARegionToTheIntervalItWasGiven() throws {
+    let regions = [sketchRegion("region.square", points: regionSquarePoints)]
+    #expect(try regionRectangleHits(
+        regions, probe: RegionFrame(depthInterval: 0...1)
+    ).count == 1)
+    #expect(try regionRectangleHits(
+        regions, depthInterval: 20...30
+    ).isEmpty)
+}
+
+/// A region the section removed is drawn nowhere, so the rectangle admits no
+/// part of it.
+@Test
+func nativeOverlayRectangleRefusesARegionTheSectionRemoved() throws {
+    #expect(try regionRectangleHits(
+        [sketchRegion("region.square", points: regionSquarePoints)],
+        probe: RegionFrame(sectionKeepsXUpTo: -1)
+    ).isEmpty)
+}
+
+/// Every region the rectangle meets is an answer, and each component is named
+/// once.
+///
+/// Two regions drawn over each other are two answers: a rectangle asks which
+/// regions the operator enclosed, and the nearest-centroid tiebreak a pointer
+/// needs has nothing to resolve over a set. A component listed twice is still
+/// one thing enclosed.
+@Test
+func nativeOverlayRectangleReportsEveryRegionItMeetsOnce() throws {
+    let hits = try regionRectangleHits([
+        sketchRegion("region.first", points: regionSquarePoints),
+        sketchRegion("region.second", points: regionSquarePoints),
+        sketchRegion("region.first", points: regionSquarePoints),
+    ])
+    #expect(hits.count == 2)
+    #expect(Set(hits.compactMap(\.selectionComponent))
+        == Set<SelectionComponent>([
+            .region(SelectionComponentID(rawValue: "region.first")),
+            .region(SelectionComponentID(rawValue: "region.second")),
+        ]))
+}
+
+/// A region is its own scope, so only a scope admitting one reaches the
+/// family.
+@Test
+func nativeOverlayRectangleAdmitsRegionsOnlyUnderARegionScope() throws {
+    let regions = [sketchRegion("region.square", points: regionSquarePoints)]
+    for policy in [ViewportSelectionHitPolicy.region, .all] {
+        #expect(try regionRectangleHits(
+            regions, selectionHitPolicy: policy
+        ).count == 1, "\(policy) admits a region hit")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.object, .face, .edge, .vertex,
+        .sketchEntity,
+    ] {
+        #expect(try regionRectangleHits(
+            regions, selectionHitPolicy: policy
+        ).isEmpty, "\(policy) admits no region hit")
+    }
+}
+
+// MARK: - Rectangle curve segments
+
+private func curveRectangleHits(
+    _ outputs: [ViewportCurveSegment],
+    rect: CGRect = rectangleRect,
+    selectionHitPolicy: ViewportSelectionHitPolicy = .object,
+    modelTransform: Transform3D = .identity,
+    depthInterval: ClosedRange<Double> = rectangleDepthInterval,
+    probe: RectangleFrame = RectangleFrame()
+) throws -> [ViewportHit] {
+    let component = ViewportCurveComponent(
+        segments: outputs, yMinMeters: 0, yMaxMeters: 0
+    )
+    return try ViewportNativeOverlayHitResolver.curveSegments(
+        in: rect,
+        item: curveItem(component, modelTransform: modelTransform),
+        component: component,
+        selectionHitPolicy: selectionHitPolicy,
+        depthInterval: depthInterval,
+        probe: probe
+    )
+}
+
+/// The rectangle admits the curve polyline the frame drew across it, and the
+/// answer is the whole-curve reference.
+@Test
+func nativeOverlayRectangleAdmitsTheCurvePolylineTheFrameDrew() throws {
+    let hits = try curveRectangleHits(curveLine())
+    #expect(hits.count == 1)
+    #expect(hits.first?.selectionReference == curveReference(0))
+    #expect(hits.first?.pickingBackend == .native)
+}
+
+/// A curve is drawn at scene depth, so a surface the frame drew in front of it
+/// over every pixel hides it and one drawn behind it does not.
+@Test
+func nativeOverlayRectangleReadsTheDrawnDepthOverACurve() throws {
+    #expect(try curveRectangleHits(
+        curveLine(), probe: RectangleFrame(surfaceDepth: 5)
+    ).isEmpty)
+    #expect(try curveRectangleHits(
+        curveLine(), probe: RectangleFrame(surfaceDepth: 11)
+    ).count == 1)
+}
+
+/// The polyline is measured where the item's model transform puts it, and one
+/// curve identity is named once however many outputs carry it.
+@Test
+func nativeOverlayRectangleFollowsTheCurveItemModelTransform() throws {
+    let outputs = [
+        curveOutput(0, [curvePoint(0, 1), curvePoint(1, 1)]),
+        curveOutput(0, [curvePoint(0, 1), curvePoint(1, 1)]),
+    ]
+    #expect(try curveRectangleHits(outputs).isEmpty)
+    let transform = try ViewportWorldTransformAlgebra.translation(
+        Vector3D(x: 0, y: 0, z: -1)
+    )
+    let hits = try curveRectangleHits(outputs, modelTransform: transform)
+    #expect(hits.count == 1)
+    #expect(hits.first?.selectionReference == curveReference(0))
+}
+
+/// A curve carries a whole-curve reference and no sub-shape component, so the
+/// scopes that admit an object reach the family and the sub-shape scopes admit
+/// none of it.
+@Test
+func nativeOverlayRectangleAdmitsCurvesOnlyUnderAnObjectScope() throws {
+    for policy in [ViewportSelectionHitPolicy.object, .all] {
+        #expect(try curveRectangleHits(
+            curveLine(), selectionHitPolicy: policy
+        ).count == 1, "\(policy) admits a curve hit")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.face, .edge, .vertex, .region,
+        .sketchEntity,
+    ] {
+        #expect(try curveRectangleHits(
+            curveLine(), selectionHitPolicy: policy
+        ).isEmpty, "\(policy) admits no curve hit")
+    }
+}
+
+/// A curve the frame does not draw is not admitted, whichever of the frame's
+/// two reasons removed it.
+@Test
+func nativeOverlayRectangleRefusesACurveTheFrameDoesNotDraw() throws {
+    #expect(try curveRectangleHits(
+        curveLine(), probe: RectangleFrame(sectionKeepsXUpTo: -1)
+    ).isEmpty)
+    #expect(try curveRectangleHits(
+        curveLine(), depthInterval: 20...30
+    ).isEmpty)
+}

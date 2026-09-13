@@ -142,9 +142,6 @@ public struct Viewport: View {
     @State private var hoveredModelPoint: Point2D?
     @State private var measurementSession = ViewportMeasurementSession()
     @State private var automaticMeasurementSummary: String?
-    @State private var identityHitResolver = ViewportIdentityHitResolver(
-        renderBudget: .deviceCalibrated()
-    )
     @State private var previewEvaluationCache = ViewportPreviewEvaluationCache()
     @State private var presentationPlanCache = MeshSourcePresentationPlanCache()
     @State private var overlayRevision = ViewportSpatialOverlayRevision()
@@ -1799,9 +1796,10 @@ public struct Viewport: View {
     /// cannot answer is a typed failure, never an empty rectangle: the caller
     /// publishes nothing rather than a selection the frame never judged.
     ///
-    /// With no presentation mounted there is no native frame to ask and the
-    /// whole legacy rectangle path runs, so the empty result here is the
-    /// absence of a presentation occurrence rather than a refused query.
+    /// With no presentation mounted there is no native frame to ask, and the
+    /// caller has already answered the whole rectangle as empty, so the empty
+    /// result here is the absence of a presentation rather than a refused
+    /// query.
     private func presentationOccurrenceIDs(
         intersecting rect: CGRect
     ) throws -> [SceneOccurrenceID] {
@@ -2004,69 +2002,50 @@ public struct Viewport: View {
         return best?.hit
     }
 
-    /// Selection scopes whose rectangle the native frame answers from prepared
-    /// B-Rep topology.
+    /// Every family the rectangle admits, answered by the mounted native frame
+    /// this viewport draws, through the same identity, camera revision and
+    /// projection the point path reads.
     ///
-    /// `.all` and `.object` are excluded because a rectangle that allows object
-    /// hits selects whole occurrences: the legacy filter already drops every
-    /// body hit there, and the native occurrence rectangle carries the result.
-    /// `.region` and `.sketchEntity` name geometry the prepared topology does
-    /// not describe.
-    private var usesNativeCADSubshapeRectangle: Bool {
-        guard presentationScene != nil else {
-            return false
-        }
-        switch selectionHitPolicy {
-        case .face, .edge, .vertex:
-            return true
-        case .all, .object, .region, .sketchEntity:
-            return false
-        }
-    }
-
-    /// Outcome of the native CAD sub-shape rectangle query.
+    /// This is a set query with no rank: a rectangle asks which drawn things
+    /// the operator enclosed, so each admitted identity is reported once and
+    /// nothing here compares two of them. The families, their inputs, their
+    /// scope gates and the order the scene is walked in are the point path's,
+    /// so the two gestures cannot name different families for one item. Only
+    /// the admission rule differs: a rectangle asks whether the frame draws a
+    /// candidate inside it, where a pointer asks how near the frame draws it.
     ///
-    /// `resolved` carries every sub-shape the native frame admitted.
-    /// `requiresLegacyResidual` reports whether a CAD interaction body in the
-    /// same scene still holds geometry the prepared topology cannot name — a
-    /// body without face, edge or vertex targets, whose sub-objects the pick
-    /// index projects from a bounding box, and, for the vertex scope, a body
-    /// carrying surface knot, span, trim-knot or trim-span handles. Only then
-    /// does the legacy resolver run alongside, stripped of everything the
-    /// native query owns.
+    /// A CAD sub-shape is keyed by `SelectionTarget`, the identity a selection
+    /// already names an editable sub-shape by, so one shared feature placed by
+    /// several scene nodes reports each placement once. A `SubshapeID` names
+    /// the feature it belongs to, so de-duplicating by `SelectionComponentID`
+    /// alone would drop every placement after the first. The overlay families
+    /// carry no such sharing and each reports one hit per identity per item.
     ///
-    /// `unsupported` reports that no CAD interaction body carried prepared
-    /// topology at all, so the whole legacy path answers, exactly as the point
-    /// query does.
-    private enum NativeCADSubshapeRectangleResult {
-        case resolved(hits: [ViewportHit], requiresLegacyResidual: Bool)
-        case unsupported
-    }
-
-    /// Resolves every CAD face, edge and vertex the rectangle admits from
-    /// prepared B-Rep topology, using the same native projection, occlusion and
-    /// section rule that drew the frame.
+    /// Vertices and edges are resolved per body, because each is a candidate
+    /// the prepared topology names and the frame is asked about at that
+    /// candidate's own pixels. Faces are resolved the other way round, from the
+    /// triangles the frame draws inside the rectangle: the region raster
+    /// reports those for the whole scene in one pass, and each `.cad` triangle
+    /// names the body that emitted it and the emission index its recorded runs
+    /// resolve. Harvesting once for the scene is why a face the frame draws in
+    /// a window narrower than any candidate test could sample is still
+    /// selected.
     ///
-    /// This is a set query with no rank: each admitted sub-shape is reported
-    /// once per placement, keyed by the identity `SelectionTarget` defines of a
-    /// `SceneNodeID` together with its `SelectionComponent`. A `SubshapeID`
-    /// names the feature it belongs to, so scene items that place one shared
-    /// feature more than once share its face, edge and vertex identities.
-    /// De-duplicating by `SelectionComponentID` alone would drop every
-    /// placement after the first.
+    /// A scope that admits object hits reports no body-derived family at all.
+    /// Such a rectangle selects whole occurrences, which the occurrence query
+    /// answers and the consumer keys by scene node alone, so a body's faces,
+    /// edges, vertices and surface handles would name sub-shapes that scope
+    /// cannot select. The rule is stated once here instead of being repeated
+    /// in each family's own entry point.
     ///
-    /// Vertices and edges are resolved per body, because each is a candidate the
-    /// prepared topology names and the frame is asked about at that candidate's
-    /// own pixels. Faces are resolved the other way round, from the triangles
-    /// the frame draws inside the rectangle: the region raster reports those for
-    /// the whole scene in one pass, and each `.cad` triangle names the body that
-    /// emitted it and the emission index its recorded runs resolve. Harvesting
-    /// once for the scene is why a face the frame draws in a window narrower
-    /// than any candidate test could sample is still selected.
-    private func presentationCADSubshapeRectangleHits(
+    /// A CAD interaction body without prepared topology contributes nothing.
+    /// Its sub-objects carry no stable CAD identity, and projecting a bounding
+    /// box to invent one would put a render-derived name where a prepared one
+    /// belongs.
+    private func presentationRectangleHits(
         in rect: CGRect,
         in scene: ViewportScene
-    ) throws -> NativeCADSubshapeRectangleResult {
+    ) throws -> [ViewportHit] {
         let identity = try presentationQueryIdentity()
         let revision = activeControlSession.revision
         let probe = try ViewportNativePresentationFrameProbe(
@@ -2075,39 +2054,102 @@ public struct Viewport: View {
         // The interval belongs to the same mounted camera the projections come
         // from, so an edge crossing a clip plane is walked over the part that
         // camera draws instead of being dropped whole. It is read once for the
-        // rectangle rather than once per body, which is the same question the
+        // rectangle rather than once per family, which is the same question the
         // frame answered before.
         let depthInterval = try probe.cameraDepthInterval()
         var hits: [ViewportHit] = []
         var admitted: Set<SelectionTarget> = []
-        var requiresLegacyResidual = false
+        let admitsBodyFamilies = selectionHitPolicy.allowsObjectHits == false
+        // Either gate the sketch entity families use: `object` or
+        // `sketchEntity` reaches an entity and `sketchEntity` alone reaches a
+        // control point, so their union is the wider of the two.
+        let admitsSketchFamilies = selectionHitPolicy.allowsObjectHits
+            || selectionHitPolicy.allowsSketchEntityHits
+        let admitsSketchRegions = selectionHitPolicy.allowsRegionHits
+        let suppressedSketchFeatureIDs = admitsSketchFamilies || admitsSketchRegions
+            ? frameSuppressedSketchFeatureIDs(in: scene)
+            : []
+        let sketchControlPoints: ViewportSketchControlPointHitPolicy = admitsSketchFamilies
+            ? sketchControlPointHitPolicy(for: scene)
+            : .none
         // The bodies the face harvest can name, keyed by the scene node a drawn
         // triangle's occurrence resolves to. A placement absent here drew no
         // prepared topology, so its triangles name no CAD face.
         var bodies: [SceneNodeID: (featureID: FeatureID, topology: ViewportBodyTopology)] = [:]
         for item in scene.items {
-            guard let sceneNodeID = item.sceneNodeID,
-                  presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+            // A sketch item carries no scene node and no body component, so it
+            // is answered before the body families rather than through them.
+            if case .sketch(let primitives) = item.kind {
+                let queriesEntities = admitsSketchFamilies && !primitives.isEmpty
+                let queriesRegions = admitsSketchRegions && !item.sketchRegions.isEmpty
+                guard queriesEntities || queriesRegions else { continue }
+                // A sketch the frame suppressed — because the body it feeds is
+                // selected or being edited — is not drawn and is not asked
+                // about, which is the producer's rule read from the same
+                // selection. The frame drew nothing there, so skipping the item
+                // is the answer and not a family left unclaimed.
+                guard !suppressedSketchFeatureIDs.contains(item.featureID) else {
+                    continue
+                }
+                if queriesEntities {
+                    hits += try ViewportNativeOverlayHitResolver.sketchEntities(
+                        in: rect,
+                        item: item,
+                        primitives: primitives,
+                        selectionHitPolicy: selectionHitPolicy,
+                        sketchControlPointHitPolicy: sketchControlPoints,
+                        depthInterval: depthInterval,
+                        probe: probe
+                    )
+                }
+                // A region is the only family the frame draws for a sketch that
+                // carries no primitive of its own, so it is asked independently
+                // of the entity query above rather than after it.
+                if queriesRegions {
+                    hits += try ViewportNativeOverlayHitResolver.sketchRegions(
+                        in: rect,
+                        item: item,
+                        selectionHitPolicy: selectionHitPolicy,
+                        depthInterval: depthInterval,
+                        probe: probe
+                    )
+                }
+                continue
+            }
+            // A curve item carries no body component either, and its polylines
+            // are the only family it draws.
+            if case .curve(let component) = item.kind {
+                hits += try ViewportNativeOverlayHitResolver.curveSegments(
+                    in: rect,
+                    item: item,
+                    component: component,
+                    selectionHitPolicy: selectionHitPolicy,
+                    depthInterval: depthInterval,
+                    probe: probe
+                )
+                continue
+            }
+            guard admitsBodyFamilies,
+                  let sceneNodeID = item.sceneNodeID,
                   case .body(let component) = item.kind else {
                 continue
             }
-            guard let topology = component.topology,
-                  topology.faces.isEmpty == false
-                      || topology.edges.isEmpty == false
-                      || topology.vertices.isEmpty == false else {
-                // The evaluation gave this body no stable sub-shape identity,
-                // so the pick index answers it with sub-objects projected from
-                // its bounding box and the native query has no CAD name to
-                // report.
-                requiresLegacyResidual = true
-                continue
+            // The surface handle displays are drawn for every body that carries
+            // them, so they are not gated on exact CAD affordance context, which
+            // is the gate the point path states for this family.
+            if ViewportNativeOverlayHitResolver.carriesSurfaceHandleDisplays(component) {
+                hits += try ViewportNativeOverlayHitResolver.surfaceHandles(
+                    in: rect,
+                    item: item,
+                    component: component,
+                    selectionHitPolicy: selectionHitPolicy,
+                    depthInterval: depthInterval,
+                    probe: probe
+                )
             }
-            if selectionHitPolicy.allowsVertexHits,
-               component.surfaceKnotDisplays.isEmpty == false
-                   || component.surfaceSpanDisplays.isEmpty == false
-                   || component.surfaceTrimKnotDisplays.isEmpty == false
-                   || component.surfaceTrimSpanDisplays.isEmpty == false {
-                requiresLegacyResidual = true
+            guard presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+                  let topology = component.topology else {
+                continue
             }
             // The scene builder writes the recorded runs and the topology from
             // one body display snapshot or writes neither, so faces without the
@@ -2137,36 +2179,34 @@ public struct Viewport: View {
                 admitted: &admitted
             )
         }
-        guard bodies.isEmpty == false else {
-            return .unsupported
+        guard selectionHitPolicy.allowsFaceHits, bodies.isEmpty == false else {
+            return hits
         }
-        if selectionHitPolicy.allowsFaceHits {
-            // A triangle carries the occurrence that drew it, and mesh face
-            // identities are numbered per body, so resolving the occurrence
-            // first is what keeps another body's index from naming a run of
-            // this one. An authored mesh triangle names no CAD face at all.
-            try presentationPlanCache.forEachRegionTriangle(
-                intersecting: rect, for: identity, revision: revision
-            ) { triangle in
-                guard case .cad = triangle.sourceReference else { return }
-                guard let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
-                          triangle.occurrenceID
-                      ],
-                      let body = bodies[sceneNodeID] else { return }
-                guard let componentID = try ViewportNativeCADTopologyResolver
-                    .regionFaceComponentID(
-                        forTriangle: triangle, topology: body.topology
-                    ) else { return }
-                Self.appendRectangleSubshapeHit(
-                    .face(componentID),
-                    featureID: body.featureID,
-                    sceneNodeID: sceneNodeID,
-                    into: &hits,
-                    admitted: &admitted
-                )
-            }
+        // A triangle carries the occurrence that drew it, and mesh face
+        // identities are numbered per body, so resolving the occurrence first is
+        // what keeps another body's index from naming a run of this one. An
+        // authored mesh triangle names no CAD face at all.
+        try presentationPlanCache.forEachRegionTriangle(
+            intersecting: rect, for: identity, revision: revision
+        ) { triangle in
+            guard case .cad = triangle.sourceReference else { return }
+            guard let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
+                      triangle.occurrenceID
+                  ],
+                  let body = bodies[sceneNodeID] else { return }
+            guard let componentID = try ViewportNativeCADTopologyResolver
+                .regionFaceComponentID(
+                    forTriangle: triangle, topology: body.topology
+                ) else { return }
+            Self.appendRectangleSubshapeHit(
+                .face(componentID),
+                featureID: body.featureID,
+                sceneNodeID: sceneNodeID,
+                into: &hits,
+                admitted: &admitted
+            )
         }
-        return .resolved(hits: hits, requiresLegacyResidual: requiresLegacyResidual)
+        return hits
     }
 
     /// Appends the rectangle hits one scene item's admitted sub-shapes
@@ -2227,25 +2267,6 @@ public struct Viewport: View {
                 selectionComponent: selectionComponent
             )
         )
-    }
-
-    /// Whether the native rectangle query already owns this legacy hit.
-    ///
-    /// Ownership is decided by what produced the record, not by whether the
-    /// native query happened to admit the same sub-shape: a CAD interaction
-    /// body's generated face, edge and vertex records are exactly what prepared
-    /// topology names, so keeping one would let the identity-buffer rule
-    /// re-admit a sub-shape the native frame rejected as occluded, sectioned
-    /// away, or outside the rectangle.
-    private func nativeRectangleOwnsLegacyHit(_ hit: ViewportHit) -> Bool {
-        guard hit.kind == .body,
-              let sceneNodeID = hit.sceneNodeID,
-              presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
-              let component = hit.selectionComponent,
-              let componentID = Self.rectangleComponentID(component) else {
-            return false
-        }
-        return componentID.generatedTopologySubshapeID != nil
     }
 
     /// The identity a rectangle-admitted `SelectionComponent` is keyed by. The
@@ -2801,21 +2822,6 @@ public struct Viewport: View {
         return "\(title) / G2 required"
     }
 
-    private func suppressedSketchFeatureIDs(
-        in scene: ViewportScene,
-        selectedFeatureIDs: Set<FeatureID>
-    ) -> Set<FeatureID> {
-        Set(
-            scene.items.compactMap { item -> FeatureID? in
-                guard case .body = item.kind,
-                      selectedFeatureIDs.contains(item.featureID) || editedBodies[item.featureID] != nil else {
-                    return nil
-                }
-                return item.sourceFeatureID
-            }
-        )
-    }
-
     /// The sketch features the mounted frame stops drawing, which are exactly
     /// the ones the native query stops asking about.
     ///
@@ -2823,9 +2829,8 @@ public struct Viewport: View {
     /// feeds is selected or is being edited, because the body replaced it on
     /// screen. That rule reads the selection by scene node where an item has
     /// one and by feature otherwise, which is what `isObjectItem` states, so
-    /// this reads the same rule and not the narrower feature-only one
-    /// `suppressedSketchFeatureIDs(in:selectedFeatureIDs:)` gives the legacy
-    /// resolver.
+    /// this reads the producer's own rule and states the suppression once for
+    /// both gestures that ask about a sketch.
     private func frameSuppressedSketchFeatureIDs(in scene: ViewportScene) -> Set<FeatureID> {
         let selectedFeatureIDs = selectedTargetFeatureIDs()
         let selectedSceneNodeIDs = Set(selection.selectedSceneNodeIDs)
@@ -2844,26 +2849,6 @@ public struct Viewport: View {
         )
     }
 
-    private func sceneBySuppressingSketches(
-        _ scene: ViewportScene,
-        selectedFeatureIDs: Set<FeatureID>
-    ) -> ViewportScene {
-        let suppressedFeatureIDs = suppressedSketchFeatureIDs(
-            in: scene,
-            selectedFeatureIDs: selectedFeatureIDs
-        )
-        guard !suppressedFeatureIDs.isEmpty else {
-            return scene
-        }
-        return ViewportScene(
-            items: scene.items.filter { item in
-                if case .sketch = item.kind {
-                    return !suppressedFeatureIDs.contains(item.featureID)
-                }
-                return true
-            }
-        )
-    }
 
 
 
@@ -7664,11 +7649,11 @@ public struct Viewport: View {
 
     /// The rectangle selection the viewport publishes.
     ///
-    /// For a CAD sub-shape scope over a mounted presentation the native frame
-    /// answers from prepared topology, and the legacy resolver runs only for
-    /// the geometry that has no prepared identity — stripped of every hit the
-    /// native query owns, so one sub-shape is never judged twice by two
-    /// different projections. Every other scope keeps the whole legacy path.
+    /// The mounted frame is the query authority, so one query over it answers
+    /// every family the scope admits and there is no second projection to
+    /// reconcile. A viewport that mounted no presentation draws nothing and
+    /// has nothing to ask, and the empty selection is that complete answer
+    /// rather than a route to another rule.
     ///
     /// A native query that cannot be answered is a failure, not an empty
     /// selection: both publishers report nothing rather than replacing the
@@ -7682,113 +7667,28 @@ public struct Viewport: View {
         guard rect.width > 0.0, rect.height > 0.0 else {
             return ViewportSelectionDragTarget(hits: [])
         }
-        let sceneContext = makeSceneContext(
+        guard presentationScene != nil else {
+            return ViewportSelectionDragTarget(hits: [])
+        }
+        let scene = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
-        )
-        let scene = sceneContext.scene
-        let layout = sceneContext.mapper.layout
-        var nativeResult = NativeCADSubshapeRectangleResult.unsupported
-        if usesNativeCADSubshapeRectangle {
-            nativeResult = try presentationCADSubshapeRectangleHits(in: rect, in: scene)
-        }
-        let requiresLegacy: Bool
-        switch nativeResult {
-        case .resolved(_, let requiresLegacyResidual):
-            requiresLegacy = requiresLegacyResidual
-        case .unsupported:
-            requiresLegacy = true
-        }
-        // The occurrence rectangle is one query over the mounted frame, so both
-        // consumers below read the same answer: the legacy filter needs it to
-        // know which bodies the presentation still shows, and an object-scope
-        // drag reports it as the selection. A rectangle the native query
-        // resolves on its own asks the frame nothing.
-        let visibleOccurrenceIDs: [SceneOccurrenceID]
-        if requiresLegacy || selectionHitPolicy.allowsObjectHits {
-            // The answer is the frame's own drawing decision at every device
-            // pixel of the rectangle, so an occurrence absent from it is one
-            // the frame drew nowhere inside the rectangle. There is no third
-            // outcome either consumer has to interpret.
-            visibleOccurrenceIDs = try presentationOccurrenceIDs(intersecting: rect)
+        ).scene
+        let hits = try presentationRectangleHits(in: rect, in: scene)
+        // An object scope reports whole occurrences, which the frame's own
+        // drawing decision at every device pixel of the rectangle answers. An
+        // occurrence absent from it is one the frame drew nowhere inside the
+        // rectangle, and no other scope has a consumer for the answer.
+        let occurrenceIDs: [SceneOccurrenceID]
+        if selectionHitPolicy.allowsObjectHits {
+            occurrenceIDs = try presentationOccurrenceIDs(intersecting: rect)
         } else {
-            visibleOccurrenceIDs = []
-        }
-        let hits: [ViewportHit]
-        switch nativeResult {
-        case .resolved(let nativeHits, let requiresLegacyResidual):
-            if requiresLegacyResidual {
-                let residual = legacySelectionRectangleHits(
-                    in: rect,
-                    scene: scene,
-                    layout: layout,
-                    visiblePresentationOccurrenceIDs: visibleOccurrenceIDs
-                )
-                hits = nativeHits + residual.filter { nativeRectangleOwnsLegacyHit($0) == false }
-            } else {
-                hits = nativeHits
-            }
-        case .unsupported:
-            hits = legacySelectionRectangleHits(
-                in: rect,
-                scene: scene,
-                layout: layout,
-                visiblePresentationOccurrenceIDs: visibleOccurrenceIDs
-            )
+            occurrenceIDs = []
         }
         return ViewportSelectionDragTarget(
             hits: hits,
-            presentationOccurrenceIDs: selectionHitPolicy.allowsObjectHits ? visibleOccurrenceIDs : []
-        )
-    }
-
-    // FIXME(INCOMPLETE_IMPLEMENTATION): This is the interim bridge to the
-    // pre-RealityKit identity-buffer resolver for rectangle selection. It
-    // projects, occludes and clips with the GPU identity rule instead of the
-    // mounted native frame, so a second selection judgement stays live for the
-    // geometry it still answers.
-    //
-    // Production path: `selectionDragTarget(from:to:size:)` calls this for
-    // every scope outside `usesNativeCADSubshapeRectangle`, and for the CAD
-    // sub-shape scopes when the scene still holds a body the native query
-    // cannot name — one without prepared topology targets, or, for `.vertex`,
-    // one carrying surface knot, span or trim handles.
-    //
-    // Which occurrences the presentation shows inside the rectangle is no
-    // longer decided here: the caller answers that from the mounted native
-    // frame and passes the result in, so only the hits themselves still come
-    // from the legacy projection.
-    //
-    // Do not treat rectangle selection as migrated while this is reachable:
-    // those bodies need a prepared native identity first, after which this
-    // method is deleted with the resolver rather than reimplemented.
-    private func legacySelectionRectangleHits(
-        in rect: CGRect,
-        scene: ViewportScene,
-        layout: ViewportLayout,
-        visiblePresentationOccurrenceIDs: [SceneOccurrenceID]
-    ) -> [ViewportHit] {
-        let hitScene = sceneBySuppressingSketches(
-            scene,
-            selectedFeatureIDs: selectedTargetFeatureIDs()
-        )
-        let rawHits = identityHitResolver.selectionHits(
-            in: rect,
-            scene: hitScene,
-            layout: layout,
-            sketchControlPointHitPolicy: sketchControlPointHitPolicy(for: hitScene),
-            selectionHitPolicy: selectionHitPolicy
-        )
-        guard presentationScene != nil else {
-            return rawHits
-        }
-        return MeshSourcePresentationLegacyHitFilter().selectionHits(
-            rawHits,
-            visiblePresentationOccurrenceIDs: visiblePresentationOccurrenceIDs,
-            navigation: presentationSceneNodeIDByOccurrenceID,
-            exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs,
-            selectionHitPolicy: selectionHitPolicy
+            presentationOccurrenceIDs: occurrenceIDs
         )
     }
 

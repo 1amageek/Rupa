@@ -184,33 +184,22 @@ enum ViewportNativeCADTopologyResolver {
     /// `regionFaceComponentID(forTriangle:topology:)`, so `selectionHitPolicy`
     /// gates vertices and edges alone here.
     ///
-    /// A vertex is admitted when the frame draws it inside the rectangle: its
-    /// projected point is inside with no tolerance, its camera depth lies in
-    /// the frame's depth interval, the section retains it, and the frame draws
-    /// nothing nearer than `depthSlack` at its own device pixel. That pixel is
-    /// read once. An empty pixel hides nothing, which is what keeps a
-    /// silhouette vertex selectable, and the section query is what separates an
-    /// empty pixel from a point the cut removed.
+    /// A vertex is admitted where `regionMarkerCandidate` admits it and the
+    /// frame draws nothing nearer than `depthSlack` at that pixel, which is the
+    /// occlusion half that rule leaves to its caller. The pixel is read once.
+    /// An empty pixel hides nothing, which is what keeps a silhouette vertex
+    /// selectable, and the section query the marker rule runs is what separates
+    /// an empty pixel from a point the cut removed.
     ///
-    /// An edge is narrowed in its own world parameter first, against the
-    /// camera's depth interval and against the section's affine bound, so a
-    /// part the frame does not draw never reaches the walk and a part it does
-    /// draw is never dropped whole. What survives is projected and handed to
-    /// the frame's segment probe, which clips it to the rectangle's device
-    /// pixels and walks one pixel at a time along the major axis. The first
-    /// accepted pixel ends the walk.
+    /// An edge is admitted by `regionSegmentAdmits`, which carries its own
+    /// occlusion test because every family it answers is drawn at scene depth.
     ///
-    /// The walk is bounded by the device pixels that clip produced, so it needs
-    /// no query ceiling of its own: every round either answers or resumes
-    /// strictly past the pixel it rejected. Nothing here reads a region it did
-    /// not ask about as empty — every device pixel the rectangle holds along a
-    /// candidate is reachable by the walk, and a vertex is asked at its own
-    /// pixel.
+    /// Nothing here reads a region it did not ask about as empty: every device
+    /// pixel the rectangle holds along an edge is reachable by that rule's
+    /// walk, and a vertex is asked at its own pixel.
     ///
     /// Readiness, camera revision, admission and projection failures stay typed
-    /// and are propagated from the frame probe. A segment whose
-    /// section scalar names no finite crossing is refused rather than reported
-    /// as excluded, because those are different answers.
+    /// and are propagated from the frame probe.
     static func resolveRegion(
         in rect: CGRect,
         topology: ViewportBodyTopology,
@@ -240,13 +229,14 @@ enum ViewportNativeCADTopologyResolver {
         if selectionHitPolicy.allowsVertexHits {
             for vertex in topology.vertices where admitted.contains(vertex.componentID) == false {
                 let worldPoint = world(vertex.point, modelTransform: modelTransform)
-                let camera = try probe.projectedPointWithDepth(worldPoint)
-                guard let projected = camera.point,
-                      depthInterval.contains(camera.depth),
-                      rect.contains(projected),
-                      try probe.retainsSectionedPoint(worldPoint),
+                guard let marker = try regionMarkerCandidate(
+                          worldPoint,
+                          in: rect,
+                          depthInterval: depthInterval,
+                          probe: probe
+                      ),
                       try isRegionVisible(
-                          depth: camera.depth, at: projected, probe: probe
+                          depth: marker.depth, at: marker.point, probe: probe
                       ) else { continue }
                 admitted.insert(vertex.componentID)
                 components.append(.vertex(vertex.componentID))
@@ -255,50 +245,115 @@ enum ViewportNativeCADTopologyResolver {
 
         guard selectionHitPolicy.allowsEdgeHits else { return components }
         for edge in topology.edges where admitted.contains(edge.componentID) == false {
-            let worldStart = world(edge.start, modelTransform: modelTransform)
-            let worldEnd = world(edge.end, modelTransform: modelTransform)
-            let start = try probe.projectedPointWithDepth(worldStart)
-            let end = try probe.projectedPointWithDepth(worldEnd)
-            guard let drawn = ViewportCameraDepthClip.clippedParameterInterval(
-                startDepth: start.depth, endDepth: end.depth, to: depthInterval
-            ) else { continue }
-            var retained = ViewportCameraDepthClip.ParameterInterval.whole
-            if let bound = try probe.sectionParameterBound(from: worldStart, to: worldEnd) {
-                guard retained.narrow(by: bound) else {
-                    throw MeshSourcePresentationRenderError(
-                        code: .invalidSceneItem,
-                        message: "A CAD edge names no finite section crossing for the region rectangle."
-                    )
-                }
-            }
-            guard retained.isEmpty == false else { continue }
-            let lower = max(drawn.lower, retained.lower)
-            let upper = min(drawn.upper, retained.upper)
-            guard lower <= upper else { continue }
-            guard let drawnStart = ViewportCameraDepthClip.interpolated(
-                      worldStart, worldEnd, lower
-                  ),
-                  let drawnEnd = ViewportCameraDepthClip.interpolated(
-                      worldStart, worldEnd, upper
-                  ) else { continue }
-            let clippedStart = lower == 0 ? start : try probe.projectedPointWithDepth(drawnStart)
-            let clippedEnd = upper == 1 ? end : try probe.projectedPointWithDepth(drawnEnd)
-            guard let screenStart = clippedStart.point,
-                  let screenEnd = clippedEnd.point else { continue }
             guard try regionSegmentAdmits(
-                from: screenStart,
-                to: screenEnd,
-                worldStart: drawnStart,
-                worldEnd: drawnEnd,
-                startDepth: clippedStart.depth,
-                endDepth: clippedEnd.depth,
+                worldStart: world(edge.start, modelTransform: modelTransform),
+                worldEnd: world(edge.end, modelTransform: modelTransform),
                 in: rect,
+                depthInterval: depthInterval,
                 probe: probe
             ) else { continue }
             admitted.insert(edge.componentID)
             components.append(.edge(edge.componentID))
         }
         return components
+    }
+
+    /// Where the mounted frame draws a world point inside the rectangle, and
+    /// the depth it draws it at, or nil when the rectangle does not admit it.
+    ///
+    /// This is the admission rule every rectangle family that is a point
+    /// shares: a prepared CAD vertex, a surface knot, span, trim-knot or
+    /// trim-span display, a spline control point and a single-point sketch
+    /// entity. It projects the world point with its depth, keeps it only where
+    /// the camera's depth interval admits that depth, only where the rectangle
+    /// contains the projected point with no tolerance at all, and only where
+    /// the section retains the world point.
+    ///
+    /// Occlusion is the caller's. A CAD vertex is drawn at scene depth and a
+    /// handle display, a control point and a single-point entity at annotation
+    /// depth, so which depth the returned pixel is compared against — or that
+    /// there is no compare at all — is knowledge of the family and not of this
+    /// rule.
+    static func regionMarkerCandidate(
+        _ worldPoint: Point3D,
+        in rect: CGRect,
+        depthInterval: ClosedRange<Double>,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (point: CGPoint, depth: Double)? {
+        let camera = try probe.projectedPointWithDepth(worldPoint)
+        guard let projected = camera.point,
+              depthInterval.contains(camera.depth),
+              rect.contains(projected),
+              try probe.retainsSectionedPoint(worldPoint) else {
+            return nil
+        }
+        return (projected, camera.depth)
+    }
+
+    /// Whether the rectangle admits the segment the mounted frame draws between
+    /// two world points.
+    ///
+    /// This is the admission rule every rectangle family that is a polyline
+    /// shares: a prepared CAD edge, a multi-point sketch entity's polyline and
+    /// a curve output's polyline. The segment is narrowed in its own world
+    /// parameter first, against the camera's depth interval and against the
+    /// section's affine bound, so a part the frame does not draw never reaches
+    /// the walk and a part it does draw is never dropped whole. What survives
+    /// is projected and handed to the frame's segment probe, which clips it to
+    /// the rectangle's device pixels and walks one pixel at a time.
+    ///
+    /// The occlusion test belongs to this rule and not to its callers. Every
+    /// family it answers is drawn at scene depth, and the walk is where the
+    /// depth the frame draws is read, so there is no second place a caller
+    /// could apply a different rule from.
+    ///
+    /// A segment whose section scalar names no finite crossing is refused
+    /// rather than reported as excluded, because those are different answers.
+    static func regionSegmentAdmits(
+        worldStart: Point3D,
+        worldEnd: Point3D,
+        in rect: CGRect,
+        depthInterval: ClosedRange<Double>,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> Bool {
+        let start = try probe.projectedPointWithDepth(worldStart)
+        let end = try probe.projectedPointWithDepth(worldEnd)
+        guard let drawn = ViewportCameraDepthClip.clippedParameterInterval(
+            startDepth: start.depth, endDepth: end.depth, to: depthInterval
+        ) else { return false }
+        var retained = ViewportCameraDepthClip.ParameterInterval.whole
+        if let bound = try probe.sectionParameterBound(from: worldStart, to: worldEnd) {
+            guard retained.narrow(by: bound) else {
+                throw MeshSourcePresentationRenderError(
+                    code: .invalidSceneItem,
+                    message: "A drawn segment names no finite section crossing for the region rectangle."
+                )
+            }
+        }
+        guard retained.isEmpty == false else { return false }
+        let lower = max(drawn.lower, retained.lower)
+        let upper = min(drawn.upper, retained.upper)
+        guard lower <= upper else { return false }
+        guard let drawnStart = ViewportCameraDepthClip.interpolated(
+                  worldStart, worldEnd, lower
+              ),
+              let drawnEnd = ViewportCameraDepthClip.interpolated(
+                  worldStart, worldEnd, upper
+              ) else { return false }
+        let clippedStart = lower == 0 ? start : try probe.projectedPointWithDepth(drawnStart)
+        let clippedEnd = upper == 1 ? end : try probe.projectedPointWithDepth(drawnEnd)
+        guard let screenStart = clippedStart.point,
+              let screenEnd = clippedEnd.point else { return false }
+        return try regionSegmentWalkAdmits(
+            from: screenStart,
+            to: screenEnd,
+            worldStart: drawnStart,
+            worldEnd: drawnEnd,
+            startDepth: clippedStart.depth,
+            endDepth: clippedEnd.depth,
+            in: rect,
+            probe: probe
+        )
     }
 
     private static func world(_ point: Point3D, modelTransform: Transform3D) -> Point3D {
@@ -431,7 +486,7 @@ enum ViewportNativeCADTopologyResolver {
     /// admitted. The perspective recovery has a finite solution for every depth
     /// the mounted camera's interval admits, so the region path does not reach
     /// that refusal; it is not an approximation this rule accepts.
-    private static func regionSegmentAdmits(
+    private static func regionSegmentWalkAdmits(
         from screenStart: CGPoint,
         to screenEnd: CGPoint,
         worldStart: Point3D,

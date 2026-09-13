@@ -1109,8 +1109,8 @@ of screen-baked dashes.
     `handleSelectionDrag`, the region query, and the identity resolution the
     scope asks for, not the raster alone. On an 800-by-600-point viewport
     drawing one CAD box and one authored mesh box, the call that publishes an
-    answer takes about 2.6 ms to 12.1 ms for a face, edge or vertex rectangle
-    and about 16.7 ms for an occurrence rectangle. A drag issued before the
+    answer takes about 1.9 ms to 13.5 ms for a face, edge or vertex rectangle
+    and about 13.2 ms for an occurrence rectangle. A drag issued before the
     frame is mounted answers `frameNotReady` and publishes nothing, so it is
     not part of that number. This fixture draws two boxes, far below the hard
     maximum the kernel numbers describe, so the two sets bound opposite ends of

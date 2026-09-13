@@ -1375,11 +1375,11 @@ independent tessellator is never an alternative implementation.
    family here and is withheld for a sketch the frame suppressed, neither of
    which the legacy identity buffer applied. All three narrow what wins a
    pointer; none of them widens it.
-   The surface handle displays are native on the point path before they are on
-   the rectangle path, and the two are narrowed by separate seams, so for that
-   interval one frame answers a knot at a pointer and the legacy identity
-   buffer answers the same knot inside a rectangle. The rectangle residual
-   below states that window and the seam that closes it.
+   The surface handle displays were native on the point path before they were
+   on the rectangle path, because the two gestures were narrowed by separate
+   seams. That window is closed. The rectangle now answers a knot, span,
+   trim-knot and trim-span display from the same frame and the same display
+   list the pointer reads, so one frame answers a display in both gestures.
 
    Rectangle selection uses this same resolver and this same frame under the
    bounded exception above. It is a set query, not a nearest query: the
@@ -1395,13 +1395,11 @@ independent tessellator is never an alternative implementation.
    selection already names an editable sub-shape by, because scene items that
    place one shared feature carry identical sub-shape component identities
    and de-duplicating by component alone would report only the first
-   placement. The covered scopes are exactly face, edge, and vertex.
-   The `all` and `object` scopes are deliberately not covered: the legacy
-   rectangle filter already drops every body hit wherever object hits are
-   allowed, so a rectangle there selects whole occurrences and never a
-   sub-shape. Region and sketch entity keep their existing routes. The
-   occurrence rectangle that answers `all` and `object` is a separate native
-   query over the same mounted frame, described after the legacy residual below.
+   placement. The scopes this CAD sub-shape entry point covers are exactly
+   face, edge, and vertex. Every other family a rectangle can select is
+   answered from the same mounted frame by an entry point of its own, and the
+   scope-to-family rule for all of them is stated with the rectangle families
+   below.
    These three scopes are answered from the region visibility raster that
    contract 10 of
    [RealityViewport](RealityViewport/DESIGN.md#contracts-and-invariants)
@@ -1564,34 +1562,116 @@ independent tessellator is never an alternative implementation.
    handler read one decision and neither forms its own. `Viewport` is a SwiftUI
    `View` whose drag state is private, so the policy is where this contract is
    proved and the two call sites are thin dispatch over it.
-   The legacy rectangle resolver is narrowed, not removed. Face, edge, and
-   vertex consult it when, and only when, the hit scene holds geometry the
-   native path does not own: a CAD interaction body whose prepared topology
-   carries no face, edge, or vertex target, which the legacy pick index answers
-   with projected bounding-box sub-objects, and, for vertex alone, a body
-   carrying surface knot, span, trim-knot, or trim-span displays, which are
-   addressed by `SelectionReference` and have no prepared topology identity at
-   all. With neither present the rectangle makes no legacy call and renders no
-   identity buffer. With either present the legacy result has the hits the
-   native path owns removed by ownership and not by outcome — every body hit
-   carrying a generated face, edge, or vertex `SelectionComponent` whose scene
-   node is a CAD interaction node — so a native miss cannot let the legacy
-   answer back in for a body the native path answered for. `unsupported` is
-   unchanged: with no presentation mounted, or with no CAD interaction body
-   carrying prepared topology, the whole legacy rectangle path runs as before.
-   The GPU identity buffer therefore survives this seam for that residual, and
-   is removed only once those producers have seams of their own or are retired.
+   The legacy rectangle resolver is removed, not narrowed. Every family a
+   rectangle can select is answered from the mounted frame by the entry
+   points this section names, so `Viewport.legacySelectionRectangleHits`, the
+   residual it routed, the filter that trimmed it and the
+   `FIXME(INCOMPLETE_IMPLEMENTATION)` that stated the incompleteness are gone,
+   and the rectangle renders no identity buffer in any scope.
+   The scopes divide the families the way the point path divides them.
+   `face`, `edge` and `vertex` read the CAD sub-shape entry point above, and
+   `vertex` also reads the surface knot, span, trim-knot and trim-span
+   displays, which are addressed by `SelectionReference` and carry no prepared
+   topology identity at all. `region` reads sketch regions. `sketchEntity`
+   reads sketch entities and spline control points. `object` reads sketch
+   entities and curve segments, `all` reads those, spline control points and
+   sketch regions, and the occurrence query described below carries every
+   whole occurrence for both.
+   A rectangle whose scope admits object hits reports no body-derived hit at
+   all — no CAD face, edge or vertex, and no surface handle display. That is
+   the rule `MeshSourcePresentationLegacyHitFilter` applied to the legacy
+   answer, moved to the point where the families are generated instead of
+   applied to an answer afterwards, which is why that filter and its test are
+   removed together with the route they trimmed. The occurrence query carries
+   the result for those two scopes, so a rectangle there selects whole
+   occurrences and never a sub-shape, exactly as it did before.
+   A CAD interaction body whose prepared topology names no face, edge or
+   vertex target contributes nothing to a face, edge or vertex rectangle. That
+   is the miss the point path already states above, and it holds for the same
+   reason: the projected bounding-box sub-objects the replaced rule answered
+   such a body with correspond to no world geometry, so no frame can reproduce
+   them, and answering those scopes from the frame would be a new geometric
+   contract rather than the one being replaced.
+   `ViewportLayout.bodyProjection` outlives this seam for the accessibility
+   markers alone, which are a separate producer with a separate owner.
+   Two shared rules answer every family that is not a triangle harvest, and
+   `ViewportNativeCADTopologyResolver` owns both, so CAD topology, sketch
+   geometry and curve outputs are admitted by one implementation rather than
+   by three that agree today. `regionMarkerCandidate` reports where the frame
+   draws a world point: it projects the point with its depth, keeps it only
+   where the camera's depth interval admits that depth, only where the
+   rectangle contains the projected point, and only where the section retains
+   the world point. `regionSegmentAdmits` reports whether the rectangle admits
+   the drawn segment between two world points: it narrows the segment's own
+   parameter against the camera interval and against the section half-space,
+   projects the surviving interval, intersects it with the rectangle, and
+   walks the frame's own device pixels along it until the frame draws nothing
+   nearer at one of them. The occlusion test divides the two rules the way
+   the drawn depth divides the families. Every segment family is drawn at
+   scene depth, so `regionSegmentAdmits` owns that compare and admits a
+   segment only where the frame draws nothing nearer along it.
+   `regionMarkerCandidate` reports the pixel and the depth the frame draws
+   the marker at and leaves the compare to its caller, because a marker is
+   drawn at scene depth in one family and at annotation depth in another.
+   A marker is inside the rectangle when its projected point is, with no
+   tolerance. That is a contract change. The replaced rule grew the rectangle
+   by a screen distance before testing containment: eight points for a sketch
+   entity, a six-point radius for a spline control point and for a topology
+   vertex, four points for a body edge, two points for a body. The new rule is
+   the one the CAD vertex rectangle already ships with, so the rectangle now
+   has one admission rule rather than two, and it is the rule a rectangle
+   states: the operator encloses what is drawn inside it, and a padding is a
+   pointer tolerance read where there is no pointer.
+   Occlusion divides the families by the depth the frame draws them at, and
+   each family keeps the rule its own pointer answer already has. A CAD face,
+   edge or vertex, a multi-point sketch entity's polyline and a curve segment
+   are drawn at scene depth, so each is admitted only where the frame draws
+   nothing nearer. A surface handle display, a spline control point and a
+   single-point sketch entity are drawn at annotation depth in front of the
+   scene, so each is admitted wherever the marker rule admits it and no depth
+   compare is performed at all.
+   A sketch region is admitted by intersection and not by containment. Its
+   boundary is clipped against the section half-space and against the camera's
+   depth interval before it is projected, which is the pointer's own pipeline,
+   and the surviving polygon is admitted where any part of it meets the
+   rectangle: where a boundary segment crosses the rectangle, where a boundary
+   vertex lies inside it, or where the polygon contains the rectangle with no
+   segment crossing it. A region larger than the rectangle and a region
+   smaller than it are therefore both admitted; containment in either
+   direction would refuse one of the two. No depth compare is performed,
+   which is the rule the region's own pointer answer already has: the clip
+   against the camera interval and against the section half-space is the
+   whole visibility test either gesture performs over a sketch region.
+   The two de-duplications stated above are unchanged for CAD sub-shapes, and
+   the other families need no second one. A sketch item carries no
+   `SceneNodeID`, so `SelectionTarget` cannot address one at all. Each sketch
+   entity, control point, region and curve output is named once per scene item
+   by its own `SelectionReference` or `SelectionComponent`, and each entry
+   point reports at most one hit per such identity, so a second de-duplication
+   would have nothing to remove.
+   A `Viewport` built without a presentation scene answers nothing for a
+   rectangle, which is the point path's contract read over a rectangle rather
+   than at a pointer: that path publishes an empty pick there, and the
+   rectangle publishes an empty answer. That is a complete answer over a
+   viewport that draws no presentation, not a refusal, so nothing is reported
+   and no preview is held. It is distinct from a presentation that has not
+   mounted a frame yet, where the identity query fails as `frameNotReady` and
+   the split stated above retains the preview and the selection. The mounted
+   frame is the query authority in both gestures, so neither reaches a second
+   backend while no frame has judged anything.
 
    The occurrence rectangle that answers `all` and `object` is its own native
    query, owned by `RealityViewport.occurrenceIDs(intersecting:revision:)` and
    forwarded by the plan cache under the same exact-ready identity and camera
    revision as the point path. It answers from the mounted frame's own retained
    plan, so the geometry it projects and the pixels it samples can never belong
-   to two different plans. `usesNativeCADSubshapeRectangle` is not widened for
-   it: the sub-shape rectangle and the occurrence rectangle are different
-   questions over one frame, gated separately by
-   `selectionHitPolicy.allowsObjectHits` and by whether the legacy residual
-   still runs.
+   to two different plans. It stays a query of its own rather than a widening
+   of the sub-shape rectangle: the two are different questions over one frame,
+   and the occurrence question is asked exactly where
+   `selectionHitPolicy.allowsObjectHits` holds. The predicate that used to
+   decide whether a scope reached the native sub-shape rectangle at all,
+   `usesNativeCADSubshapeRectangle`, is removed with the residual it gated,
+   because every scope reaches the frame now.
    A candidate occurrence is not tested, projected or sampled by this path
    either. The occurrence rectangle reads the same region visibility raster
    and returns the distinct occurrence identities of the triangles the frame
@@ -1617,11 +1697,10 @@ independent tessellator is never an alternative implementation.
    as neither selected nor proven absent, and `ViewportRectangleResolution`
    carried that list. Both are removed, so no caller reads a channel with
    nothing to carry.
-   The result is returned in plan order, de-duplicated. Both consumers depend on
-   that determinism for stability and not for meaning:
-   `MeshSourcePresentationLegacyHitFilter` converts it to a set, and
-   `MainView.mergedSelectionTargets` appends it after the hit-derived targets and
-   drops duplicates.
+   The result is returned in plan order, de-duplicated. Its one consumer
+   depends on that determinism for stability and not for meaning:
+   `MainView.mergedSelectionTargets` appends it after the hit-derived targets
+   and drops duplicates.
    The failure contract changes with this seam. The replaced query answered an
    unready or absent presentation with an empty list, which the legacy filter
    read as "no occurrence is visible" and used to drop every legacy body hit.
@@ -1634,23 +1713,22 @@ independent tessellator is never an alternative implementation.
    CAD sub-shape rectangle. An empty answer now means only what it says: at
    no device pixel of the rectangle did the mounted frame draw an occurrence
    this rectangle admits. `Viewport` computes the answer at most once per
-   rectangle update and passes it to the legacy filter and to an object-scope
-   drag, so the two consumers cannot disagree, and the query does not run at
-   all for a face, edge or vertex rectangle the native path resolved with no
-   legacy residual.
+   rectangle update and asks it only where the scope admits object hits, which
+   is exactly where its result can name a selection.
    A frame whose raster the admission refused answers no rectangle, in any
    scope, while it stays mounted. That is the case the operator is told
    about and the committed selection is kept: the drag reports the refusal
    and changes no selection. An answer is complete or it is absent. The
    rectangle never reports part of a frame as all of it, and never resolves
    an unadmitted frame by falling back to points.
-   One production consequence of the legacy residual remains, and it is the
-   only incompleteness this path now carries: a legacy-residual body — one
-   carrying no prepared topology, reachable only through the interim path
-   `Viewport.legacySelectionRectangleHits` — is judged by the identity
-   buffer's own scene and not by the mounted frame. It disappears with the
-   interim path itself. No window of any width is lost for a body the native
-   path owns.
+   No incompleteness remains on this path. Every body, sketch, region and
+   curve a rectangle can reach is judged by the mounted frame, and no window
+   of any width is lost for any of them. With the point and the rectangle
+   gesture both reading the frame, `ViewportIdentityHitResolver` keeps no
+   production caller for selection: its `selectionHits` and `hitTest` entry
+   points are marked deprecated and name RK-5, which owns removing the GPU
+   identity buffer backend, the CPU rectangle tester it falls back to, and the
+   readiness budget types that still read it.
    `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
    the behavioral evidence for this resolver's point path: the rank-then-metric
    order across bodies, the run lookup that names the CAD face of the drawn
@@ -1713,6 +1791,20 @@ independent tessellator is never an alternative implementation.
    segment's `SelectionReference` and no `SelectionComponent`, and the scope
    gate, with the scopes that admit object hits admitting a curve and the
    sub-shape scopes admitting none.
+   It also owns the rectangle entry points for those same families, against
+   those same inputs, because a rectangle rule that differed from the pointer
+   rule would be visible nowhere else: a marker admitted by its projected
+   centre and refused just outside the rectangle where each legacy padding
+   would have admitted it, a polyline refused where the frame draws a nearer
+   surface along all of it and admitted where the frame leaves part of that
+   walk clear, a surface handle display, a control point and a single-point
+   entity admitted through a drawn surface at annotation depth, a non-convex
+   region admitted where the rectangle meets one of its arms and refused where
+   the rectangle sits in its notch while still meeting its bounding box, a
+   region admitted where it contains the whole rectangle, each identity named
+   once however many spans or runs carry it, each family's own scope gate,
+   and each family withheld entirely where the section removed what the frame
+   would have drawn.
    `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
    owns the same rule on the mounted frame and through the production click
    path: the occurrence the frame draws at the pointer is selected under the
@@ -1780,6 +1872,20 @@ independent tessellator is never an alternative implementation.
    straddles, and rejected when the frame draws something nearer along all
    of it. Every hit is checked to carry the native picking backend, so a
    legacy residual answer fails that test rather than passing it.
+   `Tests/RupaRenderingTests/ViewportNativeOverlayScopeRectangleSelectionTests.swift`
+   owns the scopes this seam brought onto the frame, on that same mounted
+   drag path. A `region` rectangle drawn around one region selects that
+   region alone, a `region` rectangle drawn around the whole sketch selects
+   both regions it meets and names no body, and a `region` rectangle on an
+   empty pixel selects nothing. A `sketchEntity` rectangle selects the line
+   the frame drew there, carrying no point handle, no control point index
+   and no `SelectionComponent`; over a pixel where the same rectangle
+   answers a body face under a `face` scope, it selects nothing. An `all`
+   rectangle drawn over a body and a sketch together names the occurrence
+   and both regions while naming no CAD face, edge or vertex. That last
+   case is the body-withholding rule read on the frame rather than on a
+   filter, and it is the one a regression would show as a marquee that
+   suddenly selects every face inside it.
    Four rules of this path are keyed where a mounted frame cannot vary them,
    and each stays with the test that owns its input. A `.cad` triangle whose
    index no run names is missed truthfully, which

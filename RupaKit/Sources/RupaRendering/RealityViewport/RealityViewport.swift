@@ -1219,11 +1219,10 @@ final class RealityViewport {
     /// every scope from this same frame. A handle record is reachable exactly
     /// where the same frame drew its collision footprint. Rectangle selection
     /// does not wait on this method at all: `Viewport.selectionDragTarget`
-    /// answers CAD face, edge and vertex rectangles from prepared topology, and
-    /// the occurrence rectangle from `occurrenceIDs(intersecting:revision:)`,
-    /// both through this same mounted frame. The rectangle scopes neither of
-    /// those covers carry the one identity query that has not moved yet, named
-    /// by `Viewport.legacySelectionRectangleHits`.
+    /// answers every family from prepared topology and the overlay records
+    /// through this same mounted frame, and the occurrence rectangle from
+    /// `occurrenceIDs(intersecting:revision:)`. No selection rectangle reaches
+    /// a second projection.
     func spatialHandleHits(at point: CGPoint, revision: UInt64) throws -> [UInt32] {
         guard point.x.isFinite, point.y.isFinite, appliedViewportRevision == revision,
               root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {

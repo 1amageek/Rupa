@@ -356,6 +356,19 @@ public final class ViewportIdentityHitResolver {
         self.renderBudget = renderBudget
     }
 
+    /// Answers a pointer from the GPU identity buffer, or from the projected
+    /// CPU rule when that render fails.
+    ///
+    /// No production path calls this. `Viewport` answers every pointer scope
+    /// from the mounted native frame through
+    /// `Viewport.presentationCADSubshapeHit(at:visibleSurface:in:)`, so the
+    /// only callers left are this module's own tests of the identity backend.
+    /// It stays declared until RK-5 deletes the identity backend with its
+    /// renderer, and nothing routes back to it in the meantime.
+    @available(
+        *, deprecated,
+        message: "The mounted native frame answers pointer selection. RK-5 removes the identity backend."
+    )
     public func hitTest(
         point: CGPoint,
         in scene: ViewportScene,
@@ -380,6 +393,18 @@ public final class ViewportIdentityHitResolver {
         }
     }
 
+    /// Answers a rectangle from the GPU identity buffer, or from the projected
+    /// CPU rule when that render fails.
+    ///
+    /// No production path calls this. `Viewport.selectionDragTarget` answers
+    /// every rectangle family from the mounted native frame, so the only
+    /// callers left are this module's own tests of the identity backend. It
+    /// stays declared until RK-5 deletes the identity backend with its
+    /// renderer, and nothing routes back to it in the meantime.
+    @available(
+        *, deprecated,
+        message: "The mounted native frame answers rectangle selection. RK-5 removes the identity backend."
+    )
     public func selectionHits(
         in rect: CGRect,
         scene: ViewportScene,
