@@ -49,7 +49,9 @@ private struct NativeCADFrame {
         usesPerspectiveProjection ? 10 / depth : 1
     }
 
-    func project(_ point: Point3D) throws -> (point: CGPoint, depth: Double)? {
+    func projectedPointWithinDepthRange(
+        _ point: Point3D
+    ) throws -> (point: CGPoint, depth: Double)? {
         if let projectionFailure {
             throw projectionFailure
         }
@@ -91,7 +93,50 @@ private struct NativeCADFrame {
             + point.z * section.normal.z
         return distance - section.offset >= -section.tolerance
     }
+
+    // The point query asks none of the rectangle's frame questions. Answering
+    // them would let this frame stand in for a region raster it does not model,
+    // so each one refuses instead of returning a value the resolver could read
+    // as an empty region.
+
+    func projectedPointWithDepth(
+        _ point: Point3D
+    ) throws -> (point: CGPoint?, depth: Double) {
+        throw UnqueriedRegionFrameQuery()
+    }
+
+    func regionFragment(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        throw UnqueriedRegionFrameQuery()
+    }
+
+    func cameraDepthInterval() throws -> ClosedRange<Double> {
+        throw UnqueriedRegionFrameQuery()
+    }
+
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        throw UnqueriedRegionFrameQuery()
+    }
+
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int
+    ) throws -> RealityViewportRegionSegmentProbe {
+        throw UnqueriedRegionFrameQuery()
+    }
 }
+
+extension NativeCADFrame: ViewportNativeFrameProbe {}
+
+/// Raised when the point query reaches a frame question only the rectangle
+/// query asks.
+private struct UnqueriedRegionFrameQuery: Error {}
 
 private func frameTriangle(
     occurrenceID: SceneOccurrenceID,
@@ -200,7 +245,7 @@ private func visibleSurface(
 ) throws -> (faceID: MeshFaceID, depth: Double)? {
     guard let hit = try frame.surfaceHit(at: point),
           hit.triangle.occurrenceID == NativeCADFrame.occurrenceID,
-          let depth = try frame.project(hit.point)?.depth else {
+          let depth = try frame.projectedPointWithinDepthRange(hit.point)?.depth else {
         return nil
     }
     return (faceID: hit.triangle.faceID, depth: depth)
@@ -219,10 +264,7 @@ private func resolve(
         modelTransform: modelTransform,
         selectionHitPolicy: policy,
         visibleSurface: try visibleSurface(at: point, frame: frame),
-        usesPerspectiveProjection: frame.usesPerspectiveProjection,
-        project: frame.project,
-        surfaceHit: frame.surfaceHit,
-        retainsSectionedPoint: frame.retainsSectionedPoint
+        probe: frame
     )?.component
 }
 

@@ -55,7 +55,7 @@ enum ViewportNativeCADTopologyResolver {
 
     /// A nil result is a valid miss after projection and visibility run.
     /// Readiness, camera revision and projection failures stay typed and are
-    /// propagated from the injected native queries.
+    /// propagated from the frame probe.
     ///
     /// `visibleSurface` is the render provenance of the native surface *this
     /// body* draws at the pointer — the hit triangle's mesh face identity and
@@ -68,22 +68,19 @@ enum ViewportNativeCADTopologyResolver {
     /// no native input path, which is what sent them back to the legacy
     /// identity resolver.
     ///
-    /// `usesPerspectiveProjection` and `retainsSectionedPoint` come from the
-    /// same mounted frame as `project` and `surfaceHit`. The resolver owns no
-    /// projection model and no clipping rule of its own: it asks the frame
-    /// which interpolation its camera makes linear, and asks the frame whether
-    /// a point survived the section.
+    /// Projection, section retention, occlusion and the recovery of a world
+    /// parameter all come from `probe`, which reads one mounted frame. The
+    /// resolver owns no projection model and no clipping rule of its own: it
+    /// asks the frame which interpolation its camera makes linear, and asks the
+    /// frame whether a point survived the section.
     static func resolve(
         at point: CGPoint,
         topology: ViewportBodyTopology,
         modelTransform: Transform3D,
         selectionHitPolicy: ViewportSelectionHitPolicy,
         visibleSurface: (faceID: MeshFaceID, depth: Double)?,
-        usesPerspectiveProjection: Bool,
         tolerance: CGFloat = 8,
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?,
-        surfaceHit: (CGPoint) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
-        retainsSectionedPoint: (Point3D) throws -> Bool
+        probe: some ViewportNativeFrameProbe
     ) throws -> Candidate? {
         guard point.x.isFinite, point.y.isFinite, tolerance.isFinite, tolerance >= 0 else {
             throw MeshSourcePresentationRenderError(
@@ -96,16 +93,12 @@ enum ViewportNativeCADTopologyResolver {
             var best: Candidate?
             for vertex in topology.vertices {
                 let worldPoint = world(vertex.point, modelTransform: modelTransform)
-                guard let projected = try project(worldPoint) else { continue }
+                guard let projected = try probe.projectedPointWithinDepthRange(worldPoint) else {
+                    continue
+                }
                 let distance = Double(hypot(point.x - projected.point.x, point.y - projected.point.y))
                 guard distance <= Double(tolerance), distance < (best?.metric ?? .infinity),
-                      try isVisible(
-                          worldPoint,
-                          projected,
-                          project: project,
-                          surfaceHit: surfaceHit,
-                          retainsSectionedPoint: retainsSectionedPoint
-                      ) else { continue }
+                      try isVisible(worldPoint, projected, probe: probe) else { continue }
                 best = Candidate(
                     component: .vertex(vertex.componentID),
                     rank: .vertex,
@@ -122,8 +115,8 @@ enum ViewportNativeCADTopologyResolver {
             for edge in topology.edges {
                 let worldStart = world(edge.start, modelTransform: modelTransform)
                 let worldEnd = world(edge.end, modelTransform: modelTransform)
-                guard let start = try project(worldStart),
-                      let end = try project(worldEnd) else { continue }
+                guard let start = try probe.projectedPointWithinDepthRange(worldStart),
+                      let end = try probe.projectedPointWithinDepthRange(worldEnd) else { continue }
                 let parameter = segmentParameter(for: point, from: start.point, to: end.point)
                 let nearest = CGPoint(
                     x: start.point.x + (end.point.x - start.point.x) * parameter,
@@ -138,25 +131,18 @@ enum ViewportNativeCADTopologyResolver {
                 // the edge's own parameter under the frame's projection and let
                 // the native camera report that point's depth, so no depth on
                 // this path is interpolated by a rule the frame does not use.
-                guard let edgeParameter = worldParameter(
+                guard let edgeParameter = probe.worldParameter(
                     forScreenParameter: Double(parameter),
                     startDepth: start.depth,
-                    endDepth: end.depth,
-                    usesPerspectiveProjection: usesPerspectiveProjection
+                    endDepth: end.depth
                 ) else { continue }
                 let worldPoint = Point3D(
                     x: worldStart.x + (worldEnd.x - worldStart.x) * edgeParameter,
                     y: worldStart.y + (worldEnd.y - worldStart.y) * edgeParameter,
                     z: worldStart.z + (worldEnd.z - worldStart.z) * edgeParameter
                 )
-                guard let projected = try project(worldPoint),
-                      try isVisible(
-                          worldPoint,
-                          projected,
-                          project: project,
-                          surfaceHit: surfaceHit,
-                          retainsSectionedPoint: retainsSectionedPoint
-                      ) else { continue }
+                guard let projected = try probe.projectedPointWithinDepthRange(worldPoint),
+                      try isVisible(worldPoint, projected, probe: probe) else { continue }
                 best = Candidate(
                     component: .edge(edge.componentID),
                     rank: .edge,
@@ -265,7 +251,7 @@ enum ViewportNativeCADTopologyResolver {
     /// pixel.
     ///
     /// Readiness, camera revision, admission and projection failures stay typed
-    /// and are propagated from the injected native queries. A segment whose
+    /// and are propagated from the frame probe. A segment whose
     /// section scalar names no finite crossing is refused rather than reported
     /// as excluded, because those are different answers.
     static func resolveRegion(
@@ -273,13 +259,8 @@ enum ViewportNativeCADTopologyResolver {
         topology: ViewportBodyTopology,
         modelTransform: Transform3D,
         selectionHitPolicy: ViewportSelectionHitPolicy,
-        usesPerspectiveProjection: Bool,
         depthInterval: ClosedRange<Double>,
-        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double),
-        retainsSectionedPoint: (Point3D) throws -> Bool,
-        sectionParameterBound: (Point3D, Point3D) throws -> ViewportCameraDepthClip.AffineScalarBound?,
-        regionFragmentDepth: (CGPoint) throws -> Double?,
-        regionSegmentProbe: (CGPoint, CGPoint, Int) throws -> RealityViewportRegionSegmentProbe
+        probe: some ViewportNativeFrameProbe
     ) throws -> [SelectionComponent] {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
               rect.size.width.isFinite, rect.size.height.isFinite,
@@ -302,15 +283,13 @@ enum ViewportNativeCADTopologyResolver {
         if selectionHitPolicy.allowsVertexHits {
             for vertex in topology.vertices where admitted.contains(vertex.componentID) == false {
                 let worldPoint = world(vertex.point, modelTransform: modelTransform)
-                let camera = try projectWithDepth(worldPoint)
+                let camera = try probe.projectedPointWithDepth(worldPoint)
                 guard let projected = camera.point,
                       depthInterval.contains(camera.depth),
                       rect.contains(projected),
-                      try retainsSectionedPoint(worldPoint),
+                      try probe.retainsSectionedPoint(worldPoint),
                       try isRegionVisible(
-                          depth: camera.depth,
-                          at: projected,
-                          regionFragmentDepth: regionFragmentDepth
+                          depth: camera.depth, at: projected, probe: probe
                       ) else { continue }
                 admitted.insert(vertex.componentID)
                 components.append(.vertex(vertex.componentID))
@@ -321,13 +300,13 @@ enum ViewportNativeCADTopologyResolver {
         for edge in topology.edges where admitted.contains(edge.componentID) == false {
             let worldStart = world(edge.start, modelTransform: modelTransform)
             let worldEnd = world(edge.end, modelTransform: modelTransform)
-            let start = try projectWithDepth(worldStart)
-            let end = try projectWithDepth(worldEnd)
+            let start = try probe.projectedPointWithDepth(worldStart)
+            let end = try probe.projectedPointWithDepth(worldEnd)
             guard let drawn = ViewportCameraDepthClip.clippedParameterInterval(
                 startDepth: start.depth, endDepth: end.depth, to: depthInterval
             ) else { continue }
             var retained = ViewportCameraDepthClip.ParameterInterval.whole
-            if let bound = try sectionParameterBound(worldStart, worldEnd) {
+            if let bound = try probe.sectionParameterBound(from: worldStart, to: worldEnd) {
                 guard retained.narrow(by: bound) else {
                     throw MeshSourcePresentationRenderError(
                         code: .invalidSceneItem,
@@ -345,8 +324,8 @@ enum ViewportNativeCADTopologyResolver {
                   let drawnEnd = ViewportCameraDepthClip.interpolated(
                       worldStart, worldEnd, upper
                   ) else { continue }
-            let clippedStart = lower == 0 ? start : try projectWithDepth(drawnStart)
-            let clippedEnd = upper == 1 ? end : try projectWithDepth(drawnEnd)
+            let clippedStart = lower == 0 ? start : try probe.projectedPointWithDepth(drawnStart)
+            let clippedEnd = upper == 1 ? end : try probe.projectedPointWithDepth(drawnEnd)
             guard let screenStart = clippedStart.point,
                   let screenEnd = clippedEnd.point else { continue }
             guard try regionSegmentAdmits(
@@ -356,9 +335,8 @@ enum ViewportNativeCADTopologyResolver {
                 worldEnd: drawnEnd,
                 startDepth: clippedStart.depth,
                 endDepth: clippedEnd.depth,
-                usesPerspectiveProjection: usesPerspectiveProjection,
-                projectWithDepth: projectWithDepth,
-                regionSegmentProbe: regionSegmentProbe
+                in: rect,
+                probe: probe
             ) else { continue }
             admitted.insert(edge.componentID)
             components.append(.edge(edge.componentID))
@@ -388,13 +366,10 @@ enum ViewportNativeCADTopologyResolver {
     private static func isVisible(
         _ worldPoint: Point3D,
         _ candidate: (point: CGPoint, depth: Double),
-        project: (Point3D) throws -> (point: CGPoint, depth: Double)?,
-        surfaceHit: (CGPoint) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
-        retainsSectionedPoint: (Point3D) throws -> Bool
+        probe: some ViewportNativeFrameProbe
     ) throws -> Bool {
-        guard try retainsSectionedPoint(worldPoint) else { return false }
-        guard let surface = try surfaceHit(candidate.point),
-              let surfaceDepth = try project(surface.point)?.depth else {
+        guard try probe.retainsSectionedPoint(worldPoint) else { return false }
+        guard let surfaceDepth = try probe.drawnSurfaceDepth(at: candidate.point) else {
             return true
         }
         return candidate.depth - surfaceDepth <= abs(candidate.depth) * depthSlack
@@ -412,19 +387,21 @@ enum ViewportNativeCADTopologyResolver {
     private static func isRegionVisible(
         depth: Double,
         at point: CGPoint,
-        regionFragmentDepth: (CGPoint) throws -> Double?
+        probe: some ViewportNativeFrameProbe
     ) throws -> Bool {
-        guard let fragmentDepth = try regionFragmentDepth(point) else { return true }
+        guard let fragmentDepth = try probe.drawnRegionFragmentDepth(at: point) else {
+            return true
+        }
         return depth - fragmentDepth <= abs(depth) * depthSlack
     }
 
     /// Walks a projected edge one device pixel at a time and reports whether
     /// the rectangle admits it.
     ///
-    /// The probe owns the walk's geometry. It clips the segment to the
-    /// rectangle's device pixels and reports the first pixel of the remaining
-    /// walk the frame draws at, with that pixel's parameter along the segment
-    /// it was given. A walk that meets no pixel of the rectangle answers no,
+    /// The frame's segment probe owns the walk's geometry. It clips the segment
+    /// to the rectangle's device pixels and reports the first pixel of the
+    /// remaining walk the frame draws at, with that pixel's parameter along the
+    /// segment it was given. A walk that meets no pixel of the rectangle answers no,
     /// and a walk whose remaining pixels the frame draws nothing at answers
     /// yes, because nothing at those pixels can occlude the edge and the caller
     /// narrowed the segment against the section in world space before
@@ -444,21 +421,21 @@ enum ViewportNativeCADTopologyResolver {
         worldEnd: Point3D,
         startDepth: Double,
         endDepth: Double,
-        usesPerspectiveProjection: Bool,
-        projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double),
-        regionSegmentProbe: (CGPoint, CGPoint, Int) throws -> RealityViewportRegionSegmentProbe
+        in rect: CGRect,
+        probe: some ViewportNativeFrameProbe
     ) throws -> Bool {
         var step = 0
         while true {
-            let probe = try regionSegmentProbe(screenStart, screenEnd, step)
-            guard step < probe.stepCount else { return false }
-            guard let drawn = probe.drawn else { return true }
+            let segment = try probe.regionSegmentProbe(
+                from: screenStart, to: screenEnd, within: rect, startingAt: step
+            )
+            guard step < segment.stepCount else { return false }
+            guard let drawn = segment.drawn else { return true }
             guard drawn.step == step else { return true }
-            guard let parameter = worldParameter(
+            guard let parameter = probe.worldParameter(
                       forScreenParameter: drawn.fraction,
                       startDepth: startDepth,
-                      endDepth: endDepth,
-                      usesPerspectiveProjection: usesPerspectiveProjection
+                      endDepth: endDepth
                   ),
                   let worldPoint = ViewportCameraDepthClip.interpolated(
                       worldStart, worldEnd, parameter
@@ -466,7 +443,7 @@ enum ViewportNativeCADTopologyResolver {
                 step = drawn.step + 1
                 continue
             }
-            let depth = try projectWithDepth(worldPoint).depth
+            let depth = try probe.projectedPointWithDepth(worldPoint).depth
             if depth - drawn.depth <= abs(depth) * depthSlack { return true }
             step = drawn.step + 1
         }
@@ -485,31 +462,4 @@ enum ViewportNativeCADTopologyResolver {
         return min(1, max(0, raw))
     }
 
-    /// Maps a parameter along a *projected* segment back to the segment's own
-    /// parameter in world space.
-    ///
-    /// An orthographic camera projects the segment affinely, so the two
-    /// parameters are the same. A perspective camera makes reciprocal depth —
-    /// not depth — linear on screen, so the world parameter is recovered from
-    /// the endpoint depths. Which of the two applies is a property of the
-    /// mounted camera, never of the sign of the sampled depths: with an
-    /// orthographic camera both depths are positive and the perspective rule
-    /// would still report the wrong point. Returns nil when the perspective
-    /// recovery has no finite solution, which drops the candidate rather than
-    /// substituting the other camera's rule.
-    private static func worldParameter(
-        forScreenParameter parameter: Double,
-        startDepth: Double,
-        endDepth: Double,
-        usesPerspectiveProjection: Bool
-    ) -> Double? {
-        guard parameter.isFinite else { return nil }
-        guard usesPerspectiveProjection else { return parameter }
-        guard startDepth > 0, endDepth > 0 else { return nil }
-        let reciprocal = (1.0 - parameter) / startDepth + parameter / endDepth
-        guard reciprocal.isFinite, reciprocal > 0 else { return nil }
-        let world = (parameter / endDepth) / reciprocal
-        guard world.isFinite else { return nil }
-        return world
-    }
 }

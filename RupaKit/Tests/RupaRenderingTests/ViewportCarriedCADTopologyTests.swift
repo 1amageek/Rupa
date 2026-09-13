@@ -9,6 +9,61 @@ import Testing
 /// Thrown by a native query the face branch must not reach.
 private struct UnreachableNativeQuery: Error {}
 
+/// A frame probe that refuses every question. The face branch resolves a CAD
+/// identity from the carried run list alone, so reaching the mounted frame at
+/// all through this probe fails the test rather than producing an answer.
+private struct UnreachableNativeFrameProbe: ViewportNativeFrameProbe {
+    let usesPerspectiveProjection = false
+
+    func projectedPointWithinDepthRange(
+        _ point: Point3D
+    ) throws -> (point: CGPoint, depth: Double)? {
+        throw UnreachableNativeQuery()
+    }
+
+    func projectedPointWithDepth(
+        _ point: Point3D
+    ) throws -> (point: CGPoint?, depth: Double) {
+        throw UnreachableNativeQuery()
+    }
+
+    func retainsSectionedPoint(_ point: Point3D) throws -> Bool {
+        throw UnreachableNativeQuery()
+    }
+
+    func surfaceHit(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        throw UnreachableNativeQuery()
+    }
+
+    func regionFragment(
+        at point: CGPoint
+    ) throws -> (triangle: MeshSourcePresentationTriangle, depth: Double)? {
+        throw UnreachableNativeQuery()
+    }
+
+    func cameraDepthInterval() throws -> ClosedRange<Double> {
+        throw UnreachableNativeQuery()
+    }
+
+    func sectionParameterBound(
+        from start: Point3D,
+        to end: Point3D
+    ) throws -> ViewportCameraDepthClip.AffineScalarBound? {
+        throw UnreachableNativeQuery()
+    }
+
+    func regionSegmentProbe(
+        from start: CGPoint,
+        to end: CGPoint,
+        within rect: CGRect,
+        startingAt step: Int
+    ) throws -> RealityViewportRegionSegmentProbe {
+        throw UnreachableNativeQuery()
+    }
+}
+
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func nativeTriangleHitOnACarriedExtrudeTopologyNamesThePreparedCADFace() throws {
@@ -45,10 +100,7 @@ func nativeTriangleHitOnACarriedExtrudeTopologyNamesThePreparedCADFace() throws 
                     modelTransform: item.modelTransform,
                     selectionHitPolicy: .face,
                     visibleSurface: (faceID: MeshFaceID(UInt64(triangleIndex)), depth: 4.5),
-                    usesPerspectiveProjection: false,
-                    project: { _ in throw UnreachableNativeQuery() },
-                    surfaceHit: { _ in throw UnreachableNativeQuery() },
-                    retainsSectionedPoint: { _ in throw UnreachableNativeQuery() }
+                    probe: UnreachableNativeFrameProbe()
                 )
             )
             #expect(candidate.component == .face(run.componentID))
@@ -70,10 +122,7 @@ func nativeTriangleHitOnACarriedExtrudeTopologyNamesThePreparedCADFace() throws 
             modelTransform: item.modelTransform,
             selectionHitPolicy: .face,
             visibleSurface: (faceID: MeshFaceID(UInt64(triangleCount)), depth: 4.5),
-            usesPerspectiveProjection: false,
-            project: { _ in throw UnreachableNativeQuery() },
-            surfaceHit: { _ in throw UnreachableNativeQuery() },
-            retainsSectionedPoint: { _ in throw UnreachableNativeQuery() }
+            probe: UnreachableNativeFrameProbe()
         ) == nil
     )
 }

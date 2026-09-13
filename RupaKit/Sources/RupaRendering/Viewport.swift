@@ -1897,23 +1897,10 @@ public struct Viewport: View {
         visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
         in scene: ViewportScene
     ) throws -> NativeCADSubshapeResult {
-        let identity = try presentationQueryIdentity()
-        let revision = activeControlSession.revision
-        let project: (Point3D) throws -> (point: CGPoint, depth: Double)? = {
-            try presentationPlanCache.projectedPointWithinDepthRange(
-                $0, for: identity, revision: revision
-            )
-        }
-        let surfaceHit: (CGPoint) throws -> (
-            triangle: MeshSourcePresentationTriangle, point: Point3D
-        )? = {
-            try presentationPlanCache.surfaceHit(at: $0, for: identity, revision: revision)
-        }
-        let retainsSectionedPoint: (Point3D) throws -> Bool = {
-            try presentationPlanCache.retainsSectionedPoint($0, for: identity, revision: revision)
-        }
-        let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
-            for: identity, revision: revision
+        let probe = try ViewportNativePresentationFrameProbe(
+            planCache: presentationPlanCache,
+            identity: presentationQueryIdentity(),
+            revision: activeControlSession.revision
         )
         // Only a CAD-sourced triangle carries provenance the prepared run list
         // can name. An authored mesh numbers its own faces independently, so
@@ -1927,7 +1914,7 @@ public struct Viewport: View {
            let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
                visibleSurface.triangle.occurrenceID
            ],
-           let depth = try project(visibleSurface.point)?.depth {
+           let depth = try probe.projectedPointWithinDepthRange(visibleSurface.point)?.depth {
             visibleSceneNodeID = sceneNodeID
             visibleFace = (faceID: visibleSurface.triangle.faceID, depth: depth)
         }
@@ -1947,10 +1934,7 @@ public struct Viewport: View {
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: selectionHitPolicy,
                 visibleSurface: sceneNodeID == visibleSceneNodeID ? visibleFace : nil,
-                usesPerspectiveProjection: usesPerspectiveProjection,
-                project: project,
-                surfaceHit: surfaceHit,
-                retainsSectionedPoint: retainsSectionedPoint
+                probe: probe
             ) else {
                 continue
             }
@@ -2039,41 +2023,15 @@ public struct Viewport: View {
     ) throws -> NativeCADSubshapeRectangleResult {
         let identity = try presentationQueryIdentity()
         let revision = activeControlSession.revision
-        let projectWithDepth: (Point3D) throws -> (point: CGPoint?, depth: Double) = {
-            try presentationPlanCache.projectedPointWithDepth(
-                $0, for: identity, revision: revision
-            )
-        }
-        let retainsSectionedPoint: (Point3D) throws -> Bool = {
-            try presentationPlanCache.retainsSectionedPoint($0, for: identity, revision: revision)
-        }
-        let sectionParameterBound: (Point3D, Point3D) throws
-            -> ViewportCameraDepthClip.AffineScalarBound? = {
-            try presentationPlanCache.sectionParameterBound(
-                from: $0, to: $1, for: identity, revision: revision
-            )
-        }
-        let regionFragmentDepth: (CGPoint) throws -> Double? = {
-            try presentationPlanCache.regionFragment(
-                at: $0, for: identity, revision: revision
-            )?.depth
-        }
-        let regionSegmentProbe: (CGPoint, CGPoint, Int) throws
-            -> RealityViewportRegionSegmentProbe = {
-            try presentationPlanCache.regionSegmentProbe(
-                from: $0, to: $1, within: rect, startingAt: $2,
-                for: identity, revision: revision
-            )
-        }
-        let usesPerspectiveProjection = try presentationPlanCache.usesPerspectiveProjection(
-            for: identity, revision: revision
+        let probe = try ViewportNativePresentationFrameProbe(
+            planCache: presentationPlanCache, identity: identity, revision: revision
         )
         // The interval belongs to the same mounted camera the projections come
         // from, so an edge crossing a clip plane is walked over the part that
-        // camera draws instead of being dropped whole.
-        let depthInterval = try presentationPlanCache.cameraDepthInterval(
-            for: identity, revision: revision
-        )
+        // camera draws instead of being dropped whole. It is read once for the
+        // rectangle rather than once per body, which is the same question the
+        // frame answered before.
+        let depthInterval = try probe.cameraDepthInterval()
         var hits: [ViewportHit] = []
         var admitted: Set<SelectionTarget> = []
         var requiresLegacyResidual = false
@@ -2122,13 +2080,8 @@ public struct Viewport: View {
                 topology: topology,
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: selectionHitPolicy,
-                usesPerspectiveProjection: usesPerspectiveProjection,
                 depthInterval: depthInterval,
-                projectWithDepth: projectWithDepth,
-                retainsSectionedPoint: retainsSectionedPoint,
-                sectionParameterBound: sectionParameterBound,
-                regionFragmentDepth: regionFragmentDepth,
-                regionSegmentProbe: regionSegmentProbe
+                probe: probe
             )
             Self.appendRectangleSubshapeHits(
                 components,
