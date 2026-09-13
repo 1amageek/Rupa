@@ -1815,74 +1815,6 @@ public struct Viewport: View {
         )
     }
 
-    /// Every selection scope asks the mounted native frame once a presentation
-    /// scene is mounted. `.object` and `.all` still reach the legacy resolver
-    /// afterwards for the curve family, which has no prepared native
-    /// counterpart yet.
-    private var usesNativeCADSubshapeHits: Bool {
-        presentationScene != nil
-    }
-
-    /// Once the native frame has answered for a topology-backed scene, only the
-    /// scopes that still lack a native input path re-ask the legacy identity
-    /// resolver. Face, edge and vertex scopes never route a miss into it,
-    /// including over an empty pixel, which the native frame answers as a miss.
-    /// A scene the native query cannot answer for at all still reaches the
-    /// legacy resolver past this property; `NativeCADSubshapeResult.unsupported`
-    /// owns that rule and names its condition.
-    // FIXME(INCOMPLETE_IMPLEMENTATION): `.all` and `.object` still reach the
-    // legacy identity resolver, which projects, occludes and clips with its own
-    // GPU rule instead of the mounted native frame, so two selection judgements
-    // remain live.
-    //
-    // Production path: `resolvedViewportHit(_:at:in:layout:presentationOccurrenceID:)`
-    // routes a native `.miss` into `legacyViewportHit` for `.all` and
-    // `.object`, and `.all` is the default hover scope. Both also reach it
-    // after a native occurrence answer, which `legacyOverlayAnswer(_:)`
-    // records separately.
-    //
-    // Do not treat the input cutover as complete while this returns true for
-    // any scope: the curve family needs a native path, and `.all` has to
-    // generate every family — the sketch region included — as a candidate it
-    // orders itself, before the legacy resolver and this property can be
-    // deleted together. Rectangle selection no longer waits on this property;
-    // it asks `presentationCADSubshapeRectangleHits(in:in:)` for the CAD
-    // sub-shape scopes.
-    private var requiresLegacyHitFallback: Bool {
-        switch selectionHitPolicy {
-        case .face, .edge, .vertex, .region, .sketchEntity:
-            return false
-        case .all, .object:
-            return true
-        }
-    }
-
-    /// Outcome of the native CAD sub-shape query.
-    ///
-    /// `unsupported` reports that the native frame cannot answer a CAD
-    /// sub-shape query at all — no mounted presentation, or no CAD interaction
-    /// node in the scene carries prepared B-Rep topology to resolve an identity
-    /// from, and for the `vertex` scope no body carries a surface handle
-    /// display either, and for the `sketchEntity` scope no sketch item carries
-    /// a primitive. It is the only outcome that still routes a face, edge,
-    /// vertex or sketch entity query to the legacy resolver, so a miss over a
-    /// scene the native frame does answer for stays a miss instead of being
-    /// answered by a second, differently projected hit rule.
-    ///
-    /// An empty pixel is a `miss`, not `unsupported`: the native frame did
-    /// answer, and nothing is drawn there. So is a sketch the frame suppressed,
-    /// which is a family this path claims and then answers as not drawn.
-    ///
-    /// `resolvedOccurrence` is a complete native answer that the interim overlay
-    /// residual still has to be ordered against, and it is separated from
-    /// `resolved` for that reason alone. A sub-shape answer is final.
-    private enum NativeCADSubshapeResult {
-        case resolved(ViewportHit)
-        case resolvedOccurrence(ViewportHit)
-        case miss
-        case unsupported
-    }
-
     /// Resolves a CAD face, edge or vertex from prepared B-Rep topology, or the
     /// occurrence the frame draws, using the same native ray and projection that
     /// drew the frame. A sub-shape identity is always the prepared
@@ -1891,11 +1823,11 @@ public struct Viewport: View {
     /// Every CAD interaction body with prepared topology is a candidate, not
     /// only the body the pointer draws. A pixel just outside the tessellated
     /// silhouette still has outline edges and silhouette vertices within the
-    /// point tolerance, and gating the whole query on a drawn surface would
-    /// send those queries — and every hover over empty space — back to the
-    /// legacy identity resolver. `visibleSurface` is the native surface hit at
-    /// the pointer; its triangle provenance answers the face query for the body
-    /// it belongs to and is nil over an empty pixel. Candidates from different
+    /// point tolerance, so gating the whole query on a drawn surface would
+    /// answer nothing for a pointer the frame drew an edge under.
+    /// `visibleSurface` is the native surface hit at the pointer; its triangle
+    /// provenance answers the face query for the body it belongs to and is nil
+    /// over an empty pixel. Candidates from different
     /// bodies are compared through `ViewportNativeHitCandidate.precedes`, so the
     /// nearest projected sub-shape wins and equal candidates keep stable scene
     /// order.
@@ -1905,11 +1837,18 @@ public struct Viewport: View {
     /// it. It is admitted from the drawn triangle alone and is not gated on the
     /// depth that answers the face query: a frame that drew the pointer's pixel
     /// has already answered which occurrence is there.
+    ///
+    /// The answer is one optional hit. Every family a scope admits is generated
+    /// and ordered here, so `nil` is the mounted frame's own answer that
+    /// nothing this scope admits is drawn at the pointer, and there is no
+    /// second hit rule for it to mean anything else. A sketch the frame
+    /// suppressed is part of that answer rather than an unclaimed family: the
+    /// frame stopped drawing it, so the pointer misses it.
     private func presentationCADSubshapeHit(
         at point: CGPoint,
         visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
         in scene: ViewportScene
-    ) throws -> NativeCADSubshapeResult {
+    ) throws -> ViewportHit? {
         let probe = try ViewportNativePresentationFrameProbe(
             planCache: presentationPlanCache,
             identity: presentationQueryIdentity(),
@@ -1940,28 +1879,13 @@ public struct Viewport: View {
                 selectionHitPolicy: selectionHitPolicy
             )
         }
-        var carriesNativeFamily = false
         // Either gate the sketch entity families use: `object` or
         // `sketchEntity` reaches an entity and `sketchEntity` alone reaches a
         // control point, so their union is the wider of the two.
         let admitsSketchFamilies = selectionHitPolicy.allowsObjectHits
             || selectionHitPolicy.allowsSketchEntityHits
-        // FIXME(INCOMPLETE_IMPLEMENTATION): the sketch region family is native
-        // here for the `region` scope alone, although the resolver answers it
-        // from the mounted frame for any scope that admits a region.
-        //
-        // Production path: `.all` admits region hits and reaches this function,
-        // but this gate withholds the family from it, so an `.all` pointer over
-        // a region is still answered by the legacy identity resolver through
-        // `legacyOverlayAnswer(_:)`, on its own projection and with no section
-        // or occlusion test.
-        //
-        // Do not treat the region family as cut over while this narrows the
-        // scope. It is replaced by `selectionHitPolicy.allowsRegionHits` when
-        // `.all` generates every family as a candidate it orders itself, which
-        // is the same seam that deletes the legacy overlay answer.
-        let admitsNativeSketchRegions = selectionHitPolicy == .region
-        let suppressedSketchFeatureIDs = admitsSketchFamilies || admitsNativeSketchRegions
+        let admitsSketchRegions = selectionHitPolicy.allowsRegionHits
+        let suppressedSketchFeatureIDs = admitsSketchFamilies || admitsSketchRegions
             ? frameSuppressedSketchFeatureIDs(in: scene)
             : []
         let sketchControlPoints: ViewportSketchControlPointHitPolicy = admitsSketchFamilies
@@ -1972,19 +1896,17 @@ public struct Viewport: View {
             // is answered before the body families rather than through them.
             if case .sketch(let primitives) = item.kind {
                 let queriesEntities = admitsSketchFamilies && !primitives.isEmpty
-                let queriesRegions = admitsNativeSketchRegions
+                let queriesRegions = admitsSketchRegions
                     && !item.sketchRegions.isEmpty
                 guard queriesEntities || queriesRegions else { continue }
-                carriesNativeFamily = true
                 // A sketch the frame suppressed — because the body it feeds is
                 // selected or being edited — is not drawn and is not asked
                 // about, which is the producer's rule read from the same
-                // selection. The frame's answer for it is that nothing is
-                // drawn there, so this is a miss the native path owns and not
-                // a query it cannot answer; leaving the family unclaimed here
-                // would send the pointer to the legacy resolver, whose
-                // narrower feature-only suppression would answer the sketch
-                // the frame stopped drawing.
+                // selection. The frame drew nothing there, so skipping the
+                // item is the answer and not a family left unclaimed for
+                // something else to speak for. The resolver this replaced
+                // suppressed by feature alone and answered the sketch the
+                // frame had stopped drawing.
                 guard !suppressedSketchFeatureIDs.contains(item.featureID) else {
                     continue
                 }
@@ -2014,6 +1936,21 @@ public struct Viewport: View {
                 }
                 continue
             }
+            // A curve item carries no body component either, and its polylines
+            // are the only family it draws.
+            if case .curve(let component) = item.kind {
+                if let curve = try ViewportNativeOverlayHitResolver.curveSegment(
+                    at: point,
+                    item: item,
+                    component: component,
+                    selectionHitPolicy: selectionHitPolicy,
+                    tolerance: ViewportNativeCADTopologyResolver.pointTolerance,
+                    probe: probe
+                ), best.map({ curve.candidate.precedes($0.candidate) }) ?? true {
+                    best = curve
+                }
+                continue
+            }
             guard let sceneNodeID = item.sceneNodeID,
                   case .body(let component) = item.kind else {
                 continue
@@ -2025,7 +1962,6 @@ public struct Viewport: View {
             // the path it replaces.
             if selectionHitPolicy.allowsVertexHits,
                ViewportNativeOverlayHitResolver.carriesSurfaceHandleDisplays(component) {
-                carriesNativeFamily = true
                 if let handle = try ViewportNativeOverlayHitResolver.surfaceHandle(
                     at: point,
                     item: item,
@@ -2041,7 +1977,6 @@ public struct Viewport: View {
                   let topology = component.topology else {
                 continue
             }
-            carriesNativeFamily = true
             guard let resolved = try ViewportNativeCADTopologyResolver.resolve(
                 at: point,
                 topology: topology,
@@ -2066,15 +2001,7 @@ public struct Viewport: View {
                 resolved.candidate
             )
         }
-        if let best {
-            return best.candidate.rank == .object
-                ? .resolvedOccurrence(best.hit)
-                : .resolved(best.hit)
-        }
-        // The occurrence family needs no prepared topology, so a scope that
-        // admits it has a supported query on any mounted frame and reports an
-        // empty pixel as the miss it is.
-        return carriesNativeFamily || selectionHitPolicy.allowsObjectHits ? .miss : .unsupported
+        return best?.hit
     }
 
     /// Selection scopes whose rectangle the native frame answers from prepared
@@ -2333,150 +2260,6 @@ public struct Viewport: View {
         case .object, .sketchEntity, .region, .constructionPlane:
             return nil
         }
-    }
-
-    /// Resolves the native outcome into the hit the viewport acts on, asking
-    /// the legacy resolver only where the native frame has no input path yet.
-    private func resolvedViewportHit(
-        _ result: NativeCADSubshapeResult,
-        at point: CGPoint,
-        in scene: ViewportScene,
-        layout: ViewportLayout,
-        presentationOccurrenceID: SceneOccurrenceID?
-    ) -> ViewportHit? {
-        switch result {
-        case .resolved(let hit):
-            return hit
-        case .resolvedOccurrence(let hit):
-            guard requiresLegacyHitFallback else {
-                return hit
-            }
-            let legacy = legacyViewportHit(
-                at: point,
-                in: scene,
-                layout: layout,
-                presentationOccurrenceID: presentationOccurrenceID
-            )
-            return legacyOverlayAnswer(legacy) ?? hit
-        case .miss where requiresLegacyHitFallback == false:
-            return nil
-        case .miss:
-            // The native frame answered for every family it owns and found
-            // nothing at the pointer, so only the families it does not own can
-            // still be asked of the legacy resolver.
-            return legacyAnswerWithoutNativeSketchFamilies(
-                legacyViewportHit(
-                    at: point,
-                    in: scene,
-                    layout: layout,
-                    presentationOccurrenceID: presentationOccurrenceID
-                )
-            )
-        case .unsupported:
-            return legacyViewportHit(
-                at: point,
-                in: scene,
-                layout: layout,
-                presentationOccurrenceID: presentationOccurrenceID
-            )
-        }
-    }
-
-    /// The legacy answer with the two sketch families the native overlay
-    /// resolver owns removed.
-    ///
-    /// A sketch entity and a spline control point are answered on the mounted
-    /// frame now, tested against the section and against what the frame drew in
-    /// front of them, and an entity the frame suppressed is not answered at
-    /// all. The legacy resolver tests none of that, so its answer in either
-    /// family can only reinstate what this frame says is not on screen. A
-    /// sketch region carries no entity identity and is the one sketch family
-    /// still answered there, which only `.all` reaches: the `region` scope
-    /// answers it natively and never routes past a native answer.
-    ///
-    /// `unsupported` does not pass through here: the native query answered for
-    /// no family on that scene, so the legacy resolver is the only answer there
-    /// is.
-    private func legacyAnswerWithoutNativeSketchFamilies(
-        _ hit: ViewportHit?
-    ) -> ViewportHit? {
-        guard let hit, hit.sketchEntityID == nil else {
-            return nil
-        }
-        return hit
-    }
-
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The native occurrence answer is complete,
-    // but the overlay families that outrank it are still answered here by the
-    // pre-RealityKit identity resolver, so a pointer the occurrence wins has to
-    // be ordered against a second, differently projected hit rule. The curve
-    // segment family has no native path at all; the sketch region family has
-    // one, but `presentationCADSubshapeHit(at:visibleSurface:in:)` generates it
-    // as a candidate only for the `region` scope. That legacy answer is not
-    // occlusion-tested against the mounted frame, so a curve behind a body can
-    // still win the pointer; this preserves the behaviour the replaced rule
-    // already had and does not introduce it.
-    //
-    // Production path: `resolvedViewportHit(_:at:in:layout:presentationOccurrenceID:)`
-    // on the `.object` and `.all` scopes, which are the select tool's object
-    // scope and the default hover scope.
-    //
-    // Do not treat the object scope as cut over while this exists. It is deleted
-    // when the curve seam lands and `.all` generates every family — the region
-    // included — through `ViewportNativeOverlayHitResolver` as candidates this
-    // query orders itself, not when the occurrence alone passes its tests.
-    private func legacyOverlayAnswer(_ hit: ViewportHit?) -> ViewportHit? {
-        guard let hit else {
-            return nil
-        }
-        // Every legacy body answer is declined. It is the occurrence, which the
-        // native frame now owns; a CAD sub-shape of it, which the native CAD
-        // resolver already declined at this pointer; or a surface handle
-        // display, which the native overlay resolver answers for on this same
-        // frame. Re-admitting any of them would let a second, differently
-        // projected rule contradict a family this path already owns.
-        guard hit.kind != .body else {
-            return nil
-        }
-        return legacyAnswerWithoutNativeSketchFamilies(hit)
-    }
-
-    // FIXME(INCOMPLETE_IMPLEMENTATION): This is the interim bridge to the
-    // pre-RealityKit identity-buffer resolver, kept only for the scopes
-    // `requiresLegacyHitFallback` still admits. Its completion condition is
-    // recorded there; it is deleted with the resolver, not reimplemented.
-    private func legacyViewportHit(
-        at point: CGPoint,
-        in scene: ViewportScene,
-        layout: ViewportLayout,
-        presentationOccurrenceID: SceneOccurrenceID?
-    ) -> ViewportHit? {
-        presentationFilteredLegacyHit(
-            viewportHit(
-                point: point,
-                in: sceneBySuppressingSketches(
-                    scene,
-                    selectedFeatureIDs: selectedTargetFeatureIDs()
-                ),
-                layout: layout
-            ),
-            presentationOccurrenceID: presentationOccurrenceID
-        )
-    }
-
-    private func presentationFilteredLegacyHit(
-        _ hit: ViewportHit?,
-        presentationOccurrenceID: SceneOccurrenceID?
-    ) -> ViewportHit? {
-        guard presentationScene != nil else {
-            return hit
-        }
-        return MeshSourcePresentationLegacyHitFilter().hit(
-            hit,
-            presentationOccurrenceID: presentationOccurrenceID,
-            navigation: presentationSceneNodeIDByOccurrenceID,
-            exactCADSceneNodeIDs: presentationCADInteractionSceneNodeIDs
-        )
     }
 
     private func presentationFrameFailure(
@@ -6592,20 +6375,6 @@ public struct Viewport: View {
         return nil
     }
 
-    private func viewportHit(
-        point: CGPoint,
-        in scene: ViewportScene,
-        layout: ViewportLayout
-    ) -> ViewportHit? {
-        identityHitResolver.hitTest(
-            point: point,
-            in: scene,
-            layout: layout,
-            selectionHitPolicy: selectionHitPolicy
-        )
-    }
-
-
     /// Gizmo actions without a commit path (translate, rotate, scale) must not
     /// leave their drag preview behind: a stale editedBodies entry permanently
     /// displaces the gizmo, the face and edge highlights, and the affordance
@@ -7122,7 +6891,7 @@ public struct Viewport: View {
         )
         var presentationOccurrenceID: SceneOccurrenceID?
         var presentationSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?
-        var nativeCADResult = NativeCADSubshapeResult.unsupported
+        var nativeCADHit: ViewportHit?
         if let presentationScene {
             do {
                 presentationSurface = try presentationSurfaceHit(at: point)
@@ -7157,17 +6926,15 @@ public struct Viewport: View {
                 onPresentationOccurrencePick(occurrenceID, selectionIntent)
                 return
             }
-            if usesNativeCADSubshapeHits {
-                do {
-                    nativeCADResult = try presentationCADSubshapeHit(
-                        at: point,
-                        visibleSurface: presentationSurface,
-                        in: sceneContext.scene
-                    )
-                } catch {
-                    // An unavailable frame cannot authorize selection or an edit.
-                    return
-                }
+            do {
+                nativeCADHit = try presentationCADSubshapeHit(
+                    at: point,
+                    visibleSurface: presentationSurface,
+                    in: sceneContext.scene
+                )
+            } catch {
+                // An unavailable frame cannot authorize selection or an edit.
+                return
             }
         }
         guard let onPick else {
@@ -7175,13 +6942,7 @@ public struct Viewport: View {
         }
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
-        let hit = resolvedViewportHit(
-            nativeCADResult,
-            at: point,
-            in: scene,
-            layout: mapper.layout,
-            presentationOccurrenceID: presentationOccurrenceID
-        )
+        let hit = nativeCADHit
         let sketchPlane = constructionSketchPlane(for: hit)
         let exactWorldPoint: Point3D?
         if selectedPresentationHasExactCADContext,
@@ -8092,13 +7853,16 @@ public struct Viewport: View {
         let mapper = sceneContext.mapper
         clearHoverInteractionTargets()
         let presentationOccurrenceID: SceneOccurrenceID?
-        var nativeCADResult = NativeCADSubshapeResult.unsupported
+        var nativeCADHit: ViewportHit?
         var exactWorldPoint: Point3D?
         do {
             let presentationSurface = try presentationSurfaceHit(at: point)
             presentationOccurrenceID = presentationSurface?.triangle.occurrenceID
-            if usesNativeCADSubshapeHits {
-                nativeCADResult = try presentationCADSubshapeHit(
+            // The mounted frame is the query authority. A viewport that
+            // mounted none has nothing to ask, and no hit is its complete
+            // answer rather than a route to a second rule.
+            if presentationScene != nil {
+                nativeCADHit = try presentationCADSubshapeHit(
                     at: point,
                     visibleSurface: presentationSurface,
                     in: scene
@@ -8115,13 +7879,7 @@ public struct Viewport: View {
             clearCanvasHover()
             return
         }
-        let hit = resolvedViewportHit(
-            nativeCADResult,
-            at: point,
-            in: scene,
-            layout: mapper.layout,
-            presentationOccurrenceID: presentationOccurrenceID
-        )
+        let hit = nativeCADHit
         hoveredCanvasHit = hit
         let sketchPlane = canvasDragSketchPlane(for: hit)
         hoveredModelPoint = canvasInput(

@@ -236,12 +236,9 @@ func viewportNativeObjectScopeSelectsNothingWhereTheFrameDrewNothing() async thr
     )
 
     // The readiness pointer resolved on this same mounted frame, so the frame
-    // answered here too and drew nothing. What this proves is the production
-    // result: the object scope publishes no hit over an empty pixel. It does not
-    // yet separate the native miss from the legacy resolver's own miss, because
-    // `requiresLegacyHitFallback` still routes an object-scope miss through the
-    // pre-RealityKit resolver. That separation arrives when the fallback is
-    // deleted, and this test becomes its evidence then.
+    // answered here too and drew nothing. The object scope reaches no second
+    // hit rule past that answer, so this is the frame's own miss and not a
+    // routed one: nothing the pointer could still have selected is withheld.
     #expect(observations[0].target.hit == nil)
 }
 

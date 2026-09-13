@@ -123,8 +123,8 @@ enum ViewportNativeCADTopologyResolver {
         // The universal mesh source names a CAD body's triangles by their
         // emission index, so the raw value is that index. A value no `Int` can
         // hold is malformed provenance rather than a miss: reporting it as
-        // "nothing was hit" would hand the query to the legacy resolver as if
-        // the frame had answered.
+        // "nothing was hit" would answer the pointer with a deselection the
+        // frame never justified.
         guard let triangleIndex = Int(exactly: visibleSurface.faceID.rawValue) else {
             throw MeshSourcePresentationRenderError(
                 code: .invalidSceneItem,

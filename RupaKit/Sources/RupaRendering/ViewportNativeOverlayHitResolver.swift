@@ -9,9 +9,8 @@ import RupaViewportScene
 /// The two resolvers split by family, not by projection: both answer through
 /// `ViewportNativeFrameProbe` and both produce `ViewportNativeHitCandidate`, so
 /// no two families can disagree about what the frame draws where. This one
-/// keeps the occurrence, the surface handle displays, the sketch entity, the
-/// sketch control point and the sketch region families, and, as its seam
-/// lands, the curve segment family.
+/// keeps the occurrence, the curve segment, the surface handle displays, the
+/// sketch entity, the sketch control point and the sketch region families.
 enum ViewportNativeOverlayHitResolver {
     /// The occurrence the mounted frame draws at the pointer's own pixel.
     ///
@@ -387,7 +386,76 @@ enum ViewportNativeOverlayHitResolver {
                 pickingBackend: .native,
                 selectionComponent: .region(best.componentID)
             ),
-            ViewportNativeHitCandidate(rank: .face, metric: best.distance)
+            ViewportNativeHitCandidate(rank: .region, metric: best.distance)
+        )
+    }
+
+    /// The nearest segment of one curve item's drawn polylines within
+    /// `tolerance` of the pointer.
+    ///
+    /// A curve is drawn as each of its segments' evaluated polylines, mapped
+    /// through the scene item's model transform, and this asks the frame about
+    /// exactly those points: a pointer between two samples is measured against
+    /// the segment the frame drew and never against an ideal curve no frame
+    /// drew.
+    ///
+    /// Admission is `ViewportNativeCADTopologyResolver.segmentCandidate`, the
+    /// CAD edge family's own rule, so the section and the occlusion test are
+    /// one implementation and not two. The frame emits a curve at scene depth,
+    /// so a body in front of it hides it — which the replaced identity resolver
+    /// did not test at all, having recorded curve geometry with no depth and
+    /// never applying the section.
+    ///
+    /// The scope gate is `allowsObjectHits`. A curve carries a whole-curve
+    /// `SelectionReference` and no sub-shape component, so the sub-shape scopes
+    /// admit none of it, which is the gate `ViewportSelectionHitPolicy` already
+    /// states for this family and is unchanged by moving the query onto the
+    /// frame.
+    static func curveSegment(
+        at point: CGPoint,
+        item: ViewportSceneItem,
+        component: ViewportCurveComponent,
+        selectionHitPolicy: ViewportSelectionHitPolicy,
+        tolerance: CGFloat,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+        guard selectionHitPolicy.allowsObjectHits else { return nil }
+        var best: (reference: SelectionReference, distance: Double)?
+        for segment in component.segments {
+            let points = segment.points.map {
+                ViewportLayout.transformedPoint($0, by: item.modelTransform)
+            }
+            guard points.count >= 2 else { continue }
+            // The bound starts at the best distance found so far, so a segment
+            // is recorded only where it is nearer than every segment before it,
+            // across the whole curve and not only within one polyline.
+            var nearest = best?.distance ?? .infinity
+            var admitted = false
+            for index in points.indices.dropLast() {
+                guard let distance = try ViewportNativeCADTopologyResolver.segmentCandidate(
+                    at: point,
+                    worldStart: points[index],
+                    worldEnd: points[index + 1],
+                    tolerance: tolerance,
+                    nearerThan: nearest,
+                    probe: probe
+                ) else { continue }
+                nearest = distance
+                admitted = true
+            }
+            guard admitted else { continue }
+            best = (segment.selectionReference, nearest)
+        }
+        guard let best else { return nil }
+        return (
+            ViewportHit(
+                featureID: item.featureID,
+                sceneNodeID: item.sceneNodeID,
+                kind: item.kind.selectableKind,
+                pickingBackend: .native,
+                selectionReference: best.reference
+            ),
+            ViewportNativeHitCandidate(rank: .edge, metric: best.distance)
         )
     }
 

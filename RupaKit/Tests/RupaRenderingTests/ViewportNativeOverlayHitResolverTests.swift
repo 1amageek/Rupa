@@ -147,6 +147,7 @@ func nativeOverlayOccurrenceLosesToEverySubshapeRank() throws {
         // A face metric is a camera depth and a point metric is a screen
         // distance, so each is given a value far worse than the occurrence's
         // zero: rank has to decide these, not metric.
+        ViewportNativeHitCandidate(rank: .region, metric: 900),
         ViewportNativeHitCandidate(rank: .face, metric: 900),
         ViewportNativeHitCandidate(rank: .edge, metric: 900),
         ViewportNativeHitCandidate(rank: .vertex, metric: 900),
@@ -549,12 +550,23 @@ private struct SketchFrame: ViewportNativeFrameProbe {
     var sectionKeepsXUpTo = Double.infinity
     /// World points the camera's depth interval rejects.
     var depthRejects: [Point3D] = []
+    /// World points the frame cannot represent in native scene space. The
+    /// mounted frame raises these as a typed failure rather than reporting
+    /// them outside the depth interval, so they are a separate knob from
+    /// `depthRejects`.
+    var unrepresentable: [Point3D] = []
 
     let usesPerspectiveProjection = false
 
     func projectedPointWithinDepthRange(
         _ point: Point3D
     ) throws -> (point: CGPoint, depth: Double)? {
+        guard unrepresentable.contains(point) == false else {
+            throw MeshSourcePresentationRenderError(
+                code: .failed,
+                message: "The world point cannot be represented in native scene space."
+            )
+        }
         guard depthRejects.contains(point) == false else { return nil }
         return (
             CGPoint(x: 200 + point.x * 100, y: 200 - point.z * 100),
@@ -1091,7 +1103,7 @@ func nativeOverlaySketchRegionAnswersAPointerInsideItsDrawnBoundary() throws {
     #expect(answer.hit.sceneNodeID == nil)
     #expect(answer.hit.kind == .sketch)
     #expect(answer.hit.pickingBackend == .native)
-    #expect(answer.candidate.rank == .face)
+    #expect(answer.candidate.rank == .region)
     #expect(answer.candidate.metric == 0)
 }
 
@@ -1249,5 +1261,256 @@ func nativeOverlaySketchRegionAnswersOnlyTheScopesThatAdmitARegion() throws {
             regions: regions,
             selectionHitPolicy: policy
         ) == nil, "\(policy) admits no region hit")
+    }
+}
+
+// MARK: - Curve segments
+
+private let curveFeatureID = FeatureID()
+
+/// One evaluated curve output, drawn as the polyline through `points`.
+///
+/// The exact geometry stays unset. The family measures the pointer against the
+/// polyline the overlay producer drew and never against an ideal curve, so a
+/// rule that read `exactCurve` would be answering about geometry no frame put
+/// on screen.
+private func curveOutput(
+    _ curveIndex: Int,
+    _ points: [Point3D]
+) -> ViewportCurveSegment {
+    ViewportCurveSegment(
+        reference: CurveOutputReference(
+            featureID: curveFeatureID,
+            curveIndex: curveIndex
+        ),
+        curve: EvaluatedCurve(
+            sourceFeatureID: curveFeatureID,
+            source: .generatedFeature,
+            kind: .line,
+            points: points
+        )
+    )
+}
+
+/// A world position on the plane `SketchFrame` draws at camera depth 10.
+private func curvePoint(_ x: Double, _ z: Double) -> Point3D {
+    Point3D(x: x, y: 0, z: z)
+}
+
+/// The whole-curve reference one curve output answers with.
+private func curveReference(_ curveIndex: Int) -> SelectionReference {
+    .curve(.whole(CurveOutputReference(
+        featureID: curveFeatureID,
+        curveIndex: curveIndex
+    )))
+}
+
+/// A single line output the frame draws from `(200, 200)` to `(300, 200)`.
+private func curveLine() -> [ViewportCurveSegment] {
+    [curveOutput(0, [curvePoint(0, 0), curvePoint(1, 0)])]
+}
+
+/// The curve scene item the family hangs from.
+///
+/// The scene builder gives an evaluated curve item no scene node and the
+/// identity transform, which is what this carries by default. `modelBounds` is
+/// empty: the rule is the projected polyline and the pointer, never a
+/// projected box.
+private func curveItem(
+    _ component: ViewportCurveComponent,
+    modelTransform: Transform3D = .identity
+) -> ViewportSceneItem {
+    ViewportSceneItem(
+        id: "curve.native",
+        featureID: curveFeatureID,
+        modelTransform: modelTransform,
+        modelBounds: .zero,
+        kind: .curve(component: component)
+    )
+}
+
+private func curveAnswer(
+    at point: CGPoint,
+    outputs: [ViewportCurveSegment],
+    selectionHitPolicy: ViewportSelectionHitPolicy = .object,
+    modelTransform: Transform3D = .identity,
+    tolerance: CGFloat = 8,
+    probe: SketchFrame = SketchFrame()
+) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
+    let component = ViewportCurveComponent(
+        segments: outputs,
+        yMinMeters: 0,
+        yMaxMeters: 0
+    )
+    return try ViewportNativeOverlayHitResolver.curveSegment(
+        at: point,
+        item: curveItem(component, modelTransform: modelTransform),
+        component: component,
+        selectionHitPolicy: selectionHitPolicy,
+        tolerance: tolerance,
+        probe: probe
+    )
+}
+
+@Test
+func nativeOverlayCurveAnswersTheSegmentTheFrameDrew() throws {
+    let answer = try #require(try curveAnswer(
+        at: CGPoint(x: 250, y: 203),
+        outputs: curveLine()
+    ))
+    #expect(answer.hit.featureID == curveFeatureID)
+    #expect(answer.hit.sceneNodeID == nil)
+    #expect(answer.hit.kind == .curve)
+    #expect(answer.hit.pickingBackend == .native)
+    #expect(answer.hit.selectionReference == curveReference(0))
+    #expect(answer.hit.selectionComponent == nil)
+    #expect(answer.candidate.rank == .edge)
+    #expect(abs(answer.candidate.metric - 3) < 1e-9)
+}
+
+@Test
+func nativeOverlayCurveRefusesAPointerOutsideTheTolerance() throws {
+    #expect(try curveAnswer(
+        at: CGPoint(x: 250, y: 209),
+        outputs: curveLine()
+    ) == nil)
+}
+
+/// A frame that cannot answer for a drawn point is a typed refusal and not a
+/// pointer that hit nothing. The two have to stay apart: a miss deselects, and
+/// this has to reach the caller as a failure it can refuse the operation on.
+@Test
+func nativeOverlayCurveRaisesTheFrameFailureItCannotAnswerThrough() {
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try curveAnswer(
+            at: CGPoint(x: 250, y: 203),
+            outputs: curveLine(),
+            probe: SketchFrame(unrepresentable: [curvePoint(1, 0)])
+        )
+    }
+}
+
+/// A curve is drawn as a polyline, so the metric is the nearest of its segments
+/// and not the first one within the tolerance. This pointer is five points from
+/// the segment the frame draws first and on the one after it.
+@Test
+func nativeOverlayCurveCarriesTheNearestPolylineSegmentAsTheMetric() throws {
+    let answer = try #require(try curveAnswer(
+        at: CGPoint(x: 300, y: 195),
+        outputs: [curveOutput(0, [
+            curvePoint(0, 0),
+            curvePoint(1, 0),
+            curvePoint(1, 1),
+        ])]
+    ))
+    #expect(answer.hit.selectionReference == curveReference(0))
+    #expect(answer.candidate.metric < 1e-9)
+}
+
+/// Two curve outputs are ordered against each other by projected distance, and
+/// the nearer one answers with its own reference whichever order the scene
+/// lists them in.
+@Test
+func nativeOverlayCurveAnswersTheNearerOfTwoCurveOutputs() throws {
+    let far = curveOutput(0, [curvePoint(0, 0), curvePoint(1, 0)])
+    let near = curveOutput(1, [curvePoint(0, -0.1), curvePoint(1, -0.1)])
+    for outputs in [[far, near], [near, far]] {
+        let answer = try #require(try curveAnswer(
+            at: CGPoint(x: 250, y: 207),
+            outputs: outputs
+        ))
+        #expect(answer.hit.selectionReference == curveReference(1))
+        #expect(abs(answer.candidate.metric - 3) < 1e-9)
+    }
+}
+
+/// The section is asked about the point on the segment the pointer is nearest
+/// to, not about the segment's endpoints: one pointer on this curve is kept and
+/// another, on the same unclipped segment, is removed.
+@Test
+func nativeOverlayCurveAsksTheSectionAboutThePointOnTheSegment() throws {
+    let probe = SketchFrame(sectionKeepsXUpTo: 0.4)
+    let kept = try #require(try curveAnswer(
+        at: CGPoint(x: 220, y: 200),
+        outputs: curveLine(),
+        probe: probe
+    ))
+    #expect(kept.hit.selectionReference == curveReference(0))
+    #expect(try curveAnswer(
+        at: CGPoint(x: 280, y: 200),
+        outputs: curveLine(),
+        probe: probe
+    ) == nil)
+}
+
+/// The frame emits a curve at scene depth, so a body in front of it hides it.
+/// The replaced identity buffer recorded curve geometry with no depth at all
+/// and answered through anything drawn over it.
+@Test
+func nativeOverlayCurveRefusesASegmentTheFrameDrewASurfaceInFrontOf() throws {
+    #expect(try curveAnswer(
+        at: CGPoint(x: 250, y: 200),
+        outputs: curveLine(),
+        probe: SketchFrame(surfaceDepth: 9)
+    ) == nil)
+}
+
+/// A surface the frame drew *behind* the curve is not an occluder, so the rule
+/// is a depth comparison and not the presence of a drawn surface. The frame
+/// reports the surface it drew without naming which body owns it, and that
+/// depth is the whole of what this family reads from it.
+@Test
+func nativeOverlayCurveAdmitsASegmentInFrontOfTheDrawnSurface() throws {
+    let answer = try #require(try curveAnswer(
+        at: CGPoint(x: 250, y: 200),
+        outputs: curveLine(),
+        probe: SketchFrame(surfaceDepth: 11)
+    ))
+    #expect(answer.hit.selectionReference == curveReference(0))
+}
+
+/// The polyline is measured where the scene item's model transform puts it, so
+/// a curve a placement moved is measured at the pointer the frame draws it
+/// under and not at the one its model-space points alone would project to.
+@Test
+func nativeOverlayCurveFollowsTheItemModelTransform() throws {
+    let transform = try ViewportWorldTransformAlgebra.translation(
+        Vector3D(x: 0, y: 0, z: 0.5)
+    )
+    let answer = try #require(try curveAnswer(
+        at: CGPoint(x: 250, y: 153),
+        outputs: curveLine(),
+        modelTransform: transform
+    ))
+    #expect(answer.hit.selectionReference == curveReference(0))
+    #expect(abs(answer.candidate.metric - 3) < 1e-9)
+    #expect(try curveAnswer(
+        at: CGPoint(x: 250, y: 203),
+        outputs: curveLine(),
+        modelTransform: transform
+    ) == nil)
+}
+
+/// A curve carries a whole-curve reference and no sub-shape component, so the
+/// scopes that admit an object reach the family and the sub-shape scopes admit
+/// none of it.
+@Test
+func nativeOverlayCurveAnswersOnlyTheScopesThatAdmitAnObject() throws {
+    let pointer = CGPoint(x: 250, y: 200)
+    for policy in [ViewportSelectionHitPolicy.object, .all] {
+        #expect(try curveAnswer(
+            at: pointer,
+            outputs: curveLine(),
+            selectionHitPolicy: policy
+        ) != nil, "\(policy) admits a curve hit")
+    }
+    for policy in [
+        ViewportSelectionHitPolicy.face, .edge, .vertex, .region, .sketchEntity,
+    ] {
+        #expect(try curveAnswer(
+            at: pointer,
+            outputs: curveLine(),
+            selectionHitPolicy: policy
+        ) == nil, "\(policy) admits no curve hit")
     }
 }

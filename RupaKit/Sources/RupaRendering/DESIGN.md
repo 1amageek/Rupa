@@ -1016,7 +1016,7 @@ independent tessellator is never an alternative implementation.
    | Selected face occluded by another surface | a point on the hidden face | none; the sketch plane answers |
    | Body with a non-identity `modelTransform` | an untransformed, wrong point | the point the frame drew |
    | Drag start covered by the drag preview at mouse-up | a point on the selected face | none; the sketch plane answers |
-   | No mounted presentation | a CPU point | none, matching `usesNativeCADSubshapeHits` |
+   | No mounted presentation | a CPU point | none; the frame is the authority |
 
    Results are sorted by ascending distance and filtered by the
    same visible/section/back-face rules as the scene. The host requests all
@@ -1126,8 +1126,8 @@ independent tessellator is never an alternative implementation.
    miss: evaluation gave its face no stable sub-shape identity, so there is no
    CAD name to select, and no neighbouring face is substituted. A raw value no
    triangle index can hold is malformed provenance and is a typed failure, not
-   a miss, because a miss would hand the query to the legacy resolver as if the
-   frame had answered.
+   a miss, because a miss answers the pointer with a deselection the frame
+   never justified.
    Only a `.cad` source reference reaches this branch. An authored mesh numbers
    its own faces independently, so its `MeshFaceID` could land inside a CAD run
    by coincidence and name a face the frame never drew; `Viewport` withholds the
@@ -1155,22 +1155,27 @@ independent tessellator is never an alternative implementation.
    that draws nothing hides nothing, which keeps silhouette vertices and outline
    edges selectable where the exact B-Rep point and the tessellated collision
    surface disagree.
-   The native outcome is three-valued. `resolved` and `miss` both mean the
-   native frame answered the query; `unsupported` means it could not, because no
-   presentation is mounted or no CAD interaction node in the scene carries
-   prepared topology. Which bodies carry it is not decided here: the scene
+   The point query has one outcome: the `ViewportHit?` this path forms. Every
+   family a scope admits is generated here and ordered here, so there is no
+   second hit rule to route to and no third value to distinguish. `nil` is the
+   mounted frame's answer that nothing this scope admits is drawn at the
+   pointer. Which bodies carry topology is not decided here: the scene
    builder writes the evaluated snapshot's mesh and face runs onto every body
    feature the evaluation named, under the
    [scene item sub-shape identity contract](../RupaViewportScene/DESIGN.md#cad-sub-shape-identity-on-a-body-scene-item),
    whatever geometry that item displays. A body reaching this query with no
-   prepared topology is therefore one evaluation gave no stable sub-shape
-   identity at all, not one whose display happens to be a projected box. An empty pixel is a `miss`, not `unsupported`: the frame
-   answered, and nothing is drawn there.
-   No scope reaches a second hit rule on a miss. Every scope this viewport
-   offers is answered from one mounted frame, so neither a miss on a
-   topology-backed scene nor a hover over empty space can be answered by a
-   second, differently projected hit rule, and `unsupported` remains the only
-   outcome that leaves this path at all.
+   prepared topology therefore contributes no CAD sub-shape candidate: it is
+   one evaluation gave no stable sub-shape identity at all, not one whose
+   display happens to be a projected box. An empty pixel is an answer and not
+   the absence of one.
+   A viewport with no mounted presentation scene is answered the same way. The
+   mounted frame is the query authority, so a viewport that mounted none has
+   nothing to ask, and `nil` is its complete answer rather than a fallback
+   withheld from it. No production composition reaches that configuration —
+   `MainView` supplies a presentation scene on both of its viewport
+   constructions — and what such a viewport still draws through
+   `drawsLegacyBodies` is a residual on the drawing side, owned by the legacy
+   renderer's own deletion and not by any selection rule stated here.
    Two owners carry that. `ViewportNativeFrameProbe` is the single reader of
    the mounted frame. It projects a world point with and without its depth,
    reports whether the active section retains a point, reports the depth of the
@@ -1201,7 +1206,7 @@ independent tessellator is never an alternative implementation.
    |---|---|---|---|
    | occurrence | object | frame surface | the frame draws it at the pointer |
    | CAD face | face | frame surface | the frame draws its triangle |
-   | sketch region | face | `.annotation` | the clipped boundary contains it |
+   | sketch region | region | `.annotation` | the clipped boundary contains it |
    | CAD edge | edge | `.scene` | section, then no nearer surface |
    | curve segment | edge | `.scene` | section, then no nearer surface |
    | sketch entity polyline | edge | `.scene` | section, then no nearer surface |
@@ -1223,12 +1228,20 @@ independent tessellator is never an alternative implementation.
    an index. Each resolver therefore returns the `ViewportHit` it formed
    alongside the candidate that orders it, and nothing widens the candidate to
    hold whichever identity a new family happens to carry.
-   Its `Rank` carries `.object` as its weakest case, so a pointer
-   that named a sub-shape never resolves to the occurrence carrying it. An
+   Its `Rank` orders five families — `vertex`, `edge`, `face`, `region`, then
+   `object` as its weakest case — so a pointer that named a sub-shape never
+   resolves to the occurrence carrying it. A region is a rank of its own
+   rather than a second family at face rank because a CAD face's metric is a
+   camera depth and a region's is a pixel distance: separating the ranks means
+   the two are never compared by metric, and a CAD face drawn at the pointer
+   wins the region beneath it. That is the order the interim routing already
+   produced, where a native face answer returned before the legacy resolver
+   could offer a region. An
    occurrence's metric is zero: it is admitted at the pointer's own pixel, so it
    has no distance to the pointer to be ordered by, and it is never ordered
-   against a sub-shape of its own rank. The replaced GPU rule ordered by these
-   same four ranks and then by drawn depth and emission order, and that depth
+   against a sub-shape of its own rank. The replaced GPU rule ordered by four
+   priorities these five refine — it drew a sketch region and a CAD face at
+   one priority — and then by drawn depth and emission order, and that depth
    tiebreak is deliberately not carried over: it was that renderer's only
    occlusion mechanism, since its curve, sketch and region draw items were
    emitted with no depth at all, whereas here section and occlusion are
@@ -1307,12 +1320,10 @@ independent tessellator is never an alternative implementation.
    A region's metric is the projected distance from the pointer to its clipped
    boundary's centroid. Two regions can both contain one pointer, because one
    profile's boundary can lie inside another's, and this is the tiebreak the
-   replaced CPU rule resolved that with. It is a pixel distance carried at
-   face rank where a CAD face carries a camera depth, and the two are never
-   ordered against each other: the `region` scope admits no face, and the
-   `all` scope does not generate this family as a candidate at all yet. Making
-   one metric order both families is the `all` scope's own seam, stated in the
-   residual below.
+   replaced CPU rule resolved that with. It is a pixel distance where a CAD
+   face's metric is a camera depth, and the two are never ordered against each
+   other: the region family carries its own rank below face, so a CAD face
+   drawn at the pointer wins before either metric is read.
    The occurrence family has no bounding box. An occurrence is a candidate
    where the mounted frame draws it at the pointer's own pixel, which is what
    the rectangle's occurrence harvest reads at every pixel it covers. The
@@ -1352,27 +1363,18 @@ independent tessellator is never an alternative implementation.
    the operator must be able to see and is reported to `Logger` without
    changing a selection. A miss is neither: it is the frame's answer that
    nothing this scope admits is drawn at the pointer.
-   Until every scope's seam has landed, the scopes named here as native but not
-   yet implemented stay routed to the legacy resolver on a miss, and
-   `requiresLegacyHitFallback` names exactly which. That routing and the
-   `FIXME(INCOMPLETE_IMPLEMENTATION)` markers on it are removed together with
-   the last of those scopes.
-   One interim residual is not a miss. The curve segment family still belongs
-   to the legacy resolver, and the region family answers the `region` scope
-   here but is not generated as a candidate under `all` yet; both outrank
-   `object`, so a pointer the occurrence family wins under `all` is one this
-   path cannot yet order correctly: a curve segment or a region drawn at that
-   same pointer would have won it. That pointer is therefore asked of the
-   legacy resolver as well, and an answer it returns that is neither a body
-   nor a sketch entity is preferred over the native occurrence. A pointer a
-   CAD sub-shape, a surface handle display or a sketch entity wins is not,
-   because those families are already native here and a legacy answer could
-   only contradict them. The legacy overlay answer is not occlusion-tested
-   against the frame, which is exactly what the replaced rule did, so
-   preferring it preserves the current behaviour rather than choosing a new
-   one; it is removed when the curve seam lands and `all` generates every
-   family as a candidate it orders itself, and the occurrence then answers
-   those pointers alone.
+   Three answers change where the legacy overlay route used to stand. A curve
+   segment is now asked of the section and of the surface the frame draws in
+   front of it, so a curve behind a body no longer wins the pointer; that is
+   the rule the frame already drew it under, because the overlay producer
+   emits a curve at `.scene` depth. A curve segment is now ordered against a
+   CAD edge by projected distance at one shared edge rank, where the replaced
+   route preferred any legacy overlay answer over the native occurrence
+   without comparing it to a CAD sub-shape at all. A sketch region under `all`
+   is now clipped by the same section and camera interval as every other
+   family here and is withheld for a sketch the frame suppressed, neither of
+   which the legacy identity buffer applied. All three narrow what wins a
+   pointer; none of them widens it.
    The surface handle displays are native on the point path before they are on
    the rectangle path, and the two are narrowed by separate seams, so for that
    interval one frame answers a knot at a pointer and the legacy identity
@@ -1655,8 +1657,7 @@ independent tessellator is never an alternative implementation.
    triangle including its recorded-order scan, its truthful miss for a triangle
    no run names and its typed failure for an unrepresentable identity, the
    orthographic and perspective edge-parameter rules, rejection of vertices and
-   edges the section removed, silhouette retention over an empty pixel, and the
-   `miss` versus `unsupported` split.
+   edges the section removed, and silhouette retention over an empty pixel.
    `Tests/RupaRenderingTests/ViewportNativeOverlayHitResolverTests.swift` owns
    the occurrence family's rule against the resolver's own input: an occurrence
    admitted only where the frame drew a triangle, refused where the scope
@@ -1698,18 +1699,29 @@ independent tessellator is never an alternative implementation.
    frame answers a non-finite depth for proves; the nearer centroid winning at
    a pointer two nested regions both contain; and the scope gate, with
    `region` and `all` admitting a region and the other scopes admitting none,
-   which is the resolver's own gate and not the narrower one the point query
-   applies above it.
+   which is the gate the point query now applies unchanged.
+   It also owns the curve segment family: a pointer within the resolver's
+   tolerance of a drawn polyline segment admitted at the edge rank the table
+   above states and one beyond the tolerance refused, the nearest polyline
+   segment of one curve carried as the metric, the nearer of two curve
+   outputs answering with its own reference, the segment refused where the
+   section removed the world point under the pointer and where the frame
+   draws a nearer surface there, the frame's own failure at a point it
+   cannot represent raised as a typed refusal instead of answered as a miss,
+   admission where the surface the frame draws is behind the segment, the
+   item's model transform applied to the drawn points, the hit carrying the
+   segment's `SelectionReference` and no `SelectionComponent`, and the scope
+   gate, with the scopes that admit object hits admitting a curve and the
+   sub-shape scopes admitting none.
    `Tests/RupaRenderingTests/ViewportNativeObjectScopePointSelectionTests.swift`
    owns the same rule on the mounted frame and through the production click
    path: the occurrence the frame draws at the pointer is selected under the
    `object` scope, an authored-mesh occurrence that carries no prepared CAD
    topology is selected there too, an empty pixel selects nothing, and a pointer
    over a CAD face under the `all` scope still resolves to the face. Every hit
-   is checked to carry the native picking backend. The empty-pixel case states
-   the production result and not yet the native miss: the object scope still
-   routes a miss through the interim legacy fallback, so that pointer's answer
-   becomes evidence for the native miss only once the fallback is deleted.
+   is checked to carry the native picking backend. The empty-pixel case is the
+   frame's own answer and not a routed one: the object scope reaches no second
+   hit rule, so that pointer proves the frame answered and drew nothing there.
    `Tests/RupaRenderingTests/ViewportNativeVertexScopePointSelectionTests.swift`
    owns the surface handle displays on the mounted frame and through the
    production click path: a pointer over a knot selects it under the `vertex`

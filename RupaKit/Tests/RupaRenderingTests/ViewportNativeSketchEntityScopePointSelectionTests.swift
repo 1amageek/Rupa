@@ -1093,10 +1093,10 @@ func viewportNativeSketchEntityScopeSuppressionFixtureDrawsAProfileClearOfItsBod
 /// profile's top edge on the first mount is asking, on the second, for
 /// something the frame is not drawing.
 ///
-/// `.object` and `.all` still consult the legacy resolver on a native miss, so
-/// they are asked here too: the same pointer has to come back empty there as
-/// well, which is `legacyAnswerWithoutNativeSketchFamilies` declining an answer
-/// the mounted frame contradicts.
+/// `.object` and `.all` reach the sketch families through the same gate, so
+/// they are asked here too. No resolver stands behind the mounted frame to
+/// reinstate what it stopped drawing, so the same pointer has to come back
+/// empty in all three scopes.
 @MainActor
 @Test(.timeLimit(.minutes(5)))
 func viewportNativeSketchEntityScopeRefusesTheProfileSketchTheFrameSuppressed() async throws {

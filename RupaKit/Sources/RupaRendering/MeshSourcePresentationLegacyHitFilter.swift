@@ -3,25 +3,6 @@ import RupaCoreTypes
 import RupaViewportScene
 
 struct MeshSourcePresentationLegacyHitFilter {
-    func hit(
-        _ hit: ViewportHit?,
-        presentationOccurrenceID: SceneOccurrenceID?,
-        navigation: [SceneOccurrenceID: SceneNodeID],
-        exactCADSceneNodeIDs: Set<SceneNodeID>
-    ) -> ViewportHit? {
-        guard let hit,
-              hit.kind == .body else {
-            return hit
-        }
-        guard let presentationOccurrenceID,
-              let presentationSceneNodeID = navigation[presentationOccurrenceID],
-              exactCADSceneNodeIDs.contains(presentationSceneNodeID),
-              hit.sceneNodeID == presentationSceneNodeID else {
-            return nil
-        }
-        return hit
-    }
-
     func selectionHits(
         _ hits: [ViewportHit],
         visiblePresentationOccurrenceIDs: [SceneOccurrenceID],
