@@ -500,10 +500,11 @@ struct ViewportMeasurementBoundsRulerLayout: Sendable {
         var acceptedLines: [(CGPoint, CGPoint)] = []
         var result: [ViewportMeasurementBoundsRuler] = []
         var disabledAxes: Set<ViewportMeasurementRulerAxis> = []
-        let hitTester = MeshSourcePresentationScreenHitTester()
 
         func crosses(_ lines: [(CGPoint, CGPoint)], _ rect: CGRect) -> Bool {
-            lines.contains { hitTester.segmentIntersectsRect($0.0, $0.1, rect: rect) }
+            lines.contains {
+                ViewportMeasurementRulerCollision.segmentIntersects($0.0, $0.1, rect: rect)
+            }
         }
 
         for (axis, value) in extents {

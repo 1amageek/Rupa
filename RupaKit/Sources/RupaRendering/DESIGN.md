@@ -30,8 +30,9 @@ RK-CLEAN-1 retires the now-unreferenced `MTKView` surface host, fixed Canvas
 grid renderer, and private Canvas world-drawing roots that RK-3 replaced with
 production `RealityViewportView`. The two-dimensional selection rectangle and
 its live input/layout helpers remain. The legacy identity-input paths that
-retirement did not claim to remove were removed by RK-5.1; RK-5.5 still owns
-the unreachable screen-hit picking API.
+retirement did not claim to remove were removed by RK-5.1. RK-5.5 removed the
+unreachable CPU screen-hit picking API; its one segment-versus-rectangle
+predicate now belongs to [ViewportMeasurement](ViewportMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 

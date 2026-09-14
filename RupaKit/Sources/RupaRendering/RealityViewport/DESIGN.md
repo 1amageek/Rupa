@@ -896,14 +896,15 @@ of screen-baked dashes.
    missing readiness, an unapplied camera revision, collision/provenance loss,
    or a nonfinite world conversion throws the existing typed render failure, so
    Measure cannot reinterpret unavailable presentation as a construction-plane
-   or snap hit. Neither outcome invokes the CPU screen-hit tester or legacy
-   identity renderer. The spatial-handle seam uses the same exact mounted
-   revision: its throwing query returns bounded, priority-ordered frame-local
-   indexes, and every projection used to materialize one of those candidates
-   explicitly supplies that same revision. Projection with a stale/unapplied
-   revision, disabled root, missing content, or nonfinite result is typed frame
-   unavailability rather than an optional legacy fallback. This component does
-   not map indexes to CAD records. Rectangle selection is answered by the
+   or snap hit. Neither outcome falls back to a CPU picking route: RK-5.1 and
+   RK-5.5 removed the legacy identity renderer and the CPU screen-hit tester.
+   The spatial-handle seam uses the same exact mounted revision: its throwing
+   query returns bounded, priority-ordered frame-local indexes, and every
+   projection used to materialize one of those candidates explicitly supplies
+   that same revision. Projection with a stale/unapplied revision, disabled
+   root, missing content, or nonfinite result is typed frame unavailability
+   rather than an optional legacy fallback. This component does not map
+   indexes to CAD records. Rectangle selection is answered by the
    region query in contract 10, which shares this surface contract's frame
    tuple, readiness validation and visibility predicates rather than weakening
    them.

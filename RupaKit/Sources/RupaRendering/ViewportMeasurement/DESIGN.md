@@ -129,13 +129,16 @@ For each axis, placement examines a fixed ordered set of projected bounding-box
 edges and outside label slots. It selects the first candidate whose label and
 dimension line remain within the viewport safe rectangle and do not intersect
 the projected object rectangle, viewport chrome exclusions, or an already accepted
-label. Extension leaders may touch only their own projected endpoints. If no
-candidate is valid, that axis is returned as explicitly disabled rather than
-silently omitted or allowed to obscure a control or the model; its world-bounds
-value remains available in the transient status. The candidate count is
-constant and independent of scene size. The safe rectangle and exclusion
-rectangles are the current values owned by `ViewportCanvasChromeLayout`, passed
-to the camera update rather than retained as source or native resource state.
+label. `ViewportMeasurementRulerCollision` owns the segment-versus-rectangle
+predicate those rejections use; it is a purely two-dimensional overlap test
+that carries no picking, depth, or occlusion meaning. Extension leaders may
+touch only their own projected endpoints. If no candidate is valid, that axis
+is returned as explicitly disabled rather than silently omitted or allowed to
+obscure a control or the model; its world-bounds value remains available in
+the transient status. The candidate count is constant and independent of
+scene size. The safe rectangle and exclusion rectangles are the current
+values owned by `ViewportCanvasChromeLayout`, passed to the camera update
+rather than retained as source or native resource state.
 
 All measurement entities are noninteractive and excluded from hit testing. They
 cannot consume selection, camera, tool, or context-panel input. Camera changes

@@ -480,9 +480,9 @@ func viewportMeasurementBoundsRulersAreWorldLabeledAndBounded() throws {
     let avoiding = placedRulers(excluding: leaderBlockers)
     for ruler in avoiding {
         for blocker in leaderBlockers {
-            #expect(!MeshSourcePresentationScreenHitTester().segmentIntersectsRect(
+            #expect(!ViewportMeasurementRulerCollision.segmentIntersects(
                 ruler.extensionStart, ruler.dimensionStart, rect: blocker))
-            #expect(!MeshSourcePresentationScreenHitTester().segmentIntersectsRect(
+            #expect(!ViewportMeasurementRulerCollision.segmentIntersects(
                 ruler.extensionEnd, ruler.dimensionEnd, rect: blocker))
         }
     }
