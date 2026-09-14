@@ -1386,10 +1386,6 @@ public struct Viewport: View {
         usesDragPreviewDocument ? renderingEvaluationCache : evaluationCache
     }
 
-    private func makeScene() -> ViewportScene {
-        cachedScene(usesDragPreviewDocument: true)
-    }
-
     private func makeSceneContext(
         size: CGSize,
         camera: ViewportCamera,
@@ -1681,22 +1677,6 @@ public struct Viewport: View {
         .renderedScene(from: scene)
     }
 
-    private func makeCoordinateMapper(
-        size: CGSize,
-        camera: ViewportCamera,
-        basis: ViewportProjectionBasis,
-        usesDragPreviewDocument: Bool = true,
-        fittingInsets: ViewportLayout.FittingInsets? = nil
-    ) -> ViewportModelCoordinateMapper {
-        makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: basis,
-            usesDragPreviewDocument: usesDragPreviewDocument,
-            fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
-        ).mapper
-    }
-
     private func makeLayout(
         size: CGSize,
         camera: ViewportCamera,
@@ -1704,12 +1684,12 @@ public struct Viewport: View {
         usesDragPreviewDocument: Bool = true,
         fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportLayout {
-        makeCoordinateMapper(
+        makeSceneContext(
             size: size,
             camera: camera,
             basis: basis,
             usesDragPreviewDocument: usesDragPreviewDocument,
-            fittingInsets: fittingInsets
+            fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
         ).layout
     }
 
@@ -2403,13 +2383,6 @@ public struct Viewport: View {
         }
     }
 
-    private func point3D(_ point: GeometryPoint3D) -> Point3D {
-        Point3D(x: point.x, y: point.y, z: point.z)
-    }
-
-
-
-
     private func measurementDistanceMeters(
         start: Point3D,
         end: Point3D
@@ -2437,7 +2410,6 @@ public struct Viewport: View {
     private var snapOverlayContext: ViewportSnapOverlayContext {
         ViewportSnapOverlayContext(activeCanvasDrag: activeCanvasDrag)
     }
-
 
     private func snapOverlayQuery() -> ViewportSnapQuery? {
         if let activeCanvasDrag {
@@ -2706,84 +2678,6 @@ public struct Viewport: View {
         return onReferenceLineAnchor(selectedCandidate.point)
     }
 
-
-    private func surfaceAnalysisBoundaryColor(
-        for item: ViewportSurfaceAnalysisOverlay.BoundaryItem
-    ) -> Color {
-        switch item.role {
-        case .outer:
-            return ViewportTheme.surfaceAnalysisBoundaryOuter
-        case .inner:
-            return ViewportTheme.surfaceAnalysisBoundaryInner
-        }
-    }
-
-
-    private func surfaceAnalysisColor(
-        for item: ViewportSurfaceAnalysisOverlay.Item
-    ) -> Color {
-        switch item.direction {
-        case .u:
-            return ViewportTheme.surfaceAnalysisU
-        case .v:
-            return ViewportTheme.surfaceAnalysisV
-        }
-    }
-
-
-
-
-
-
-    private func surfaceContinuityLabelRect(for label: String, at point: CGPoint) -> CGRect {
-        let width = max(44.0, CGFloat(label.count) * 6.2 + 14.0)
-        let height: CGFloat = 20.0
-        return CGRect(
-            x: point.x - width / 2.0,
-            y: point.y - height / 2.0,
-            width: width,
-            height: height
-        )
-    }
-
-    private func surfaceContinuityColor(
-        for item: ViewportSurfaceContinuityOverlay.Item
-    ) -> Color {
-        if item.requiresCurvatureContinuitySolve {
-            return ViewportTheme.surfaceContinuitySolveRequired
-        }
-        switch item.continuity {
-        case .disconnected:
-            return ViewportTheme.surfaceContinuityDisconnected
-        case .g0:
-            return ViewportTheme.surfaceContinuityPosition
-        case .g1:
-            return ViewportTheme.surfaceContinuityTangent
-        case .g2:
-            return ViewportTheme.surfaceContinuityCurvature
-        }
-    }
-
-    private func surfaceContinuityLabel(
-        for item: ViewportSurfaceContinuityOverlay.Item
-    ) -> String {
-        let title: String
-        switch item.continuity {
-        case .disconnected:
-            title = "DISCONNECTED"
-        case .g0:
-            title = "G0"
-        case .g1:
-            title = "G1"
-        case .g2:
-            title = "G2"
-        }
-        guard item.requiresCurvatureContinuitySolve else {
-            return title
-        }
-        return "\(title) / G2 required"
-    }
-
     /// The sketch features the mounted frame stops drawing, which are exactly
     /// the ones the native query stops asking about.
     ///
@@ -2811,25 +2705,6 @@ public struct Viewport: View {
         )
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     private func slideDirectionTitle(_ direction: SplineControlPointSlideDirection) -> String {
         switch direction {
         case .positiveU:
@@ -2856,184 +2731,11 @@ public struct Viewport: View {
         }
     }
 
-    private func surfaceFrameAxisTitle(_ axis: ViewportSurfaceFrameAxis) -> String {
-        switch axis {
-        case .u:
-            return "U"
-        case .v:
-            return "V"
-        case .normal:
-            return "N"
-        }
-    }
-
-
-    private func displayedSketchDimensionLine(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        start: CGPoint,
-        end: CGPoint
-    ) -> (start: CGPoint, end: CGPoint) {
-        guard let preview = nativeWorldPointPreview,
-              case .sketchDimension(let value) = preview.value,
-              case .sketchDimension(let handle) = preview.target,
-              handle.featureID == featureID,
-              handle.entityID == entityID else {
-            return (start, end)
-        }
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let currentLength = hypot(dx, dy)
-        guard currentLength > 1.0e-12 else {
-            return (start, end)
-        }
-        switch handle.kind {
-        case .length:
-            let length = CGFloat(value)
-            return (
-                start,
-                CGPoint(
-                    x: start.x + dx / currentLength * length,
-                    y: start.y + dy / currentLength * length
-                )
-            )
-        case .angle:
-            let length = CGFloat(currentLength)
-            return (
-                start,
-                CGPoint(
-                    x: start.x + cos(CGFloat(value)) * length,
-                    y: start.y + sin(CGFloat(value)) * length
-                )
-            )
-        case .radius, .diameter:
-            return (start, end)
-        }
-    }
-
-    private func displayedSketchArcParameters(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        radiusMeters: Double,
-        startAngleRadians: Double,
-        endAngleRadians: Double
-    ) -> (radiusMeters: Double, startAngleRadians: Double, endAngleRadians: Double) {
-        guard let preview = nativeWorldPointPreview else {
-            return (radiusMeters, startAngleRadians, endAngleRadians)
-        }
-        switch (preview.target, preview.value) {
-        case (
-            .sketchCurveHandle(let handle),
-            .sketchCurveHandle(let previewRadius, let previewStart, let previewEnd)
-        ):
-            guard handle.featureID == featureID, handle.entityID == entityID else {
-                return (radiusMeters, startAngleRadians, endAngleRadians)
-            }
-            return (
-                previewRadius ?? radiusMeters,
-                previewStart ?? startAngleRadians,
-                previewEnd ?? endAngleRadians
-            )
-        case (.sketchDimension(let handle), .sketchDimension(let value)):
-            guard handle.featureID == featureID, handle.entityID == entityID else {
-                return (radiusMeters, startAngleRadians, endAngleRadians)
-            }
-            switch handle.kind {
-            case .radius:
-                return (value, startAngleRadians, endAngleRadians)
-            case .angle:
-                return (radiusMeters, startAngleRadians, startAngleRadians + value)
-            case .length, .diameter:
-                return (radiusMeters, startAngleRadians, endAngleRadians)
-            }
-        default:
-            return (radiusMeters, startAngleRadians, endAngleRadians)
-        }
-    }
-
-
-    private func pointOnSketchCircle(
-        center: CGPoint,
-        radiusMeters: Double,
-        angleRadians: Double
-    ) -> CGPoint {
-        let radius = CGFloat(max(radiusMeters, 1.0e-12))
-        return CGPoint(
-            x: center.x + cos(CGFloat(angleRadians)) * radius,
-            y: center.y + sin(CGFloat(angleRadians)) * radius
-        )
-    }
-
     private func formattedViewportLength(_ meters: Double) -> String {
         ViewportLengthLabelFormatter.string(
             fromMeters: meters,
             preferredUnit: workspaceRuler.displayUnit
         )
-    }
-
-    private func normalizedVector(
-        from start: CGPoint,
-        to end: CGPoint,
-        fallback: CGVector
-    ) -> CGVector {
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let length = hypot(dx, dy)
-        guard length > 1.0e-9 else {
-            return fallback
-        }
-        return CGVector(dx: dx / length, dy: dy / length)
-    }
-
-    private func displayedSketchPointHandlePoint(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        handle: SketchEntityPointHandle,
-        point: CGPoint
-    ) -> CGPoint {
-        guard let preview = nativeWorldPointPreview,
-              case .sketchDisplayDelta(let displayDelta) = preview.value,
-              case .sketchPointHandle(let target) = preview.target,
-              target.featureID == featureID,
-              target.entityID == entityID,
-              target.handle == handle else {
-            return point
-        }
-        return CGPoint(
-            x: point.x + displayDelta.x,
-            y: point.y + displayDelta.y
-        )
-    }
-
-
-    private func displayedSplineControlPoints(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        controlPoints: [CGPoint]
-    ) -> [CGPoint] {
-        if let preview = nativeWorldPointPreview,
-           case .sketchDisplayDelta(let displayDelta) = preview.value,
-           case .splineControlPoint(let target) = preview.target,
-           target.featureID == featureID,
-           target.entityID == entityID,
-           controlPoints.indices.contains(target.controlPointIndex) {
-            var updatedControlPoints = controlPoints
-            updatedControlPoints[target.controlPointIndex].x += displayDelta.x
-            updatedControlPoints[target.controlPointIndex].y += displayDelta.y
-            return updatedControlPoints
-        }
-        return controlPoints
-    }
-
-
-
-    private func curveCurvatureDisplay(
-        featureID: FeatureID,
-        entityID: SketchEntityID
-    ) -> CurveCurvatureDisplay? {
-        sceneOverlayState.curveCurvatureDisplays[
-            .sketchEntity(featureID: featureID, entityID: entityID)
-        ]
     }
 
     private func pointDisplay(
@@ -3043,18 +2745,6 @@ public struct Viewport: View {
         sceneOverlayState.pointDisplays[
             .sketchEntity(featureID: featureID, entityID: entityID)
         ]
-    }
-
-    private func showsPointDisplay(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        isSelected: Bool,
-        isHovered: Bool
-    ) -> Bool {
-        if let display = pointDisplay(featureID: featureID, entityID: entityID) {
-            return display.isVisible
-        }
-        return isSelected || isHovered
     }
 
     private func allowsPointHandleInteraction(
@@ -3091,94 +2781,6 @@ public struct Viewport: View {
         return .only(targets)
     }
 
-    private func isSplineControlPointHighlighted(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        controlPointIndex: Int,
-        selectedControlPointIDs: Set<ViewportSplineControlPointIdentity>
-    ) -> Bool {
-        let target = ViewportSplineControlPointIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            controlPointIndex: controlPointIndex
-        )
-        return selectedControlPointIDs.contains(target)
-    }
-
-    private func splineSamplePoints(controlPoints: [CGPoint]) -> [CGPoint] {
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
-        var samples: [CGPoint] = []
-        let samplesPerSegment = 32
-        for segmentStart in stride(from: 0, to: controlPoints.count - 1, by: 3) {
-            let p0 = controlPoints[segmentStart]
-            let p1 = controlPoints[segmentStart + 1]
-            let p2 = controlPoints[segmentStart + 2]
-            let p3 = controlPoints[segmentStart + 3]
-            for index in 0 ... samplesPerSegment {
-                if segmentStart > 0, index == 0 {
-                    continue
-                }
-                let t = CGFloat(index) / CGFloat(samplesPerSegment)
-                samples.append(cubicBezierPoint(p0, p1, p2, p3, t: t))
-            }
-        }
-        return samples
-    }
-
-    private func cubicBezierPoint(
-        _ p0: CGPoint,
-        _ p1: CGPoint,
-        _ p2: CGPoint,
-        _ p3: CGPoint,
-        t: CGFloat
-    ) -> CGPoint {
-        let oneMinusT = 1.0 - t
-        let b0 = oneMinusT * oneMinusT * oneMinusT
-        let b1 = 3.0 * oneMinusT * oneMinusT * t
-        let b2 = 3.0 * oneMinusT * t * t
-        let b3 = t * t * t
-        return CGPoint(
-            x: p0.x * b0 + p1.x * b1 + p2.x * b2 + p3.x * b3,
-            y: p0.y * b0 + p1.y * b1 + p2.y * b2 + p3.y * b3
-        )
-    }
-
-    private func projectedCirclePath(
-        center: CGPoint,
-        radiusMeters: Double,
-        layout: ViewportLayout
-    ) -> Path {
-        let radius = max(CGFloat(radiusMeters), 1.0e-12)
-        let points = (0 ... 96).map { index in
-            let angle = CGFloat(index) / 96.0 * CGFloat.pi * 2.0
-            return CGPoint(
-                x: center.x + cos(angle) * radius,
-                y: center.y + sin(angle) * radius
-            )
-        }
-        return projectedPath(points, layout: layout)
-    }
-
-    private func projectedArcPath(
-        center: CGPoint,
-        radiusMeters: Double,
-        startAngleRadians: Double,
-        endAngleRadians: Double,
-        layout: ViewportLayout
-    ) -> Path {
-        let span = normalizedArcSpan(startAngle: startAngleRadians, endAngle: endAngleRadians)
-        let points = (0 ... 96).map { index in
-            pointOnSketchCircle(
-                center: center, radiusMeters: radiusMeters,
-                angleRadians: startAngleRadians + span * Double(index) / 96
-            )
-        }
-        return projectedPath(points, layout: layout)
-    }
-
     /// Published surfaces belong exclusively to Metal. Only explicit edited
     /// bodies and the requested preview target may add a transient Canvas ghost.
     static func drawsTransientBody(
@@ -3186,9 +2788,6 @@ public struct Viewport: View {
     ) -> Bool {
         isEdited || (previewSceneNodeID != nil && sceneNodeID == previewSceneNodeID)
     }
-
-
-
 
     private func bodyProjection(
         for item: ViewportSceneItem,
@@ -3199,70 +2798,6 @@ public struct Viewport: View {
         }
         let edit = editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
         return edit.projectedBodyProjection(layout: layout)
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    private func surfaceFrameAxisEnd(
-        origin: CGPoint,
-        direction: Vector3D,
-        item: ViewportSceneItem,
-        display: ViewportSurfaceFrameDisplay,
-        distanceMeters: Double? = nil,
-        layout: ViewportLayout
-    ) -> CGPoint? {
-        if let distanceMeters {
-            let basePoint = item.modelTransform.viewportTransformedPoint(display.position)
-            let modelDirection = item.modelTransform.viewportTransformedVector(direction)
-            let projected = layout.projectedPoint(Point3D(
-                x: basePoint.x + modelDirection.x * distanceMeters,
-                y: basePoint.y + modelDirection.y * distanceMeters,
-                z: basePoint.z + modelDirection.z * distanceMeters
-            ))?.point
-            return projected
-        }
-        let modelScale = Double(max(max(item.modelBounds.width, item.modelBounds.height), 1.0e-6)) * 0.08
-        let axisPoint = Point3D(
-            x: display.position.x + direction.x * modelScale,
-            y: display.position.y + direction.y * modelScale,
-            z: display.position.z + direction.z * modelScale
-        )
-        guard let projected = layout.projectedPoint(axisPoint, in: item)?.point else { return nil }
-        let dx = projected.x - origin.x
-        let dy = projected.y - origin.y
-        let length = hypot(dx, dy)
-        guard length >= 1.0 else {
-            return nil
-        }
-        let viewportLength: CGFloat = 36.0
-        return CGPoint(
-            x: origin.x + dx / length * viewportLength,
-            y: origin.y + dy / length * viewportLength
-        )
     }
 
     private func sceneItem(
@@ -3397,69 +2932,6 @@ public struct Viewport: View {
         return surface.point
     }
 
-    private func edgeInwardDirection(
-        projection: ViewportBodyProjection,
-        edge: ViewportBodyEdge
-    ) -> CGVector {
-        let front = edgeInwardCorner(
-            footprint: projection.frontFootprint,
-            edge: edge
-        )
-        let back = edgeInwardCorner(
-            footprint: projection.backFootprint,
-            edge: edge
-        )
-        let direction = CGVector(
-            dx: front.dx + back.dx,
-            dy: front.dy + back.dy
-        ).normalized
-        guard direction.length > 1.0e-9 else {
-            return CGVector(dx: 0.0, dy: -1.0)
-        }
-        return direction
-    }
-
-    private func edgeInwardCorner(
-        footprint: ViewportProjectedRect,
-        edge: ViewportBodyEdge
-    ) -> CGVector {
-        let corner: CGPoint
-        let firstNeighbor: CGPoint
-        let secondNeighbor: CGPoint
-        switch edge {
-        case .leftBottom:
-            corner = footprint.bottomLeft
-            firstNeighbor = footprint.bottomRight
-            secondNeighbor = footprint.topLeft
-        case .rightBottom:
-            corner = footprint.bottomRight
-            firstNeighbor = footprint.bottomLeft
-            secondNeighbor = footprint.topRight
-        case .rightTop:
-            corner = footprint.topRight
-            firstNeighbor = footprint.topLeft
-            secondNeighbor = footprint.bottomRight
-        case .leftTop:
-            corner = footprint.topLeft
-            firstNeighbor = footprint.topRight
-            secondNeighbor = footprint.bottomLeft
-        }
-        let firstDirection = normalizedVector(
-            from: corner,
-            to: firstNeighbor,
-            fallback: CGVector(dx: 0.0, dy: 0.0)
-        )
-        let secondDirection = normalizedVector(
-            from: corner,
-            to: secondNeighbor,
-            fallback: CGVector(dx: 0.0, dy: 0.0)
-        )
-        return CGVector(
-            dx: firstDirection.dx + secondDirection.dx,
-            dy: firstDirection.dy + secondDirection.dy
-        )
-    }
-
     private func bodyFaceAccessibilityMarkers(
         size: CGSize,
         basis: ViewportProjectionBasis
@@ -3545,160 +3017,6 @@ public struct Viewport: View {
         }
     }
 
-
-
-
-
-
-
-    private func patternArrayLinearAxisSlotTitle(
-        _ axisSlot: ViewportPatternArrayLinearAxisSlot
-    ) -> String {
-        switch axisSlot {
-        case .first:
-            "Axis 1"
-        case .second:
-            "Axis 2"
-        case .radial:
-            "Radius"
-        }
-    }
-
-
-
-
-    private func drawablePatternArrayOutputs(
-        _ outputs: [ViewportPatternArrayPreview.Output]
-    ) -> [ViewportPatternArrayPreview.Output] {
-        let maximumDecoratedOutputs = 128
-        guard outputs.count > maximumDecoratedOutputs else {
-            return outputs
-        }
-        var decoratedOutputs: [ViewportPatternArrayPreview.Output] = []
-        decoratedOutputs.reserveCapacity(maximumDecoratedOutputs)
-        var seenIndexes: Set<Int> = []
-        for output in outputs where output.isSelected && decoratedOutputs.count < maximumDecoratedOutputs {
-            seenIndexes.insert(output.index)
-            decoratedOutputs.append(output)
-        }
-        for output in outputs where decoratedOutputs.count < maximumDecoratedOutputs {
-            guard seenIndexes.insert(output.index).inserted else {
-                continue
-            }
-            decoratedOutputs.append(output)
-        }
-        return decoratedOutputs.sorted { $0.index < $1.index }
-    }
-
-
-
-
-    private func patternArrayItemOutlinePath(
-        _ item: ViewportSceneItem,
-        layout: ViewportLayout
-    ) -> Path {
-        if let projection = layout.bodyProjection(for: item) {
-            return patternArrayBodyOutlinePath(projection)
-        }
-        let bounds = item.modelBounds
-        return projectedPath([
-            CGPoint(x: bounds.minX, y: bounds.minY), CGPoint(x: bounds.maxX, y: bounds.minY),
-            CGPoint(x: bounds.maxX, y: bounds.maxY), CGPoint(x: bounds.minX, y: bounds.maxY),
-        ], layout: layout, closed: true)
-    }
-
-    private func patternArrayBodyOutlinePath(
-        _ projection: ViewportBodyProjection
-    ) -> Path {
-        var path = Path()
-        appendPatternArrayProjectedRect(projection.frontFootprint, to: &path)
-        appendPatternArrayProjectedRect(projection.backFootprint, to: &path)
-        let corners = [
-            (projection.frontFootprint.bottomLeft, projection.backFootprint.bottomLeft),
-            (projection.frontFootprint.bottomRight, projection.backFootprint.bottomRight),
-            (projection.frontFootprint.topRight, projection.backFootprint.topRight),
-            (projection.frontFootprint.topLeft, projection.backFootprint.topLeft),
-        ]
-        for edge in corners {
-            path.move(to: edge.0)
-            path.addLine(to: edge.1)
-        }
-        return path
-    }
-
-    private func patternArrayProjectedRectPath(
-        _ rect: ViewportProjectedRect
-    ) -> Path {
-        var path = Path()
-        appendPatternArrayProjectedRect(rect, to: &path)
-        return path
-    }
-
-    private func appendPatternArrayProjectedRect(
-        _ rect: ViewportProjectedRect,
-        to path: inout Path
-    ) {
-        path.move(to: rect.bottomLeft)
-        path.addLine(to: rect.bottomRight)
-        path.addLine(to: rect.topRight)
-        path.addLine(to: rect.topLeft)
-        path.closeSubpath()
-    }
-
-    private func patternArrayOutputCenter(
-        for output: ViewportPatternArrayPreview.Output,
-        itemByID: [String: ViewportSceneItem],
-        layout: ViewportLayout
-    ) -> CGPoint? {
-        let centers = output.itemIDs.compactMap { itemID -> CGPoint? in
-            guard let item = itemByID[itemID] else {
-                return nil
-            }
-            if let projection = layout.bodyProjection(for: item) {
-                return projection.center
-            }
-            return layout.projectedFootprintIfVisible(item.modelBounds)?.center
-        }
-        guard !centers.isEmpty else {
-            return nil
-        }
-        let sum = centers.reduce(CGPoint.zero) { partial, center in
-            CGPoint(x: partial.x + center.x, y: partial.y + center.y)
-        }
-        return CGPoint(
-            x: sum.x / CGFloat(centers.count),
-            y: sum.y / CGFloat(centers.count)
-        )
-    }
-
-
-
-
-    private func patternArrayDistributionTitle(
-        _ distributionKind: PatternArraySummary.DistributionKind
-    ) -> String {
-        switch distributionKind {
-        case .rectangular:
-            "Rectangular"
-        case .radial:
-            "Radial"
-        case .curve:
-            "Curve"
-        }
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
     private func drawSelectionDragRectangle(
         _ activeDrag: ViewportActiveDrag,
         in context: inout GraphicsContext
@@ -3759,34 +3077,6 @@ public struct Viewport: View {
         return result
     }
 
-    private func polylinePath(for points: [CGPoint]) -> Path {
-        var path = Path()
-        guard let first = points.first else {
-            return path
-        }
-        path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
-        }
-        return path
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     private func path(for polygon: [CGPoint]) -> Path {
         var path = Path()
         guard let firstPoint = polygon.first else {
@@ -3798,10 +3088,6 @@ public struct Viewport: View {
         }
         path.closeSubpath()
         return path
-    }
-
-    private func handleSideLength(points: CGFloat, layout: ViewportLayout) -> CGFloat {
-        points / max(layout.scale, 1.0e-9)
     }
 
     private func selectedObjectFeatureIDs() -> Set<FeatureID> {
@@ -3848,57 +3134,6 @@ public struct Viewport: View {
         }
     }
 
-    private func selectedFaceTargets() -> [ViewportFaceSelectionTarget] {
-        faceSelectionTargets(in: selection.selectedTargets)
-    }
-
-    private func faceSelectionTargets(in targets: [SelectionTarget]) -> [ViewportFaceSelectionTarget] {
-        targets.compactMap { target in
-            faceSelectionTarget(for: target)
-        }
-    }
-
-    private func hoveredFaceTarget() -> ViewportFaceSelectionTarget? {
-        guard let hoveredTarget = selection.hoveredTarget else {
-            return nil
-        }
-        return faceSelectionTarget(for: hoveredTarget)
-    }
-
-    private func selectedEdgeTargets() -> [ViewportEdgeSelectionTarget] {
-        edgeSelectionTargets(in: selection.selectedTargets)
-    }
-
-    private func edgeSelectionTargets(in targets: [SelectionTarget]) -> [ViewportEdgeSelectionTarget] {
-        targets.compactMap { target in
-            edgeSelectionTarget(for: target)
-        }
-    }
-
-    private func hoveredEdgeTarget() -> ViewportEdgeSelectionTarget? {
-        guard let hoveredTarget = selection.hoveredTarget else {
-            return nil
-        }
-        return edgeSelectionTarget(for: hoveredTarget)
-    }
-
-    private func selectedVertexTargets() -> [ViewportVertexSelectionTarget] {
-        vertexSelectionTargets(in: selection.selectedTargets)
-    }
-
-    private func vertexSelectionTargets(in targets: [SelectionTarget]) -> [ViewportVertexSelectionTarget] {
-        targets.compactMap { target in
-            vertexSelectionTarget(for: target)
-        }
-    }
-
-    private func hoveredVertexTarget() -> ViewportVertexSelectionTarget? {
-        guard let hoveredTarget = selection.hoveredTarget else {
-            return nil
-        }
-        return vertexSelectionTarget(for: hoveredTarget)
-    }
-
     private func selectedSketchEntityTargets() -> [ViewportSketchEntitySelectionTarget] {
         sketchEntitySelectionTargets(in: selection.selectedTargets)
     }
@@ -3906,74 +3141,6 @@ public struct Viewport: View {
     private func sketchEntitySelectionTargets(in targets: [SelectionTarget]) -> [ViewportSketchEntitySelectionTarget] {
         targets.compactMap { target in
             sketchEntitySelectionTarget(for: target)
-        }
-    }
-
-    private func selectedSplineControlPointIdentities() -> Set<ViewportSplineControlPointIdentity> {
-        Set(
-            selection.selectedTargets.compactMap { target in
-                guard case .sketchEntity(let componentID) = target.component,
-                      let reference = componentID.sketchControlPointReference,
-                      let sceneNodeReference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-                      sceneNodeReference.kind == .sketch,
-                      sceneNodeReference.featureID == reference.featureID else {
-                    return nil
-                }
-                return ViewportSplineControlPointIdentity(
-                    featureID: reference.featureID,
-                    entityID: reference.entityID,
-                    controlPointIndex: reference.index
-                )
-            }
-        )
-    }
-
-    private func selectedSplineControlPointGroups() -> [ViewportSplineControlPointGroup] {
-        var groups: [ViewportSplineControlPointGroup] = []
-        var groupIndexes: [ViewportSplineControlPointGroupKey: Int] = [:]
-
-        for target in selection.selectedTargets {
-            guard case .sketchEntity(let componentID) = target.component,
-                  let reference = componentID.sketchControlPointReference,
-                  let sceneNodeReference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-                  sceneNodeReference.kind == .sketch,
-                  sceneNodeReference.featureID == reference.featureID else {
-                continue
-            }
-
-            let key = ViewportSplineControlPointGroupKey(
-                featureID: reference.featureID,
-                entityID: reference.entityID
-            )
-            if let groupIndex = groupIndexes[key] {
-                if groups[groupIndex].controlPointIndexes.contains(reference.index) == false {
-                    groups[groupIndex].controlPointIndexes.append(reference.index)
-                }
-            } else {
-                groupIndexes[key] = groups.count
-                groups.append(
-                    ViewportSplineControlPointGroup(
-                        featureID: reference.featureID,
-                        entityID: reference.entityID,
-                        target: target,
-                        controlPointIndexes: [reference.index]
-                    )
-                )
-            }
-        }
-
-        return groups
-    }
-
-    private func selectedSlotWidthSourceTargets() -> [ViewportSlotWidthSourceTarget] {
-        selection.selectedTargets.compactMap { target in
-            slotWidthSourceTarget(for: target)
-        }
-    }
-
-    private func selectedSketchVertexOffsetSourceTargets() -> [ViewportSketchVertexOffsetSourceTarget] {
-        selection.selectedTargets.compactMap { target in
-            sketchVertexOffsetSourceTarget(for: target)
         }
     }
 
@@ -4015,37 +3182,6 @@ public struct Viewport: View {
         )
     }
 
-    private func slotWidthSourceTarget(for target: SelectionTarget) -> ViewportSlotWidthSourceTarget? {
-        ViewportSlotWidthSourceTargetResolver(document: document)
-            .sourceTarget(for: target)
-    }
-
-    private func sketchVertexOffsetSourceTarget(for target: SelectionTarget) -> ViewportSketchVertexOffsetSourceTarget? {
-        guard case .sketchEntity(let componentID) = target.component,
-              let sketchReference = componentID.sketchPointHandleReference,
-              Self.isSketchVertexOffsetHandle(sketchReference.handle),
-              let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-              reference.kind == .sketch,
-              reference.featureID == sketchReference.featureID else {
-            return nil
-        }
-        return ViewportSketchVertexOffsetSourceTarget(
-            featureID: sketchReference.featureID,
-            entityID: sketchReference.entityID,
-            handle: sketchReference.handle,
-            target: target
-        )
-    }
-
-    private static func isSketchVertexOffsetHandle(_ handle: SketchEntityPointHandle) -> Bool {
-        switch handle {
-        case .lineStart, .lineEnd, .arcStart, .arcEnd:
-            return true
-        default:
-            return false
-        }
-    }
-
     private func sketchRegionSelectionTarget(for target: SelectionTarget) -> ViewportSketchRegionSelectionTarget? {
         guard case .region(let componentID) = target.component,
               let regionReference = componentID.profileRegionReference,
@@ -4059,357 +3195,6 @@ public struct Viewport: View {
             componentID: componentID,
             target: target
         )
-    }
-
-    private func edgeOffsetSupportPoint(
-        featureID: FeatureID,
-        projection: ViewportBodyProjection
-    ) -> CGPoint? {
-        let supportFaces = selection.selectedTargets.compactMap { target -> ViewportBodyFace? in
-            guard case .face = target.component,
-                  let faceTarget = faceSelectionTarget(for: target),
-                  faceTarget.featureID == featureID else {
-                return nil
-            }
-            return faceTarget.face
-        }
-        guard supportFaces.count == 1,
-              let supportFace = supportFaces.first else {
-            return nil
-        }
-        return projection.footprint(for: supportFace).center
-    }
-
-    private func displayedSlotWidthPrimitive(
-        target: ViewportSlotWidthSourceTarget,
-        primitives: [ViewportSketchPrimitive],
-        featureID: FeatureID
-    ) -> ViewportSketchPrimitive? {
-        if let line = primitives.firstLine(with: target.entityID) {
-            let displayedStart = displayedSketchPointHandlePoint(
-                featureID: featureID,
-                entityID: target.entityID,
-                handle: .lineStart,
-                point: line.start
-            )
-            let displayedEnd = displayedSketchPointHandlePoint(
-                featureID: featureID,
-                entityID: target.entityID,
-                handle: .lineEnd,
-                point: line.end
-            )
-            let displayedLine = displayedSketchDimensionLine(
-                featureID: featureID,
-                entityID: target.entityID,
-                start: displayedStart,
-                end: displayedEnd
-            )
-            return .line(
-                entityID: target.entityID,
-                start: displayedLine.start,
-                end: displayedLine.end
-            )
-        }
-
-        if let arc = primitives.firstArc(with: target.entityID) {
-            let displayedArc = displayedSketchArcParameters(
-                featureID: featureID,
-                entityID: target.entityID,
-                radiusMeters: arc.radiusMeters,
-                startAngleRadians: arc.startAngleRadians,
-                endAngleRadians: arc.endAngleRadians
-            )
-            return .arc(
-                entityID: target.entityID,
-                center: arc.center,
-                radiusMeters: displayedArc.radiusMeters,
-                startAngleRadians: displayedArc.startAngleRadians,
-                endAngleRadians: displayedArc.endAngleRadians
-            )
-        }
-
-        if let spline = primitives.firstSpline(with: target.entityID) {
-            return .spline(
-                entityID: target.entityID,
-                points: spline.points,
-                controlPoints: spline.controlPoints,
-                sketchPlane: spline.sketchPlane
-            )
-        }
-
-        return nil
-    }
-
-
-    private func sketchVertexOffsetGeometryInput(
-        target: ViewportSketchVertexOffsetSourceTarget,
-        item: ViewportSceneItem,
-        primitives: [ViewportSketchPrimitive]
-    ) -> (baseModelPoint: CGPoint, modelDirection: CGPoint)? {
-        switch target.handle {
-        case .lineStart, .lineEnd:
-            guard let line = primitives.firstLine(with: target.entityID) else {
-                return nil
-            }
-            let displayedStart = displayedSketchPointHandlePoint(
-                featureID: item.featureID,
-                entityID: target.entityID,
-                handle: .lineStart,
-                point: line.start
-            )
-            let displayedEnd = displayedSketchPointHandlePoint(
-                featureID: item.featureID,
-                entityID: target.entityID,
-                handle: .lineEnd,
-                point: line.end
-            )
-            switch target.handle {
-            case .lineStart:
-                return (
-                    displayedStart,
-                    CGPoint(x: displayedEnd.x - displayedStart.x, y: displayedEnd.y - displayedStart.y)
-                )
-            case .lineEnd:
-                return (
-                    displayedEnd,
-                    CGPoint(x: displayedStart.x - displayedEnd.x, y: displayedStart.y - displayedEnd.y)
-                )
-            default:
-                return nil
-            }
-        case .arcStart, .arcEnd:
-            guard let arc = primitives.firstArc(with: target.entityID) else {
-                return nil
-            }
-            let displayedCenter = displayedSketchPointHandlePoint(
-                featureID: item.featureID,
-                entityID: target.entityID,
-                handle: .arcCenter,
-                point: arc.center
-            )
-            let displayedArc = displayedSketchArcParameters(
-                featureID: item.featureID,
-                entityID: target.entityID,
-                radiusMeters: arc.radiusMeters,
-                startAngleRadians: arc.startAngleRadians,
-                endAngleRadians: arc.endAngleRadians
-            )
-            switch target.handle {
-            case .arcStart:
-                return (
-                    pointOnSketchCircle(
-                        center: displayedCenter,
-                        radiusMeters: displayedArc.radiusMeters,
-                        angleRadians: displayedArc.startAngleRadians
-                    ),
-                    CGPoint(
-                        x: -sin(CGFloat(displayedArc.startAngleRadians)),
-                        y: cos(CGFloat(displayedArc.startAngleRadians))
-                    )
-                )
-            case .arcEnd:
-                return (
-                    pointOnSketchCircle(
-                        center: displayedCenter,
-                        radiusMeters: displayedArc.radiusMeters,
-                        angleRadians: displayedArc.endAngleRadians
-                    ),
-                    CGPoint(
-                        x: sin(CGFloat(displayedArc.endAngleRadians)),
-                        y: -cos(CGFloat(displayedArc.endAngleRadians))
-                    )
-                )
-            default:
-                return nil
-            }
-        default:
-            return nil
-        }
-    }
-
-    private func selectedSurfaceFrameControlPointReferences() -> [SelectionReference] {
-        selection.selectedReferences.reversed().filter { reference in
-            guard case .surface(.controlPoint) = reference else {
-                return false
-            }
-            return true
-        }
-    }
-
-    private func polySplineSurfaceTopologyVertices(
-        in scene: ViewportScene
-    ) -> [ViewportBodyTopology.Vertex] {
-        scene.items.flatMap { item -> [ViewportBodyTopology.Vertex] in
-            guard case .body(let component) = item.kind,
-                  let topology = component.topology else {
-                return []
-            }
-            return topology.vertices
-        }
-    }
-
-    /// Patch corner tables derived from the current PolySpline source meshes.
-    /// Display affordances resolve patch context through this table because
-    /// vertex identities only carry the owning feature and source index.
-    private func polySplinePatchDescriptorsByFeatureID() -> [FeatureID: [ViewportPolySplinePatchDescriptor]] {
-        let tolerance = document.modelingSettings.tolerance
-        var descriptorsByFeatureID: [FeatureID: [ViewportPolySplinePatchDescriptor]] = [:]
-        for featureID in document.cadDocument.designGraph.order {
-            guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  case let .polySpline(polySpline) = feature.operation else {
-                continue
-            }
-            let analysis = PolySplineMeshAnalyzer().analyze(
-                mesh: polySpline.sourceMesh,
-                options: polySpline.options,
-                tolerance: tolerance
-            )
-            guard analysis.result.isSupported else {
-                continue
-            }
-            descriptorsByFeatureID[featureID] = analysis.supportedPatches.map { patch in
-                ViewportPolySplinePatchDescriptor(
-                    candidateID: patch.candidateID,
-                    cornerSourceVertexIndices: patch.boundaryVertexIndices
-                )
-            }
-        }
-        return descriptorsByFeatureID
-    }
-
-    private func polySplineSurfaceVertexSlideInputs(
-        in scene: ViewportScene
-    ) -> [ViewportPolySplineSurfaceVertexSlideInput] {
-        selection.selectedTargets.reversed().compactMap { selectionTarget in
-            guard case .vertex(let componentID) = selectionTarget.component,
-                  let parsedTarget = PolySplineSurfaceVertexTarget.parse(componentID: componentID),
-                  let reference = document.productMetadata.sceneNodes[selectionTarget.sceneNodeID]?.reference,
-                  reference.kind == .body,
-                  let featureID = reference.featureID,
-                  featureID == parsedTarget.featureID,
-                  let item = scene.items.first(where: { $0.featureID == parsedTarget.featureID }),
-                  case .body(let component) = item.kind,
-                  let vertex = component.topology?.vertices.first(where: { $0.componentID == componentID }) else {
-                return nil
-            }
-            return ViewportPolySplineSurfaceVertexSlideInput(
-                target: parsedTarget,
-                selectionTarget: selectionTarget,
-                point: vertex.point,
-                modelTransform: item.modelTransform
-            )
-        }
-    }
-
-    private func surfaceControlPointSlideInputs(
-        in scene: ViewportScene
-    ) -> [ViewportSurfaceControlPointSlideInput] {
-        selection.selectedReferences.reversed().compactMap { reference in
-            guard let patch = surfaceControlPointPatch(for: reference) else {
-                return nil
-            }
-            for item in scene.items {
-                guard item.featureID == patch.featureID,
-                      case .body(let component) = item.kind,
-                      let display = component.surfaceControlPointDisplays.first(where: { display in
-                          display.selectionReference == reference
-                      }) else {
-                    continue
-                }
-                return ViewportSurfaceControlPointSlideInput(
-                    target: reference,
-                    featureID: patch.featureID,
-                    patchID: patch.patchID,
-                    point: display.point,
-                    modelTransform: item.modelTransform
-                )
-            }
-            return nil
-        }
-    }
-
-    private func surfaceControlPointPatch(
-        for reference: SelectionReference
-    ) -> (featureID: FeatureID, patchID: Int)? {
-        guard case .surface(.controlPoint(let controlPoint)) = reference else {
-            return nil
-        }
-        let subshapeID = controlPoint.surface.subshape.subshapeID
-        let roleParts = subshapeID.role.split(
-            separator: ".",
-            maxSplits: 1,
-            omittingEmptySubsequences: false
-        ).map(String.init)
-        guard roleParts.count == 2,
-              roleParts[0] == "polySpline" else {
-            return nil
-        }
-        let parts = roleParts[1].split(
-            separator: ":",
-            omittingEmptySubsequences: false
-        ).map(String.init)
-        guard parts.count == 3,
-              parts[0] == "patch",
-              let patchID = Int(parts[1]),
-              parts[2] == "face" else {
-            return nil
-        }
-        return (subshapeID.featureID, patchID)
-    }
-
-    private func sketchEntityIDs(
-        in targets: [ViewportSketchEntitySelectionTarget],
-        featureID: FeatureID
-    ) -> Set<SketchEntityID> {
-        Set(
-            targets.compactMap { target in
-                target.featureID == featureID ? target.entityID : nil
-            }
-        )
-    }
-
-    private func sketchRegionIDs(
-        in targets: [ViewportSketchRegionSelectionTarget],
-        featureID: FeatureID
-    ) -> Set<SelectionComponentID> {
-        Set(
-            targets.compactMap { target in
-                target.featureID == featureID ? target.componentID : nil
-            }
-        )
-    }
-
-    private func faceSelectionTarget(for target: SelectionTarget) -> ViewportFaceSelectionTarget? {
-        guard case .face(let componentID) = target.component,
-              let face = viewportBodyFace(for: componentID, target: target),
-              let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-              reference.kind == .body,
-              let featureID = reference.featureID else {
-            return nil
-        }
-        return ViewportFaceSelectionTarget(featureID: featureID, face: face)
-    }
-
-    private func edgeSelectionTarget(for target: SelectionTarget) -> ViewportEdgeSelectionTarget? {
-        guard case .edge(let componentID) = target.component,
-              let edge = viewportBodyEdge(for: componentID, target: target),
-              let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-              reference.kind == .body,
-              let featureID = reference.featureID else {
-            return nil
-        }
-        return ViewportEdgeSelectionTarget(featureID: featureID, edge: edge, target: target)
-    }
-
-    private func vertexSelectionTarget(for target: SelectionTarget) -> ViewportVertexSelectionTarget? {
-        guard case .vertex(let componentID) = target.component,
-              let vertex = viewportBodyVertex(for: componentID, target: target),
-              let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-              reference.kind == .body,
-              let featureID = reference.featureID else {
-            return nil
-        }
-        return ViewportVertexSelectionTarget(featureID: featureID, vertex: vertex)
     }
 
     private func viewportBodyFace(
@@ -4553,38 +3338,6 @@ public struct Viewport: View {
         }
     }
 
-    private func selectedBodyItems(in scene: ViewportScene) -> [ViewportSceneItem] {
-        objectSelectionIndex.selectedBodySourceItems(in: scene)
-    }
-
-    private func selectedBodyItem(
-        for affordanceTarget: ViewportAffordanceTarget,
-        in scene: ViewportScene
-    ) -> ViewportSceneItem? {
-        if let sceneNodeID = affordanceTarget.selectionTarget?.sceneNodeID {
-            return scene.items.first { item in
-                item.sceneNodeID == sceneNodeID && item.featureID == affordanceTarget.featureID
-            }
-        }
-        return scene.items.first { item in
-            item.sceneNodeID == nil && item.featureID == affordanceTarget.featureID
-        }
-    }
-
-    private func selectionGroupEditState(for edits: [ViewportObjectEditState]) -> ViewportObjectEditState? {
-        guard let first = edits.first else {
-            return nil
-        }
-        return ViewportObjectEditState(
-            xMin: edits.map(\.xMin).min() ?? first.xMin,
-            xMax: edits.map(\.xMax).max() ?? first.xMax,
-            yMin: edits.map(\.yMin).min() ?? first.yMin,
-            yMax: edits.map(\.yMax).max() ?? first.yMax,
-            zMin: edits.map(\.zMin).min() ?? first.zMin,
-            zMax: edits.map(\.zMax).max() ?? first.zMax
-        )
-    }
-
     private func bodyEditStates(for bodyItems: [ViewportSceneItem]) -> [FeatureID: ViewportObjectEditState] {
         Dictionary(
             uniqueKeysWithValues: bodyItems.map { item in
@@ -4637,34 +3390,6 @@ public struct Viewport: View {
             return [hoveredTarget.sceneNodeID]
         }
         return selection.hoveredSceneNodeID.map { [$0] } ?? []
-    }
-
-    private func isAffordanceHovered(
-        featureID: FeatureID,
-        action: ViewportAffordanceAction
-    ) -> Bool {
-        hoveredAffordance?.featureID == featureID && hoveredAffordance?.action == action
-    }
-
-    private func isEdgeFilletAffordanceHovered(
-        featureID: FeatureID,
-        edge: ViewportBodyEdge
-    ) -> Bool {
-        guard let hoveredAffordance,
-              hoveredAffordance.featureID == featureID,
-              case .profileEdgeFillet(_, let hoveredEdge) = hoveredAffordance.action else {
-            return false
-        }
-        return hoveredEdge == edge
-    }
-
-    private func highlightedRotationAxis(for featureID: FeatureID) -> ViewportCoordinateAxis? {
-        guard let hoveredAffordance,
-              hoveredAffordance.featureID == featureID,
-              case .rotate(let axis) = hoveredAffordance.action else {
-            return nil
-        }
-        return axis
     }
 
     private func updateCanvasDragPlaceholder(

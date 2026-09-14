@@ -253,18 +253,6 @@ struct ViewportSplineControlPointIdentity: Equatable, Hashable, Sendable {
     var controlPointIndex: Int
 }
 
-struct ViewportSplineControlPointGroup: Equatable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var target: SelectionTarget
-    var controlPointIndexes: [Int]
-}
-
-struct ViewportSplineControlPointGroupKey: Equatable, Hashable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-}
-
 struct ViewportSplineControlPointSlideHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID

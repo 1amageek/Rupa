@@ -41,38 +41,9 @@ enum ViewportTheme {
     static let surfaceEdit = Color(red: 1.0, green: 0.78, blue: 0.28)
 }
 
-struct ViewportFaceSelectionTarget: Hashable {
-    var featureID: FeatureID
-    var face: ViewportBodyFace
-}
-
-struct ViewportEdgeSelectionTarget: Hashable {
-    var featureID: FeatureID
-    var edge: ViewportBodyEdge
-    var target: SelectionTarget
-}
-
-struct ViewportVertexSelectionTarget: Hashable {
-    var featureID: FeatureID
-    var vertex: ViewportBodyVertex
-}
-
 struct ViewportSketchRegionSelectionTarget: Hashable {
     var featureID: FeatureID
     var componentID: SelectionComponentID
-    var target: SelectionTarget
-}
-
-struct ViewportSlotWidthSourceTarget: Hashable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var target: SelectionTarget
-}
-
-struct ViewportSketchVertexOffsetSourceTarget: Hashable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var handle: SketchEntityPointHandle
     var target: SelectionTarget
 }
 
