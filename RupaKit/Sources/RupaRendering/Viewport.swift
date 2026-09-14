@@ -763,10 +763,10 @@ public struct Viewport: View {
                         onOrbit: { delta, size in
                             orbitViewport(by: delta, size: size)
                         },
-                        onModifierFlagsChange: { flags, size in
+                        onModifierFlagsChange: { flags, _ in
                             modifierFlags = flags
-                            refreshSnapOverlayResolution(size: size)
-                            refreshPlacementHighlight(size: size)
+                            refreshSnapOverlayResolution()
+                            refreshPlacementHighlight()
                         },
                         onSecondaryClick: { _, _ in
                             onCommandConfirm?()
@@ -913,8 +913,8 @@ public struct Viewport: View {
                 }
             }
             .onChange(of: snapResolutionOptions) { _, _ in
-                refreshSnapOverlayResolution(size: proxy.size)
-                refreshPlacementHighlight(size: proxy.size)
+                refreshSnapOverlayResolution()
+                refreshPlacementHighlight()
             }
             .onChange(of: measurementToolActive) { _, isActive in
                 cancelNativeInputGesture()
@@ -948,7 +948,7 @@ public struct Viewport: View {
                 resetMeasurement()
             }
             .onChange(of: canvasPlacementPreviewKind) { _, _ in
-                refreshPlacementHighlight(size: proxy.size)
+                refreshPlacementHighlight()
             }
             .onChange(of: cameraResetSignal) { _, _ in
                 resetViewportCamera(size: proxy.size, basis: currentProjectionBasis)
@@ -959,8 +959,8 @@ public struct Viewport: View {
             .onChange(of: sourceIdentity) { _, _ in
                 cancelNativeInputGesture()
                 clearDragPreviewDocument()
-                refreshSnapOverlayResolution(size: proxy.size)
-                refreshPlacementHighlight(size: proxy.size)
+                refreshSnapOverlayResolution()
+                refreshPlacementHighlight()
                 resetMeasurement()
             }
             .onDisappear {
@@ -2506,10 +2506,23 @@ public struct Viewport: View {
         }
     }
 
+    /// The point the mounted frame draws at `viewportPoint` on the displayed
+    /// canvas plane, which is the ray origin a canvas gesture carries when it
+    /// names no exact world point.
+    private func canvasViewRayAnchor(at viewportPoint: CGPoint) throws -> Point3D {
+        let identity = try presentationQueryIdentity()
+        return try ViewportCanvasViewRayAnchorResolver.resolve(
+            at: viewportPoint,
+            canvasPlane: .displayed(for: currentProjectionBasis),
+            planCache: presentationPlanCache,
+            identity: identity,
+            revision: activeControlSession.revision
+        )
+    }
+
     private func canvasModelDrag(
         from start: CGPoint,
         to end: CGPoint,
-        mapper: ViewportModelCoordinateMapper,
         sketchPlane: SketchPlane,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
         startExactWorldPoint: Point3D? = nil,
@@ -2527,6 +2540,17 @@ public struct Viewport: View {
         ) else {
             return nil
         }
+        let startAnchor: Point3D
+        let endAnchor: Point3D
+        do {
+            startAnchor = try canvasViewRayAnchor(at: start)
+            endAnchor = try canvasViewRayAnchor(at: end)
+        } catch {
+            // A frame that cannot place the view-ray anchor cannot authorize
+            // the drag: the consumer would substitute a different ray origin
+            // and move the created geometry.
+            return nil
+        }
         return ViewportModelDrag(
             start: startInput.point,
             end: endInput.point,
@@ -2534,8 +2558,8 @@ public struct Viewport: View {
             modifierFlags: modifierFlags,
             startWorldPoint: startExactWorldPoint,
             endWorldPoint: endExactWorldPoint,
-            startViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: start),
-            endViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: end)
+            startViewRayAnchorWorldPoint: startAnchor,
+            endViewRayAnchorWorldPoint: endAnchor
         )
     }
 
@@ -2547,16 +2571,7 @@ public struct Viewport: View {
         onSnapCandidateKindChange?(kind)
     }
 
-    private func refreshSnapOverlayResolution(size: CGSize) {
-        let mapper = makeCoordinateMapper(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        refreshSnapOverlayResolution(layout: mapper.layout)
-    }
-
-    private func refreshSnapOverlayResolution(layout: ViewportLayout) {
+    private func refreshSnapOverlayResolution() {
         applySnapOverlayResolution(
             ViewportSnapResolutionService().resolution(
                 for: snapOverlayQuery(),
@@ -2583,16 +2598,7 @@ public struct Viewport: View {
         publishSnapCandidateKind(resolution.publishedKind(context: snapOverlayContext))
     }
 
-    private func refreshPlacementHighlight(size: CGSize) {
-        let mapper = makeCoordinateMapper(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
-        refreshPlacementHighlight(layout: mapper.layout)
-    }
-
-    private func refreshPlacementHighlight(layout: ViewportLayout) {
+    private func refreshPlacementHighlight() {
         guard let previewKind = canvasPlacementPreviewKind,
               let hoveredModelPoint,
               hoveredCanvasHit?.bodyFace == nil,
@@ -4667,7 +4673,7 @@ public struct Viewport: View {
         size: CGSize
     ) {
         defer {
-            refreshSnapOverlayResolution(size: size)
+            refreshSnapOverlayResolution()
         }
         if start == nil || current == nil {
             // Mouse-up clears the adapter preview before a replacement frame
@@ -4731,11 +4737,6 @@ public struct Viewport: View {
 
         publishSelectionDragPreview(hits: [])
         let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
-        let inputMapper = makeCoordinateMapper(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         activeCanvasDrag = ViewportActiveDrag(
             startLocation: start,
             currentLocation: current,
@@ -4744,7 +4745,6 @@ public struct Viewport: View {
             modelDrag: semanticCanvasModelDrag(
                 from: start,
                 to: current,
-                mapper: inputMapper,
                 sketchPlane: sketchPlane
             )
         )
@@ -4756,7 +4756,6 @@ public struct Viewport: View {
     private func semanticCanvasModelDrag(
         from start: CGPoint,
         to end: CGPoint,
-        mapper: ViewportModelCoordinateMapper,
         sketchPlane: SketchPlane
     ) -> ViewportModelDrag? {
         guard let startInput = canvasInput(
@@ -4770,6 +4769,16 @@ public struct Viewport: View {
         ) else {
             return nil
         }
+        let startAnchor: Point3D
+        let endAnchor: Point3D
+        do {
+            startAnchor = try canvasViewRayAnchor(at: start)
+            endAnchor = try canvasViewRayAnchor(at: end)
+        } catch {
+            // A frame that cannot place the view-ray anchor cannot authorize
+            // the creation gesture.
+            return nil
+        }
         return ViewportModelDrag(
             start: startInput.point,
             end: endInput.point,
@@ -4777,8 +4786,8 @@ public struct Viewport: View {
             modifierFlags: modifierFlags,
             startWorldPoint: startInput.worldPoint,
             endWorldPoint: endInput.worldPoint,
-            startViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: start),
-            endViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: end)
+            startViewRayAnchorWorldPoint: startAnchor,
+            endViewRayAnchorWorldPoint: endAnchor
         )
     }
 
@@ -5909,7 +5918,6 @@ public struct Viewport: View {
             return
         }
         let scene = sceneContext.scene
-        let mapper = sceneContext.mapper
         let hit = nativeCADHit
         let sketchPlane = constructionSketchPlane(for: hit)
         let exactWorldPoint: Point3D?
@@ -5935,12 +5943,19 @@ public struct Viewport: View {
         guard let input else {
             return
         }
+        let viewRayAnchorWorldPoint: Point3D
+        do {
+            viewRayAnchorWorldPoint = try canvasViewRayAnchor(at: point)
+        } catch {
+            // An unavailable frame cannot authorize selection or an edit.
+            return
+        }
         onPick(
             ViewportCanvasTarget(
                 hit: hit,
                 modelPoint: input.point,
                 modelWorldPoint: exactWorldPoint,
-                viewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: point),
+                viewRayAnchorWorldPoint: viewRayAnchorWorldPoint,
                 sketchPlane: sketchPlane,
                 selectionIntent: selectionIntent,
                 modifierFlags: modifierFlags
@@ -5996,7 +6011,6 @@ public struct Viewport: View {
             basis: currentProjectionBasis
         )
         let scene = sceneContext.scene
-        let mapper = sceneContext.mapper
         let sketchPlane = activeCanvasDrag?.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
         var startExactWorldPoint: Point3D?
         var endExactWorldPoint: Point3D?
@@ -6018,7 +6032,6 @@ public struct Viewport: View {
         guard let drag = canvasModelDrag(
             from: start,
             to: end,
-            mapper: mapper,
             sketchPlane: sketchPlane,
             modifierFlags: modifierFlags,
             startExactWorldPoint: startExactWorldPoint,
@@ -6411,7 +6424,6 @@ public struct Viewport: View {
             basis: currentProjectionBasis
         )
         let scene = sceneContext.scene
-        let mapper = sceneContext.mapper
         clearHoverInteractionTargets()
         let presentationOccurrenceID: SceneOccurrenceID?
         var nativeCADHit: ViewportHit?
@@ -6448,8 +6460,8 @@ public struct Viewport: View {
             exactWorldPoint: exactWorldPoint,
             sketchPlane: sketchPlane
         )?.point
-        refreshSnapOverlayResolution(layout: mapper.layout)
-        refreshPlacementHighlight(layout: mapper.layout)
+        refreshSnapOverlayResolution()
+        refreshPlacementHighlight()
         if hit == nil, let presentationOccurrenceID {
             onHover?(nil)
             onPresentationOccurrenceHover?(presentationOccurrenceID)
