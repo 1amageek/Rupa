@@ -1,6 +1,10 @@
 import Foundation
 
-/// One measured iteration of the production preparation and draw work.
+/// One measured iteration of the production plan preparation.
+///
+/// No drawing figure appears here. The viewport draws through a mounted
+/// RealityKit frame this process cannot bring up, so a sample records what
+/// preparation costs and nothing about a frame.
 public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     public let index: Int
     /// The cost of building one plan, measured around the single
@@ -27,21 +31,12 @@ public struct ResponsivenessIterationSample: Equatable, Sendable, Codable {
     public let retainedByteCount: Int
     /// Peak checked reservation including transient triangulation storage.
     public let workingByteCount: Int
-    /// MainActor time encoding and submitting the production surface pass.
-    public let drawWorkSeconds: Double
-    /// Wall-clock span from encoding through actual GPU completion. Waiting
-    /// suspends the actor; this is not charged as MainActor blocked time.
-    public let gpuCompletionSeconds: Double
-    /// The total `MainActor` interval one scene change causes, as the sum of
-    /// the publication and the draw pass. These are two separate `MainActor`
-    /// turns, not one uninterruptible interval, because construction now
-    /// suspends between them.
+    /// The `MainActor` interval one scene change causes in this process, which
+    /// is the publication alone: construction runs detached, and no drawing is
+    /// performed here. The frame the application actually pays is larger and is
+    /// owned by the signed-application run.
     public let mainActorBlockedSeconds: Double
     public let triangleCount: Int
-    public let projectedPointCount: Int
-    public let pathCount: Int
-    public let fillCount: Int
-    public let strokeCount: Int
 }
 
 /// Sampled `phys_footprint` values. Every value is a proxy for resident memory,
@@ -134,10 +129,6 @@ public struct ResponsivenessBaselineReport: Equatable, Sendable, Codable {
 
     public var worstReadinessSeconds: Double {
         samples.map(\.readinessSeconds).max() ?? 0.0
-    }
-
-    public var worstDrawWorkSeconds: Double {
-        samples.map(\.drawWorkSeconds).max() ?? 0.0
     }
 
     public var worstMainActorBlockedSeconds: Double {

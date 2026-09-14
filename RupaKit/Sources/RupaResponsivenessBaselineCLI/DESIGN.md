@@ -23,7 +23,7 @@ release build and compared later without a graphical session.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaKit package design](../../DESIGN.md) | parent | Package composition and target index | Registers this executable as an upper-level measurement target. | Production authority modules must not depend on it. |
-| [RupaResponsivenessBaseline design](../RupaResponsivenessBaseline/DESIGN.md) | depends on | `ResponsivenessFixture`, `ResponsivenessBaselineRunner`, `ResponsivenessBaselineReport` | Supplies the fixture, the measurement, and the per-row verdicts. | The CLI must not compute or adjust a verdict. |
+| [RupaResponsivenessBaseline design](../RupaResponsivenessBaseline/DESIGN.md) | depends on | `ResponsivenessFixture`, `ResponsivenessBaselineRunner`, `ResponsivenessBaselineReport` | Supplies the fixture, the measurement, and the per-row verdicts. | The CLI must not compute or adjust a verdict. The module measures no drawing, so no exit code can report a drawing verdict. |
 
 ## Architecture
 
@@ -49,6 +49,14 @@ flowchart LR
    | The measurement failed and no report was produced | `1` |
    | At least one row rejects | `2` |
    | No row rejects and at least one was not measured | `3` |
+
+   Exit code `0` is currently unreachable, and that is a design position rather
+   than an oversight. The measurement module reports no drawing duration
+   because the shipped viewport draws through a mounted RealityKit frame no
+   offscreen process can bring up, so the drawing row is permanently not
+   measured. The best outcome a clean run can produce is therefore `3`. A
+   script must treat `3` as the expected success of this command and must not
+   wait for `0`.
 2. The report written to stdout is the value the measurement module produced.
    The CLI does not add, drop, or round a measured value.
 3. Environment inputs not supplied on the command line are the module's derived
@@ -78,7 +86,7 @@ built binary in the same session.
 
 | Invariant | Required evidence |
 |---|---|
-| Exit codes | The recorded run's observed exit code matches the outcome its report states, and a run against a path that is not a repository exits `1` without emitting a report. |
+| Exit codes | The recorded run's observed exit code matches the outcome its report states, and a run against a path that is not a repository exits `1` without emitting a report. The recorded run predates the removal of the drawing measurement, so its rejecting `2` is history, not the current best outcome. |
 | Revision recording | The recorded report names both revisions, and a run from a working tree with uncommitted changes under the package path records the `-dirty` suffix. |
 | Unmodified report | The emitted JSON decodes to a report equal to the one the runner returned, which [RupaResponsivenessBaseline](../RupaResponsivenessBaseline/DESIGN.md) evidences at the report level. |
 

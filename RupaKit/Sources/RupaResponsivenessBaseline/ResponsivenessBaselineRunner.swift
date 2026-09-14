@@ -1,26 +1,26 @@
-import CoreGraphics
 import Darwin
 import Foundation
-import Metal
 import RupaRendering
 import RupaViewportScene
 import SwiftCAD
-import SwiftUI
 
-/// Measures the production presentation path against the RupaRendering
+/// Measures the production plan preparation path against the RupaRendering
 /// performance acceptance table.
 ///
-/// The runner executes the same public types as the production cache and native
-/// surface encoder. It never re-implements triangulation, projection, or plan
-/// construction, so a measured number describes production work rather than a
-/// model of it.
+/// The runner executes the same public plan type the production cache
+/// constructs and publishes. It never re-implements triangulation, projection,
+/// or plan construction, so a measured number describes production work rather
+/// than a model of it.
+///
+/// It measures no drawing. The shipped viewport draws through a mounted
+/// RealityKit frame that this process cannot bring up, so the drawing
+/// acceptance row reports no duration and stays `notMeasured`.
 @MainActor
 public struct ResponsivenessBaselineRunner {
     public struct Configuration: Sendable {
         public var fixture: ResponsivenessFixture.Parameters
         public var warmupCount: Int
         public var iterationCount: Int
-        public var viewportSize: CGSize
         public var footprintSamplingIntervalSeconds: Double
         public var environment: ResponsivenessEnvironment
         public var rupaKitRevision: String
@@ -30,7 +30,6 @@ public struct ResponsivenessBaselineRunner {
             fixture: ResponsivenessFixture.Parameters = .standard,
             warmupCount: Int = 1,
             iterationCount: Int = 10,
-            viewportSize: CGSize = CGSize(width: 1440.0, height: 900.0),
             footprintSamplingIntervalSeconds: Double = 0.001,
             environment: ResponsivenessEnvironment,
             rupaKitRevision: String,
@@ -39,7 +38,6 @@ public struct ResponsivenessBaselineRunner {
             self.fixture = fixture
             self.warmupCount = warmupCount
             self.iterationCount = iterationCount
-            self.viewportSize = viewportSize
             self.footprintSamplingIntervalSeconds = footprintSamplingIntervalSeconds
             self.environment = environment
             self.rupaKitRevision = rupaKitRevision
@@ -62,17 +60,6 @@ public struct ResponsivenessBaselineRunner {
                 message: "At least one measured iteration is required."
             )
         }
-        guard configuration.viewportSize.width >= 1.0,
-              configuration.viewportSize.height >= 1.0,
-              configuration.viewportSize.width.isFinite,
-              configuration.viewportSize.height.isFinite,
-              configuration.viewportSize.width <= 16_384,
-              configuration.viewportSize.height <= 16_384 else {
-            throw ResponsivenessBaselineError(
-                code: .invalidMeasurementRequest,
-                message: "The viewport size must be at least one point in each dimension."
-            )
-        }
         guard configuration.footprintSamplingIntervalSeconds > 0.0,
               configuration.footprintSamplingIntervalSeconds.isFinite else {
             throw ResponsivenessBaselineError(
@@ -92,7 +79,6 @@ public struct ResponsivenessBaselineRunner {
 
     public func run() async throws -> ResponsivenessBaselineReport {
         let fixture = try ResponsivenessFixture.build(configuration.fixture)
-        let layout = makeLayout(for: configuration.fixture)
 
         // Warm-up runs are discarded so first-touch page faults and lazily
         // initialized runtime state are not attributed to a measured iteration.
@@ -103,7 +89,6 @@ public struct ResponsivenessBaselineRunner {
             // iterations will pay them rather than in a different context.
             let preparation = try await measurePreparation(scene: fixture.scene)
             planTriangleCount = preparation.plan.triangleCount
-            _ = try await measureDrawWork(surface: preparation.surface, layout: layout)
         }
 
         var samples: [ResponsivenessIterationSample] = []
@@ -114,7 +99,6 @@ public struct ResponsivenessBaselineRunner {
             // only the publication is charged to a frame.
             let preparation = try await measurePreparation(scene: fixture.scene)
             let plan = preparation.plan
-            let draw = try await measureDrawWork(surface: preparation.surface, layout: layout)
 
             planTriangleCount = plan.triangleCount
             samples.append(
@@ -126,14 +110,8 @@ public struct ResponsivenessBaselineRunner {
                     positionCount: plan.positionCount,
                     retainedByteCount: plan.retainedByteCount,
                     workingByteCount: plan.workingByteCount,
-                    drawWorkSeconds: draw.seconds,
-                    gpuCompletionSeconds: draw.gpuCompletionSeconds,
-                    mainActorBlockedSeconds: preparation.publicationSeconds + draw.seconds,
-                    triangleCount: plan.triangleCount,
-                    projectedPointCount: draw.projectedPointCount,
-                    pathCount: draw.pathCount,
-                    fillCount: draw.fillCount,
-                    strokeCount: draw.strokeCount
+                    mainActorBlockedSeconds: preparation.publicationSeconds,
+                    triangleCount: plan.triangleCount
                 )
             )
         }
@@ -166,7 +144,6 @@ public struct ResponsivenessBaselineRunner {
 
     private struct PreparationMeasurement {
         var plan: MeshSourcePresentationRenderPlan
-        var surface: ViewportSurfaceRenderer
         var constructionSeconds: Double
         var publicationSeconds: Double
         var readinessSeconds: Double
@@ -179,7 +156,7 @@ public struct ResponsivenessBaselineRunner {
     private final class PublicationTarget {
         enum State {
             case idle
-            case ready(MeshSourcePresentationRenderPlan, ViewportSurfaceRenderer)
+            case ready(MeshSourcePresentationRenderPlan)
         }
 
         var state: State = .idle
@@ -204,10 +181,9 @@ public struct ResponsivenessBaselineRunner {
         let construction = Task.detached(priority: .userInitiated) {
             let start = clock.now
             let plan = try MeshSourcePresentationRenderPlan(scene: scene)
-            let surface = try ViewportSurfaceRenderer(plan: plan)
-            return (plan: plan, surface: surface, duration: start.duration(to: clock.now))
+            return (plan: plan, duration: start.duration(to: clock.now))
         }
-        let constructed: (plan: MeshSourcePresentationRenderPlan, surface: ViewportSurfaceRenderer, duration: Duration)
+        let constructed: (plan: MeshSourcePresentationRenderPlan, duration: Duration)
         do {
             constructed = try await construction.value
         } catch {
@@ -219,9 +195,9 @@ public struct ResponsivenessBaselineRunner {
 
         let target = PublicationTarget()
         let publicationStart = clock.now
-        target.state = .ready(constructed.plan, constructed.surface)
+        target.state = .ready(constructed.plan)
         let publicationEnd = clock.now
-        guard case let .ready(published, surface) = target.state else {
+        guard case let .ready(published) = target.state else {
             throw ResponsivenessBaselineError(
                 code: .planPreparationFailed,
                 message: "The published state did not hold the constructed plan."
@@ -230,83 +206,9 @@ public struct ResponsivenessBaselineRunner {
 
         return PreparationMeasurement(
             plan: published,
-            surface: surface,
             constructionSeconds: seconds(constructed.duration),
             publicationSeconds: seconds(publicationStart.duration(to: publicationEnd)),
             readinessSeconds: seconds(requestStart.duration(to: publicationEnd))
-        )
-    }
-
-    private struct DrawWorkMeasurement {
-        var seconds: Double
-        var gpuCompletionSeconds: Double
-        var projectedPointCount: Int
-        var pathCount: Int
-        var fillCount: Int
-        var strokeCount: Int
-    }
-
-    /// Executes the production raster pass. GPU completion suspends MainActor.
-    private func measureDrawWork(
-        surface: ViewportSurfaceRenderer,
-        layout: ViewportLayout
-    ) async throws -> DrawWorkMeasurement {
-        let width = Int(configuration.viewportSize.width.rounded(.up))
-        let height = Int(configuration.viewportSize.height.rounded(.up))
-        _ = try ViewportSurfaceRenderer.attachmentByteCount(width: width, height: height)
-        let colorDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false
-        )
-        colorDescriptor.usage = .renderTarget
-        colorDescriptor.storageMode = .private
-        let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .depth32Float, width: width, height: height, mipmapped: false
-        )
-        depthDescriptor.usage = .renderTarget
-        depthDescriptor.storageMode = .private
-        guard let color = surface.device.makeTexture(descriptor: colorDescriptor),
-              let depth = surface.device.makeTexture(descriptor: depthDescriptor) else {
-            throw ResponsivenessBaselineError(
-                code: .planConsumptionFailed, message: "Metal could not allocate bounded measurement attachments."
-            )
-        }
-        let pass = MTLRenderPassDescriptor()
-        pass.colorAttachments[0].texture = color
-        pass.colorAttachments[0].loadAction = .clear
-        pass.colorAttachments[0].storeAction = .store
-        pass.depthAttachment.texture = depth
-        pass.depthAttachment.loadAction = .clear
-        pass.depthAttachment.storeAction = .dontCare
-        pass.depthAttachment.clearDepth = 0
-        let clock = ContinuousClock()
-        let start = clock.now
-        let buffer = try surface.makeCommandBuffer()
-        var fillCount = 0
-        try surface.encode(into: buffer, pass: pass, layout: layout, state: { _ in
-            fillCount += 1
-            return .normal
-        })
-        // Install completion before commit, then record submission time without
-        // charging the suspended wait to the calling actor.
-        let completed = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        buffer.addCompletedHandler { _ in
-            completed.continuation.yield(())
-            completed.continuation.finish()
-        }
-        buffer.commit()
-        let encoded = clock.now
-        for await _ in completed.stream { break }
-        let end = clock.now
-        guard buffer.status == .completed else {
-            throw ResponsivenessBaselineError(
-                code: .planConsumptionFailed,
-                message: buffer.error?.localizedDescription ?? "Native surface GPU execution failed."
-            )
-        }
-        return DrawWorkMeasurement(
-            seconds: seconds(start.duration(to: encoded)),
-            gpuCompletionSeconds: seconds(start.duration(to: end)),
-            projectedPointCount: 0, pathCount: 0, fillCount: fillCount, strokeCount: 0
         )
     }
 
@@ -344,12 +246,11 @@ public struct ResponsivenessBaselineRunner {
         let frameInterval = configuration.environment.frameIntervalSeconds
         let worstPublication = samples.map(\.publicationSeconds).max() ?? 0.0
         let worstReadiness = samples.map(\.readinessSeconds).max() ?? 0.0
-        let worstDraw = samples.map(\.drawWorkSeconds).max() ?? 0.0
         let byteCeiling = configuration.environment.planByteCeiling
-        // The Canvas consumption and plan readiness rows are the two the
-        // acceptance table defines over ten consecutive post-warm-up runs. A
+        // The plan readiness row is the one this process can establish, and the
+        // acceptance table defines it over ten consecutive post-warm-up runs. A
         // shorter series can still observe an exceedance, so it can reject, but
-        // it cannot establish acceptance for those two rows.
+        // it cannot establish acceptance.
         let hasFullRunSeries = samples.count >= Self.requiredRunCount
         let seriesNote = hasFullRunSeries
             ? ""
@@ -383,7 +284,8 @@ public struct ResponsivenessBaselineRunner {
                         \(Self.milliseconds(samples.map(\.constructionSeconds).max() ?? 0.0)) \
                         that no longer runs on MainActor. The measured interval \
                         excludes the observation invalidation a live SwiftUI scope \
-                        adds, because no observation scope exists in this process. A \
+                        adds, nor the MainActor LowLevelMesh construction the mounted \
+                        frame performs, because neither exists in this process. A \
                         lower bound below the threshold cannot establish acceptance; \
                         the signed-application PresentationPlanPublication signpost \
                         owns this row.
@@ -391,18 +293,19 @@ public struct ResponsivenessBaselineRunner {
             )
         )
 
-        let drawRejects = worstDraw > frameInterval
         rows.append(
             ResponsivenessRowResult(
                 row: .canvasConsumption,
-                verdict: drawRejects ? .rejects : .notMeasured,
-                measured: Self.milliseconds(worstDraw),
+                verdict: .notMeasured,
+                measured: "not measured",
                 threshold: Self.milliseconds(frameInterval),
                 detail: """
-                    Native Metal encoding/submission measured on MainActor; actual GPU
-                    completion is recorded separately in every sample. Canvas grid,
-                    interaction overlay fill/stroke and window presentation are excluded.
-                    The signed-application run owns the complete frame acceptance row.
+                    No drawing was measured. The viewport draws through a mounted \
+                    RealityKit frame, which this offscreen process cannot bring up, \
+                    so there is no shipped drawing interval to record here. Timing \
+                    any encoder this process could build instead would describe a \
+                    renderer the application does not run, so the row reports no \
+                    duration at all. The signed-application frame run owns it.
                     """
             )
         )
@@ -534,31 +437,6 @@ public struct ResponsivenessBaselineRunner {
     }
 
     // MARK: - Support
-
-    private func makeLayout(for parameters: ResponsivenessFixture.Parameters) -> ViewportLayout {
-        var minimumX = Double.greatestFiniteMagnitude
-        var maximumX = -Double.greatestFiniteMagnitude
-        var maximumRadius = 0.0
-        for index in 0..<parameters.bodyCount {
-            let radius = parameters.baseRadiusMeters
-                + parameters.radiusStepMeters * Double(index)
-            let center = Double(index) * parameters.bodySpacingMeters
-            minimumX = min(minimumX, center - radius)
-            maximumX = max(maximumX, center + radius)
-            maximumRadius = max(maximumRadius, radius)
-        }
-        let bounds = CGRect(
-            x: minimumX,
-            y: 0.0,
-            width: maximumX - minimumX,
-            height: parameters.lengthMeters
-        )
-        return ViewportLayout(
-            modelBounds: bounds,
-            size: configuration.viewportSize,
-            verticalBounds: (-maximumRadius)...maximumRadius
-        )
-    }
 
     private func seconds(_ duration: Duration) -> Double {
         let components = duration.components

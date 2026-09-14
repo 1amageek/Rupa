@@ -1,5 +1,4 @@
 import ArgumentParser
-import CoreGraphics
 import Foundation
 import RupaResponsivenessBaseline
 
@@ -8,8 +7,11 @@ struct ResponsivenessBaselineCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "rupa-responsiveness-baseline",
         abstract: """
-            Records the responsiveness baseline of the presentation path against \
-            the RupaRendering performance acceptance table.
+            Records the responsiveness baseline of the plan preparation path \
+            against the RupaRendering performance acceptance table. No drawing \
+            is measured, because the viewport draws through a mounted RealityKit \
+            frame this process cannot bring up, so the drawing row reports no \
+            duration and the best exit code a clean run produces is 3.
             """
     )
 
@@ -24,12 +26,6 @@ struct ResponsivenessBaselineCLI: AsyncParsableCommand {
 
     @Option(name: .long, help: "Measured iterations.")
     var iterations: Int = 10
-
-    @Option(name: .long, help: "Viewport width in points.")
-    var width: Double = 1440.0
-
-    @Option(name: .long, help: "Viewport height in points.")
-    var height: Double = 900.0
 
     @Option(
         name: .long,
@@ -88,7 +84,6 @@ struct ResponsivenessBaselineCLI: AsyncParsableCommand {
             fixture: parameters,
             warmupCount: warmups,
             iterationCount: iterations,
-            viewportSize: CGSize(width: width, height: height),
             environment: environment,
             rupaKitRevision: try Self.gitRevision(at: rupaKitPath),
             swiftCADRevision: try Self.gitRevision(at: resolvedSwiftCADPath)

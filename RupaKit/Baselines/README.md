@@ -1,9 +1,29 @@
 # Recorded baselines
 
-`responsiveness-baseline.json` is the recorded responsiveness baseline the
-`RupaRendering` performance acceptance table is compared against. It is produced
-by `rupa-responsiveness-baseline`, whose contract is owned by
+`responsiveness-baseline.json` is a recorded responsiveness measurement of the
+plan preparation path. It is produced by `rupa-responsiveness-baseline`, whose
+contract is owned by
 [RupaResponsivenessBaselineCLI](../Sources/RupaResponsivenessBaselineCLI/DESIGN.md).
+
+Both files in this directory are historical records, not current evidence. Read
+the next section before citing either of them.
+
+## What these recordings no longer evidence
+
+The viewport now draws through a mounted RealityKit frame. Every drawing figure
+in this directory was taken from a renderer the application no longer runs, so
+no drawing figure here describes the shipped path.
+
+| Recording | Still evidence for | No longer evidence for |
+|---|---|---|
+| `responsiveness-baseline.json` | Nothing on its own: it also predates the report shape the runner now emits, and its `pathCount`, `strokeCount` and `projectedPointCount` come from a SwiftUI Canvas renderer that was already gone when it was last read. | Any drawing, frame or presentation figure. Its `canvasConsumption` row is a legacy encoder's timing. |
+| `signed-app-responsiveness-2026-09-05.md` | The footprint series and the observation and interaction findings, which do not depend on the encoder. | Its `Surface command encoding` series, which measured the retired Metal surface encoder. |
+
+A current plan-preparation recording requires a fresh Release run from a clean
+working tree, because a run taken from a dirty tree records a `-dirty` revision
+that does not identify the measured sources. Until such a run exists, the plan
+preparation rows have no recorded evidence in this repository, and the
+signed-application run owns every frame, drawing and observation gate.
 
 Reproduce it with a Release build:
 
@@ -45,3 +65,9 @@ report cited as the same content must also come from a Release build.
 | `--rupakit-path /private/tmp` (not a repository) | `1`, with the typed error and no report |
 | The recorded standard-fixture run (three rows reject) | `2` |
 | `--bodies 1 --segments 8 --iterations 10` (no row rejects, three not measured) | `3` |
+
+These codes were observed against the build that still measured drawing. The
+drawing row is now permanently not measured, so `0` is unreachable and `3` is
+the best outcome a clean run can produce, as
+[RupaResponsivenessBaselineCLI](../Sources/RupaResponsivenessBaselineCLI/DESIGN.md)
+states.

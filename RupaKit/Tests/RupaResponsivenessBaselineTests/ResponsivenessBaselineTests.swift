@@ -9,10 +9,9 @@ import Testing
 /// Verifies the contracts the module design owns. The measured durations are
 /// host dependent and are therefore never asserted; what is asserted is that
 /// the fixture is deterministic, that the plan admits the whole fixture, that
-/// construction is charged to readiness rather than to `MainActor`, that the
-/// draw pass submits one indexed draw per occurrence without CPU paths, and that a
+/// construction is charged to readiness rather than to `MainActor`, and that a
 /// measure this process cannot observe is reported as `notMeasured` with a
-/// reason.
+/// reason. No drawing contract is asserted here: the module measures none.
 @Suite("Responsiveness baseline contracts")
 struct ResponsivenessBaselineTests {
     /// A fixture small enough to measure inside a test while exercising the
@@ -35,7 +34,6 @@ struct ResponsivenessBaselineTests {
             fixture: smallFixture,
             warmupCount: 1,
             iterationCount: iterationCount,
-            viewportSize: CGSize(width: 640.0, height: 480.0),
             footprintSamplingIntervalSeconds: 0.001,
             environment: try ResponsivenessEnvironment(),
             rupaKitRevision: "test-rupakit-revision",
@@ -110,13 +108,10 @@ struct ResponsivenessBaselineTests {
         #expect(report.samples.count == 2)
         for sample in report.samples {
             #expect(sample.constructionSeconds > 0.0)
-            // The blocked interval is exactly publication plus draw. A run that
-            // charged construction to MainActor could not satisfy this, so the
+            // The blocked interval is exactly publication. A run that charged
+            // construction to MainActor could not satisfy this, so the
             // assertion fails the moment construction moves back on-actor.
-            #expect(
-                sample.mainActorBlockedSeconds
-                    == sample.publicationSeconds + sample.drawWorkSeconds
-            )
+            #expect(sample.mainActorBlockedSeconds == sample.publicationSeconds)
             // Readiness spans the detached construction, so it can never be the
             // shorter of the two.
             #expect(sample.readinessSeconds >= sample.constructionSeconds)
@@ -134,22 +129,6 @@ struct ResponsivenessBaselineTests {
             #expect(sample.positionCount > 0)
             #expect(sample.positionCount < 3 * sample.triangleCount)
             #expect(sample.retainedByteCount > 0)
-        }
-    }
-
-    @Test("The native pass submits one draw per occurrence without CPU paths")
-    @MainActor
-    func honestExclusion() async throws {
-        let report = try await Self.makeReport(iterationCount: 2)
-        let canvas = try #require(report.rows.first { $0.row == .canvasConsumption })
-        #expect(canvas.detail.contains("fill"))
-        #expect(canvas.detail.contains("stroke"))
-        for sample in report.samples {
-            #expect(sample.fillCount == Self.smallFixture.bodyCount)
-            #expect(sample.strokeCount == 0)
-            #expect(sample.pathCount == 0)
-            #expect(sample.projectedPointCount == 0)
-            #expect(sample.gpuCompletionSeconds >= sample.drawWorkSeconds)
             #expect(sample.workingByteCount >= sample.retainedByteCount)
         }
     }
@@ -189,6 +168,13 @@ struct ResponsivenessBaselineTests {
         // nothing accept the row.
         #expect(cancellation.verdict == .notMeasured)
         #expect(cancellation.detail.contains("No cancellation was requested"))
+        let canvas = try #require(report.rows.first { $0.row == .canvasConsumption })
+        // The shipped viewport draws through a mounted RealityKit frame this
+        // process cannot bring up, so the row reports no duration at all
+        // rather than timing an encoder the application does not run.
+        #expect(canvas.verdict == .notMeasured)
+        #expect(canvas.detail.contains("No drawing was measured"))
+        #expect(canvas.measured == "not measured")
         let publication = try #require(
             report.rows.first { $0.row == .mainActorStatePublication }
         )
@@ -201,7 +187,6 @@ struct ResponsivenessBaselineTests {
         let report = try await Self.makeReport(iterationCount: 2)
         let lowerBoundRows: [ResponsivenessAcceptanceRow] = [
             .mainActorStatePublication,
-            .canvasConsumption,
             .planRetainedBytes,
             .planWorkingBytes,
         ]
