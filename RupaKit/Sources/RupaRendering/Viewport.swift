@@ -193,6 +193,7 @@ public struct Viewport: View {
     private let showsConstructionPlaneHover: Bool
     private let measurementToolActive: Bool
     private let showsAutomaticMeasurement: Bool
+    private let showsBoundsReadout: Bool
     private let measurementConstructionPlane: SketchPlane?
     private let allowsSelectionRectangle: Bool
     private let allowsObjectAffordances: Bool
@@ -378,6 +379,7 @@ public struct Viewport: View {
         showsConstructionPlaneHover: Bool = false,
         measurementToolActive: Bool = false,
         showsAutomaticMeasurement: Bool = false,
+        showsBoundsReadout: Bool = false,
         measurementConstructionPlane: SketchPlane? = nil,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
@@ -509,6 +511,7 @@ public struct Viewport: View {
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.measurementToolActive = measurementToolActive
         self.showsAutomaticMeasurement = showsAutomaticMeasurement
+        self.showsBoundsReadout = showsBoundsReadout
         self.measurementConstructionPlane = measurementConstructionPlane
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
@@ -2342,8 +2345,11 @@ public struct Viewport: View {
         publishMeasurementState()
     }
 
+    /// The world-bounds text the transient status carries. Its gate is a
+    /// superset of the spatial ruler gate, so an axis the frame refuses to
+    /// place still reports its value wherever the rulers can be drawn.
     private func automaticMeasurementReadout() -> String? {
-        guard showsAutomaticMeasurement, activeCanvasDrag == nil, pendingInteractionTarget == nil,
+        guard showsBoundsReadout, activeCanvasDrag == nil, pendingInteractionTarget == nil,
               nativeInputGesture == nil,
               let occurrence = selectedMeasurementOccurrence() else { return nil }
         let disabledAxes = mountedBoundsRulerDisabledAxes

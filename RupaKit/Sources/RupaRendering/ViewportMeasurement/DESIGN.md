@@ -32,15 +32,16 @@ geometry preparation, native Entity/resource lifetime, Agent/MCP operations, or
 application lifecycle. `Viewport` supplies the mounted RealityKit camera
 query, ready presentation data, effective construction plane, snap options,
 ruler, selection, and chrome exclusions. `RupaUI` supplies only whether Measure
-or automatic selected-object dimensions should be shown and presents the
-component's non-spatial status.
+is active and, as two separate gates, whether the selected-object rulers and
+their readout should be shown; it also presents the component's non-spatial
+status.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaRendering](../DESIGN.md) | parent | RealityKit frame, native camera queries, ready-scene and cancellation lifecycle | Composes the component into the current viewport. | Measurement must run before ordinary affordance and object-pick interception. |
-| [RupaUI](../../RupaUI/DESIGN.md) | used by | Active mode and visible transient status | Selects the tool without acquiring geometry authority. | Tool exit and authority change cancel transient measurement. |
+| [RupaUI](../../RupaUI/DESIGN.md) | used by | Active mode, the two selected-object bounds gates, and visible transient status | Selects the tool and decides which bounds presentations appear, without acquiring geometry authority. | Tool exit and authority change cancel transient measurement, and the readout gate stays a superset of the ruler gate. |
 | [RupaViewportScene](../../RupaViewportScene/DESIGN.md) | depends on | Immutable scene and snap inputs | Supplies source values without owning the live measurement ray or projection; those queries remain with [RealityViewport](../RealityViewport/DESIGN.md). | A camera projection changes only screen placement, never the measured value. |
 | [RupaCore](../../RupaCore/DESIGN.md) | depends on | Existing `SnapResolver`, `SnapResolutionResult`, ruler and immutable selection | Reuses current snap policy and source provenance. | A snap failure is visible and is not replaced by guessed depth. |
 | [Rendering tests](../../../Tests/RupaRenderingTests) | verification owner | Interaction, resolution, geometry and native spatial behavior | Rejects stale, ambiguous, occluding, or screen-distance implementations. | CPU/build success alone does not prove the signed-App input workflow. |
@@ -108,12 +109,24 @@ any phase --tool exit / Escape / snapshot replacement--> idle
 ### Selected-object world-bounds rulers
 
 Automatic object dimensions are presentation of evaluated bounds, not another
-Measure operation. They are shown only for an unambiguous single selected
-viewport occurrence while ordinary object selection is active and no modeling,
-Mesh-element, drag, or Measure interaction owns the viewport. A clicked occurrence
-may be retained only while it still matches the published selection and
-presentation snapshot. If a scene-node selection expands to multiple occurrences
-and no current clicked occurrence disambiguates it, no ruler is shown.
+Measure operation. They take two forms behind separate gates. The spatial
+rulers reach the object with leaders and labels, so they are drawn only while
+the Measure tool owns the viewport, where nothing else competes for the space
+around the selection. The text readout in the transient status accompanies
+both the Measure tool and ordinary object selection, so every tool that can
+draw a ruler also reports its value. The readout gate is therefore a superset
+of the ruler gate.
+
+Both forms require an unambiguous single selected viewport occurrence and a
+viewport that no modeling, Mesh-element, drag, command, preview, or
+construction-plane interaction owns. A clicked occurrence may be retained only
+while it still matches the published selection and presentation snapshot. If a
+scene-node selection expands to multiple occurrences and no current clicked
+occurrence disambiguates it, neither form is shown.
+
+`WorkspaceMeasurementPresentationGate` owns both predicates, and `Viewport`
+receives them as the separate `showsAutomaticMeasurement` and
+`showsBoundsReadout` inputs.
 
 The component labels the values `World bounds` and uses the occurrence's existing
 evaluated `worldBounds`. The producer formats at most one label for each finite
@@ -152,7 +165,8 @@ The measurement component never creates a second camera or spatial scene root.
 Measure hover/click -> current native camera resolution -> existing snap policy
   -> accept explicit world endpoint -> preview/complete -> build spatial descriptors
 object selection -> exact occurrence validation -> evaluated world bounds
-  -> format three axis labels once -> prepare one optional native ruler group
+  -> format three axis labels once -> readout gate publishes the status text
+  -> ruler gate additionally prepares one optional native ruler group
 matching camera/chrome update -> native project closure + safe/excluded rects
   -> existing bounded collision placement -> enable accepted axes
   -> disable unplaceable axes -> update fixed-capacity native ruler entities
@@ -202,8 +216,9 @@ and noninteractive spatial entities. Ortho and Persp tests orbit after resource
 preparation, change safe/excluded rectangles, and prove placement is recomputed
 from native projection without changing labels or native resource identities.
 
-RupaUI tests own Measure activation/status/tool-exit wiring and the absence of
-source/selection/Undo mutations. A signed App test owns two clicks and live hover
+RupaUI tests own Measure activation/status/tool-exit wiring, both bounds
+presentation gates including the superset relation between them, and the
+absence of source/selection/Undo mutations. A signed App test owns two clicks and live hover
 preview in empty-space and snapped object cases, selected-object ruler placement,
 camera reprojection, control hit targets, Escape, clean document state, and
 unchanged project bytes. Changes to layout projection, selection occurrence
