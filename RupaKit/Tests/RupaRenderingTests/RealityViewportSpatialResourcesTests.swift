@@ -245,6 +245,92 @@ struct RealityViewportSpatialResourcesTests {
         #expect(prepared.root.children.allSatisfy { $0.components[CollisionComponent.self] == nil })
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func boundsRulerLabelsDrawVisibleGlyphs() async throws {
+        _ = NSApplication.shared
+        let bounds = try GeometryBounds3D(minimum: .init(x: -0.5, y: -0.5, z: -0.5),
+                                          maximum: .init(x: 0.5, y: 0.5, z: 0.5))
+        let labels = ViewportMeasurementBoundsRulerLabels(x: "World bounds X: 1 m",
+                                                          y: "World bounds Y: 1 m",
+                                                          z: "World bounds Z: 1 m")
+        let group = RealityViewportSpatialBatch.BoundsRulers(input: .init(bounds: bounds, labels: labels),
+                                                             heightPoints: 9, color: [1, 1, 1, 1])
+        let batch = try RealityViewportSpatialBatch(boundsRulers: group, renderOrigin: .origin,
+                                                    retainedSurfaceByteCount: 0)
+        let prepared = try await RealityViewportSpatialResources.prepare(batch: batch)
+        // Shape extrusion maps 72 typographic points onto one mesh unit, so an
+        // em sized at 72 points measures exactly the font's unit cap height.
+        var probe = AttributedString("X")
+        probe.font = NSFont.monospacedSystemFont(ofSize: 72, weight: .medium)
+        var extrusion = MeshResource.ShapeExtrusionOptions()
+        extrusion.extrusionMethod = .linear(depth: 0)
+        let capHeight = try await MeshResource(extruding: probe, extrusionOptions: extrusion).bounds.extents.y
+        let unitCapHeight = Float(NSFont.monospacedSystemFont(ofSize: 1, weight: .medium).capHeight)
+        #expect(abs(capHeight - unitCapHeight) < 1e-4)
+        let camera = Entity()
+        camera.position.z = 5
+        var lens = PerspectiveCameraComponent()
+        lens.fieldOfViewInDegrees = 60
+        camera.components.set(lens)
+        let capture = CameraCapture()
+        let controller = NSHostingController(rootView: RealityView { content in
+            content.camera = .virtual
+            content.add(camera)
+            content.add(prepared.root)
+            capture.content = content
+        }.frame(width: 800, height: 600))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer {
+            capture.content?.remove(prepared.root)
+            capture.content?.remove(camera)
+            capture.content = nil
+            window.contentViewController = nil
+            window.close()
+        }
+        let ready = ContinuousClock.now.advanced(by: .seconds(5))
+        while capture.content == nil, ContinuousClock.now < ready { try await Task.sleep(for: .milliseconds(10)) }
+        let content = try #require(capture.content)
+        let safeRect = CGRect(x: 10, y: 10, width: 780, height: 580)
+        let settle = ContinuousClock.now.advanced(by: .seconds(5))
+        while ContinuousClock.now < settle {
+            try prepared.updateCamera(camera: camera, content: content, safeRect: safeRect)
+            if prepared.disabledRulerAxes.count < ViewportMeasurementRulerAxis.allCases.count { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try #require(prepared.disabledRulerAxes.count < ViewportMeasurementRulerAxis.allCases.count)
+        let up = camera.orientation.act(SIMD3<Float>(0, 1, 0))
+        for (index, axis) in ViewportMeasurementRulerAxis.allCases.enumerated() {
+            let label = prepared.root.children[index * 2]
+            guard label.isEnabled else { continue }
+            let glyph = try #require(label.children.first as? ModelEntity)
+            #expect(glyph.isEnabled)
+            let resource = try #require(glyph.model?.mesh)
+            var triangleCount = 0
+            for model in resource.contents.models {
+                for part in model.parts { triangleCount += (part.triangleIndices?.count ?? 0) / 3 }
+            }
+            #expect(triangleCount > 0, "axis \(axis) glyph carries no triangles")
+            let extents = resource.bounds.extents
+            #expect(extents.x > 0, "axis \(axis) glyph has no horizontal extent")
+            #expect(extents.y > 0, "axis \(axis) glyph has no vertical extent")
+            let centre = label.position(relativeTo: nil)
+            let half = up * (extents.y * label.scale.y * 0.5)
+            let top = try #require(content.project(point: centre + half, to: .local))
+            let bottom = try #require(content.project(point: centre - half, to: .local))
+            let heightPoints = Double(hypot(top.x - bottom.x, top.y - bottom.y))
+            // One em is one mesh unit, so the drawn glyph box stays between the
+            // cap height and the full ascender-to-descender span of the request.
+            #expect(heightPoints > Double(group.heightPoints) * 0.5,
+                    "axis \(axis) glyph covers \(heightPoints) points on screen")
+            #expect(heightPoints < Double(group.heightPoints) * 1.2,
+                    "axis \(axis) glyph covers \(heightPoints) points on screen")
+        }
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func directedOffsetMatchesNativeProjectionAfterOrbit(perspective: Bool) async throws {
         _ = NSApplication.shared

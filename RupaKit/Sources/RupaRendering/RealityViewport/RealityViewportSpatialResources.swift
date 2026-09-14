@@ -1699,11 +1699,19 @@ final class RealityViewportSpatialResources {
         }
     }
 
+    /// Typographic points that `MeshResource(extruding:)` maps onto one mesh
+    /// unit. Pinned by `boundsRulerLabelsDrawVisibleGlyphs`.
+    private static let textPointsPerMeshUnit: CGFloat = 72
+
     private static func textResource(_ value: String, cache: inout [String: MeshResource]) async throws -> MeshResource {
         try Task.checkCancellation()
         if let existing = cache[value] { return existing }
         var text = AttributedString(value)
-        text.font = NSFont.monospacedSystemFont(ofSize: 1, weight: .medium)
+        // Shape extrusion emits one mesh unit per `textPointsPerMeshUnit`
+        // typographic points, so sizing the font at that value makes one em
+        // exactly one unit. Callers scale the glyph by their requested point
+        // height, which therefore names the font size the label is drawn at.
+        text.font = NSFont.monospacedSystemFont(ofSize: Self.textPointsPerMeshUnit, weight: .medium)
         var extrusion = MeshResource.ShapeExtrusionOptions()
         extrusion.extrusionMethod = .linear(depth: 0)
         let resource = try await MeshResource(extruding: text, extrusionOptions: extrusion)
