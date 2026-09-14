@@ -58,6 +58,15 @@ final class AppProjectRoundTripUITests: XCTestCase {
             createdBounds.isEmpty,
             "The workspace reports no world bounds for the created solid."
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["CanvasSelectionAffordance"]
+                .waitForExistence(timeout: 10),
+            """
+            The select tool draws no object affordance for the created solid, \
+            so the workspace resolved no exact CAD context for it and the \
+            face scope cannot reach its topology either.
+            """
+        )
 
         // Edit one face.
         expandSelectionRail(in: app)
@@ -212,9 +221,12 @@ final class AppProjectRoundTripUITests: XCTestCase {
     /// Face scope commits through a canvas click, which is the path the shipped
     /// native hit test serves. The viewport centres the model bounds inside the
     /// chrome-inset fitting rectangle, so the created body does not stay under
-    /// the point it was placed at. The body accessibility markers report that
-    /// projected centre, and clicking the canvas there drives the same
-    /// production pick a pointer over the body would.
+    /// the point it was placed at. Each body face marker reports where one face
+    /// of the body projects, and clicking the canvas there drives the same
+    /// production pick a pointer over that face would. The markers cover the
+    /// faces the camera hides as well, so the first point the frame resolves a
+    /// face at answers the scope and the failure report names every point that
+    /// resolved nothing.
     @MainActor
     private func selectFaceOnCanvas(in app: XCUIApplication, canvas: XCUIElement) {
         let target = app.staticTexts["WorkspaceSelection.target"]
@@ -226,7 +238,8 @@ final class AppProjectRoundTripUITests: XCTestCase {
             """
         )
         let placedTarget = targetSummary(of: target)
-        guard let bodyCenter = projectedBodyCenter(in: app) else {
+        let markers = projectedBodyFacePoints(in: app)
+        guard !markers.isEmpty else {
             XCTFail(
                 """
                 No body accessibility marker reports where the created solid \
@@ -235,32 +248,37 @@ final class AppProjectRoundTripUITests: XCTestCase {
             )
             return
         }
-        click(canvas, at: bodyCenter)
-        if waitForTargetSummary(target, hasSuffix: "Face", timeout: 10) { return }
+        var refusals: [String] = []
+        for marker in markers {
+            click(canvas, at: marker.point)
+            if waitForTargetSummary(target, hasSuffix: "Face", timeout: 5) { return }
+            refusals.append(
+                "\(marker.identifier) at \(marker.point) left \(targetSummary(of: target))"
+            )
+        }
         XCTFail(
             """
-            Face scope did not resolve a face target from the canvas hit at \
-            \(bodyCenter) inside \(canvas.frame). Target before the hit: \
-            \(placedTarget). Target after the hit: \(targetSummary(of: target)).
+            Face scope resolved no face target from any canvas hit inside \
+            \(canvas.frame). Target before the hits: \(placedTarget). \
+            Refused hits: \(refusals.joined(separator: "; ")).
             """
         )
     }
 
-    /// Returns the projected centre of the created body in screen coordinates.
+    /// Returns where each face of the created body projects, in screen
+    /// coordinates, paired with the marker identifier a failure report names.
     @MainActor
-    private func projectedBodyCenter(in app: XCUIApplication) -> CGPoint? {
+    private func projectedBodyFacePoints(
+        in app: XCUIApplication
+    ) -> [(identifier: String, point: CGPoint)] {
         let markers = app.descendants(matching: .any).matching(
             NSPredicate(format: "identifier BEGINSWITH 'CanvasBodyFace.'")
         )
-        let count = markers.count
-        guard count > 0 else { return nil }
-        var sum = CGVector(dx: 0.0, dy: 0.0)
-        for index in 0 ..< count {
-            let frame = markers.element(boundBy: index).frame
-            sum.dx += frame.midX
-            sum.dy += frame.midY
+        return (0 ..< markers.count).map { index in
+            let element = markers.element(boundBy: index)
+            let frame = element.frame
+            return (element.identifier, CGPoint(x: frame.midX, y: frame.midY))
         }
-        return CGPoint(x: sum.dx / CGFloat(count), y: sum.dy / CGFloat(count))
     }
 
     @MainActor
