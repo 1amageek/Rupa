@@ -7,8 +7,8 @@ immutable viewport snapshot. Production `RealityViewportView` supplies the
 RealityKit surface, native camera, grid, and world overlays. SwiftUI `Canvas`
 draws only two-dimensional screen chrome: the selection rectangle and the axis
 triad. The legacy identity picking backend was removed by RK-5.1 and the
-retired surface encoder by RK-5.2; RK-5 removes the remaining migration-only
-code before RK-IV integration verifies the complete cutover. The target uses
+retired surface encoder by RK-5.2; RK-5 removed the remaining migration-only
+code, and RK-IV integration verifies the complete cutover. The target uses
 RealityKit on macOS 27 or later,
 with `RealityView` as the live host and `RealityRenderer` limited to offscreen
 GPU verification. A mounted native surface or capability probe alone does not
@@ -23,7 +23,7 @@ never source authority.
 resources, entities, camera application, materials, and native input queries.
 RK-3 completed the native world-rendering cutover and RK-4 moved input
 authority to the mounted frame. The legacy identity GPU readback backend was
-removed by RK-5.1; RK-5 removes what remains of the migration-only code
+removed by RK-5.1; RK-5 removed what remained of the migration-only code
 before RK-IV integration.
 
 RK-CLEAN-1 retires the now-unreferenced `MTKView` surface host, fixed Canvas
@@ -2300,5 +2300,5 @@ tests and native GPU measurements.
 Changes to `UniversalViewportScene`, frame identity, camera projection,
 provenance, resource limits, or native RealityKit availability require checking
 the parent package/system designs, `RealityViewport`, `ViewportMeasurement`,
-and the application composition. RK-5 owns removal of the remaining
+and the application composition. RK-5 owned removal of the remaining
 migration-only routes; no CPU or offscreen test implies that removal.
