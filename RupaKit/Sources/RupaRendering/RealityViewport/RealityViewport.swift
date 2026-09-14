@@ -484,10 +484,11 @@ final class RealityViewport {
         do {
             let start = ContinuousClock.now
             let signposter = ViewportResponsivenessSignposts.signposter
-            let interval = signposter.beginInterval("NativeLineUpload", id: signposter.makeSignpostID())
+            let uploadName = ViewportResponsivenessSignposts.nativeLineUploadName
+            let interval = signposter.beginInterval(uploadName, id: signposter.makeSignpostID())
             defer {
                 maximumNativeUploadDuration = max(maximumNativeUploadDuration, start.duration(to: .now))
-                signposter.endInterval("NativeLineUpload", interval)
+                signposter.endInterval(uploadName, interval)
             }
             var descriptor = LowLevelMesh.Descriptor()
             descriptor.vertexCapacity = geometry.positions.count

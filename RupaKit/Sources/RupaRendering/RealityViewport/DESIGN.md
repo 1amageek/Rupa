@@ -5,9 +5,9 @@
 `RealityViewport` is the `RupaRendering` child that owns the native RealityKit
 surface, camera, materials, collision resources, and stable-ID lookup metadata
 for one mounted viewport. Production mounts surfaces, grid, and world overlays
-through `RealityViewportView`. The legacy identity renderer remains an active
-picking route until RK-4; RK-5 removes the obsolete backend and RK-IV verifies
-the complete cutover.
+through `RealityViewportView`, which answers every picking query from the
+mounted frame. The legacy identity renderer was removed by RK-5.1 and the
+retired surface encoder by RK-5.2; RK-IV verifies the complete cutover.
 `RealityRenderer` remains offscreen GPU evidence and does not by itself prove
 the complete production cutover.
 

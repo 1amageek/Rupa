@@ -6,18 +6,18 @@ import OSLog
 ///
 /// The table charges two `MainActor` intervals to a frame: the presentation
 /// plan publication the cache performs when a completed plan reaches its
-/// observable state, and grid/overlay Canvas and native surface encoding. Plan
-/// construction is not one of them, because it runs off `MainActor`. Both are
-/// emitted under one subsystem and category so a single `xctrace` or
+/// observable state, and the SDK-required `LowLevelMesh` construction and
+/// scoped buffer copy the mounted frame performs for one native line payload.
+/// Plan construction is not one of them, because it runs off `MainActor`. Both
+/// are emitted under one subsystem and category so a single `xctrace` or
 /// Instruments filter selects them together.
 ///
 /// The offline harness in `RupaResponsivenessBaseline` measures neither
-/// interval as the application pays it: its publication figure excludes the
-/// observation invalidation a live SwiftUI scope adds, and its native surface figure
-/// excludes the grid/overlay submissions a live `GraphicsContext` performs.
-/// Both are therefore lower bounds of the intervals recorded here. A harness
-/// rejection stays valid for the application, while a harness acceptance does
-/// not.
+/// interval as the application pays it: it cannot bring up a mounted frame, so
+/// it performs no native upload at all, and its publication figure excludes the
+/// observation invalidation a live SwiftUI scope adds. That figure is therefore
+/// a lower bound of the interval recorded here. A harness rejection stays valid
+/// for the application, while a harness acceptance does not.
 enum ViewportResponsivenessSignposts {
     /// The subsystem an Instruments filter selects.
     static let subsystem = "RupaRendering"
@@ -28,8 +28,9 @@ enum ViewportResponsivenessSignposts {
     /// The interval covering one presentation plan publication.
     static let planPublicationName: StaticString = "PresentationPlanPublication"
 
-    /// The interval covering one Canvas consumption of the published plan.
-    static let canvasConsumptionName: StaticString = "ViewportCanvasConsumption"
+    /// The interval covering the SDK-required `LowLevelMesh` construction and
+    /// scoped buffer copy for one native line payload.
+    static let nativeLineUploadName: StaticString = "NativeLineUpload"
 
     static let signposter = OSSignposter(subsystem: subsystem, category: category)
 
@@ -43,19 +44,5 @@ enum ViewportResponsivenessSignposts {
         )
         defer { signposter.endInterval(planPublicationName, state) }
         return body()
-    }
-
-    /// Opens the Canvas consumption interval. The interval is opened and closed
-    /// separately rather than wrapped, because the Canvas renderer receives an
-    /// `inout GraphicsContext` that cannot cross a generic closure boundary.
-    static func beginCanvasConsumption() -> OSSignpostIntervalState {
-        signposter.beginInterval(
-            canvasConsumptionName,
-            id: signposter.makeSignpostID()
-        )
-    }
-
-    static func endCanvasConsumption(_ state: OSSignpostIntervalState) {
-        signposter.endInterval(canvasConsumptionName, state)
     }
 }

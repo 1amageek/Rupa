@@ -5,9 +5,10 @@
 `RupaRendering` owns the bounded, postpublication presentation contract for one
 immutable viewport snapshot. Production `RealityViewportView` supplies the
 RealityKit surface, native camera, grid, and world overlays. SwiftUI `Canvas`
-is limited to nonspatial selection chrome, while the legacy identity renderer
-still supplies the picking routes owned by RK-4; RK-5 removes that backend and
-the remaining migration-only code before RK-IV integration. The target uses
+draws only two-dimensional screen chrome: the selection rectangle and the axis
+triad. The legacy identity picking backend was removed by RK-5.1 and the
+retired surface encoder by RK-5.2; RK-5 removes the remaining migration-only
+code before RK-IV integration verifies the complete cutover. The target uses
 RealityKit on macOS 27 or later,
 with `RealityView` as the live host and `RealityRenderer` limited to offscreen
 GPU verification. A mounted native surface or capability probe alone does not
@@ -20,16 +21,17 @@ never source authority.
 [`ViewportMeasurement`](ViewportMeasurement/DESIGN.md), and the new
 [`RealityViewport`](RealityViewport/DESIGN.md) component owns native scene
 resources, entities, camera application, materials, and native input queries.
-RK-3 completed the native world-rendering cutover. The remaining migration
-boundary is input authority: legacy identity GPU readback remains active until
-RK-4, and its backend is removed by RK-5 before RK-IV integration.
+RK-3 completed the native world-rendering cutover and RK-4 moved input
+authority to the mounted frame. The legacy identity GPU readback backend was
+removed by RK-5.1; RK-5 removes what remains of the migration-only code
+before RK-IV integration.
 
 RK-CLEAN-1 retires the now-unreferenced `MTKView` surface host, fixed Canvas
 grid renderer, and private Canvas world-drawing roots that RK-3 replaced with
-production `RealityViewportView`. The nonspatial selection rectangle and its
-live input/layout helpers remain, as do the legacy identity-input paths until
-RK-4 and RK-5 replace them; this retirement therefore does not claim that every
-legacy backend has already been removed.
+production `RealityViewportView`. The two-dimensional selection rectangle and
+its live input/layout helpers remain. The legacy identity-input paths that
+retirement did not claim to remove were removed by RK-5.1; RK-5.5 still owns
+the unreachable screen-hit picking API.
 
 ## Responsibilities and Boundaries
 
@@ -2297,5 +2299,5 @@ tests and native GPU measurements.
 Changes to `UniversalViewportScene`, frame identity, camera projection,
 provenance, resource limits, or native RealityKit availability require checking
 the parent package/system designs, `RealityViewport`, `ViewportMeasurement`,
-and the application composition. Removal of old Metal/Canvas routes is owned by
-the later migration sprint and is not implied by a CPU or offscreen test.
+and the application composition. RK-5 owns removal of the remaining
+migration-only routes; no CPU or offscreen test implies that removal.
