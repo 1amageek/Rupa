@@ -135,7 +135,7 @@ struct ViewportConstructionPlaneHandleTarget: Equatable {
     }
 }
 
-struct ViewportConstructionPlaneHandleIdentity: Equatable, Sendable {
+struct ViewportConstructionPlaneHandleIdentity: Hashable, Sendable {
     var constructionPlaneID: ConstructionPlaneSourceID
     var sceneNodeID: SceneNodeID
     var handle: ViewportConstructionPlaneHandleKind

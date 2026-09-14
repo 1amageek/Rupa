@@ -527,6 +527,22 @@ grid in SwiftUI. Recoverable grid failure retains the readout with the previous
 complete grid and reports the failure separately; hiding the grid clears it. A valid
 view with no forward grid-plane intersection explicitly disables only the grid;
 a partially visible plane retains the bounded partial-coverage rule.
+
+The same coalesced task carries one more value for SwiftUI overlays whose
+screen position is owned by the frame rather than by the document: the camera
+revision `applyCamera` last installed. A SwiftUI body runs before that call,
+so a body-time reading of the applied revision is one revision behind, and a
+non-observable native surface cannot invalidate the body on its own. The mount
+therefore reports the applied revision through its own optional receiver,
+recorded at report time beside the status values and carried on every report,
+so an orbit that changes no status still republishes the frame position. It
+carries no change guard of its own: reusing a native surface for a new
+preparation can leave the revision equal while the frame's prepared content
+differs, and the mount cannot tell those apart. The receiver never enters the
+status or grid seams, and a withdrawn camera reports the absence rather than a
+stale revision. Deduplication belongs to the receiver, which publishes only
+when its own derived content changes.
+
 The resource owner reuses the frame-local native `CameraProjection` to project
 and place that grid. It does not call the surface-bounds-dependent
 `RealityViewport.cameraRay`, fabricate geometry or bounds for an empty scene,

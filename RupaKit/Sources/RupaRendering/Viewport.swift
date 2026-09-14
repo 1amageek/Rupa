@@ -58,6 +58,7 @@ public struct Viewport: View {
     @State private var pendingInteractionTarget: ViewportInteractionTarget?
     @State private var pendingNativeAffordance: ViewportNativeAffordanceClaim?
     @State private var hoveredNativeHandleIdentity: ViewportSpatialHandleIdentity?
+    @State private var constructionPlaneHandleMarkers: [ViewportConstructionPlaneHandleMarker] = []
     @State private var nativeInputGesture: NativeInputGesture?
 
     private struct NativeAxisPress {
@@ -657,6 +658,30 @@ public struct Viewport: View {
                                 gridFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
                                 nativeGridReadout = readout.map { (ObjectIdentifier(presentationSurface), $0) }
                             },
+                            onAppliedFrameRevision: { revision in
+                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                                guard let revision else {
+                                    constructionPlaneHandleMarkers = []
+                                    return
+                                }
+                                do {
+                                    let markers = try ViewportConstructionPlaneHandleMarkerResolver.resolve(
+                                        planCache: presentationPlanCache,
+                                        identity: preparationIdentity,
+                                        revision: revision
+                                    )
+                                    if constructionPlaneHandleMarkers != markers {
+                                        constructionPlaneHandleMarkers = markers
+                                    }
+                                } catch {
+                                    constructionPlaneHandleMarkers = []
+                                    let failure = (error as? MeshSourcePresentationRenderError)
+                                        ?? MeshSourcePresentationRenderError(
+                                            code: .failed, message: error.localizedDescription
+                                        )
+                                    surfaceFailure = (ObjectIdentifier(presentationSurface), failure)
+                                }
+                            },
                             onUpdateResult: { error in
                                 guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
                                 surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
@@ -694,7 +719,7 @@ public struct Viewport: View {
                     selectionAffordanceAccessibilityMarker
                 }
                 .overlay {
-                    constructionPlaneHandleAccessibilityMarkers(layout: sceneContext.layout)
+                    constructionPlaneHandleAccessibilityMarkers
                 }
                 .overlay {
                     if let gridReadout { gridAccessibilityMarkers(readout: gridReadout) }
@@ -1066,48 +1091,34 @@ public struct Viewport: View {
         }
     }
 
-    @ViewBuilder private func constructionPlaneHandleAccessibilityMarkers(
-        layout: ViewportLayout
-    ) -> some View {
+    /// Marks the construction-plane handles the mounted frame drew.
+    ///
+    /// The screen points come from `constructionPlaneHandleMarkers`, which the
+    /// applied-frame receiver resolves against the frame that drew the
+    /// handles. The gate matches the one that registers the prepared records,
+    /// so an uninteractive plane publishes neither a handle nor a marker.
+    @ViewBuilder private var constructionPlaneHandleAccessibilityMarkers: some View {
         if onConstructionPlaneHandleDrag != nil {
-            let targets = ViewportConstructionPlaneHandleGeometry().targets(
-                document: document,
-                ruler: workspaceRuler,
-                selection: selection,
-                layout: layout
-            )
-            ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
-                let point = constructionPlaneHandleMarkerPoint(target)
+            ForEach(constructionPlaneHandleMarkers, id: \.identity) { marker in
                 Rectangle()
                     .fill(Color.clear)
                     .frame(width: 24.0, height: 24.0)
-                    .position(point)
+                    .position(marker.point)
                     .accessibilityElement(children: .ignore)
                     .accessibilityIdentifier(
-                        "CanvasConstructionPlaneHandle.\(target.handle.rawValue)"
+                        "CanvasConstructionPlaneHandle.\(marker.identity.handle.rawValue)"
                     )
-                    .accessibilityLabel(constructionPlaneHandleAccessibilityLabel(target))
-                    .accessibilityValue(constructionPlaneHandleAccessibilityValue(target))
+                    .accessibilityLabel(constructionPlaneHandleAccessibilityLabel(marker))
+                    .accessibilityValue(constructionPlaneHandleAccessibilityValue(marker))
                     .allowsHitTesting(false)
             }
         }
     }
 
-    private func constructionPlaneHandleMarkerPoint(
-        _ target: ViewportConstructionPlaneHandleTarget
-    ) -> CGPoint {
-        switch target.handle {
-        case .origin:
-            return target.projectedOrigin
-        case .normal:
-            return target.projectedNormalEnd
-        }
-    }
-
     private func constructionPlaneHandleAccessibilityLabel(
-        _ target: ViewportConstructionPlaneHandleTarget
+        _ marker: ViewportConstructionPlaneHandleMarker
     ) -> String {
-        switch target.handle {
+        switch marker.identity.handle {
         case .origin:
             return "Construction plane origin handle"
         case .normal:
@@ -1116,20 +1127,20 @@ public struct Viewport: View {
     }
 
     private func constructionPlaneHandleAccessibilityValue(
-        _ target: ViewportConstructionPlaneHandleTarget
+        _ marker: ViewportConstructionPlaneHandleMarker
     ) -> String {
-        switch target.handle {
+        switch marker.identity.handle {
         case .origin:
             return [
-                "x \(accessibilityNumber(target.origin.x))",
-                "y \(accessibilityNumber(target.origin.y))",
-                "z \(accessibilityNumber(target.origin.z))",
+                "x \(accessibilityNumber(marker.origin.x))",
+                "y \(accessibilityNumber(marker.origin.y))",
+                "z \(accessibilityNumber(marker.origin.z))",
             ].joined(separator: ", ")
         case .normal:
             return [
-                "x \(accessibilityNumber(target.normal.x))",
-                "y \(accessibilityNumber(target.normal.y))",
-                "z \(accessibilityNumber(target.normal.z))",
+                "x \(accessibilityNumber(marker.normal.x))",
+                "y \(accessibilityNumber(marker.normal.y))",
+                "z \(accessibilityNumber(marker.normal.z))",
             ].joined(separator: ", ")
         }
     }

@@ -20,6 +20,12 @@ struct RealityViewportView: View {
     var gridRuler: RulerConfiguration? = nil
     var gridSpacing: ViewportGridVisualSpacingMode = .adaptive
     var onGridUpdateResult: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)? = nil
+    /// Receives the camera revision this mount last installed, or its absence.
+    ///
+    /// Overlays whose screen position belongs to the frame need it because a
+    /// SwiftUI body runs before `applyCamera` and the surface is not
+    /// observable, so nothing else republishes the applied frame on an orbit.
+    var onAppliedFrameRevision: ((UInt64?) -> Void)? = nil
     let onUpdateResult: (MeshSourcePresentationRenderError?) -> Void
     @State private var mount = Mount()
     @Environment(\.displayScale) private var displayScale
@@ -60,7 +66,8 @@ struct RealityViewportView: View {
             mount.schedule(in: content, viewport: viewport,
                            safeRect: layout.fittingInsets.fittingRect(in: layout.viewportSize),
                            excludedRects: excludedRects, gridRuler: gridRuler, gridSpacing: gridSpacing,
-                           callback: onUpdateResult, gridCallback: onGridUpdateResult)
+                           callback: onUpdateResult, gridCallback: onGridUpdateResult,
+                           revisionCallback: onAppliedFrameRevision)
             if canUpdateSynchronously {
                 mount.updatePending()
             } else {
@@ -71,7 +78,9 @@ struct RealityViewportView: View {
             let failure = (error as? MeshSourcePresentationRenderError)
                 ?? MeshSourcePresentationRenderError(code: .failed, message: error.localizedDescription)
             mount.report(failure, gridError: nil, gridReadout: nil,
-                         callback: onUpdateResult, gridCallback: onGridUpdateResult)
+                         appliedRevision: viewport.appliedViewportRevision,
+                         callback: onUpdateResult, gridCallback: onGridUpdateResult,
+                         revisionCallback: onAppliedFrameRevision)
         }
     }
 
@@ -82,7 +91,10 @@ struct RealityViewportView: View {
         private var lastError: MeshSourcePresentationRenderError?
         private var lastGridError: MeshSourcePresentationRenderError?
         private var lastGridReadout: ViewportProjectedGrid.ScaleReadout?
+        private var lastAppliedRevision: UInt64?
         private var hasReported = false
+        private var reportsStatus = false
+        private var reportsRevision = false
         private var reportTask: Task<Void, Never>?
         private var frameSubscription: EventSubscription?
         private var pending: (() -> Bool)?
@@ -97,7 +109,8 @@ struct RealityViewportView: View {
                       safeRect: CGRect, excludedRects: [CGRect], gridRuler: RulerConfiguration?,
                       gridSpacing: ViewportGridVisualSpacingMode,
                       callback: @escaping (MeshSourcePresentationRenderError?) -> Void,
-                      gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?) {
+                      gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?,
+                      revisionCallback: ((UInt64?) -> Void)?) {
             pending = { [weak self] in
                 guard let self, current === viewport,
                       viewport.isBound(to: ObjectIdentifier(self)) else { return true }
@@ -106,18 +119,26 @@ struct RealityViewportView: View {
                                                                 gridRuler: gridRuler, gridSpacing: gridSpacing)
                     viewport.setPresentationEnabled(true)
                     report(nil, gridError: error, gridReadout: viewport.gridScaleReadout,
-                           callback: callback, gridCallback: gridCallback)
+                           appliedRevision: viewport.appliedViewportRevision,
+                           callback: callback, gridCallback: gridCallback,
+                           revisionCallback: revisionCallback)
                     return true
                 } catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable {
                     viewport.setPresentationEnabled(false)
                     report(.init(code: .failed, message: "Waiting for the mounted native camera projection."),
-                           gridError: nil, gridReadout: nil, callback: callback, gridCallback: gridCallback)
+                           gridError: nil, gridReadout: nil,
+                           appliedRevision: viewport.appliedViewportRevision,
+                           callback: callback, gridCallback: gridCallback,
+                           revisionCallback: revisionCallback)
                     return false
                 } catch {
                     viewport.invalidateCamera()
                     let failure = (error as? MeshSourcePresentationRenderError)
                         ?? MeshSourcePresentationRenderError(code: .failed, message: error.localizedDescription)
-                    report(failure, gridError: nil, gridReadout: nil, callback: callback, gridCallback: gridCallback)
+                    report(failure, gridError: nil, gridReadout: nil,
+                           appliedRevision: viewport.appliedViewportRevision,
+                           callback: callback, gridCallback: gridCallback,
+                           revisionCallback: revisionCallback)
                     return true
                 }
             }
@@ -130,21 +151,43 @@ struct RealityViewportView: View {
             }
         }
 
+        /// Coalesces the status values and the applied camera revision.
+        ///
+        /// The status values keep their own change guard. The applied revision
+        /// has none, because the same revision can belong to a different
+        /// prepared frame after a surface is reused, and the mount cannot tell
+        /// those apart; its receiver deduplicates on the content it derives.
+        /// A pending notification survives the cancellation of its task
+        /// because both flags live on the mount, not in the closure.
         func report(_ error: MeshSourcePresentationRenderError?, gridError: MeshSourcePresentationRenderError?,
-                    gridReadout: ViewportProjectedGrid.ScaleReadout?,
+                    gridReadout: ViewportProjectedGrid.ScaleReadout?, appliedRevision: UInt64?,
                     callback: @escaping (MeshSourcePresentationRenderError?) -> Void,
-                    gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?) {
-            guard !hasReported || error != lastError || gridError != lastGridError || gridReadout != lastGridReadout else { return }
-            hasReported = true
-            lastError = error
-            lastGridError = gridError
-            lastGridReadout = gridReadout
+                    gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?,
+                    revisionCallback: ((UInt64?) -> Void)?) {
+            let statusChanged = !hasReported || error != lastError
+                || gridError != lastGridError || gridReadout != lastGridReadout
+            if statusChanged {
+                hasReported = true
+                lastError = error
+                lastGridError = gridError
+                lastGridReadout = gridReadout
+                reportsStatus = true
+            }
+            lastAppliedRevision = appliedRevision
+            reportsRevision = true
             reportTask?.cancel()
             reportTask = Task { @MainActor [weak self] in
                 guard !Task.isCancelled, let self,
                       current?.isBound(to: ObjectIdentifier(self)) == true else { return }
-                callback(error)
-                gridCallback?(gridError, gridReadout)
+                let deliversStatus = reportsStatus
+                let deliversRevision = reportsRevision
+                reportsStatus = false
+                reportsRevision = false
+                if deliversStatus {
+                    callback(lastError)
+                    gridCallback?(lastGridError, lastGridReadout)
+                }
+                if deliversRevision { revisionCallback?(lastAppliedRevision) }
             }
         }
 
@@ -157,9 +200,12 @@ struct RealityViewportView: View {
             current?.unbind(owner: ObjectIdentifier(self))
             current = nil
             hasReported = false
+            reportsStatus = false
+            reportsRevision = false
             lastError = nil
             lastGridError = nil
             lastGridReadout = nil
+            lastAppliedRevision = nil
         }
     }
 }

@@ -361,6 +361,25 @@ final class MeshSourcePresentationPlanCache {
         return current.interactionRecords[Int(index)]
     }
 
+    /// Every prepared interaction record of the frame that answers for `identity`.
+    ///
+    /// Overlays that mark where the frame drew a native handle enumerate the
+    /// records under the same guard `interactionRecord(at:for:)` uses, so an
+    /// enumeration and an index lookup can never name different frames. The
+    /// caller decides readiness with `hasReadyCamera(for:revision:)` before
+    /// projecting anything; a throw here means no frame answers at all.
+    func interactionRecords(
+        for identity: RealityViewportPreparationRequest.Identity
+    ) throws -> [ViewportSpatialInteractionRecord] {
+        let surface = try querySurface(for: identity)
+        guard let current, current.surface === surface else {
+            throw notReadyFailure(
+                "The native interaction records are unavailable before the prepared frame is retained."
+            )
+        }
+        return current.interactionRecords
+    }
+
     /// The failure recorded for this identity, or `nil` when the current state is not
     /// a failure that belongs to this scene identity.
     func failure(for identity: RealityViewportPreparationRequest.Identity) -> MeshSourcePresentationRenderError? {

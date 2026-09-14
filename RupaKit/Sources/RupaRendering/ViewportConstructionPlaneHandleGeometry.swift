@@ -2,6 +2,17 @@ import CoreGraphics
 import RupaCore
 import RupaViewportScene
 
+/// Projects the construction-plane handles with `ViewportLayout`.
+///
+/// No production caller remains: the accessibility markers now read the
+/// mounted frame through `ViewportConstructionPlaneHandleMarkerResolver`, and
+/// press, hover, and drag read the prepared records. The only remaining
+/// caller is `ViewportConstructionPlaneHandleGeometryTests`. Deletion belongs
+/// to RK-5, which already owns the other retired legacy projection and pick
+/// entry points, because it also has to retire the source and test paths this
+/// file contributes to the construction-plane evidence list in
+/// `CADInteractionQualityAssessmentService`.
+@available(*, deprecated, message: "Read the mounted frame through ViewportConstructionPlaneHandleMarkerResolver.")
 struct ViewportConstructionPlaneHandleGeometry: Sendable {
     func targets(
         document: DesignDocument,
