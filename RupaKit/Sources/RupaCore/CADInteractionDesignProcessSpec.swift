@@ -258,7 +258,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("non-source-owned-arc-edge-move", "Generated arc edge movement rejects when it cannot resolve to a source-owned line-arc-line profile corner.", .rejected, .core),
                 ],
                 performanceCases: [
-                    caseItem("identity-picking-budget", "Identity picking and direct-edit previews need production-scene budgets.", .planned, .measurement),
+                    caseItem("mounted-frame-picking-budget", "Mounted-frame picking and direct-edit previews need production-scene budgets.", .planned, .measurement),
                 ],
                 surfaces: RouteSurface(
                     documentation: "Direct modeling reference",
@@ -497,13 +497,13 @@ struct CADInteractionDesignProcessSpec: Sendable {
         case .selection:
             CADInteractionDesignProcessSpec(
                 capabilityTitle: "Object, face, edge, vertex, region, and sketch selection",
-                sourceEntities: ["selection target", "selection component", "identity-buffer ID", "persistent topology name"],
+                sourceEntities: ["selection target", "selection component", "mounted frame native hit", "persistent topology name"],
                 targetEntities: ["selection state", "hover state", "selection diagnostic"],
                 generatedTopology: ["generated face", "generated edge", "generated vertex", "sketch region"],
-                tolerances: ["hit-test screen tolerance", "depth tie-break tolerance", "identity render budget"],
+                tolerances: ["hit-test screen tolerance", "depth tie-break tolerance", "mounted frame query budget"],
                 ownershipBoundaries: ["RupaRendering resolves hits", "RupaCore owns SelectionTarget semantics", "Agent consumes selection readback"],
                 supportedCases: [
-                    caseItem("identity-picking", "Identity-buffer and CPU fallback selection routes report backend and hit targets.", .supported, .ui),
+                    caseItem("mounted-frame-picking", "The mounted frame answers point and rectangle selection and reports the resolved hit targets.", .supported, .ui),
                     caseItem("subobject-selection", "Object, face, edge, vertex, region, and sketch entity scopes share SelectionTarget conversion.", .supported, .core),
                 ],
                 boundaryCases: [
@@ -513,10 +513,10 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("overlapping-depth", "Overlapping generated candidates use view-depth tie-breaks.", .supported, .ui),
                 ],
                 rejectedCases: [
-                    caseItem("zero-identity-id", "Zero identity-buffer IDs cannot represent selectable topology.", .rejected, .ui),
+                    caseItem("unmounted-frame-query", "A query with no mounted frame for the requested presentation identity is a typed failure, not a fallback hit.", .rejected, .ui),
                 ],
                 performanceCases: [
-                    caseItem("identity-buffer-production-budget", "Identity-buffer budgets must be calibrated against production scenes.", .planned, .measurement),
+                    caseItem("mounted-frame-production-budget", "Mounted-frame query budgets must be calibrated against production scenes.", .planned, .measurement),
                 ],
                 surfaces: RouteSurface(
                     documentation: "Selection architecture",
@@ -528,14 +528,14 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     kernel: "Generated topology references",
                     evaluation: "Topology summary evaluation",
                     measurement: "Selection measurement readback",
-                    diagnostics: "Picking readiness diagnostics"
+                    diagnostics: "Mounted-frame query diagnostics"
                 ),
                 invariants: [
                     invariant("selection-stable-id", "Selection must use stable target references where possible.", .core),
-                    invariant("picking-budget-visible", "Identity render budget fallback must be visible before relying on exact picking.", .diagnostics),
+                    invariant("mounted-frame-refusal-visible", "A refused or unmounted frame must report that refusal instead of answering a partial selection.", .diagnostics),
                 ],
-                decisionConflictArea: "Picking backend and selection semantics",
-                decisionRationale: "Viewport hit resolution can vary by backend, but the resulting SelectionTarget contract must remain stable."
+                decisionConflictArea: "Mounted-frame query authority and selection semantics",
+                decisionRationale: "Viewport hit resolution is answered only by the mounted frame, and the resulting SelectionTarget contract stays stable across presentations."
             )
         case .sweep:
             CADInteractionDesignProcessSpec(
@@ -713,15 +713,15 @@ struct CADInteractionDesignProcessSpec: Sendable {
             )
         case .performance:
             CADInteractionDesignProcessSpec(
-                capabilityTitle: "Evaluation reuse, identity picking budgets, and zero-copy-oriented display paths",
-                sourceEntities: ["evaluated document cache", "identity pick render plan", "mesh summary", "analysis result"],
+                capabilityTitle: "Evaluation reuse, mounted-frame query budgets, and zero-copy-oriented display paths",
+                sourceEntities: ["evaluated document cache", "mounted presentation plan", "mesh summary", "analysis result"],
                 targetEntities: ["reuse context", "performance diagnostic", "budget rejection"],
-                generatedTopology: ["cached evaluated body", "identity buffer", "render metrics", "analysis samples"],
-                tolerances: ["cache fingerprint tolerance", "identity buffer budget", "analysis density budget"],
-                ownershipBoundaries: ["RupaCore owns evaluation cache validity", "RupaRendering owns identity-buffer metrics", "Agent reads diagnostics"],
+                generatedTopology: ["cached evaluated body", "mounted frame plan cache entry", "render metrics", "analysis samples"],
+                tolerances: ["cache fingerprint tolerance", "mounted frame query budget", "analysis density budget"],
+                ownershipBoundaries: ["RupaCore owns evaluation cache validity", "RupaRendering owns mounted-frame query metrics", "Agent reads diagnostics"],
                 supportedCases: [
                     caseItem("evaluation-context-reuse", "Evaluation context reuse checks generation and CAD source fingerprint.", .supported, .core),
-                    caseItem("identity-picking-budget-report", "Identity picking reports render cost and budget fallback diagnostics.", .supported, .ui),
+                    caseItem("mounted-frame-budget-report", "Mounted-frame selection reports query cost and refusal diagnostics.", .supported, .ui),
                 ],
                 boundaryCases: [
                     caseItem("enforced-dense-budget", "Dense-model budgets are not yet enforced by regression fixtures.", .planned, .measurement),
@@ -737,7 +737,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 ],
                 surfaces: RouteSurface(
                     documentation: "Performance and exchange roadmap",
-                    ui: "Picking readiness and Inspector diagnostics",
+                    ui: "Mounted-frame query diagnostics in the Inspector",
                     core: "Evaluation context cache",
                     automation: "Performance-aware readback commands",
                     agent: "Performance diagnostics readback",
@@ -752,7 +752,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     invariant("budget-visible", "Budget fallback must be visible to UI and Agent diagnostics.", .diagnostics),
                 ],
                 decisionConflictArea: "Performance as a first-class CAD gate",
-                decisionRationale: "Dense CAD workflows cannot broaden safely until cache reuse, identity picking, and zero-copy paths have measurable budgets."
+                decisionRationale: "Dense CAD workflows cannot broaden safely until cache reuse, mounted-frame queries, and zero-copy paths have measurable budgets."
             )
         }
     }

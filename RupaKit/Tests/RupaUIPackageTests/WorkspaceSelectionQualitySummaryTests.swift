@@ -17,7 +17,7 @@ import Testing
         #expect(summary.ratingTitle == "Partial")
         #expect(summary.attentionGate == .viewportAffordance)
         #expect(summary.attentionGateTitle == "Viewport")
-        #expect(summary.nextRequiredResult.contains("identity-buffer"))
+        #expect(summary.nextRequiredResult.contains("mounted-frame"))
     }
 }
 

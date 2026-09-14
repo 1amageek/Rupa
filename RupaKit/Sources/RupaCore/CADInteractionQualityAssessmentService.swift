@@ -998,7 +998,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
-                        "Kernel-generated bridge, edit, offset, trim, extend, match, and projected curves share one evaluated viewport curve representation with visible polylines, CPU and identity-buffer object picking, rectangle selection, scene transforms, and feature-scene-node resolution; Project Curve is authored through the same Core EditorCommand transaction path.",
+                        "Kernel-generated bridge, edit, offset, trim, extend, match, and projected curves share one evaluated viewport curve representation with visible polylines, mounted-frame object picking, rectangle selection, scene transforms, and feature-scene-node resolution; Project Curve is authored through the same Core EditorCommand transaction path.",
                         "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, press-state isolation, exact line/arc/spline Value projection, and command-backed endpoint parameter drag commits through setBridgeCurveParameters.",
                         "Bridge Curve Inspector Show Curvature controls now target the generated bridge spline through the same CurveCurvatureDisplay contract used by generic source curves, while generic curve display controls are suppressed for bridge-generated spline selections to avoid duplicate ownership.",
                         "Bridge Curve Trim Side is now an endpoint-owned Core value that chooses the retained start-side or end-side source segment independently from Sense, so Sense only controls tangent direction and Agent/UI callers can operate the same explicit contract.",
@@ -1062,7 +1062,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         ),
         entry(
             area: .performance,
-            workflow: "Evaluation reuse, identity picking budgets, and zero-copy-oriented display paths",
+            workflow: "Evaluation reuse, mounted-frame query budgets, and zero-copy-oriented display paths",
             references: [
                 "Rupa/CAD_QUALITY_MILESTONES.md",
                 "swift-CAD/CAD_KERNEL_REQUIREMENTS.md",
