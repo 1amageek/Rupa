@@ -185,6 +185,13 @@ final class RealityViewport {
         spatialResources?.scaleReadout
     }
 
+    /// The bounds ruler axes the current native frame refused to place. It is
+    /// `nil` until a mounted frame answers, so callers never present an older
+    /// frame's placement or assume an unanswered axis is drawn.
+    var boundsRulerDisabledAxes: Set<ViewportMeasurementRulerAxis>? {
+        spatialResources?.disabledRulerAxes
+    }
+
     static func prepare(
         plan: MeshSourcePresentationRenderPlan?,
         spatialBatch: RealityViewportSpatialBatch?,

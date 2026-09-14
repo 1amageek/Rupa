@@ -631,23 +631,6 @@ struct ViewportMeasurementBoundsRulerLayout: Sendable {
         )
     }
 
-    func rulers(
-        for bounds: GeometryBounds3D,
-        layout: ViewportLayout,
-        displayUnit: LengthDisplayUnit,
-        safeRect: CGRect,
-        excludedRects: [CGRect]
-    ) -> [ViewportMeasurementBoundsRuler] {
-        let labels = preformattedLabels(for: bounds, displayUnit: displayUnit)
-        return placement(
-            for: bounds,
-            labels: labels,
-            project: { layout.projectedPoint($0)?.point },
-            safeRect: safeRect,
-            excludedRects: excludedRects
-        ).rulers
-    }
-
     private func projectBounds(
         _ bounds: GeometryBounds3D,
         project: (Point3D) -> CGPoint?

@@ -20,6 +20,9 @@ struct RealityViewportView: View {
     var gridRuler: RulerConfiguration? = nil
     var gridSpacing: ViewportGridVisualSpacingMode = .adaptive
     var onGridUpdateResult: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)? = nil
+    /// Receives the bounds ruler axes this mount's frame refused to place, or
+    /// their absence while no mounted frame has placed them.
+    var onBoundsRulerUpdateResult: ((Set<ViewportMeasurementRulerAxis>?) -> Void)? = nil
     /// Receives the camera revision this mount last installed, or its absence.
     ///
     /// Overlays whose screen position belongs to the frame need it because a
@@ -67,6 +70,7 @@ struct RealityViewportView: View {
                            safeRect: layout.fittingInsets.fittingRect(in: layout.viewportSize),
                            excludedRects: excludedRects, gridRuler: gridRuler, gridSpacing: gridSpacing,
                            callback: onUpdateResult, gridCallback: onGridUpdateResult,
+                           boundsRulerCallback: onBoundsRulerUpdateResult,
                            revisionCallback: onAppliedFrameRevision)
             if canUpdateSynchronously {
                 mount.updatePending()
@@ -77,9 +81,10 @@ struct RealityViewportView: View {
             viewport.invalidateCamera()
             let failure = (error as? MeshSourcePresentationRenderError)
                 ?? MeshSourcePresentationRenderError(code: .failed, message: error.localizedDescription)
-            mount.report(failure, gridError: nil, gridReadout: nil,
+            mount.report(failure, gridError: nil, gridReadout: nil, boundsRulerAxes: nil,
                          appliedRevision: viewport.appliedViewportRevision,
                          callback: onUpdateResult, gridCallback: onGridUpdateResult,
+                         boundsRulerCallback: onBoundsRulerUpdateResult,
                          revisionCallback: onAppliedFrameRevision)
         }
     }
@@ -91,6 +96,7 @@ struct RealityViewportView: View {
         private var lastError: MeshSourcePresentationRenderError?
         private var lastGridError: MeshSourcePresentationRenderError?
         private var lastGridReadout: ViewportProjectedGrid.ScaleReadout?
+        private var lastBoundsRulerAxes: Set<ViewportMeasurementRulerAxis>?
         private var lastAppliedRevision: UInt64?
         private var hasReported = false
         private var reportsStatus = false
@@ -110,6 +116,7 @@ struct RealityViewportView: View {
                       gridSpacing: ViewportGridVisualSpacingMode,
                       callback: @escaping (MeshSourcePresentationRenderError?) -> Void,
                       gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?,
+                      boundsRulerCallback: ((Set<ViewportMeasurementRulerAxis>?) -> Void)?,
                       revisionCallback: ((UInt64?) -> Void)?) {
             pending = { [weak self] in
                 guard let self, current === viewport,
@@ -119,25 +126,29 @@ struct RealityViewportView: View {
                                                                 gridRuler: gridRuler, gridSpacing: gridSpacing)
                     viewport.setPresentationEnabled(true)
                     report(nil, gridError: error, gridReadout: viewport.gridScaleReadout,
+                           boundsRulerAxes: viewport.boundsRulerDisabledAxes,
                            appliedRevision: viewport.appliedViewportRevision,
                            callback: callback, gridCallback: gridCallback,
+                           boundsRulerCallback: boundsRulerCallback,
                            revisionCallback: revisionCallback)
                     return true
                 } catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable {
                     viewport.setPresentationEnabled(false)
                     report(.init(code: .failed, message: "Waiting for the mounted native camera projection."),
-                           gridError: nil, gridReadout: nil,
+                           gridError: nil, gridReadout: nil, boundsRulerAxes: nil,
                            appliedRevision: viewport.appliedViewportRevision,
                            callback: callback, gridCallback: gridCallback,
+                           boundsRulerCallback: boundsRulerCallback,
                            revisionCallback: revisionCallback)
                     return false
                 } catch {
                     viewport.invalidateCamera()
                     let failure = (error as? MeshSourcePresentationRenderError)
                         ?? MeshSourcePresentationRenderError(code: .failed, message: error.localizedDescription)
-                    report(failure, gridError: nil, gridReadout: nil,
+                    report(failure, gridError: nil, gridReadout: nil, boundsRulerAxes: nil,
                            appliedRevision: viewport.appliedViewportRevision,
                            callback: callback, gridCallback: gridCallback,
+                           boundsRulerCallback: boundsRulerCallback,
                            revisionCallback: revisionCallback)
                     return true
                 }
@@ -160,17 +171,21 @@ struct RealityViewportView: View {
         /// A pending notification survives the cancellation of its task
         /// because both flags live on the mount, not in the closure.
         func report(_ error: MeshSourcePresentationRenderError?, gridError: MeshSourcePresentationRenderError?,
-                    gridReadout: ViewportProjectedGrid.ScaleReadout?, appliedRevision: UInt64?,
+                    gridReadout: ViewportProjectedGrid.ScaleReadout?,
+                    boundsRulerAxes: Set<ViewportMeasurementRulerAxis>?, appliedRevision: UInt64?,
                     callback: @escaping (MeshSourcePresentationRenderError?) -> Void,
                     gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?,
+                    boundsRulerCallback: ((Set<ViewportMeasurementRulerAxis>?) -> Void)?,
                     revisionCallback: ((UInt64?) -> Void)?) {
             let statusChanged = !hasReported || error != lastError
                 || gridError != lastGridError || gridReadout != lastGridReadout
+                || boundsRulerAxes != lastBoundsRulerAxes
             if statusChanged {
                 hasReported = true
                 lastError = error
                 lastGridError = gridError
                 lastGridReadout = gridReadout
+                lastBoundsRulerAxes = boundsRulerAxes
                 reportsStatus = true
             }
             lastAppliedRevision = appliedRevision
@@ -186,6 +201,7 @@ struct RealityViewportView: View {
                 if deliversStatus {
                     callback(lastError)
                     gridCallback?(lastGridError, lastGridReadout)
+                    boundsRulerCallback?(lastBoundsRulerAxes)
                 }
                 if deliversRevision { revisionCallback?(lastAppliedRevision) }
             }
@@ -205,6 +221,7 @@ struct RealityViewportView: View {
             lastError = nil
             lastGridError = nil
             lastGridReadout = nil
+            lastBoundsRulerAxes = nil
             lastAppliedRevision = nil
         }
     }

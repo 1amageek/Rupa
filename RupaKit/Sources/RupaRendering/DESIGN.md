@@ -2017,8 +2017,19 @@ independent tessellator is never an alternative implementation.
     measurement layout recomputes collision-free placement from the mounted
     native project closure and current chrome safe/exclusion rectangles, then
     synchronously updates at most three fixed-capacity line meshes and labels.
-    An unplaceable axis is explicitly disabled. Its resources and every camera
-    point remain charged to the same aggregate item/position/byte admission. A
+    An unplaceable axis is explicitly disabled. That disabled set is the
+    mounted frame's published answer under contract 2, and its absence is the
+    distinct state in which the frame has not placed the rulers yet: a camera
+    whose projection is not ready withdraws the answer instead of reporting
+    every axis as hidden, so a retry is never reported as a refusal. The
+    automatic measurement readout consumes that published answer and never
+    recomputes placement from a `ViewportLayout` projection, so the frame that
+    draws the annotation is the only authority on whether an axis is drawn and
+    the readout names an axis hidden only once that frame has answered. A
+    placement that exceeds its admission disables every axis and reports a
+    presentation failure; that is a frame failure, not a readout failure. Its
+    resources and every camera point remain charged to the same aggregate
+    item/position/byte admission. A
     view-dependent `Path` is converted through native
     `MeshResource(extruding:extrusionOptions:)` and cached by stable geometry and
     style when possible. Native path/text generation is an overlay-revision

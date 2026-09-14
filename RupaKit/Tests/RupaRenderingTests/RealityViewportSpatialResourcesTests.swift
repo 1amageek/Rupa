@@ -233,7 +233,7 @@ struct RealityViewportSpatialResourcesTests {
                 #expect(abs(projected.y - ruler.labelRect.midY) < 0.1)
             }
             try prepared.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: [safeRect])
-            #expect(prepared.disabledRulerAxes.count == 3)
+            #expect(prepared.disabledRulerAxes?.count == 3)
             #expect(prepared.root.children.allSatisfy { !$0.isEnabled })
         }
         #expect(throws: MeshSourcePresentationRenderError.self) {
@@ -243,6 +243,69 @@ struct RealityViewportSpatialResourcesTests {
         #expect(prepared.root.children.allSatisfy { !$0.isEnabled })
         for (resource, previous) in zip(meshes(in: prepared.root), original) { #expect(resource === previous) }
         #expect(prepared.root.children.allSatisfy { $0.components[CollisionComponent.self] == nil })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func boundsRulerDisabledAxesSeparateRefusalFromUnpreparedProjection() async throws {
+        _ = NSApplication.shared
+        let bounds = try GeometryBounds3D(minimum: .init(x: -0.5, y: -0.5, z: -0.5),
+                                         maximum: .init(x: 0.5, y: 0.5, z: 0.5))
+        let labels = ViewportMeasurementBoundsRulerLabels(x: "World X", y: "World Y", z: "World Z")
+        let group = RealityViewportSpatialBatch.BoundsRulers(input: .init(bounds: bounds, labels: labels),
+                                                             heightPoints: 9, color: [1, 1, 1, 1])
+        let batch = try RealityViewportSpatialBatch(boundsRulers: group, renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let prepared = try await RealityViewportSpatialResources.prepare(batch: batch)
+        // Preparation places nothing, so the frame has not answered yet.
+        #expect(prepared.disabledRulerAxes == nil)
+        let camera = Entity()
+        camera.position.z = 5
+        var lens = OrthographicCameraComponent()
+        lens.scale = 4
+        lens.near = 0.01; lens.far = 100
+        camera.components.set(lens)
+        let capture = CameraCapture()
+        let controller = NSHostingController(rootView: RealityView { content in
+            content.camera = .virtual
+            content.add(camera)
+            content.add(prepared.root)
+            capture.content = content
+        }.frame(width: 800, height: 600))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer {
+            capture.content?.remove(prepared.root)
+            capture.content?.remove(camera)
+            capture.content = nil
+            window.contentViewController = nil
+            window.close()
+        }
+        let ready = ContinuousClock.now.advanced(by: .seconds(5))
+        while capture.content == nil, ContinuousClock.now < ready { try await Task.sleep(for: .milliseconds(10)) }
+        let content = try #require(capture.content)
+        let safeRect = CGRect(x: 10, y: 10, width: 780, height: 580)
+        let settle = ContinuousClock.now.advanced(by: .seconds(5))
+        while ContinuousClock.now < settle {
+            try prepared.updateCamera(camera: camera, content: content, safeRect: safeRect)
+            if let disabled = prepared.disabledRulerAxes,
+               disabled.count < ViewportMeasurementRulerAxis.allCases.count { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let placed = try #require(prepared.disabledRulerAxes)
+        #expect(placed.count < ViewportMeasurementRulerAxis.allCases.count)
+        // A camera without a lens has no projection. The frame withdraws its
+        // answer instead of reporting every axis as refused.
+        let lensless = Entity()
+        #expect(throws: RealityViewportSpatialResources.CameraReadinessError.self) {
+            try prepared.updateCamera(camera: lensless, content: content, safeRect: safeRect)
+        }
+        #expect(prepared.disabledRulerAxes == nil)
+        // An exclusion that covers the safe rect is a refusal, which is an
+        // answer about every axis rather than the absence of one.
+        try prepared.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: [safeRect])
+        #expect(prepared.disabledRulerAxes == Set(ViewportMeasurementRulerAxis.allCases))
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -298,10 +361,12 @@ struct RealityViewportSpatialResourcesTests {
         let settle = ContinuousClock.now.advanced(by: .seconds(5))
         while ContinuousClock.now < settle {
             try prepared.updateCamera(camera: camera, content: content, safeRect: safeRect)
-            if prepared.disabledRulerAxes.count < ViewportMeasurementRulerAxis.allCases.count { break }
+            if let disabled = prepared.disabledRulerAxes,
+               disabled.count < ViewportMeasurementRulerAxis.allCases.count { break }
             try await Task.sleep(for: .milliseconds(20))
         }
-        try #require(prepared.disabledRulerAxes.count < ViewportMeasurementRulerAxis.allCases.count)
+        let placed = try #require(prepared.disabledRulerAxes)
+        try #require(placed.count < ViewportMeasurementRulerAxis.allCases.count)
         let up = camera.orientation.act(SIMD3<Float>(0, 1, 0))
         for (index, axis) in ViewportMeasurementRulerAxis.allCases.enumerated() {
             let label = prepared.root.children[index * 2]

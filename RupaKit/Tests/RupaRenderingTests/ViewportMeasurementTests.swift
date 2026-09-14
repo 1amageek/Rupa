@@ -453,33 +453,31 @@ func viewportMeasurementBoundsRulersAreWorldLabeledAndBounded() throws {
         basis: .isometric,
         verticalBounds: -2.0...2.0
     )
-    let rulers = ViewportMeasurementBoundsRulerLayout().rulers(
-        for: bounds,
-        layout: layout,
-        displayUnit: .meter,
-        safeRect: CGRect(origin: .zero, size: layout.viewportSize),
-        excludedRects: []
-    )
+    let layoutEngine = ViewportMeasurementBoundsRulerLayout()
+    let labels = layoutEngine.preformattedLabels(for: bounds, displayUnit: .meter)
+    func placedRulers(excluding excludedRects: [CGRect]) -> [ViewportMeasurementBoundsRuler] {
+        layoutEngine.placement(
+            for: bounds,
+            labels: labels,
+            project: { layout.projectedPoint($0)?.point },
+            safeRect: CGRect(origin: .zero, size: layout.viewportSize),
+            excludedRects: excludedRects
+        ).rulers
+    }
+    let rulers = placedRulers(excluding: [])
 
     #expect(!rulers.isEmpty)
     #expect(rulers.count <= 3)
     #expect(rulers.allSatisfy { $0.label.hasPrefix("World bounds") })
     #expect(Set(rulers.map(\.axis)).count == rulers.count)
     #expect(rulers.allSatisfy { $0.labelRect.hasFiniteComponents })
-    let blocked = ViewportMeasurementBoundsRulerLayout().rulers(
-        for: bounds, layout: layout, displayUnit: .meter,
-        safeRect: CGRect(origin: .zero, size: layout.viewportSize),
-        excludedRects: [CGRect(origin: .zero, size: layout.viewportSize)]
-    )
+    let blocked = placedRulers(excluding: [CGRect(origin: .zero, size: layout.viewportSize)])
     #expect(blocked.isEmpty)
     let leaderBlockers = rulers.map { ruler in
         CGRect(x: (ruler.extensionStart.x + ruler.dimensionStart.x) / 2 - 2,
                y: (ruler.extensionStart.y + ruler.dimensionStart.y) / 2 - 2, width: 4, height: 4)
     }
-    let avoiding = ViewportMeasurementBoundsRulerLayout().rulers(
-        for: bounds, layout: layout, displayUnit: .meter,
-        safeRect: CGRect(origin: .zero, size: layout.viewportSize), excludedRects: leaderBlockers
-    )
+    let avoiding = placedRulers(excluding: leaderBlockers)
     for ruler in avoiding {
         for blocker in leaderBlockers {
             #expect(!MeshSourcePresentationScreenHitTester().segmentIntersectsRect(

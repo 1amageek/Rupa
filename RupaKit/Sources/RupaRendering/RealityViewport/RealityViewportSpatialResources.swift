@@ -85,7 +85,10 @@ final class RealityViewportSpatialResources {
     private(set) var collisionBounds: BoundingBox?
     private let surfacePositionCount: Int
     private let byteLimit: Int
-    private(set) var disabledRulerAxes: Set<ViewportMeasurementRulerAxis> = []
+    /// Bounds ruler axes the mounted frame refused to place. `nil` means
+    /// the frame has not placed the rulers yet, which a camera without a
+    /// ready projection restores; it never means every axis is drawn.
+    private(set) var disabledRulerAxes: Set<ViewportMeasurementRulerAxis>?
     private(set) var scaleReadout: ViewportProjectedGrid.ScaleReadout?
 
     /// True when the prepared batch admitted native grid resources, independent
@@ -1072,7 +1075,6 @@ final class RealityViewportSpatialResources {
                 result.root.addChild(label)
                 result.root.addChild(line)
                 result.boundsRulers.append((axis, label, line, mesh))
-                result.disabledRulerAxes.insert(axis)
             }
         }
         try Task.checkCancellation()
@@ -1150,9 +1152,10 @@ final class RealityViewportSpatialResources {
             }
             for (entity, _) in markers { entity.isEnabled = false }
             for (entity, _, _, _) in cameraLines { entity.isEnabled = false }
-            for (axis, label, line, _) in boundsRulers {
-                label.isEnabled = false; line.isEnabled = false; disabledRulerAxes.insert(axis)
+            for (_, label, line, _) in boundsRulers {
+                label.isEnabled = false; line.isEnabled = false
             }
+            disabledRulerAxes = nil
             disableAxes()
             hideGrid()
             throw CameraReadinessError.projectionUnavailable
@@ -1636,10 +1639,13 @@ final class RealityViewportSpatialResources {
     private func updateBoundsRulers(projection: CameraProjection,
                                     safeRect: CGRect, excludedRects: [CGRect]) throws {
         guard let group = batch.boundsRulers else { return }
-        for (axis, label, line, _) in boundsRulers {
+        // Every exit from here answers about all three axes, so a refusal is
+        // never published as the absence of an answer.
+        var disabled = Set(ViewportMeasurementRulerAxis.allCases)
+        defer { disabledRulerAxes = disabled }
+        for (_, label, line, _) in boundsRulers {
             label.isEnabled = false
             line.isEnabled = false
-            disabledRulerAxes.insert(axis)
         }
         guard excludedRects.count <= batch.limits.maxItemCount - preparedItemCount else {
             throw MeshSourcePresentationRenderError(code: .resourceExhausted,
@@ -1653,7 +1659,7 @@ final class RealityViewportSpatialResources {
                     return projection.project(native)
                 } catch { return nil }
             }, safeRect: safeRect, excludedRects: excludedRects)
-        disabledRulerAxes = layout.disabledAxes
+        disabled = layout.disabledAxes
         for ruler in layout.rulers {
             guard let (_, label, line, mesh) = boundsRulers.first(where: { $0.0 == ruler.axis }) else {
                 throw RealityViewportSpatialBatch.invalid("Bounds ruler placement references an unprepared axis.")
@@ -1669,7 +1675,7 @@ final class RealityViewportSpatialResources {
                   let labelPlacement = placement(anchor: midpoint,
                     offset: .fixed(CGPoint(x: ruler.labelRect.midX - projected.x, y: ruler.labelRect.midY - projected.y)),
                     projection: projection) else {
-                disabledRulerAxes.insert(ruler.axis)
+                disabled.insert(ruler.axis)
                 continue
             }
             var valid = true
@@ -1688,7 +1694,7 @@ final class RealityViewportSpatialResources {
                     bounds.formUnion(.init(min: value.position, max: value.position))
                 }
             }
-            guard valid else { disabledRulerAxes.insert(ruler.axis); continue }
+            guard valid else { disabled.insert(ruler.axis); continue }
             var part = mesh.parts[0]
             part.bounds = bounds
             mesh.parts[0] = part

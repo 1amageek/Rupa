@@ -148,6 +148,7 @@ public struct Viewport: View {
     @State private var overlayRevision = ViewportSpatialOverlayRevision()
     @State private var gridFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var nativeGridReadout: (rendererID: ObjectIdentifier, value: ViewportProjectedGrid.ScaleReadout)?
+    @State private var nativeBoundsRulerAxes: (rendererID: ObjectIdentifier, disabled: Set<ViewportMeasurementRulerAxis>)?
     @State private var baseSceneSnapshotCache = ViewportSceneSnapshotCache()
     @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
@@ -658,6 +659,10 @@ public struct Viewport: View {
                                 gridFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
                                 nativeGridReadout = readout.map { (ObjectIdentifier(presentationSurface), $0) }
                             },
+                            onBoundsRulerUpdateResult: { axes in
+                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                                nativeBoundsRulerAxes = axes.map { (ObjectIdentifier(presentationSurface), $0) }
+                            },
                             onAppliedFrameRevision: { revision in
                                 guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
                                 guard let revision else {
@@ -922,7 +927,7 @@ public struct Viewport: View {
                     resetMeasurement()
                 }
             }
-            .onChange(of: automaticMeasurementReadout(size: proxy.size), initial: true) { _, summary in
+            .onChange(of: automaticMeasurementReadout(), initial: true) { _, summary in
                 automaticMeasurementSummary = summary
                 publishMeasurementState()
             }
@@ -970,6 +975,7 @@ public struct Viewport: View {
                 surfaceFailure = nil
                 gridFailure = nil
                 nativeGridReadout = nil
+                nativeBoundsRulerAxes = nil
                 resetMeasurement()
             }
             .onChange(of: projectionRequest) { _, nextRequest in
@@ -2338,20 +2344,11 @@ public struct Viewport: View {
         publishMeasurementState()
     }
 
-    private func automaticMeasurementReadout(size: CGSize) -> String? {
+    private func automaticMeasurementReadout() -> String? {
         guard showsAutomaticMeasurement, activeCanvasDrag == nil, pendingInteractionTarget == nil,
               nativeInputGesture == nil,
               let occurrence = selectedMeasurementOccurrence() else { return nil }
-        let layout = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).layout
-        let chrome = ViewportCanvasChromeLayout(
-            viewportSize: size, bottomReservedHeight: bottomChromeReservedHeight,
-            additionalExclusions: canvasOverlayExclusions,
-            viewportBadgeWidth: nativeGridReadout.map { estimatedViewportBadgeWidth(scaleReadout: $0.value) } ?? 0
-        )
-        let rulers = ViewportMeasurementBoundsRulerLayout().rulers(
-            for: occurrence.worldBounds, layout: layout, displayUnit: workspaceRuler.displayUnit,
-            safeRect: layout.fittingInsets.fittingRect(in: size), excludedRects: chrome.inputExclusionRects
-        )
+        let disabledAxes = mountedBoundsRulerDisabledAxes
         let bounds = occurrence.worldBounds
         let values: [(ViewportMeasurementRulerAxis, Double)] = [
             (.x, bounds.maximum.x - bounds.minimum.x),
@@ -2359,9 +2356,23 @@ public struct Viewport: View {
             (.z, bounds.maximum.z - bounds.minimum.z)
         ]
         return "World bounds: " + values.map { axis, value in
-            let omitted = value > 0 && !rulers.contains(where: { $0.axis == axis })
+            // The frame that draws the annotation decides whether an axis is
+            // drawn. Before it answers, the readout states the measurement
+            // without claiming anything about the annotation.
+            let omitted = value > 0 && disabledAxes?.contains(axis) == true
             return "\(axis.title) \(formattedViewportLength(value))\(omitted ? " (ruler hidden)" : "")"
         }.joined(separator: " · ")
+    }
+
+    /// The bounds ruler axes refused by the frame the viewport displays now.
+    /// An answer published by an earlier surface describes a frame that is no
+    /// longer on screen, so it is withdrawn instead of reused.
+    private var mountedBoundsRulerDisabledAxes: Set<ViewportMeasurementRulerAxis>? {
+        guard case .success(let identity) = presentationPreparation,
+              let surface = presentationPlanCache.displaySurface(for: identity),
+              let published = nativeBoundsRulerAxes,
+              published.rendererID == ObjectIdentifier(surface) else { return nil }
+        return published.disabled
     }
 
     @ViewBuilder
