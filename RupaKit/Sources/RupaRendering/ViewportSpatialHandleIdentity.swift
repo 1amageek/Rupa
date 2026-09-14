@@ -127,24 +127,16 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
 }
 
 extension ViewportInteractionTarget {
+    /// The handle identity the claimed target resolves to.
+    ///
+    /// The projection stays throwing because a future native claim may carry
+    /// reference addresses that the mounted frame has to resolve; the single
+    /// case reachable today carries its identity directly.
     var spatialIdentity: ViewportSpatialHandleIdentity {
         get throws {
-        switch self {
-        case .splineControlPointSlide(let target): .splineControlPointSlide(target.identity)
-        case .polySplineSurfaceVertexSlide(let target): .polySplineSurfaceVertexSlide(target.identity)
-        case .surfaceControlPointSlide(let target):
-            .surfaceControlPointSlide(try ViewportSpatialReferenceAddress.project(target.targets), direction: target.direction)
-        case .surfaceFrame(let target):
-            .surfaceFrame(try ViewportSpatialReferenceAddress.project(target.targets), displayID: target.displayID, axis: target.axis)
-        case .regionOffset(let target): .regionOffset(target.identity)
-        case .edgeOffset(let target): .edgeOffset(target.identity)
-        case .slotWidth(let target): .slotWidth(target.identity)
-        case .sketchVertexOffset(let target): .sketchVertexOffset(target.identity)
-        case .patternArrayLinearAxis(let target): .patternArrayLinearAxis(target.identity)
-        case .independentCopyExtrudeDistance(let target): .independentCopyExtrudeDistance(target.identity)
-        case .independentCopyBodyDimension(let target): .independentCopyBodyDimension(target.identity)
-        case .affordance(let target): .affordance(target)
-        }
+            switch self {
+            case .affordance(let target): .affordance(target)
+            }
         }
     }
 }

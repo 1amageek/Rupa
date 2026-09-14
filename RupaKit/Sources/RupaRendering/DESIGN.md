@@ -669,11 +669,20 @@ independent tessellator is never an alternative implementation.
    only from the press claim or from the drag already in flight, and an
    affordance target carrying neither is a typed refusal, because no owner
    outside the prepared record produces one after this change.
-   When every route above is native-enabled, the legacy identity hit
-   fallback is removed as well, and the `ViewportInteractionTarget` cases
-   and drag functions that no native owner produces are removed with it; a
-   case no owner can reach is a defect of this migration, not a reserve
-   path.
+   A case no owner can reach is a defect of this migration, not a reserve
+   path, so the `ViewportInteractionTarget` cases and the drag functions
+   that no native owner produces are removed once the prepared record is
+   the only producer. That point is reached here: the enum carries
+   `.affordance` alone, every other prepared target travels as a
+   `ViewportSpatialHandleIdentity` instead, and the candidate and handle
+   target structs that only the deleted CPU selectors constructed are
+   removed with them. Two handle identities go with those structs because
+   the prepared enum spells their payload inline; the identities the
+   prepared enum names stay, because the native overlay producer builds
+   them. The legacy identity hit fallback is a separate removal under its
+   own owner: the rectangle and point selection routes still read it, and
+   the identity information those routes need outlives the backend that
+   used to draw it.
    The body transform affordance is native-enabled under this same authority.
    `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
    prepared interaction record at the point, and its `.affordance` case owns

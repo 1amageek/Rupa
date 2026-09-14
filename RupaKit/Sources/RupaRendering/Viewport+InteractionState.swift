@@ -141,72 +141,6 @@ struct ViewportConstructionPlaneHandleIdentity: Equatable, Sendable {
     var handle: ViewportConstructionPlaneHandleKind
 }
 
-struct ViewportSplineControlPointSlideDragState: Equatable {
-    var target: ViewportSplineControlPointSlideHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportPolySplineSurfaceVertexSlideDragState: Equatable {
-    var target: ViewportPolySplineSurfaceVertexSlideHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportSurfaceControlPointSlideDragState: Equatable {
-    var target: ViewportSurfaceControlPointSlideHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportSurfaceFrameDragState: Equatable {
-    var target: ViewportSurfaceFrameHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportRegionOffsetDragState: Equatable {
-    var target: ViewportRegionOffsetHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportEdgeOffsetDragState: Equatable {
-    var target: ViewportEdgeOffsetHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportSlotWidthDragState: Equatable {
-    var target: ViewportSlotWidthHandleTarget
-    var startPoint: CGPoint
-    var widthMeters: Double
-}
-
-struct ViewportPatternArrayLinearAxisDragState: Equatable {
-    var target: ViewportPatternArrayLinearAxisHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportIndependentCopyExtrudeDistanceDragState: Equatable {
-    var target: ViewportIndependentCopyExtrudeDistanceHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
-struct ViewportIndependentCopyBodyDimensionDragState: Equatable {
-    var target: ViewportIndependentCopyBodyDimensionHandleTarget
-    var startPoint: CGPoint
-    var valueMeters: Double
-}
-
-struct ViewportSketchVertexOffsetDragState: Equatable {
-    var target: ViewportSketchVertexOffsetHandleTarget
-    var startPoint: CGPoint
-    var distanceMeters: Double
-}
-
 struct ViewportSketchCurveHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
@@ -331,29 +265,6 @@ struct ViewportSplineControlPointGroupKey: Equatable, Hashable {
     var entityID: SketchEntityID
 }
 
-struct ViewportSplineControlPointSlideAffordanceCandidate: Equatable {
-    var target: ViewportSplineControlPointSlideHandleTarget
-    var geometry: ViewportSplineControlPointSlideAffordanceGeometry
-}
-
-struct ViewportSplineControlPointSlideHandleTarget: Equatable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var target: SelectionTarget
-    var controlPointIndexes: [Int]
-    var direction: SplineControlPointSlideDirection
-    var geometry: ViewportSplineControlPointSlideAffordanceGeometry
-
-    var identity: ViewportSplineControlPointSlideHandleIdentity {
-        ViewportSplineControlPointSlideHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            controlPointIndexes: controlPointIndexes,
-            direction: direction
-        )
-    }
-}
-
 struct ViewportSplineControlPointSlideHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
@@ -361,77 +272,9 @@ struct ViewportSplineControlPointSlideHandleIdentity: Equatable, Sendable {
     var direction: SplineControlPointSlideDirection
 }
 
-struct ViewportPolySplineSurfaceVertexSlideAffordanceCandidate: Equatable {
-    var target: ViewportPolySplineSurfaceVertexSlideHandleTarget
-    var geometry: ViewportPolySplineSurfaceVertexSlideAffordanceGeometry
-}
-
-struct ViewportSurfaceControlPointSlideAffordanceCandidate: Equatable {
-    var target: ViewportSurfaceControlPointSlideHandleTarget
-    var geometry: ViewportPolySplineSurfaceVertexSlideAffordanceGeometry
-}
-
-struct ViewportSurfaceFrameAffordanceCandidate: Equatable {
-    var target: ViewportSurfaceFrameHandleTarget
-    var geometry: ViewportSurfaceFrameAxisAffordanceGeometry
-}
-
-struct ViewportPolySplineSurfaceVertexSlideHandleTarget: Equatable {
-    var targets: [SelectionTarget]
-    var direction: PolySplineSurfaceVertexSlideDirection
-    var geometry: ViewportPolySplineSurfaceVertexSlideAffordanceGeometry
-
-    var identity: ViewportPolySplineSurfaceVertexSlideHandleIdentity {
-        ViewportPolySplineSurfaceVertexSlideHandleIdentity(
-            targets: targets,
-            direction: direction
-        )
-    }
-}
-
 struct ViewportPolySplineSurfaceVertexSlideHandleIdentity: Equatable, Sendable {
     var targets: [SelectionTarget]
     var direction: PolySplineSurfaceVertexSlideDirection
-}
-
-struct ViewportSurfaceControlPointSlideHandleTarget: Equatable {
-    var targets: [SelectionReference]
-    var direction: PolySplineSurfaceVertexSlideDirection
-    var geometry: ViewportPolySplineSurfaceVertexSlideAffordanceGeometry
-
-    var identity: ViewportSurfaceControlPointSlideHandleIdentity {
-        ViewportSurfaceControlPointSlideHandleIdentity(
-            targets: targets,
-            direction: direction
-        )
-    }
-}
-
-struct ViewportSurfaceControlPointSlideHandleIdentity: Equatable, Sendable {
-    var targets: [SelectionReference]
-    var direction: PolySplineSurfaceVertexSlideDirection
-}
-
-struct ViewportSurfaceFrameHandleTarget: Equatable {
-    var targets: [SelectionReference]
-    var query: SurfaceFrameQuery
-    var displayID: SurfaceFrameDisplayID
-    var axis: ViewportSurfaceFrameAxis
-    var geometry: ViewportSurfaceFrameAxisAffordanceGeometry
-
-    var identity: ViewportSurfaceFrameHandleIdentity {
-        ViewportSurfaceFrameHandleIdentity(
-            targets: targets,
-            displayID: displayID,
-            axis: axis
-        )
-    }
-}
-
-struct ViewportSurfaceFrameHandleIdentity: Equatable, Sendable {
-    var targets: [SelectionReference]
-    var displayID: SurfaceFrameDisplayID
-    var axis: ViewportSurfaceFrameAxis
 }
 
 struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable, Sendable {
@@ -603,47 +446,9 @@ enum ViewportPolySplineSurfaceVertexDragMode: Equatable, Sendable {
     }
 }
 
-struct ViewportRegionOffsetAffordanceCandidate: Equatable {
-    var target: ViewportRegionOffsetHandleTarget
-    var geometry: ViewportRegionOffsetAffordanceGeometry
-}
-
-struct ViewportRegionOffsetHandleTarget: Equatable {
-    var featureID: FeatureID
-    var componentID: SelectionComponentID
-    var target: SelectionTarget
-    var geometry: ViewportRegionOffsetAffordanceGeometry
-
-    var identity: ViewportRegionOffsetHandleIdentity {
-        ViewportRegionOffsetHandleIdentity(
-            featureID: featureID,
-            componentID: componentID
-        )
-    }
-}
-
 struct ViewportRegionOffsetHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var componentID: SelectionComponentID
-}
-
-struct ViewportEdgeOffsetAffordanceCandidate: Equatable {
-    var target: ViewportEdgeOffsetHandleTarget
-    var geometry: ViewportEdgeOffsetAffordanceGeometry
-}
-
-struct ViewportEdgeOffsetHandleTarget: Equatable {
-    var featureID: FeatureID
-    var edge: ViewportBodyEdge
-    var target: SelectionTarget
-    var geometry: ViewportEdgeOffsetAffordanceGeometry
-
-    var identity: ViewportEdgeOffsetHandleIdentity {
-        ViewportEdgeOffsetHandleIdentity(
-            featureID: featureID,
-            edge: edge
-        )
-    }
 }
 
 struct ViewportEdgeOffsetHandleIdentity: Equatable, Sendable {
@@ -651,49 +456,9 @@ struct ViewportEdgeOffsetHandleIdentity: Equatable, Sendable {
     var edge: ViewportBodyEdge
 }
 
-struct ViewportSlotWidthAffordanceCandidate: Equatable {
-    var target: ViewportSlotWidthHandleTarget
-    var geometry: ViewportSlotWidthAffordanceGeometry
-}
-
-struct ViewportSlotWidthHandleTarget: Equatable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var target: SelectionTarget
-    var geometry: ViewportSlotWidthAffordanceGeometry
-
-    var identity: ViewportSlotWidthHandleIdentity {
-        ViewportSlotWidthHandleIdentity(
-            featureID: featureID,
-            entityID: entityID
-        )
-    }
-}
-
 struct ViewportSlotWidthHandleIdentity: Equatable, Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
-}
-
-struct ViewportSketchVertexOffsetAffordanceCandidate: Equatable {
-    var target: ViewportSketchVertexOffsetHandleTarget
-    var geometry: ViewportSketchVertexOffsetAffordanceGeometry
-}
-
-struct ViewportSketchVertexOffsetHandleTarget: Equatable {
-    var featureID: FeatureID
-    var entityID: SketchEntityID
-    var target: SelectionTarget
-    var handle: SketchEntityPointHandle
-    var geometry: ViewportSketchVertexOffsetAffordanceGeometry
-
-    var identity: ViewportSketchVertexOffsetHandleIdentity {
-        ViewportSketchVertexOffsetHandleIdentity(
-            featureID: featureID,
-            entityID: entityID,
-            handle: handle
-        )
-    }
 }
 
 struct ViewportSketchVertexOffsetHandleIdentity: Equatable, Sendable {
@@ -718,18 +483,13 @@ struct ViewportAffordanceTarget: Equatable, Sendable {
     }
 }
 
+/// The interaction target a press or hover claim carries.
+///
+/// The prepared native record is the only producer, and its `.affordance` case
+/// is the only claim that reaches this type. Every other case that once lived
+/// here was reachable solely through the removed legacy projected selectors,
+/// so a new case belongs here only once a native owner produces it.
 enum ViewportInteractionTarget: Equatable {
-    case splineControlPointSlide(ViewportSplineControlPointSlideHandleTarget)
-    case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideHandleTarget)
-    case surfaceControlPointSlide(ViewportSurfaceControlPointSlideHandleTarget)
-    case surfaceFrame(ViewportSurfaceFrameHandleTarget)
-    case regionOffset(ViewportRegionOffsetHandleTarget)
-    case edgeOffset(ViewportEdgeOffsetHandleTarget)
-    case slotWidth(ViewportSlotWidthHandleTarget)
-    case sketchVertexOffset(ViewportSketchVertexOffsetHandleTarget)
-    case patternArrayLinearAxis(ViewportPatternArrayLinearAxisHandleTarget)
-    case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceHandleTarget)
-    case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionHandleTarget)
     case affordance(ViewportAffordanceTarget)
 }
 
