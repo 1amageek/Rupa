@@ -1651,14 +1651,26 @@ final class RealityViewportSpatialResources {
             throw MeshSourcePresentationRenderError(code: .resourceExhausted,
                 message: "Current chrome exclusions exceed bounds ruler placement admission.")
         }
+        // A point the camera cannot project is a placement refusal the layout
+        // resolves. A point that leaves native coordinate precision is a scene
+        // failure instead, so it is carried out of the non-throwing closure and
+        // rethrown rather than reported as an axis the layout declined. Batch
+        // admission converts the same bounds corners, so no admitted group
+        // reaches this failure; nothing in this file may assume that, because
+        // the refusal it would otherwise publish is read as measured text.
+        var sceneFailure: (any Error)?
         let layout = ViewportMeasurementBoundsRulerLayout().placement(
             for: group.input.bounds, labels: group.input.labels,
             project: { point in
                 do {
                     let native = try RealityViewportSpatialBatch.nativePoint(point, relativeTo: self.batch.renderOrigin)
                     return projection.project(native)
-                } catch { return nil }
+                } catch {
+                    if sceneFailure == nil { sceneFailure = error }
+                    return nil
+                }
             }, safeRect: safeRect, excludedRects: excludedRects)
+        if let sceneFailure { throw sceneFailure }
         disabled = layout.disabledAxes
         for ruler in layout.rulers {
             guard let (_, label, line, mesh) = boundsRulers.first(where: { $0.0 == ruler.axis }) else {
