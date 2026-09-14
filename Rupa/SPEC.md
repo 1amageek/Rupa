@@ -983,7 +983,7 @@ Viewport framing must use the ruler visible span for empty documents and a ruler
 | `ViewportProjectedGrid.swift` | Unit-aware projected coordinate-grid and in-plane ruler line calculation. |
 | `UniversalViewportScene.swift` / `UniversalViewportSceneBuilder.swift` | Provider-neutral primary presentation scene built from purpose-selected evaluated occurrences, representation provenance, navigation, and optional exact CAD interaction context. (Owned by `RupaViewportScene`.) |
 | `MeshSourcePresentationRenderPlan.swift` | Draw-plan construction from immutable presentation MeshSource buffers without making CAD source the viewport authority. |
-| `ViewportIdentityBufferRenderer.swift` / `ViewportIdentityHitResolver.swift` | Current offscreen identity-buffer rendering and hit resolution. |
+| `MeshSourcePresentationPlanCache.swift` / `ViewportNativeOverlayHitResolver.swift` / `ViewportNativeCADTopologyResolver.swift` | Mounted-frame presentation planning and the native hit resolution that reads it. |
 | `ViewportScene.swift` / `ViewportSceneBuilder.swift` | CAD-derived source affordance context used only when the project view proves an exact CAD interaction match. (Owned by `RupaViewportScene`.) |
 
 RupaRendering consumes the provider-neutral `UniversalViewportScene`, shared
@@ -1003,7 +1003,7 @@ Mesh-only and external-provider presentation stay fully renderable and pickable.
 | `ViewportScene.swift` / `ViewportSceneBuilder.swift` | Optional exact-CAD source-affordance scene construction; never the primary presentation authority. |
 | `ViewportCamera.swift` / `ViewportCameraZoomPolicy.swift` | Viewport pan/zoom state and zoom policy shared by layout, hit testing, and coordinate mapping. |
 | `ViewportProjectionBasis.swift` | Shared projection basis; default mode is isometric. |
-| `ViewportPickingBackend.swift` / `ViewportSelectionHitPolicy.swift` / `ViewportSketchControlPointHitPolicy.swift` / `ViewportIdentityPickIndex.swift` | Picking backend and hit-selection policies for scene and identity-buffer picking. |
+| `ViewportSelectionHitPolicy.swift` / `ViewportSketchControlPointHitPolicy.swift` | Hit-selection policies applied to the hits the native frame query returns. |
 | `ViewportInputModifierFlags.swift` / `ViewportSceneTransformIndex.swift` / `ViewportTransformUtilities.swift` | Input modifier flags, scene transform indexing, and shared transform math. |
 
 RupaViewportScene owns no SwiftUI, AppKit, or Metal view code; it exposes value types and services that `RupaRendering` draws and hit-tests.

@@ -1935,7 +1935,6 @@ public struct Viewport: View {
                     featureID: item.featureID,
                     sceneNodeID: sceneNodeID,
                     kind: .body,
-                    pickingBackend: .native,
                     selectionComponent: resolved.component
                 ),
                 resolved.candidate
@@ -2205,7 +2204,6 @@ public struct Viewport: View {
                 featureID: featureID,
                 sceneNodeID: sceneNodeID,
                 kind: .body,
-                pickingBackend: .native,
                 selectionComponent: selectionComponent
             )
         )
@@ -2586,7 +2584,6 @@ public struct Viewport: View {
               let hoveredModelPoint,
               hoveredCanvasHit?.bodyFace == nil,
               hoveredCanvasHit?.bodyEdge == nil,
-              hoveredCanvasHit?.bodyVertex == nil,
               Self.designatesBodySubshape(hoveredCanvasHit) == false else {
             clearPlacementHighlight()
             return

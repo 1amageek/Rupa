@@ -198,7 +198,6 @@ func viewportNativeObjectScopeSelectsTheOccurrenceTheFrameDrew() async throws {
     )
 
     let cadHit = try #require(observations[0].target.hit)
-    #expect(cadHit.pickingBackend == .native)
     #expect(cadHit.sceneNodeID == fixture.cadSceneNodeID)
     #expect(cadHit.selectionComponent == .object)
 
@@ -210,7 +209,6 @@ func viewportNativeObjectScopeSelectsTheOccurrenceTheFrameDrew() async throws {
         observations[1].target.hit,
         "The pointer over the authored-mesh occluder selected nothing."
     )
-    #expect(meshHit.pickingBackend == .native)
     #expect(meshHit.sceneNodeID == fixture.meshSceneNodeID)
     #expect(meshHit.selectionComponent == .object)
     #expect(meshHit.sceneNodeID != cadHit.sceneNodeID)
@@ -269,7 +267,6 @@ func viewportNativeCombinedScopePrefersTheCADFaceOverItsOccurrence() async throw
     // is a live candidate at this pointer. The face outranks it, which is what
     // keeps a pointer that named a sub-shape from resolving to the whole body.
     let hit = try #require(observations[0].target.hit)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.sceneNodeID == fixture.cadSceneNodeID)
     #expect(hit.selectionComponent == .face(frontFaceID))
 }

@@ -33,32 +33,6 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
         self == .all || self == .sketchEntity
     }
 
-    public func allows(geometry: ViewportIdentityPickGeometry) -> Bool {
-        switch geometry {
-        case .body, .curve:
-            return allowsObjectHits
-        case .sketchEntity:
-            return allowsObjectHits || allowsSketchEntityHits
-        case .sketchControlPoint:
-            return allowsSketchEntityHits
-        case .sketchRegion:
-            return allowsRegionHits
-        case .generatedFace,
-             .projectedBodyFace:
-            return allowsFaceHits
-        case .generatedEdge,
-             .projectedBodyEdge:
-            return allowsEdgeHits
-        case .generatedVertex,
-             .surfaceKnot,
-             .surfaceSpan,
-             .surfaceTrimKnot,
-             .surfaceTrimSpan,
-             .projectedBodyVertex:
-            return allowsVertexHits
-        }
-    }
-
     public func allows(component: SelectionComponent) -> Bool {
         switch component {
         case .object:
@@ -100,9 +74,6 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
             }
             if hit.bodyEdge != nil {
                 return allowsEdgeHits
-            }
-            if hit.bodyVertex != nil {
-                return allowsVertexHits
             }
             return allowsObjectHits
         case .sketch:

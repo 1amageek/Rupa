@@ -40,21 +40,9 @@ import Testing
             bodyEdge: .rightTop
         ))
     )
-    let vertexTarget = try #require(
-        resolver(
-            document: session.document,
-            sceneRows: sceneRows,
-            scope: .vertex
-        ).selectionTarget(for: ViewportHit(
-            featureID: bodyFeatureID,
-            kind: .body,
-            bodyVertex: .frontTopRight
-        ))
-    )
 
     #expect(faceTarget.sceneNodeID == bodySceneNodeID)
     #expect(edgeTarget.sceneNodeID == bodySceneNodeID)
-    #expect(vertexTarget.sceneNodeID == bodySceneNodeID)
     guard case .face(let faceComponentID) = faceTarget.component else {
         Issue.record("Expected a face component.")
         return
@@ -63,13 +51,8 @@ import Testing
         Issue.record("Expected an edge component.")
         return
     }
-    guard case .vertex(let vertexComponentID) = vertexTarget.component else {
-        Issue.record("Expected a vertex component.")
-        return
-    }
     #expect(faceComponentID.generatedTopologySubshapeID != nil)
     #expect(edgeComponentID.generatedTopologySubshapeID != nil)
-    #expect(vertexComponentID.generatedTopologySubshapeID != nil)
 }
 
 @Test func workspaceSelectionTargetResolverDeduplicatesObjectTargetsThroughSceneRows() {

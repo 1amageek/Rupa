@@ -29,7 +29,7 @@ struct WorkspaceSelectionTargetResolver {
             }
             return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
         case .vertex:
-            guard let component = vertexSelectionComponent(for: hit, sceneNodeID: sceneNodeID) else {
+            guard let component = directSelectionComponent(for: hit) else {
                 return nil
             }
             return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
@@ -211,38 +211,6 @@ struct WorkspaceSelectionTargetResolver {
         }
     }
 
-    private func vertexSelectionComponent(
-        for hit: ViewportHit,
-        sceneNodeID: SceneNodeID
-    ) -> SelectionComponent? {
-        guard hit.kind == .body,
-              let bodyVertex = hit.bodyVertex,
-              let generatedComponentID = generatedTopologyComponentID(
-                for: sceneNodeID,
-                bodyVertex: bodyVertex
-              ) else {
-            return nil
-        }
-        return .vertex(generatedComponentID)
-    }
-
-    private func generatedTopologyComponentID(
-        for sceneNodeID: SceneNodeID,
-        bodyVertex: ViewportBodyVertex
-    ) -> SelectionComponentID? {
-        let cornerVertex = bodyCornerVertex(for: bodyVertex)
-        do {
-            return try GeneratedTopologySelectionResolver().componentID(
-                for: sceneNodeID,
-                cornerVertex: cornerVertex,
-                in: document,
-                objectRegistry: objectRegistry
-            )
-        } catch {
-            return nil
-        }
-    }
-
     private func coreBodyFace(for bodyFace: ViewportBodyFace) -> BodyFace {
         switch bodyFace {
         case .front:
@@ -272,27 +240,6 @@ struct WorkspaceSelectionTargetResolver {
             return .rightTop
         case .leftTop:
             return .leftTop
-        }
-    }
-
-    private func bodyCornerVertex(for bodyVertex: ViewportBodyVertex) -> BodyCornerVertex {
-        switch bodyVertex {
-        case .frontBottomLeft:
-            return .frontBottomLeft
-        case .frontBottomRight:
-            return .frontBottomRight
-        case .frontTopRight:
-            return .frontTopRight
-        case .frontTopLeft:
-            return .frontTopLeft
-        case .backBottomLeft:
-            return .backBottomLeft
-        case .backBottomRight:
-            return .backBottomRight
-        case .backTopRight:
-            return .backTopRight
-        case .backTopLeft:
-            return .backTopLeft
         }
     }
 

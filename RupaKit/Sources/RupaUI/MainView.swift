@@ -180,7 +180,6 @@ private struct ProjectMainViewContent: View {
     @State private var viewportProjectedGridStepMeters: Double?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
-    @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
     @State private var viewportHoverClearSignal: Int
     private let operationSequencer: ProjectWorkspaceOperationSequencer
     @FocusState private var isWorkspaceFocused: Bool
@@ -3196,7 +3195,6 @@ private struct ProjectMainViewContent: View {
                 accessibilityIdentifier: "WorkspaceQuality.gate"
             )
         }
-        viewportPickingPills
         if nodes.isEmpty == false {
             workspaceValuePill("Visible", "\(nodes.filter(\.isVisible).count)")
             workspaceValuePill("Locked", "\(nodes.filter(\.isLocked).count)")
@@ -3944,26 +3942,6 @@ private struct ProjectMainViewContent: View {
 
     private var selectionQualitySummary: WorkspaceSelectionQualitySummary? {
         WorkspaceSelectionQualitySummary(scope: selectionScope)
-    }
-
-    private var activeViewportPickingBackend: ViewportPickingBackend {
-        hoveredViewportPickingBackend ?? .projectedCPU
-    }
-
-    @ViewBuilder
-    private var viewportPickingPills: some View {
-        workspaceValuePill(
-            "Pick",
-            activeViewportPickingBackend.title,
-            accessibilityIdentifier: "WorkspacePicking.backend"
-        )
-        if activeViewportPickingBackend.isExactIdentityBacked == false {
-            workspaceValuePill(
-                "Next",
-                ViewportPickingBackend.identityBuffer.title,
-                accessibilityIdentifier: "WorkspacePicking.nextBackend"
-            )
-        }
     }
 
     private var evaluationStatusSystemImage: String {
@@ -5939,12 +5917,10 @@ private struct ProjectMainViewContent: View {
     private func handleViewportHover(_ hit: ViewportHit?) {
         guard let hit else {
             patternArrayCurvePathPreviewCandidate = nil
-            hoveredViewportPickingBackend = nil
             setHoveredTarget(nil)
             return
         }
 
-        hoveredViewportPickingBackend = hit.pickingBackend
         if let reference = hit.selectionReference {
             patternArrayCurvePathPreviewCandidate = nil
             setHoveredReference(reference)

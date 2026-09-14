@@ -778,10 +778,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/TopologySummaryService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSelectionHitPolicy.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportIdentityBufferRenderer.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportPickingReadinessService.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportPickingReadinessSummary.swift",
+                        "RupaKit/Sources/RupaRendering/MeshSourcePresentationPlanCache.swift",
+                        "RupaKit/Sources/RupaRendering/MeshSourcePresentationExactCADSelectionResolver.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportNativeCADTopologyResolver.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportNativeOverlayHitResolver.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                         "RupaKit/Sources/RupaRendering/ViewportEdgeOffsetAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceSelectionScope.swift",
@@ -792,16 +792,17 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaCoreTests/TopologySummaryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
-                        "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportNativeOverlayHitResolverTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSelectionScopeTests.swift",
                     ]
                 ),
             ],
             openWork: [
                 "Remaining selection-mode edit-handle affordance parity for all subobject scopes.",
-                "Production-scene identity-buffer budget calibration from larger scene captures.",
+                "Production-scene mounted-frame query budget calibration from larger scene captures.",
             ],
-            next: "Broaden remaining scope-specific edit-handle affordances and calibrate identity-buffer budgets against larger production scenes before retiring remaining CPU-projected topology hit heuristics."
+            next: "Broaden remaining scope-specific edit-handle affordances and calibrate mounted-frame query budgets against larger production scenes."
         ),
         entry(
             area: .sweep,
@@ -1099,21 +1100,21 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
                         "RupaKit/Sources/RupaAgentRuntime/ProjectAgentCommandController.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
-                        "RupaKit/Sources/RupaRendering/ViewportPickingReadinessService.swift",
+                        "RupaKit/Sources/RupaRendering/MeshSourcePresentationPlanCache.swift",
+                        "RupaKit/Sources/RupaRendering/MeshSourcePresentationPlanLimits.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DocumentEvaluationContextTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
-                        "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift",
                     ],
                     notes: [
                         "EvaluationScheduler can return the evaluated document alongside the persistent evaluation snapshot.",
                         "Viewport scene construction, Inspector shape and surface panels, Agent display/mesh/topology/surface summaries, measurement, surface frame, and selection dimension read paths can consume a store-validated current evaluation context instead of forcing another CAD evaluation.",
                         "Evaluation context reuse now checks both document generation and CAD source fingerprint before returning an evaluated document.",
-                        "Identity picking exposes render/readback metrics and budget fallback diagnostics.",
+                        "Mounted-frame presentation planning exposes render telemetry and plan-limit diagnostics.",
                     ]
                 ),
             ],
@@ -1122,7 +1123,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "Borrowed or copy-on-write buffers for dense meshes, control nets, and imported byte ranges where API ownership permits.",
                 "Inspector diagnostics for memory pressure and render budget fallback beyond current evaluation-cache reuse.",
             ],
-            next: "Turn evaluation reuse and identity-picking metrics into enforced dense-model performance budgets with regression fixtures before broadening heavy CAD workflows."
+            next: "Turn evaluation reuse and mounted-frame query metrics into enforced dense-model performance budgets with regression fixtures before broadening heavy CAD workflows."
         ),
     ]
 

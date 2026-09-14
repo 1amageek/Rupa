@@ -47,7 +47,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 selectionComponent: .object
             ),
             ViewportNativeHitCandidate(rank: .object, metric: 0)
@@ -137,7 +136,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 selectionReference: best.reference
             ),
             ViewportNativeHitCandidate(rank: .vertex, metric: best.distance)
@@ -192,7 +190,6 @@ enum ViewportNativeOverlayHitResolver {
                     featureID: item.featureID,
                     sceneNodeID: sceneNodeID,
                     kind: item.kind.selectableKind,
-                    pickingBackend: .native,
                     selectionReference: reference
                 )
             )
@@ -260,7 +257,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 sketchEntityID: entityID,
                 sketchControlPointIndex: controlPointIndex
             )
@@ -377,7 +373,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 sketchEntityID: entityID,
                 sketchControlPointIndex: controlPointIndex
             )
@@ -477,7 +472,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 selectionComponent: .region(best.componentID)
             ),
             ViewportNativeHitCandidate(rank: .region, metric: best.distance)
@@ -524,7 +518,6 @@ enum ViewportNativeOverlayHitResolver {
                     featureID: item.featureID,
                     sceneNodeID: item.sceneNodeID,
                     kind: item.kind.selectableKind,
-                    pickingBackend: .native,
                     selectionComponent: .region(region.componentID)
                 )
             )
@@ -594,7 +587,6 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
-                pickingBackend: .native,
                 selectionReference: best.reference
             ),
             ViewportNativeHitCandidate(rank: .edge, metric: best.distance)
@@ -645,7 +637,6 @@ enum ViewportNativeOverlayHitResolver {
                         featureID: item.featureID,
                         sceneNodeID: item.sceneNodeID,
                         kind: item.kind.selectableKind,
-                        pickingBackend: .native,
                         selectionReference: segment.selectionReference
                     )
                 )

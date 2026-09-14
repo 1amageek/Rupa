@@ -206,7 +206,6 @@ func viewportNativeRegionScopeRectangleSelectsTheRegionsItMeets() async throws {
     )
     #expect(standalone.hits.count == 1)
     let hit = try #require(standalone.hits.first)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.kind == .sketch)
     #expect(hit.featureID == fixture.standaloneFeatureID)
     // A region names the drawn area. No entity and no sub-shape reference
@@ -262,7 +261,6 @@ func viewportNativeSketchEntityScopeRectangleSelectsTheLineItMeets() async throw
     let target = observations[0].target
     #expect(target.hits.count == 1)
     let hit = try #require(target.hits.first)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.featureID == fixture.lineFeatureID)
     #expect(hit.kind == .sketch)
     #expect(hit.sceneNodeID == fixture.lineSceneNodeID)

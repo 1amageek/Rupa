@@ -104,7 +104,6 @@ func viewportNativeCADRectangleFaceScopeReadsPreparedFaceIdentity() async throws
     let runComponentIDs = Set(fixture.topology.meshFaceRuns.map(\.componentID))
     var targets: Set<SelectionTarget> = []
     for hit in hits {
-        #expect(hit.pickingBackend == .native)
         #expect(hit.kind == .body)
         #expect(hit.sceneNodeID == fixture.cadSceneNodeID)
         let component = try #require(hit.selectionComponent)
@@ -250,7 +249,6 @@ func viewportNativeCADRectangleEdgeScopeAdmitsFirstDrawnPixel() async throws {
     let hits = observations[0].target.hits
     var admitted: Set<SelectionComponentID> = []
     for hit in hits {
-        #expect(hit.pickingBackend == .native)
         #expect(hit.sceneNodeID == fixture.cadSceneNodeID)
         let component = try #require(hit.selectionComponent)
         guard case .edge(let componentID) = component else {
@@ -563,7 +561,6 @@ private func rectangleSelectionVertexComponentIDs(
 ) throws -> Set<SelectionComponentID> {
     var componentIDs: Set<SelectionComponentID> = []
     for hit in hits {
-        #expect(hit.pickingBackend == .native)
         #expect(hit.sceneNodeID == sceneNodeID)
         let component = try #require(hit.selectionComponent)
         guard case .vertex(let componentID) = component else {

@@ -467,31 +467,6 @@ private func sketchScopePicks(
     return observations
 }
 
-/// What the replaced identity backend answers at one pixel.
-///
-/// The two refusal rules below are only meaningful against a backend that did
-/// not refuse, so they measure it here instead of citing it. `hitTest` falls
-/// back to the projected CPU tester when the identity render fails, and that
-/// tester answers the same sketch family, so either backend establishes the
-/// premise.
-///
-/// These two call sites are the only compile-time dependency the tests in this
-/// file have on `ViewportIdentityHitResolver`. RK-5 deletes them with it.
-@MainActor
-private func sketchScopeLegacyHit(
-    fixture: SketchScopeSelectionFixture,
-    geometry: SketchScopeScreenGeometry,
-    at point: CGPoint,
-    selectionHitPolicy: ViewportSelectionHitPolicy
-) -> ViewportHit? {
-    ViewportIdentityHitResolver().hitTest(
-        point: point,
-        in: fixture.cpuScene,
-        layout: geometry.layout,
-        selectionHitPolicy: selectionHitPolicy
-    )
-}
-
 // MARK: - Fixture invariants
 
 /// The premises every rule below reads: which pointer the solid stands in front
@@ -610,7 +585,6 @@ func viewportNativeSketchEntityScopeSelectsTheSketchLineUnderThePointer() async 
     )
 
     let hit = try #require(observations[0].target.hit)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.featureID == fixture.lineFeatureID)
     #expect(hit.kind == .sketch)
     #expect(hit.sceneNodeID == fixture.lineSceneNodeID)
@@ -654,23 +628,15 @@ func viewportNativeSketchEntityScopeRefusesALineTheDrawnBodyCovers() async throw
         return
     }
 
-    // The second premise: the replaced identity backend answers the line at
-    // this same pixel. It recorded sketch geometry with no depth at all, so it
-    // cannot tell that the solid is drawn in front of it.
-    let legacy = try #require(
-        sketchScopeLegacyHit(
-            fixture: fixture,
-            geometry: geometry,
-            at: point,
-            selectionHitPolicy: .sketchEntity
-        ),
-        "The replaced identity backend answers nothing at the occluded pointer."
-    )
-    #expect(legacy.sketchEntityID == fixture.lineEntityID)
+    // The second premise: the line is drawn at this same pixel.
+    // `viewportNativeSketchEntityScopeFixtureSeparatesItsThreePointers` states
+    // it, by placing the whole line on the world plane the overlay producer
+    // draws sketches on, putting the solid in front of that plane, and holding
+    // this pointer inside the solid's silhouette and clear of both line ends.
+    // Without depth the pointer would therefore answer the line.
 
     // The rule: the frame draws the polyline at scene depth, so the body in
-    // front of it hides it, and the scope no longer routes that miss to the
-    // replaced backend.
+    // front of it hides it, and nothing behind that body answers instead.
     let observations = try await sketchScopePicks(
         mount: fixture.mountInputs,
         control: control,
@@ -744,9 +710,8 @@ func viewportNativeCombinedScopeSelectsTheSketchLineThroughTheNativeFrame() asyn
 
     // The combined scope admits the occurrence family too, so the sketch entity
     // has to be produced as a candidate this query orders itself rather than
-    // reached through the legacy bridge the occurrence answer still crosses.
+    // won by default because nothing else competed for the pixel.
     let hit = try #require(observations[0].target.hit)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.featureID == fixture.lineFeatureID)
     #expect(hit.kind == .sketch)
     #expect(hit.sketchEntityID == fixture.lineEntityID)
@@ -764,20 +729,11 @@ func viewportNativeCombinedScopeRefusesASketchLineTheSectionRemoved() async thro
     let geometry = try sketchScopeScreenGeometry(fixture: fixture, control: control)
     let section = try sketchScopeSection(fixture: fixture)
 
-    // The premise: the replaced identity backend answers the line at the
-    // removed pointer. Its pick plan records no section at all, so a legacy
-    // answer reaching the viewport would reinstate geometry this frame does not
-    // draw.
-    let legacy = try #require(
-        sketchScopeLegacyHit(
-            fixture: fixture,
-            geometry: geometry,
-            at: geometry.mirror.point,
-            selectionHitPolicy: .all
-        ),
-        "The replaced identity backend answers nothing at the sectioned pointer."
-    )
-    #expect(legacy.sketchEntityID == fixture.lineEntityID)
+    // The premise: the removed pointer lies on the drawn line and outside the
+    // solid, so only the section can refuse it.
+    // `viewportNativeSketchEntityScopeFixtureSeparatesItsThreePointers` states
+    // it, by holding this pointer clear of the solid's silhouette and of both
+    // line ends while placing it on the discarded side of the resolved plane.
 
     let observations = try await sketchScopePicks(
         mount: fixture.mountInputs,
@@ -791,10 +747,8 @@ func viewportNativeCombinedScopeRefusesASketchLineTheSectionRemoved() async thro
 
     // The kept half is answered on the same frame, which is what separates the
     // section rule from a query that stopped answering. The removed half is
-    // refused, and `.all` is the scope that still asks the legacy resolver, so
-    // this nil is the sketch-family filter declining that answer.
+    // refused by the same frame rather than by a scope that declined to ask.
     let kept = try #require(observations[0].target.hit)
-    #expect(kept.pickingBackend == .native)
     #expect(kept.sketchEntityID == fixture.lineEntityID)
     #expect(observations[1].target.hit == nil)
 }
@@ -1119,7 +1073,6 @@ func viewportNativeSketchEntityScopeRefusesTheProfileSketchTheFrameSuppressed() 
             drawn[0].target.hit,
             "The \(policy) scope answers nothing on the drawn profile edge."
         )
-        #expect(hit.pickingBackend == .native)
         #expect(hit.featureID == fixture.profileFeatureID)
         #expect(hit.sketchEntityID == fixture.profileTopEdgeEntityID)
 

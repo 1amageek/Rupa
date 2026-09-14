@@ -80,7 +80,6 @@ func nativeOverlayResolverNamesTheOccurrenceTheFrameDrew() throws {
     #expect(answer.hit.sceneNodeID == drawnSceneNodeID)
     #expect(answer.hit.featureID == drawnFeatureID)
     #expect(answer.hit.kind == .body)
-    #expect(answer.hit.pickingBackend == .native)
     #expect(answer.hit.selectionComponent == .object)
     #expect(answer.candidate.rank == .object)
     #expect(answer.candidate.metric == 0)
@@ -360,7 +359,6 @@ func nativeOverlaySurfaceHandleNamesThePreparedReferenceAtVertexRank() throws {
     #expect(answer.hit.sceneNodeID == handleSceneNodeID)
     #expect(answer.hit.featureID == handleFeatureID)
     #expect(answer.hit.kind == .body)
-    #expect(answer.hit.pickingBackend == .native)
     #expect(answer.hit.selectionReference == component.surfaceKnotDisplays[0].selectionReference)
     #expect(answer.hit.selectionComponent == nil)
     #expect(answer.candidate.rank == .vertex)
@@ -697,7 +695,6 @@ func nativeOverlaySketchEntityAnswersTheLineTheFrameDrew() throws {
     #expect(answer.hit.featureID == sketchFeatureID)
     #expect(answer.hit.sceneNodeID == nil)
     #expect(answer.hit.kind == .sketch)
-    #expect(answer.hit.pickingBackend == .native)
     #expect(answer.candidate.rank == .edge)
     #expect(abs(answer.candidate.metric - 3) < 1e-9)
 }
@@ -1102,7 +1099,6 @@ func nativeOverlaySketchRegionAnswersAPointerInsideItsDrawnBoundary() throws {
     #expect(answer.hit.featureID == sketchFeatureID)
     #expect(answer.hit.sceneNodeID == nil)
     #expect(answer.hit.kind == .sketch)
-    #expect(answer.hit.pickingBackend == .native)
     #expect(answer.candidate.rank == .region)
     #expect(answer.candidate.metric == 0)
 }
@@ -1361,7 +1357,6 @@ func nativeOverlayCurveAnswersTheSegmentTheFrameDrew() throws {
     #expect(answer.hit.featureID == curveFeatureID)
     #expect(answer.hit.sceneNodeID == nil)
     #expect(answer.hit.kind == .curve)
-    #expect(answer.hit.pickingBackend == .native)
     #expect(answer.hit.selectionReference == curveReference(0))
     #expect(answer.hit.selectionComponent == nil)
     #expect(answer.candidate.rank == .edge)
@@ -1761,7 +1756,6 @@ func nativeOverlayRectangleAdmitsEverySurfaceHandleFamilyItEncloses() throws {
         ))),
     ]))
     #expect(hits.allSatisfy { $0.sceneNodeID == handleSceneNodeID })
-    #expect(hits.allSatisfy { $0.pickingBackend == .native })
 }
 
 /// The rectangle is the drawn marker's own bounds and carries no tolerance.
@@ -1882,7 +1876,6 @@ func nativeOverlayRectangleAdmitsTheSketchPolylineTheFrameDrew() throws {
     #expect(hits.count == 1)
     #expect(hits.first?.sketchEntityID == entityID)
     #expect(hits.first?.sketchControlPointIndex == nil)
-    #expect(hits.first?.pickingBackend == .native)
     #expect(try sketchRectangleHits(
         [sketchLine(entityID)],
         rect: CGRect(x: 210, y: 300, width: 80, height: 80)
@@ -2177,7 +2170,6 @@ func nativeOverlayRectangleAdmitsTheCurvePolylineTheFrameDrew() throws {
     let hits = try curveRectangleHits(curveLine())
     #expect(hits.count == 1)
     #expect(hits.first?.selectionReference == curveReference(0))
-    #expect(hits.first?.pickingBackend == .native)
 }
 
 /// A curve is drawn at scene depth, so a surface the frame drew in front of it

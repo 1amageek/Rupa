@@ -54,7 +54,6 @@ struct ViewportRectangleSubshapeIdentityTests {
         }
         #expect(hits.allSatisfy { $0.featureID == Self.sharedFeatureID })
         #expect(hits.allSatisfy { $0.kind == .body })
-        #expect(hits.allSatisfy { $0.pickingBackend == .native })
     }
 
     @Test("One placement reports each sub-shape once")

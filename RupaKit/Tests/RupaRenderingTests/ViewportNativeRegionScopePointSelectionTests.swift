@@ -526,7 +526,6 @@ func viewportNativeRegionScopeSelectsTheRegionUnderThePointer() async throws {
         observations[0].target.hit,
         "The region scope answers nothing inside the standalone region."
     )
-    #expect(hit.pickingBackend == .native)
     #expect(hit.kind == .sketch)
     #expect(hit.featureID == fixture.standaloneFeatureID)
     #expect(hit.selectionComponent == .region(fixture.standaloneRegionComponentID))
@@ -553,7 +552,6 @@ func viewportNativeRegionScopeSelectsTheProfileRegionTheFrameDraws() async throw
         observations[0].target.hit,
         "The region scope answers nothing inside the drawn profile region."
     )
-    #expect(hit.pickingBackend == .native)
     #expect(hit.kind == .sketch)
     #expect(hit.featureID == fixture.profileFeatureID)
     #expect(hit.selectionComponent == .region(fixture.profileRegionComponentID))
@@ -619,7 +617,6 @@ func viewportNativeRegionScopeRefusesTheProfileRegionTheFrameSuppressed() async 
         suppressed[0].target.hit,
         "The suppressed mount answers nothing inside the standalone region."
     )
-    #expect(standalone.pickingBackend == .native)
     #expect(standalone.featureID == fixture.standaloneFeatureID)
     #expect(standalone.selectionComponent == .region(fixture.standaloneRegionComponentID))
     #expect(suppressed[1].target.hit == nil)

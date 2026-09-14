@@ -564,7 +564,6 @@ func viewportNativeVertexScopeSelectsTheSurfaceKnotUnderThePointer() async throw
     )
 
     let hit = try #require(observations[0].target.hit)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.sceneNodeID == fixture.freeSheetSceneNodeID)
     #expect(hit.kind == .body)
 
@@ -617,7 +616,6 @@ func viewportNativeVertexScopeSelectsAKnotTheDrawnBodyCovers() async throws {
         observations[0].target.hit,
         "The vertex scope refused a knot the body is drawn in front of."
     )
-    #expect(hit.pickingBackend == .native)
     #expect(hit.sceneNodeID == fixture.occludedSheetSceneNodeID)
     #expect(hit.selectionReference == geometry.occludedKnot.reference)
     #expect(hit.selectionComponent == nil)
@@ -673,7 +671,6 @@ func viewportNativeCombinedScopePrefersTheSurfaceKnotOverTheFaceBeneathIt() asyn
     // rank, which is what keeps a pointer that named a handle from resolving to
     // the body drawn behind it.
     let hit = try #require(observations[0].target.hit)
-    #expect(hit.pickingBackend == .native)
     #expect(hit.sceneNodeID == fixture.occludedSheetSceneNodeID)
     #expect(hit.selectionReference == geometry.occludedKnot.reference)
     #expect(hit.selectionComponent == nil)

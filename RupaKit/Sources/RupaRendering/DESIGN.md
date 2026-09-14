@@ -1742,11 +1742,16 @@ independent tessellator is never an alternative implementation.
    No incompleteness remains on this path. Every body, sketch, region and
    curve a rectangle can reach is judged by the mounted frame, and no window
    of any width is lost for any of them. With the point and the rectangle
-   gesture both reading the frame, `ViewportIdentityHitResolver` keeps no
-   production caller for selection: its `selectionHits` and `hitTest` entry
-   points are marked deprecated and name RK-5, which owns removing the GPU
-   identity buffer backend, the CPU rectangle tester it falls back to, and the
-   readiness budget types that still read it.
+   gesture both reading the frame, the legacy pick backend is gone.
+   `ViewportIdentityBufferRenderer`, `ViewportIdentityPickRenderPlan`,
+   `ViewportIdentityPickIndex` and `ViewportIdentityHitResolver` are deleted,
+   as are the CPU testers they fell back to, `ViewportHitTester`,
+   `ViewportBodyTopologyHitTester` and `ViewportSelectionRectangleHitTester`,
+   and the readiness budget types that read them,
+   `ViewportPickingReadinessService` and `ViewportPickingReadinessSummary`.
+   `ViewportHit.pickingBackend` and `ViewportHit.bodyVertex` go with them:
+   each existed only to carry that backend's output, and nothing writes
+   either once it is removed.
    `Tests/RupaRenderingTests/ViewportNativeCADTopologyResolverTests.swift` owns
    the behavioral evidence for this resolver's point path: the rank-then-metric
    order across bodies, the run lookup that names the CAD face of the drawn
