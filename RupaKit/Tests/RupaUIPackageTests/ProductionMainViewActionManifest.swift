@@ -66,6 +66,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/MainView.swift",
         "Sources/RupaUI/Modeling/ModelingOperationDraft.swift",
         "Sources/RupaUI/Modeling/FeatureHistoryView.swift",
+        "Sources/RupaUI/Outliner/OutlinerSourceCommands.swift",
         "Sources/RupaKit/GeometryExchange/ProjectGeometryImport.swift",
         "Sources/RupaUI/PatternArrayEditingService.swift",
         "Sources/RupaUI/PatternArrayExpressionWritebackService.swift",
@@ -124,6 +125,7 @@ enum ProductionMainViewActionManifest {
         "moveBody",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",
+        "moveSceneNodes",
         "moveSketchEntityPoint",
         "moveSketchSplineControlPoint",
         "moveSurfaceControlPoint",
@@ -140,8 +142,10 @@ enum ProductionMainViewActionManifest {
         "rebaseWorkspaceOrigin",
         "rebuildSketchCurve",
         "removeSavedView",
+        "renameComponentInstance",
         "renameConstructionPlane",
         "renameParameter",
+        "renameSceneNode",
         "reorderFeatureGraph",
         "setFeatureSuppression",
         "reverseSketchCurve",
@@ -182,12 +186,10 @@ enum ProductionMainViewActionManifest {
 
     static let canvasEditorCommandNames = [
         "createArcSketch",
-        "createCircleSketch",
         "createExtrudedRectangleFromCorners",
         "createFaceKnife",
         "createPolygonSketch",
         "createRectangleSketchFromCorners",
-        "createSectionPlane",
         "createSplineSketch",
         "createSweep",
         "extrudeProfile",
@@ -248,13 +250,29 @@ enum ProductionMainViewActionManifest {
         routeRow("canvas.polygonKnife", "WorkspaceCanvasCommandPlanner face knife", .sourceTransaction, .canvas, "EditorCommand.splitBodyFaceWithSketch", "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift", #"\bfaceKnifeCommand\b"#),
         routeRow("canvas.arc", "WorkspaceCanvasCommandPlanner arc", .sourceTransaction, .canvas, "EditorCommand.createArcSketch", "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift", #"\barcCommand\b"#),
         routeRow("canvas.spline", "WorkspaceCanvasCommandPlanner spline", .sourceTransaction, .canvas, "EditorCommand.createSplineSketch", "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift", #"\bsplineCommand\b"#),
-        routeRow("canvas.surface", "WorkspaceCanvasCommandPlanner circle", .sourceTransaction, .canvas, "EditorCommand.createCircleSketch", "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift", #"\bcircleClickCommand\b"#),
+        routeRow(
+            "canvas.surface",
+            "MainView sheet Loft draft",
+            .mainActorTransient,
+            .canvas,
+            "ModelingOperationDraft.loft(sheet: true)",
+            "Sources/RupaUI/MainView.swift",
+            #"beginSurfaceModelingOperation[\s\S]*?sheet\s*=\s*true"#
+        ),
         routeRow("canvas.sweep", "SweepSelectionPlanningService", .sourceTransaction, .canvas, "EditorCommand.createSweep", "Sources/RupaCore/SweepSelectionPlanningService.swift", #"\bcommand\s*\("#),
-        routeRow("canvas.section", "WorkspaceCanvasCommandPlanner section", .sourceTransaction, .canvas, "EditorCommand.createSectionPlane", "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift", #"\.createSectionPlane\s*\("#),
-        routeRow("canvas.measure.selection", "MainView measurement target selection", .interactionTransaction, .canvas, "ProjectWorkspace.applySelection", "Sources/RupaUI/MainView.swift", #"measureCanvasTarget[\s\S]*?workspace\.applySelection\(\.replace\(selection\)\)"#),
-        routeRow("canvas.measure.read", "MainView immutable measurement", .snapshotRead, .canvas, "MeasurementService", "Sources/RupaUI/MainView.swift", #"measureCanvasTarget[\s\S]*?MeasurementService\(\)\.measure"#),
-        routeRow("canvas.mesh.selection", "MainView mesh target selection", .interactionTransaction, .canvas, "ProjectWorkspace.applySelection", "Sources/RupaUI/MainView.swift", #"inspectCanvasMesh[\s\S]*?workspace\.applySelection\(\.replace\(selection\)\)"#),
-        routeRow("canvas.mesh.read", "MainView immutable mesh summary", .snapshotRead, .canvas, "MeshSummaryService", "Sources/RupaUI/MainView.swift", #"inspectCanvasMesh[\s\S]*?MeshSummaryService\(\)\.summarize"#),
+        routeRow(
+            "canvas.section",
+            "WorkspaceCanvasCommandPlanner view-aligned section",
+            .sourceTransaction,
+            .canvas,
+            "EditorCommand.createViewAlignedConstructionPlane",
+            "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
+            #"sectionClickCommand[\s\S]*?\.createViewAlignedConstructionPlane\s*\("#
+        ),
+        routeRow("canvas.measure.selection", "MainView transient measurement state forwarding", .mainActorTransient, .canvas, "ViewportMeasurementState callback", "Sources/RupaUI/MainView.swift", #"onMeasurementStateChange[\s\S]*?viewportMeasurementState\s*=\s*state"#),
+        routeRow("canvas.measure.read", "MainView transient measurement status", .mainActorTransient, .canvas, "ViewportMeasurementState display", "Sources/RupaUI/MainView.swift", #"measurementContextPanelContent\(viewportMeasurementState\)"#),
+        routeRow("canvas.mesh.selection", "MainView mesh target selection", .interactionTransaction, .canvas, "ProjectWorkspace.applySelection", "Sources/RupaUI/MainView.swift", #"routeCanvasMesh[\s\S]*?workspace\.applySelection\(\.replace\(selection\)\)"#),
+        routeRow("canvas.mesh.read", "MainView authored mesh element draft", .mainActorTransient, .canvas, "MainActor MeshOperationDraft", "Sources/RupaUI/MainView.swift", #"\bhandleMeshElementPick\b"#),
     ]
 
     static let patternArrayRows: [Row] = [
@@ -327,11 +345,44 @@ enum ProductionMainViewActionManifest {
         let contents = try sourceContents(filePath: filePath)
         var matches: [String] = []
         for (relativePath, source) in contents {
-            for forbidden in forbiddenProductionReferences where source.contains(forbidden) {
+            let code = try productionCode(in: source)
+            for forbidden in forbiddenProductionReferences where code.contains(forbidden) {
                 matches.append("\(relativePath):\(forbidden)")
             }
         }
         return matches.sorted()
+    }
+
+    /// Production source with comment prose blanked out.
+    ///
+    /// The forbidden-reference audit proves that no production file holds or
+    /// drives a legacy session object. A comment that names a session is
+    /// prose, not an authority, so comments become whitespace before the
+    /// match. String literals stay verbatim so a URL inside quotes never
+    /// truncates the code that follows it on the same line.
+    static func productionCode(in source: String) throws -> String {
+        let expression = try NSRegularExpression(
+            pattern: #"(?:""")[\s\S]*?(?:""")|"(?:\\.|[^"\n])*"|//[^\n]*|/\*[\s\S]*?\*/"#
+        )
+        let sourceRange = NSRange(source.startIndex..<source.endIndex, in: source)
+        var code = ""
+        code.reserveCapacity(source.count)
+        var cursor = source.startIndex
+        for match in expression.matches(in: source, range: sourceRange) {
+            guard let matchRange = Range(match.range, in: source) else {
+                continue
+            }
+            code.append(contentsOf: source[cursor..<matchRange.lowerBound])
+            let matched = source[matchRange]
+            if matched.hasPrefix("//") || matched.hasPrefix("/*") {
+                code.append(contentsOf: matched.map { $0 == "\n" ? "\n" : " " })
+            } else {
+                code.append(contentsOf: matched)
+            }
+            cursor = matchRange.upperBound
+        }
+        code.append(contentsOf: source[cursor...])
+        return code
     }
 
     static func detectedProductionEditorCommandNames(

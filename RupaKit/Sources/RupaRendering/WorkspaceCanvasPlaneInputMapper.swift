@@ -16,6 +16,7 @@ public struct WorkspaceCanvasPlaneInputMapper: Sendable {
     public enum Failure: Error, Equatable {
         case unresolvedViewNormal
         case viewRayParallelToPlane
+        case unresolvedViewRayAnchor
     }
 
     public var projectionBasis: ViewportProjectionBasis
@@ -60,24 +61,14 @@ public struct WorkspaceCanvasPlaneInputMapper: Sendable {
             )
         }
 
+        // A standard plane carries the model point as a plain canvas footprint,
+        // so it still answers without a world point. A saved construction plane
+        // only has canvas coordinates through the plane itself, and the mounted
+        // frame owns the ray origin that reaches it.
         guard case .plane = sketchPlane else {
             return Result(point: modelPoint, worldPoint: nil)
         }
-
-        guard let viewNormal = projectionBasis.viewNormal else {
-            throw Failure.unresolvedViewNormal
-        }
-        let rayOrigin = viewRayAnchorWorldPoint ?? Point3D(x: modelPoint.x, y: 0.0, z: modelPoint.y)
-        let worldPoint = try intersectPlane(
-            rayOrigin: rayOrigin,
-            rayDirection: viewNormal,
-            coordinateSystem: coordinateSystem
-        )
-        return mappedResult(
-            for: worldPoint,
-            coordinateSystem: coordinateSystem,
-            sketchPlane: sketchPlane
-        )
+        throw Failure.unresolvedViewRayAnchor
     }
 
     private func mappedResult(

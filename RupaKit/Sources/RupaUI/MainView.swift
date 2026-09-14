@@ -5815,6 +5815,11 @@ private struct ProjectMainViewContent: View {
                 "Canvas input is parallel to the active construction plane from this view.",
                 severity: .warning
             )
+        } catch WorkspaceCanvasPlaneInputMapper.Failure.unresolvedViewRayAnchor {
+            reportToolStatus(
+                "Canvas input needs a mounted viewport frame to place it on the active construction plane.",
+                severity: .warning
+            )
         } catch {
             reportToolStatus(
                 "Canvas input could not be projected onto the active construction plane.",

@@ -19,26 +19,20 @@ import Testing
     #expect(result.worldPoint == nil)
 }
 
-@Test func workspaceCanvasPlaneInputMapperIntersectsCustomPlaneFromViewRay() throws {
-    let plane = SketchPlane.plane(
-        Plane3D(
-            origin: Point3D(x: 0.0, y: 0.2, z: 0.0),
-            normal: .unitY
-        )
-    )
-    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane)
+@Test func workspaceCanvasPlaneInputMapperRefusesCustomPlaneWithoutViewRayAnchor() throws {
+    let plane = try workspaceCanvasCustomPlane()
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
 
-    let result = try mapper.map(
-        modelPoint: Point2D(x: 0.04, y: 0.03),
-        modelWorldPoint: nil,
-        sketchPlane: plane
-    )
-
-    let worldPoint = try #require(result.worldPoint)
-    let depth = offsetVector(from: coordinateSystem.origin, to: worldPoint).dot(coordinateSystem.normal)
-    #expect(abs(depth) <= 1.0e-9)
-    #expect(pointIsApproximatelyEqual(result.point, coordinateSystem.project(worldPoint).point))
+    do {
+        _ = try mapper.map(
+            modelPoint: Point2D(x: 0.04, y: 0.03),
+            modelWorldPoint: nil,
+            sketchPlane: plane
+        )
+        Issue.record("Expected mapper to refuse a custom plane with no view-ray anchor.")
+    } catch let failure as WorkspaceCanvasPlaneInputMapper.Failure {
+        #expect(failure == .unresolvedViewRayAnchor)
+    }
 }
 
 @Test func workspaceCanvasPlaneInputMapperProjectsKnownWorldPointOntoCustomPlane() throws {
@@ -93,10 +87,10 @@ import Testing
 }
 
 @Test func workspaceCanvasPlaneInputMapperIntersectsStandardPlaneFromViewRayAnchor() throws {
-    let basis = ViewportProjectionBasis.axisFront(.y)
+    let basis = ViewportProjectionBasis.axisFront(.z)
     let viewNormal = try #require(basis.viewNormal)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: basis)
-    let anchor = Point3D(x: 0.12, y: 0.0, z: -0.04)
+    let anchor = Point3D(x: 0.12, y: -0.04, z: 0.09)
 
     let result = try mapper.map(
         modelPoint: Point2D(x: 99.0, y: 99.0),
@@ -114,7 +108,7 @@ import Testing
     #expect(abs(rayCross.x) <= 1.0e-12)
     #expect(abs(rayCross.y) <= 1.0e-12)
     #expect(abs(rayCross.z) <= 1.0e-12)
-    #expect(abs(worldPoint.y - anchor.y) > 1.0e-6)
+    #expect(abs(worldPoint.z - anchor.z) > 1.0e-6)
 }
 
 @Test func workspaceCanvasPlaneInputMapperRejectsStandardPlaneParallelToViewRay() throws {
@@ -135,12 +129,7 @@ import Testing
 }
 
 @Test func workspaceCanvasPlaneInputMapperIntersectsCustomPlaneFromViewRayAnchor() throws {
-    let plane = SketchPlane.plane(
-        Plane3D(
-            origin: Point3D(x: 0.0, y: 0.2, z: 0.0),
-            normal: .unitY
-        )
-    )
+    let plane = try workspaceCanvasCustomPlane()
     let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane)
     let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
     let anchor = Point3D(x: 0.04, y: 0.0, z: 0.03)
@@ -157,6 +146,7 @@ import Testing
     #expect(abs(depth) <= 1.0e-9)
     #expect(pointIsApproximatelyEqual(result.point, coordinateSystem.project(worldPoint).point))
     #expect(abs(worldPoint.x - anchor.x) <= 1.0e-12)
+    #expect(abs(worldPoint.z - anchor.z) > 1.0e-6)
 }
 
 @MainActor
@@ -170,6 +160,7 @@ import Testing
     let canvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.018, y: -0.012),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.018, y: -0.012, z: 0.0),
         sketchPlane: activePlane
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
@@ -206,11 +197,13 @@ import Testing
     let startCanvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.005, y: 0.004),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.005, y: 0.004, z: 0.0),
         sketchPlane: activePlane
     )
     let endCanvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.031, y: 0.017),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.031, y: 0.017, z: 0.0),
         sketchPlane: activePlane
     )
     let resolvedStartWorldPoint = try mapper.resolvedWorldPoint(
@@ -283,6 +276,7 @@ import Testing
     let canvasInput = try mapper.map(
         modelPoint: Point2D(x: -0.016, y: 0.011),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: -0.016, y: 0.011, z: 0.0),
         sketchPlane: activePlane
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
@@ -322,11 +316,13 @@ import Testing
     let startCanvasInput = try mapper.map(
         modelPoint: Point2D(x: -0.024, y: 0.006),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: -0.024, y: 0.006, z: 0.0),
         sketchPlane: activePlane
     )
     let endCanvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.018, y: 0.034),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.018, y: 0.034, z: 0.0),
         sketchPlane: activePlane
     )
     let startWorldPoint = try #require(
@@ -380,6 +376,7 @@ import Testing
         _ = try mapper.map(
             modelPoint: Point2D(x: 0.0, y: 0.0),
             modelWorldPoint: nil,
+            viewRayAnchorWorldPoint: Point3D(x: 0.0, y: 0.0, z: 0.4),
             sketchPlane: plane
         )
         Issue.record("Expected mapper to reject a custom plane parallel to the view ray.")
@@ -410,6 +407,7 @@ private func assertCustomPlaneCanvasClickCreatesSketch(
     let canvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.022, y: -0.017),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.022, y: -0.017, z: 0.0),
         sketchPlane: activePlane
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
@@ -453,11 +451,13 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
     let startCanvasInput = try mapper.map(
         modelPoint: Point2D(x: -0.018, y: 0.009),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: -0.018, y: 0.009, z: 0.0),
         sketchPlane: activePlane
     )
     let endCanvasInput = try mapper.map(
         modelPoint: Point2D(x: 0.027, y: 0.031),
         modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: Point3D(x: 0.027, y: 0.031, z: 0.0),
         sketchPlane: activePlane
     )
     let startWorldPoint = try #require(

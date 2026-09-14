@@ -515,6 +515,20 @@ public final class EditorSession {
         sketchInputState.clearReferenceLineAnchors()
     }
 
+    /// Activates the selected tool from a canvas click.
+    ///
+    /// - Warning: Deprecated. No production route calls this. `MainView`
+    ///   routes canvas clicks through `WorkspaceCanvasPlaneInputMapper` and
+    ///   `WorkspaceCanvasCommandPlanner`, which build an explicit
+    ///   `EditorCommand` from the immutable project snapshot instead of
+    ///   mutating a session in place. It stays only until the canvas tool
+    ///   tests that still exercise it assert against that planner route, and
+    ///   must not be adopted by new callers.
+    @available(
+        *,
+        deprecated,
+        message: "Route canvas clicks through WorkspaceCanvasCommandPlanner."
+    )
     @discardableResult
     public func activateSelectedToolFromCanvas(
         targetSceneNodeID: SceneNodeID?,
@@ -751,6 +765,19 @@ public final class EditorSession {
         }
     }
 
+    /// Activates the selected tool from a canvas drag.
+    ///
+    /// - Warning: Deprecated. No production route calls this. `MainView`
+    ///   routes canvas drags through `WorkspaceCanvasPlaneInputMapper`,
+    ///   `ViewportCanvasDragSnapResolver` and
+    ///   `WorkspaceCanvasCommandPlanner.dragCommand(tool:...)`. It stays only
+    ///   until the canvas tool tests that still exercise it assert against
+    ///   that planner route, and must not be adopted by new callers.
+    @available(
+        *,
+        deprecated,
+        message: "Route canvas drags through WorkspaceCanvasCommandPlanner."
+    )
     @discardableResult
     public func activateSelectedToolFromCanvasDrag(
         startModelPoint: Point2D,

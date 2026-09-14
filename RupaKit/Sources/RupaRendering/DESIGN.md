@@ -1019,8 +1019,24 @@ independent tessellator is never an alternative implementation.
    normal and a frame that cannot answer the intersection both refuse the
    whole gesture. The anchor is never dropped to `nil` on failure, because
    the consumer then substitutes a different ray origin and the created
-   geometry moves. The CAD-face `exactWorldPoint` handed to
-   that mapper is native provenance: it is the mounted frame's own surface hit
+   geometry moves. `WorkspaceCanvasPlaneInputMapper` is that consumer and
+   holds the matching guarantee: with no exact world point and no anchor it
+   substitutes nothing. A standard plane keeps the model point as a plain
+   footprint with no world point, and a saved custom construction plane,
+   whose canvas coordinates only exist through the plane, refuses with
+   `unresolvedViewRayAnchor`. Deriving a ray origin from the model point on
+   a fixed world plane is forbidden: the pre-native mapper read the model
+   point as a ZX ground-plane position, which under a true-orthographic
+   axis-front basis collapses every canvas point of a tilted plane onto one
+   line, so a rectangle drag loses its height and the command is refused for
+   a zero extent instead of the missing anchor. A plane whose normal is
+   perpendicular to the view normal is edge-on to that basis and refuses with
+   `viewRayParallelToPlane`; that is the accepted limitation of a true
+   orthographic camera, and the answer is the view-aligned construction plane
+   request, which builds a plane facing the current camera, never an oblique
+   projection term reintroduced to make the ray cross the plane.
+   The CAD-face `exactWorldPoint` handed to that mapper is native
+   provenance: it is the mounted frame's own surface hit
    at that input event, admitted only when the drawn triangle is `.cad`-sourced,
    its occurrence maps to the primary selection target's scene node, that node
    is a CAD interaction node, and the prepared run list names the selected face
