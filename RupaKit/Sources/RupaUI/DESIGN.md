@@ -130,7 +130,47 @@ are not converted into empty successful views. MainActor work is bounded by
 admitted plan positions and batches. Title projection performs no CAD, file,
 or transport reads.
 
+### Failure surfacing
+
+Every failure a workspace control refuses on is appended to
+`WorkspaceFailureLog` before any view shows it. The log is a process-wide,
+MainActor-isolated, ordered, bounded, non-deduplicating record. Each entry
+carries a timestamp, the operation that failed, the reflected error type, the
+reflected error value, and the message the control displays. Because typed
+errors in this repository describe themselves through `message` alone, the
+reflected value is what preserves the `code` and the concrete error type that
+`localizedDescription` drops. Each entry is mirrored to
+`Logger(subsystem: "RupaUI", category: "WorkspaceFailureLog")`, so a manual
+session can be reconstructed from the unified log after the window is gone.
+
+The red inline text, the Outliner alert, and `modelingPreview.errorMessage`
+are transient views of the most recent record, not the record itself. A new
+run, a Cancel, or a selection change clears the view and never clears the
+log. The log is the authority for what failed; a surface is the authority
+only for what is visible right now.
+
+Refusals that carry no `Error` value, where a guard discards a user gesture,
+are recorded through the same API with a message naming the unmet
+precondition. Two guards stay silent by contract: a viewport hit whose
+`snapshotID` is older than the mounted frame is frame readiness rather than a
+refusal, and re-entrancy or token-mismatch guards describe no user operation.
+`WorkspaceObjectTransform.componentsError` is also not appended, because it
+is a function of the current selection evaluated while the view is being
+built, not an event, and appending would mutate state during a view update.
+
+`EditorDiagnostic` keeps its existing meaning, a fact about the document or
+its evaluation, and is not extended to carry UI failures. It crosses the
+Agent wire through `AgentSemanticDiagnostic` and
+`AgentProjectViewCoordinates`, so its shape is a protocol rather than a UI
+detail. `EditorDiagnostic.stableMerged` also deduplicates by severity, code,
+and message, which would hide a failure that repeats. The two lists stay
+separate and the Logs pane presents recorded failures above diagnostics.
+
 ## Verification and Change Impact
+
+A focused App UI test must drive a shipped control to a deterministic refusal
+and read the recorded entry back out of the Logs pane, proving the record
+exists independently of the transient red surface that appears with it.
 
 Focused tests must verify title projection, matching
 idle/preparing/ready/failed state, stale/teardown completion rejection, and
