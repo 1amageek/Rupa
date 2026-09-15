@@ -189,8 +189,27 @@ private to `Viewport`, no fixture in either module constructs that view, and
 `RupaRendering` already owns the classification test that decides which
 failures reach the funnel, so the behavioral evidence that a refused gesture
 becomes a record is the shipped-chrome sweep reading the Logs pane after a
-real drag. Until that sweep runs, the wiring is verified by source review and
-by the package build alone.
+real drag.
+
+That sweep has run. `AppProjectRoundTripUITests` drove create, select, face
+edit, save, and reload against the shipped chrome with recording on, and read
+the scene rail before each launch ended: "0 failures, 0 errors, 0 warnings, 1
+info" after the save and "None" after the reload. It exercised no gesture
+refusal. The one canvas drag that run carried started on a body face marker,
+which is not a transform-gizmo station, so the press took the
+selection-rectangle path and never reached the affordance route the funnel
+serves; that leg is not part of the committed test. The channel is therefore
+unexercised by the sweep, and its wiring still rests on source review and the
+package build.
+
+Exercising it from shipped chrome would need two things that do not exist
+today. A gizmo station would have to publish where the frame drew it, the way
+`RupaRendering` publishes the construction-plane handles, because a press
+aimed anywhere else routes elsewhere. And the gesture would have to be one the
+frame refuses for a permanent reason: a drag that succeeds commits and reports
+nothing, so reaching the funnel means provoking a refusal rather than
+performing a move. Both are conditions a later exercise would have to arrange,
+not work this design schedules.
 
 Focused tests must verify title projection, matching
 idle/preparing/ready/failed state, stale/teardown completion rejection, and
