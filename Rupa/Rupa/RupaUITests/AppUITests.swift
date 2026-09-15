@@ -152,7 +152,7 @@ final class AppUITests: XCTestCase {
     @MainActor
     func testFaceSelectionModeShowsSubobjectTarget() throws {
         let app = launchApp()
-        let canvas = app.otherElements["CanvasViewport"]
+        let canvas = app.descendants(matching: .any)["CanvasViewport"]
         XCTAssertTrue(canvas.waitForExistence(timeout: 8))
 
         let solidTool = app.buttons["CanvasTool.solid"]
@@ -162,12 +162,13 @@ final class AppUITests: XCTestCase {
 
         let box = app.outlines.staticTexts["Box"].firstMatch
         XCTAssertTrue(box.waitForExistence(timeout: 3))
-        XCTAssertTrue(app.otherElements["CanvasSelectionAffordance"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.descendants(matching: .any)["CanvasSelectionAffordance"].waitForExistence(timeout: 3))
 
         let selectTool = app.buttons["CanvasTool.select"]
         XCTAssertTrue(selectTool.waitForExistence(timeout: 3))
         selectTool.click()
 
+        expandUtilityRailIfNeeded(in: app)
         let faceScope = app.buttons["WorkspaceSelectionScope.face"]
         XCTAssertTrue(faceScope.waitForExistence(timeout: 3))
         faceScope.click()
@@ -186,7 +187,7 @@ final class AppUITests: XCTestCase {
     @MainActor
     func testEdgeSelectionModeShowsChamferCommand() throws {
         let app = launchApp()
-        let canvas = app.otherElements["CanvasViewport"]
+        let canvas = app.descendants(matching: .any)["CanvasViewport"]
         XCTAssertTrue(canvas.waitForExistence(timeout: 8))
 
         let solidTool = app.buttons["CanvasTool.solid"]
@@ -201,6 +202,7 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(selectTool.waitForExistence(timeout: 3))
         selectTool.click()
 
+        expandUtilityRailIfNeeded(in: app)
         let edgeScope = app.buttons["WorkspaceSelectionScope.edge"]
         XCTAssertTrue(edgeScope.waitForExistence(timeout: 3))
         edgeScope.click()
@@ -214,10 +216,13 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(targetValue.waitForExistence(timeout: 3))
         let displayedTarget = (targetValue.value as? String) ?? targetValue.label
         XCTAssertTrue(displayedTarget.hasSuffix("Edge"), displayedTarget)
-        let inspectorButton = app.buttons["WorkspaceCommand.inspector"]
-        XCTAssertTrue(inspectorButton.waitForExistence(timeout: 3))
-        inspectorButton.click()
-        XCTAssertTrue(app.buttons["InspectorEdge.fillet"].waitForExistence(timeout: 3))
+        let fillet = app.buttons["InspectorEdge.fillet"]
+        if !fillet.waitForExistence(timeout: 3) {
+            let inspectorButton = app.buttons["WorkspaceCommand.inspector"]
+            XCTAssertTrue(inspectorButton.waitForExistence(timeout: 3))
+            inspectorButton.click()
+        }
+        XCTAssertTrue(fillet.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["InspectorEdge.chamfer"].waitForExistence(timeout: 3))
     }
 
@@ -393,7 +398,7 @@ final class AppUITests: XCTestCase {
     @MainActor
     func testFaceSelectionCreatesSavedConstructionPlaneFromContextPanel() throws {
         let app = launchApp()
-        let canvas = app.otherElements["CanvasViewport"]
+        let canvas = app.descendants(matching: .any)["CanvasViewport"]
         XCTAssertTrue(canvas.waitForExistence(timeout: 8))
 
         let solidTool = app.buttons["CanvasTool.solid"]
@@ -408,6 +413,7 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(selectTool.waitForExistence(timeout: 3))
         selectTool.click()
 
+        expandUtilityRailIfNeeded(in: app)
         let faceScope = app.buttons["WorkspaceSelectionScope.face"]
         XCTAssertTrue(faceScope.waitForExistence(timeout: 3))
         faceScope.click()
