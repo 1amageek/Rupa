@@ -393,10 +393,30 @@ private struct ProjectMainViewContent: View {
             if intent == .replace { meshDraft?.elements.removeAll() }
             return
         }
-        guard hit.snapshotID == snapshot.viewport.snapshotID,
-              let asset = snapshot.document.document.authoredMeshAssets[hit.sourceID],
-              let nodeID = snapshot.sceneNodeIDByOccurrenceID[hit.occurrenceID],
-              snapshot.document.document.productMetadata.sceneNodes[nodeID]?.isLocked == false else { return }
+        // A pick naming a frame the workspace has already replaced is a
+        // transient miss, not a refusal: the successor frame carries the hit.
+        guard hit.snapshotID == snapshot.viewport.snapshotID else { return }
+        guard let asset = snapshot.document.document.authoredMeshAssets[hit.sourceID] else {
+            reportToolStatus(
+                "The picked Mesh source is no longer part of this document.",
+                severity: .warning
+            )
+            return
+        }
+        guard let nodeID = snapshot.sceneNodeIDByOccurrenceID[hit.occurrenceID] else {
+            reportToolStatus(
+                "The picked Mesh occurrence has no scene node to edit.",
+                severity: .warning
+            )
+            return
+        }
+        guard snapshot.document.document.productMetadata.sceneNodes[nodeID]?.isLocked == false else {
+            reportToolStatus(
+                "Unlock this scene node before selecting Mesh elements on it.",
+                severity: .warning
+            )
+            return
+        }
         do {
             var draft = meshDraft ?? MeshOperationDraft(sourceID: hit.sourceID, contentIdentity: asset.contentIdentity, occurrenceID: hit.occurrenceID, unit: snapshot.workspaceState.ruler.displayUnit)
             if draft.sourceID != hit.sourceID || draft.contentIdentity != asset.contentIdentity || draft.occurrenceID != hit.occurrenceID {
@@ -5645,7 +5665,14 @@ private struct ProjectMainViewContent: View {
     private func handleViewportSketchTransformCommit(
         _ target: ViewportSketchTransformDragTarget
     ) {
-        guard selectedTool == .select, selectionScope == .object else { return }
+        guard selectedTool == .select, selectionScope == .object else {
+            reportToolStatus(
+                "Sketch transforms commit only with the Select tool "
+                    + "in object scope.",
+                severity: .warning
+            )
+            return
+        }
         submitSource(name: "transformSketch") { current in
             guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
                 throw EditorError(
