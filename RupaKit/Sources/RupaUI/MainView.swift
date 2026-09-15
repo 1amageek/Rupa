@@ -517,6 +517,10 @@ private struct ProjectMainViewContent: View {
                 guard modelingPreview.token == token else { return }
                 modelingPreview.invalidate()
                 selectedTool = .mesh
+            } catch is CancellationError {
+                // A run cancelled by its own successor, or by teardown, is
+                // superseded rather than refused, so it names no failure.
+                return
             } catch {
                 modelingPreview.fail(error, token: token)
                 reportToolStatus(
@@ -541,6 +545,10 @@ private struct ProjectMainViewContent: View {
                 }
                 try Task.checkCancellation()
                 modelingPreview.complete(payload, token: token)
+            } catch is CancellationError {
+                // A run cancelled by its own successor, or by teardown, is
+                // superseded rather than refused, so it names no failure.
+                return
             } catch {
                 modelingPreview.fail(error, token: token)
                 recordFailure(error)
@@ -562,6 +570,10 @@ private struct ProjectMainViewContent: View {
                 }
                 guard modelingPreview.token == token else { return }
                 cancelModelingOperation()
+            } catch is CancellationError {
+                // A run cancelled by its own successor, or by teardown, is
+                // superseded rather than refused, so it names no failure.
+                return
             } catch {
                 // A post-commit failure consumes the request too; never replay it.
                 modelingPreview.fail(error, token: token)
