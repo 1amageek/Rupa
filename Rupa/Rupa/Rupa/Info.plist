@@ -64,6 +64,16 @@
 				<string>application/vnd.rupa.project</string>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Rupa Outliner Scene Move</string>
+			<key>UTTypeIdentifier</key>
+			<string>team.stamp.rupa.outliner.scene-move</string>
+		</dict>
 	</array>
 </dict>
 </plist>
