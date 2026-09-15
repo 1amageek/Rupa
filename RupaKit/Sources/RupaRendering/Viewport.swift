@@ -256,6 +256,7 @@ public struct Viewport: View {
     private let onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
     private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
+    private let onNativeGestureRefusal: ((any Error) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
     private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
     private let selectedPresentationHasExactCADContext: Bool
@@ -442,7 +443,8 @@ public struct Viewport: View {
         onCameraFrameChange: ((ViewportCameraFrame?) -> Void)? = nil,
         onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
         onProjectedGridStepChange: ((Double) -> Void)? = nil,
-        onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil
+        onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
+        onNativeGestureRefusal: ((any Error) -> Void)? = nil
         ) {
         self.controlSession = controlSession
         self._localControlSession = State(
@@ -577,6 +579,7 @@ public struct Viewport: View {
         self.onCameraFrameRequestResult = onCameraFrameRequestResult
         self.onProjectedGridStepChange = onProjectedGridStepChange
         self.onMeasurementStateChange = onMeasurementStateChange
+        self.onNativeGestureRefusal = onNativeGestureRefusal
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
             sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
@@ -3674,15 +3677,19 @@ public struct Viewport: View {
 
     /// Reports a refused native gesture.
     ///
-    /// The viewport owns no workspace error channel, so a refusal is surfaced
-    /// the way the other overlay refusals are rather than being dropped, and it
-    /// is never turned into a committed value.
+    /// This is the one funnel every refusal this view judges reportable leaves
+    /// through, so a transient `frameNotReady` is filtered by the caller rather
+    /// than here. The refusal reaches this module's log and, when the owner
+    /// bound one, the owner's channel; it is never turned into a committed
+    /// value. The owner receives the `Error` itself, because a rendered string
+    /// drops the typed code and the concrete type a failure record keeps.
     private func reportNativeGestureFailure(_ error: Error) {
         let description = (error as? MeshSourcePresentationRenderError)?.message
             ?? error.localizedDescription
         Self.nativeGestureLogger.warning(
             "Native viewport gesture refused: \(description, privacy: .public)"
         )
+        onNativeGestureRefusal?(error)
     }
 
     private func cancelNativeInputGesture() {
@@ -3944,7 +3951,8 @@ public struct Viewport: View {
             }
         } catch {
             // Invalid native values never reach a source mutation callback, and
-            // the refusal is reported rather than dropped at mouse-up.
+            // the refusal leaves through the reporting funnel rather than being
+            // dropped at mouse-up.
             reportNativeGestureFailure(error)
             commit = nil
         }

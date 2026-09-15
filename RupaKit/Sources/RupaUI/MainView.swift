@@ -1821,6 +1821,17 @@ private struct ProjectMainViewContent: View {
             },
             onProjectedGridStepChange: { stepMeters in
                 viewportProjectedGridStepMeters = stepMeters
+            },
+            onNativeGestureRefusal: { error in
+                // The viewport decides which native gesture refusals are
+                // reportable and filters frame readiness before this point, so
+                // the workspace records what it is handed and shows the same
+                // text once, without recording it a second time.
+                reportToolStatus(
+                    recordFailure(error, operation: "Viewport.nativeGesture"),
+                    severity: .warning,
+                    recordsFailure: false
+                )
             }
         )
     }

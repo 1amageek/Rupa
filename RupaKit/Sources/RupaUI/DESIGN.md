@@ -29,7 +29,7 @@ document model.
 | [RupaKit package](../../DESIGN.md) | parent | module dependency and authority direction | Places UI above the workspace snapshot. | UI must not bypass the workspace. |
 | [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | used by | application file lifecycle and composition | Supplies the App-owned workspace and file activation. | File names are not project-title authority. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | `ProjectWorkspace` and `ProjectViewSnapshot` | Publishes the exact view consumed by `MainView`. | Snapshot coordinates remain immutable evidence. |
-| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state | Supplies a bounded ready frame or typed preparation failure. | UI never builds geometry, creates native resources, or repairs a failed frame. |
+| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state and the native gesture refusal callback | Supplies a bounded ready frame or typed preparation failure, and reports each native gesture refusal it judges reportable. | UI never builds geometry, creates native resources, repairs a failed frame, or re-derives which refusals are reportable. |
 | [Modeling](Modeling/DESIGN.md) | child | Local CAD operation drafts and native parameter controls | Converts explicit selection and input into existing commands. | A draft is neither a source document nor an evaluated preview. |
 
 ## Architecture
@@ -166,11 +166,31 @@ detail. `EditorDiagnostic.stableMerged` also deduplicates by severity, code,
 and message, which would hide a failure that repeats. The two lists stay
 separate and the Logs pane presents recorded failures above diagnostics.
 
+Native viewport gestures are refused inside `RupaRendering`, which owns what
+counts as reportable there. `Viewport` reports each such refusal through the
+refusal callback this module binds, and the callback records the `Error` the
+same way every other workspace failure is recorded, so a drag that ends in a
+refusal leaves an entry rather than only an os_log line. The record names
+`Viewport.nativeGesture` as the operation, because the binding closure is not
+the control the user pressed and its declaration name would say nothing about
+which channel fired. The frame-readiness exclusion stays where the decision
+lives: `RupaRendering` filters a transient query before the callback, so this
+module never re-derives that rule, and a gesture the user supersedes by
+releasing a route is a cancellation rather than a refusal and is not reported.
+
 ## Verification and Change Impact
 
 A focused App UI test must drive a shipped control to a deterministic refusal
 and read the recorded entry back out of the Logs pane, proving the record
 exists independently of the transient red surface that appears with it.
+
+The native gesture channel has no cheaper proof than that. Its report is
+private to `Viewport`, no fixture in either module constructs that view, and
+`RupaRendering` already owns the classification test that decides which
+failures reach the funnel, so the behavioral evidence that a refused gesture
+becomes a record is the shipped-chrome sweep reading the Logs pane after a
+real drag. Until that sweep runs, the wiring is verified by source review and
+by the package build alone.
 
 Focused tests must verify title projection, matching
 idle/preparing/ready/failed state, stale/teardown completion rejection, and
