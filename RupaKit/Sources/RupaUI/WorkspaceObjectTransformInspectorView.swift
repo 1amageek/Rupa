@@ -67,7 +67,9 @@ struct WorkspaceObjectTransformInspectorView: View {
             transforms = next
             transformError = nil
             onDraftChanged()
-        } catch { transformError = error.localizedDescription }
+        } catch {
+            transformError = WorkspaceFailureLog.shared.record(error)
+        }
     }
 
     private var stateSection: some View {

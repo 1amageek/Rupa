@@ -298,7 +298,7 @@ struct WorkspaceDomainCommandPanel: View {
                 errorMessage = nil
             } catch {
                 result = nil
-                errorMessage = error.localizedDescription
+                errorMessage = WorkspaceFailureLog.shared.record(error)
             }
         }
     }

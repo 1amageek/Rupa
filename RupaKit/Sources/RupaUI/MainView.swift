@@ -374,7 +374,7 @@ private struct ProjectMainViewContent: View {
             startModelingPreview(.source(action))
         } catch {
             invalidateModelingPreview()
-            modelingPreview.errorMessage = error.localizedDescription
+            modelingPreview.errorMessage = recordFailure(error)
         }
     }
 
@@ -384,7 +384,7 @@ private struct ProjectMainViewContent: View {
         do {
             let action = try DefaultProjectWorkspaceActionPlanner().source(name: title, commands: [command], from: snapshot)
             startModelingPreview(.source(action))
-        } catch { modelingPreview.errorMessage = error.localizedDescription }
+        } catch { modelingPreview.errorMessage = recordFailure(error) }
     }
 
     private func handleMeshElementPick(_ hit: ViewportMeshElementHit?, intent: ViewportSelectionIntent) {
@@ -405,7 +405,7 @@ private struct ProjectMainViewContent: View {
             try draft.select(hit.element, toggle: intent == .toggle)
             updateMeshDraft(draft)
         } catch {
-            modelingPreview.errorMessage = error.localizedDescription
+            modelingPreview.errorMessage = recordFailure(error)
         }
     }
 
@@ -448,7 +448,7 @@ private struct ProjectMainViewContent: View {
             return
         } catch {
             guard !Task.isCancelled, meshOverlayRequest == request else { return }
-            meshOverlayError = error.localizedDescription
+            meshOverlayError = recordFailure(error)
         }
     }
 
@@ -480,7 +480,7 @@ private struct ProjectMainViewContent: View {
         do { startModelingPreview(.mesh(try draft.request(from: snapshot))) }
         catch {
             invalidateModelingPreview()
-            modelingPreview.errorMessage = error.localizedDescription
+            modelingPreview.errorMessage = recordFailure(error)
         }
     }
 
@@ -499,7 +499,11 @@ private struct ProjectMainViewContent: View {
                 selectedTool = .mesh
             } catch {
                 modelingPreview.fail(error, token: token)
-                reportToolStatus(error.localizedDescription, severity: .warning)
+                reportToolStatus(
+                    recordFailure(error),
+                    severity: .warning,
+                    recordsFailure: false
+                )
             }
         }
     }
@@ -519,6 +523,7 @@ private struct ProjectMainViewContent: View {
                 modelingPreview.complete(payload, token: token)
             } catch {
                 modelingPreview.fail(error, token: token)
+                recordFailure(error)
             }
         }
     }
@@ -540,6 +545,7 @@ private struct ProjectMainViewContent: View {
             } catch {
                 // A post-commit failure consumes the request too; never replay it.
                 modelingPreview.fail(error, token: token)
+                recordFailure(error)
             }
         }
     }
@@ -574,10 +580,32 @@ private struct ProjectMainViewContent: View {
         return snapshot.selection.replacingHover(with: hover)
     }
 
+    /// The log the workspace chrome records refused operations in.
+    /// See `RupaUI/DESIGN.md`, "Failure surfacing".
+    private var failureLog: WorkspaceFailureLog { .shared }
+
+    /// Records `error` and returns the message to display, so a catch keeps the
+    /// text it already showed while the event survives the next interaction.
+    @discardableResult
+    private func recordFailure(
+        _ error: any Error,
+        operation: String = #function
+    ) -> String {
+        failureLog.record(error, operation: operation)
+    }
+
+    /// Publishes a tool status line. `.info` is progress; anything else is a
+    /// refused operation and is recorded unless the caller already recorded it
+    /// with the originating error.
     private func reportToolStatus(
         _ message: String,
-        severity: EditorDiagnostic.Severity = .info
+        severity: EditorDiagnostic.Severity = .info,
+        recordsFailure: Bool = true,
+        operation: String = #function
     ) {
+        if recordsFailure, severity != .info {
+            failureLog.record(refusal: message, operation: operation)
+        }
         transientDiagnostics.append(
             EditorDiagnostic(severity: severity, message: message)
         )
@@ -1592,14 +1620,20 @@ private struct ProjectMainViewContent: View {
                 viewportContextPanelContainer
             }
         } content: {
-            PreviewSurface(
-                document: snapshot.document.document,
-                ruler: snapshot.workspaceState.ruler,
-                evaluationStatus: snapshot.evaluationSnapshot.status,
-                evaluatedGeneration: snapshot.evaluationSnapshot.evaluatedGeneration,
-                evaluatedBodyCount: snapshot.evaluationSnapshot.bodyCount,
-                diagnostics: diagnostics
-            )
+            VStack(alignment: .leading, spacing: 0) {
+                WorkspaceFailureLogView(
+                    records: failureLog.records,
+                    onClear: { failureLog.clear() }
+                )
+                PreviewSurface(
+                    document: snapshot.document.document,
+                    ruler: snapshot.workspaceState.ruler,
+                    evaluationStatus: snapshot.evaluationSnapshot.status,
+                    evaluatedGeneration: snapshot.evaluationSnapshot.evaluatedGeneration,
+                    evaluatedBodyCount: snapshot.evaluationSnapshot.bodyCount,
+                    diagnostics: diagnostics
+                )
+            }
         } header: {
             Label("Logs", systemImage: "list.bullet.rectangle")
                 .font(.headline)
@@ -7075,7 +7109,7 @@ private struct ProjectMainViewContent: View {
                 do {
                     let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Transform Objects", commands: commands, from: snapshot)
                     startModelingPreview(.source(action))
-                } catch { modelingPreview.errorMessage = error.localizedDescription }
+                } catch { modelingPreview.errorMessage = recordFailure(error) }
             },
             onApply: applyModelingOperation,
             onCancel: invalidateModelingPreview
@@ -9375,13 +9409,15 @@ private struct ProjectMainViewContent: View {
 
     private var diagnosticSummary: String {
         let diagnostics = diagnostics
-        guard !diagnostics.isEmpty else {
+        let failures = failureLog.records.count
+        guard !diagnostics.isEmpty || failures > 0 else {
             return "None"
         }
         let errors = diagnostics.filter { $0.severity == .error }.count
         let warnings = diagnostics.filter { $0.severity == .warning }.count
         let info = diagnostics.filter { $0.severity == .info }.count
-        return "\(errors) errors, \(warnings) warnings, \(info) info"
+        return "\(failures) failures, \(errors) errors, "
+            + "\(warnings) warnings, \(info) info"
     }
 
     private var renderInvalidationReasonTitle: String {
