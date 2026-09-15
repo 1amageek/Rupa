@@ -169,8 +169,7 @@ private struct ProjectMainViewContent: View {
     @State private var slotProfileWidthMeters: Double
     @State private var slotProfileCommandState: SlotProfileCommandState
     @State private var viewportProjectionBasis: ViewportProjectionBasis
-    @State private var viewportContextPanelHeight: CGFloat
-    @State private var viewportOverlayExclusions: [ViewportCanvasOverlayExclusion]
+    @State private var viewportChromeGeometry: WorkspaceCanvasChromeGeometry
     @State private var viewportCameraResetSignal: Int
     @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
@@ -278,8 +277,7 @@ private struct ProjectMainViewContent: View {
         self._slotProfileWidthMeters = State(initialValue: editingDefaults.slotWidthMeters)
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
-        self._viewportContextPanelHeight = State(initialValue: 0.0)
-        self._viewportOverlayExclusions = State(initialValue: [])
+        self._viewportChromeGeometry = State(initialValue: .empty)
         self._viewportCameraResetSignal = State(initialValue: 0)
         self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
@@ -1528,87 +1526,95 @@ private struct ProjectMainViewContent: View {
         return values.contains { $0.localizedCaseInsensitiveContains(query) }
     }
 
-    @ViewBuilder
+    /// The detail column's split. The size it lays out at is the proposal
+    /// NavigationSplitView hands down; nothing here measures that size and
+    /// hands it back to this subtree as a frame. See `RupaUI/DESIGN.md`.
     private var editorDetailPane: some View {
-        if isInspectorPresented || modelingDraft != nil || historyPreviewTitle != nil || selectedTool == .mesh {
-            HSplitPane {
-                workArea
-                if let draft = modelingDraft {
-                    ModelingOperationView(
-                        draft: Binding(get: { modelingDraft ?? draft }, set: { modelingDraft = $0 }),
-                        document: snapshot.document.document,
-                        isBusy: modelingPreview.isBusy,
-                        hasMatchingPreview: modelingPreview.phase == .ready,
-                        errorMessage: modelingPreview.errorMessage,
-                        onUseSelection: { modelingDraft?.targets = snapshot.selection.selectedTargets },
-                        onPreview: previewModelingOperation,
-                        onApply: applyModelingOperation,
-                        onCancel: cancelModelingOperation
-                    )
-                } else if let title = historyPreviewTitle {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(title).font(.headline)
-                        Text("Review the evaluated result before applying. Dependency-invalid changes leave the document unchanged.")
-                        if modelingPreview.isBusy { ProgressView("Evaluating…") }
-                        if let message = modelingPreview.errorMessage {
-                            Text(message).foregroundStyle(.red).textSelection(.enabled)
-                                .accessibilityIdentifier("Modeling.historyPreview.error")
+        HSplitPane {
+            workArea
+            if isInspectorPresented || modelingDraft != nil
+                || historyPreviewTitle != nil || selectedTool == .mesh {
+                inspectorDetailPane
+            }
+        }
+        .leadingPaneWidth(minimum: 560)
+        .trailingPaneWidth(minimum: 320)
+        .dividerDragStrip(width: 10)
+    }
+
+    @ViewBuilder
+    private var inspectorDetailPane: some View {
+        Group {
+            if let draft = modelingDraft {
+                ModelingOperationView(
+                    draft: Binding(get: { modelingDraft ?? draft }, set: { modelingDraft = $0 }),
+                    document: snapshot.document.document,
+                    isBusy: modelingPreview.isBusy,
+                    hasMatchingPreview: modelingPreview.phase == .ready,
+                    errorMessage: modelingPreview.errorMessage,
+                    onUseSelection: { modelingDraft?.targets = snapshot.selection.selectedTargets },
+                    onPreview: previewModelingOperation,
+                    onApply: applyModelingOperation,
+                    onCancel: cancelModelingOperation
+                )
+            } else if let title = historyPreviewTitle {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(title).font(.headline)
+                    Text("Review the evaluated result before applying. Dependency-invalid changes leave the document unchanged.")
+                    if modelingPreview.isBusy { ProgressView("Evaluating…") }
+                    if let message = modelingPreview.errorMessage {
+                        Text(message).foregroundStyle(.red).textSelection(.enabled)
+                            .accessibilityIdentifier("Modeling.historyPreview.error")
+                    }
+                    HStack {
+                        Button("Cancel", action: cancelModelingOperation).keyboardShortcut(.cancelAction)
+                        Button("Apply", action: applyModelingOperation)
+                            .disabled(modelingPreview.phase != .ready)
+                            .keyboardShortcut(.defaultAction)
+                    }
+                    Spacer()
+                }.padding(16).frame(minWidth: 320)
+            } else if selectedTool == .mesh {
+                if let draft = meshDraft {
+                    VStack(alignment: .leading, spacing: 0) {
+                        MeshOperationView(
+                            draft: Binding(get: { meshDraft ?? draft }, set: updateMeshDraft),
+                            domain: $meshSelectionDomain,
+                            isBusy: modelingPreview.isBusy,
+                            hasMatchingPreview: modelingPreview.phase == .ready,
+                            errorMessage: modelingPreview.errorMessage,
+                            onPreview: previewMeshOperation, onApply: applyModelingOperation, onCancel: cancelModelingOperation
+                        )
+                        if let meshOverlayError {
+                            Text(meshOverlayError).foregroundStyle(.red).padding(.horizontal, 16)
+                                .accessibilityIdentifier("Modeling.meshOverlay.error")
+                        } else if let overlay = meshSelectionOverlay, overlay.isTruncated {
+                            Text("Selection outline: \(overlay.visibleBoundarySegmentCount) of \(overlay.sourceBoundarySegmentCount) edges shown. All selected IDs remain active.")
+                                .font(.caption).padding(.horizontal, 16)
                         }
-                        HStack {
-                            Button("Cancel", action: cancelModelingOperation).keyboardShortcut(.cancelAction)
-                            Button("Apply", action: applyModelingOperation)
-                                .disabled(modelingPreview.phase != .ready)
-                                .keyboardShortcut(.defaultAction)
-                        }
-                        Spacer()
-                    }.padding(16).frame(minWidth: 320)
-                } else if selectedTool == .mesh {
-                    if let draft = meshDraft {
-                        VStack(alignment: .leading, spacing: 0) {
-                            MeshOperationView(
-                                draft: Binding(get: { meshDraft ?? draft }, set: updateMeshDraft),
-                                domain: $meshSelectionDomain,
-                                isBusy: modelingPreview.isBusy,
-                                hasMatchingPreview: modelingPreview.phase == .ready,
-                                errorMessage: modelingPreview.errorMessage,
-                                onPreview: previewMeshOperation, onApply: applyModelingOperation, onCancel: cancelModelingOperation
-                            )
-                            if let meshOverlayError {
-                                Text(meshOverlayError).foregroundStyle(.red).padding(.horizontal, 16)
-                                    .accessibilityIdentifier("Modeling.meshOverlay.error")
-                            } else if let overlay = meshSelectionOverlay, overlay.isTruncated {
-                                Text("Selection outline: \(overlay.visibleBoundarySegmentCount) of \(overlay.sourceBoundarySegmentCount) edges shown. All selected IDs remain active.")
-                                    .font(.caption).padding(.horizontal, 16)
-                            }
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Mesh Editing").font(.headline)
-                            Picker("Select", selection: $meshSelectionDomain) {
-                                Text("Vertex").tag(GeometryAttributeDomain.vertex)
-                                Text("Edge").tag(GeometryAttributeDomain.edge)
-                                Text("Face").tag(GeometryAttributeDomain.face)
-                            }.pickerStyle(.segmented)
-                            Text("Click an Authored Mesh in the canvas. CAD bodies must first be made editable as Mesh.")
-                            Button("Make Selected CAD Editable…") { showsMakeEditableConfirmation = true }
-                                .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
-                            if let message = modelingPreview.errorMessage {
-                                Text(message).foregroundStyle(.red)
-                                    .accessibilityIdentifier("Modeling.meshTarget.error")
-                            }
-                            Button("Cancel", action: cancelModelingOperation)
-                            Spacer()
-                        }.padding(16).frame(minWidth: 320)
                     }
                 } else {
-                    inspectorPane
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Mesh Editing").font(.headline)
+                        Picker("Select", selection: $meshSelectionDomain) {
+                            Text("Vertex").tag(GeometryAttributeDomain.vertex)
+                            Text("Edge").tag(GeometryAttributeDomain.edge)
+                            Text("Face").tag(GeometryAttributeDomain.face)
+                        }.pickerStyle(.segmented)
+                        Text("Click an Authored Mesh in the canvas. CAD bodies must first be made editable as Mesh.")
+                        Button("Make Selected CAD Editable…") { showsMakeEditableConfirmation = true }
+                            .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
+                        if let message = modelingPreview.errorMessage {
+                            Text(message).foregroundStyle(.red)
+                                .accessibilityIdentifier("Modeling.meshTarget.error")
+                        }
+                        Button("Cancel", action: cancelModelingOperation)
+                        Spacer()
+                    }.padding(16).frame(minWidth: 320)
                 }
+            } else {
+                inspectorPane
             }
-            .leadingPaneWidth(minimum: 560)
-            .trailingPaneWidth(minimum: 320)
-            .dividerDragStrip(width: 10)
-        } else {
-            workArea
         }
     }
 
@@ -1617,8 +1623,7 @@ private struct ProjectMainViewContent: View {
             WorkspaceCanvasOverlayHost(
                 isContextPanelVisible: isViewportContextPanelVisible,
                 onHover: handleWorkspaceOverlayHover,
-                onContextPanelHeightChange: setViewportContextPanelHeight,
-                onExclusionsChange: setViewportOverlayExclusions
+                onChromeGeometryChange: setViewportChromeGeometry
             ) {
                 if let payload = modelingPreview.payload {
                     Viewport(
@@ -1744,7 +1749,7 @@ private struct ProjectMainViewContent: View {
             cameraFrameRequest: viewportCameraFrameRequest,
             selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
-            canvasOverlayExclusions: viewportOverlayExclusions,
+            canvasOverlayExclusions: viewportChromeGeometry.exclusions,
             gridVisualSpacingMode: snapshot.workspaceState.viewportGridSettings.visualSpacingMode,
             workspaceScalePresetTitle: scaleSummary.presetTitle,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
@@ -1836,18 +1841,11 @@ private struct ProjectMainViewContent: View {
         )
     }
 
-    private func setViewportContextPanelHeight(_ height: CGFloat) {
-        guard abs(viewportContextPanelHeight - height) > 0.5 else {
+    private func setViewportChromeGeometry(_ geometry: WorkspaceCanvasChromeGeometry) {
+        guard viewportChromeGeometry != geometry else {
             return
         }
-        viewportContextPanelHeight = height
-    }
-
-    private func setViewportOverlayExclusions(_ exclusions: [ViewportCanvasOverlayExclusion]) {
-        guard viewportOverlayExclusions != exclusions else {
-            return
-        }
-        viewportOverlayExclusions = exclusions
+        viewportChromeGeometry = geometry
     }
 
     private var inspectorPane: some View {
@@ -3137,7 +3135,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportBottomChromeReservedHeight: CGFloat {
-        isViewportContextPanelVisible ? viewportContextPanelHeight : 0.0
+        isViewportContextPanelVisible ? viewportChromeGeometry.contextPanelHeight : 0.0
     }
 
     private var viewportContextPanelContainer: some View {

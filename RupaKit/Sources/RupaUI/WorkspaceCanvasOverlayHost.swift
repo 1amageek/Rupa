@@ -4,13 +4,13 @@ import SwiftUI
 struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View, UtilityRail: View, ContextPanel: View>: View {
     var isContextPanelVisible: Bool
     var onHover: (Bool) -> Void
-    var onContextPanelHeightChange: (CGFloat) -> Void
-    var onExclusionsChange: ([ViewportCanvasOverlayExclusion]) -> Void
+    var onChromeGeometryChange: (WorkspaceCanvasChromeGeometry) -> Void
     @ViewBuilder var content: () -> Content
     @ViewBuilder var topBar: () -> TopBar
     @ViewBuilder var toolPalette: () -> ToolPalette
     @ViewBuilder var utilityRail: () -> UtilityRail
     @ViewBuilder var contextPanel: () -> ContextPanel
+    @State private var store = WorkspaceCanvasChromeRectStore()
 
     var body: some View {
         ZStack {
@@ -21,19 +21,19 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
             topBar()
                 .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
                 .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayExclusion(.topBar)
+                .workspaceCanvasOverlayChrome(.topBar, onChange: setChromeRect)
                 .onHover(perform: onHover)
         }
         .overlay(alignment: .leading) {
             toolPalette()
                 .padding(.leading, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayExclusion(.toolPalette)
+                .workspaceCanvasOverlayChrome(.toolPalette, onChange: setChromeRect)
                 .onHover(perform: onHover)
         }
         .overlay(alignment: .trailing) {
             utilityRail()
                 .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayExclusion(.utilityRail)
+                .workspaceCanvasOverlayChrome(.utilityRail, onChange: setChromeRect)
                 .onHover(perform: onHover)
         }
         .overlay(alignment: .bottom) {
@@ -41,9 +41,11 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
                 contextPanel()
                     .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
                     .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .workspaceCanvasContextPanelHeight()
-                    .workspaceCanvasOverlayExclusion(.contextPanel)
+                    .workspaceCanvasOverlayChrome(.contextPanel, onChange: setChromeRect)
                     .onHover(perform: onHover)
+                    .onDisappear {
+                        clearChromeRect(.contextPanel)
+                    }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -51,11 +53,58 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
         .accessibilityIdentifier("WorkspaceCanvasArea")
         .accessibilityLabel("Workspace canvas area")
         .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
-        .onPreferenceChange(ViewportContextPanelHeightPreferenceKey.self) { height in
-            onContextPanelHeightChange(WorkspaceCanvasOverlayGeometry.normalizedHeight(height))
+    }
+
+    /// Records one chrome's measured rectangle.
+    ///
+    /// The host accumulates rectangles rather than reading a preference bound
+    /// into this body. A bound preference would make this body both the reader
+    /// and the producer of one value inside a single update, leaving the
+    /// measurement with no owner outside the view that produced it. The
+    /// rectangles live in a reference this body never reads, so what the view
+    /// graph sees is the published value and nothing else.
+    @MainActor
+    private func setChromeRect(_ id: WorkspaceCanvasOverlayChromeID, _ rect: CGRect) {
+        guard store.rects[id] != rect else {
+            return
         }
-        .onPreferenceChange(WorkspaceCanvasOverlayExclusionRectPreferenceKey.self) { rectsByID in
-            onExclusionsChange(WorkspaceCanvasOverlayGeometry.normalizedExclusions(rectsByID))
+        store.rects[id] = rect
+        schedulePublication()
+    }
+
+    /// Withdraws a chrome's rectangle when that chrome leaves the overlay.
+    ///
+    /// The accumulated rectangles outlive the views that produced them, so a
+    /// context panel that is hidden and shown again would otherwise republish
+    /// the rectangle it had before it went away.
+    @MainActor
+    private func clearChromeRect(_ id: WorkspaceCanvasOverlayChromeID) {
+        guard store.rects[id] != nil else {
+            return
+        }
+        store.rects.removeValue(forKey: id)
+        schedulePublication()
+    }
+
+    // Chrome rectangles are layout output. The workspace stores what this host
+    // publishes and hands it straight back to the viewport in `content()`,
+    // whose fitting insets and control-context identity derive from it, so the
+    // publication is an input to the same subtree that produced the
+    // measurement. Publishing on the next MainActor tick keeps the measuring
+    // pass and the write that depends on it in separate passes, and replacing
+    // a pending publication collapses a settling sequence into the value that
+    // survives the frame. A superseded publication carries no operation
+    // meaning, so dropping it reports nothing.
+    @MainActor
+    private func schedulePublication() {
+        store.publication?.cancel()
+        let geometry = WorkspaceCanvasChromeGeometry(chromeRects: store.rects)
+        store.publication = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else {
+                return
+            }
+            onChromeGeometryChange(geometry)
         }
     }
 }
@@ -65,49 +114,18 @@ private enum WorkspaceCanvasOverlayLayout {
     static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
 }
 
-private struct WorkspaceCanvasOverlayExclusionRectPreferenceKey: PreferenceKey {
-    static let defaultValue: [WorkspaceCanvasOverlayChromeID: CGRect] = [:]
-
-    static func reduce(
-        value: inout [WorkspaceCanvasOverlayChromeID: CGRect],
-        nextValue: () -> [WorkspaceCanvasOverlayChromeID: CGRect]
-    ) {
-        value.merge(nextValue()) { _, next in next }
-    }
-}
-
-private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0.0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
 private extension View {
-    func workspaceCanvasOverlayExclusion(_ id: WorkspaceCanvasOverlayChromeID) -> some View {
-        background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: WorkspaceCanvasOverlayExclusionRectPreferenceKey.self,
-                    value: [
-                        id: proxy.frame(
-                            in: .named(WorkspaceCanvasOverlayLayout.coordinateSpaceName)
-                        ),
-                    ]
-                )
-            }
-        }
-    }
-
-    func workspaceCanvasContextPanelHeight() -> some View {
-        background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ViewportContextPanelHeightPreferenceKey.self,
-                    value: proxy.size.height
-                )
-            }
+    /// Reports this chrome's rectangle in the overlay coordinate space once the
+    /// layout that produced it has completed.
+    @MainActor
+    func workspaceCanvasOverlayChrome(
+        _ id: WorkspaceCanvasOverlayChromeID,
+        onChange: @escaping @MainActor (WorkspaceCanvasOverlayChromeID, CGRect) -> Void
+    ) -> some View {
+        onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(WorkspaceCanvasOverlayLayout.coordinateSpaceName))
+        } action: { rect in
+            onChange(id, rect)
         }
     }
 }

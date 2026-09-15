@@ -105,6 +105,32 @@ The viewport root fills its parent-allocated rectangle in every preparation
 state. Native content, input, and chrome share that coordinate space; padding
 is inside the allocation, never a competing child width or height.
 
+`HSplitPane` owns the viewport/inspector division and user resizing inside
+NavigationSplitView's detail column; the native inspector modifier is not
+used. The split is mounted for the document's lifetime and the inspector is
+added and removed as its trailing child, so the detail column presents one
+split rather than alternating between a split and a bare viewport. The split
+also owns how it divides its bounds between those columns: the pane minimums
+it declares are enforced only from the constrain callbacks AppKit makes while
+a divider is dragged, and adding a child is not a drag, so a pane that appears
+receives whatever division the split assigns it. A fixed width on the pane's
+content does not override that division either; it only centres the content
+inside the column it was handed. Inspector content therefore fills its column
+rather than naming a width of its own, and no caller-side width is treated as
+a layout guarantee. Every native split must keep its arranged columns within
+its own bounds and the host window.
+
+The detail column's size is owned by the proposal NavigationSplitView hands
+down. No view between that column and the canvas host may measure the size it
+has been given and feed that measurement back into its own subtree as a
+frame. A measured size is one pass behind the proposal that produced it, so a
+frame derived from it can hold a child at a size its parent has already left,
+and one subtree is then laid out at two different sizes inside a single pass.
+The split therefore takes the proposal directly, the viewport accepts the
+remaining width without imposing a competing minimum width, and inspector
+content consumes its pane's width with only its existing horizontal padding,
+without measuring, storing, or independently fixing that width.
+
 ## Runtime Flows
 
 The application coordinator publishes a new workspace view only after
@@ -121,6 +147,39 @@ The existing cache owns one cancellable build task and matching result;
 the injected workspace owns the observable view; `ProjectController` owns
 source state and publication. The UI does not retain source authority,
 security-scoped URLs, or transport resources.
+
+`WorkspaceCanvasOverlayHost` owns the screen-space chrome the canvas draws
+over the viewport, and the rectangles that chrome occupies are layout output
+rather than view state. The host owns both how it reads them and when they
+become workspace state. It reads each rectangle from a layout-completion
+geometry callback on the chrome that owns it, never from a preference bound
+into the host's own body. A bound preference would make the host both the
+producer and the reader of one value inside a single update, leaving the
+measurement with no owner outside the view that produced it. The context
+panel's reserved height is derived from that panel's measured rectangle
+rather than measured a second time, because a second measurement of the same
+view carries the same number while adding a second workspace value that
+changes in the same frame.
+
+The host holds the rectangles it has been handed in a reference its own body
+never reads, and publishes them to the workspace as one value on the
+MainActor tick after the layout that measured them, replacing a publication
+still pending when a newer value arrives. No view renders from a held
+rectangle until it has been published. Keeping them out of the view graph is
+an ownership rule, and this design does not claim it removes any particular
+SwiftUI runtime issue. That one value carries every chrome rectangle and the
+derived height together, so the workspace state the viewport reads changes
+once per settled layout rather than once per chrome. The deferral follows
+from where the value goes: `MainView` stores what the host publishes and
+passes it straight back into the `Viewport` occupying the host's content
+slot, whose fitting insets and control-context identity derive from it, so
+the publication is an input to the same subtree that produced the
+measurement. Publishing on the next tick keeps the measuring pass and the
+write that depends on it in separate passes. Chrome that leaves the overlay
+withdraws its rectangle, because rectangles the host holds outlive the view
+that produced them. Neither the rectangles nor the derived height carries
+operation meaning and neither is a source input, so a publication superseded
+before it runs is dropped rather than recorded as a failure.
 
 ## Failure, Concurrency, and Constraints
 
@@ -210,6 +269,31 @@ frame refuses for a permanent reason: a drag that succeeds commits and reports
 nothing, so reaching the funnel means provoking a refusal rather than
 performing a move. Both are conditions a later exercise would have to arrange,
 not work this design schedules.
+
+Chrome publication timing has no in-process fixture. `MainView` and
+`WorkspaceCanvasOverlayHost` hold the state privately, and a same-frame
+re-entry is not visible in any value either view exposes: the rectangles that
+reach `RupaRendering` are identical whether they arrived once or twice. That
+signal lives outside the process. A launch and quit of the built app must
+produce no `com.apple.SwiftUI:Invalid Configuration` runtime issue naming a
+chrome geometry value or the viewport control-context identity, read from the
+process log for that window, and the same window must carry RealityKit engine
+entries showing the launch reached a mounted viewport rather than failing
+before the chrome was laid out.
+
+A launch cannot show that anything was measured, because a host that
+publishes nothing also raises nothing. Delivery is proved in process instead:
+mounted in an `NSWindow` with a visible context panel, the host publishes four
+canvas-local rectangles and a reserved height equal to the context panel's own
+measured height. Neither check is sound without the other.
+
+The split's own behavior is proved by mounting it the way the detail column
+builds it and driving the transition that adds and removes the inspector. A
+width read back from that fixture is the division the split chose rather than
+a value this module named, so the assertions that discriminate are the edges:
+the inspector arrives as a column flush with the split's trailing edge and
+separated from the canvas by no more than the divider, withdrawing it returns
+the whole split to the canvas, and re-adding it restores the same division.
 
 Focused tests must verify title projection, matching
 idle/preparing/ready/failed state, stale/teardown completion rejection, and
