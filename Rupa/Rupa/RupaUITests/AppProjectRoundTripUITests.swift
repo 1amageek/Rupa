@@ -8,6 +8,16 @@ final class AppProjectRoundTripUITests: XCTestCase {
 
     private var workingDirectoryURL: URL?
 
+    /// Every failure the workspace recorded while the round trip ran, in the
+    /// order the two launches reported them. Nothing on this path is meant to
+    /// be refused, so a non-empty list is the defect the sweep exists to find.
+    private var recordedFailures: [String] = []
+
+    /// What each launch read back without judging it. A passing round trip
+    /// asserts only that nothing was recorded, so the readouts that carry the
+    /// counts are printed as well, and a green run still says what it saw.
+    private var observations: [String] = []
+
     override func setUpWithError() throws {
         continueAfterFailure = false
         let directory = FileManager.default.temporaryDirectory
@@ -21,6 +31,20 @@ final class AppProjectRoundTripUITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        if !recordedFailures.isEmpty {
+            print("Workspace failures recorded during the round trip:")
+            for failure in recordedFailures {
+                print("  - \(failure)")
+            }
+        }
+        recordedFailures.removeAll()
+        if !observations.isEmpty {
+            print("Round trip observations:")
+            for observation in observations {
+                print("  - \(observation)")
+            }
+        }
+        observations.removeAll()
         guard let workingDirectoryURL else { return }
         if FileManager.default.fileExists(atPath: workingDirectoryURL.path) {
             try FileManager.default.removeItem(at: workingDirectoryURL)
@@ -113,6 +137,7 @@ final class AppProjectRoundTripUITests: XCTestCase {
             """
         )
         assertProjectIsAvailable(in: app)
+        harvestRecordedFailures(in: app, stage: "create, edit and save")
         app.terminate()
 
         // Reload.
@@ -131,7 +156,87 @@ final class AppProjectRoundTripUITests: XCTestCase {
             editedBounds,
             "The reopened project does not measure the geometry that was saved."
         )
+        harvestRecordedFailures(in: reopened, stage: "reload")
         reopened.terminate()
+
+        XCTAssertTrue(
+            recordedFailures.isEmpty,
+            """
+            The round trip recorded workspace failures: \
+            \(recordedFailures.joined(separator: " | "))
+            """
+        )
+    }
+
+    // MARK: - Failure record helpers
+
+    /// Reads back what the workspace recorded, the way a user checks it: the
+    /// scene rail reports how many failures the session holds, and the Logs
+    /// pane keeps their text after the red inline labels are gone. The record
+    /// is process-wide, so one read before a launch ends covers every
+    /// operation that launch performed.
+    /// See `RupaUI/DESIGN.md`, "Failure surfacing".
+    @MainActor
+    private func harvestRecordedFailures(in app: XCUIApplication, stage: String) {
+        let issues = app.descendants(matching: .any)["WorkspaceScene.issues"]
+        // An expanded rail already publishes the whole readout; a collapsed one
+        // publishes compact destinations instead, and any of them expands it.
+        if !issues.exists {
+            let destinations = [
+                "WorkspaceUtilityRail.scene",
+                "WorkspaceUtilityRail.selection",
+                "WorkspaceUtilityRail.expand",
+            ]
+            guard let opener = destinations
+                .map({ app.buttons[$0] })
+                .first(where: { $0.waitForExistence(timeout: 5) })
+            else {
+                recordedFailures.append(
+                    "\(stage): the utility rail publishes neither the scene readout nor a way to open it."
+                )
+                return
+            }
+            opener.click()
+        }
+        guard issues.waitForExistence(timeout: 10) else {
+            recordedFailures.append("\(stage): the scene rail published no issue readout.")
+            return
+        }
+        let summary = (issues.value as? String) ?? issues.label
+        observations.append("\(stage): issues read \(summary)")
+        // "None" is the readout with no diagnostics and no records at all.
+        guard summary != "None", !summary.hasPrefix("0 failures") else { return }
+        let logs = app.buttons["WorkspaceCommand.logs"]
+        guard logs.waitForExistence(timeout: 10) else {
+            recordedFailures.append(
+                "\(stage): issues read \(summary), and the Logs command is unreachable."
+            )
+            return
+        }
+        logs.click()
+        let count = app.descendants(matching: .any)["WorkspaceFailureLog.count"]
+        guard count.waitForExistence(timeout: 10) else {
+            recordedFailures.append(
+                "\(stage): issues read \(summary), but the Logs pane lists no record."
+            )
+            return
+        }
+        // Records without an `Error` value carry no detail row, so the two
+        // lists do not line up by index. Report each list on its own terms.
+        for entry in texts(of: "WorkspaceFailureLog.entry", in: app) {
+            recordedFailures.append("\(stage): \(entry)")
+        }
+        for detail in texts(of: "WorkspaceFailureLog.detail", in: app) {
+            recordedFailures.append("\(stage) detail: \(detail)")
+        }
+    }
+
+    @MainActor
+    private func texts(of identifier: String, in app: XCUIApplication) -> [String] {
+        app.descendants(matching: .any)
+            .matching(identifier: identifier)
+            .allElementsBoundByIndex
+            .map { ($0.value as? String) ?? $0.label }
     }
 
     // MARK: - App helpers
