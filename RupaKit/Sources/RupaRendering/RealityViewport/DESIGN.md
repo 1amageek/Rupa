@@ -135,6 +135,40 @@ Production-host tests must mount `RealityViewportView` itself without manually
 calling `applyCamera` or `updateSpatialCamera`; delayed test-only camera setup
 is not evidence for this lifecycle.
 
+### Native host lifetime
+
+The host view accepts an absent frame. One canvas owns exactly one native
+scene for its lifetime: the `RealityView` is mounted unconditionally, and an
+absent frame is a no-op for the host. The frame it last attached stays in that
+scene and keeps drawing, and its pending work runs to completion, because the
+parent cache has already withdrawn authority and drops whatever that work
+reports. A frame is attached and replaced inside that one scene; it is removed
+only by its successor or by the host's disappearance.
+
+Resource reuse requires this, not display. A prepared surface reuses the
+previous frame's mesh, collision, and material resources whenever the source
+snapshot allows it, while `attachSurfaces` always builds fresh entities. A
+native resource used by two scenes migrates its asset root between them, so a
+host that is unmounted and remounted per source change hands live resources
+to a scene whose predecessor is still being discarded. Remounting also
+rebuilds the engine on every document mutation, because the parent cache
+withdraws its frame for every changed scene key or snapshot ID.
+
+```text
+frame withdrawn -> the host does nothing; the last root keeps drawing
+frame published -> the previous root leaves as the new one attaches
+host disappears -> detach the root and unbind; the scene is discarded once
+```
+
+A withdrawn frame keeps drawing and stops answering. Its root stays a child
+of the scene and stays display-eligible, while the parent cache refuses every
+query for it, so what is on screen is never evidence that a press will land.
+Display continuity is why: a rebuild withdraws the requested identity for as
+long as it takes, and a host that emptied its scene for that span would black
+the canvas out on every document mutation. The host publishes no status for an
+absent frame: the visible failure for that identity is owned by the parent
+cache, not by the mount.
+
 The parent Rendering owner supplies one immutable
 `[SceneOccurrenceID: ColorRGBA]` value containing material values resolved from
 exactly the provided visible `presentationScene.items`. The
@@ -697,7 +731,10 @@ of screen-baked dashes.
    provenance entry; any loss is a typed preparation failure and no ready frame
    is published. The exposed root is a mount/unmount capability only:
    production hosts may add or remove that root from `RealityView` content but
-   may not mutate its descendants or components. Surface entries and collision
+   may not mutate its descendants or components. Between the first admitted
+   frame and the host's disappearance the scene never holds zero roots: an
+   absent frame leaves the last attached root in place, and a published frame
+   is what removes it. Surface entries and collision
    components are immutable after publication, so pointer queries rely on this
    established guarantee instead of scanning all occurrences on every event.
    A raycast with no hit in a validated ready frame remains a valid miss;
@@ -1201,7 +1238,9 @@ replacement or unmount
 
 ## State, Ownership, and Lifecycle
 
-The host owns the candidate and current root for one mount. The preparation
+The host owns the native scene for the canvas lifetime and the candidate and
+current root for one mount; withdrawing a frame detaches its root and leaves
+the scene mounted. The preparation
 request owns immutable source/overlay values until completion; the host owns
 native resources. The camera
 session remains owned by `ViewportControlSession`, not by RealityKit entities.
@@ -1292,6 +1331,7 @@ latency for every allocator arrangement.
 
 | Invariant | Evidence |
 |---|---|
+| Native host lifetime | [`RealityViewportMountTests`](../../../Tests/RupaRenderingTests/RealityViewportMountTests.swift) mounts the host in an `NSWindow`, withdraws its frame, and proves the root it attached is still in the same `Scene` after the host has run further updates, so a rebuild cannot empty the scene and black the canvas out. Publishing a successor then moves the scene to that frame and removes the predecessor, proving one canvas keeps one scene across a source change. |
 | Native resource path | Apple GPU probe/test covers triangles, line topology, text/path extrusion, material assignment, and macOS-27-or-later `ClippingComponent` hierarchy. Purely translated exact-equal payloads use the same visual/collision/line resource identities through distinct entities and retain distinct occurrence/face hit provenance; a changed shear or other non-equal native payload does not share. A same-shading material-map replacement changes the actual native output; invalid replacement reports failure without partial mutation; a camera-only revision leaves appearance resources unchanged and performs no material-resolution callback or scene traversal. |
 | Native camera/input | [`RealityViewportNativeCameraQueryTests`](../../../Tests/RupaRenderingTests/RealityViewportNativeCameraQueryTests.swift) mounts the real owner and proves empty-scene Ortho/Persp camera-plane queries, plane intersection, a 1 mm depth-axis drag, perspective eye-probe reversal handling, behind-camera refusal, render-origin conversion, and cache stale/unmounted refusal. Existing mounted macOS 27 tests retain the raw inverse-query counterexamples, then cover documented orthographic/symmetric-perspective lens forms; centered/off-center fit/pan render/project parity; three-point affine explicit miss; composed-ray/project round trips; near/far filtering; bounded `Scene.raycast`; true axis-front endpoints; rigid quaternion-transition frames; and invalid-frame or stale-tuple miss. Apple-GPU front/back quad tests prove the one-sided visual-mesh collision counterexample, then compare rendered visibility with ordered native `.all` results from the collision-only original/reversed mesh for material culling on/off, both normalized face ranges, out-of-range refusal, and exact source provenance. |
 | Spatial footprint admission | Focused RK-4.2.1 tests admit and query each enabled Mesh, PlanarPath, Label, and CameraPath footprint and reject invalid tolerance, rectangle, handle index, generated-tessellation count, cumulative proxy count/byte, or retained-byte input before application-owned copies or partial publication. The raw nested-path counterexample demonstrates that zero-depth native extrusion followed directly by static collision fills a same-winding hole; the native even-odd-normalized fixture proves GPU-visible fill, front/back hole misses, transformed reuse, and peak normalized-growth refusal. Two-sided Mesh and normalized PlanarPath fixtures distinguish exact filled regions, holes, zero tolerance, and point-space boundary expansion in world/sectioned and scene/annotation routes; Label fixtures compare the exact supplied rectangle after alignment, orbit, and zoom; CameraPath fixtures compare the legacy center radius at its final camera-relative position. Nil footprints create no collider, and camera-only updates retain native resource identity. |

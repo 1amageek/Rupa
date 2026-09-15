@@ -869,4 +869,103 @@ struct RealityViewportMountTests {
         #expect(viewport.gridScaleReadout != nil)
         #expect(nativeGridModel()?.model?.mesh === initialGridMesh)
     }
+
+    /// The host owns one native scene, and that scene is never empty.
+    ///
+    /// Withdrawing a frame must leave its root drawing in the scene, because
+    /// the cache withdraws the requested identity for the whole of every
+    /// rebuild and a host that emptied its scene for that span would black
+    /// the canvas out on each document mutation. The successor frame is what
+    /// removes the predecessor, and it is adopted by that same scene: a host
+    /// unmounted per source change would hand reused native resources to a
+    /// scene whose predecessor is still being discarded.
+    @Test(.timeLimit(.minutes(1)))
+    func withdrawnFrameKeepsDrawingUntilItsSuccessorAttaches() async throws {
+        _ = NSApplication.shared
+        let size = CGSize(width: 480, height: 360)
+        func makeViewport() async throws -> RealityViewport {
+            let batch = try RealityViewportSpatialBatch(
+                includesAxes: true, renderOrigin: .origin, retainedSurfaceByteCount: 0
+            )
+            return try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: nil)
+        }
+        let first = try await makeViewport()
+        let second = try await makeViewport()
+        var reportedError: MeshSourcePresentationRenderError?
+        func view(_ viewport: RealityViewport?, revision: UInt64) -> some View {
+            RealityViewportView(
+                viewport: viewport,
+                viewportRevision: revision,
+                displayMode: .solid,
+                shading: .init(style: .flat),
+                materialColors: [:],
+                layout: .init(
+                    modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02),
+                    size: size,
+                    camera: .init(zoom: 1, projection: .parallel),
+                    basis: .isometric,
+                    verticalBounds: -0.01...0.01
+                ),
+                interaction: .init(
+                    sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
+                    previewSceneNodeIDs: [], hoveredSceneNodeID: nil
+                ),
+                sectionPlane: nil,
+                retainedSide: .front,
+                sectionTolerance: 0,
+                onUpdateResult: { reportedError = $0 }
+            )
+            .frame(width: size.width, height: size.height)
+        }
+        let controller = NSHostingController(rootView: view(first, revision: 1))
+        let window = NSWindow(
+            contentRect: CGRect(origin: .zero, size: size),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.orderFront(nil)
+        defer {
+            first.unbind()
+            second.unbind()
+            window.contentViewController = nil
+            window.close()
+        }
+
+        func settle(until ready: () -> Bool) async throws -> Bool {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+            while ContinuousClock.now < deadline {
+                controller.view.layoutSubtreeIfNeeded()
+                if ready() { return true }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            return ready()
+        }
+
+        let mounted = try await settle {
+            reportedError == nil && first.appliedViewportRevision == 1 && first.root.scene != nil
+        }
+        #expect(mounted)
+        let scene = try #require(first.root.scene)
+
+        controller.rootView = view(nil, revision: 2)
+        // Nothing may change here, so run the host long enough that an update
+        // which removed the root would have done so before this is read.
+        for _ in 0..<10 {
+            controller.view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(first.root.scene === scene)
+
+        controller.rootView = view(second, revision: 3)
+        let adopted = try await settle {
+            reportedError == nil && second.appliedViewportRevision == 3
+                && second.root.scene != nil && first.root.scene == nil
+        }
+        #expect(adopted)
+        #expect(second.root.scene === scene)
+        #expect(first.root.scene == nil)
+    }
 }

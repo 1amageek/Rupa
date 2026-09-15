@@ -642,69 +642,73 @@ public struct Viewport: View {
                         ?? presentationSurface.flatMap { gridFailure?.rendererID == ObjectIdentifier($0) ? gridFailure?.error : nil }
                 }
                 ZStack {
-                    if let presentationSurface, let preparationIdentity {
-                        RealityViewportView(
-                            viewport: presentationSurface,
-                            viewportRevision: activeControlSession.revision,
-                            displayMode: displayMode,
-                            shading: shading,
-                            materialColors: materialColors,
-                            layout: sceneContext.layout,
-                            interaction: presentationInteractionStateResolver,
-                            sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,
-                            retainedSide: sectionClippingPlan?.retainedSide ?? .front,
-                            sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
-                            excludedRects: chromeLayout.inputExclusionRects,
-                            gridRuler: workspaceRuler,
-                            gridSpacing: gridVisualSpacingMode,
-                            onGridUpdateResult: { error, readout in
-                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
-                                gridFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
-                                nativeGridReadout = readout.map { (ObjectIdentifier(presentationSurface), $0) }
-                            },
-                            onBoundsRulerUpdateResult: { axes in
-                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
-                                nativeBoundsRulerAxes = axes.map { (ObjectIdentifier(presentationSurface), $0) }
-                            },
-                            onAppliedFrameRevision: { revision in
-                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
-                                guard let revision else {
-                                    constructionPlaneHandleMarkers = []
-                                    return
-                                }
-                                do {
-                                    let markers = try ViewportConstructionPlaneHandleMarkerResolver.resolve(
-                                        planCache: presentationPlanCache,
-                                        identity: preparationIdentity,
-                                        revision: revision
-                                    )
-                                    if constructionPlaneHandleMarkers != markers {
-                                        constructionPlaneHandleMarkers = markers
-                                    }
-                                } catch {
-                                    constructionPlaneHandleMarkers = []
-                                    let failure = (error as? MeshSourcePresentationRenderError)
-                                        ?? MeshSourcePresentationRenderError(
-                                            code: .failed, message: error.localizedDescription
-                                        )
-                                    surfaceFailure = (ObjectIdentifier(presentationSurface), failure)
-                                }
-                            },
-                            onUpdateResult: { error in
-                                guard presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
-                                surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
-                                if error == nil {
-                                    resumeNativeAxisFinish()
-                                    resumeSketchTransformFinish()
-                                    resumeNativeWorldPointFinish()
-                                } else if presentationSurface.appliedViewportRevision == nil {
-                                    cancelNativeInputGesture()
-                                }
+                    // The host stays mounted while no frame is current, so one
+                    // canvas keeps one native scene across every rebuild.
+                    RealityViewportView(
+                        viewport: presentationSurface,
+                        viewportRevision: activeControlSession.revision,
+                        displayMode: displayMode,
+                        shading: shading,
+                        materialColors: materialColors,
+                        layout: sceneContext.layout,
+                        interaction: presentationInteractionStateResolver,
+                        sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,
+                        retainedSide: sectionClippingPlan?.retainedSide ?? .front,
+                        sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
+                        excludedRects: chromeLayout.inputExclusionRects,
+                        gridRuler: workspaceRuler,
+                        gridSpacing: gridVisualSpacingMode,
+                        onGridUpdateResult: { error, readout in
+                            guard let preparationIdentity, let presentationSurface,
+                                  presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                            gridFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
+                            nativeGridReadout = readout.map { (ObjectIdentifier(presentationSurface), $0) }
+                        },
+                        onBoundsRulerUpdateResult: { axes in
+                            guard let preparationIdentity, let presentationSurface,
+                                  presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                            nativeBoundsRulerAxes = axes.map { (ObjectIdentifier(presentationSurface), $0) }
+                        },
+                        onAppliedFrameRevision: { revision in
+                            guard let preparationIdentity, let presentationSurface,
+                                  presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                            guard let revision else {
+                                constructionPlaneHandleMarkers = []
+                                return
                             }
-                        )
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                    }
+                            do {
+                                let markers = try ViewportConstructionPlaneHandleMarkerResolver.resolve(
+                                    planCache: presentationPlanCache,
+                                    identity: preparationIdentity,
+                                    revision: revision
+                                )
+                                if constructionPlaneHandleMarkers != markers {
+                                    constructionPlaneHandleMarkers = markers
+                                }
+                            } catch {
+                                constructionPlaneHandleMarkers = []
+                                let failure = (error as? MeshSourcePresentationRenderError)
+                                    ?? MeshSourcePresentationRenderError(
+                                        code: .failed, message: error.localizedDescription
+                                    )
+                                surfaceFailure = (ObjectIdentifier(presentationSurface), failure)
+                            }
+                        },
+                        onUpdateResult: { error in
+                            guard let preparationIdentity, let presentationSurface,
+                                  presentationPlanCache.displaySurface(for: preparationIdentity) === presentationSurface else { return }
+                            surfaceFailure = error.map { (ObjectIdentifier(presentationSurface), $0) }
+                            if error == nil {
+                                resumeNativeAxisFinish()
+                                resumeSketchTransformFinish()
+                                resumeNativeWorldPointFinish()
+                            } else if presentationSurface.appliedViewportRevision == nil {
+                                cancelNativeInputGesture()
+                            }
+                        }
+                    )
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(viewportBackground)

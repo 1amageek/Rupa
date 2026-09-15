@@ -178,10 +178,19 @@ requested identity is prepared, otherwise the mounted frame whose scene key and
 optional real snapshot ID are equal and whose overlay revision alone differs. An
 overlay-only rebuild therefore never converts a press into a silent refusal. A
 changed source or snapshot, an idle cache, or a typed failure recorded for the
-requested identity withdraws display and authority together, so the two cannot
-disagree about which frame answers. The exact-ready `surface(for:)` accessor
-remains the preparation-lifecycle readiness predicate, not the input authority. Render origin is derived from those admitted
-source/layout inputs rather than being a second cache-authority coordinate;
+requested identity withdraws authority, and no other frame inherits it, so two
+frames never disagree about which one answers. Withdrawal removes neither the
+picture nor the native host: the `RealityView` stays mounted and keeps showing
+the frame it last attached, so one canvas keeps one native scene across every
+rebuild and never goes blank between two of them. A displayed frame is
+therefore not evidence of authority. The cache alone decides, and it refuses
+every query for a withdrawn identity while that picture is still on screen.
+See the
+[native host lifetime](RealityViewport/DESIGN.md#native-host-lifetime).
+The exact-ready `surface(for:)` accessor remains the preparation-lifecycle
+readiness predicate, not the input authority. Render origin is derived from
+those admitted source/layout inputs rather than being a second cache-authority
+coordinate;
 warm synchronous native reuse still requires the mounted and requested origins
 to be equal. The `.task(id:)` that captures the immutable raw
 producer input and starts its semantic build is attached inside the geometry

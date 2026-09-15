@@ -5,8 +5,14 @@ import SwiftCAD
 import SwiftUI
 
 /// Mounts the native scene; the input surface and CAD mutation owners stay outside.
+///
+/// One canvas owns one native scene for its lifetime. An absent frame leaves
+/// the root this host last attached in that scene, so a rebuild never blacks
+/// the canvas out; its successor is what removes it. The host is never
+/// unmounted, because a rebuilt frame reuses native resources and a resource
+/// shared by two scenes migrates its asset root between them.
 struct RealityViewportView: View {
-    let viewport: RealityViewport
+    let viewport: RealityViewport?
     let viewportRevision: UInt64
     let displayMode: ViewportDisplayMode
     let shading: ViewportShading
@@ -45,6 +51,12 @@ struct RealityViewportView: View {
     }
 
     private func update(_ content: inout RealityViewCameraContent) {
+        // A withdrawn frame keeps drawing. The root this host last attached
+        // stays in the scene until its successor replaces it, so a rebuild
+        // never empties the scene and blacks the canvas out. The parent cache
+        // has already withdrawn authority, so whatever this frame still
+        // reports reaches no state.
+        guard let viewport else { return }
         let canUpdateSynchronously = mount.current?.matchesAppliedFrame(
             layout: layout, displayScale: displayScale, revision: viewportRevision,
             renderOrigin: viewport.renderOrigin
@@ -214,6 +226,8 @@ struct RealityViewportView: View {
             reportTask?.cancel()
             reportTask = nil
             current?.unbind(owner: ObjectIdentifier(self))
+            // No frame may outlive the scene that adopted it.
+            current?.root.removeFromParent()
             current = nil
             hasReported = false
             reportsStatus = false
