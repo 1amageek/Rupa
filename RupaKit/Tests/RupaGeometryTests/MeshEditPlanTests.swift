@@ -753,53 +753,42 @@ func meshEditPlanRejectsInvalidExtrusionRegionsAndAttributes() throws {
     }
     #expect(error?.code == .inconsistentFaceOrientation)
 
-    let attributed = try makeAttributedTriangle()
+    let faceAttributed = try makeFaceAttributedTriangle()
     let topologyStep = MeshEditStep(
         id: MeshEditStepID("topology"),
         operation: .primitive(
-            .addFace(vertexIDs: [MeshVertexID(0), MeshVertexID(2), MeshVertexID(1)])
+            .addFace(vertexIDs: [
+                faceAttributed.vertexIDs[0],
+                faceAttributed.vertexIDs[2],
+                faceAttributed.vertexIDs[1],
+            ])
         )
     )
     error = nil
     do {
         _ = try DefaultMeshEditPlanExecutor().execute(
             plan: MeshEditPlan(steps: [topologyStep]),
-            source: attributed
+            source: faceAttributed
         )
     } catch let caught as MeshEditError {
         error = caught
     }
     #expect(error?.code == .topologyAttributeRemappingUnsupported)
 
-    var directBuffer = MeshEditBuffer(source: attributed)
+    // The commit rejects the same plan even when the preflight is bypassed.
+    var directBuffer = MeshEditBuffer(source: faceAttributed)
+    _ = try directBuffer.addFace(vertexIDs: [
+        faceAttributed.vertexIDs[0],
+        faceAttributed.vertexIDs[2],
+        faceAttributed.vertexIDs[1],
+    ])
     var directError: MeshSourceError?
     do {
-        _ = try directBuffer.addVertex(GeometryPoint3D(x: 0, y: 0, z: 1))
+        _ = try directBuffer.commit()
     } catch let caught as MeshSourceError {
         directError = caught
     }
     #expect(directError?.code == .unsupportedOperation)
-    #expect(!directBuffer.hasEdits)
-    directError = nil
-    do {
-        _ = try directBuffer.addFace(vertexIDs: [
-            attributed.vertexIDs[0],
-            attributed.vertexIDs[1],
-            attributed.vertexIDs[2],
-        ])
-    } catch let caught as MeshSourceError {
-        directError = caught
-    }
-    #expect(directError?.code == .unsupportedOperation)
-    #expect(!directBuffer.hasEdits)
-    directError = nil
-    do {
-        try directBuffer.deleteFace(attributed.faceIDs[0])
-    } catch let caught as MeshSourceError {
-        directError = caught
-    }
-    #expect(directError?.code == .unsupportedOperation)
-    #expect(!directBuffer.hasEdits)
 
     let nonManifold = try makeNonManifoldTriangleFan()
     let nonManifoldStep = MeshEditStep(
@@ -819,6 +808,94 @@ func meshEditPlanRejectsInvalidExtrusionRegionsAndAttributes() throws {
         error = caught
     }
     #expect(error?.code == .nonManifoldFaceRegion)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func meshEditPlanCarriesAttributesThroughTopologyCommits() throws {
+    let attributed = try makeAttributedQuadPair()
+    let executor = DefaultMeshEditPlanExecutor()
+
+    let deleted = try executor.execute(
+        plan: MeshEditPlan(steps: [
+            MeshEditStep(
+                id: MeshEditStepID("delete"),
+                operation: .primitive(
+                    .deleteFaces(
+                        .explicit(
+                            try MeshSelectionSet(elements: [.face(attributed.faceIDs[0])])
+                        )
+                    )
+                )
+            ),
+        ]),
+        source: attributed
+    )
+
+    guard let sourceNormalLayer = attributed.attributes.layer(for: "cad.normal"),
+          let committedNormalLayer = deleted.source.attributes.layer(for: "cad.normal"),
+          case .vector3(let sourceNormalBuffer) = sourceNormalLayer.values,
+          case .vector3(let committedNormalBuffer) = committedNormalLayer.values else {
+        Issue.record("The committed Mesh lost its dense CAD normal layer.")
+        return
+    }
+    let sourceNormals = Array(sourceNormalBuffer)
+    #expect(sourceNormals.count == 4)
+    // An unchanged vertex domain shares its dense layer storage rather than
+    // gathering the same values into a new buffer.
+    #expect(
+        sourceNormalBuffer.storage.chunkIdentities
+            == committedNormalBuffer.storage.chunkIdentities
+    )
+
+    guard let tag = deleted.source.attributes.layer(for: "face.tag"),
+          let tagIndices = tag.indices,
+          case .int32(let tagValues) = tag.values else {
+        Issue.record("The committed Mesh lost its sparse face tag layer.")
+        return
+    }
+    #expect(Array(tagIndices) == [UInt32(0)])
+    #expect(Array(tagValues) == [Int32(22)])
+
+    let extruded = try executor.execute(
+        plan: MeshEditPlan(steps: [
+            MeshEditStep(
+                id: MeshEditStepID("extrude"),
+                operation: .extrudeFaces(
+                    .explicit(
+                        try MeshSelectionSet(
+                            elements: attributed.faceIDs.map(MeshSelectionElement.face)
+                        )
+                    ),
+                    offset: GeometryVector3D(x: 0, y: 0, z: 1)
+                )
+            ),
+        ]),
+        source: attributed
+    )
+    guard let extrudedNormals = vector3Values(
+        extruded.source.attributes.layer(for: "cad.normal")
+    ) else {
+        Issue.record("The extruded Mesh lost its CAD normal layer.")
+        return
+    }
+    #expect(extrudedNormals.count == extruded.source.vertexIDs.count)
+    #expect(extrudedNormals.count > sourceNormals.count)
+    #expect(Array(extrudedNormals.prefix(sourceNormals.count)) == sourceNormals)
+    for index in sourceNormals.count..<extrudedNormals.count {
+        let duplicated = extruded.source.vertexPositions[index]
+        let origin = GeometryPoint3D(
+            x: duplicated.x,
+            y: duplicated.y,
+            z: duplicated.z - 1
+        )
+        guard let originIndex = (0..<sourceNormals.count).first(where: {
+            attributed.vertexPositions[$0] == origin
+        }) else {
+            Issue.record("An extruded vertex has no source vertex at its offset origin.")
+            continue
+        }
+        #expect(extrudedNormals[index] == sourceNormals[originIndex])
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -1204,6 +1281,78 @@ private func makeDenselyAndSparselyAttributedTriangle() throws -> MeshSource {
         )
     )
     return try builder.build()
+}
+
+private func makeFaceAttributedTriangle() throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: "fixture.plan-face-attributed")
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addTriangle(first, second, third)
+    try builder.setAttribute(
+        GeometryAttributeLayer(
+            descriptor: GeometryAttributeDescriptor(
+                id: "face.area",
+                name: "Face Area",
+                domain: .face,
+                valueType: .float32,
+                interpolation: .linear
+            ),
+            values: .float32(GeometryBuffer([Float(0.5)]))
+        )
+    )
+    return try builder.build()
+}
+
+private func makeAttributedQuadPair() throws -> MeshSource {
+    var builder = MeshSourceBuilder(identity: "fixture.plan-attributed-quad")
+    let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let v1 = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let v2 = try builder.addVertex(GeometryPoint3D(x: 1, y: 1, z: 0))
+    let v3 = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addTriangle(v0, v1, v2)
+    _ = try builder.addTriangle(v0, v2, v3)
+    try builder.setAttribute(
+        GeometryAttributeLayer(
+            descriptor: GeometryAttributeDescriptor(
+                id: "cad.normal",
+                name: "CAD Normal",
+                domain: .vertex,
+                valueType: .vector3,
+                interpolation: .linear
+            ),
+            values: .vector3(GeometryBuffer([
+                GeometryPoint3D(x: 1, y: 0, z: 0),
+                GeometryPoint3D(x: 0, y: 1, z: 0),
+                GeometryPoint3D(x: 0, y: 0, z: 1),
+                GeometryPoint3D(x: 1, y: 1, z: 0),
+            ]))
+        )
+    )
+    try builder.setAttribute(
+        GeometryAttributeLayer(
+            descriptor: GeometryAttributeDescriptor(
+                id: "face.tag",
+                name: "Face Tag",
+                domain: .face,
+                valueType: .int32,
+                interpolation: .constant,
+                isSparse: true
+            ),
+            values: .int32(GeometryBuffer([Int32(11), Int32(22)])),
+            indices: GeometryBuffer([UInt32(0), UInt32(1)])
+        )
+    )
+    return try builder.build()
+}
+
+private func vector3Values(
+    _ layer: GeometryAttributeLayer?
+) -> [GeometryPoint3D]? {
+    guard let layer, case .vector3(let buffer) = layer.values else {
+        return nil
+    }
+    return Array(buffer)
 }
 
 private func makeNonManifoldTriangleFan() throws -> MeshSource {

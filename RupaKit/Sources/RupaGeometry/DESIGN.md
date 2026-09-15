@@ -230,10 +230,65 @@ builder ownership.
    are sorted by their start ID.
 8. Deleted IDs are never reused. Outputs are immutable and may be consumed only
    by later plan steps.
-9. Topology edits on attributed Meshes fail with a typed error before any
-   mutation or allocation. No UV, normal, or other attribute is silently lost.
+9. Topology edits carry attributes onto the committed elements by element
+   identity. A plan that would create an element with no source element to
+   inherit from fails with a typed error before any mutation or allocation.
+   No UV, normal, or other attribute is silently lost.
 10. No-op plans, including a zero-offset translation, preserve source identity
     and produce an explicit no-op receipt.
+
+### Attribute remapping
+
+Attributes are element-identity-bound, not geometry-derived. A commit carries
+each layer's values to the elements that still own them; it never recomputes a
+value from the edited geometry. `commitVertexEdits` already carries every layer
+unchanged after a position edit, so a normal that no longer matches the moved
+surface is the existing contract, and the topology path extends that contract
+rather than introducing it. `ProjectGeometryExport` is the only consumer of the
+CAD normal and UV layers; rendering does not read them.
+
+The commit derives one source index per committed element from element IDs, not
+from index arithmetic, because a face loop override can replace the corner IDs
+stored inside an unchanged corner range.
+
+| Domain | Committed shape | Source of a committed element's value |
+|---|---|---|
+| Vertex | Appended to | The same ID, else the resolved provenance vertex |
+| Edge | Appended to | The same ID |
+| Face | Rebuilt when a face was deleted; survivors keep their relative order | The same ID |
+| Corner | Follows the face rebuild | The same ID |
+| Point, curve, instance | Always empty in a Mesh source | Unchanged |
+
+A created vertex may declare the vertex it was duplicated from. Provenance
+resolves transitively, so extruding the cap of an earlier extrusion in the same
+plan still reaches a source vertex. Extrusion is the only producer: it declares
+the selected vertex each duplicate came from. A source element that is
+duplicated keeps its own committed index; a duplicate inherits its value.
+
+A dense layer requires a value for every element in its domain:
+
+| Condition | Result |
+|---|---|
+| The map is the identity and the element count is unchanged | The layer is committed unchanged and no byte is copied |
+| Every committed element resolves to a source element | Values are gathered in committed element order |
+| A committed element has no source element | Typed failure |
+
+A sparse layer covers a subset of its domain by contract. Its entries are
+remapped onto the surviving elements, entries for removed elements are dropped,
+and created elements receive no entry. Remapping a sparse layer never fails.
+
+The executor rejects an unsatisfiable plan before it mutates anything. An
+operation declares the domains in which it creates elements that inherit
+nothing: `addFace` and `extrudeFaces` both create edges, faces, and corners,
+and no other operation creates an unsourced element. A plan carrying a dense
+layer in one of those domains fails with
+`MeshEditError.Code.topologyAttributeRemappingUnsupported`. The commit itself
+still rejects an unresolvable element with a typed source error, so the
+preflight is an early boundary rather than the only check.
+
+Gathered layers charge their bytes to the same commit copy telemetry the
+executor checks against `maxCopiedBytes`, so an attribute copy that exceeds the
+ceiling is a typed `copyBudgetExceeded` failure and never an unbounded copy.
 
 ### Triangulation invariants
 
@@ -400,8 +455,8 @@ owned by the caller above this module.
 Typed failures cover empty/duplicate/forward references, invalid element or
 operation domains, stale or missing source elements, non-finite values,
 integer/size overflow, budget exceedance, invalid face loops, disconnected or
-non-manifold regions, inconsistent orientation, and unsupported attribute
-remapping.
+non-manifold regions, inconsistent orientation, and attribute remapping for a
+created element that inherits from no source element.
 
 The module does not use target-conditional raw mutable state. Native, ordinary
 WASM, and Embedded consumers receive the same immutable-source and single
@@ -416,7 +471,7 @@ The module proof is T09-A:
 | Structure and selectors | Empty, duplicate, missing, forward, mixed-domain, and malformed plan tests. |
 | Semantic behavior | Translate and extrusion output chaining, deterministic IDs, repeated-face-region cases, and no-op tests. |
 | Topology validity | Disconnected, inconsistent, non-manifold, and invalid offset rejection tests. |
-| Attribute contract | Attribute-preserving translation and typed topology-remap failure tests. |
+| Attribute contract | Attribute-preserving translation, identity-shared dense carry-through across a face deletion, provenance inheritance across extrusion, and typed preflight and commit remap failures. |
 | Atomicity | Mid-plan failure leaves no committed result. |
 | Execution semantics | Exact step roles/order and aliases from direct buffer results, persistent allocation/non-reuse, valid create-then-delete plans, and absence of a second topology replay. |
 | Performance | Unchanged chunk identity, immutable-buffer equality fast path, one-buffer telemetry, hard-boundary limits, measured copy ceilings, source-order triangulation counters, convex linear-fan work, and typed non-convex budget failure. |

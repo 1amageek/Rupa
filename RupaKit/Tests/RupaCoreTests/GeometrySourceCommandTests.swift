@@ -268,7 +268,7 @@ func authoredMeshFaceEditsPreservePersistentIdentityAndVertexStorage() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func authoredMeshTopologyEditRejectsAttributeRemappingWithoutMutation() throws {
+func authoredMeshTopologyEditRejectsUnsourcedAttributeRemappingWithoutMutation() throws {
     let source = try attributedTriangleSource(identity: "mesh.attributes")
     let fixture = try meshOnlyDocument(source: source)
     var error: MeshEditError?
@@ -280,13 +280,9 @@ func authoredMeshTopologyEditRejectsAttributeRemappingWithoutMutation() throws {
                 plan: try MeshEditPlan(
                     steps: [
                         MeshEditStep(
-                            id: MeshEditStepID("delete-face"),
+                            id: MeshEditStepID("add-face"),
                             operation: .primitive(
-                                .deleteFaces(
-                                    try MeshElementSelector.explicit(
-                                        MeshSelectionSet(elements: [.face(source.faceIDs[0])])
-                                    )
-                                )
+                                .addFace(vertexIDs: Array(source.vertexIDs.reversed()))
                             )
                         ),
                     ]

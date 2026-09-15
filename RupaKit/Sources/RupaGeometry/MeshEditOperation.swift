@@ -34,4 +34,18 @@ public enum MeshEditOperation: Codable, Equatable, Sendable {
             true
         }
     }
+
+    /// The attribute domains in which this operation creates elements that
+    /// inherit nothing from a source element. Extruded vertices declare the
+    /// selected vertex they duplicate, so the vertex domain stays sourced.
+    var unsourcedAttributeDomains: Set<GeometryAttributeDomain> {
+        switch self {
+        case .primitive(let primitive):
+            primitive.unsourcedAttributeDomains
+        case .translateElements:
+            []
+        case .extrudeFaces:
+            [.edge, .face, .corner]
+        }
+    }
 }

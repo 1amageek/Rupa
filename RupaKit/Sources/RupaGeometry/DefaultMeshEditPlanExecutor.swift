@@ -16,13 +16,7 @@ package struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
         try budget.scan(sourceRecordCount(in: source))
         try preflightStaticBudget(plan: validatedPlan, budget: &budget)
 
-        if source.attributes.count > 0,
-           validatedPlan.steps.contains(where: { $0.operation.isTopologyMutation }) {
-            throw MeshEditError(
-                code: .topologyAttributeRemappingUnsupported,
-                message: "Topology edits on attributed Meshes require explicit attribute remapping."
-            )
-        }
+        try preflightAttributeRemapping(plan: validatedPlan, source: source)
 
         var buffer = MeshEditBuffer(source: source)
         var stepOutputs: [MeshEditStepID: [MeshEditOutputRole: [MeshSelectionElement]]] = [:]
@@ -71,6 +65,38 @@ package struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
             telemetry: commit.telemetry
         )
         return MeshEditPlanExecution(source: commit.source, receipt: receipt)
+    }
+
+    /// Rejects a plan that would create an element carrying a dense attribute
+    /// layer it cannot inherit, before the plan mutates or allocates anything.
+    private func preflightAttributeRemapping(
+        plan: MeshEditPlan,
+        source: MeshSource
+    ) throws {
+        guard source.attributes.count > 0 else {
+            return
+        }
+        var unsourcedDomains: Set<GeometryAttributeDomain> = []
+        for step in plan.steps {
+            unsourcedDomains.formUnion(step.operation.unsourcedAttributeDomains)
+        }
+        guard !unsourcedDomains.isEmpty else {
+            return
+        }
+        for layer in source.attributes.sortedLayers() {
+            guard !layer.descriptor.isSparse else {
+                continue
+            }
+            guard unsourcedDomains.contains(layer.descriptor.domain) else {
+                continue
+            }
+            let domain = layer.descriptor.domain.rawValue
+            let name = layer.descriptor.name
+            throw MeshEditError(
+                code: .topologyAttributeRemappingUnsupported,
+                message: "Mesh edit plan creates \(domain) elements that inherit no dense attribute \"\(name)\"."
+            )
+        }
     }
 
     private func execute(
@@ -816,7 +842,7 @@ package struct DefaultMeshEditPlanExecutor: MeshEditPlanExecuting {
                     message: "Extrusion is missing a prepared duplicated vertex position."
                 )
             }
-            let duplicated = try buffer.addVertex(position)
+            let duplicated = try buffer.addVertex(position, derivedFrom: vertexID)
             duplicatedVertexIDs[vertexID] = duplicated
             createdVertexIDs.append(duplicated)
         }

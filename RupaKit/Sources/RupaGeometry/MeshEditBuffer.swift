@@ -41,6 +41,7 @@ public struct MeshEditBuffer: Sendable {
     private var stagedFaceIDs: [MeshFaceID] = []
     private var stagedFaces: [MeshFaceID: FaceState] = [:]
     private var deletedFaceIDs: Set<MeshFaceID> = []
+    private var vertexProvenance: [MeshVertexID: MeshVertexID] = [:]
 
     public init(source: MeshSource) {
         self.source = source
@@ -323,13 +324,29 @@ public struct MeshEditBuffer: Sendable {
     }
 
     /// Allocates a persistent vertex ID during staging.
-    public mutating func addVertex(_ position: GeometryPoint3D) throws -> MeshVertexID {
-        try ensureTopologyEditable()
+    ///
+    /// `derivedFrom` names the vertex this one duplicates so that attribute
+    /// layers can carry that vertex's values onto the new vertex at commit.
+    /// Pass `nil` only for a vertex that inherits from no existing vertex; a
+    /// dense vertex-domain attribute then rejects the commit.
+    public mutating func addVertex(
+        _ position: GeometryPoint3D,
+        derivedFrom originVertexID: MeshVertexID?
+    ) throws -> MeshVertexID {
         try position.validate()
+        if let originVertexID {
+            guard vertexIndexByID[originVertexID] != nil
+                || stagedVertexPositions[originVertexID] != nil else {
+                throw invalidReference("Mesh edit cannot derive a vertex from an unknown vertex.")
+            }
+        }
         try allocationState.validateVertexAllocation(count: 1)
         let id = try allocationState.allocateVertexID()
         stagedVertexIDs.append(id)
         stagedVertexPositions[id] = position
+        if let originVertexID {
+            vertexProvenance[id] = originVertexID
+        }
         return id
     }
 
@@ -339,7 +356,6 @@ public struct MeshEditBuffer: Sendable {
 
     /// Allocates a face and all required edge/corner IDs before commit.
     mutating func stageFace(vertexIDs: [MeshVertexID]) throws -> StagedFaceResult {
-        try ensureTopologyEditable()
         guard vertexIDs.count >= 3,
               Set(vertexIDs).count == vertexIDs.count,
               vertexIDs.allSatisfy(containsSourceVertex) else {
@@ -409,7 +425,6 @@ public struct MeshEditBuffer: Sendable {
         vertexIDs: [MeshVertexID],
         edgeIDs: [MeshEdgeID]
     ) throws -> StagedFaceResult {
-        try ensureTopologyEditable()
         guard vertexIDs.count >= 3,
               vertexIDs.count == edgeIDs.count,
               Set(vertexIDs).count == vertexIDs.count,
@@ -464,7 +479,6 @@ public struct MeshEditBuffer: Sendable {
         end: MeshVertexID,
         forceNew: Bool
     ) throws -> (id: MeshEdgeID, created: Bool) {
-        try ensureTopologyEditable()
         guard start != end, containsVertex(start), containsVertex(end) else {
             throw invalidFaceLoop("Mesh edges require two distinct active vertices.")
         }
@@ -488,7 +502,6 @@ public struct MeshEditBuffer: Sendable {
         vertexIDs: [MeshVertexID],
         edgeIDs: [MeshEdgeID]
     ) throws {
-        try ensureTopologyEditable()
         let current = try faceState(for: faceID)
         guard current.vertexIDs.count == vertexIDs.count,
               vertexIDs.count == edgeIDs.count,
@@ -526,7 +539,6 @@ public struct MeshEditBuffer: Sendable {
         start: MeshVertexID,
         end: MeshVertexID
     ) throws {
-        try ensureTopologyEditable()
         guard start != end, containsVertex(start), containsVertex(end) else {
             throw invalidFaceLoop("Rewired mesh edges require two distinct active vertices.")
         }
@@ -557,7 +569,6 @@ public struct MeshEditBuffer: Sendable {
     }
 
     public mutating func deleteFace(_ faceID: MeshFaceID) throws {
-        try ensureTopologyEditable()
         guard faceIndexByID[faceID] != nil || stagedFaces[faceID] != nil else {
             throw invalidReference("Mesh edit cannot delete an unknown face.")
         }
@@ -585,12 +596,6 @@ public struct MeshEditBuffer: Sendable {
         }
         if !hasTopologyEdits {
             return try commitVertexEdits()
-        }
-        guard source.attributes.count == 0 else {
-            throw MeshSourceError(
-                code: .unsupportedOperation,
-                message: "Topology edits require attribute remapping before commit."
-            )
         }
         return try commitTopologyEdits()
     }
@@ -796,22 +801,305 @@ public struct MeshEditBuffer: Sendable {
         try telemetry.record(contentsOf: edgeEndpoints.telemetry)
         try telemetry.record(contentsOf: faceTelemetry)
 
+        let committedVertexIDs = vertexIDs.build()
+        let committedPositions = positions.build()
+        let committedEdgeIDs = edgeIDs.build()
+        let committedEdgeEndpoints = edgeEndpoints.build()
+        let attributes = try remappedAttributes(
+            vertexIDs: committedVertexIDs,
+            edgeIDs: committedEdgeIDs,
+            faceIDs: faceBuffers.0,
+            cornerIDs: faceBuffers.2,
+            telemetry: &telemetry
+        )
+
         return MeshEditCommitResult(
             source: try MeshSource(
                 identity: source.identity,
                 allocationState: allocationState,
-                vertexIDs: vertexIDs.build(),
-                vertexPositions: positions.build(),
-                edgeIDs: edgeIDs.build(),
-                edgeEndpoints: edgeEndpoints.build(),
+                vertexIDs: committedVertexIDs,
+                vertexPositions: committedPositions,
+                edgeIDs: committedEdgeIDs,
+                edgeEndpoints: committedEdgeEndpoints,
                 faceIDs: faceBuffers.0,
                 faceCornerRanges: faceBuffers.1,
                 cornerIDs: faceBuffers.2,
                 cornerVertexIDs: faceBuffers.3,
-                cornerEdgeIDs: faceBuffers.4
+                cornerEdgeIDs: faceBuffers.4,
+                attributes: attributes
             ),
             telemetry: telemetry
         )
+    }
+
+    /// Carries every attribute layer onto the committed elements by identity.
+    ///
+    /// A committed element takes the value of the source element that owns its
+    /// ID. A duplicated vertex takes the value of the vertex it was derived
+    /// from. A dense layer whose domain gained an element that resolves to no
+    /// source element is a typed failure; a sparse layer drops the entries of
+    /// removed elements and leaves created elements uncovered.
+    private func remappedAttributes(
+        vertexIDs: GeometryBuffer<MeshVertexID>,
+        edgeIDs: GeometryBuffer<MeshEdgeID>,
+        faceIDs: GeometryBuffer<MeshFaceID>,
+        cornerIDs: GeometryBuffer<MeshCornerID>,
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryAttributeSet {
+        guard source.attributes.count > 0 else {
+            return GeometryAttributeSet()
+        }
+        var sourceIndicesByDomain: [GeometryAttributeDomain: [Int?]] = [:]
+        var layers: [GeometryAttributeLayer] = []
+        layers.reserveCapacity(source.attributes.count)
+        for layer in source.attributes.sortedLayers() {
+            let domain = layer.descriptor.domain
+            let sourceIndices: [Int?]
+            if let cached = sourceIndicesByDomain[domain] {
+                sourceIndices = cached
+            } else {
+                sourceIndices = try attributeSourceIndices(
+                    domain: domain,
+                    vertexIDs: vertexIDs,
+                    edgeIDs: edgeIDs,
+                    faceIDs: faceIDs,
+                    cornerIDs: cornerIDs
+                )
+                sourceIndicesByDomain[domain] = sourceIndices
+            }
+            layers.append(
+                try remappedLayer(
+                    layer,
+                    sourceIndices: sourceIndices,
+                    telemetry: &telemetry
+                )
+            )
+        }
+        return try GeometryAttributeSet(layers: layers)
+    }
+
+    /// Maps each committed element of one domain to its source element index.
+    private func attributeSourceIndices(
+        domain: GeometryAttributeDomain,
+        vertexIDs: GeometryBuffer<MeshVertexID>,
+        edgeIDs: GeometryBuffer<MeshEdgeID>,
+        faceIDs: GeometryBuffer<MeshFaceID>,
+        cornerIDs: GeometryBuffer<MeshCornerID>
+    ) throws -> [Int?] {
+        switch domain {
+        case .vertex:
+            var indices: [Int?] = []
+            indices.reserveCapacity(vertexIDs.count)
+            for vertexID in vertexIDs {
+                indices.append(try sourceVertexIndex(for: vertexID))
+            }
+            return indices
+        case .edge:
+            var indices: [Int?] = []
+            indices.reserveCapacity(edgeIDs.count)
+            for edgeID in edgeIDs {
+                indices.append(edgeIndexByID[edgeID])
+            }
+            return indices
+        case .face:
+            var indices: [Int?] = []
+            indices.reserveCapacity(faceIDs.count)
+            for faceID in faceIDs {
+                indices.append(faceIndexByID[faceID])
+            }
+            return indices
+        case .corner:
+            var sourceIndexByID: [MeshCornerID: Int] = [:]
+            sourceIndexByID.reserveCapacity(source.cornerIDs.count)
+            for index in source.cornerIDs.indices {
+                sourceIndexByID[source.cornerIDs[index]] = index
+            }
+            var indices: [Int?] = []
+            indices.reserveCapacity(cornerIDs.count)
+            for cornerID in cornerIDs {
+                indices.append(sourceIndexByID[cornerID])
+            }
+            return indices
+        case .point, .curve, .instance:
+            // A Mesh source never holds these domains, so their element count
+            // is zero before and after the edit.
+            return []
+        }
+    }
+
+    /// Resolves a committed vertex to the source vertex whose values it takes.
+    private func sourceVertexIndex(for vertexID: MeshVertexID) throws -> Int? {
+        if let index = vertexIndexByID[vertexID] {
+            return index
+        }
+        var current = vertexID
+        var steps = 0
+        while let origin = vertexProvenance[current] {
+            if let index = vertexIndexByID[origin] {
+                return index
+            }
+            current = origin
+            steps += 1
+            guard steps <= vertexProvenance.count else {
+                throw invalidReference("Mesh edit vertex provenance forms a cycle.")
+            }
+        }
+        return nil
+    }
+
+    private func remappedLayer(
+        _ layer: GeometryAttributeLayer,
+        sourceIndices: [Int?],
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryAttributeLayer {
+        if layer.descriptor.isSparse {
+            return try remappedSparseLayer(
+                layer,
+                sourceIndices: sourceIndices,
+                telemetry: &telemetry
+            )
+        }
+        return try remappedDenseLayer(
+            layer,
+            sourceIndices: sourceIndices,
+            telemetry: &telemetry
+        )
+    }
+
+    private func remappedDenseLayer(
+        _ layer: GeometryAttributeLayer,
+        sourceIndices: [Int?],
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryAttributeLayer {
+        let valueCount = layer.values.count
+        var picks: [Int] = []
+        picks.reserveCapacity(sourceIndices.count)
+        var isIdentity = sourceIndices.count == valueCount
+        for (index, sourceIndex) in sourceIndices.enumerated() {
+            guard let sourceIndex else {
+                let domain = layer.descriptor.domain.rawValue
+                let name = layer.descriptor.name
+                throw MeshSourceError(
+                    code: .unsupportedOperation,
+                    message: "Mesh edit created a \(domain) element that inherits no dense attribute \"\(name)\"."
+                )
+            }
+            guard sourceIndex < valueCount else {
+                throw MeshSourceError(
+                    code: .invalidBuffer,
+                    message: "Mesh attribute remapping referenced a value outside its layer."
+                )
+            }
+            if sourceIndex != index {
+                isIdentity = false
+            }
+            picks.append(sourceIndex)
+        }
+        guard !isIdentity else {
+            return layer
+        }
+        var remapped = layer
+        remapped.values = try Self.gatheredStorage(
+            layer.values,
+            picking: picks,
+            telemetry: &telemetry
+        )
+        return remapped
+    }
+
+    private func remappedSparseLayer(
+        _ layer: GeometryAttributeLayer,
+        sourceIndices: [Int?],
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryAttributeLayer {
+        guard let entryIndices = layer.indices else {
+            throw MeshSourceError(
+                code: .invalidBuffer,
+                message: "Sparse attribute layer is missing its index buffer."
+            )
+        }
+        // A source element always precedes the elements derived from it, so the
+        // first committed index wins and an entry stays on its own element.
+        var committedIndexBySourceIndex: [Int: Int] = [:]
+        committedIndexBySourceIndex.reserveCapacity(sourceIndices.count)
+        for (committedIndex, sourceIndex) in sourceIndices.enumerated() {
+            guard let sourceIndex,
+                  committedIndexBySourceIndex[sourceIndex] == nil else {
+                continue
+            }
+            committedIndexBySourceIndex[sourceIndex] = committedIndex
+        }
+        var picks: [Int] = []
+        var remappedIndices: [UInt32] = []
+        picks.reserveCapacity(entryIndices.count)
+        remappedIndices.reserveCapacity(entryIndices.count)
+        var isIdentity = true
+        for entry in entryIndices.indices {
+            let sourceIndex = Int(entryIndices[entry])
+            guard let committedIndex = committedIndexBySourceIndex[sourceIndex] else {
+                isIdentity = false
+                continue
+            }
+            if committedIndex != sourceIndex {
+                isIdentity = false
+            }
+            picks.append(entry)
+            remappedIndices.append(UInt32(committedIndex))
+        }
+        guard !isIdentity else {
+            return layer
+        }
+        var remapped = layer
+        remapped.values = try Self.gatheredStorage(
+            layer.values,
+            picking: picks,
+            telemetry: &telemetry
+        )
+        var construction = GeometryBufferConstructionBuffer<UInt32>()
+        construction.reserveCapacity(remappedIndices.count)
+        for index in remappedIndices {
+            try construction.append(index)
+        }
+        try construction.recordCopy(reason: .sourceEdit, in: &telemetry)
+        remapped.indices = construction.build()
+        return remapped
+    }
+
+    private static func gatheredStorage(
+        _ storage: GeometryAttributeStorage,
+        picking picks: [Int],
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryAttributeStorage {
+        switch storage {
+        case .boolean(let buffer):
+            return .boolean(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .int32(let buffer):
+            return .int32(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .float32(let buffer):
+            return .float32(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .float64(let buffer):
+            return .float64(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .vector2(let buffer):
+            return .vector2(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .vector3(let buffer):
+            return .vector3(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        case .vector4(let buffer):
+            return .vector4(try gathered(buffer, picking: picks, telemetry: &telemetry))
+        }
+    }
+
+    private static func gathered<Element: Codable & Sendable>(
+        _ buffer: GeometryBuffer<Element>,
+        picking picks: [Int],
+        telemetry: inout GeometryCopyTelemetry
+    ) throws -> GeometryBuffer<Element> {
+        var construction = GeometryBufferConstructionBuffer<Element>()
+        construction.reserveCapacity(picks.count)
+        for index in picks {
+            try construction.append(buffer[index])
+        }
+        try construction.recordCopy(reason: .sourceEdit, in: &telemetry)
+        return construction.build()
     }
 
     private func faceStateFromSource(faceID: MeshFaceID) throws -> FaceState {
@@ -833,15 +1121,6 @@ public struct MeshEditBuffer: Sendable {
 
     private func containsSourceVertex(_ vertexID: MeshVertexID) -> Bool {
         vertexIndexByID[vertexID] != nil
-    }
-
-    private func ensureTopologyEditable() throws {
-        guard source.attributes.count == 0 else {
-            throw MeshSourceError(
-                code: .unsupportedOperation,
-                message: "Topology edits require attribute remapping before staging."
-            )
-        }
     }
 
     private func invalidReference(_ message: String) -> MeshSourceError {

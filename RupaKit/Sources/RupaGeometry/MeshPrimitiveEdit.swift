@@ -26,4 +26,15 @@ public enum MeshPrimitiveEdit: Codable, Equatable, Sendable {
             true
         }
     }
+
+    /// The attribute domains in which this edit creates elements that inherit
+    /// nothing from a source element.
+    var unsourcedAttributeDomains: Set<GeometryAttributeDomain> {
+        switch self {
+        case .setVertexPositions, .deleteFaces:
+            []
+        case .addFace:
+            [.edge, .face, .corner]
+        }
+    }
 }
