@@ -36,11 +36,15 @@ struct WorkspaceObjectTransformInspectorView: View {
             scaleSection(components)
         case .failure(let error):
             Text(error.localizedDescription).font(.callout).foregroundStyle(.red)
+                .accessibilityIdentifier("WorkspaceObjectTransform.componentsError")
         }
         materialSection
         transformSection
             .onChange(of: nodes) { _, _ in transforms.removeAll(); transformError = nil }
-        if let error = transformError ?? previewError { Text(error).foregroundStyle(.red).font(.callout) }
+        if let error = transformError ?? previewError {
+            Text(error).foregroundStyle(.red).font(.callout)
+                .accessibilityIdentifier("WorkspaceObjectTransform.error")
+        }
         if !transforms.isEmpty {
             inspectorActionRow {
                 Button("Cancel") { transforms.removeAll(); transformError = nil; onCancel() }

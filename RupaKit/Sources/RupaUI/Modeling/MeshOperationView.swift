@@ -49,7 +49,10 @@ struct MeshOperationView: View {
                 }
                 if draft.kind == .delete { Text("Selected faces will be removed. Preview first; Apply is undoable.").foregroundStyle(.orange) }
             }.disabled(isBusy)
-            if let errorMessage { Text(errorMessage).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
+            if let errorMessage {
+                Text(errorMessage).font(.callout).foregroundStyle(.red).textSelection(.enabled)
+                    .accessibilityIdentifier("Modeling.mesh.error")
+            }
             if isBusy { ProgressView("Evaluating…").controlSize(.small) }
             HStack {
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)

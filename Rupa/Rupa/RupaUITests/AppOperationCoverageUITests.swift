@@ -36,22 +36,98 @@ final class AppOperationCoverageUITests: XCTestCase {
         (element.value as? String) ?? ""
     }
 
+    /// Every identifier the workspace publishes a failure on.
+    ///
+    /// A surface that renders a failure without an identifier cannot be read
+    /// from a test at all, so a stalled control reports only that it never
+    /// became ready. Naming the surfaces here lets both the error-absence
+    /// assertion and the wait diagnostics quote what the application showed.
+    private static let errorSurfaceIdentifiers = [
+        "Modeling.error",
+        "Modeling.mesh.error",
+        "Modeling.historyPreview.error",
+        "Modeling.meshOverlay.error",
+        "Modeling.meshTarget.error",
+        "WorkspaceDomainCommand.error",
+        "WorkspaceObjectTransform.error",
+        "WorkspaceObjectTransform.componentsError",
+    ]
+
+    /// Reads whatever failure text the application currently displays.
     @MainActor
-    private func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval) {
+    private func errorSurfaceReport(in app: XCUIApplication) -> String? {
+        var displayed: [String] = []
+        for identifier in Self.errorSurfaceIdentifiers {
+            let surface = app.descendants(matching: .any)[identifier].firstMatch
+            guard surface.exists else { continue }
+            displayed.append("\(identifier): \(accessibilityValue(of: surface))")
+        }
+        return displayed.isEmpty ? nil : displayed.joined(separator: " | ")
+    }
+
+    @MainActor
+    private func assertNoErrorSurface(
+        in app: XCUIApplication,
+        after step: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let report = errorSurfaceReport(in: app) else { return }
+        XCTFail("\(step) left an error on screen: \(report)", file: file, line: line)
+    }
+
+    /// Names an element in a diagnostic, falling back when its label is empty.
+    @MainActor
+    private func diagnosticName(of element: XCUIElement) -> String {
+        if element.label.isEmpty == false { return element.label }
+        if element.identifier.isEmpty == false { return element.identifier }
+        return "The awaited element"
+    }
+
+    @MainActor
+    private func waitUntilEnabled(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         let ready = expectation(
             for: NSPredicate(format: "isEnabled == true"),
             evaluatedWith: element
         )
-        wait(for: [ready], timeout: timeout)
+        guard XCTWaiter().wait(for: [ready], timeout: timeout) != .completed else {
+            return
+        }
+        let displayed = errorSurfaceReport(in: app) ?? "no error surface was shown"
+        XCTFail(
+            "\(diagnosticName(of: element)) stayed disabled for \(timeout)s and \(displayed).",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
-    private func waitUntilGone(_ element: XCUIElement, timeout: TimeInterval) {
+    private func waitUntilGone(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        timeout: TimeInterval,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
         let gone = expectation(
             for: NSPredicate(format: "exists == false"),
             evaluatedWith: element
         )
-        wait(for: [gone], timeout: timeout)
+        guard XCTWaiter().wait(for: [gone], timeout: timeout) != .completed else {
+            return
+        }
+        let displayed = errorSurfaceReport(in: app) ?? "no error surface was shown"
+        XCTFail(
+            "\(diagnosticName(of: element)) stayed on screen for \(timeout)s and \(displayed).",
+            file: file,
+            line: line
+        )
     }
 
     @MainActor
@@ -138,14 +214,14 @@ final class AppOperationCoverageUITests: XCTestCase {
         preview.click()
         let apply = app.buttons["Modeling.apply"]
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        waitUntilEnabled(apply, timeout: 40)
+        waitUntilEnabled(apply, in: app, timeout: 40)
         apply.click()
 
         XCTAssertTrue(
             app.outlines.staticTexts["Box"].firstMatch.waitForExistence(timeout: 30)
         )
-        waitUntilGone(draft, timeout: 30)
-        XCTAssertFalse(app.descendants(matching: .any)["Modeling.error"].exists)
+        waitUntilGone(draft, in: app, timeout: 30)
+        assertNoErrorSurface(in: app, after: "Committing a box")
     }
 
     @MainActor
@@ -189,6 +265,7 @@ final class AppOperationCoverageUITests: XCTestCase {
         XCTAssertEqual(accessibilityValue(of: bodies), "0")
         XCTAssertEqual(accessibilityValue(of: nodes), "1")
         XCTAssertEqual(accessibilityValue(of: issues), "None")
+        assertNoErrorSurface(in: app, after: "Reading the Analysis and Scene sections")
     }
 
     @MainActor
@@ -225,6 +302,7 @@ final class AppOperationCoverageUITests: XCTestCase {
             accessibilityValue(of: status)
         )
         XCTAssertFalse(accessibilityValue(of: distance).isEmpty)
+        assertNoErrorSurface(in: app, after: "Measuring between two points")
     }
 
     @MainActor
@@ -247,11 +325,12 @@ final class AppOperationCoverageUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5))
         XCTAssertEqual(confirm.label, "Make Editable")
         confirm.click()
-        waitUntilGone(sheet, timeout: 15)
+        waitUntilGone(sheet, in: app, timeout: 15)
         // The Model menu is disabled while a modeling operation runs, so it
         // reads as enabled again only once the mesh source exists.
-        waitUntilEnabled(menu, timeout: 60)
+        waitUntilEnabled(menu, in: app, timeout: 60)
         XCTAssertTrue(app.staticTexts["Mesh Editing"].waitForExistence(timeout: 15))
+        assertNoErrorSurface(in: app, after: "Making the selected CAD editable as Mesh")
 
         menu.click()
         let editMesh = app.menuItems["Edit Mesh Elements"]
@@ -285,10 +364,11 @@ final class AppOperationCoverageUITests: XCTestCase {
         preview.click()
         let apply = meshPanel.buttons["Apply"]
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        waitUntilEnabled(apply, timeout: 60)
+        waitUntilEnabled(apply, in: app, timeout: 60)
         apply.click()
         // A committed mesh edit clears the draft and returns the select tool;
         // a rejected one keeps the panel open with its error.
-        waitUntilGone(meshPanel, timeout: 60)
+        waitUntilGone(meshPanel, in: app, timeout: 60)
+        assertNoErrorSurface(in: app, after: "Committing a face deletion")
     }
 }

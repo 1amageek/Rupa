@@ -1490,7 +1490,10 @@ private struct ProjectMainViewContent: View {
                         Text(title).font(.headline)
                         Text("Review the evaluated result before applying. Dependency-invalid changes leave the document unchanged.")
                         if modelingPreview.isBusy { ProgressView("Evaluating…") }
-                        if let message = modelingPreview.errorMessage { Text(message).foregroundStyle(.red).textSelection(.enabled) }
+                        if let message = modelingPreview.errorMessage {
+                            Text(message).foregroundStyle(.red).textSelection(.enabled)
+                                .accessibilityIdentifier("Modeling.historyPreview.error")
+                        }
                         HStack {
                             Button("Cancel", action: cancelModelingOperation).keyboardShortcut(.cancelAction)
                             Button("Apply", action: applyModelingOperation)
@@ -1512,6 +1515,7 @@ private struct ProjectMainViewContent: View {
                             )
                             if let meshOverlayError {
                                 Text(meshOverlayError).foregroundStyle(.red).padding(.horizontal, 16)
+                                    .accessibilityIdentifier("Modeling.meshOverlay.error")
                             } else if let overlay = meshSelectionOverlay, overlay.isTruncated {
                                 Text("Selection outline: \(overlay.visibleBoundarySegmentCount) of \(overlay.sourceBoundarySegmentCount) edges shown. All selected IDs remain active.")
                                     .font(.caption).padding(.horizontal, 16)
@@ -1528,7 +1532,10 @@ private struct ProjectMainViewContent: View {
                             Text("Click an Authored Mesh in the canvas. CAD bodies must first be made editable as Mesh.")
                             Button("Make Selected CAD Editable…") { showsMakeEditableConfirmation = true }
                                 .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
-                            if let message = modelingPreview.errorMessage { Text(message).foregroundStyle(.red) }
+                            if let message = modelingPreview.errorMessage {
+                                Text(message).foregroundStyle(.red)
+                                    .accessibilityIdentifier("Modeling.meshTarget.error")
+                            }
                             Button("Cancel", action: cancelModelingOperation)
                             Spacer()
                         }.padding(16).frame(minWidth: 320)
