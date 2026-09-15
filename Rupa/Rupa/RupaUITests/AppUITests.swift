@@ -18,6 +18,23 @@ final class AppUITests: XCTestCase {
         return app
     }
 
+    /// Clicks a canvas sub-shape the way a pointer reaches it.
+    ///
+    /// A body face or edge marker reports where that sub-shape projects and
+    /// takes no pointer input, so a test aims at the midpoint of the marker's
+    /// frame and clicks the canvas there. That drives `ViewportInputSurface`,
+    /// which is the route a pointer over the sub-shape takes.
+    @MainActor
+    private func clickCanvas(_ canvas: XCUIElement, atMidpointOf marker: XCUIElement) {
+        let frame = canvas.frame
+        let target = marker.frame
+        let normalized = CGVector(
+            dx: (target.midX - frame.minX) / max(frame.width, 1.0),
+            dy: (target.midY - frame.minY) / max(frame.height, 1.0)
+        )
+        canvas.coordinate(withNormalizedOffset: normalized).click()
+    }
+
     @MainActor
     private func expandUtilityRailIfNeeded(in app: XCUIApplication) {
         let expandButton = app.buttons["WorkspaceUtilityRail.expand"]
@@ -176,7 +193,7 @@ final class AppUITests: XCTestCase {
 
         let frontFace = app.descendants(matching: .any)["CanvasBodyFace.front"]
         XCTAssertTrue(frontFace.waitForExistence(timeout: 3))
-        frontFace.click()
+        clickCanvas(canvas, atMidpointOf: frontFace)
 
         let targetValue = app.staticTexts["WorkspaceSelection.target"]
         XCTAssertTrue(targetValue.waitForExistence(timeout: 3))
@@ -210,7 +227,7 @@ final class AppUITests: XCTestCase {
 
         let leftTopEdge = app.descendants(matching: .any)["CanvasBodyEdge.leftTop"]
         XCTAssertTrue(leftTopEdge.waitForExistence(timeout: 3))
-        leftTopEdge.click()
+        clickCanvas(canvas, atMidpointOf: leftTopEdge)
 
         let targetValue = app.staticTexts["WorkspaceSelection.target"]
         XCTAssertTrue(targetValue.waitForExistence(timeout: 3))
@@ -421,7 +438,7 @@ final class AppUITests: XCTestCase {
 
         let frontFace = app.descendants(matching: .any)["CanvasBodyFace.front"]
         XCTAssertTrue(frontFace.waitForExistence(timeout: 3))
-        frontFace.click()
+        clickCanvas(canvas, atMidpointOf: frontFace)
 
         let createPlane = app.buttons["WorkspaceConstructionPlane.createFromSelection"]
         XCTAssertTrue(createPlane.waitForExistence(timeout: 3))

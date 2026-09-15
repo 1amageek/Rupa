@@ -1402,6 +1402,15 @@ independent tessellator is never an alternative implementation.
    synthesize the same hits for every body from that same fabricated projection
    are a separate producer with a separate owner, so
    `ViewportLayout.bodyProjection` outlives this seam.
+   Those markers report and do not intercept. Each one names a sub-shape and
+   the point that sub-shape projects to, and none of them takes pointer
+   input: `ViewportInputSurface` owns every press, click and drag the canvas
+   receives, so a modifier-held click and a drag that begin over a marker
+   reach the same route they reach anywhere else on the body. A test
+   therefore activates a sub-shape the way a pointer does, by clicking the
+   canvas at the midpoint of the marker's frame, and the marker answers only
+   where to aim. The button action each marker keeps is the
+   assistive-technology activation route and no test here exercises it.
    The point path's failure contract is the drag's readiness split read at one
    pointer. A frame that has not mounted reports `frameNotReady`, which retains
    the existing selection and reports nothing, because a pointer that outran

@@ -1021,6 +1021,13 @@ public struct Viewport: View {
         .allowsHitTesting(false)
     }
 
+    /// Marks where each editable body face projects.
+    ///
+    /// The markers report and do not intercept. `ViewportInputSurface` owns
+    /// every press, click and drag the canvas receives, so the layer stays out
+    /// of the pointer's way and a modifier-held click or a drag that starts
+    /// over a face reaches the route it reaches anywhere else on the body. The
+    /// button action remains the assistive-technology activation route.
     private func faceAccessibilityMarkers(
         size: CGSize,
         basis: ViewportProjectionBasis
@@ -1044,8 +1051,13 @@ public struct Viewport: View {
                 .accessibilityValue(marker.face.rawValue)
             }
         }
+        .allowsHitTesting(false)
     }
 
+    /// Marks where each vertical body edge projects.
+    ///
+    /// The markers report and do not intercept, for the reason
+    /// `faceAccessibilityMarkers` records.
     private func edgeAccessibilityMarkers(
         size: CGSize,
         basis: ViewportProjectionBasis
@@ -1069,6 +1081,7 @@ public struct Viewport: View {
                 .accessibilityValue(marker.edge.rawValue)
             }
         }
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder private var canvasDragPlaceholderOverlay: some View {
