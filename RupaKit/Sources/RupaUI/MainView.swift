@@ -2898,11 +2898,11 @@ private struct ProjectMainViewContent: View {
                         accessibilityIdentifier: "WorkspacePlane.twoDSnap"
                     )
                     if let activeConstructionPlane = activeConstructionPlane {
-                        workspaceValueRow("Active", activeConstructionPlane.name)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Active Construction Plane")
-                            .accessibilityValue(activeConstructionPlane.name)
-                            .accessibilityIdentifier("WorkspacePlane.activeName")
+                        workspaceValueRow(
+                            "Active",
+                            activeConstructionPlane.name,
+                            accessibilityIdentifier: "WorkspacePlane.activeName"
+                        )
                     }
                     workspaceValueRow("Snap", constructionPlaneSnapSummary)
                     if planeSummary.planes.isEmpty {

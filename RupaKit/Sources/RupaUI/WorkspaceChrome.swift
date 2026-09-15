@@ -75,16 +75,35 @@ func workspaceToggleButton(
     .accessibilityIdentifier(accessibilityIdentifier)
 }
 
+/// Lays a rail row out as a secondary title and its value.
+///
+/// `accessibilityIdentifier` names the value `Text`, not the row. macOS gives
+/// a row collapsed with `.accessibilityElement(children: .ignore)` the `Other`
+/// role, which publishes the accessibility label and drops the accessibility
+/// value, while a `Text` keeps `StaticText` and publishes its string as the
+/// element's value. A caller whose value a test reads passes the identifier
+/// here so the value stays readable.
+@ViewBuilder
 @MainActor
-func workspaceValueRow(_ title: String, _ value: String) -> some View {
+func workspaceValueRow(
+    _ title: String,
+    _ value: String,
+    accessibilityIdentifier: String? = nil
+) -> some View {
+    let valueText = Text(value)
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .monospacedDigit()
     HStack(spacing: 8) {
         Text(title)
             .foregroundStyle(.secondary)
         Spacer(minLength: 6)
-        Text(value)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .monospacedDigit()
+        if let accessibilityIdentifier {
+            valueText
+                .accessibilityIdentifier(accessibilityIdentifier)
+        } else {
+            valueText
+        }
     }
     .font(.caption)
 }
