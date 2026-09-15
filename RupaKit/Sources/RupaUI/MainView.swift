@@ -2921,8 +2921,16 @@ private struct ProjectMainViewContent: View {
 
                 workspaceRailSection("Analysis") {
                     WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
-                    workspaceValueRow("Overlay", surfaceAnalysisOverlaySummary)
-                    workspaceValueRow("Samples", surfaceAnalysisDensitySummary)
+                    workspaceValueRow(
+                        "Overlay",
+                        surfaceAnalysisOverlaySummary,
+                        accessibilityIdentifier: "WorkspaceAnalysis.overlay"
+                    )
+                    workspaceValueRow(
+                        "Samples",
+                        surfaceAnalysisDensitySummary,
+                        accessibilityIdentifier: "WorkspaceAnalysis.samples"
+                    )
                 }
 
                 if commandCatalog.hasDomainCommands {
@@ -2955,9 +2963,21 @@ private struct ProjectMainViewContent: View {
                 }
 
                 workspaceRailSection("Scene") {
-                    workspaceValueRow("Bodies", "\(snapshot.evaluationSnapshot.bodyCount)")
-                    workspaceValueRow("Nodes", "\(snapshot.document.document.productMetadata.sceneNodes.count)")
-                    workspaceValueRow("Issues", diagnosticSummary)
+                    workspaceValueRow(
+                        "Bodies",
+                        "\(snapshot.evaluationSnapshot.bodyCount)",
+                        accessibilityIdentifier: "WorkspaceScene.bodies"
+                    )
+                    workspaceValueRow(
+                        "Nodes",
+                        "\(snapshot.document.document.productMetadata.sceneNodes.count)",
+                        accessibilityIdentifier: "WorkspaceScene.nodes"
+                    )
+                    workspaceValueRow(
+                        "Issues",
+                        diagnosticSummary,
+                        accessibilityIdentifier: "WorkspaceScene.issues"
+                    )
                 }
             }
             .padding(WorkspaceUtilityRailLayout.contentPadding)
