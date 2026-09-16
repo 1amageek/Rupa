@@ -4,19 +4,19 @@ import SwiftUI
 ///
 /// The red inline labels show one control's newest failure and are cleared by
 /// the next interaction; this is where a failure stays readable afterwards.
-/// It renders nothing while the log is empty, so a session without failures
-/// keeps the Logs pane exactly as it was.
+/// The count is published whether or not anything failed, because an empty log
+/// and a Logs pane that was never opened are otherwise indistinguishable: a
+/// reader that finds no count is looking at a closed pane, not at a session
+/// that recorded nothing.
 /// See `RupaUI/DESIGN.md`, "Failure surfacing".
 struct WorkspaceFailureLogView: View {
     let records: [WorkspaceFailureRecord]
     let onClear: () -> Void
 
     var body: some View {
-        if records.isEmpty {
-            EmptyView()
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                header
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            if records.isEmpty == false {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
                         // Newest first: the failure just seen is the one read.
@@ -27,24 +27,28 @@ struct WorkspaceFailureLogView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxHeight: 160)
-                Divider()
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Divider()
         }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Label("Failures", systemImage: "exclamationmark.octagon.fill")
+            Label("Failures", systemImage: records.isEmpty
+                ? "checkmark.circle"
+                : "exclamationmark.octagon.fill")
                 .font(.headline)
-                .foregroundStyle(.red)
+                .foregroundStyle(records.isEmpty ? Color.secondary : Color.red)
             Text("\(records.count)")
                 .font(.headline.monospacedDigit())
                 .accessibilityIdentifier("WorkspaceFailureLog.count")
             Spacer(minLength: 0)
+            // Nothing to clear is not an action to offer.
             Button("Clear", action: onClear)
+                .disabled(records.isEmpty)
                 .accessibilityIdentifier("WorkspaceFailureLog.clear")
         }
     }
