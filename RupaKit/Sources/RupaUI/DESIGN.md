@@ -110,15 +110,33 @@ NavigationSplitView's detail column; the native inspector modifier is not
 used. The split is mounted for the document's lifetime and the inspector is
 added and removed as its trailing child, so the detail column presents one
 split rather than alternating between a split and a bare viewport. The split
-also owns how it divides its bounds between those columns: the pane minimums
-it declares are enforced only from the constrain callbacks AppKit makes while
-a divider is dragged, and adding a child is not a drag, so a pane that appears
-receives whatever division the split assigns it. A fixed width on the pane's
-content does not override that division either; it only centres the content
-inside the column it was handed. Inspector content therefore fills its column
-rather than naming a width of its own, and no caller-side width is treated as
-a layout guarantee. Every native split must keep its arranged columns within
-its own bounds and the host window.
+also owns how it divides its bounds between those columns. It applies the
+opening width its caller declares once, when the arranged column count
+changes, and on every later layout pass it only clamps the division it has
+redistributed into the declared minimum and maximum. A column laid out at a
+size other than the one its opening width was applied at is therefore rescaled
+with the split, and a declared minimum and maximum that differ are the
+allowance that rescaling drifts inside. A column whose width must not follow
+the window declares one width for all three, so that every layout pass re-pins
+it. The width is declared on the pane and never on the pane's content: a fixed
+width inside the column only centres the content in whatever column it was
+handed, so inspector content still fills its column and names no width of its
+own. Every native split must keep its arranged columns within its own bounds
+and the host window.
+
+The inspector column's width is declared in one place, `editorDetailPane`, as
+a single 320 pt for the opening width, the minimum and the maximum. 320 pt is
+the widest the sidebar column is allowed to be, so the inspector reads as a
+second column of the window's chrome rather than as a second half of it.
+Declaring one width rather than a range is what holds it there: the column
+keeps that width while the window is resized, and withdrawing the inspector
+and adding it back reopens it at the same width. The divider consequently does
+not resize the inspector; it only marks the boundary the canvas reaches. The
+declared width measures from the split's trailing edge to the leading edge of
+the divider, which is where the split puts the number it is given, so the
+column itself measures the declared width less the divider's thickness. This
+width and the canvas column's declared minimum may change only together, and
+only while their sum still fits inside the window's own minimum width.
 
 The detail column's size is owned by the proposal NavigationSplitView hands
 down. No view between that column and the canvas host may measure the size it
@@ -288,12 +306,14 @@ canvas-local rectangles and a reserved height equal to the context panel's own
 measured height. Neither check is sound without the other.
 
 The split's own behavior is proved by mounting it the way the detail column
-builds it and driving the transition that adds and removes the inspector. A
-width read back from that fixture is the division the split chose rather than
-a value this module named, so the assertions that discriminate are the edges:
-the inspector arrives as a column flush with the split's trailing edge and
-separated from the canvas by no more than the divider, withdrawing it returns
-the whole split to the canvas, and re-adding it restores the same division.
+builds it and driving it through the transition that adds and removes the
+inspector and through a change of the size it lays out at. The assertions that
+discriminate are the declared width and the edges: the inspector arrives as a
+column of the declared width less the divider, flush with the split's trailing
+edge and separated from the canvas by no more than the divider, a change of
+the split's own size leaves that width alone, withdrawing the inspector
+returns the whole split to the canvas, and re-adding it reopens the same
+column.
 
 Focused tests must verify title projection, matching
 idle/preparing/ready/failed state, stale/teardown completion rejection, and

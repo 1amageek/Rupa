@@ -1528,7 +1528,11 @@ private struct ProjectMainViewContent: View {
 
     /// The detail column's split. The size it lays out at is the proposal
     /// NavigationSplitView hands down; nothing here measures that size and
-    /// hands it back to this subtree as a frame. See `RupaUI/DESIGN.md`.
+    /// hands it back to this subtree as a frame. This is the one place the
+    /// inspector column's width is declared, and it declares one width rather
+    /// than a range: a range is a drift allowance, because the split applies
+    /// the opening width once and afterwards only clamps the division it
+    /// redistributes as the window resizes. See `RupaUI/DESIGN.md`.
     private var editorDetailPane: some View {
         HSplitPane {
             workArea
@@ -1538,7 +1542,7 @@ private struct ProjectMainViewContent: View {
             }
         }
         .leadingPaneWidth(minimum: 560)
-        .trailingPaneWidth(minimum: 320)
+        .trailingPaneWidth(320, minimum: 320, maximum: 320)
         .dividerDragStrip(width: 10)
     }
 
@@ -1573,7 +1577,7 @@ private struct ProjectMainViewContent: View {
                             .keyboardShortcut(.defaultAction)
                     }
                     Spacer()
-                }.padding(16).frame(minWidth: 320)
+                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
             } else if selectedTool == .mesh {
                 if let draft = meshDraft {
                     VStack(alignment: .leading, spacing: 0) {
@@ -1610,7 +1614,7 @@ private struct ProjectMainViewContent: View {
                         }
                         Button("Cancel", action: cancelModelingOperation)
                         Spacer()
-                    }.padding(16).frame(minWidth: 320)
+                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 inspectorPane
