@@ -517,9 +517,14 @@ public struct SnapResolver: Sendable {
     private static let exactHitToleranceMeters = 1.0e-10
 
     private let curveSampler: SketchCurveSampler
+    private let topologySnapshotService: TopologySnapshotService
 
-    public init(curveSampler: SketchCurveSampler = SketchCurveSampler()) {
+    public init(
+        curveSampler: SketchCurveSampler = SketchCurveSampler(),
+        topologySnapshotService: TopologySnapshotService = TopologySnapshotService()
+    ) {
         self.curveSampler = curveSampler
+        self.topologySnapshotService = topologySnapshotService
     }
 
     public func resolve(
@@ -527,7 +532,9 @@ public struct SnapResolver: Sendable {
         in document: DesignDocument,
         ruler: RulerConfiguration,
         options: SnapResolutionOptions,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SnapResolutionResult {
         try validate(point: point)
         let normalizedOptions = try validated(options, ruler: ruler)
@@ -544,7 +551,9 @@ public struct SnapResolver: Sendable {
                 searchRadiusMeters: normalizedOptions.objectSearchRadiusMeters,
                 referencePoint: normalizedOptions.referencePoint,
                 constructionPlane: constructionPlane,
-                surfaceFrameDisplays: surfaceFrameDisplays
+                surfaceFrameDisplays: surfaceFrameDisplays,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         candidates += referenceLineCandidates(
@@ -618,7 +627,9 @@ public struct SnapResolver: Sendable {
         searchRadiusMeters: Double,
         referencePoint: Point2D?,
         constructionPlane: SketchPlaneCoordinateSystem?,
-        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> [PrioritizedSnapCandidate] {
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         var snapEntities: [SnapEntity] = []
@@ -668,7 +679,9 @@ public struct SnapResolver: Sendable {
         }
         let topology = try snapTopologySummary(
             in: document,
-            searchRadiusMeters: searchRadiusMeters
+            searchRadiusMeters: searchRadiusMeters,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         candidates += try measurementCandidates(
             in: document,
@@ -912,15 +925,19 @@ public struct SnapResolver: Sendable {
 
     private func snapTopologySummary(
         in document: DesignDocument,
-        searchRadiusMeters: Double
+        searchRadiusMeters: Double,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> TopologySnapshot? {
         guard measurementsRequireTopology(in: document)
             || (searchRadiusMeters > 0.0
                 && document.cadDocument.hasActiveRenderableTopologyFeatures) else {
             return nil
         }
-        return try TopologySnapshotService().snapshot(
+        return try topologySnapshotService.snapshot(
             document: document,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             metricPolicy: .omit
         )
     }

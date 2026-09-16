@@ -1926,3 +1926,74 @@ private func snapResolverAuthoredTrimLoop() -> SurfaceTrimLoop {
         ]
     )
 }
+
+private struct RefusingExactDocumentEvaluator: ExactDocumentEvaluating {
+    enum Refusal: Error {
+        case exactEvaluationWasRequested
+    }
+
+    let evaluationTolerance: ModelingTolerance = .standard
+
+    func evaluateExact(_ document: CADDocument) throws -> EvaluatedDocument {
+        throw Refusal.exactEvaluationWasRequested
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func snapResolverResolvesObjectsFromTheCallersEvaluationContext() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let document = session.document
+    let generation = session.generation
+    let currentEvaluation = try #require(session.currentEvaluation)
+    #expect(document.cadDocument.hasActiveRenderableTopologyFeatures)
+
+    let point = Point2D(x: 0.0014, y: 0.0026)
+    let ruler = RulerConfiguration.standard(for: .millimeter)
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: true,
+        gridIntervalMeters: 0.001,
+        objectSearchRadiusMeters: 0.001,
+        maximumCandidateCount: 4
+    )
+    let resolver = SnapResolver(
+        topologySnapshotService: TopologySnapshotService(
+            exactEvaluator: RefusingExactDocumentEvaluator()
+        )
+    )
+
+    #expect(throws: (any Error).self) {
+        try resolver.resolve(point: point, in: document, ruler: ruler, options: options)
+    }
+    #expect(throws: (any Error).self) {
+        try resolver.resolve(
+            point: point,
+            in: document,
+            ruler: ruler,
+            options: options,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: nil
+        )
+    }
+
+    let reused = try resolver.resolve(
+        point: point,
+        in: document,
+        ruler: ruler,
+        options: options,
+        currentEvaluation: currentEvaluation,
+        currentGeneration: generation
+    )
+    let evaluated = try SnapResolver().resolve(
+        point: point,
+        in: document,
+        ruler: ruler,
+        options: options
+    )
+
+    #expect(reused.candidates.map(\.kind) == evaluated.candidates.map(\.kind))
+    #expect(reused.resolvedPoint == evaluated.resolvedPoint)
+    #expect(reused.selectedCandidate?.kind == evaluated.selectedCandidate?.kind)
+}

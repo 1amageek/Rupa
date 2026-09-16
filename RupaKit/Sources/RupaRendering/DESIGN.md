@@ -1148,6 +1148,11 @@ independent tessellator is never an alternative implementation.
    never a partial candidate list or old selector fallback. Third, rectangle
    selection uses only the bounded exception in invariant 8. Completing the
    first seam does not by itself complete RK-4.
+   Snap resolution requested for that same pointer event carries the published
+   `DocumentEvaluationContext` and `DocumentGeneration` the viewport already
+   holds for the document it passes beside them; the
+   [snap topology demand contract](../RupaCore/DESIGN.md#snap-topology-demand-contract)
+   owns whether that context is reused and this design does not restate it.
 8. Edge/vertex tolerance, rectangle selection, and any operation for which
    RealityKit has no equivalent may use the same prepared geometry and native
    camera projection as a bounded CPU query. This exception preserves CAD

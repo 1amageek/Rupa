@@ -311,8 +311,24 @@ document topology validation. While resolving object candidates, a measurement a
 `topologyReference` or `topologyEdgeParameter` forces the existing topology
 service, even when the search radius is zero or the document has no active
 renderable CAD topology. `TopologySnapshotService` remains the validation and
-CAD/measurement failure authority; SnapResolver does not add a cache, context,
-alternate topology path, or failure conversion.
+CAD/measurement failure authority; SnapResolver adds no cache, alternate
+topology path, or failure conversion of its own.
+
+Object candidate resolution runs once per pointer event on the caller's thread,
+and on a document with active renderable CAD topology the demand above reaches
+one exact kernel evaluation of the whole document per event. `resolve`
+therefore accepts the caller's published `DocumentEvaluationContext` and
+`DocumentGeneration` and forwards both to that one `snapshot` call, exactly as
+`MeasurementService` and `MeshSummaryService` already forward them. The context
+stays the caller's: SnapResolver neither stores nor updates it, and
+`TopologySnapshotService` alone decides whether it matches. A caller that
+supplies no context, or one whose generation, modeling settings, or source
+identity no longer describe the document passed beside it, is answered by the
+same exact evaluation as before, so the reuse cannot return topology from a
+document the caller did not ask about. `SnapResolver.init` takes the
+`TopologySnapshotService` it calls, so a test can hand it a service whose exact
+evaluator refuses to run and read the difference between a matching context and
+no context as success against failure.
 
 ### Evaluated primitive measurement contract
 
@@ -453,7 +469,7 @@ T09-B owns the following behavioral proof:
 | Error handling | Typed failures do not publish a partial document. |
 | Product visibility | Root, hidden-parent, visible-sibling, and hidden-descendant cases prove one effective-visibility result without source deletion. |
 | Evaluated primitives | Box, cylinder, cone, sphere, and torus all produce evaluated-body solids with exact B-rep volume and Mesh-only area/bounds through one cached evaluation path; unavailable outputs remain diagnostics. |
-| Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green. |
+| Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green; a matching caller evaluation context resolves object candidates on a CAD document without consulting the exact evaluator, and the same resolve without that context still consults it. |
 | Body display face runs | `Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift` proves an evaluated box snapshot records one run per prepared face, that the runs carry the same prepared identities as `Topology.faces`, and that they partition every drawn triangle contiguously from zero to the snapshot's triangle count. |
 
 CADAPI-C must additionally prove:

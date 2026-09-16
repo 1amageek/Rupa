@@ -2310,7 +2310,9 @@ public struct Viewport: View {
             }
             let snap = ViewportSnapResolutionService().resolution(
                 for: snapQuery, document: document, ruler: workspaceRuler,
-                options: snapResolutionOptions, modifierFlags: modifierFlags
+                options: snapResolutionOptions, modifierFlags: modifierFlags,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: sceneDocumentGeneration
             )
             return ViewportMeasurementResolver().resolve(
                 effectivePlane: effectivePlane, snap: snap, presentationHit: presentationHit,
@@ -2585,7 +2587,9 @@ public struct Viewport: View {
                 document: document,
                 ruler: workspaceRuler,
                 options: snapResolutionOptions,
-                modifierFlags: modifierFlags
+                modifierFlags: modifierFlags,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: sceneDocumentGeneration
             )
         )
     }
@@ -2620,7 +2624,9 @@ public struct Viewport: View {
             document: document,
             ruler: workspaceRuler,
             options: snapResolutionOptions,
-            modifierFlags: modifierFlags
+            modifierFlags: modifierFlags,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: sceneDocumentGeneration
         )
         let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
         applyPlacementHighlight(
@@ -2697,7 +2703,9 @@ public struct Viewport: View {
             document: document,
             ruler: workspaceRuler,
             options: snapResolutionOptions,
-            modifierFlags: modifierFlags
+            modifierFlags: modifierFlags,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: sceneDocumentGeneration
         )
         if let failureDescription = resolution.failureDescription {
             Self.referenceLineAnchorLogger.warning(

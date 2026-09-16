@@ -40,7 +40,9 @@ public struct ViewportSnapResolutionService: Sendable {
         document: DesignDocument,
         ruler: RulerConfiguration,
         options baseOptions: SnapResolutionOptions?,
-        modifierFlags: ViewportInputModifierFlags
+        modifierFlags: ViewportInputModifierFlags,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) -> ViewportSnapResolution {
         guard let query,
               var options = baseOptions,
@@ -62,7 +64,9 @@ public struct ViewportSnapResolutionService: Sendable {
                 point: query.point,
                 in: document,
                 ruler: ruler,
-                options: options
+                options: options,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             return ViewportSnapResolution(
                 attemptedResolution: true,
