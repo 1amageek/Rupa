@@ -88,6 +88,17 @@ path; the row is not a second source graph or a dynamic definition editor.
 - Editing a draft invalidates the parent's previous preview. Apply is enabled
   only for a completed matching preview and while no operation is running.
   Apply and Preview are disabled during work; Cancel remains available.
+- Preview is offered only while the draft names a command. The panel plans the
+  draft it is showing against the document it is showing it for, and when that
+  plan refuses it disables Preview and displays the reason the plan gave, so a
+  press whose only outcome is a refusal is never offered. `command(in:)` stays
+  the one place that decides what a draft means; the panel reads its refusal
+  rather than restating the preconditions. The reason is a function of the
+  draft and the document read while the view is built, not an event, so it is
+  displayed and not recorded; the workspace's
+  [failure surfacing](../DESIGN.md#failure-surfacing) rule owns that split.
+  Planning walks each operand's ancestors by scanning the scene node table, so
+  the panel pays that walk once for every evaluation of its body.
 - The Definitions inspector exposes existing named parameter expressions and
   their dependency/dependent summaries through the existing parameter editor.
   It does not claim that new creation drafts have dynamic expression binding;

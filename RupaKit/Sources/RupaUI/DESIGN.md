@@ -231,9 +231,13 @@ are recorded through the same API with a message naming the unmet
 precondition. Two guards stay silent by contract: a viewport hit whose
 `snapshotID` is older than the mounted frame is frame readiness rather than a
 refusal, and re-entrancy or token-mismatch guards describe no user operation.
-`WorkspaceObjectTransform.componentsError` is also not appended, because it
-is a function of the current selection evaluated while the view is being
-built, not an event, and appending would mutate state during a view update.
+`WorkspaceObjectTransform.componentsError` and `Modeling.refusal` are also not
+appended, because each is a function of the current selection or draft
+evaluated while the view is being built, not an event, and appending would
+mutate state during a view update. A control whose refusal the view can
+evaluate that way is disabled with the reason beside it, so the refusal is
+read before the press instead of recorded after it, and the record keeps its
+meaning: something ran and failed.
 
 `EditorDiagnostic` keeps its existing meaning, a fact about the document or
 its evaluation, and is not extended to carry UI failures. It crosses the
@@ -257,9 +261,19 @@ releasing a route is a cancellation rather than a refusal and is not reported.
 
 ## Verification and Change Impact
 
-A focused App UI test must drive a shipped control to a deterministic refusal
-and read the recorded entry back out of the Logs pane, proving the record
-exists independently of the transient red surface that appears with it.
+A focused App UI test must drive a shipped control whose refusal the view can
+evaluate and read back three facts together: the control is disabled, the
+reason is displayed beside it, and the Logs pane count has not moved. That is
+the behavioral proof that a refusal the panel can see is read before the press
+and never becomes an entry.
+
+No shipped control is left that refuses deterministically once it is pressed,
+because a control that can see its own refusal now disables itself, so there
+is no focused test that can read a record back out of the pane. The recorded
+half is evidenced instead by `WorkspaceFailureLogTests`, which owns the log's
+ordering, bound, reflected value, non-deduplication and clearing, and by
+`AppProjectRoundTripUITests`, which reads the pane at every stage of a create,
+select, edit, save and reload run and fails with whatever it found there.
 
 The native gesture channel has no cheaper proof than that. Its report is
 private to `Viewport`, no fixture in either module constructs that view, and

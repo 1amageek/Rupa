@@ -372,12 +372,14 @@ final class AppOperationCoverageUITests: XCTestCase {
         assertNoErrorSurface(in: app, after: "Committing a face deletion")
     }
 
-    /// A refused operation must stay readable after the red label that showed
-    /// it is gone. Booleans need two bodies, so a Boolean preview in an empty
-    /// document refuses deterministically through the shipped Model menu.
-    /// See `RupaUI/DESIGN.md`, "Failure surfacing".
+    /// A refusal the panel can evaluate is read before the press, not after
+    /// it. Booleans need two bodies, so a Boolean draft in an empty document
+    /// refuses deterministically through the shipped Model menu: Preview has
+    /// to be disabled, the reason has to be beside it, and the Logs pane has
+    /// to stay empty, because the reason is a function of the draft being
+    /// shown rather than an event. See `RupaUI/DESIGN.md`, "Failure surfacing".
     @MainActor
-    func testARefusedPreviewIsRecordedAfterItsRedLabelIsGone() throws {
+    func testAPanelRefusalIsReadBeforeThePressAndRecordsNothing() throws {
         let app = launchApp()
         _ = waitForCanvas(in: app)
 
@@ -389,69 +391,47 @@ final class AppOperationCoverageUITests: XCTestCase {
 
         let draft = app.descendants(matching: .any)["Modeling.operation"]
         XCTAssertTrue(draft.waitForExistence(timeout: 10))
-        let preview = app.buttons["Modeling.preview"]
-        XCTAssertTrue(preview.waitForExistence(timeout: 5))
-        preview.click()
 
         let refusal = "Select target CAD bodies, then a separate tool body last."
-        let inline = app.descendants(matching: .any)["Modeling.error"].firstMatch
-        XCTAssertTrue(inline.waitForExistence(timeout: 10))
-        XCTAssertEqual(accessibilityValue(of: inline), refusal)
-
-        // The same refusal twice is two records: the log never deduplicates,
-        // because a control that keeps failing is the signal.
-        preview.click()
-
-        let railDestination = app.buttons["WorkspaceUtilityRail.analysis"]
-        XCTAssertTrue(railDestination.waitForExistence(timeout: 15))
-        railDestination.click()
-        let issues = app.descendants(matching: .any)["WorkspaceScene.issues"]
-        XCTAssertTrue(issues.waitForExistence(timeout: 10))
-        let counted = expectation(
-            for: NSPredicate(format: "value BEGINSWITH %@", "2 failures"),
-            evaluatedWith: issues
-        )
-        XCTAssertEqual(
-            XCTWaiter().wait(for: [counted], timeout: 10),
-            .completed,
-            "Issues read \(accessibilityValue(of: issues)) after two refusals."
+        let reason = app.descendants(matching: .any)["Modeling.refusal"].firstMatch
+        XCTAssertTrue(reason.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            accessibilityValue(of: reason) == refusal || reason.label == refusal,
+            "The panel showed \"\(reason.label)\" instead of the draft's reason."
         )
 
+        // The press whose only outcome is that refusal is not offered, and the
+        // reason is guidance rather than the report of a run that failed.
+        let preview = app.buttons["Modeling.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        XCTAssertFalse(
+            preview.isEnabled,
+            "Preview stayed pressable for a draft that names no command."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["Modeling.error"].firstMatch.exists,
+            "A refusal the panel evaluated was shown as a failed run."
+        )
+
+        // Nothing ran, so nothing is recorded. The Logs pane renders no
+        // failure header at all while the log is empty, so the header's
+        // absence is the read.
         let logs = app.buttons["WorkspaceCommand.logs"]
         XCTAssertTrue(logs.waitForExistence(timeout: 10))
         logs.click()
         let count = app.descendants(matching: .any)["WorkspaceFailureLog.count"]
-        XCTAssertTrue(count.waitForExistence(timeout: 10))
-        XCTAssertTrue(waitForValue("2", of: count, timeout: 10))
-        let entry = app.descendants(matching: .any)["WorkspaceFailureLog.entry"]
-            .firstMatch
-        XCTAssertTrue(entry.waitForExistence(timeout: 10))
-        let recorded = accessibilityValue(of: entry)
-        XCTAssertTrue(
-            recorded.contains(refusal),
-            "The record read \(recorded) instead of the displayed refusal."
-        )
-        XCTAssertTrue(
-            recorded.contains("previewModelingOperation()"),
-            "The record read \(recorded) without naming the operation."
-        )
-        let detail = app.descendants(matching: .any)["WorkspaceFailureLog.detail"]
-            .firstMatch
-        XCTAssertTrue(detail.waitForExistence(timeout: 5))
-        XCTAssertTrue(
-            accessibilityValue(of: detail).contains("commandInvalid"),
-            "The detail dropped the code localizedDescription does not carry."
+        XCTAssertFalse(
+            count.waitForExistence(timeout: 5),
+            "A refusal the panel had already shown was recorded as a failure."
         )
 
-        // Cancelling clears every transient surface; the record survives it.
+        // Cancelling releases the draft and takes the reason with it.
         let cancel = draft.buttons["Cancel"].firstMatch
         XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         cancel.click()
         waitUntilGone(draft, in: app, timeout: 15)
         XCTAssertFalse(
-            app.descendants(matching: .any)["Modeling.error"].firstMatch.exists
+            app.descendants(matching: .any)["Modeling.refusal"].firstMatch.exists
         )
-        XCTAssertTrue(entry.exists)
-        XCTAssertTrue(waitForValue("2", of: count, timeout: 5))
     }
 }

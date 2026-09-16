@@ -77,10 +77,10 @@ struct WorkspaceFailureLogView: View {
     WorkspaceFailureLogView(
         records: [
             WorkspaceFailureRecord(
-                operation: "previewModelingOperation()",
-                message: "Select target CAD bodies, then a separate tool body last.",
-                errorType: "RupaCoreTypes.EditorError",
-                detail: #"EditorError(code: .commandInvalid, message: "…")"#
+                operation: "startModelingPreview(_:)",
+                message: "Project source transactions require source-mutating commands.",
+                errorType: "RupaProject.ProjectControllerError",
+                detail: #"ProjectControllerError(code: .transactionInvalid, message: "…")"#
             ),
             WorkspaceFailureRecord(
                 operation: "handleViewportSketchTransformCommit(_:)",

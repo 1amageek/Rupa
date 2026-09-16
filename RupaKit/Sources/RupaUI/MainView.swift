@@ -364,8 +364,19 @@ private struct ProjectMainViewContent: View {
 
     private func previewModelingOperation() {
         guard let draft = modelingDraft else { return }
+        let command: EditorCommand
         do {
-            let command = try draft.command(in: snapshot.document.document)
+            command = try draft.command(in: snapshot.document.document)
+        } catch {
+            // The panel disables Preview while the draft names no command, so
+            // this is the document moving between the press and this call: a
+            // refused precondition rather than a run that failed. It goes to
+            // the refusal channel, and the panel shows the same reason itself.
+            invalidateModelingPreview()
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return
+        }
+        do {
             let action = try DefaultProjectWorkspaceActionPlanner().source(
                 name: draft.name, commands: [command], from: snapshot
             )

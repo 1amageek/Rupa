@@ -12,7 +12,26 @@ struct ModelingOperationView: View {
     let onApply: () -> Void
     let onCancel: () -> Void
 
+    /// The reason the draft names no command for this document, or `nil` when
+    /// it names one.
+    ///
+    /// `ModelingOperationDraft.command(in:)` is the one place that decides
+    /// what a draft means, so the panel asks it rather than restating the
+    /// preconditions. The answer is a function of the draft and the document
+    /// read while the body is built, not an event, so it is displayed and not
+    /// recorded. See `Modeling/DESIGN.md`.
+    private var planningRefusal: String? {
+        switch Result(catching: { try draft.command(in: document) }) {
+        case .success: nil
+        case .failure(let error): error.localizedDescription
+        }
+    }
+
     var body: some View {
+        // Planned once per body evaluation: `Preview` and the reason beside it
+        // are the same answer, and planning twice would walk the operand
+        // ancestors twice.
+        let refusal = planningRefusal
         VStack(alignment: .leading, spacing: 12) {
             Text(draft.kind.rawValue).font(.headline)
             Form {
@@ -36,6 +55,10 @@ struct ModelingOperationView: View {
                 parameters
             }
             .disabled(isBusy)
+            if let refusal {
+                Text(refusal).foregroundStyle(.secondary).font(.callout).textSelection(.enabled)
+                    .accessibilityIdentifier("Modeling.refusal")
+            }
             if let errorMessage {
                 Text(errorMessage).foregroundStyle(.red).font(.callout).textSelection(.enabled)
                     .accessibilityIdentifier("Modeling.error")
@@ -44,7 +67,7 @@ struct ModelingOperationView: View {
             HStack {
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Preview", action: onPreview).disabled(isBusy)
+                Button("Preview", action: onPreview).disabled(isBusy || refusal != nil)
                     .accessibilityIdentifier("Modeling.preview")
                 Button("Apply", action: onApply).disabled(isBusy || !hasMatchingPreview)
                     .keyboardShortcut(.defaultAction)
