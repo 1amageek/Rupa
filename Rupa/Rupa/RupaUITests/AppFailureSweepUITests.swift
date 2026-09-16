@@ -900,13 +900,16 @@ final class AppFailureSweepUITests: XCTestCase {
     /// Resolves the element a click has to land on, and says what the query
     /// found when it cannot.
     ///
-    /// `firstMatch` over `.any` reported "exists but cannot be clicked" for two
+    /// `firstMatch` over `.any` reported "exists but cannot be clicked" for
     /// unrelated states: the identifier resolved to something that is not the
-    /// control, and the control is published but covered by chrome an earlier
-    /// step left standing. A report that cannot separate them cannot be acted
-    /// on, so this names the element type it expects and, when it fails, prints
-    /// every element carrying the identifier together with the transient chrome
-    /// in front of the window.
+    /// control, the control is published and declines input by being disabled,
+    /// a window outside the app covers the screen the answer is hit-tested on,
+    /// and the control is published with no click reaching it. A report that
+    /// cannot separate them cannot be acted on, so this names the element type
+    /// it expects, holds the screen precondition on both sides of the
+    /// hittability it reads, and on a failure prints every element carrying the
+    /// identifier together with what stands in front of the window, inside the
+    /// app and outside it.
     @MainActor
     private func resolve(
         _ identifier: String,
