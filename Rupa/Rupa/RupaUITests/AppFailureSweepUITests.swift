@@ -52,6 +52,10 @@ final class AppFailureSweepUITests: XCTestCase {
     /// a cross-process accessibility query.
     private var obstruction: String?
 
+    /// The app this run drives, so a step that finds the screen covered can
+    /// put it back in front before the run is stopped.
+    private var drivenApp: XCUIApplication?
+
     /// Applications this run hid so the sweep could reach the app's window.
     /// They are put back when the run ends, whether or not it passed.
     private var hiddenApplications: [NSRunningApplication] = []
@@ -487,7 +491,8 @@ final class AppFailureSweepUITests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.05)
         }
         Self.marker.error("chrome at launch \(self.chromeInventory(in: app), privacy: .public)")
-        clearTheScreen()
+        drivenApp = app
+        clearTheScreen(so: app)
         requireUnobstructedWindow(before: "the first step")
         return app
     }
@@ -705,6 +710,11 @@ final class AppFailureSweepUITests: XCTestCase {
         line: UInt = #line
     ) -> Bool {
         guard obstruction == nil else { return false }
+        guard screenState().obstruction != nil else { return true }
+        // A window that arrived mid-run is not the same thing as a screen this
+        // run cannot be given. The app is put back in front and the screen is
+        // read again, once, before the run is stopped.
+        if let app = drivenApp { clearTheScreen(so: app) }
         guard let covering = screenState().obstruction else { return true }
         obstruction = covering
         XCTFail(
@@ -719,37 +729,53 @@ final class AppFailureSweepUITests: XCTestCase {
         return false
     }
 
-    /// Hides the applications standing over the app's window, and remembers
-    /// them so `tearDownWithError` puts them back.
+    /// Puts the app in front of the screen the sweep is about to click, and
+    /// hides only what being in front does not settle.
     ///
-    /// Taking the screen is a change to the machine the run is on, so it is not
-    /// what the sweep does by default. It is asked for with
-    /// `RUPA_UI_SWEEP_CLEAR_SCREEN` and it names every application it hides.
-    /// Whether it worked is not assumed here: `requireUnobstructedWindow` reads
-    /// the screen again afterwards and is what the run is held to.
+    /// Activation costs the machine nothing and is not optional: the app the
+    /// sweep drives belongs above every window at the normal level, and a run
+    /// that never asks for it reads whatever the screen happened to be doing.
+    /// It does not settle a window at a floating level, which stays above the
+    /// active application's own, so hiding is kept for exactly that remainder,
+    /// is asked for with `RUPA_UI_SWEEP_CLEAR_SCREEN`, names every application
+    /// it hides, and is undone in `tearDownWithError`. Asking in this order is
+    /// what keeps the run from hiding the windows activation would have moved
+    /// on its own.
+    ///
+    /// The screen is not read once. Activation and hiding are both
+    /// asynchronous, the window server reorders on its own clock, and a window
+    /// that was not there a moment ago can arrive between the reading and the
+    /// clicking, so this asks, reads back, and asks again until the screen is
+    /// clear or the budget runs out. A window it cannot hide does not end the
+    /// loop: the window server's own overlays appear while it reorders windows
+    /// and go again on their own, and stopping at the first one this run has no
+    /// authority over reports a screen that was about to clear itself. Whether
+    /// it worked is still not assumed: `requireUnobstructedWindow` reads the
+    /// screen afterwards and is what the run is held to.
     @MainActor
-    private func clearTheScreen() {
-        guard ProcessInfo.processInfo.environment["RUPA_UI_SWEEP_CLEAR_SCREEN"] == "1" else {
-            return
-        }
-        guard case .covered(_, let covering) = screenState() else { return }
-        for pid in Set(covering.map(\.pid)) {
-            guard let application = NSRunningApplication(processIdentifier: pid_t(pid)) else {
-                continue
+    private func clearTheScreen(so app: XCUIApplication) {
+        let mayHide = ProcessInfo.processInfo.environment["RUPA_UI_SWEEP_CLEAR_SCREEN"] == "1"
+        for _ in 0..<20 {
+            app.activate()
+            Thread.sleep(forTimeInterval: 0.25)
+            guard case .covered(_, let covering) = screenState() else { return }
+            guard mayHide else { return }
+            for pid in Set(covering.map(\.pid)) {
+                let alreadyHidden = hiddenApplications.contains {
+                    $0.processIdentifier == pid_t(pid)
+                }
+                guard alreadyHidden == false else { continue }
+                guard let owner = NSRunningApplication(processIdentifier: pid_t(pid)) else {
+                    continue
+                }
+                let name = owner.bundleIdentifier ?? owner.localizedName ?? "pid \(pid)"
+                guard owner.hide() else {
+                    Self.marker.error("could not hide \(name, privacy: .public)")
+                    continue
+                }
+                hiddenApplications.append(owner)
+                Self.marker.error("hid \(name, privacy: .public) to clear the app's window")
             }
-            let name = application.bundleIdentifier ?? application.localizedName ?? "pid \(pid)"
-            guard application.hide() else {
-                Self.marker.error("could not hide \(name, privacy: .public)")
-                continue
-            }
-            hiddenApplications.append(application)
-            Self.marker.error("hid \(name, privacy: .public) to clear the app's window")
-        }
-        // Hiding is asynchronous. The window server reorders on its own clock,
-        // so the screen is read back until it settles rather than once.
-        for _ in 0..<50 {
-            if case .clear = screenState() { return }
-            Thread.sleep(forTimeInterval: 0.1)
         }
     }
 
@@ -796,12 +822,28 @@ final class AppFailureSweepUITests: XCTestCase {
             // would name the wrong failure.
             return element
         }
-        // Nothing outside the app covers the window, so chrome the app itself
-        // published is the only thing left that can be over this control.
+        if element.isHittable { return element }
+        // Nothing outside the app covered the window when the precondition was
+        // read, but hittability is answered by hit-testing the screen and the
+        // window server reorders on its own clock: a window that arrives
+        // between the two reads makes a reachable control read as unclickable,
+        // and naming that the app's own chrome reports a defect the app does
+        // not have. The screen is put back and the control read once more, so
+        // an arriving window is reported as the screen it is.
+        if let driven = drivenApp { clearTheScreen(so: driven) }
+        guard requireUnobstructedWindow(before: identifier, file: file, line: line) else {
+            return nil
+        }
         guard element.isHittable else {
+            // What is left is the app's own chrome over the control, or the
+            // control lying outside the visible bounds of the container that
+            // holds it. Hit-testing answers one question for both, so the
+            // failure states what was read instead of naming one of them.
             XCTFail(
-                "\(identifier) is published but the app's own chrome covers it. "
-                    + report(identifier, in: app),
+                "\(identifier) is published and enabled, nothing outside the app covers "
+                    + "the window, and macOS still answers that no click reaches it: the "
+                    + "app's own chrome is over it, or it lies outside the visible bounds "
+                    + "of the container that holds it. " + report(identifier, in: app),
                 file: file, line: line
             )
             return nil
