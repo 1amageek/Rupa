@@ -1867,8 +1867,25 @@ private extension ViewportSpatialOverlayProducer {
         try appendCameraLine(guide, to: &cameraLines, checkpoint: checkpoint)
     }
 
+    /// The colour a handle is drawn in, which for a handle that moves along one
+    /// world axis is that axis's own colour.
+    ///
+    /// The transform gizmo's translate arrows are the world axes, and their tip
+    /// markers already carry the axis colour, so a shaft drawn in the neutral
+    /// edit colour said less than the marker on its end. Naming the axis on the
+    /// shaft as well is what lets a drag be aimed before it is released, rather
+    /// than read back afterwards from where the body went.
+    ///
+    /// Only `translate` is named here. The other gizmo actions carry an axis
+    /// too, but they scale and rotate about it rather than move along it, and
+    /// this route does not claim to say what those mean.
     static func axisColor(for identity: ViewportSpatialHandleIdentity) -> SIMD4<Float> {
         switch identity {
+        case .affordance(let target):
+            switch target.action {
+            case .translate(let axis): return axisColor(axis)
+            default: return editColor
+            }
         case .polySplineSurfaceVertex(_, _, let role), .surfaceControlPoint(_, let role):
             switch role {
             case .axis(let axis): return axisColor(axis)
