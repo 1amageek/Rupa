@@ -71,32 +71,165 @@ final class AppFailureSweepUITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        // A control the chrome published disabled was never exercised. The run
+        // read no failure for it, which is not the same as the operation having
+        // worked, so the coverage it did not reach is stated rather than left
+        // to look like a clean pass.
+        if declinedControls.isEmpty == false {
+            Self.marker.error(
+                "declined \(self.declinedControls.joined(separator: ","), privacy: .public)"
+            )
+        }
+        declinedControls.removeAll()
         for application in hiddenApplications {
             application.unhide()
         }
         hiddenApplications.removeAll()
     }
 
-    // MARK: - Sweep
+    // MARK: - Sweeps
+
+    /// Each group of controls the chrome publishes is its own test.
+    ///
+    /// The sweep drives the real app, so a run costs minutes, and a run that
+    /// covers every group can only be repeated as a whole: a group already
+    /// read clean has to be driven again to reach the group that has not been.
+    /// Split by group, a clean group is not re-read, a failing group is re-read
+    /// on its own, and a run stopped by the screen leaves the groups it did not
+    /// reach individually runnable. Each test launches the app, so no group
+    /// inherits another's document, selection, or chrome state.
 
     @MainActor
-    func testShippedWorkspaceControlsLeaveNoUnexpectedFailureRecord() throws {
-        let app = launchApp()
-        let canvas = waitForCanvas(in: app)
-        openLogsPane(in: app)
-
-        // The launch document, with nothing created and nothing selected.
+    func testCanvasToolsOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
         sweepCanvasTools(in: app, stage: "empty")
-        sweepUtilityRail(in: app, stage: "empty")
-        sweepSelectionScopes(in: app, stage: "empty")
-        sweepPlaneModes(in: app, stage: "empty")
-        sweepViewportControls(in: app, stage: "empty")
-        sweepToolbarCommands(in: app, stage: "empty")
-        sweepModelingDrafts(in: app, stage: "empty")
-        sweepSidebar(in: app, stage: "empty")
-        sweepEditMenu(in: app, stage: "empty")
+    }
 
-        // The same controls with one body created and selected.
+    @MainActor
+    func testUtilityRailOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepUtilityRail(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testSelectionScopesOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepSelectionScopes(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testPlaneModesOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepPlaneModes(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testViewportControlsOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepViewportControls(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testToolbarCommandsOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepToolbarCommands(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testModelingDraftsOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepModelingDrafts(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testSidebarOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepSidebar(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testEditMenuOnTheLaunchDocument() throws {
+        let app = prepareWorkspace()
+        sweepEditMenu(in: app, stage: "empty")
+    }
+
+    @MainActor
+    func testCreatingAndSelectingABody() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+    }
+
+    @MainActor
+    func testCanvasToolsWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepCanvasTools(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testSelectionScopesWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepSelectionScopes(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testPlaneModesWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepPlaneModes(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testViewportControlsWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepViewportControls(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testToolbarCommandsWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepToolbarCommands(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testModelingDraftsWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepModelingDrafts(in: app, stage: "selected")
+    }
+
+    @MainActor
+    func testEditMenuWithABodySelected() throws {
+        let app = prepareWorkspace()
+        selectABody(in: app)
+        sweepEditMenu(in: app, stage: "selected")
+    }
+
+    // MARK: - Fixtures
+
+    /// Brings the workspace to the state every group is read from: the canvas
+    /// mounted and the Logs pane open, since the pane is what publishes the
+    /// failure record each step is read back out of.
+    @MainActor
+    private func prepareWorkspace() -> XCUIApplication {
+        let app = launchApp()
+        _ = waitForCanvas(in: app)
+        openLogsPane(in: app)
+        return app
+    }
+
+    /// Creates one body and selects it, which is the state the "selected"
+    /// stage of a group is read in.
+    ///
+    /// Both steps are swept rather than merely performed, so a failure the app
+    /// records while reaching that state is reported against the step that
+    /// caused it instead of against the group under test.
+    @MainActor
+    private func selectABody(in app: XCUIApplication) {
+        let canvas = waitForCanvas(in: app)
         sweep("solid: create a box", in: app, settle: 20.0) {
             let solidTool = app.buttons["CanvasTool.solid"]
             guard solidTool.waitForExistence(timeout: 10) else {
@@ -123,25 +256,8 @@ final class AppFailureSweepUITests: XCTestCase {
             let affordance = app.descendants(matching: .any)["CanvasSelectionAffordance"]
             XCTAssertTrue(affordance.waitForExistence(timeout: 10))
         }
-
-        sweepSelectionScopes(in: app, stage: "selected")
-        sweepPlaneModes(in: app, stage: "selected")
-        sweepViewportControls(in: app, stage: "selected")
-        sweepToolbarCommands(in: app, stage: "selected")
-        sweepModelingDrafts(in: app, stage: "selected")
-        sweepCanvasTools(in: app, stage: "selected")
-        sweepEditMenu(in: app, stage: "selected")
-
-        // A control the chrome published disabled was never exercised. The run
-        // read no failure for it, which is not the same as the operation having
-        // worked, so the coverage it did not reach is stated rather than left
-        // to look like a clean pass.
-        if declinedControls.isEmpty == false {
-            Self.marker.error(
-                "declined \(self.declinedControls.joined(separator: ","), privacy: .public)"
-            )
-        }
     }
+
 
     // MARK: - Groups
 
