@@ -192,6 +192,20 @@ rather than measured a second time, because a second measurement of the same
 view carries the same number while adding a second workspace value that
 changes in the same frame.
 
+The overlay's trailing side carries two chromes, and they share one vertical
+budget. The top bar holds the trailing corner, and the band it occupies is
+reserved at both ends of the canvas, so the utility rail is offered only the
+height between those two bands. A rail declares the height it opens to, and
+it reaches that height only while the canvas has room for it, giving height
+back as the canvas shrinks. Two consequences follow, and both are contracts.
+The rail never covers the top bar: a canvas too short for the declared rail
+-- which is what opening the bottom logs pane produces -- yields a shorter
+rail rather than a rail laid over the corner. And the rail stays centred on
+the canvas at every height, which is where the tool palette on the leading
+side is centred too; reserving the band at one end only would move the rail
+off that centre line by half the band. Chrome on opposite edges shares no
+budget, because nothing puts two of them in one band.
+
 The host holds the rectangles it has been handed in a reference its own body
 never reads, and publishes them to the workspace as one value on the
 MainActor tick after the layout that measured them, replacing a publication

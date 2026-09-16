@@ -18,22 +18,12 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
                 .zIndex(0)
         }
         .overlay(alignment: .topTrailing) {
-            topBar()
-                .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
-                .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayChrome(.topBar, onChange: setChromeRect)
-                .onHover(perform: onHover)
+            trailingChrome
         }
         .overlay(alignment: .leading) {
             toolPalette()
                 .padding(.leading, WorkspaceCanvasOverlayLayout.edgePadding)
                 .workspaceCanvasOverlayChrome(.toolPalette, onChange: setChromeRect)
-                .onHover(perform: onHover)
-        }
-        .overlay(alignment: .trailing) {
-            utilityRail()
-                .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayChrome(.utilityRail, onChange: setChromeRect)
                 .onHover(perform: onHover)
         }
         .overlay(alignment: .bottom) {
@@ -53,6 +43,30 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
         .accessibilityIdentifier("WorkspaceCanvasArea")
         .accessibilityLabel("Workspace canvas area")
         .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
+    }
+
+    /// The chrome the canvas carries on its trailing side.
+    ///
+    /// The top bar and the utility rail are laid out over the same canvas, so
+    /// they share one vertical budget rather than being laid out as two
+    /// independent overlays, which lets the rail grow through the corner the
+    /// bar holds whenever the canvas is shorter than the height the rail
+    /// declares -- which is what opening the bottom logs pane does to it.
+    /// `WorkspaceTrailingChromeLayout` owns how that budget is divided.
+    private var trailingChrome: some View {
+        WorkspaceTrailingChromeLayout(
+            spacing: WorkspaceCanvasOverlayLayout.edgePadding
+        ) {
+            topBar()
+                .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
+                .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
+                .workspaceCanvasOverlayChrome(.topBar, onChange: setChromeRect)
+                .onHover(perform: onHover)
+            utilityRail()
+                .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
+                .workspaceCanvasOverlayChrome(.utilityRail, onChange: setChromeRect)
+                .onHover(perform: onHover)
+        }
     }
 
     /// Records one chrome's measured rectangle.
