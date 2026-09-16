@@ -33,7 +33,11 @@ public struct ViewportSnapResolution: Equatable, Sendable {
 }
 
 public struct ViewportSnapResolutionService: Sendable {
-    public init() {}
+    private let snapResolver: SnapResolver
+
+    public init(snapResolver: SnapResolver = SnapResolver()) {
+        self.snapResolver = snapResolver
+    }
 
     public func resolution(
         for query: ViewportSnapQuery?,
@@ -60,7 +64,7 @@ public struct ViewportSnapResolutionService: Sendable {
         options.referencePoint = query.referencePoint
 
         do {
-            let result = try SnapResolver().resolve(
+            let result = try snapResolver.resolve(
                 point: query.point,
                 in: document,
                 ruler: ruler,

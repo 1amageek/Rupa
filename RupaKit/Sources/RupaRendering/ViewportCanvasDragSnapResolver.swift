@@ -16,22 +16,38 @@ public struct ViewportCanvasDragSnapResolution: Equatable, Sendable {
 }
 
 public struct ViewportCanvasDragSnapResolver: Sendable {
-    public init() {}
+    private let resolver: ViewportSnapResolutionService
 
+    public init(
+        resolver: ViewportSnapResolutionService = ViewportSnapResolutionService()
+    ) {
+        self.resolver = resolver
+    }
+
+    /// Resolves the drag's start and its end against the document.
+    ///
+    /// Both resolutions carry the caller's published evaluation context, so a
+    /// drag costs the kernel what the caller already paid rather than two
+    /// whole-document evaluations per pointer move. The
+    /// [snap topology demand contract](../RupaCore/DESIGN.md#snap-topology-demand-contract)
+    /// owns whether that context is reused.
     public func resolution(
         _ drag: ViewportModelDrag,
         document: DesignDocument,
         ruler: RulerConfiguration,
         snapOptions: SnapResolutionOptions?,
-        axisConstraint: SketchAxisConstraint?
+        axisConstraint: SketchAxisConstraint?,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) -> ViewportCanvasDragSnapResolution {
-        let resolver = ViewportSnapResolutionService()
         let startResolution = resolver.resolution(
             for: ViewportSnapQuery(point: drag.start, referencePoint: nil),
             document: document,
             ruler: ruler,
             options: snapOptions,
-            modifierFlags: drag.modifierFlags
+            modifierFlags: drag.modifierFlags,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let startPoint = startResolution.resolvedPoint ?? drag.start
         let constrainedEndPoint = axisConstraint?.constrainedCanvasPoint(
@@ -44,7 +60,9 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
             document: document,
             ruler: ruler,
             options: snapOptions,
-            modifierFlags: drag.modifierFlags
+            modifierFlags: drag.modifierFlags,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let snappedEndPoint = endResolution.resolvedPoint ?? constrainedEndPoint
         let endPoint = axisConstraint?.constrainedCanvasPoint(
@@ -98,14 +116,18 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
         document: DesignDocument,
         ruler: RulerConfiguration,
         snapOptions: SnapResolutionOptions?,
-        axisConstraint: SketchAxisConstraint?
+        axisConstraint: SketchAxisConstraint?,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) -> ViewportModelDrag {
         resolution(
             drag,
             document: document,
             ruler: ruler,
             snapOptions: snapOptions,
-            axisConstraint: axisConstraint
+            axisConstraint: axisConstraint,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         ).drag
     }
 

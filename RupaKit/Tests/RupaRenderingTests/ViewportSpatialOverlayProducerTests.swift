@@ -223,7 +223,9 @@ func semanticDragPreviewDoesNotRejectAnUnmovedCreationPress() throws {
             document: .empty(),
             ruler: .standard(for: .meter),
             snapOptions: nil,
-            axisConstraint: nil
+            axisConstraint: nil,
+            currentEvaluation: nil,
+            currentGeneration: nil
         ),
         measurement: nil,
         drawsLegacyBodies: false,

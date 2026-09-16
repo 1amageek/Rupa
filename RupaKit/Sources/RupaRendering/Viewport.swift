@@ -4182,7 +4182,9 @@ public struct Viewport: View {
             for: try nativeWorldPointSample(for: input, from: start, to: current),
             document: document,
             ruler: workspaceRuler,
-            snapOptions: snapResolutionOptions
+            snapOptions: snapResolutionOptions,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: sceneDocumentGeneration
         )
     }
 
@@ -5917,7 +5919,9 @@ extension Viewport {
             document: document,
             ruler: workspaceRuler,
             snapOptions: snapResolutionOptions,
-            axisConstraint: canvasDragAxisConstraint
+            axisConstraint: canvasDragAxisConstraint,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: sceneDocumentGeneration
         )
     }
 

@@ -3,6 +3,12 @@ import RupaViewportScene
 import SwiftCAD
 
 struct ViewportConstructionPlaneDragSnapResolver: Sendable {
+    private let snapResolver: SnapResolver
+
+    init(snapResolver: SnapResolver = SnapResolver()) {
+        self.snapResolver = snapResolver
+    }
+
     /// Snaps a dragged construction-plane handle onto the document's snap
     /// candidates.
     ///
@@ -10,11 +16,20 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
     /// because a normal handle rotates about its plane's origin rather than
     /// moving it, so no separate source target is needed. Snapping is a
     /// document query, so it names no screen point and no viewport layout.
+    ///
+    /// The query carries the caller's published evaluation context, so a handle
+    /// dragged over a document with CAD topology costs the kernel what the
+    /// caller already paid rather than a whole-document evaluation per pointer
+    /// move. The
+    /// [snap topology demand contract](../RupaCore/DESIGN.md#snap-topology-demand-contract)
+    /// owns whether that context is reused.
     func snappedTarget(
         _ target: ViewportConstructionPlaneDragTarget,
         document: DesignDocument,
         ruler: RulerConfiguration,
-        options: SnapResolutionOptions?
+        options: SnapResolutionOptions?,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) -> ViewportConstructionPlaneDragTarget {
         guard let options else {
             return target
@@ -27,7 +42,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
                 document: document,
                 ruler: ruler,
                 options: options,
-                allowsPlanarFallback: true
+                allowsPlanarFallback: true,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             ) else {
                 return target
             }
@@ -45,7 +62,9 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
                 document: document,
                 ruler: ruler,
                 options: options,
-                allowsPlanarFallback: false
+                allowsPlanarFallback: false,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             ) else {
                 return target
             }
@@ -69,18 +88,22 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
         document: DesignDocument,
         ruler: RulerConfiguration,
         options: SnapResolutionOptions,
-        allowsPlanarFallback: Bool
+        allowsPlanarFallback: Bool,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> Point3D? {
         let queryPoint = snapQueryPoint(
             rawWorldPoint: rawWorldPoint,
             options: options
         )
         do {
-            let result = try SnapResolver().resolve(
+            let result = try snapResolver.resolve(
                 point: queryPoint,
                 in: document,
                 ruler: ruler,
-                options: options
+                options: options,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             if let selectedWorldPoint = result.selectedWorldPoint {
                 return selectedWorldPoint

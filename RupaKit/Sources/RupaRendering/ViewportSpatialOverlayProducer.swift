@@ -292,6 +292,12 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let ruler: RulerConfiguration
         let snapOptions: SnapResolutionOptions?
         let axisConstraint: SketchAxisConstraint?
+        /// The evaluation the publisher already holds for `document`, stated so
+        /// the producer resolves this drag against it instead of asking the
+        /// kernel to evaluate the whole document twice per pointer move. A
+        /// publisher holding none for the document it passes states none.
+        let currentEvaluation: DocumentEvaluationContext?
+        let currentGeneration: DocumentGeneration?
     }
 
     struct Measurement: Sendable {
@@ -1824,7 +1830,9 @@ enum ViewportSpatialOverlayProducer {
             document: preview.document,
             ruler: preview.ruler,
             snapOptions: preview.snapOptions,
-            axisConstraint: preview.axisConstraint
+            axisConstraint: preview.axisConstraint,
+            currentEvaluation: preview.currentEvaluation,
+            currentGeneration: preview.currentGeneration
         )
         let coordinateSystem: SketchPlaneCoordinateSystem
         do {

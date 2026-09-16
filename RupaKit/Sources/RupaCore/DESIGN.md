@@ -314,9 +314,10 @@ renderable CAD topology. `TopologySnapshotService` remains the validation and
 CAD/measurement failure authority; SnapResolver adds no cache, alternate
 topology path, or failure conversion of its own.
 
-Object candidate resolution runs once per pointer event on the caller's thread,
-and on a document with active renderable CAD topology the demand above reaches
-one exact kernel evaluation of the whole document per event. `resolve`
+Each `resolve` runs object candidate resolution on the caller's thread, and on
+a document with active renderable CAD topology the demand above reaches one
+exact kernel evaluation of the whole document. One pointer event can call it
+more than once: a canvas drag resolves its start and then its end. `resolve`
 therefore accepts the caller's published `DocumentEvaluationContext` and
 `DocumentGeneration` and forwards both to that one `snapshot` call, exactly as
 `MeasurementService` and `MeshSummaryService` already forward them. The context

@@ -235,7 +235,9 @@ struct ViewportNativeWorldPointInput: Sendable {
         for sample: Sample,
         document: DesignDocument,
         ruler: RulerConfiguration,
-        snapOptions: SnapResolutionOptions?
+        snapOptions: SnapResolutionOptions?,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> Value {
         guard sample.start.isFinite, sample.current.isFinite else {
             throw RealityViewportSpatialBatch.invalid("A world-point sample is not finite.")
@@ -274,7 +276,12 @@ struct ViewportNativeWorldPointInput: Sendable {
                 )
             }
             let snapped = ViewportConstructionPlaneDragSnapResolver().snappedTarget(
-                dragged, document: document, ruler: ruler, options: snapOptions
+                dragged,
+                document: document,
+                ruler: ruler,
+                options: snapOptions,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             guard snapped.origin.isFinite, snapped.normal.isFinite else {
                 throw RealityViewportSpatialBatch.invalid(
