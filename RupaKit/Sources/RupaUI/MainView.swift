@@ -356,9 +356,9 @@ private struct ProjectMainViewContent: View {
         cancelModelingOperation()
         selectedTool = .select
         modelingDraft = ModelingOperationDraft(
-            kind: kind, selection: snapshot.selection,
-            unit: snapshot.workspaceState.ruler.displayUnit,
-            stepMeters: WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler).operationStepMeters
+            kind: kind,
+            selection: snapshot.selection,
+            ruler: snapshot.workspaceState.ruler
         )
     }
 

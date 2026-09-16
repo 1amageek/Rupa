@@ -19,7 +19,7 @@ and passes preview/apply/cancel callbacks; this component owns no task or cache.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaUI](../DESIGN.md) | parent | Snapshot presentation and Workspace intent | Composes the form. | Never write a document from a view. |
-| [RupaCore](../../RupaCore/DESIGN.md) | depends on | EditorCommand validation and source operations | Owns CAD semantics and topology references. | Scene occurrence transforms are not feature geometry. |
+| [RupaCore](../../RupaCore/DESIGN.md) | depends on | EditorCommand validation, source operations, `WorkspaceScaleDefaults` and `WorkspaceInteractionScaleDefaults` | Owns CAD semantics, topology references and the workspace scale's published defaults. | Scene occurrence transforms are not feature geometry. A default feature size and an interaction step are different quantities. |
 | [RupaKit](../../RupaKit/DESIGN.md) | used by parent | Exact preview/commit | Owns publication coordinates. | A preview does not grant commit authority. |
 
 ## Architecture
@@ -77,8 +77,31 @@ path; the row is not a second source graph or a dynamic definition editor.
 - Box, Cylinder, Sphere, Extrude, Revolve, Sweep, Loft, Boolean, Fillet and Chamfer use existing
   Core commands. Source IDs are allocated by Core, never by this UI component.
 - Length text accepts explicit units and otherwise uses the displayed unit;
-  angle fields use degrees. All numeric inputs must be finite. Required sizes,
-  radii and chamfer distances are positive; a zero revolve angle is rejected.
+  angle fields use degrees. All numeric inputs must be finite; a zero revolve
+  angle is rejected. A length that gives a new feature its extent, such as a
+  size, a radius or an extrude distance, must exceed the document's own
+  distance tolerance, because Core refuses one at or below it, and the refusal
+  names that threshold as a readable length. An amount applied to geometry
+  that already exists, such as a fillet radius or a chamfer distance, is a
+  different quantity: Core asks only that it be positive, so this component
+  asks the same and does not invent a stricter threshold it would then refuse
+  work for. Core's remaining geometric requirements, such as whether a sketch
+  yields a closed profile or whether an edge treatment holds together, stay
+  typed failures from the actual preview rather than preconditions restated
+  here.
+- A new draft opens at the workspace scale's default feature size, which is
+  the size the canvas solid tool places, so the panel and the canvas agree on
+  what one default solid is at the current scale. The workspace's interaction
+  step is the smallest increment the workspace moves by and is not a size: at
+  a fine scale it equals the document's distance tolerance, and a solid whose
+  side is the tolerance is degenerate. Fillet and chamfer amounts are
+  increments applied to an existing edge and keep the step.
+  [RupaCore](../../RupaCore/DESIGN.md) owns both defaults; this component only
+  chooses which one a kind opens at.
+- Extrude, Revolve and Loft operands must be features that output a profile.
+  Core resolves those references itself and refuses one that does not, so
+  `command(in:)` reads the same output role and refuses first; a press whose
+  only outcome is that refusal is then never offered.
 - The form shows ordered operands and their roles. Loft section order can be
   changed explicitly; Boolean's last operand is the tool. Selection replacement
   is explicit. Authored Mesh cannot masquerade as a CAD feature.
@@ -115,8 +138,16 @@ the parent operation flow, not inferred from draft contents.
 
 `Tests/RupaUIPackageTests/ModelingOperationDraftTests.swift` verifies exact
 parameter forwarding, operand order, invalid inputs and transformed/non-CAD
-selection refusal. Parent integration tests own preview cancellation, stale
-completion and exactly-once Apply. Signed App tests own actual controls and
+selection refusal. For every workspace scale preset it also evaluates the
+command a newly opened primitive draft names, so a default the kernel would
+refuse is a test failure rather than a failure record at run time. It holds
+the two thresholds apart by driving both: a size at the document's distance
+tolerance names no command, while an edge amount at that same tolerance does
+and only a non-positive one is refused. It also holds that an operand
+producing no profile is refused before the press, reading the refusal text so
+another precondition cannot pass the check for it. Parent
+integration tests own preview cancellation, stale completion and
+exactly-once Apply. Signed App tests own actual controls and
 geometry display. The layout reuses native SwiftUI controls and existing
 Workspace spacing/semantic colors; no separate web-style design system is added.
 Validation includes keyboard labels, disabled/busy/error states, light/dark

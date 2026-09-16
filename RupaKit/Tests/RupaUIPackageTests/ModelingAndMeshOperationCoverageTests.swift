@@ -272,8 +272,7 @@ struct ModelingAndMeshOperationCoverageTests {
         ModelingOperationDraft(
             kind: kind,
             selection: SelectionModel(selectedTargets: targets),
-            unit: .millimeter,
-            stepMeters: 0.001
+            ruler: .standard(for: .millimeter)
         )
     }
 
