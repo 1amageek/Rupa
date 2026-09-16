@@ -434,4 +434,50 @@ final class AppOperationCoverageUITests: XCTestCase {
             app.descendants(matching: .any)["Modeling.refusal"].firstMatch.exists
         )
     }
+
+    /// Validate is a read, so pressing it reports what the evaluation found and
+    /// records nothing. The command it names mutates no source, and a project
+    /// source transaction carries only source-mutating commands, so the button
+    /// asks the workspace to evaluate the published snapshot again instead.
+    /// See `RupaUI/DESIGN.md`, "Contracts and Invariants".
+    @MainActor
+    func testValidateReportsTheEvaluationItRanAndRecordsNoFailure() throws {
+        let app = launchApp()
+        _ = waitForCanvas(in: app)
+
+        // The Scene section reads the merged diagnostics, so it is where the
+        // outcome of a press becomes visible.
+        let sceneDestination = app.buttons["WorkspaceUtilityRail.scene"]
+        XCTAssertTrue(sceneDestination.waitForExistence(timeout: 15))
+        sceneDestination.click()
+        let rail = app.descendants(matching: .any)["WorkspaceUtilityRail.expanded"]
+        XCTAssertTrue(rail.waitForExistence(timeout: 10))
+        let issues = app.descendants(matching: .any)["WorkspaceScene.issues"]
+        XCTAssertTrue(issues.waitForExistence(timeout: 10))
+        XCTAssertEqual(accessibilityValue(of: issues), "None")
+
+        let validate = app.buttons["WorkspaceCommand.validate"]
+        XCTAssertTrue(validate.waitForExistence(timeout: 10))
+        XCTAssertTrue(validate.isEnabled)
+        validate.click()
+
+        // The press publishes one progress line and no failure, so the readout
+        // moves to exactly one info entry with the failure count still at zero.
+        XCTAssertTrue(
+            waitForValue("0 failures, 0 errors, 0 warnings, 1 info", of: issues, timeout: 20),
+            "Validate left the Scene readout at \"\(accessibilityValue(of: issues))\"."
+        )
+
+        // The Logs pane renders no failure header at all while the log is
+        // empty, so the header's absence is the read.
+        let logs = app.buttons["WorkspaceCommand.logs"]
+        XCTAssertTrue(logs.waitForExistence(timeout: 10))
+        logs.click()
+        let count = app.descendants(matching: .any)["WorkspaceFailureLog.count"]
+        XCTAssertFalse(
+            count.waitForExistence(timeout: 5),
+            "Validating a document the workspace could evaluate was recorded as a failure."
+        )
+        assertNoErrorSurface(in: app, after: "Validating the launch document")
+    }
 }

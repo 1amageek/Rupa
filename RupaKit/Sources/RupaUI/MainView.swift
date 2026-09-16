@@ -964,6 +964,51 @@ private struct ProjectMainViewContent: View {
         return commit.commandResults
     }
 
+    /// Re-evaluates the published document and reports what the evaluation
+    /// found.
+    ///
+    /// Validation is a read. `EditorCommand.validateDocument` is the one Core
+    /// command that mutates no source, and a project source transaction carries
+    /// only source-mutating commands, so submitting it through `submitSource`
+    /// refuses every press instead of validating anything. The workspace
+    /// already owns the published evaluation this view reads, so the button
+    /// asks it to evaluate that publication again and reports the counts the
+    /// new publication carries. See `RupaUI/DESIGN.md`, "Contracts and Invariants".
+    ///
+    /// The operation succeeded even when the document it evaluated has errors,
+    /// so the line it publishes is progress, not a refusal. The document's own
+    /// diagnostics reach the Issues readout through the republished snapshot.
+    private func validateDocument() {
+        let task = enqueueWorkspaceOperation { () -> ProjectViewSnapshot in
+            guard let current = workspace.view else {
+                throw ProjectWorkspaceActionError(
+                    code: .snapshotUnavailable,
+                    message: "The project workspace has no published view snapshot."
+                )
+            }
+            return try await workspace.evaluate(from: current)
+        }
+        Task { @MainActor in
+            do {
+                let published = try await task.value
+                reportToolStatus(validationSummary(of: published), severity: .info)
+            } catch {
+                reportToolStatus(
+                    recordFailure(error),
+                    severity: .error,
+                    recordsFailure: false
+                )
+            }
+        }
+    }
+
+    private func validationSummary(of published: ProjectViewSnapshot) -> String {
+        let diagnostics = published.evaluationSnapshot.diagnostics
+        let errors = diagnostics.filter { $0.severity == .error }.count
+        let warnings = diagnostics.filter { $0.severity == .warning }.count
+        return "Validation finished: \(errors) errors, \(warnings) warnings."
+    }
+
     private func setRulerConfiguration(
         _ ruler: RulerConfiguration,
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
@@ -2790,7 +2835,7 @@ private struct ProjectMainViewContent: View {
             .accessibilityIdentifier("WorkspaceCommand.logs")
 
             Button {
-                submitSource(.validateDocument)
+                validateDocument()
             } label: {
                 Image(systemName: "checkmark.seal")
             }

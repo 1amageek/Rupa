@@ -100,6 +100,19 @@ No old column-major compatibility controls or layout-detection path remain.
     status, but it does not become a source or evaluation command surface.
     Wireframe and normals describe the source face presentation rather than
     exact B-rep geometry; normals use RGB direction encoding.
+12. A workspace source route carries only source-mutating commands, so
+    `submitSource` is not the route for a command that mutates nothing.
+    `EditorCommand.validateDocument` is the only such command, and in Core it
+    evaluates the current document and republishes its diagnostics; the toolbar
+    Validate button therefore asks `ProjectWorkspace` to evaluate the published
+    snapshot again rather than staging a transaction that a source transaction
+    must reject. The button reports the counts the new publication carries as
+    progress even when the document it evaluated has errors, because the errors
+    belong to the document and reach the Issues readout through the republished
+    snapshot, while the [failure record](#failure-surfacing) means the operation
+    itself failed. `AppOperationCoverageUITests` owns that contract from the
+    shipped control. The transaction's own mutation-only rule stays with
+    [RupaProject](../RupaProject/DESIGN.md).
 
 The viewport root fills its parent-allocated rectangle in every preparation
 state. Native content, input, and chrome share that coordinate space; padding
