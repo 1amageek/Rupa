@@ -24,17 +24,16 @@ func viewportOccurrenceSelectionKeepsExactSceneNodeForSharedCADFeature() throws 
     let selectedItems = index.selectedBodySourceItems(in: scene)
     let selectedItem = try #require(selectedItems.first)
     let exactTarget = try #require(index.exactTarget(for: selectedItem))
-    let moveTarget = ViewportBodyMoveDragTarget(
-        target: exactTarget,
-        deltaX: 0.01,
-        deltaY: 0.02
-    )
 
     #expect(scene.items.contains { $0.sceneNodeID == fixture.hiddenSceneNodeID } == false)
     #expect(scene.items.contains { $0.sceneNodeID == fixture.visibleSceneNodeID })
     #expect(selectedItems.map(\.sceneNodeID) == [fixture.visibleSceneNodeID])
     #expect(index.sceneNodeIDs == [fixture.visibleSceneNodeID])
-    #expect(moveTarget.target.sceneNodeID == fixture.visibleSceneNodeID)
+    // A gesture on this occurrence commits against the scene node the exact
+    // target names, so that node has to be the visible occurrence rather than
+    // the hidden one that shares the CAD feature with it.
+    #expect(exactTarget.sceneNodeID == fixture.visibleSceneNodeID)
+    #expect(exactTarget.component == .object)
 }
 
 @MainActor

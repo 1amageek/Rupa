@@ -197,6 +197,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
+    /// Deprecated: translates a body by rewriting its profile sketch, which
+    /// only an extrude has and which only spans that sketch's own two axes.
+    /// A body's position in the document is its scene node's local frame, so
+    /// `setSceneNodeTransform` owns moving one and this case has no caller in
+    /// the app: the viewport's transform gizmo and the inspector's position
+    /// fields both commit through that command. Remove this case once no
+    /// client outside the app depends on the profile rewrite it performs.
     case moveBody(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)

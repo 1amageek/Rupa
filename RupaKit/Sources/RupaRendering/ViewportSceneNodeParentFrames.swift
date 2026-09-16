@@ -2,15 +2,15 @@ import RupaCore
 import RupaViewportScene
 
 /// Parent world frames for the document's scene nodes, resolved once per
-/// overlay frame for the sketch transform route.
+/// overlay frame for the transform gizmos that commit against them.
 ///
-/// The walk is this route's own rather than the shared scene transform index,
+/// The walk is these routes' own rather than the shared scene transform index,
 /// because that index answers a missing node and a non-representable product
-/// with an identity frame. A sketch transform commits `P⁻¹ · M_w · P · L`, so
-/// an identity substituted for `P` would commit a frame nobody authored.
+/// with an identity frame. A gizmo commits `P⁻¹ · M_w · P · L`, so an identity
+/// substituted for `P` would commit a frame nobody authored.
 /// Every answer here is therefore a resolved frame, a typed refusal, or a
 /// documented absence the caller reads as "this node names no commit target".
-struct ViewportSketchTransformParentFrames: Sendable {
+struct ViewportSceneNodeParentFrames: Sendable {
     /// The frame a node inherits from its ancestors, carried down the walk.
     private enum Inherited {
         case frame(Transform3D)

@@ -11,7 +11,7 @@ struct ViewportSpatialInteractionRecord: Sendable {
 
     init(target: ViewportSpatialPreparedInteractionTarget,
          occurrenceID: String? = nil, modelTransform: Transform3D = .identity) throws {
-        if case .affordance(let address, let members, let groupEdit) = target {
+        if case .affordance(let address, let members, let groupEdit, let placement) = target {
             try Task.checkCancellation()
             guard members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount else {
                 throw RealityViewportSpatialBatch.exhausted()
@@ -21,6 +21,18 @@ struct ViewportSpatialInteractionRecord: Sendable {
                   members.contains(where: { $0.featureID == address.featureID }),
                   (members.count == 1 ? occurrenceID == members[0].occurrenceID : occurrenceID == nil) else {
                 throw RealityViewportSpatialBatch.invalid("Body affordance has no complete occurrence-scoped edit baseline.")
+            }
+            // A placement baseline addresses one scene node, so it belongs to a
+            // single-body gizmo whose member names that node. A group gizmo
+            // stands for no single node and carries none.
+            if let placement {
+                guard members.count == 1,
+                      members[0].featureID == placement.featureID,
+                      members[0].sceneNodeID == placement.sceneNodeID else {
+                    throw RealityViewportSpatialBatch.invalid(
+                        "Body affordance placement baseline names no member scene node."
+                    )
+                }
             }
             var occurrences: Set<String> = []
             for member in members {
@@ -107,9 +119,15 @@ struct ViewportSpatialInteractionRecord: Sendable {
                 try string(value.title)
                 try string(value.highlightedTitle)
             case .constructionPlane(_, _, _, _, let corners): try array(corners)
-            case .affordance(_, let members, _):
+            case .affordance(_, let members, _, let placement):
                 try array(members)
                 for member in members { try string(member.occurrenceID) }
+                if let placement {
+                    // Both frames own heap matrix storage the producer
+                    // allocated for this table, the way a sketch baseline's do.
+                    try array(placement.baseLocalTransform.matrix.values)
+                    try array(placement.parentWorldTransform.matrix.values)
+                }
             case .sketchTransform(let value):
                 // Both frames own heap matrix storage the producer allocated
                 // for this table, so they are charged rather than treated as

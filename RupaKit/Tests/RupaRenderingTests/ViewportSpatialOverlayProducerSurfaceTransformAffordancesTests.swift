@@ -63,10 +63,10 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
     #expect(source.cameraLines.count == 6)
     #expect(source.cameraPaths.isEmpty)
     let bodyRecord = try #require(interactionRecords.first { record in
-        guard case .affordance(let target, _, _) = record.target else { return false }
+        guard case .affordance(let target, _, _, _) = record.target else { return false }
         return target.featureID == featureID
     })
-    guard case .affordance(let bodyTarget, let members, let groupEdit) = bodyRecord.target else {
+    guard case .affordance(let bodyTarget, let members, let groupEdit, _) = bodyRecord.target else {
         Issue.record("Body transform record did not retain its prepared affordance baseline.")
         return
     }
@@ -164,10 +164,10 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
         xMin: -9, xMax: 9, yMin: -8, yMax: 8, zMin: -7, zMax: 7
     )
     let bodyRecord = try #require(interactionRecords.first { record in
-        guard case .affordance(_, let members, let groupEdit) = record.target else { return false }
+        guard case .affordance(_, let members, let groupEdit, _) = record.target else { return false }
         return members.count == 2 && groupEdit != nil
     })
-    guard case .affordance(let target, let members, let groupEdit) = bodyRecord.target else {
+    guard case .affordance(let target, let members, let groupEdit, _) = bodyRecord.target else {
         Issue.record("Grouped body transform did not retain its occurrence-scoped baseline.")
         return
     }
@@ -206,10 +206,10 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
         )
     )
     let replacementRecord = try #require(replacementRecords.first { record in
-        guard case .affordance(_, let members, let groupEdit) = record.target else { return false }
+        guard case .affordance(_, let members, let groupEdit, _) = record.target else { return false }
         return members.count == 1 && groupEdit == nil
     })
-    guard case .affordance(_, let replacementMembers, let replacementGroupEdit) = replacementRecord.target else {
+    guard case .affordance(_, let replacementMembers, let replacementGroupEdit, _) = replacementRecord.target else {
         Issue.record("Single body replacement did not retain its source edit baseline.")
         return
     }
@@ -378,7 +378,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
             action: .profileEdgeFillet(target, .leftBottom)
         )) && $0.occurrenceID == item.id
     })
-    guard case .affordance(let filletTarget, let filletMembers, let filletGroupEdit) = filletRecord.target else {
+    guard case .affordance(let filletTarget, let filletMembers, let filletGroupEdit, _) = filletRecord.target else {
         Issue.record("Edge fillet record did not retain its body baseline.")
         return
     }
@@ -955,7 +955,7 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
         return false
     })
     #expect(!interactionRecords.contains { record in
-        guard case .affordance(let target, _, _) = record.target else { return false }
+        guard case .affordance(let target, _, _, _) = record.target else { return false }
         return target.featureID == sketchFeatureID
     })
     #expect(source.markers.contains { $0.route == .constructionPlane && $0.identity != nil })

@@ -109,24 +109,18 @@ struct ViewportSketchTransformInput: Sendable {
         }
     }
 
-    /// Converts a world mutation into the scene node's new local frame as
-    /// `P⁻¹ · M · P · L`. Returns `nil` when the mutation leaves the frame
-    /// unchanged, so a released gesture that moved nothing writes no undo step.
+    /// Converts a world mutation into the scene node's new local frame, which
+    /// the shared algebra composes for both transform gizmos. Returns `nil`
+    /// when the mutation leaves the frame unchanged, so a released gesture
+    /// that moved nothing writes no undo step.
     func commit(worldMutation: Transform3D) throws -> ViewportSketchTransformDragTarget? {
-        let parent = baseline.parentWorldTransform
-        let inverseParent = try ViewportWorldTransformAlgebra.inverted(parent)
-        let mutatedParent = try ViewportWorldTransformAlgebra.multiplied(worldMutation, parent)
-        let localMutation = try ViewportWorldTransformAlgebra.multiplied(inverseParent, mutatedParent)
-        let localTransform = try ViewportWorldTransformAlgebra.multiplied(
-            localMutation, baseline.baseLocalTransform
-        )
-        let base = baseline.baseLocalTransform.matrix.values
-        let next = localTransform.matrix.values
-        guard base.count == next.count else {
-            throw RealityViewportSpatialBatch.invalid("A sketch transform frame is not a 4x4 matrix.")
+        guard let localTransform = try ViewportWorldTransformAlgebra.localTransform(
+            applying: worldMutation,
+            within: baseline.parentWorldTransform,
+            to: baseline.baseLocalTransform
+        ) else {
+            return nil
         }
-        let changed = zip(base, next).contains { abs($0 - $1) > ViewportWorldTransformAlgebra.singularDeterminantFloor }
-        guard changed else { return nil }
         return ViewportSketchTransformDragTarget(
             featureID: baseline.identity.featureID,
             sceneNodeID: baseline.identity.sceneNodeID,

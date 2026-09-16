@@ -2545,7 +2545,22 @@ private extension ViewportSpatialOverlayProducer {
                 target.component == .object && target.sceneNodeID == item.sceneNodeID
             }
         }
-        if input.enabledRoutes.contains(.bodyTransform), !bodyItems.isEmpty {
+        let sketchItems = input.selection.selectedTargets.compactMap { target -> ViewportSceneItem? in
+            guard target.component == .object,
+                  let item = input.scene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }),
+                  case .sketch = item.kind else { return nil }
+            return item
+        }
+        let drawsBodyGizmo = input.enabledRoutes.contains(.bodyTransform) && !bodyItems.isEmpty
+        let drawsSketchGizmo = input.enabledRoutes.contains(.sketchTransform) && !sketchItems.isEmpty
+        guard drawsBodyGizmo || drawsSketchGizmo else { return }
+        // One walk of the scene tree answers every transform gizmo in this
+        // frame, and it is taken only when the frame draws at least one. Both
+        // gizmos commit a scene node's local frame within its parent's world
+        // frame, so a second walk would be a second chance to disagree about
+        // the frame a released gesture measured from.
+        let parentFrames = try ViewportSceneNodeParentFrames(document: input.document)
+        if drawsBodyGizmo {
             let isGroup = bodyItems.count > 1
             let featureID = bodyItems.last?.featureID ?? bodyItems[0].featureID
             let bodyMembers = bodyItems.map { item in
@@ -2575,6 +2590,24 @@ private extension ViewportSpatialOverlayProducer {
             let target = bodyItems.count == 1
                 ? input.selection.selectedTargets.first(where: { $0.sceneNodeID == bodyItems[0].sceneNodeID && $0.component == .object })
                 : nil
+            // A translate commits the body's placement, which is one scene
+            // node's local frame. A group gizmo stands for no single node, and
+            // a body whose item names no addressable node has no commit target,
+            // so both draw a gizmo that previews and commits nothing.
+            let placement: ViewportBodyPlacementBaseline?
+            if bodyItems.count == 1,
+               let frames = try sceneNodeCommitFrames(
+                   item: bodyItems[0], parentFrames: parentFrames, input: input
+               ) {
+                placement = ViewportBodyPlacementBaseline(
+                    featureID: bodyItems[0].featureID,
+                    sceneNodeID: frames.sceneNodeID,
+                    baseLocalTransform: frames.baseLocalTransform,
+                    parentWorldTransform: frames.parentWorldTransform
+                )
+            } else {
+                placement = nil
+            }
             try emitBodyTransform(
                 featureID: featureID,
                 selectionTarget: target,
@@ -2583,6 +2616,7 @@ private extension ViewportSpatialOverlayProducer {
                 edit: edit,
                 bodyMembers: bodyMembers,
                 groupEdit: isGroup ? edit : nil,
+                placement: placement,
                 input: input,
                 interactionRecords: &interactionRecords,
                 checkpoint: checkpoint,
@@ -2593,17 +2627,7 @@ private extension ViewportSpatialOverlayProducer {
             )
         }
 
-        guard input.enabledRoutes.contains(.sketchTransform) else { return }
-        let sketchItems = input.selection.selectedTargets.compactMap { target -> ViewportSceneItem? in
-            guard target.component == .object,
-                  let item = input.scene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }),
-                  case .sketch = item.kind else { return nil }
-            return item
-        }
-        guard !sketchItems.isEmpty else { return }
-        // One walk of the scene tree answers every sketch gizmo in this frame,
-        // and it is taken only when the frame draws at least one.
-        let parentFrames = try ViewportSketchTransformParentFrames(document: input.document)
+        guard drawsSketchGizmo else { return }
         for item in sketchItems {
             try emitSketchTransform(
                 item: item,
@@ -2626,6 +2650,7 @@ private extension ViewportSpatialOverlayProducer {
         edit: ViewportObjectEditState,
         bodyMembers: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember],
         groupEdit: ViewportObjectEditState?,
+        placement: ViewportBodyPlacementBaseline?,
         input: SurfaceTransformAffordanceSource.RawInput,
         interactionRecords: inout [ViewportSpatialInteractionRecord],
         checkpoint: (Int, Int, Int) throws -> Void,
@@ -2644,7 +2669,8 @@ private extension ViewportSpatialOverlayProducer {
                 let prepared = ViewportSpatialPreparedInteractionTarget.affordance(
                     target: target,
                     members: bodyMembers,
-                    groupEdit: groupEdit
+                    groupEdit: groupEdit,
+                    placement: placement
                 )
                 _ = try handleIndex(
                     for: prepared,
@@ -2862,7 +2888,7 @@ private extension ViewportSpatialOverlayProducer {
 
     static func emitSketchTransform(
         item: ViewportSceneItem,
-        parentFrames: ViewportSketchTransformParentFrames,
+        parentFrames: ViewportSceneNodeParentFrames,
         input: SurfaceTransformAffordanceSource.RawInput,
         interactionRecords: inout [ViewportSpatialInteractionRecord],
         checkpoint: (Int, Int, Int) throws -> Void,
@@ -2888,7 +2914,7 @@ private extension ViewportSpatialOverlayProducer {
         guard drawnCorners.allSatisfy(isFinitePoint) else {
             throw RealityViewportSpatialBatch.invalid("Sketch transform bounds contain a non-finite world point.")
         }
-        let commit = try sketchTransformCommitTarget(
+        let commit = try sceneNodeCommitFrames(
             item: item, parentFrames: parentFrames, input: input
         )
         // While a drag is open the document is untouched, so the handles are
@@ -3050,16 +3076,19 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
-    /// The scene node one sketch gizmo commits into, with the frame that node
-    /// currently holds and the world frame that local frame is applied within.
+    /// The scene node one transform gizmo commits into, with the frame that
+    /// node currently holds and the world frame that local frame is applied
+    /// within. Both gizmos ask this, because both commit the same command
+    /// against the same three answers.
     ///
-    /// Returns `nil` for the three sketches that name no such node: one drawn
+    /// Returns `nil` for the three items that name no such node: one drawn
     /// without a scene-node address, one placed through a component instance,
     /// whose local frame the instance owns and the scene-node transform command
-    /// cannot address, and one whose node has left the document.
-    static func sketchTransformCommitTarget(
+    /// cannot address, and one whose node has left the document. Such an item
+    /// still draws its gizmo, and that gizmo commits nothing.
+    static func sceneNodeCommitFrames(
         item: ViewportSceneItem,
-        parentFrames: ViewportSketchTransformParentFrames,
+        parentFrames: ViewportSceneNodeParentFrames,
         input: SurfaceTransformAffordanceSource.RawInput
     ) throws -> (
         sceneNodeID: SceneNodeID,
@@ -3279,7 +3308,8 @@ private extension ViewportSpatialOverlayProducer {
         let prepared = ViewportSpatialPreparedInteractionTarget.affordance(
             target: affordanceTarget,
             members: [member],
-            groupEdit: nil
+            groupEdit: nil,
+            placement: nil
         )
         _ = try handleIndex(
             for: prepared,

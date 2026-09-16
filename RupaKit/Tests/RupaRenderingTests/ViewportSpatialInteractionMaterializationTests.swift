@@ -62,14 +62,15 @@ func materializationKeepsProjectionFreeBodyBaselineAndOccurrences() throws {
     let target = ViewportSpatialPreparedInteractionTarget.affordance(
         target: .init(featureID: featureID, action: .translate(.x)),
         members: [first, second],
-        groupEdit: .init(xMin: 0, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1)
+        groupEdit: .init(xMin: 0, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1),
+        placement: nil
     )
 
     let record = try ViewportSpatialInteractionRecord(target: target)
     let materialized = try record.materialize { point in
         CGPoint(x: point.x, y: point.z)
     }
-    guard case .projectionFree(.affordance(_, let members, let groupEdit)) = materialized else {
+    guard case .projectionFree(.affordance(_, let members, let groupEdit, _)) = materialized else {
         Issue.record("The projection-free body route was not retained.")
         return
     }

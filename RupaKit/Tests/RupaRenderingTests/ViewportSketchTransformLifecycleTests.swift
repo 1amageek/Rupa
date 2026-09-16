@@ -617,7 +617,7 @@ struct ViewportSketchTransformLifecycleTests {
         let size = CGSize(width: 800, height: 600)
         var commits: [ViewportSketchTransformDragTarget] = []
         var canvasDrags = 0
-        var bodyMoveDrags = 0
+        var bodyPlacementCommits = 0
         let viewport = Viewport(
             document: fixture.document,
             sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(1)),
@@ -628,7 +628,7 @@ struct ViewportSketchTransformLifecycleTests {
             allowsObjectAffordances: false,
             selectedPresentationHasExactCADContext: true,
             onCanvasDrag: { _ in canvasDrags += 1 },
-            onBodyMoveDrag: { _ in bodyMoveDrags += 1 },
+            onBodyPlacementCommit: { _ in bodyPlacementCommits += 1 },
             onSketchTransformCommit: { commits.append($0) }
         ).frame(width: size.width, height: size.height)
         let controller = NSHostingController(rootView: viewport)
@@ -671,7 +671,7 @@ struct ViewportSketchTransformLifecycleTests {
         )
         // The press claimed the sketch handle, so neither the body-move route
         // nor the canvas fallback ever saw this gesture.
-        #expect(bodyMoveDrags == 0)
+        #expect(bodyPlacementCommits == 0)
         #expect(canvasDrags == 0)
 
         let surface = try #require(inputView(in: controller.view))
@@ -695,7 +695,7 @@ struct ViewportSketchTransformLifecycleTests {
         surface.mouseUp(with: try event(.leftMouseUp, at: pointer.end))
         try await Task.sleep(for: .milliseconds(800))
         #expect(commits.count == count)
-        #expect(bodyMoveDrags == 0)
+        #expect(bodyPlacementCommits == 0)
     }
 
     @MainActor

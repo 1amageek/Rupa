@@ -122,7 +122,6 @@ enum ProductionMainViewActionManifest {
         "insertSurfaceTrimKnot",
         "joinSketchCurves",
         "matchSurfaceBoundaryContinuity",
-        "moveBody",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",
         "moveSceneNodes",
@@ -470,11 +469,15 @@ enum ProductionMainViewActionManifest {
                 regularExpression: commandExpression
             ),
         ]
-        if name == "moveBody" {
+        if name == "setSceneNodeTransform" {
+            // The viewport's body transform gizmo commits a released translate
+            // as this command. Naming the handler and the command it builds
+            // together keeps the gizmo from drifting back onto a profile edit,
+            // which reached only an extrude and only two of its axes.
             markers.append(
                 Marker(
                     relativePaths: ["Sources/RupaUI/MainView.swift"],
-                    regularExpression: #"\.moveBody\s*\(\s*target:\s*target\.target"#
+                    regularExpression: #"submitSource\(name: "moveBodyPlacement"\)[\s\S]*?\.setSceneNodeTransform\s*\(\s*id:\s*node\.id,\s*localTransform:\s*target\.localTransform"#
                 )
             )
         }

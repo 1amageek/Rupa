@@ -14,18 +14,18 @@ private struct ObjectAffordancePressFixtureError: Error {
 }
 
 /// What production promises for one object gizmo action once the press is
-/// claimed. `Viewport.committedBodyMoveDragTarget` is the only commit path the
-/// transform gizmo owns, and it answers a target only for the profile-plane
-/// components of `translate`, so every other action is drawn, claimed, and
-/// previewed but leaves nothing behind at release.
+/// claimed. `Viewport.committedBodyPlacementDragTarget` is the only commit path
+/// the transform gizmo owns, and it answers a target only for `translate`, so
+/// every other action is drawn, claimed, and previewed but leaves nothing
+/// behind at release.
 enum ViewportObjectHandleOutcome {
-    case commitsBodyMove
+    case commitsPlacement
     case claimsWithoutCommitting
 }
 
-/// One gizmo station per case. The height translate is included because it is
-/// the action whose preview-only contract is easiest to mistake for a routing
-/// defect: the same `translate` record commits on the other two axes.
+/// One gizmo station per case. All three translate axes commit, because a
+/// placement is the scene node's own frame rather than an edit of the profile
+/// sketch one of them happens to lie in.
 enum ViewportObjectHandlePressCase: String, CaseIterable {
     case translateX
     case translateZ
@@ -36,10 +36,22 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
 
     var outcome: ViewportObjectHandleOutcome {
         switch self {
-        case .translateX, .translateZ:
-            return .commitsBodyMove
-        case .translateY, .centerScaleX, .oneSidedScaleX, .rotateX:
+        case .translateX, .translateZ, .translateY:
+            return .commitsPlacement
+        case .centerScaleX, .oneSidedScaleX, .rotateX:
             return .claimsWithoutCommitting
+        }
+    }
+
+    /// The world axis a released drag on this station must move the body
+    /// along. The gizmo's arrows are the world axes, so naming one here is
+    /// what separates "it moved" from "it moved where the pointer pointed".
+    var committedAxis: ViewportCoordinateAxis? {
+        switch self {
+        case .translateX: return .x
+        case .translateY: return .y
+        case .translateZ: return .z
+        case .centerScaleX, .oneSidedScaleX, .rotateX: return nil
         }
     }
 
@@ -393,8 +405,9 @@ private struct MountedObjectHandleViewport {
     let window: NSWindow
     let controller: NSViewController
 
-    /// `onBodyMoveDrag` is the only commit callback the transform gizmo has, and
-    /// `allowsObjectAffordances` is what makes the gizmo interactive at all. The
+    /// `onBodyPlacementCommit` is the only commit callback the transform gizmo
+    /// has, and `allowsObjectAffordances` is what makes the gizmo interactive
+    /// at all. The
     /// profile callbacks stay unset so the profile routes are not interactive
     /// and cannot claim a press this suite attributes to the gizmo.
     init(
@@ -402,7 +415,7 @@ private struct MountedObjectHandleViewport {
         allowsObjectAffordances: Bool = true,
         onPick: @escaping (ViewportCanvasTarget) -> Void,
         onCanvasDrag: @escaping (ViewportModelDrag) -> Void,
-        onBodyMoveDrag: @escaping (ViewportBodyMoveDragTarget) -> Void
+        onBodyPlacementCommit: @escaping (ViewportBodyPlacementDragTarget) -> Void
     ) async throws {
         _ = NSApplication.shared
         let viewport = Viewport(
@@ -417,7 +430,7 @@ private struct MountedObjectHandleViewport {
             selectedPresentationHasExactCADContext: true,
             onPick: onPick,
             onCanvasDrag: onCanvasDrag,
-            onBodyMoveDrag: onBodyMoveDrag
+            onBodyPlacementCommit: onBodyPlacementCommit
         ).frame(width: fixture.size.width, height: fixture.size.height)
         let controller = NSHostingController(rootView: viewport)
         let window = NSWindow(
@@ -485,29 +498,48 @@ private struct MountedObjectHandleViewport {
     }
 }
 
+/// The world translation a committed placement adds, read out of the two
+/// frames the gesture handed over. The fixture body's scene node sits at the
+/// document root, so its local frame is its world frame and the difference of
+/// the two translation columns is the world motion the pointer described.
+@MainActor
+private func translationDelta(
+    of target: ViewportBodyPlacementDragTarget
+) throws -> [ViewportCoordinateAxis: Double] {
+    let base = target.baseLocalTransform.matrix.values
+    let next = target.localTransform.matrix.values
+    guard base.count == 16, next.count == 16 else {
+        throw ObjectAffordancePressFixtureError(
+            message: "A committed placement frame is not a 4x4 matrix."
+        )
+    }
+    return [.x: next[3] - base[3], .y: next[7] - base[7], .z: next[11] - base[11]]
+}
+
 /// The mounted tests drive a shared `NSApplication` and an ordered window, so
 /// the suite is serialized rather than sharing that state across cases.
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeObjectAffordancePressTests {
-    /// Proves the object gizmo on the mounted path: the in-plane translate
-    /// stations reach `onBodyMoveDrag` with a non-zero quantity, and every other
-    /// station is claimed by the affordance route -- it reaches neither the
-    /// canvas owner nor the body-move owner -- while the same round shows the
-    /// frame still answers both. What a claimed station computed during its
-    /// preview is not asserted here; the measuring-surface tests own that.
+    /// Proves the object gizmo on the mounted path: each translate station
+    /// reaches `onBodyPlacementCommit` having moved the body along the world
+    /// axis its arrow points down, and every other station is claimed by the
+    /// affordance route -- it reaches neither the canvas owner nor the
+    /// placement owner -- while the same round shows the frame still answers
+    /// both. What a claimed station computed during its preview is not
+    /// asserted here; the measuring-surface tests own that.
     @Test(.timeLimit(.minutes(3)), arguments: ViewportObjectHandlePressCase.allCases)
     func objectHandleGestureFollowsItsCommitContract(
         pressCase: ViewportObjectHandlePressCase
     ) async throws {
         let fixture = try ObjectHandlePressFixture(pressCase: pressCase)
         var canvasDrags = 0
-        var bodyMoves: [ViewportBodyMoveDragTarget] = []
+        var bodyMoves: [ViewportBodyPlacementDragTarget] = []
         let mounted = try await MountedObjectHandleViewport(
             fixture: fixture,
             onPick: { _ in },
             onCanvasDrag: { _ in canvasDrags += 1 },
-            onBodyMoveDrag: { bodyMoves.append($0) }
+            onBodyPlacementCommit: { bodyMoves.append($0) }
         )
         // Closing an already closed window is a no-op, so the explicit close
         // before the gate control coexists with the throw-path cleanup.
@@ -546,18 +578,24 @@ struct ViewportNativeObjectAffordancePressTests {
                 + "\(canvasDrags) canvas drags and \(bodyMoves.count) body moves."
         )
         switch pressCase.outcome {
-        case .commitsBodyMove:
+        case .commitsPlacement:
             try #require(bodyMoves.count == 1, report)
             let committed = try #require(bodyMoves.first, report)
-            switch pressCase {
-            case .translateX:
-                #expect(abs(committed.deltaX) > 1.0e-9, report)
-            case .translateZ:
-                #expect(abs(committed.deltaY) > 1.0e-9, report)
-            default:
-                Issue.record(report)
+            let axis = try #require(pressCase.committedAxis, report)
+            let moved = try translationDelta(of: committed)
+            // The drag moves along one arrow, so the committed frame has to
+            // move the body along that world axis and leave the other two
+            // where they were. A frame that moved on a different axis is the
+            // defect this case exists to catch.
+            for candidate in ViewportCoordinateAxis.allCases {
+                let component = moved[candidate] ?? 0
+                if candidate == axis {
+                    #expect(abs(component) > 1.0e-9, report)
+                } else {
+                    #expect(abs(component) <= 1.0e-9, report)
+                }
             }
-            #expect(committed.target == fixture.target, report)
+            #expect(committed.sceneNodeID == fixture.target.sceneNodeID, report)
         case .claimsWithoutCommitting:
             #expect(bodyMoves.isEmpty, report)
         }
@@ -586,7 +624,7 @@ struct ViewportNativeObjectAffordancePressTests {
             allowsObjectAffordances: false,
             onPick: { _ in },
             onCanvasDrag: { _ in ungatedCanvasDrags += 1 },
-            onBodyMoveDrag: { _ in Issue.record("A closed gate committed a body move.") }
+            onBodyPlacementCommit: { _ in Issue.record("A closed gate committed a body move.") }
         )
         defer { ungated.close() }
         let ungatedDeadline = ContinuousClock.now.advanced(by: .seconds(20))

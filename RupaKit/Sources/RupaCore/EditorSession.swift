@@ -3261,6 +3261,9 @@ public final class EditorSession {
         )
     }
 
+    /// Deprecated: performs `EditorCommand.moveBody`, whose documentation
+    /// names why a placement belongs to `setSceneNodeTransform` instead and
+    /// when this convenience goes away with it.
     @discardableResult
     public func moveBody(
         target: SelectionTarget,

@@ -1837,7 +1837,7 @@ private struct ProjectMainViewContent: View {
             onReferenceLineAnchor: viewportReferenceLineAnchorHandler,
             onSelectionDrag: handleViewportSelectionDrag,
             onSelectionDragPreview: viewportSelectionDragPreviewHandler,
-            onBodyMoveDrag: viewportBodyMoveDragHandler,
+            onBodyPlacementCommit: viewportBodyPlacementCommitHandler,
             onVertexDrag: viewportVertexDragHandler,
             onFaceDrag: viewportFaceDragHandler,
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -1979,13 +1979,13 @@ private struct ProjectMainViewContent: View {
         )
     }
 
-    private var viewportBodyMoveDragHandler: ((ViewportBodyMoveDragTarget) -> Void)? {
+    private var viewportBodyPlacementCommitHandler: ((ViewportBodyPlacementDragTarget) -> Void)? {
         guard selectionScope.allowsPresentationOccurrencePick(for: selectedTool),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
         return { target in
-            handleViewportBodyMoveDrag(target)
+            handleViewportBodyPlacementCommit(target)
         }
     }
 
@@ -5303,18 +5303,41 @@ private struct ProjectMainViewContent: View {
         return targets
     }
 
-    private func handleViewportBodyMoveDrag(_ target: ViewportBodyMoveDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .object else {
+    /// Commits a released body translate as the scene node's placement, the
+    /// way a released sketch transform commits its own. Both gizmos measure a
+    /// world mutation and hand over the local frame that realises it, so both
+    /// land on the one command that owns a scene node's frame.
+    private func handleViewportBodyPlacementCommit(
+        _ target: ViewportBodyPlacementDragTarget
+    ) {
+        guard selectedTool == .select, selectionScope == .object else {
+            reportToolStatus(
+                "Body transforms commit only with the Select tool "
+                    + "in object scope.",
+                severity: .warning
+            )
             return
         }
-        submitSource(
-            .moveBody(
-                target: target.target,
-                deltaX: .length(target.deltaX, .meter),
-                deltaY: .length(target.deltaY, .meter)
-            )
-        )
+        submitSource(name: "moveBodyPlacement") { current in
+            guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Body scene node \(target.sceneNodeID) no longer exists."
+                )
+            }
+            // The gesture measured its translation against the frame read at
+            // press, so committing onto a frame that changed since then would
+            // move the body by a delta the pointer never described.
+            guard node.localTransform == target.baseLocalTransform else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The body frame changed during the transform gesture."
+                )
+            }
+            return [
+                .setSceneNodeTransform(id: node.id, localTransform: target.localTransform)
+            ]
+        }
     }
 
     private func handleViewportVertexDrag(_ target: ViewportVertexDragTarget) {

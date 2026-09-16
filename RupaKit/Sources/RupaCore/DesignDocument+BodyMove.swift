@@ -3,10 +3,18 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    /// Translates a body in its profile-sketch plane by rewriting every entity
-    /// of the profile sketch. The whole-sketch translation preserves all
-    /// relative constraints and dimensions; sketches pinned by a fixed
-    /// constraint are rejected because moving them would contradict the pin.
+    /// Deprecated: translates a body in its profile-sketch plane by rewriting
+    /// every entity of the profile sketch. The whole-sketch translation
+    /// preserves all relative constraints and dimensions; sketches pinned by a
+    /// fixed constraint are rejected because moving them would contradict the
+    /// pin.
+    ///
+    /// This is a profile edit, not a placement: it reaches only a body an
+    /// extrude produced, and only along the two axes that body's sketch plane
+    /// spans. `setSceneNodeTransform` moves a body of any kind on all three
+    /// axes and is what the app commits. The only remaining caller is
+    /// `CADDocumentStore`'s dispatch of `EditorCommand.moveBody`, which names
+    /// the removal condition.
     public mutating func moveBody(
         target: SelectionTarget,
         deltaX: CADExpression,

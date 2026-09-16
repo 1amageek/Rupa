@@ -69,6 +69,11 @@ struct ViewportAffordanceDragState: Equatable {
     var startPoint: CGPoint
     var baseEdits: [FeatureID: ViewportObjectEditState]
     var baseGroupEdit: ViewportObjectEditState?
+    /// The frames a released translate commits against, carried from the
+    /// claim so the commit measures from the frame the gesture started on
+    /// rather than from whatever the document holds when the pointer lifts.
+    /// `nil` for a gizmo that names no single scene node to address.
+    var placement: ViewportBodyPlacementBaseline?
 }
 
 /// The prepared membership of a natively claimed transform affordance.
@@ -86,6 +91,7 @@ struct ViewportNativeAffordanceClaim {
     var target: ViewportAffordanceTarget
     var members: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember]
     var groupEdit: ViewportObjectEditState?
+    var placement: ViewportBodyPlacementBaseline?
 }
 
 struct ViewportConstructionPlaneHandlePlane: Equatable {

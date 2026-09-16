@@ -212,7 +212,7 @@ public struct Viewport: View {
     private let onReferenceLineAnchor: ((Point2D) -> Bool)?
     private let onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)?
     private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
-    private let onBodyMoveDrag: ((ViewportBodyMoveDragTarget) -> Void)?
+    private let onBodyPlacementCommit: ((ViewportBodyPlacementDragTarget) -> Void)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -400,7 +400,7 @@ public struct Viewport: View {
         onReferenceLineAnchor: ((Point2D) -> Bool)? = nil,
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
-        onBodyMoveDrag: ((ViewportBodyMoveDragTarget) -> Void)? = nil,
+        onBodyPlacementCommit: ((ViewportBodyPlacementDragTarget) -> Void)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -535,7 +535,7 @@ public struct Viewport: View {
         self.onReferenceLineAnchor = onReferenceLineAnchor
         self.onSelectionDrag = onSelectionDrag
         self.onSelectionDragPreview = onSelectionDragPreview
-        self.onBodyMoveDrag = onBodyMoveDrag
+        self.onBodyPlacementCommit = onBodyPlacementCommit
         self.onVertexDrag = onVertexDrag
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
@@ -4363,10 +4363,10 @@ public struct Viewport: View {
                     beginNativeWorldPointPress(record: record, at: point)
                     return
                 }
-                if case .affordance(let target, let members, let groupEdit) = record.target {
+                if case .affordance(let target, let members, let groupEdit, let placement) = record.target {
                     setPendingInteractionTarget(.affordance(target))
                     pendingNativeAffordance = ViewportNativeAffordanceClaim(
-                        target: target, members: members, groupEdit: groupEdit
+                        target: target, members: members, groupEdit: groupEdit, placement: placement
                     )
                     activeCanvasDrag = nil
                     return
@@ -4549,7 +4549,8 @@ public struct Viewport: View {
                 target: target,
                 startPoint: start,
                 baseEdits: baseEdits,
-                baseGroupEdit: claim.groupEdit
+                baseGroupEdit: claim.groupEdit,
+                placement: claim.placement
             )
             activeAffordanceDrag = dragState
         } else {
@@ -4837,7 +4838,7 @@ public struct Viewport: View {
 
     private func finishAffordanceInteractionDrag(end: CGPoint) {
         let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
-        let bodyMoveDragTarget = committedBodyMoveDragTarget()
+        let bodyPlacementDragTarget: ViewportBodyPlacementDragTarget?
         let vertexDragTarget: (featureID: FeatureID, target: ViewportVertexDragTarget)?
         let faceDragTarget: (featureID: FeatureID, target: ViewportFaceDragTarget)?
         let edgeChamferDragTarget: (featureID: FeatureID, target: ViewportEdgeChamferDragTarget)?
@@ -4845,6 +4846,7 @@ public struct Viewport: View {
         do {
             // Each route asks the frame only after its own action guard passes,
             // so a translate commit, which measures nothing, never requires one.
+            bodyPlacementDragTarget = try committedBodyPlacementDragTarget()
             vertexDragTarget = try committedVertexDragTarget(to: end)
             faceDragTarget = try committedFaceDragTarget(to: end)
             edgeChamferDragTarget = try committedEdgeChamferDragTarget(to: end)
@@ -4873,41 +4875,54 @@ public struct Viewport: View {
             editedBodies.removeValue(forKey: edgeFilletDragTarget.featureID)
             onEdgeFilletDrag?(edgeFilletDragTarget.target)
         }
-        if let bodyMoveDragTarget {
-            editedBodies.removeValue(forKey: bodyMoveDragTarget.featureID)
-            onBodyMoveDrag?(bodyMoveDragTarget.target)
+        if let bodyPlacementDragTarget {
+            editedBodies.removeValue(forKey: bodyPlacementDragTarget.featureID)
+            onBodyPlacementCommit?(bodyPlacementDragTarget)
         }
         for featureID in ghostFeatureIDs {
             editedBodies.removeValue(forKey: featureID)
         }
     }
 
-    /// Commits the transform gizmo's in-plane translate actions: the ghost
-    /// edit's center offset from its base is the profile-sketch translation
-    /// (edit-state x maps to sketch x, edit-state z to sketch y). Height
-    /// translation cannot be expressed as a profile edit and stays a
-    /// non-committing preview.
-    private func committedBodyMoveDragTarget() -> (featureID: FeatureID, target: ViewportBodyMoveDragTarget)? {
+    /// Commits the transform gizmo's translate actions as the body's
+    /// placement: the ghost edit's world box is the body's own world box, so
+    /// the offset of its centre from the base centre is the world translation
+    /// the pointer described, on all three axes rather than on the two a
+    /// profile plane can express.
+    ///
+    /// The new local frame of the scene node is the one that realises that
+    /// world translation inside the parent frame captured at press, which the
+    /// shared algebra composes for this gizmo and for the sketch gizmo alike.
+    ///
+    /// Answers `nil` for a gesture with no placement to commit: a group gizmo
+    /// and a body item naming no scene node both stay previews, and a
+    /// translate that moved nothing writes no undo step.
+    private func committedBodyPlacementDragTarget() throws -> ViewportBodyPlacementDragTarget? {
         guard let activeAffordanceDrag,
               case .translate = activeAffordanceDrag.target.action,
               activeAffordanceDrag.baseGroupEdit == nil,
-              let selectionTarget = activeAffordanceDrag.target.selectionTarget,
-              let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID],
-              let currentEdit = editedBodies[activeAffordanceDrag.target.featureID] else {
+              let placement = activeAffordanceDrag.placement,
+              let baseEdit = activeAffordanceDrag.baseEdits[placement.featureID],
+              let currentEdit = editedBodies[placement.featureID] else {
             return nil
         }
-        let deltaX = Double(currentEdit.centerPoint.x - baseEdit.centerPoint.x)
-        let deltaY = Double(currentEdit.centerPoint.z - baseEdit.centerPoint.z)
-        guard abs(deltaX) > 1.0e-12 || abs(deltaY) > 1.0e-12 else {
+        let worldDelta = Vector3D(
+            x: Double(currentEdit.centerPoint.x - baseEdit.centerPoint.x),
+            y: Double(currentEdit.centerPoint.y - baseEdit.centerPoint.y),
+            z: Double(currentEdit.centerPoint.z - baseEdit.centerPoint.z)
+        )
+        guard let localTransform = try ViewportWorldTransformAlgebra.localTransform(
+            applying: try ViewportWorldTransformAlgebra.translation(worldDelta),
+            within: placement.parentWorldTransform,
+            to: placement.baseLocalTransform
+        ) else {
             return nil
         }
-        return (
-            activeAffordanceDrag.target.featureID,
-            ViewportBodyMoveDragTarget(
-                target: selectionTarget,
-                deltaX: deltaX,
-                deltaY: deltaY
-            )
+        return ViewportBodyPlacementDragTarget(
+            featureID: placement.featureID,
+            sceneNodeID: placement.sceneNodeID,
+            baseLocalTransform: placement.baseLocalTransform,
+            localTransform: localTransform
         )
     }
 
@@ -5167,7 +5182,7 @@ public struct Viewport: View {
                     }
                     return
                 }
-                if case .affordance(let target, _, _) = record.target {
+                if case .affordance(let target, _, _, _) = record.target {
                     hoveredNativeHandleIdentity = nil
                     setHoveredInteractionTarget(.affordance(target))
                     hoveredCanvasHit = nil

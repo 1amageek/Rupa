@@ -208,7 +208,7 @@ private func recordTestBody(
         .init(occurrenceID: occurrenceID, featureID: featureID, sceneNodeID: nil,
               modelTransform: .identity,
               edit: .init(xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1))
-    ], groupEdit: nil)
+    ], groupEdit: nil, placement: nil)
 }
 
 @Test func spatialBodyBaselineRejectsIncompleteGroupsAndChargesMembers() throws {
@@ -222,7 +222,7 @@ private func recordTestBody(
         modelTransform: .identity, edit: .init(xMin: 2, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1))
     let group = ViewportObjectEditState(xMin: 0, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1)
     let record = try ViewportSpatialInteractionRecord(target: .affordance(
-        target: target, members: [first, second], groupEdit: group))
+        target: target, members: [first, second], groupEdit: group, placement: nil))
     let bytes = try ViewportSpatialInteractionRecord.retainedByteCount(for: [record])
     #expect(bytes >= MemoryLayout<ViewportSpatialInteractionRecord>.stride
         + 2 * MemoryLayout<ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember>.stride)
@@ -235,11 +235,57 @@ private func recordTestBody(
     ] {
         #expect(throws: MeshSourcePresentationRenderError.self) {
             try ViewportSpatialInteractionRecord(target: .affordance(
-                target: target, members: members, groupEdit: groupEdit))
+                target: target, members: members, groupEdit: groupEdit, placement: nil))
         }
     }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportSpatialInteractionRecord(target: .affordance(
-            target: target, members: [first], groupEdit: nil), occurrenceID: "body.other")
+            target: target, members: [first], groupEdit: nil, placement: nil), occurrenceID: "body.other")
+    }
+}
+
+/// A placement baseline names the one scene node a released translate commits
+/// into. The record refuses a baseline that names anything the drawn gizmo's
+/// own member does not, because the gesture would then measure from one frame
+/// and commit onto another.
+@Test func spatialBodyPlacementBaselineMustNameTheDrawnMemberSceneNode() throws {
+    let featureID = FeatureID()
+    let sceneNodeID = SceneNodeID()
+    let target = ViewportAffordanceTarget(featureID: featureID, action: .translate(.y))
+    let member = ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
+        occurrenceID: "body.first", featureID: featureID, sceneNodeID: sceneNodeID,
+        modelTransform: .identity, edit: .init(xMin: 0, xMax: 1, yMin: 0, yMax: 1, zMin: 0, zMax: 1))
+    let second = ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
+        occurrenceID: "body.second", featureID: featureID, sceneNodeID: .init(),
+        modelTransform: .identity, edit: .init(xMin: 2, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1))
+    let group = ViewportObjectEditState(xMin: 0, xMax: 3, yMin: 0, yMax: 1, zMin: 0, zMax: 1)
+    func baseline(_ node: SceneNodeID) -> ViewportBodyPlacementBaseline {
+        .init(featureID: featureID, sceneNodeID: node,
+              baseLocalTransform: .identity, parentWorldTransform: .identity)
+    }
+    let accepted = try ViewportSpatialInteractionRecord(target: .affordance(
+        target: target, members: [member], groupEdit: nil, placement: baseline(sceneNodeID)))
+    guard case .affordance(_, _, _, let placement) = accepted.target else {
+        Issue.record("The affordance baseline was not retained.")
+        return
+    }
+    #expect(placement?.sceneNodeID == sceneNodeID)
+    // Both frames are heap matrix storage this table now owns.
+    let withBaseline = try ViewportSpatialInteractionRecord.retainedByteCount(for: [accepted])
+    let withoutBaseline = try ViewportSpatialInteractionRecord.retainedByteCount(for: [
+        try ViewportSpatialInteractionRecord(target: .affordance(
+            target: target, members: [member], groupEdit: nil, placement: nil))
+    ])
+    #expect(withBaseline > withoutBaseline)
+    // A node the drawn member does not name, and a group gizmo that names no
+    // single node at all, are both refusals rather than a chosen winner.
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try ViewportSpatialInteractionRecord(target: .affordance(
+            target: target, members: [member], groupEdit: nil, placement: baseline(.init())))
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try ViewportSpatialInteractionRecord(target: .affordance(
+            target: target, members: [member, second], groupEdit: group,
+            placement: baseline(sceneNodeID)))
     }
 }

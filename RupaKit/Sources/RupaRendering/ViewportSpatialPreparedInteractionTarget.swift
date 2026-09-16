@@ -60,7 +60,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case constructionPlane(identity: ViewportConstructionPlaneHandleIdentity, origin: Point3D,
                            normal: Vector3D, normalEnd: Point3D, corners: [Point3D])
     case sketchTransform(ViewportSketchTransformBaseline)
-    case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember], groupEdit: ViewportObjectEditState?)
+    case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember],
+                    groupEdit: ViewportObjectEditState?, placement: ViewportBodyPlacementBaseline?)
 
     var spatialIdentity: ViewportSpatialHandleIdentity {
         get throws {
@@ -107,7 +108,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
             case .patternArrayOutputMode(let value): .patternArrayOutputMode(.init(sourceID: value.sourceID))
             case .constructionPlane(let identity, _, _, _, _): .constructionPlane(identity)
             case .sketchTransform(let value): .sketchTransform(value.identity)
-            case .affordance(let target, _, _): .affordance(target)
+            case .affordance(let target, _, _, _): .affordance(target)
             }
         }
     }
