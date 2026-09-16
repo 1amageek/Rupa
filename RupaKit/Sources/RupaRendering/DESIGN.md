@@ -1121,6 +1121,16 @@ independent tessellator is never an alternative implementation.
    a pick or drag. The following mouse-down starts a normal fresh gesture.
    Escape with no handled viewport interaction is not consumed and remains in
    the existing responder chain.
+   That same surface refuses the points the canvas chrome covers. The chrome
+   rectangles its owner publishes are stated in the viewport's own content
+   space, and AppKit states a hit-test point in the surface's superview's
+   space, which is not the flipped space the surface and those rectangles
+   share. The surface converts the point into its own space before comparing
+   it, so the place it refuses is the place the rectangle covers rather than
+   that place mirrored about the viewport's horizontal centre line. A refusal
+   is a routing answer and not a failure: the control drawn there receives the
+   click the canvas would otherwise take, and the surface drops the
+   interaction state the pointer left behind.
    RK-4 connects this contract in three serial seams. First, surface pointer
    selection and measurement consume one throwing native query whose nearest
    optional result contains

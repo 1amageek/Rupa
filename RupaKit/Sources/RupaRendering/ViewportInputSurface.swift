@@ -119,13 +119,31 @@ extension ViewportInputSurface {
             true
         }
 
+        /// Refuses the points the canvas chrome covers, so a control drawn over
+        /// the viewport receives the click the canvas would otherwise take.
+        ///
+        /// AppKit states the point in the superview's coordinate system, and
+        /// the superview is not flipped. This view is, and the exclusions are
+        /// published in this view's own coordinates, so the point has to be
+        /// converted before it can be compared with them. `super` is still
+        /// given the point it was handed.
         override func hitTest(_ point: NSPoint) -> NSView? {
-            trackPointer(at: point)
-            if inputExclusionRects.contains(where: { $0.contains(point) }) {
+            let localPoint = inputExclusionLocation(for: point)
+            trackPointer(at: localPoint)
+            if isInputExcluded(localPoint) {
                 clearInteractionStateForInputExclusion()
                 return nil
             }
             return super.hitTest(point)
+        }
+
+        /// Restates a point `hitTest(_:)` was given in this view's coordinates,
+        /// which is the space the exclusions and the tracked pointer use.
+        private func inputExclusionLocation(for point: NSPoint) -> CGPoint {
+            guard let superview else {
+                return point
+            }
+            return convert(point, from: superview)
         }
 
         override func updateTrackingAreas() {
