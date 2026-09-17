@@ -224,7 +224,6 @@ struct RealityViewportSpatialBatch: Sendable {
         var markerCollisionCount = 0
         var labelCollisionCount = 0
         var lineCollisionCount = 0
-        var labelCollisionResourceCharged = false
         func charge(_ count: Int, stride: Int) throws {
             let product = count.multipliedReportingOverflow(by: stride)
             let sum = bytes.addingReportingOverflow(product.partialValue)
@@ -448,18 +447,6 @@ struct RealityViewportSpatialBatch: Sendable {
                 try item()
                 labelCollisionCount += 1
                 handleFragmentCount += 1
-                if !labelCollisionResourceCharged {
-                    labelCollisionResourceCharged = true
-                    // The shared zero-thickness quad is built once per prepared
-                    // owner. Admit its fixed native buffers before allocation.
-                    try positions(4)
-                    try charge(4, stride: MemoryLayout<SIMD3<Float>>.stride)
-                    try charge(12, stride: MemoryLayout<UInt32>.stride)
-                    try charge(1, stride: MemoryLayout<LowLevelMesh.Descriptor>.stride
-                               + MemoryLayout<LowLevelMesh.Part>.stride
-                               + MemoryLayout<MeshResource>.stride
-                               + MemoryLayout<ShapeResource>.stride)
-                }
                 try charge(1, stride: MemoryLayout<CollisionComponent>.stride
                            + MemoryLayout<[ShapeResource]>.stride
                            + MemoryLayout<ShapeResource>.stride
@@ -631,6 +618,17 @@ struct RealityViewportSpatialBatch: Sendable {
                        + MemoryLayout<UInt64>.stride)
             try charge(128, stride: 1)
         }
+        if markerCollisionCount > 0 || labelCollisionCount > 0 {
+            // Markers, camera-path tips and labels share one planar collider.
+            try positions(4)
+            try charge(4, stride: MemoryLayout<SIMD3<Float>>.stride)
+            try charge(12, stride: MemoryLayout<UInt32>.stride)
+            try charge(1, stride: MemoryLayout<LowLevelMesh.Descriptor>.stride
+                       + MemoryLayout<LowLevelMesh.Part>.stride
+                       + MemoryLayout<LowLevelMesh>.stride
+                       + MemoryLayout<MeshResource>.stride
+                       + MemoryLayout<ShapeResource>.stride)
+        }
         if markerCollisionCount > 0 {
             var buckets = 2
             while buckets < markerCollisionCount * 2 { buckets *= 2 }
@@ -646,8 +644,6 @@ struct RealityViewportSpatialBatch: Sendable {
                        + MemoryLayout<RealityViewportSpatialResources.LabelCollision>.stride
                        + MemoryLayout<UInt64>.stride)
             try charge(128, stride: 1)
-            try charge(1, stride: MemoryLayout<LowLevelMesh>.stride
-                       + MemoryLayout<MeshResource>.stride + MemoryLayout<ShapeResource>.stride)
         }
         if lineCollisionCount > 0 {
             var buckets = 2

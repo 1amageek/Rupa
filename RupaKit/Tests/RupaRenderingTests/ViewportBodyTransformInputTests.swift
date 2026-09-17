@@ -107,33 +107,37 @@ import Synchronization
         }
     }
 
-    @Test func rotationCommitsGeometryRatherThanOnlyAnOrientationPreview() throws {
-        let input = try input(.rotate(.z))
+    @Test(arguments: ViewportCoordinateAxis.allCases)
+    func rotationCommitsGeometryRatherThanOnlyAnOrientationPreview(axis: ViewportCoordinateAxis) throws {
+        let input = try input(.rotate(axis))
         let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: .origin)
-        let mutation = try input.mutation(from: measure.projected(Point3D(x: 1, y: 0, z: 0)),
-            to: measure.projected(Point3D(x: 0, y: 1, z: 0)), measure: measure)
+        let first: Vector3D = axis == .x ? .unitY : axis == .y ? .unitZ : .unitX
+        let last = axis.unitVector.cross(first)
+        let mutation = try input.mutation(from: measure.projected(.origin + first),
+            to: measure.projected(.origin + last), measure: measure)
         let target = try #require(try input.commits(mutation: mutation).first)
-        let rotated = try ViewportWorldTransformAlgebra.transformedPoint(Point3D(x: 1, y: 0, z: 0), by: target.localTransform)
-        #expect((rotated - Point3D(x: 0, y: 1, z: 0)).length < 1e-9)
+        let rotated = try ViewportWorldTransformAlgebra.transformedPoint(.origin + first, by: target.localTransform)
+        #expect((rotated - (.origin + last)).length < 1e-9)
     }
 
-    @Test(arguments: [true, false])
-    func axisScalingCrossesItsPivotButDoesNotCommitCollapse(centered: Bool) throws {
-        let input = try input(centered ? .centerScale(.x) : .oneSidedScale(.x))
+    @Test(arguments: [true, false], ViewportCoordinateAxis.allCases)
+    func axisScalingCrossesItsPivotButDoesNotCommitCollapse(centered: Bool, axis: ViewportCoordinateAxis) throws {
+        let input = try input(centered ? .centerScale(axis) : .oneSidedScale(axis))
         let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: .origin)
         let mutation = try input.mutation(from: measure.projected(.origin),
-            to: measure.projected(Point3D(x: 0.5, y: 0, z: 0)), measure: measure)
-        let low = try ViewportWorldTransformAlgebra.transformedPoint(Point3D(x: -1, y: 0, z: 0), by: mutation)
-        let high = try ViewportWorldTransformAlgebra.transformedPoint(Point3D(x: 1, y: 0, z: 0), by: mutation)
-        #expect(abs(high.x - 1.5) < 1e-9)
-        #expect(abs(low.x - (centered ? -1.5 : -1)) < 1e-9)
+            to: measure.projected(.origin + axis.unitVector * 0.5), measure: measure)
+        let low = try ViewportWorldTransformAlgebra.transformedPoint(.origin + axis.unitVector * -1, by: mutation)
+        let high = try ViewportWorldTransformAlgebra.transformedPoint(.origin + axis.unitVector, by: mutation)
+        #expect((high - (.origin + axis.unitVector * 1.5)).length < 1e-9)
+        #expect((low - (.origin + axis.unitVector * (centered ? -1.5 : -1))).length < 1e-9)
         for factor in [0.1, 0, -0.1, -1, 1] {
             let distance = (factor - 1) * (centered ? 1 : 2)
             let crossing = try input.mutation(from: measure.projected(.origin),
-                to: measure.projected(Point3D(x: distance, y: 0, z: 0)), measure: measure)
-            let fixed = Point3D(x: centered ? 0 : -1, y: 0, z: 0)
+                to: measure.projected(.origin + axis.unitVector * distance), measure: measure)
+            let fixed = Point3D.origin + axis.unitVector * (centered ? 0 : -1)
             #expect(try (ViewportWorldTransformAlgebra.transformedPoint(fixed, by: crossing) - fixed).length < 1e-9)
-            #expect(abs(crossing.matrix.values[0] - factor) < 1e-9)
+            let diagonal = axis == .x ? 0 : axis == .y ? 5 : 10
+            #expect(abs(crossing.matrix.values[diagonal] - factor) < 1e-9)
             if factor == 0 {
                 #expect(throws: Error.self) { _ = try input.commits(mutation: crossing) }
             } else {

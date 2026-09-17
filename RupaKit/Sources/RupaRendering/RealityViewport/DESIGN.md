@@ -17,7 +17,7 @@ Parent: [RupaRendering](../DESIGN.md). It has no child components.
 
 Directed transform arrowheads use a shared native `MeshResource.generateCone`
 mesh oriented along the producer's explicit world axis. Their point-sized
-placement and spherical hit tolerance use the same marker owner as other handles;
+placement and screen-point hit radius use the same marker owner as other handles;
 camera changes update placement without rebuilding the cone resource.
 
 The component owns:
@@ -435,9 +435,15 @@ existing Entity/proxy transforms with their visual placement. No pointer event
 creates a ShapeResource, mesh, Entity, or descriptor. Primitive collision uses
 that scaled shared unit sphere or box rather than requesting a sub-2-mm
 primitive: RealityKit documents that direct `generateSphere` extents below 2 mm
-are clamped. Marker/box queries do not add a duplicate projection narrowphase
-after mounted tests establish the requested point-radius conversion;
-conservative line/path proxies retain the projection narrowphase defined above.
+are clamped. A world sphere is not an exact point-radius footprint off-axis in
+perspective. Markers and camera-path tips therefore use the same shared,
+double-wound camera-facing quad as labels for candidate acquisition. Their
+mounted projection accepts only the declared center radius in screen points.
+The collider is a sibling of the visual, so cone rotations and Billboard
+updates cannot change its footprint. Marker, label and tip quads share one
+admitted resource; camera updates change only existing transforms. Native
+tests probe inside/outside the radius in eight directions in both projections.
+Conservative line/path proxies retain their existing projection narrowphase.
 
 Surface and spatial hits use the same composed mounted-camera ray but retain
 separate provenance classification. A surface Entity must resolve through the

@@ -88,6 +88,14 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         #expect(abs(hypot(b.x - a.x, b.y - a.y) - 40) < 0.5)
         let screen = try #require(viewport.project(moved))
         #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(0))
+        for step in 0..<8 {
+            let angle = Double(step) * .pi / 4
+            for radius: Double in [7.99, 8.01] {
+                let point = CGPoint(x: screen.x + cos(angle) * radius, y: screen.y + sin(angle) * radius)
+                #expect(try viewport.spatialHandleHits(at: point, revision: 1).contains(0) == (radius < 8),
+                        "Marker radius must match screen points in every direction: \(perspective), \(factor), \(step), \(radius)")
+            }
+        }
     }
     try viewport.applyObjectPreviews([:], displayMode: .solid)
     _ = try viewport.updateSpatialCamera()

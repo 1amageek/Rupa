@@ -33,6 +33,7 @@ final class RealityViewportSpatialResources {
         let index: UInt32
         let depth: RealityViewportSpatialBatch.Depth
         let attachment: RealityViewportSpatialBatch.Attachment
+        let tolerance: Float
     }
     private var markerCollisions: [ObjectIdentifier: MarkerCollision] = [:]
     struct LabelCollision {
@@ -74,7 +75,6 @@ final class RealityViewportSpatialResources {
     private var lineCollisions: [LineCollision] = []
     private var lineCollisionIndex: [ObjectIdentifier: Int] = [:]
     private var lineCollisionShape: ShapeResource?
-    private var sphereCollision: ShapeResource?
     private struct AxisResource {
         let axis: ViewportCoordinateAxis
         let line: ModelEntity
@@ -184,8 +184,8 @@ final class RealityViewportSpatialResources {
               center.x.isFinite, center.y.isFinite else {
             throw RealityViewportSpatialBatch.invalid("The native marker hit has no finite prepared projection.")
         }
-        // The native sphere owns acceptance. Projection only orders valid hits.
-        return (hypot(center.x - point.x, center.y - point.y), nil)
+        let distance = hypot(center.x - point.x, center.y - point.y)
+        return distance <= CGFloat(record.tolerance) ? (distance, nil) : nil
     }
 
     static func clippedLine(first: SIMD3<Float>, last: SIMD3<Float>,
@@ -514,9 +514,7 @@ final class RealityViewportSpatialResources {
         }
         for record in markerCollisions.values where record.visual.isEnabled && record.collider.isEnabled {
             // Ancestor roots may be withheld until this camera update succeeds.
-            let radius = record.collider.parent === record.visual
-                ? record.visual.scale.x * record.collider.scale.x / 2
-                : record.collider.scale.x / 2
+            let radius = max(record.collider.scale.x, record.collider.scale.y) * sqrt(2) / 2
             guard radius.isFinite, radius > 0 else {
                 throw RealityViewportSpatialBatch.invalid("Native marker tolerance exceeds transform precision.")
             }
@@ -971,25 +969,24 @@ final class RealityViewportSpatialResources {
             // drawn separately, so these stay decoration instead of adding a
             // second footprint for the same record.
             if let index = marker.handleIndex, let tolerance = marker.hitTolerancePoints, tolerance > 0 {
-                if result.sphereCollision == nil { result.sphereCollision = .generateSphere(radius: 0.5) }
-                guard let sphereCollision = result.sphereCollision else {
+                if quadCollision == nil { quadCollision = try await Self.unitQuadCollision() }
+                guard let quadCollision else {
                     throw RealityViewportSpatialBatch.invalid("Native marker collision is unavailable.")
                 }
-                // A shared unit sphere avoids the native generation floor.
-                // Its child transform separates input radius from visible size.
-                let collider = Entity()
-                let ratio = 2 * tolerance / marker.diameterPoints
-                guard ratio.isFinite, ratio > 0 else {
+                // A camera-facing sibling keeps point radius independent of
+                // the visual shape, axis rotation and perspective position.
+                guard (2 * tolerance).isFinite else {
                     throw RealityViewportSpatialBatch.invalid("Native marker tolerance exceeds transform precision.")
                 }
-                collider.scale = SIMD3(repeating: ratio)
-                collider.components.set(CollisionComponent(shapes: [sphereCollision],
+                let collider = Entity()
+                collider.isEnabled = false
+                collider.components.set(CollisionComponent(shapes: [quadCollision],
                     filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
-                entity.addChild(collider)
+                result.root(for: marker.attachment).addChild(collider)
                 result.handleIndices[ObjectIdentifier(collider)] = index
                 result.markerCollisions[ObjectIdentifier(collider)] = .init(
                     visual: entity, collider: collider, index: index, depth: marker.depth,
-                    attachment: marker.attachment)
+                    attachment: marker.attachment, tolerance: tolerance)
             }
         }
         for line in batch.cameraLines {
@@ -1047,8 +1044,8 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = false
             var collider: Entity?
             if let index = path.handleIndex, let tolerance = path.hitTolerancePoints, tolerance > 0 {
-                if result.sphereCollision == nil { result.sphereCollision = .generateSphere(radius: 0.5) }
-                guard let sphereCollision = result.sphereCollision else {
+                if quadCollision == nil { quadCollision = try await Self.unitQuadCollision() }
+                guard let quadCollision else {
                     throw RealityViewportSpatialBatch.invalid("Native camera-path collision is unavailable.")
                 }
                 let hit = Entity()
@@ -1057,13 +1054,13 @@ final class RealityViewportSpatialResources {
                     throw RealityViewportSpatialBatch.invalid("Native camera-path tolerance exceeds transform precision.")
                 }
                 hit.scale = SIMD3(repeating: radiusScale)
-                hit.components.set(CollisionComponent(shapes: [sphereCollision],
+                hit.components.set(CollisionComponent(shapes: [quadCollision],
                     filter: .init(group: RealityViewport.spatialCollisionGroup, mask: .all)))
                 hit.isEnabled = false
                 result.handleIndices[ObjectIdentifier(hit)] = index
                 result.markerCollisions[ObjectIdentifier(hit)] = .init(
                     visual: entity, collider: hit, index: index, depth: path.depth,
-                    attachment: path.attachment)
+                    attachment: path.attachment, tolerance: tolerance)
                 collider = hit
                 result.root(for: path.attachment).addChild(hit)
             }
@@ -1107,18 +1104,18 @@ final class RealityViewportSpatialResources {
         return result
     }
 
-    /// Places a zero-thickness label hit quad in the current native camera
+    /// Places a zero-thickness hit quad in the current native camera
     /// plane. The authored rectangle is in screen points (y-down) relative to
     /// the placed anchor, so the collider cannot inherit the visual Billboard.
-    private func updateLabelCollision(
-        _ record: LabelCollision, rect: CGRect, anchor: SIMD3<Float>, projection: CameraProjection
+    private func updatePlanarCollision(
+        _ collider: Entity, rect: CGRect, anchor: SIMD3<Float>, projection: CameraProjection
     ) throws -> Bool {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
               rect.width.isFinite, rect.height.isFinite,
               rect.width > 0, rect.height > 0,
               rect.minX.isFinite, rect.minY.isFinite,
               rect.maxX.isFinite, rect.maxY.isFinite else {
-            throw RealityViewportSpatialBatch.invalid("Native label interaction rectangle is invalid.")
+            throw RealityViewportSpatialBatch.invalid("Native interaction rectangle is invalid.")
         }
         guard let anchorScreen = projection.project(anchor) else { return false }
         let local = projection.local(anchor)
@@ -1153,9 +1150,9 @@ final class RealityViewportSpatialResources {
         let orientation = simd_quatf(simd_float4x4(columns: (
             SIMD4(xAxis, 0), SIMD4(yAxis, 0), SIMD4(zAxis, 0), SIMD4(0, 0, 0, 1)
         )))
-        record.collider.position = center
-        record.collider.orientation = orientation
-        record.collider.scale = [width, height, 1]
+        collider.position = center
+        collider.orientation = orientation
+        collider.scale = [width, height, 1]
         return true
     }
 
@@ -1197,18 +1194,6 @@ final class RealityViewportSpatialResources {
             }
             entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint)
-            if let collider, let tolerance = path.hitTolerancePoints {
-                let scale = 2 * tolerance * placement.metersPerPoint
-                guard scale.isFinite, scale > 0 else {
-                    throw RealityViewportSpatialBatch.invalid("Native camera-path tolerance exceeds transform precision.")
-                }
-                // Camera-path hit geometry is a sibling, so it receives the
-                // complete native point scale rather than inheriting Billboard
-                // or visual transforms.
-                collider.position = placement.position
-                collider.scale = SIMD3(repeating: scale)
-                collider.isEnabled = true
-            }
             entity.isEnabled = true
         }
         for (entity, label, collider) in labels {
@@ -1224,7 +1209,7 @@ final class RealityViewportSpatialResources {
                       let record = labelCollisions[ObjectIdentifier(collider)] else {
                     throw RealityViewportSpatialBatch.invalid("Native label collision lost its prepared rectangle.")
                 }
-                guard try updateLabelCollision(record, rect: rect, anchor: placement.position, projection: projection) else {
+                guard try updatePlanarCollision(record.collider, rect: rect, anchor: placement.position, projection: projection) else {
                     continue
                 }
                 collider.isEnabled = true
@@ -1244,6 +1229,14 @@ final class RealityViewportSpatialResources {
             entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
+        }
+        for record in markerCollisions.values {
+            record.collider.isEnabled = false
+            guard record.visual.isEnabled else { continue }
+            let radius = CGFloat(record.tolerance)
+            record.collider.isEnabled = try updatePlanarCollision(record.collider,
+                rect: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2),
+                anchor: record.visual.position, projection: projection)
         }
         for (entity, mesh, line, proxies, strokes) in cameraLines {
             let mutation = line.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }

@@ -1,4 +1,5 @@
 import AppKit
+import RealityKit
 import CoreGraphics
 import RupaCore
 import RupaGeometry
@@ -28,7 +29,11 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     case centerScaleY
     case centerScaleZ
     case translateTipX
+    case translateTipY
+    case translateTipZ
     case rotateX
+    case rotateY
+    case rotateZ
 
     /// The world axis a released drag on this station must move the body
     /// along. The gizmo's arrows are the world axes, so naming one here is
@@ -36,9 +41,9 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     var committedAxis: ViewportCoordinateAxis? {
         switch self {
         case .translateX, .translateTipX: return .x
-        case .translateY: return .y
-        case .translateZ: return .z
-        case .centerScaleX, .centerScaleY, .centerScaleZ, .rotateX: return nil
+        case .translateY, .translateTipY: return .y
+        case .translateZ, .translateTipZ: return .z
+        case .centerScaleX, .centerScaleY, .centerScaleZ, .rotateX, .rotateY, .rotateZ: return nil
         }
     }
 
@@ -51,13 +56,17 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
         case .centerScaleY: return "centerScale(.y)"
         case .centerScaleZ: return "centerScale(.z)"
         case .translateTipX: return "translate(.x)"
+        case .translateTipY: return "translate(.y)"
+        case .translateTipZ: return "translate(.z)"
         case .rotateX: return "rotate(.x)"
+        case .rotateY: return "rotate(.y)"
+        case .rotateZ: return "rotate(.z)"
         }
     }
 }
 
 /// A drawn handle reduced to the screen footprint the native hit test accepts:
-/// a marker collider is a sphere whose world radius is the tolerance in points,
+/// a marker collider admits the declared center radius in screen points,
 /// and a line collider accepts a perpendicular distance within its tolerance,
 /// so both reduce to a screen distance compared against the emitted tolerance.
 private enum ObjectHandleShape {
@@ -309,9 +318,9 @@ private struct ObjectHandlePressFixture {
         switch pressCase {
         case .translateX, .centerScaleX, .translateTipX, .rotateX:
             axisIndex = 0
-        case .translateY, .centerScaleY:
+        case .translateY, .centerScaleY, .translateTipY, .rotateY:
             axisIndex = 1
-        case .translateZ, .centerScaleZ:
+        case .translateZ, .centerScaleZ, .translateTipZ, .rotateZ:
             axisIndex = 2
         }
         switch pressCase {
@@ -323,24 +332,28 @@ private struct ObjectHandlePressFixture {
                 BodyMetrics.centerScalePoints,
                 perpendicular: Self.markerOffsetPoints
             )
-        case .translateTipX:
+        case .translateTipX, .translateTipY, .translateTipZ:
             pressPoint = station(
                 directions[axisIndex],
                 BodyMetrics.axisLengthPoints,
                 perpendicular: Self.markerOffsetPoints
             )
-        case .rotateX:
+        case .rotateX, .rotateY, .rotateZ:
             pressPoint = try rotationSample(
-                worldAxes[1], worldAxes[2], BodyMetrics.rotationSegmentCount / 2
+                rotationPlanes[axisIndex].1, rotationPlanes[axisIndex].2, BodyMetrics.rotationSegmentCount / 2
             )
         }
         try requireSoleClaimant(pressPoint, pressCase.handleName)
         press = pressPoint
         let dragDirection = directions[axisIndex]
-        dragEnd = CGPoint(
-            x: pressPoint.x + dragDirection.x * Self.dragPoints,
-            y: pressPoint.y + dragDirection.y * Self.dragPoints
-        )
+        switch pressCase {
+        case .rotateX, .rotateY, .rotateZ:
+            dragEnd = try rotationSample(rotationPlanes[axisIndex].1, rotationPlanes[axisIndex].2,
+                                         BodyMetrics.rotationSegmentCount * 3 / 4)
+        default:
+            dragEnd = CGPoint(x: pressPoint.x + dragDirection.x * Self.dragPoints,
+                              y: pressPoint.y + dragDirection.y * Self.dragPoints)
+        }
 
         // The positive control for the mounted frame is the in-plane translate
         // the same round must commit, so a silent target cannot be confused
@@ -394,6 +407,7 @@ private struct MountedObjectHandleViewport {
     let window: NSWindow
     let controller: NSViewController
     let invalidate: (Invalidation) -> Void
+    let cache: MeshSourcePresentationPlanCache
 
     /// `onBodyPlacementCommit` is the only commit callback the transform gizmo
     /// has, and `allowsObjectAffordances` is what makes the gizmo interactive
@@ -412,6 +426,8 @@ private struct MountedObjectHandleViewport {
         onBodyResizeCommit: ((ViewportBodyResizeDragTarget) -> Void)? = nil
     ) async throws {
         _ = NSApplication.shared
+        let cache = MeshSourcePresentationPlanCache()
+        self.cache = cache
         func viewport(invalidation: Invalidation? = nil) -> AnyView {
         let selection = invalidation == .selection ? SelectionModel() : fixture.selection
         let resizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)?
@@ -421,7 +437,7 @@ private struct MountedObjectHandleViewport {
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             }
         } else { resizeCommit = nil }
-        return AnyView(Viewport(
+        let view = Viewport(
             document: presentation?.document.document ?? fixture.document,
             sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(invalidation == .source ? 2 : 1)),
             controlSession: fixture.control,
@@ -443,7 +459,8 @@ private struct MountedObjectHandleViewport {
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             },
             onBodyResizeCommit: resizeCommit
-        ).frame(width: fixture.size.width, height: fixture.size.height))
+        )
+        return AnyView(Viewport(view, presentationPlanCache: cache).frame(width: fixture.size.width, height: fixture.size.height))
         }
         let controller = NSHostingController(rootView: viewport())
         self.invalidate = { controller.rootView = viewport(invalidation: $0) }
@@ -467,6 +484,7 @@ private struct MountedObjectHandleViewport {
         while !mounted, ContinuousClock.now < deadline {
             controller.view.layoutSubtreeIfNeeded()
             mounted = Self.inputView(in: controller.view)?.bounds.size == fixture.size
+                && cache.state.identity.map { cache.hasReadyCamera(for: $0, revision: fixture.control.revision) } == true
             if !mounted {
                 try await Task.sleep(for: .milliseconds(30))
             }
@@ -483,6 +501,56 @@ private struct MountedObjectHandleViewport {
     func close() {
         window.contentViewController = nil
         window.close()
+    }
+
+    func handleEntity(_ action: ViewportAffordanceAction, marker: Bool) throws -> (RealityViewport, ModelEntity) {
+        let identity = try #require(cache.state.identity)
+        let surface = try #require(cache.surface(for: identity))
+        func find(_ entity: Entity) throws -> ModelEntity? {
+            if let model = entity as? ModelEntity,
+               (model.model?.mesh.lowLevelMesh == nil) == marker,
+               let index = surface.spatialHandleIndex(for: entity),
+               let record = cache.interactionRecord(at: index, for: identity),
+               let input = try ViewportBodyTransformInput(record: record), input.action == action { return model }
+            for child in entity.children { if let match = try find(child) { return match } }
+            return nil
+        }
+        return (surface, try #require(try find(surface.root)))
+    }
+
+    func stations(for pressCase: ViewportObjectHandlePressCase) throws -> (CGPoint, CGPoint) {
+        let axis: ViewportCoordinateAxis
+        switch pressCase {
+        case .translateX, .translateTipX, .centerScaleX, .rotateX: axis = .x
+        case .translateY, .translateTipY, .centerScaleY, .rotateY: axis = .y
+        case .translateZ, .translateTipZ, .centerScaleZ, .rotateZ: axis = .z
+        }
+        let rotation = [.rotateX, .rotateY, .rotateZ].contains(pressCase)
+        let centered = [.centerScaleX, .centerScaleY, .centerScaleZ].contains(pressCase)
+        let action: ViewportAffordanceAction = rotation ? .rotate(axis) : centered ? .centerScale(axis) : .translate(axis)
+        let (surface, entity) = try handleEntity(action, marker: !rotation)
+        func project(_ point: SIMD3<Float>) throws -> CGPoint {
+            try #require(surface.project(surface.renderOrigin + Vector3D(x: Double(point.x), y: Double(point.y), z: Double(point.z))))
+        }
+        if rotation {
+            let mesh = try #require(entity.model?.mesh.lowLevelMesh)
+            var first = SIMD3<Float>.zero, last = SIMD3<Float>.zero
+            mesh.withUnsafeBytes(bufferIndex: 0) { bytes in
+                let points = bytes.bindMemory(to: SIMD3<Float>.self)
+                first = points[points.count / 2]; last = points[points.count * 3 / 4]
+            }
+            return (try project(first), try project(last))
+        }
+        let position = entity.position(relativeTo: surface.root)
+        let center = try project(position)
+        let probe = try project(position + SIMD3(Float(axis.unitVector.x), Float(axis.unitVector.y), Float(axis.unitVector.z)))
+        let length = hypot(probe.x - center.x, probe.y - center.y)
+        let dx = (probe.x - center.x) / length, dy = (probe.y - center.y) / length
+        let shaft = [.translateX, .translateY, .translateZ].contains(pressCase)
+        let along = shaft ? ObjectHandlePressFixture.translateStationPoints - BodyMetrics.axisLengthPoints : 0
+        let across = shaft ? 0 : ObjectHandlePressFixture.markerOffsetPoints
+        let start = CGPoint(x: center.x + dx * along - dy * across, y: center.y + dy * along + dx * across)
+        return (start, CGPoint(x: start.x + dx * 24, y: start.y + dy * 24))
     }
 
     private static func inputView(in view: NSView) -> ViewportInputSurface.InputView? {
@@ -618,9 +686,10 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
         allowsObjectAffordances: false, onPick: { _ in }, onCanvasDrag: { _ in canvasDrags += 1 },
         onBodyPlacementCommit: { commits.append(contentsOf: $0) })
     defer { mounted.close() }
+    let (press, end) = try mounted.stations(for: pressCase)
     let deadline = ContinuousClock.now.advanced(by: .seconds(20))
     while commits.isEmpty, ContinuousClock.now < deadline {
-        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        try await mounted.gesture(from: press, to: end, size: fixture.size)
     }
     let target = try #require(commits.last, "Mesh handle must commit without exact CAD affordance permission.")
     #expect(target.reference == document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.reference)
@@ -634,7 +703,7 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
         }
     }
     commits.removeAll(); canvasDrags = 0
-    try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size, cancel: true)
+    try await mounted.gesture(from: press, to: end, size: fixture.size, cancel: true)
     #expect(commits.isEmpty && canvasDrags == 0)
     try target.validate(in: snapshot.document.document)
     let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Mesh Placement", commands: [
@@ -653,7 +722,7 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
 }
 
 @MainActor
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(2)))
 func boxFaceAndCornerHandlesReachSourceResizeWithoutPlacementFallback() async throws {
     let fixture = try ObjectHandlePressFixture(pressCase: .translateX)
     let workspace = ProjectWorkspace(project: try ProjectController(document: fixture.document,
@@ -681,26 +750,45 @@ func boxFaceAndCornerHandlesReachSourceResizeWithoutPlacementFallback() async th
         onPick: { _ in }, onCanvasDrag: { _ in canvas += 1 }, onBodyPlacementCommit: { _ in placements += 1 },
         onBodyResizeCommit: { resizes.append($0) })
     defer { mounted.close() }
-    let layout = ViewportSceneContext(ruler: fixture.ruler, scene: fixture.scene, size: fixture.size,
-        camera: fixture.control.camera, basis: fixture.control.basis,
-        fittingInsets: ViewportCanvasChromeLayout(viewportSize: fixture.size,
-            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth).fittingInsets).layout
-    for action: ViewportAffordanceAction in [.faceMove(.right), .vertexMove(.frontBottomRight)] {
-        let marker = try #require(source.markers.first {
-            guard case .objectTransform(_, let value) = $0.identity else { return false }
-            return value == action
+    for action in ViewportBodyFace.allCases.filter({ $0 != .side }).map(ViewportAffordanceAction.faceMove)
+        + ViewportBodyVertex.allCases.map(ViewportAffordanceAction.vertexMove) {
+        let (surface, marker) = try mounted.handleEntity(action, marker: true)
+        let position = marker.position(relativeTo: surface.root)
+        let start = try #require(surface.project(surface.renderOrigin + Vector3D(
+            x: Double(position.x), y: Double(position.y), z: Double(position.z))))
+        let record = try #require(resizeRecords.first {
+            if case .objectTransform(let value, _, _) = $0.target { return value == action }
+            return false
         })
-        let start = try #require(layout.projectedPoint(marker.anchor)?.point)
-        let end = CGPoint(x: start.x + 12, y: start.y + 8)
+        let input = try #require(try ViewportBodyTransformInput(record: record))
+        let resize = try #require(input.members.first?.resize)
+        let center = try ViewportWorldTransformAlgebra.transformedPoint(
+            Point3D(x: (resize.minimum.x + resize.maximum.x) / 2,
+                    y: (resize.minimum.y + resize.maximum.y) / 2,
+                    z: (resize.minimum.z + resize.maximum.z) / 2), by: resize.worldFromBox)
+        let centerScreen = try #require(surface.project(center))
+        for end in [CGPoint(x: start.x + 12, y: start.y + 8),
+                    CGPoint(x: start.x + 4 * (centerScreen.x - start.x),
+                            y: start.y + 4 * (centerScreen.y - start.y))] {
+        let measure = ViewportNativeAffordanceMeasure(planCache: mounted.cache,
+            identity: try #require(mounted.cache.state.identity), revision: fixture.control.revision)
+        let expected = try #require(try input.resizeCommit(mutation: input.mutation(from: start, to: end, measure: measure)))
         let count = resizes.count
         let deadline = ContinuousClock.now.advanced(by: .seconds(15))
         while resizes.count == count, ContinuousClock.now < deadline {
             try await mounted.gesture(from: start, to: end, size: fixture.size)
         }
         #expect(resizes.count > count, "The actual mounted face/corner must reach the source resize callback.")
+        let actual = try #require(resizes.last)
+        #expect((actual.size - expected.size).length < 1e-9,
+                "The pressed face/corner must own the committed resize, not an overlapping handle.")
+        for (a, b) in zip(actual.placement.localTransform.matrix.values, expected.placement.localTransform.matrix.values) {
+            #expect(abs(a - b) < 1e-9)
+        }
         let after = resizes.count
         try await mounted.gesture(from: start, to: end, size: fixture.size, cancel: true)
         #expect(resizes.count == after)
+        }
     }
     #expect(placements == 0 && canvas == 0)
 }
@@ -796,14 +884,15 @@ struct ViewportNativeObjectAffordancePressTests {
                 to: fixture.translateStationDragEnd, size: fixture.size)
         }
         try #require(!commits.isEmpty, "The translation control must establish native input readiness.")
-        let dx = (fixture.dragEnd.x - fixture.press.x) / ObjectHandlePressFixture.dragPoints
-        let dy = (fixture.dragEnd.y - fixture.press.y) / ObjectHandlePressFixture.dragPoints
+        let (press, end) = try mounted.stations(for: pressCase)
+        let dx = (end.x - press.x) / ObjectHandlePressFixture.dragPoints
+        let dy = (end.y - press.y) / ObjectHandlePressFixture.dragPoints
         // Undo the fixture's off-shaft offset: these presses deliberately hit
         // both the marker and its translation shaft, including the visible center.
         for offset: CGFloat in [0, -3, 3] {
             commits.removeAll()
-            let start = CGPoint(x: fixture.press.x + dy * ObjectHandlePressFixture.markerOffsetPoints + dx * offset,
-                                y: fixture.press.y - dx * ObjectHandlePressFixture.markerOffsetPoints + dy * offset)
+            let start = CGPoint(x: press.x + dy * ObjectHandlePressFixture.markerOffsetPoints + dx * offset,
+                                y: press.y - dx * ObjectHandlePressFixture.markerOffsetPoints + dy * offset)
             let end = CGPoint(x: start.x + dx * 24, y: start.y + dy * 24)
             try await mounted.gesture(from: start, to: end, size: fixture.size)
             try #require(commits.count == 1)
@@ -943,7 +1032,8 @@ struct ViewportNativeObjectAffordancePressTests {
 
         canvasDrags = 0
         bodyMoves.removeAll()
-        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        let (press, end) = try mounted.stations(for: pressCase)
+        try await mounted.gesture(from: press, to: end, size: fixture.size)
         let report = Comment(
             rawValue: "\(pressCase.handleName) at \(fixture.press) produced "
                 + "\(canvasDrags) canvas drags and \(bodyMoves.count) body moves."
@@ -971,22 +1061,22 @@ struct ViewportNativeObjectAffordancePressTests {
 
         let expected = try #require(bodyMoves.first).localTransform
         bodyMoves.removeAll()
-        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+        try await mounted.gesture(from: press, to: end, size: fixture.size,
                                   sendsPreview: false)
         #expect(bodyMoves.count == 1)
         #expect(bodyMoves.first?.localTransform == expected)
 
         bodyMoves.removeAll()
-        let halfway = CGPoint(x: (fixture.press.x + fixture.dragEnd.x) / 2,
-                              y: (fixture.press.y + fixture.dragEnd.y) / 2)
-        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+        let halfway = CGPoint(x: (press.x + end.x) / 2,
+                              y: (press.y + end.y) / 2)
+        try await mounted.gesture(from: press, to: end, size: fixture.size,
                                   preview: halfway)
         #expect(bodyMoves.count == 1)
         #expect(bodyMoves.first?.localTransform == expected,
                 "Release must be measured independently of the last preview.")
 
         bodyMoves.removeAll()
-        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+        try await mounted.gesture(from: press, to: end, size: fixture.size,
                                   cancel: true)
         #expect(bodyMoves.isEmpty, "Escape must consume the body release.")
         #expect(canvasDrags == 0)

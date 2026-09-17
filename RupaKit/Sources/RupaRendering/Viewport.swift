@@ -350,6 +350,13 @@ public struct Viewport: View {
         nonmutating set { activeInteractionDrags.affordance = newValue }
     }
 
+    /// Supplies the frame owner at composition time; the mounted view retains
+    /// its normal State lifetime and teardown contract.
+    init(_ viewport: Self, presentationPlanCache: MeshSourcePresentationPlanCache) {
+        self = viewport
+        _presentationPlanCache = State(initialValue: presentationPlanCache)
+    }
+
     public init(
         document: DesignDocument,
         sourceIdentity: ViewportSourceIdentity,
