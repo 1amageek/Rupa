@@ -11,6 +11,18 @@ struct ViewportSpatialInteractionRecord: Sendable {
 
     init(target: ViewportSpatialPreparedInteractionTarget,
          occurrenceID: String? = nil, modelTransform: Transform3D = .identity) throws {
+        if case .objectTransform(let action, let members, _) = target {
+            guard !members.isEmpty, members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount,
+                  Set(members.map(\.sceneNodeID)).count == members.count,
+                  Set(members.map(\.occurrenceID)).count == members.count,
+                  members.allSatisfy({ !$0.occurrenceID.isEmpty }) else {
+                throw RealityViewportSpatialBatch.invalid("Object placement requires distinct, addressed occurrences.")
+            }
+            switch action {
+            case .translate, .rotate, .centerScale, .oneSidedScale: break
+            default: throw RealityViewportSpatialBatch.invalid("Object placement received a topology action.")
+            }
+        }
         if case .affordance(let address, let members, let groupEdit, let placement) = target {
             try Task.checkCancellation()
             guard members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount else {
@@ -119,6 +131,13 @@ struct ViewportSpatialInteractionRecord: Sendable {
                 try string(value.title)
                 try string(value.highlightedTitle)
             case .constructionPlane(_, _, _, _, let corners): try array(corners)
+            case .objectTransform(_, let members, _):
+                try array(members)
+                for member in members {
+                    try string(member.occurrenceID)
+                    try array(member.baseLocalTransform.matrix.values)
+                    try array(member.parentWorldTransform.matrix.values)
+                }
             case .affordance(_, let members, _, let placement):
                 try array(members)
                 for member in members {

@@ -1980,8 +1980,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) -> Void)? {
-        guard selectionScope.allowsPresentationOccurrencePick(for: selectedTool),
-              selectedPresentationHasExactCADAffordanceContext else {
+        guard selectedTool == .select, selectionScope == .object else {
             return nil
         }
         return { target in

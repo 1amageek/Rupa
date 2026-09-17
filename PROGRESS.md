@@ -2,7 +2,7 @@
 
 - [x] UI-NORMAL-1 Inspector properties use one transaction with busy refusal, Undo/Redo and atomic failure, verified through production bindings and Workspace; commit 1d4c0d3b. Native activation remains an integration check. `depends:none` `parallel:none`
 - [x] UI-NORMAL-2 User-approved affine inspector retains shear through nine numeric edits, world-axis scale after rotation, reflection and gimbal lock; perspective/singular failures stay explicit. Seven focused macOS tests passed; scoped commit records implementation, App activation remains in integration. `depends:UI-NORMAL-1` `parallel:none`
-- [ ] UI-NORMAL-3 Close authored-mesh placement affordance and remaining exposed UI workflow gaps against production operation ownership; prove successful input, refusal and cancellation. `depends:UI-NORMAL-2` `parallel:none`
+- [x] UI-NORMAL-3 CAD and authored-Mesh presentations share occurrence-owned placement handles and source-edge previews; native gestures, cancellation, immutable assets, Undo/Redo and incomplete-selection refusal verified in 23 macOS cases; scoped commit records implementation. Remaining App UI routes belong to UI-NORMAL-IV. `depends:UI-NORMAL-2` `parallel:none`
 
 - [x] UI-P1-0917 Fixed persistent body translation/rotation/axis scaling and atomic group placement, occurrence-owned mesh previews, release-point measurement, Escape and stale source/selection/parent-frame refusal; reviewed and verified task-only changes in commit 6d439eba. New topology editing and P2 capability expansion remain out of scope. `depends:none` `parallel:none`
 

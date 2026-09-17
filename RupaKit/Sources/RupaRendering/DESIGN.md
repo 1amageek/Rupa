@@ -703,7 +703,8 @@ independent tessellator is never an alternative implementation.
    used to draw it.
    The body transform affordance is native-enabled under this same authority.
    `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
-   prepared interaction record at the point, and its `.affordance` case owns
+   prepared interaction record at the point, and its `.objectTransform` case
+   (or `.affordance` for direct CAD scenes) owns
    the press, the hover highlight, and the drag for `translate`,
    `oneSidedScale`, `centerScale`, and `rotate`. The
    legacy CPU projection selector is removed from this route: a native miss, a
@@ -723,9 +724,26 @@ independent tessellator is never an alternative implementation.
    selector gone it also receives no transform input, so this route no longer
    hit-tests geometry it never draws.
    Body transform gestures persist translation, rotation and positive axis scaling
+   for CAD and authored Mesh presentations through occurrence placement, not
+   CAD feature editing. A presentation-backed frame builds the selected members
+   from UniversalViewportScene bounds and the exact occurrence-to-node map.
+   Each member retains its actual SceneNodeReference, local and parent frames;
+   no synthetic FeatureID is assigned to Mesh. Missing, locked, instance-owned,
+   ambiguous or mixed unsupported selections produce no partial group gizmo.
+   Presentation-backed input never falls back to CAD-only bounds. The common
+   handle geometry and world-mutation algorithm serve both source kinds; only
+   topology editing still requires exact CAD context. Source-reference and
+   placement changes invalidate the complete transaction. Native input tests
+   must prove Mesh movement/rotation/scaling and cancellation with unchanged
+   unselected copies, followed by Workspace Undo/Redo and stale refusal.
+   Legacy non-presentation fixtures retain the CAD body registration until
+   their direct scene callers migrate; production uses the presentation branch.
+   Both branches persist their mutations
    through one atomic batch of scene-node placements. The press retains one
    baseline per occurrence, the source/snapshot, selection and press point.
    Preview uses occurrence-keyed world mutations, never a feature-keyed box.
+   Presentation previews draw the transformed source edges as a wireframe;
+   they do not replace the committed solid or mutate shared mesh assets.
    Release measures its own point against a matching mounted camera, including
    release without preview. An unready frame retains the closed release until
    answered; source, selection, route or release-revision changes and Escape

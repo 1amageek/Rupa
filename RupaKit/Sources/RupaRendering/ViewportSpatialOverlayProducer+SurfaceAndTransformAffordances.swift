@@ -156,6 +156,8 @@ extension ViewportSpatialOverlayProducer {
             let selection: SelectionModel
             let editedBodies: [FeatureID: ViewportObjectEditState]
             var bodyPreviewTransforms: [String: Transform3D] = [:]
+            var presentationScene: UniversalViewportScene?
+            var presentationNodeIDs: [SceneOccurrenceID: SceneNodeID] = [:]
             let ruler: RulerConfiguration
             let enabledRoutes: Set<SurfaceTransformAffordanceRoute>
             let interactiveRoutes: Set<SurfaceTransformAffordanceRoute>
@@ -1882,6 +1884,9 @@ private extension ViewportSpatialOverlayProducer {
     /// this route does not claim to say what those mean.
     static func axisColor(for identity: ViewportSpatialHandleIdentity) -> SIMD4<Float> {
         switch identity {
+        case .objectTransform(_, let action):
+            if case .translate(let axis) = action { return axisColor(axis) }
+            return editColor
         case .affordance(let target):
             switch target.action {
             case .translate(let axis): return axisColor(axis)
@@ -2557,6 +2562,20 @@ private extension ViewportSpatialOverlayProducer {
     ) throws {
         guard input.enabledRoutes.contains(.bodyTransform)
                 || input.enabledRoutes.contains(.sketchTransform) else { return }
+        if input.enabledRoutes.contains(.bodyTransform), input.presentationScene != nil,
+           let members = try presentationTransformMembers(input: input), !members.isEmpty {
+            try appendPresentationTransformPreviews(input: input, checkpoint: checkpoint, meshes: &meshes)
+            let bounds = ViewportObjectEditState(
+                xMin: members.map { $0.bounds.xMin }.min()!, xMax: members.map { $0.bounds.xMax }.max()!,
+                yMin: members.map { $0.bounds.yMin }.min()!, yMax: members.map { $0.bounds.yMax }.max()!,
+                zMin: members.map { $0.bounds.zMin }.min()!, zMax: members.map { $0.bounds.zMax }.max()!)
+            try emitBodyTransform(featureID: nil, selectionTarget: nil,
+                occurrenceID: members.count == 1 ? members[0].occurrenceID : nil,
+                modelTransform: .identity, edit: bounds, bodyMembers: [], groupEdit: nil,
+                placement: nil, objectMembers: members, input: input,
+                interactionRecords: &interactionRecords, checkpoint: checkpoint,
+                worldLines: &worldLines, cameraLines: &cameraLines, cameraPaths: &cameraPaths, markers: &markers)
+        }
         let bodyItems = input.scene.items.filter { item in
             guard case .body = item.kind else { return false }
             return input.selection.selectedTargets.contains { target in
@@ -2569,7 +2588,7 @@ private extension ViewportSpatialOverlayProducer {
                   case .sketch = item.kind else { return nil }
             return item
         }
-        let drawsBodyGizmo = input.enabledRoutes.contains(.bodyTransform) && !bodyItems.isEmpty
+        let drawsBodyGizmo = input.presentationScene == nil && input.enabledRoutes.contains(.bodyTransform) && !bodyItems.isEmpty
         let drawsSketchGizmo = input.enabledRoutes.contains(.sketchTransform) && !sketchItems.isEmpty
         guard drawsBodyGizmo || drawsSketchGizmo else { return }
         // One walk of the scene tree answers every transform gizmo in this
@@ -2649,7 +2668,7 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
     static func emitBodyTransform(
-        featureID: FeatureID,
+        featureID: FeatureID?,
         selectionTarget: SelectionTarget?,
         occurrenceID: String?,
         modelTransform: Transform3D,
@@ -2657,6 +2676,7 @@ private extension ViewportSpatialOverlayProducer {
         bodyMembers: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember],
         groupEdit: ViewportObjectEditState?,
         placement: ViewportBodyPlacementBaseline?,
+        objectMembers: [ViewportObjectTransformMember]? = nil,
         input: SurfaceTransformAffordanceSource.RawInput,
         interactionRecords: inout [ViewportSpatialInteractionRecord],
         checkpoint: (Int, Int, Int) throws -> Void,
@@ -2670,6 +2690,18 @@ private extension ViewportSpatialOverlayProducer {
             throw RealityViewportSpatialBatch.invalid("Body transform bounds do not contain eight finite corners.")
         }
         func affordance(_ action: ViewportAffordanceAction) throws -> ViewportSpatialHandleIdentity {
+            if let objectMembers {
+                let prepared = ViewportSpatialPreparedInteractionTarget.objectTransform(
+                    action: action, members: objectMembers, bounds: edit)
+                if input.interactiveRoutes.contains(.bodyTransform) {
+                    _ = try handleIndex(for: prepared, occurrenceID: occurrenceID,
+                                        modelTransform: modelTransform, in: &interactionRecords)
+                }
+                return try prepared.spatialIdentity
+            }
+            guard let featureID else {
+                throw RealityViewportSpatialBatch.invalid("A CAD affordance has no source feature.")
+            }
             let target = ViewportAffordanceTarget(featureID: featureID, selectionTarget: selectionTarget, action: action)
             if input.interactiveRoutes.contains(.bodyTransform) {
                 let prepared = ViewportSpatialPreparedInteractionTarget.affordance(

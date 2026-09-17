@@ -21,6 +21,9 @@ Body transform commits consume the occurrence-scoped batch defined by
 UI validates every retained node, local frame and parent world frame against
 the current workspace snapshot. It submits all placements in one existing
 source transaction, preserving atomic failure and a single Undo entry.
+Object placement callbacks are available for CAD and authored Mesh selection;
+exact CAD capability remains a requirement only for topology operations.
+Rendering owns complete selection admission against the presented occurrences.
 Translation, rotation and axis scaling use the same boundary. Cancellation
 submits nothing. Verification includes stale ancestors and shared-feature
 placements, not only callback receipt.

@@ -3694,7 +3694,7 @@ public struct Viewport: View {
     private var pendingSpatialHandleIdentity: ViewportSpatialHandleIdentity? {
         get throws {
             switch nativeInputGesture {
-            case .bodyTransform(let press): return .affordance(press.input.target)
+            case .bodyTransform(let press): return press.input.identity
             case .active(let press): return press.input.record.identity
             case .sketchTransform(let press): return press.identity
             case .pattern(let press): return press.input.record.identity
@@ -4028,7 +4028,9 @@ public struct Viewport: View {
         return Dictionary(uniqueKeysWithValues: press.input.members.map { ($0.occurrenceID, mutation) })
     }
 
-    private var bodyTransformRouteEnabled: Bool { allowsObjectAffordances && onBodyPlacementCommit != nil }
+    private var bodyTransformRouteEnabled: Bool {
+        onBodyPlacementCommit != nil && (presentationScene != nil || allowsObjectAffordances)
+    }
 
     private func bodyTransformBaselineMatches(_ press: BodyTransformPress) -> Bool {
         press.source == sourceIdentity && press.snapshotID == presentationScene?.snapshotID
@@ -5204,6 +5206,11 @@ public struct Viewport: View {
         }
         do {
             if let record = try nativeInteractionRecord(at: point) {
+                if try ViewportBodyTransformInput(record: record) != nil {
+                    clearCanvasHover()
+                    if bodyTransformRouteEnabled { hoveredNativeHandleIdentity = record.identity }
+                    return
+                }
                 if try ViewportNativeAxisInput(record: record) != nil {
                     clearCanvasHover()
                     if nativeAxisRouteEnabled(record.target) {
@@ -5766,7 +5773,7 @@ extension Viewport {
             analysisSource: analysisSource,
             sectionSource: sectionSource,
             editedBodies: editedBodies,
-            bodyPreviewTransforms: bodyPreviewTransforms,
+            bodyPreviewTransforms: presentationScene == nil ? bodyPreviewTransforms : [:],
             world: world,
             snapReference: snapReference,
             placement: placement,
@@ -5949,6 +5956,8 @@ extension Viewport {
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
         result.bodyPreviewTransforms = bodyPreviewTransforms
+        result.presentationScene = presentationScene
+        result.presentationNodeIDs = presentationSceneNodeIDByOccurrenceID
         return result
     }
 

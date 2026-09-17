@@ -5,11 +5,19 @@ import SwiftCAD
 
 /// A world-space transform applied to immutable, occurrence-scoped placements.
 struct ViewportBodyTransformInput: Sendable {
-    let target: ViewportAffordanceTarget
-    let members: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember]
+    let identity: ViewportSpatialHandleIdentity
+    let action: ViewportAffordanceAction
+    let members: [ViewportObjectTransformMember]
     let bounds: ViewportObjectEditState
 
     init?(record: ViewportSpatialInteractionRecord) throws {
+        if case .objectTransform(let action, let members, let bounds) = record.target {
+            self.identity = record.identity
+            self.action = action
+            self.members = members
+            self.bounds = bounds
+            return
+        }
         guard case .affordance(let target, let members, let group, let single) = record.target else {
             return nil
         }
@@ -24,8 +32,16 @@ struct ViewportBodyTransformInput: Sendable {
         guard !resolved.isEmpty, resolved.allSatisfy({ $0.placement != nil }) else {
             throw RealityViewportSpatialBatch.invalid("A body transform has no complete placement baseline.")
         }
-        self.target = target
-        self.members = resolved
+        self.identity = record.identity
+        self.action = target.action
+        self.members = try resolved.map { member in
+            guard let placement = member.placement else {
+                throw RealityViewportSpatialBatch.invalid("A body transform has no placement.")
+            }
+            return .init(occurrenceID: member.occurrenceID, reference: .body(placement.featureID),
+                         sceneNodeID: placement.sceneNodeID, baseLocalTransform: placement.baseLocalTransform,
+                         parentWorldTransform: placement.parentWorldTransform, bounds: member.edit)
+        }
         self.bounds = group ?? resolved[0].edit
     }
 
@@ -33,7 +49,7 @@ struct ViewportBodyTransformInput: Sendable {
     func mutation(from start: CGPoint, to end: CGPoint,
                   measure: some ViewportAffordanceMeasuring) throws -> Transform3D {
         let pivot = bounds.worldPoint(bounds.centerPoint)
-        switch target.action {
+        switch action {
         case .translate(let axis):
             let delta = try measure.worldAxisDelta(from: start, to: end,
                 axisOrigin: pivot, axisDirection: axis.unitVector)
@@ -55,7 +71,7 @@ struct ViewportBodyTransformInput: Sendable {
             case .z: extent = Double(bounds.zMax - bounds.zMin)
             }
             let centered: Bool
-            if case .centerScale = target.action { centered = true } else { centered = false }
+            if case .centerScale = action { centered = true } else { centered = false }
             let factor = 1 + delta * (centered ? 2 : 1) / extent
             guard extent.isFinite, extent > 0, factor.isFinite, factor > 1e-3 else {
                 throw RealityViewportSpatialBatch.invalid("A body scale must remain finite and positive.")
@@ -78,14 +94,14 @@ struct ViewportBodyTransformInput: Sendable {
         var result: [ViewportBodyPlacementDragTarget] = []
         var seen: Set<SceneNodeID> = []
         for member in members {
-            guard let baseline = member.placement, seen.insert(baseline.sceneNodeID).inserted else {
+            guard seen.insert(member.sceneNodeID).inserted else {
                 throw RealityViewportSpatialBatch.invalid("A body transform repeats or omits a placement.")
             }
             guard let local = try ViewportWorldTransformAlgebra.localTransform(applying: mutation,
-                within: baseline.parentWorldTransform, to: baseline.baseLocalTransform) else { continue }
-            result.append(.init(featureID: baseline.featureID, sceneNodeID: baseline.sceneNodeID,
-                baseLocalTransform: baseline.baseLocalTransform, localTransform: local,
-                baseParentWorldTransform: baseline.parentWorldTransform))
+                within: member.parentWorldTransform, to: member.baseLocalTransform) else { continue }
+            result.append(.init(reference: member.reference, sceneNodeID: member.sceneNodeID,
+                baseLocalTransform: member.baseLocalTransform, localTransform: local,
+                baseParentWorldTransform: member.parentWorldTransform))
         }
         return result
     }

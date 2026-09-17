@@ -63,6 +63,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case sketchTransform(ViewportSketchTransformBaseline)
     case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember],
                     groupEdit: ViewportObjectEditState?, placement: ViewportBodyPlacementBaseline?)
+    case objectTransform(action: ViewportAffordanceAction, members: [ViewportObjectTransformMember], bounds: ViewportObjectEditState)
 
     var spatialIdentity: ViewportSpatialHandleIdentity {
         get throws {
@@ -110,6 +111,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
             case .constructionPlane(let identity, _, _, _, _): .constructionPlane(identity)
             case .sketchTransform(let value): .sketchTransform(value.identity)
             case .affordance(let target, _, _, _): .affordance(target)
+            case .objectTransform(let action, let members, _):
+                .objectTransform(nodes: members.map(\.sceneNodeID), action: action)
             }
         }
     }

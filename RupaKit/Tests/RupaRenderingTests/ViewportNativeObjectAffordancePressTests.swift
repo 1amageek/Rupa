@@ -1,6 +1,9 @@
 import AppKit
 import CoreGraphics
 import RupaCore
+import RupaGeometry
+import RupaKit
+import RupaProject
 import SwiftCAD
 import RupaViewportScene
 import SwiftUI
@@ -395,6 +398,7 @@ private struct MountedObjectHandleViewport {
     /// and cannot claim a press this suite attributes to the gizmo.
     init(
         fixture: ObjectHandlePressFixture,
+        presentation: ProjectViewSnapshot? = nil,
         allowsObjectAffordances: Bool = true,
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onPick: @escaping (ViewportCanvasTarget) -> Void,
@@ -405,9 +409,11 @@ private struct MountedObjectHandleViewport {
         func viewport(invalidation: Invalidation? = nil) -> AnyView {
         let selection = invalidation == .selection ? SelectionModel() : fixture.selection
         return AnyView(Viewport(
-            document: fixture.document,
+            document: presentation?.document.document ?? fixture.document,
             sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(invalidation == .source ? 2 : 1)),
             controlSession: fixture.control,
+            presentationScene: presentation?.viewport,
+            presentationSceneNodeIDByOccurrenceID: presentation?.sceneNodeIDByOccurrenceID ?? [:],
             workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: fixture.ruler),
             selection: selection,
             objectSelectionIndex: .init(document: fixture.document, selection: selection),
@@ -418,7 +424,7 @@ private struct MountedObjectHandleViewport {
             onPick: onPick,
             onCanvasDrag: onCanvasDrag,
             onSelectionDrag: onSelectionDrag,
-            onBodyPlacementCommit: onBodyPlacementCommit
+            onBodyPlacementCommit: invalidation == .route ? nil : onBodyPlacementCommit
         ).frame(width: fixture.size.width, height: fixture.size.height))
         }
         let controller = NSHostingController(rootView: viewport())
@@ -499,6 +505,154 @@ private struct MountedObjectHandleViewport {
         input.mouseUp(with: try event(.leftMouseUp, end))
         try await Task.sleep(for: .milliseconds(500))
     }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)), arguments: ViewportObjectHandlePressCase.allCases, [false, true])
+func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandlePressCase, keepsCADModeling: Bool) async throws {
+    let fixture = try ObjectHandlePressFixture(pressCase: pressCase)
+    let item = try #require(fixture.scene.items.first { $0.sceneNodeID == fixture.target.sceneNodeID })
+    guard case .body(let component) = item.kind else { Issue.record("Expected fixture body."); return }
+    let bodyMesh = try #require(component.mesh)
+    var builder = MeshSourceBuilder()
+    let vertices = try bodyMesh.positions.map {
+        try builder.addVertex(GeometryPoint3D(x: $0.x, y: $0.y, z: $0.z))
+    }
+    for offset in stride(from: 0, to: bodyMesh.indices.count, by: 3) {
+        _ = try builder.addFace(vertexIDs: (0..<3).map { vertices[Int(bodyMesh.indices[offset + $0])] })
+    }
+    let mesh = try builder.build()
+    let asset = try AuthoredMeshAsset(source: mesh, provenance: .created)
+    var document = fixture.document
+    document.authoredMeshAssets[asset.id] = asset
+    if keepsCADModeling {
+        var object = try #require(document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.object)
+        object.geometryRepresentations.representations["mesh"] = .init(id: "mesh", source: .authoredMesh(asset.id))
+        object.geometryRepresentations.selection?.presentation = "mesh"
+        document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.object = object
+    } else {
+        document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.reference = .authoredMesh(asset.id)
+        document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.object = ObjectDescriptor(
+            category: .body, geometryRole: .mesh, geometryRepresentations: .init(
+                representations: ["mesh": .init(id: "mesh", source: .authoredMesh(asset.id))],
+                selection: .init(modeling: "mesh", presentation: "mesh")))
+    }
+    let copyID = try document.productMetadata.appendSceneNodeToFirstRoot(name: "Unselected Mesh Copy",
+        reference: .authoredMesh(asset.id), object: ObjectDescriptor(
+            category: .body, geometryRole: .mesh, geometryRepresentations: .init(
+                representations: ["mesh": .init(id: "mesh", source: .authoredMesh(asset.id))],
+                selection: .init(modeling: "mesh", presentation: "mesh"))))
+    let controller = try ProjectController(document: document,
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge())
+    let workspace = ProjectWorkspace(project: controller)
+    let snapshot = try await workspace.evaluate()
+    if pressCase == .translateX, !keepsCADModeling {
+        var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+            document: document, scene: .init(items: []), selection: fixture.selection,
+            ruler: fixture.ruler, enabledRoutes: [.bodyTransform])
+        raw.presentationScene = snapshot.viewport
+        raw.presentationNodeIDs = snapshot.sceneNodeIDByOccurrenceID
+        let selected = try #require(snapshot.viewport.items.first {
+            snapshot.sceneNodeID(for: $0.occurrenceID) == fixture.target.sceneNodeID
+        })
+        let mutation = try ViewportWorldTransformAlgebra.translation(Vector3D(x: 0.25, y: 0, z: 0))
+        raw.bodyPreviewTransforms[selected.occurrenceID.rawValue] = mutation
+        var records: [ViewportSpatialInteractionRecord] = []
+        let source = try #require(try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw, interactionRecords: &records, checkpoint: { _, _, _ in }))
+        #expect(source.meshes.count == 1)
+        let preview = try #require(source.meshes.first)
+        #expect(preview.occurrenceID == selected.occurrenceID.rawValue)
+        #expect(preview.positions.count == selected.mesh.vertexPositions.count)
+        for index in preview.positions.indices {
+            let base = try selected.worldTransform.applying(to: selected.mesh.vertexPositions[index])
+            #expect(abs(preview.positions[index].x - base.x - 0.25) < 1e-10)
+            #expect(abs(preview.positions[index].y - base.y) < 1e-10)
+        }
+        #expect(!records.isEmpty)
+    }
+    var commits: [ViewportBodyPlacementDragTarget] = []
+    var canvasDrags = 0
+    let mounted = try await MountedObjectHandleViewport(fixture: fixture, presentation: snapshot,
+        allowsObjectAffordances: false, onPick: { _ in }, onCanvasDrag: { _ in canvasDrags += 1 },
+        onBodyPlacementCommit: { commits.append(contentsOf: $0) })
+    defer { mounted.close() }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+    while commits.isEmpty, ContinuousClock.now < deadline {
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+    }
+    let target = try #require(commits.last, "Mesh handle must commit without exact CAD affordance permission.")
+    #expect(target.reference == document.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.reference)
+    #expect((target.featureID != nil) == keepsCADModeling)
+    #expect(target.localTransform != target.baseLocalTransform)
+    if let axis = pressCase.committedAxis {
+        let delta = try translationDelta(of: target)
+        for other in ViewportCoordinateAxis.allCases {
+            if other == axis { #expect(abs(delta[other] ?? 0) > 1e-9) }
+            else { #expect(abs(delta[other] ?? 0) < 1e-9) }
+        }
+    }
+    commits.removeAll(); canvasDrags = 0
+    try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size, cancel: true)
+    #expect(commits.isEmpty && canvasDrags == 0)
+    try target.validate(in: snapshot.document.document)
+    let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Mesh Placement", commands: [
+        .setSceneNodeTransform(id: target.sceneNodeID, localTransform: target.localTransform)
+    ], from: snapshot)
+    _ = try await workspace.perform(action)
+    let changed = try #require(workspace.view)
+    #expect(changed.document.document.authoredMeshAssets[asset.id] == asset)
+    #expect(changed.document.document.productMetadata.sceneNodes[target.sceneNodeID]?.localTransform == target.localTransform)
+    #expect(changed.document.document.productMetadata.sceneNodes[copyID] == document.productMetadata.sceneNodes[copyID])
+    #expect(throws: EditorError.self) { try target.validate(in: changed.document.document) }
+    let undone = try await workspace.undo()
+    #expect(undone.document.document.productMetadata == document.productMetadata)
+    let redone = try await workspace.redo()
+    #expect(redone.document.document.productMetadata == changed.document.document.productMetadata)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func cadPresentationPlacementUsesNativeInputAndRejectsIncompleteSelections() async throws {
+    let fixture = try ObjectHandlePressFixture(pressCase: .translateY)
+    let controller = try ProjectController(document: fixture.document,
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge())
+    let workspace = ProjectWorkspace(project: controller)
+    let snapshot = try await workspace.evaluate()
+    func source(document: DesignDocument, selection: SelectionModel) -> ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput {
+        var input = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+            document: document, scene: .init(items: []), selection: selection,
+            ruler: fixture.ruler, enabledRoutes: [.bodyTransform])
+        input.presentationScene = snapshot.viewport
+        input.presentationNodeIDs = snapshot.sceneNodeIDByOccurrenceID
+        return input
+    }
+    let valid = source(document: fixture.document, selection: fixture.selection)
+    #expect(try ViewportSpatialOverlayProducer.presentationTransformMembers(input: valid)?.count == 1)
+    var missing = valid
+    missing.presentationNodeIDs = [:]
+    #expect(try ViewportSpatialOverlayProducer.presentationTransformMembers(input: missing) == nil)
+    var lockedDocument = fixture.document
+    lockedDocument.productMetadata.sceneNodes[fixture.target.sceneNodeID]?.isLocked = true
+    #expect(try ViewportSpatialOverlayProducer.presentationTransformMembers(
+        input: source(document: lockedDocument, selection: fixture.selection)) == nil)
+    let incomplete = SelectionModel(selectedTargets: [fixture.target, .init(sceneNodeID: SceneNodeID(), component: .object)])
+    #expect(try ViewportSpatialOverlayProducer.presentationTransformMembers(
+        input: source(document: fixture.document, selection: incomplete)) == nil)
+    var commits: [ViewportBodyPlacementDragTarget] = []
+    let mounted = try await MountedObjectHandleViewport(fixture: fixture, presentation: snapshot,
+        onPick: { _ in }, onCanvasDrag: { _ in }, onBodyPlacementCommit: { commits.append(contentsOf: $0) })
+    defer { mounted.close() }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+    while commits.isEmpty, ContinuousClock.now < deadline {
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+    }
+    let committed = try #require(commits.last)
+    let delta = try translationDelta(of: committed)
+    #expect(abs(delta[.y] ?? 0) > 1e-9)
+    #expect(abs(delta[.x] ?? 0) < 1e-9)
+    #expect(abs(delta[.z] ?? 0) < 1e-9)
+    try committed.validate(in: fixture.document)
 }
 
 /// The world translation a committed placement adds, read out of the two

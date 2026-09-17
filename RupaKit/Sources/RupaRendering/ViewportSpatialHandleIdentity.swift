@@ -46,6 +46,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case constructionPlane(ViewportConstructionPlaneHandleIdentity)
     case sketchTransform(ViewportSketchTransformHandleIdentity)
     case affordance(ViewportAffordanceTarget)
+    case objectTransform(nodes: [SceneNodeID], action: ViewportAffordanceAction)
 
     /// Charges owned value/array storage and conservative UTF-8 backing, without
     /// walking CAD geometry or encoding another copy of the table.
@@ -107,6 +108,9 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                 try addresses(values)
                 try string(displayID.rawValue)
             case .regionOffset(let value): try string(value.componentID.rawValue)
+            case .objectTransform(let nodes, _):
+                guard nodes.count <= limits.maxPositionCount else { throw RealityViewportSpatialBatch.exhausted() }
+                try charge(nodes.capacity, stride: MemoryLayout<SceneNodeID>.stride)
             case .affordance(let value):
                 if let selectionTarget = value.selectionTarget { try target(selectionTarget) }
                 switch value.action {
