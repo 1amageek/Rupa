@@ -1,0 +1,109 @@
+import SwiftUI
+
+struct InspectorNumericInput: View {
+    let title: String
+    let value: Double?
+    let mapping: InspectorNumericMapping
+    let onChange: (Double) -> Void
+
+    @Environment(\.inspectorInputSequencer) private var sequencer
+    @State private var edit = InspectorNumericEdit()
+    @State private var controlID = UUID()
+    @State private var observer: Task<Void, Never>?
+    @State private var pendingCompletion: (revision: Int, task: Task<Void, Never>?)?
+    @State private var isDragging = false
+    @FocusState private var isFocused: Bool
+
+    private var activeMapping: InspectorNumericMapping { edit.mapping ?? mapping }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            inspectorControlRow(title) {
+                HStack(spacing: 6) {
+                    TextField(title, text: Binding(
+                        get: { edit.text ?? value.map(activeMapping.format) ?? "Mixed" },
+                        set: { text in
+                            if isFocused { edit.begin(mapping) }
+                            if let value = edit.setText(text, mapping: mapping) { submit(value) }
+                        }))
+                        .focused($isFocused)
+                        .onSubmit { isFocused = false }
+                        .foregroundStyle(edit.text.map { activeMapping.parse($0) == nil } == true
+                                         ? Color.red : Color.primary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: inspectorControlWidth)
+                    if !activeMapping.unit.isEmpty {
+                        Text(activeMapping.unit)
+                            .foregroundStyle(.secondary)
+                            .frame(width: inspectorUnitWidth, alignment: .leading)
+                    }
+                }
+            }
+            if let step = activeMapping.step {
+                Stepper(title, value: Binding(
+                    get: { edit.value ?? value ?? activeMapping.sliderRange.lowerBound },
+                    set: { value in
+                        edit.begin(mapping)
+                        submit(edit.setSlider(value, mapping: mapping))
+                        if !isFocused { edit.end() }
+                    }), in: activeMapping.sliderRange, step: step)
+                    .labelsHidden()
+                    .padding(.leading, inspectorSliderLeadingPadding)
+            } else {
+                Slider(value: Self.sliderBinding(edit: $edit, value: value,
+                                                mapping: mapping, onChange: submit),
+                       in: activeMapping.sliderRange, onEditingChanged: { editing in
+                    isDragging = editing
+                    if editing {
+                        isFocused = false
+                        edit.begin(mapping)
+                    } else {
+                        edit.end()
+                    }
+                })
+                .padding(.leading, inspectorSliderLeadingPadding)
+                .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
+            }
+        }
+        .padding(.vertical, 2)
+        .onChange(of: isFocused) { _, focused in
+            if focused { edit.begin(mapping) } else if !isDragging { edit.end() }
+        }
+        .onDisappear {
+            observer?.cancel()
+            observer = nil
+            pendingCompletion = nil
+        }
+    }
+
+    /// Shared by the native Slider and non-foreground binding contract tests.
+    static func sliderBinding(
+        edit: Binding<InspectorNumericEdit>, value: Double?,
+        mapping: InspectorNumericMapping, onChange: @escaping (Double) -> Void
+    ) -> Binding<Double> {
+        Binding(
+            get: {
+                let current = edit.wrappedValue
+                return (current.mapping ?? mapping).sliderValue(current.value ?? value ?? 0)
+            },
+            set: { position in
+                onChange(edit.wrappedValue.setSlider(position, mapping: mapping))
+            })
+    }
+
+    private func submit(_ value: Double) {
+        let revision = edit.submitted()
+        InspectorInputSubmission.$controlID.withValue(controlID) { onChange(value) }
+        pendingCompletion = (revision, sequencer?.currentCompletion)
+        guard observer == nil else { return }
+        observer = Task { @MainActor in
+            while let pending = pendingCompletion {
+                await pending.task?.value
+                guard !Task.isCancelled else { return }
+                edit.acknowledged(pending.revision)
+                if pendingCompletion?.revision == pending.revision { pendingCompletion = nil }
+            }
+            observer = nil
+        }
+    }
+}

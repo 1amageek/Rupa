@@ -432,49 +432,8 @@ func numericControl(
     onChange: @escaping (Double) -> Void,
     unitLabel: () -> String = { "" }
 ) -> some View {
-    let commonValue = commonWorkspaceInspectorValue(values)
-    let textBinding = Binding<String>(
-        get: {
-            if let commonValue {
-                return WorkspaceInspectorNumberText.string(from: commonValue)
-            }
-            return "Mixed"
-        },
-        set: { text in
-            guard let value = WorkspaceInspectorNumberText.value(from: text) else {
-                return
-            }
-            onChange(value)
-        }
-    )
-    let sliderBinding = Binding<Double>(
-        get: {
-            min(max(commonValue ?? 0.0, sliderRange.lowerBound), sliderRange.upperBound)
-        },
-        set: { value in
-            onChange(value)
-        }
-    )
-    let unit = unitLabel()
-
-    return VStack(alignment: .leading, spacing: 4) {
-        inspectorControlRow(title) {
-            HStack(spacing: 6) {
-                TextField(title, text: textBinding)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: inspectorControlWidth)
-                if !unit.isEmpty {
-                    Text(unit)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-        }
-        Slider(value: sliderBinding, in: sliderRange)
-            .padding(.leading, inspectorSliderLeadingPadding)
-            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
-    }
-    .padding(.vertical, 2)
+    InspectorNumericInput(title: title, value: commonWorkspaceInspectorValue(values),
+                          mapping: .number(range: sliderRange, unit: unitLabel()), onChange: onChange)
 }
 
 @MainActor
@@ -483,48 +442,14 @@ func workspaceScaleFactorControl(
     values: [Double],
     onChange: @escaping (Double) -> Void
 ) -> some View {
-    let commonValue = commonWorkspaceInspectorValue(values)
-    let sliderRange = workspaceScaleFactorSliderRange(for: values)
-    let scale = WorkspaceScaleFactorSliderScale(valueRange: sliderRange)
-    let textBinding = Binding<String>(
-        get: {
-            if let commonValue {
-                return WorkspaceInspectorNumberText.string(from: commonValue)
-            }
-            return "Mixed"
-        },
-        set: { text in
-            guard let value = WorkspaceInspectorNumberText.value(from: text) else {
-                return
-            }
-            onChange(max(value, sliderRange.lowerBound))
-        }
-    )
-    let sliderBinding = Binding<Double>(
-        get: {
-            scale.sliderValue(for: commonValue ?? 1.0)
-        },
-        set: { sliderValue in
-            onChange(scale.value(fromSliderValue: sliderValue))
-        }
-    )
-
-    return VStack(alignment: .leading, spacing: 4) {
-        inspectorControlRow(title) {
-            HStack(spacing: 6) {
-                TextField(title, text: textBinding)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: inspectorControlWidth)
-                Text("x")
-                    .foregroundStyle(.secondary)
-                    .frame(width: inspectorUnitWidth, alignment: .leading)
-            }
-        }
-        Slider(value: sliderBinding, in: 0.0 ... 1.0)
-            .padding(.leading, inspectorSliderLeadingPadding)
-            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
-    }
-    .padding(.vertical, 2)
+    let range = workspaceScaleFactorSliderRange(for: values)
+    let scale = WorkspaceScaleFactorSliderScale(valueRange: range)
+    return InspectorNumericInput(
+        title: title, value: commonWorkspaceInspectorValue(values),
+        mapping: InspectorNumericMapping(
+            unit: "x", sliderRange: 0...1, sliderValue: scale.sliderValue,
+            value: scale.value, format: { WorkspaceInspectorNumberText.string(from: $0) },
+            parse: WorkspaceInspectorNumberText.value), onChange: onChange)
 }
 
 func commonWorkspaceInspectorValue(_ values: [Double]) -> Double? {
@@ -549,58 +474,17 @@ func workspaceLengthControl(
     sliderMetersRange: ClosedRange<Double>,
     onChange: @escaping (Double) -> Void
 ) -> some View {
-    let commonMeters = commonWorkspaceInspectorValue(values)
-    let presentation = commonMeters.map {
-        workspaceLengthFieldPresentation(
-            fromMeters: $0,
-            preferredUnit: displayUnit
-        )
-    }
-    let textBinding = Binding<String>(
-        get: {
-            if let presentation {
-                return presentation.text
-            }
-            return "Mixed"
-        },
-        set: { text in
-            let defaultUnit = presentation?.unit ?? displayUnit
-            guard let meters = workspaceLengthMeters(
-                fromFieldText: text,
-                defaultUnit: defaultUnit
-            ) else {
-                return
-            }
-            onChange(meters)
-        }
-    )
-    let sliderBinding = Binding<Double>(
-        get: {
-            WorkspaceLengthSliderScale(metersRange: sliderMetersRange)
-                .sliderValue(forMeters: commonMeters ?? 0.0)
-        },
-        set: { value in
-            let meters = WorkspaceLengthSliderScale(metersRange: sliderMetersRange)
-                .meters(fromSliderValue: value)
-            onChange(meters)
-        }
-    )
-    let unit = presentation?.unit.symbol ?? displayUnit.symbol
-
-    return VStack(alignment: .leading, spacing: 4) {
-        inspectorControlRow(title) {
-            HStack(spacing: 6) {
-                TextField(title, text: textBinding)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: inspectorControlWidth)
-                Text(unit)
-                    .foregroundStyle(.secondary)
-                    .frame(width: inspectorUnitWidth, alignment: .leading)
-            }
-        }
-        Slider(value: sliderBinding, in: 0.0 ... 1.0)
-            .padding(.leading, inspectorSliderLeadingPadding)
-            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
-    }
-    .padding(.vertical, 2)
+    let common = commonWorkspaceInspectorValue(values)
+    let unit = common.map {
+        workspaceLengthFieldPresentation(fromMeters: $0, preferredUnit: displayUnit).unit
+    } ?? displayUnit
+    let scale = WorkspaceLengthSliderScale(metersRange: sliderMetersRange)
+    return InspectorNumericInput(
+        title: title, value: common,
+        mapping: InspectorNumericMapping(
+            unit: unit.symbol, sliderRange: 0...1,
+            sliderValue: scale.sliderValue, value: scale.meters,
+            format: { WorkspaceInspectorNumberText.string(from: unit.value(fromMeters: $0)) },
+            parse: { workspaceLengthMeters(fromFieldText: $0, defaultUnit: unit) }),
+        onChange: onChange)
 }

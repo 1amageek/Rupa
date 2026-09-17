@@ -293,52 +293,17 @@ struct WorkspaceDocumentInspectorView: View {
         meters: Double,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let presentation = RulerScaleControl.fieldPresentation(
-            fromMeters: meters,
-            preferredUnit: state.displayUnit,
-            for: kind
-        )
-        let unit = presentation.unit
-        let textBinding = Binding<String>(
-            get: {
-                presentation.text
-            },
-            set: { text in
-                guard let meters = RulerScaleControl.meters(
-                    fromFieldText: text,
-                    unit: unit,
-                    for: kind
-                ) else {
-                    return
-                }
-                onChange(meters)
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                RulerScaleControl.sliderValue(fromMeters: meters, for: kind)
-            },
-            set: { value in
-                onChange(RulerScaleControl.meters(fromSliderValue: value, for: kind))
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 4) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, text: textBinding)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    Text(unit.symbol)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-            Slider(value: sliderBinding, in: RulerScaleControl.sliderRange(for: kind))
-                .padding(.leading, inspectorSliderLeadingPadding)
-                .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
-        }
-        .padding(.vertical, 2)
+        let unit = RulerScaleControl.fieldPresentation(
+            fromMeters: meters, preferredUnit: state.displayUnit, for: kind).unit
+        return InspectorNumericInput(
+            title: title, value: meters,
+            mapping: InspectorNumericMapping(
+                unit: unit.symbol, sliderRange: RulerScaleControl.sliderRange(for: kind),
+                sliderValue: { RulerScaleControl.sliderValue(fromMeters: $0, for: kind) },
+                value: { RulerScaleControl.meters(fromSliderValue: $0, for: kind) },
+                format: { WorkspaceInspectorNumberText.string(from: unit.value(fromMeters: $0)) },
+                parse: { RulerScaleControl.meters(fromFieldText: $0, unit: unit, for: kind) }),
+            onChange: onChange)
     }
 }
 

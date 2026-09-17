@@ -43,6 +43,7 @@ struct WorkspaceParameterInspectorView: View {
             }
             newParameterRows
         }
+        .disabled(isSubmitting)
     }
 
     @ViewBuilder
@@ -91,8 +92,9 @@ struct WorkspaceParameterInspectorView: View {
         }
         inspectorActionRow {
             Button(role: .destructive) {
+                guard !isSubmitting else { return }
+                isSubmitting = true
                 Task { @MainActor in
-                    isSubmitting = true
                     defer { isSubmitting = false }
                     if await onDelete(row.name) {
                         nameDrafts[row.id] = nil
@@ -175,6 +177,7 @@ struct WorkspaceParameterInspectorView: View {
     }
 
     private func applyName(_ row: WorkspaceParameterInspectorState.Row) {
+        guard !isSubmitting else { return }
         let name = nameDrafts[row.id] ?? row.name
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedName.isEmpty == false,
@@ -182,8 +185,8 @@ struct WorkspaceParameterInspectorView: View {
             nameDrafts[row.id] = nil
             return
         }
+        isSubmitting = true
         Task { @MainActor in
-            isSubmitting = true
             defer { isSubmitting = false }
             if await onRename(row.name, trimmedName) {
                 nameDrafts[row.id] = nil
@@ -192,12 +195,13 @@ struct WorkspaceParameterInspectorView: View {
     }
 
     private func applyExpression(_ row: WorkspaceParameterInspectorState.Row) {
+        guard !isSubmitting else { return }
         let expression = expressionDrafts[row.id] ?? row.expression
         guard expression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             return
         }
+        isSubmitting = true
         Task { @MainActor in
-            isSubmitting = true
             defer { isSubmitting = false }
             if await onUpsert(row.name, expression, row.kind) {
                 expressionDrafts[row.id] = nil
@@ -206,14 +210,15 @@ struct WorkspaceParameterInspectorView: View {
     }
 
     private func applyNewParameter() {
+        guard !isSubmitting else { return }
         let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedExpression = newExpression.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedName.isEmpty == false,
               trimmedExpression.isEmpty == false else {
             return
         }
+        isSubmitting = true
         Task { @MainActor in
-            isSubmitting = true
             defer { isSubmitting = false }
             if await onUpsert(trimmedName, trimmedExpression, kind(rawValue: newKindRawValue)) {
                 newName = ""

@@ -396,48 +396,8 @@ struct SurfaceControlPointInspectorView: View {
         onChange: @escaping (Double) -> Void,
         unitLabel: () -> String = { "" }
     ) -> some View {
-        let commonValue = commonValue(values)
-        let textBinding = Binding<String>(
-            get: {
-                if let commonValue {
-                    return WorkspaceInspectorNumberText.string(from: commonValue)
-                }
-                return "Mixed"
-            },
-            set: { text in
-                guard let value = WorkspaceInspectorNumberText.value(from: text) else {
-                    return
-                }
-                onChange(value)
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                min(max(commonValue ?? 0.0, sliderRange.lowerBound), sliderRange.upperBound)
-            },
-            set: { value in
-                onChange(value)
-            }
-        )
-        let unit = unitLabel()
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, text: textBinding)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    if !unit.isEmpty {
-                        Text(unit)
-                            .foregroundStyle(.secondary)
-                            .frame(width: inspectorUnitWidth, alignment: .leading)
-                    }
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
-        }
-        .padding(.vertical, 1)
+        InspectorNumericInput(title: title, value: commonWorkspaceInspectorValue(values),
+                              mapping: .number(range: sliderRange, unit: unitLabel()), onChange: onChange)
     }
 
     private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {

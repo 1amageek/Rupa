@@ -119,19 +119,13 @@ struct PatternArrayInspectorView: View {
         setDistanceMode: @escaping (PatternArrayDistanceMode) -> Void
     ) -> some View {
         inspectorRow(title, "Linear")
-        inspectorControlRow("\(title) Copies") {
-            Stepper(
-                value: Binding(
-                    get: { axis.copyCount },
-                    set: { setCopyCount($0) }
-                ),
-                in: 1 ... 10_000
-            ) {
-                Text("\(axis.copyCount)")
-                    .monospacedDigit()
-            }
-            .accessibilityIdentifier("\(accessibilityPrefix).copyCount")
+        InspectorNumericInput(
+            title: "\(title) Copies", value: Double(axis.copyCount),
+            mapping: .integer(range: 1...10_000)
+        ) { value in
+            if let count = Int(exactly: value) { setCopyCount(count) }
         }
+        .accessibilityIdentifier("\(accessibilityPrefix).copyCount")
         if let distanceMeters = axis.distanceMeters {
             lengthControl(
                 "\(title) \(axis.distanceModeTitle)",
@@ -202,19 +196,13 @@ struct PatternArrayInspectorView: View {
         ) { value in
             setRadialAxisDirection(z: value)
         }
-        inspectorControlRow("Angle Copies") {
-            Stepper(
-                value: Binding(
-                    get: { angularAxis.copyCount },
-                    set: { setRadialAngularCopyCount($0) }
-                ),
-                in: 1 ... 10_000
-            ) {
-                Text("\(angularAxis.copyCount)")
-                    .monospacedDigit()
-            }
-            .accessibilityIdentifier("InspectorPatternArray.radial.angular.copyCount")
+        InspectorNumericInput(
+            title: "Angle Copies", value: Double(angularAxis.copyCount),
+            mapping: .integer(range: 1...10_000)
+        ) { value in
+            if let count = Int(exactly: value) { setRadialAngularCopyCount(count) }
         }
+        .accessibilityIdentifier("InspectorPatternArray.radial.angular.copyCount")
         if let angleRadians = angularAxis.angleRadians {
             numericControl(
                 angularAxis.angleModeTitle,
@@ -255,19 +243,13 @@ struct PatternArrayInspectorView: View {
     ) -> some View {
         inspectorRow("Path", curve.pathTitle)
         curvePathReplacementControls
-        inspectorControlRow("Curve Copies") {
-            Stepper(
-                value: Binding(
-                    get: { curve.copyCount },
-                    set: { setCurveCopyCount($0) }
-                ),
-                in: 1 ... 10_000
-            ) {
-                Text("\(curve.copyCount)")
-                    .monospacedDigit()
-            }
-            .accessibilityIdentifier("InspectorPatternArray.curve.copyCount")
+        InspectorNumericInput(
+            title: "Curve Copies", value: Double(curve.copyCount),
+            mapping: .integer(range: 1...10_000)
+        ) { value in
+            if let count = Int(exactly: value) { setCurveCopyCount(count) }
         }
+        .accessibilityIdentifier("InspectorPatternArray.curve.copyCount")
         if let twistRadians = curve.twistRadians {
             numericControl(
                 "Twist",
@@ -661,48 +643,8 @@ struct PatternArrayInspectorView: View {
         onChange: @escaping (Double) -> Void,
         unitLabel: () -> String = { "" }
     ) -> some View {
-        let commonValue = commonValue(values)
-        let textBinding = Binding<String>(
-            get: {
-                if let commonValue {
-                    return WorkspaceInspectorNumberText.string(from: commonValue)
-                }
-                return "Mixed"
-            },
-            set: { text in
-                guard let value = WorkspaceInspectorNumberText.value(from: text) else {
-                    return
-                }
-                onChange(value)
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                min(max(commonValue ?? 0.0, sliderRange.lowerBound), sliderRange.upperBound)
-            },
-            set: { value in
-                onChange(value)
-            }
-        )
-        let unit = unitLabel()
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, text: textBinding)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    if !unit.isEmpty {
-                        Text(unit)
-                            .foregroundStyle(.secondary)
-                            .frame(width: inspectorUnitWidth, alignment: .leading)
-                    }
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
-        }
-        .padding(.vertical, 1)
+        InspectorNumericInput(title: title, value: commonWorkspaceInspectorValue(values),
+                              mapping: .number(range: sliderRange, unit: unitLabel()), onChange: onChange)
     }
 
     private func lengthControl(

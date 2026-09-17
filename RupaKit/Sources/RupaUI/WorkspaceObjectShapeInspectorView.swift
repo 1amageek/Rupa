@@ -126,7 +126,9 @@ struct WorkspaceObjectShapeInspectorView: View {
             case .number:
                 numericObjectPropertyControl(property, values: values, shapes: shapes) { .number($0) }
             case .integer:
-                numericObjectPropertyControl(property, values: values, shapes: shapes) { .integer(Int($0.rounded())) }
+                numericObjectPropertyControl(property, values: values, shapes: shapes) {
+                    Int(exactly: $0.rounded()).map(ObjectPropertyValue.integer)
+                }
             case .angle:
                 numericObjectPropertyControl(property, values: values, shapes: shapes) { .angle($0) }
             case .boolean:
@@ -169,7 +171,7 @@ struct WorkspaceObjectShapeInspectorView: View {
         _ property: ObjectPropertyDefinition,
         values: [ObjectPropertyValue],
         shapes: [InspectorObjectShape],
-        makeValue: @escaping (Double) -> ObjectPropertyValue
+        makeValue: @escaping (Double) -> ObjectPropertyValue?
     ) -> some View {
         let numbers = values.compactMap { value -> Double? in
             switch value {
@@ -183,12 +185,14 @@ struct WorkspaceObjectShapeInspectorView: View {
         }
         if numbers.count == values.count {
             let range = property.numericRange.map { $0.lowerBound ... $0.upperBound } ?? 0.0 ... 100.0
-            numericControl(
-                property.title,
-                values: numbers,
-                sliderRange: range
+            InspectorNumericInput(
+                title: property.title,
+                value: commonWorkspaceInspectorValue(numbers),
+                mapping: property.valueKind == .integer ? .integer(range: range) : .number(range: range)
             ) { value in
-                onSetProperty(property, makeValue(value), shapes)
+                if let propertyValue = makeValue(value) {
+                    onSetProperty(property, propertyValue, shapes)
+                }
             }
         } else {
             workspaceInspectorValueRow(property.title, "Mixed")

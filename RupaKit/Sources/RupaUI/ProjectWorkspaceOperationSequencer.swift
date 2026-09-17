@@ -15,6 +15,9 @@ public final class ProjectWorkspaceOperationSequencer {
 
     public init() {}
 
+    /// Observes already-enqueued work without introducing an ordering barrier.
+    var currentCompletion: Task<Void, Never>? { tail }
+
     @discardableResult
     public func enqueue<Result: Sendable>(
         operationGuard: @escaping @MainActor @Sendable () throws -> Void = {},

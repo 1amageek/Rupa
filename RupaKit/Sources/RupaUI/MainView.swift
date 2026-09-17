@@ -841,7 +841,7 @@ private struct ProjectMainViewContent: View {
         commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [WorkspaceCommand],
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        let task = enqueueWorkspaceOperation {
+        let operation: @MainActor @Sendable () async throws -> ProjectViewSnapshot = {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
                     code: .snapshotUnavailable,
@@ -857,6 +857,8 @@ private struct ProjectMainViewContent: View {
             completion(published)
             return published
         }
+        if submitNumericInput({ _ = try await operation() }) { return }
+        let task = enqueueWorkspaceOperation(operation)
         Task { @MainActor in
             do {
                 _ = try await task.value
@@ -888,6 +890,10 @@ private struct ProjectMainViewContent: View {
         commands: @escaping @MainActor @Sendable (ProjectViewSnapshot) throws -> [EditorCommand],
         completion: @escaping @MainActor ([CommandExecutionResult]) async throws -> Void = { _ in }
     ) {
+        if submitNumericInput({
+            let results = try await executeSource(name: name, commands: commands)
+            try await completion(results)
+        }) { return }
         let task = enqueueWorkspaceOperation {
             let results = try await executeSource(name: name, commands: commands)
             try await completion(results)
@@ -901,6 +907,29 @@ private struct ProjectMainViewContent: View {
                 isPreviewExpanded = true
             }
         }
+    }
+
+    /// The control context is synchronous; queued work never inherits it.
+    private func submitNumericInput(
+        _ operation: @escaping @MainActor @Sendable () async throws -> Void
+    ) -> Bool {
+        guard let controlID = InspectorInputSubmission.controlID else { return false }
+        let lifetime = snapshot.documentLifetimeID
+        InspectorInputSubmission.$controlID.withValue(nil) {
+            operationSequencer.enqueueReplacingPending(key: controlID) {
+                do {
+                    guard workspace.view?.documentLifetimeID == lifetime else {
+                        throw ProjectWorkspaceActionError(
+                            code: .documentLifetimeMismatch,
+                            message: "The edited document is no longer active.")
+                    }
+                    try await operation()
+                } catch {
+                    reportToolStatus(error.localizedDescription, severity: .warning)
+                }
+            }
+        }
+        return true
     }
 
     private func performSource(
@@ -1930,7 +1959,10 @@ private struct ProjectMainViewContent: View {
                     definitionsInspectorContent
                 }
             }
+            .id(snapshot.selection.selectedTargets)
+            .id(snapshot.selection.selectedReferences)
         }
+            .environment(\.inspectorInputSequencer, operationSequencer)
             .frame(
                 minWidth: 320,
                 idealWidth: 420,
@@ -7219,25 +7251,10 @@ private struct ProjectMainViewContent: View {
             isBusy: modelingPreview.isBusy,
             onEditTransform: { component, value in
                 let ids = nodes.map(\.id)
-                let lifetime = snapshot.documentLifetimeID
-                let key = [AnyHashable(lifetime), AnyHashable(ids), AnyHashable(component)]
-                operationSequencer.enqueueReplacingPending(key: key) {
-                    do {
-                        guard workspace.view?.documentLifetimeID == lifetime else {
-                            throw ProjectWorkspaceActionError(
-                                code: .documentLifetimeMismatch,
-                                message: "The queued Inspector edit belongs to a replaced project document."
-                            )
-                        }
-                        _ = try await executeSource(name: "Transform Objects") { current in
-                            try WorkspaceTransformMatrix.commands(
-                                replacing: component, with: value, nodeIDs: ids,
-                                in: current.document.document
-                            )
-                        }
-                    } catch {
-                        reportToolStatus(error.localizedDescription, severity: .warning)
-                    }
+                submitSource(name: "Transform Objects") { current in
+                    try WorkspaceTransformMatrix.commands(
+                        replacing: component, with: value, nodeIDs: ids,
+                        in: current.document.document)
                 }
             }
         )

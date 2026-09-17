@@ -273,36 +273,7 @@ struct SurfaceParameterInspectorView: View {
         sliderRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let textBinding = Binding<String>(
-            get: {
-                WorkspaceInspectorNumberText.string(from: value)
-            },
-            set: { text in
-                guard let newValue = WorkspaceInspectorNumberText.value(from: text) else {
-                    return
-                }
-                onChange(newValue)
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                min(max(value, sliderRange.lowerBound), sliderRange.upperBound)
-            },
-            set: { newValue in
-                onChange(newValue)
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                TextField(title, text: textBinding)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: inspectorControlWidth)
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
-        }
-        .padding(.vertical, 1)
+        numericControl(title, values: [value], sliderRange: sliderRange, onChange: onChange)
     }
 
     private func draftScalarControl(
@@ -310,36 +281,9 @@ struct SurfaceParameterInspectorView: View {
         value: Binding<Double>,
         sliderRange: ClosedRange<Double>
     ) -> some View {
-        let textBinding = Binding<String>(
-            get: {
-                WorkspaceInspectorNumberText.string(from: value.wrappedValue)
-            },
-            set: { text in
-                guard let newValue = WorkspaceInspectorNumberText.value(from: text) else {
-                    return
-                }
-                value.wrappedValue = newValue
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                min(max(value.wrappedValue, sliderRange.lowerBound), sliderRange.upperBound)
-            },
-            set: { newValue in
-                value.wrappedValue = newValue
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                TextField(title, text: textBinding)
-                    .multilineTextAlignment(.trailing)
-                    .frame(width: inspectorControlWidth)
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
+        numericControl(title, values: [value.wrappedValue], sliderRange: sliderRange) {
+            value.wrappedValue = $0
         }
-        .padding(.vertical, 1)
     }
 
     private func inspectorIconButton(

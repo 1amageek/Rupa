@@ -16,6 +16,11 @@ live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
+Numeric Inspector interaction is owned by [InspectorInput](InspectorInput/DESIGN.md).
+MainView captures the existing sequencer completion after synchronous numeric
+submission. It coalesces only consecutive unstarted absolute edits from the same
+control, retaining document-lifetime guards, error reporting and ordering barriers.
+
 Body transform commits consume the occurrence-scoped batch defined by
 [RupaRendering](../RupaRendering/DESIGN.md). Before producing any command, the
 UI validates every retained node, local frame and parent world frame against
