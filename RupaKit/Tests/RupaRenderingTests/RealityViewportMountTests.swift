@@ -212,7 +212,7 @@ struct RealityViewportMountTests {
                 color: [1, 1, 1, 1], handleIndex: 0, hitTolerancePoints: 8)],
             cameraLines: cameraRelative ? [.init(points: zip(points, offsets).map {
                 .init(anchor: $0, offset: .fixed(CGPoint(x: $1, y: 0)))
-            }, color: [1, 1, 1, 1], widthPoints: 3, handleIndex: 0, hitTolerancePoints: 8)] : [],
+            }, color: [1, 1, 1, 1], widthPoints: 2, handleIndex: 0, hitTolerancePoints: 8)] : [],
             handleCount: 1, renderOrigin: .origin, retainedSurfaceByteCount: 0)
         #expect(batch.lineCollisionCount == 2)
         do {
@@ -273,7 +273,7 @@ struct RealityViewportMountTests {
                     let b = stroke.convert(position: [0, 0.5, 0], to: nil)
                     let p = try #require(viewport.project(.init(x: Double(a.x), y: Double(a.y), z: Double(a.z))))
                     let q = try #require(viewport.project(.init(x: Double(b.x), y: Double(b.y), z: Double(b.z))))
-                    #expect(abs(hypot(p.x - q.x, p.y - q.y) - 3) < 0.01)
+                    #expect(abs(hypot(p.x - q.x, p.y - q.y) - 2) < 0.01)
                 }
             }
             for collider in collisionEntities {

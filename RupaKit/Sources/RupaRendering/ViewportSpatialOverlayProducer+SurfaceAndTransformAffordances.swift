@@ -549,7 +549,7 @@ extension ViewportSpatialOverlayProducer {
             var line = RealityViewportSpatialBatch.CameraLine(
                 points: points,
                 color: color(for: value.state, fallback: value.color),
-                widthPoints: value.family == .transform ? 3 : nil,
+                widthPoints: value.family == .transform ? 2 : nil,
                 depth: .annotation
             )
             line.handleIndex = index
