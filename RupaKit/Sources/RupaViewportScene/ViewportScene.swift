@@ -1688,10 +1688,10 @@ public struct ViewportLayout: Equatable {
         self.modelBounds = modelBounds
         self.renderOrigin = renderOrigin
         self.focus = resolvedFocus
-        self.scale = min(
+        self.scale = (clampedCamera.referenceScale ?? min(
             fittingRect.width / max(projectedBounds.width, 1.0e-9),
             fittingRect.height / max(projectedBounds.height, 1.0e-9)
-        ) * clampedCamera.zoom
+        )) * clampedCamera.zoom
         self.fittingCenter = CGPoint(x: fittingRect.midX, y: fittingRect.midY)
         self.center = CGPoint(
             x: fittingCenter.x + clampedCamera.pan.width,
@@ -2380,7 +2380,7 @@ public struct ViewportModelCoordinateMapper {
         )
         let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
             ruler: ruler,
-            identityScale: identityLayout.scale
+            identityScale: camera.referenceScale ?? identityLayout.scale
         )
         self.layout = ViewportLayout(
             modelBounds: modelBounds,

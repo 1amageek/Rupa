@@ -95,6 +95,14 @@ the numerical coordinate origin, never the authority for an explicit focus.
 Projection rows, CPU projection, depth, and view rays use the same camera focus.
 The fitting-rectangle center looks at that focus when the screen offset is zero.
 
+`ViewportCamera.referenceScale` is the retained points-per-meter scale at unit
+zoom. Nil requests initial framing; the mounted owner resolves it once along
+with focus. Subsequent geometry bounds affect precision and clipping, not
+navigation scale. Explicit fit/reset/saved-frame requests may establish a new
+reference. A finite positive reference is required. Model translation, resize,
+removal and replacement must preserve projected stationary world points in
+both lens modes; fit and anchored zoom remain effective.
+
 Existing screen-offset camera inputs remain representable, but the mounted
 camera owner converts navigation offsets to a world-space focus on the current
 view plane and clears the offset. This is camera translation, not geometry or

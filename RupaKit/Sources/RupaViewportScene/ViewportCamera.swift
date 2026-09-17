@@ -6,17 +6,21 @@ public struct ViewportCamera: Equatable, Sendable {
     public var pan: CGSize
     public var projection: ViewportCameraProjection
     public var focus: Point3D?
+    /// Points per world meter at unit zoom, resolved by the mounted owner.
+    public var referenceScale: CGFloat?
 
     public init(
         zoom: CGFloat = 1.0,
         pan: CGSize = .zero,
         projection: ViewportCameraProjection = .parallel,
-        focus: Point3D? = nil
+        focus: Point3D? = nil,
+        referenceScale: CGFloat? = nil
     ) {
         self.zoom = max(zoom, Self.minimumZoom)
         self.pan = pan
         self.projection = projection
         self.focus = focus
+        self.referenceScale = referenceScale
     }
 
     public static let minimumZoom: CGFloat = 0.04
@@ -31,7 +35,8 @@ public struct ViewportCamera: Equatable, Sendable {
             zoom: min(max(zoom, Self.minimumZoom), resolvedMaximumZoom),
             pan: pan,
             projection: projection,
-            focus: focus
+            focus: focus,
+            referenceScale: referenceScale
         )
     }
 }

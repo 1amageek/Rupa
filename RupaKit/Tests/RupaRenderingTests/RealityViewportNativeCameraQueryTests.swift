@@ -227,6 +227,30 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
             )
         }
 
+        // A resolved camera must project the same world point even when the
+        // next geometry frame changes its fit bounds and clipping extent.
+        let stableCamera = ViewportCamera(zoom: 0.6,
+            projection: perspective ? .standardPerspective : .parallel,
+            focus: layout.focus, referenceScale: layout.scale / 0.6)
+        let changedLayout = ViewportLayout(
+            modelBounds: CGRect(x: 90, y: 5, width: 30, height: 50), size: size,
+            camera: stableCamera, basis: .axisFront(.z), verticalBounds: -50...0)
+        controller.rootView = RealityViewportView(
+            viewport: viewport, viewportRevision: 2, displayMode: .solid,
+            shading: .init(style: .flat), materialColors: [:], layout: changedLayout,
+            interaction: interaction, sectionPlane: nil,
+            retainedSide: .front, sectionTolerance: 0,
+            onUpdateResult: { reportedError = $0 }
+        ).frame(width: size.width, height: size.height)
+        let changedDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !viewport.isCameraReady(revision: 2), ContinuousClock.now < changedDeadline {
+            controller.view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(viewport.isCameraReady(revision: 2))
+        let unchanged = try viewport.projectWithinDepthRange(anchor, revision: 2)
+        #expect(hypot(unchanged.x - projected.x, unchanged.y - projected.y) < 0.02)
+
         window.contentViewController = nil
         window.close()
         let unmountDeadline = ContinuousClock.now.advanced(by: .seconds(5))

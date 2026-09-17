@@ -5,6 +5,56 @@ import RupaGeometry
 import Testing
 @testable import RupaRendering
 
+@MainActor
+@Test
+func viewportModelChangesPreserveCameraProjectionAndExplicitFitStillWorks() throws {
+    for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
+        let control = ViewportControlSession(camera: .init(projection: projection))
+        let mount = ViewportInstanceID()
+        _ = control.mount(viewportID: mount)
+        let initial = try viewportContractContext(mount: mount)
+        control.updateContext(initial)
+        let camera = control.camera
+        func layout(_ context: ViewportControlMountContext) -> ViewportLayout {
+            ViewportLayout(modelBounds: context.modelBounds, size: context.viewportSize,
+                camera: control.camera, basis: control.basis,
+                maximumZoom: context.maximumZoom(for: control.basis, camera: control.camera),
+                verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets)
+        }
+        let original = layout(initial)
+        let points: [Point3D] = [.origin, .init(x: 0.1, y: 0.2, z: -0.3)]
+        for bounds in [CGRect(x: 90, y: 90, width: 20, height: 30),
+                       CGRect(x: -2, y: -1, width: 0.5, height: 0.7), initial.modelBounds] {
+            let context = ViewportControlMountContext(viewportID: mount,
+                viewportSize: initial.viewportSize, fittingInsets: initial.fittingInsets,
+                modelBounds: bounds, verticalBounds: -50...100, ruler: initial.ruler,
+                sceneBounds: nil, selectedBounds: nil)
+            control.updateContext(context)
+            #expect(control.camera == camera)
+            #expect(layout(context).scale == original.scale)
+            for point in points {
+                let before = original.project(point), after = layout(context).project(point)
+                #expect(hypot(before.x - after.x, before.y - after.y) < 1e-7)
+            }
+        }
+        control.updateContext(initial)
+        _ = try control.perform(.fitVisible)
+        #expect(control.camera != camera)
+        let fitted = layout(initial)
+        for x in [-1.0, 1.0] { for y in [-1.0, 1.0] { for z in [-1.0, 1.0] {
+            #expect(initial.fittingInsets.fittingRect(in: initial.viewportSize)
+                .insetBy(dx: -1e-6, dy: -1e-6).contains(fitted.project(.init(x: x, y: y, z: z))))
+        } } }
+        for invalid: CGFloat in [0, -1, .nan, .infinity] {
+            let saved = try control.snapshot()
+            #expect(throws: ViewportControlError.self) {
+                try control.applyPresentationState(camera: .init(referenceScale: invalid), basis: control.basis)
+            }
+            #expect(try control.snapshot() == saved)
+        }
+    }
+}
+
 @Test
 func viewportFitContainsOffsetBoundsInsideTheActualChromeInsets() throws {
     for basis in [ViewportProjectionBasis.isometric, .axisFront(.z), .orbit(yaw: -0.4, elevation: 0.7)] {
@@ -135,7 +185,8 @@ func viewportControlUsesOneCameraForPresentationChangesAndCommands() throws {
     let mode = try control.perform(.setDisplayMode(.normals))
     #expect(mode.camera == zoomed.camera)
     let reset = try control.perform(.resetCamera)
-    #expect(reset.camera == ViewportCamera(focus: .origin))
+    #expect(reset.camera == ViewportCamera(focus: .origin, referenceScale: control.camera.referenceScale))
+    #expect(reset.camera.referenceScale != nil)
     #expect(reset.basis == .axisFront(.z))
     #expect(reset.displayMode == .normals)
 
@@ -145,15 +196,11 @@ func viewportControlUsesOneCameraForPresentationChangesAndCommands() throws {
     let layout = ViewportLayout(
         modelBounds: context.modelBounds, size: context.viewportSize,
         camera: turned.camera, basis: turned.basis,
-        maximumZoom: context.maximumZoom(for: turned.basis),
+        maximumZoom: context.maximumZoom(for: turned.basis, camera: turned.camera),
         verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets
     )
     #expect(turned.camera.zoom <= layout.maximumZoom)
-    let identity = ViewportLayout(
-        modelBounds: context.modelBounds, size: context.viewportSize, basis: turned.basis,
-        verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets
-    )
-    #expect(abs(layout.scale / identity.scale - turned.camera.zoom) < 1e-7)
+    #expect(abs(layout.scale / (try #require(turned.camera.referenceScale)) - turned.camera.zoom) < 1e-7)
 }
 
 @MainActor

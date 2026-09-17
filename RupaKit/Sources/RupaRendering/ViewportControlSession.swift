@@ -321,7 +321,7 @@ public final class ViewportControlSession {
                 throw ViewportControlError.nonFiniteInput
             }
             nextCamera.zoom = zoom
-            nextCamera = nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis))
+            nextCamera = nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis, camera: nextCamera))
             if let anchor, let anchorWorld {
                 guard let projected = layout(camera: nextCamera, basis: nextBasis, context: context)
                     .projectedPoint(anchorWorld)?.point else {
@@ -372,7 +372,8 @@ public final class ViewportControlSession {
               nextBasis.zDirection.dy.isFinite else {
             throw ViewportControlError.nonFiniteInput
         }
-        nextCamera = nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis))
+        nextCamera = try centeredCamera(nextCamera, basis: nextBasis, context: context)
+        nextCamera = nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis, camera: nextCamera))
         try validateProjection(camera: nextCamera, basis: nextBasis, context: context)
 
         let changed = nextCamera != camera
@@ -410,11 +411,12 @@ public final class ViewportControlSession {
             return
         }
         self.context = context
-        camera = camera.clamped(maximumZoom: context.maximumZoom(for: basis))
-        if camera.focus == nil {
+        camera = camera.clamped(maximumZoom: context.maximumZoom(for: basis, camera: camera))
+        if camera.focus == nil || camera.referenceScale == nil {
             let initialLayout = layout(camera: camera, basis: basis, context: context)
             if let focus = initialLayout.worldPointOnFocusPlane(for: initialLayout.fittingCenter), focus.isFinite {
                 camera.focus = focus
+                camera.referenceScale = initialLayout.scale / camera.zoom
                 camera.pan = .zero
             }
         }
@@ -445,7 +447,7 @@ public final class ViewportControlSession {
             throw ViewportControlError.nonFiniteInput
         }
         let nextCamera = try centeredCamera(
-            nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis)),
+            nextCamera.clamped(maximumZoom: context.maximumZoom(for: nextBasis, camera: nextCamera)),
             basis: nextBasis, context: context
         )
         try validateProjection(camera: nextCamera, basis: nextBasis, context: context)
@@ -527,7 +529,7 @@ public final class ViewportControlSession {
     ) -> ViewportLayout {
         ViewportLayout(
             modelBounds: context.modelBounds, size: context.viewportSize,
-            camera: camera, basis: basis, maximumZoom: context.maximumZoom(for: basis),
+            camera: camera, basis: basis, maximumZoom: context.maximumZoom(for: basis, camera: camera),
             verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets
         )
     }
@@ -536,13 +538,17 @@ public final class ViewportControlSession {
         _ camera: ViewportCamera, basis: ViewportProjectionBasis,
         context: ViewportControlMountContext
     ) throws -> ViewportCamera {
-        guard camera.focus?.isFinite != false else { throw ViewportControlError.nonFiniteInput }
+        guard camera.focus?.isFinite != false,
+              camera.referenceScale.map({ $0.isFinite && $0 > 0 }) != false else {
+            throw ViewportControlError.nonFiniteInput
+        }
         let layout = layout(camera: camera, basis: basis, context: context)
         guard let focus = layout.worldPointOnFocusPlane(for: layout.fittingCenter), focus.isFinite else {
             throw ViewportControlError.nonFiniteInput
         }
         var result = camera
         result.focus = camera.pan == .zero ? layout.focus : focus
+        result.referenceScale = camera.referenceScale ?? layout.scale / camera.zoom
         result.pan = .zero
         return result
     }
@@ -555,7 +561,7 @@ public final class ViewportControlSession {
         let newLayout = layout(camera: camera, basis: newBasis, context: context)
         var result = camera
         result.zoom *= oldLayout.scale / newLayout.scale
-        return result.clamped(maximumZoom: context.maximumZoom(for: newBasis))
+        return result.clamped(maximumZoom: context.maximumZoom(for: newBasis, camera: result))
     }
 
     private func validateProjection(
@@ -564,7 +570,7 @@ public final class ViewportControlSession {
     ) throws {
         let layout = ViewportLayout(
             modelBounds: context.modelBounds, size: context.viewportSize,
-            camera: camera, basis: basis, maximumZoom: context.maximumZoom(for: basis),
+            camera: camera, basis: basis, maximumZoom: context.maximumZoom(for: basis, camera: camera),
             verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets
         )
         // The shared camera must remain representable by the Metal clip uniforms.
@@ -590,12 +596,12 @@ struct ViewportControlMountContext: Equatable {
     let sceneBounds: GeometryBounds3D?
     let selectedBounds: GeometryBounds3D?
 
-    func maximumZoom(for basis: ViewportProjectionBasis) -> CGFloat {
+    func maximumZoom(for basis: ViewportProjectionBasis, camera: ViewportCamera = .identity) -> CGFloat {
         let identityLayout = ViewportLayout(
             modelBounds: modelBounds, size: viewportSize, basis: basis,
             verticalBounds: verticalBounds, fittingInsets: fittingInsets
         )
-        return ViewportCameraZoomPolicy.maximumZoom(ruler: ruler, identityScale: identityLayout.scale)
+        return ViewportCameraZoomPolicy.maximumZoom(ruler: ruler, identityScale: camera.referenceScale ?? identityLayout.scale)
     }
 }
 

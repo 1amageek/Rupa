@@ -2426,6 +2426,11 @@ claims that RealityKit has completed a GPU frame.
 
 `ViewportControlSession` owns camera, projection, display mode, shading,
 mount identity, and its monotonic revision for one document/window lifetime.
+It resolves the optional focus and reference scale together at initial mount
+or an explicit framing request. Geometry-context updates never reframe an
+already resolved camera. Zoom limits use the retained reference scale, not the
+changing scene fit. The projection contract is owned by
+[RupaViewportScene](../RupaViewportScene/DESIGN.md#world-space-navigation-focus).
 The derived presentation cache owns the active task, newest value-only pending
 request, engine-neutral descriptors, and matching failure. It retains at most
 one current native owner and one candidate being prepared. `RealityViewport`
