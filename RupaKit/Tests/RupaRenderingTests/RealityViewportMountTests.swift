@@ -701,12 +701,29 @@ struct RealityViewportMountTests {
         #expect(viewport.gridScaleReadout != nil)
         #expect(nativeGridModel()?.model?.mesh === initialGridMesh)
 
-        // A hover-only candidate keeps the same camera. Observe native engine
-        // frames, not just eventual readiness, to detect a blank replacement.
+        // Geometry replacement must retain the resolved camera and native tick
+        // glyphs. Observe engine frames, not merely eventual readiness.
         let replacement = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: viewport)
         let scene = try #require(viewport.root.scene)
+        let textQuery = EntityQuery(where: .has(TextComponent.self))
+        let glyphDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        var originalLabels: [Entity] = []
+        while ContinuousClock.now < glyphDeadline {
+            originalLabels = Array(scene.performQuery(textQuery)).filter { $0.isEnabledInHierarchy }
+            if !originalLabels.isEmpty && originalLabels.allSatisfy({ $0.visualBounds(relativeTo: $0).extents.y > 0 }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(!originalLabels.isEmpty)
+        try #require(originalLabels.allSatisfy { $0.visualBounds(relativeTo: $0).extents.y > 0 })
+        let originalParents = originalLabels.map { $0.parent }
+        let priorLayout = layout(camera: camera)
+        camera.focus = priorLayout.focus
+        camera.referenceScale = priorLayout.scale / camera.zoom
+        let changedLayout = ViewportLayout(modelBounds: CGRect(x: -10, y: -10, width: 20, height: 20),
+            size: size, camera: camera, basis: basis, verticalBounds: -10...10)
         var observedFrames = 0
         var blankFrames = 0
+        var blankTextFrames = 0
         let subscription = scene.subscribe(to: SceneEvents.Update.self) { _ in
             observedFrames += 1
             let previousVisible = viewport.project(.origin) != nil && viewport.gridScaleReadout != nil
@@ -714,9 +731,12 @@ struct RealityViewportMountTests {
             if !previousVisible && !replacementVisible {
                 blankFrames += 1
             }
+            if !originalLabels.contains(where: { $0.isEnabledInHierarchy && $0.visualBounds(relativeTo: $0).extents.y > 0 }) {
+                blankTextFrames += 1
+            }
         }
         defer { subscription.cancel() }
-        controller.rootView = view(layout(camera: camera), revision: 2, renderer: replacement)
+        controller.rootView = view(changedLayout, revision: 2, renderer: replacement)
         let replacementDeadline = ContinuousClock.now.advanced(by: .seconds(5))
         while ContinuousClock.now < replacementDeadline {
             controller.view.layoutSubtreeIfNeeded()
@@ -726,6 +746,11 @@ struct RealityViewportMountTests {
         }
         #expect(observedFrames >= 3)
         #expect(blankFrames == 0, "An unchanged-camera overlay replacement blanked a native engine frame.")
+        #expect(blankTextFrames == 0, "A model replacement withdrew already drawn tick labels.")
+        for (label, parent) in zip(originalLabels, originalParents) {
+            #expect(label.parent === parent)
+            #expect(label.visualBounds(relativeTo: label).extents.y > 0)
+        }
         #expect(replacement.gridScaleReadout != nil)
         let replacementProjection = try #require(replacement.project(.origin))
         #expect(hypot(replacementProjection.x - expectedUpdatedProjection.x,

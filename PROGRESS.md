@@ -1,4 +1,6 @@
 # Progress
+- [x] CANVAS-STABLE-1 Retained camera scale independent of geometry; focused control and mounted native projection passed. Commit 33b4a3861. `depends:none` `parallel:none`
+- [x] CANVAS-STABLE-2 Stable native tick text and host-owned label root; 6 mount/GPU runs and 5 resource/remount/lifecycle runs passed, including zero blank native frames during geometry replacement. `depends:CANVAS-STABLE-1` `parallel:none`
 
 - [x] CORNER-1 User confirmed exact CAD Corner and display-only Corner Sides. Preserve source authority, dimensions, placement, radius-zero reversibility, persistence and Undo. `depends:none` `parallel:none`
 - [x] CORNER-K1 Exact all-edge box fillet, volume, bounds, mesh, persistence and invalid-radius checks passed; swift-CAD `bf27eef`. `depends:CORNER-1` `parallel:none`

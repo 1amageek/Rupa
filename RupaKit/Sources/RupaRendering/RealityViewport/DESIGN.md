@@ -87,6 +87,20 @@ detached preparation tasks.
 
 ### Mounted camera readiness
 
+Grid tick text Entities are keyed by their displayed text, with distinct slots
+for repeated strings. Placement changes never replace an unchanged text
+component. A frame keeps only its current label set; disappearing labels are
+removed, so repeated pan/zoom cannot grow a text cache. Hide retains the current
+set until replacement or owner release. A replacement mount transfers this
+set from the retiring frame before detaching it, not during asynchronous
+preparation. The host owns a persistent label root beside the replaceable
+geometry root: unchanged text never leaves and re-enters its native scene on
+model replacement. The root is removed on host detach; native-camera readiness
+still gates its visibility. The next admitted update matches surviving strings and replaces
+only new text; cancellation before mounting cannot mutate the visible owner.
+Native tests verify unchanged text/Entity identity on pan, hide/show and frame
+handoff in both lens modes, and preserve the complete prior grid on failure.
+
 `RealityView`'s make/state-update closure installs the camera and appearance;
 it does not guarantee that native screen projection is already available.
 The existing `RealityViewportView.Mount` retains one `SceneEvents.Update`

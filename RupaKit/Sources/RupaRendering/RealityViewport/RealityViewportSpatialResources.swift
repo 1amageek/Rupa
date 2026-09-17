@@ -24,7 +24,8 @@ final class RealityViewportSpatialResources {
     private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
     private var grid: (entity: ModelEntity, mesh: LowLevelMesh)?
-    private var gridLabels: [Entity] = []
+    private var gridLabels: [(entity: Entity, text: String)] = []
+    private var gridLabelRoot: Entity?
     private var gridPlacement: ModelEntity?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
     struct MarkerCollision {
@@ -1357,9 +1358,36 @@ final class RealityViewportSpatialResources {
         grid?.entity.isEnabled = false
         gridPlacement?.isEnabled = false
         for label in gridLabels {
-            label.components.remove(TextComponent.self)
-            label.isEnabled = false
+            label.entity.isEnabled = false
         }
+    }
+
+    /// Transfers ownership only at mount handoff, never during preparation.
+    func takeGridLabels(from previous: RealityViewportSpatialResources) {
+        guard grid != nil else {
+            previous.clearGridLabels()
+            return
+        }
+        guard gridLabels.isEmpty else { return }
+        gridLabels = previous.gridLabels
+        previous.gridLabels = []
+        let parent = gridLabelRoot ?? root
+        for label in gridLabels where label.entity.parent !== parent { parent.addChild(label.entity) }
+    }
+
+    func clearGridLabels() {
+        for label in gridLabels { label.entity.removeFromParent() }
+        gridLabels = []
+    }
+
+    func attachGridLabels(to parent: Entity) {
+        guard gridLabelRoot !== parent else { return }
+        gridLabelRoot = parent
+        for label in gridLabels where label.entity.parent !== parent { parent.addChild(label.entity) }
+    }
+
+    func setGridLabelsEnabled(_ enabled: Bool) {
+        gridLabelRoot?.isEnabled = enabled
     }
 
     private func disableAxes() {
@@ -1575,7 +1603,7 @@ final class RealityViewportSpatialResources {
         let placementTransform = try batch.gridPlacement?.transform(
             minorStepMeters: frame.minorStepMeters, renderOrigin: batch.renderOrigin
         )
-        let slotCount = max(gridLabels.count, frame.screenLabels.count)
+        let slotCount = frame.screenLabels.count
         guard slotCount <= batch.limits.maxItemCount - preparedItemCount else {
             throw RealityViewportSpatialBatch.exhausted()
         }
@@ -1589,10 +1617,10 @@ final class RealityViewportSpatialResources {
             }
             byteCount = sum.partialValue
         }
-        try charge(slotCount, MemoryLayout<Entity>.stride + MemoryLayout<TextComponent>.stride)
+        try charge(slotCount, MemoryLayout<(Entity, String)>.stride + MemoryLayout<TextComponent>.stride)
         try charge(frame.worldLines.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.WorldLine>.stride + 2 * MemoryLayout<SIMD3<Float>>.stride)
         try charge(frame.screenLabels.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.ScreenLabel>.stride)
-        try charge(frame.screenLabels.count, MemoryLayout<(TextComponent, SIMD3<Float>)>.stride)
+        try charge(frame.screenLabels.count, MemoryLayout<(Entity, String, SIMD3<Float>)>.stride + MemoryLayout<Int>.stride)
         for label in frame.screenLabels {
             guard !label.text.isEmpty, label.position.x.isFinite, label.position.y.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("Grid label has invalid text or placement.")
@@ -1627,33 +1655,39 @@ final class RealityViewportSpatialResources {
             throw RealityViewportSpatialBatch.invalid("Grid text has no finite native point scale.")
         }
         let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-        var text: [(TextComponent, SIMD3<Float>)] = []
+        var text: [(Entity, String, SIMD3<Float>)] = []
         text.reserveCapacity(frame.screenLabels.count)
+        var used = Set<Int>()
         for label in frame.screenLabels {
-            let attributed = NSAttributedString(string: label.text, attributes: [
-                .font: font, .foregroundColor: NSColor.white.withAlphaComponent(0.42)
-            ])
-            let size = attributed.size()
-            guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {
-                throw RealityViewportSpatialBatch.invalid("Native grid text has invalid measured bounds.")
+            let entity: Entity
+            // ponytail: linear matching is bounded by the admitted grid label
+            // count; surviving text never triggers native glyph regeneration.
+            if let index = gridLabels.indices.first(where: { !used.contains($0) && gridLabels[$0].text == label.text }) {
+                used.insert(index)
+                entity = gridLabels[index].entity
+            } else {
+                let attributed = NSAttributedString(string: label.text, attributes: [
+                    .font: font, .foregroundColor: NSColor.white.withAlphaComponent(0.42)
+                ])
+                let size = attributed.size()
+                guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {
+                    throw RealityViewportSpatialBatch.invalid("Native grid text has invalid measured bounds.")
+                }
+                var component = TextComponent()
+                component.size = CGSize(width: ceil(size.width) + 2, height: ceil(size.height) + 2)
+                component.text = AttributedString(attributed)
+                entity = Entity()
+                entity.components.set(component)
             }
-            var component = TextComponent()
-            component.size = CGSize(width: ceil(size.width) + 2, height: ceil(size.height) + 2)
-            component.text = AttributedString(attributed)
             let point = projection.point(at: label.position, depth: projection.annotationDepth)
             guard point.x.isFinite, point.y.isFinite, point.z.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("Native grid label position exceeds precision.")
             }
-            text.append((component, point))
+            text.append((entity, label.text, point))
         }
         // Every fallible conversion and aggregate admission finished above. The
         // following synchronous publication changes the complete grid together.
-        while gridLabels.count < slotCount {
-            let label = Entity()
-            label.isEnabled = false
-            root.addChild(label)
-            gridLabels.append(label)
-        }
+        for index in gridLabels.indices where !used.contains(index) { gridLabels[index].entity.removeFromParent() }
         grid.mesh.withUnsafeMutableBytes(bufferIndex: 0) { destination in
             vertices.withUnsafeBytes { source in destination.copyMemory(from: source) }
         }
@@ -1663,17 +1697,11 @@ final class RealityViewportSpatialResources {
             gridPlacement?.transform = Transform(matrix: placementTransform)
             gridPlacement?.isEnabled = true
         }
-        for (index, label) in gridLabels.enumerated() {
-            guard text.indices.contains(index) else {
-                label.components.remove(TextComponent.self)
-                label.isEnabled = false
-                continue
-            }
-            let (component, position) = text[index]
-            let existing = label.components[TextComponent.self]
-            if existing?.text != component.text || existing?.size != component.size {
-                label.components.set(component)
-            }
+        gridLabels.removeAll(keepingCapacity: true)
+        for (label, value, position) in text {
+            let parent = gridLabelRoot ?? root
+            if label.parent !== parent { parent.addChild(label) }
+            gridLabels.append((label, value))
             label.position = position
             label.orientation = simd_quatf(projection.worldFromCamera)
             // TextComponent's native plane uses typographic points (1/72 inch).

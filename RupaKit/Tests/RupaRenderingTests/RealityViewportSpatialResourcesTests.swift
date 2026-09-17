@@ -916,6 +916,10 @@ struct RealityViewportSpatialResourcesTests {
         while capture.content == nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
         let content = try #require(capture.content)
         let ruler = RulerConfiguration(displayUnit: .meter, minorTickMeters: 0.1, majorTickMeters: 1, visibleSpanMeters: 100)
+        let labelRoot = Entity()
+        content.add(labelRoot)
+        prepared.attachGridLabels(to: labelRoot)
+        defer { content.remove(labelRoot) }
         var originalLabels: [Entity] = []
         var heights: [CGFloat] = []
         var placementWidths: [Float] = []
@@ -942,11 +946,24 @@ struct RealityViewportSpatialResourcesTests {
             #expect(abs(placementEntity.scale.y - 0.7) < 1e-6)
             #expect(simd_distance(placementEntity.position, [0.2, -0.3, 0]) < 1e-6)
             placementWidths.append(placementEntity.scale.x)
-            let labels = prepared.root.children.filter { $0.components[TextComponent.self] != nil && $0.isEnabled }
+            let labels = labelRoot.children.filter { $0.components[TextComponent.self] != nil && $0.isEnabled }
             try #require(!labels.isEmpty)
             if frame == 0 { originalLabels = labels }
             else {
-                for (a, b) in zip(originalLabels, labels) { #expect(a === b) }
+                let strings = Set(originalLabels.compactMap { $0.components[TextComponent.self]?.text })
+                var survivorCount = 0
+                for string in strings {
+                    let before = originalLabels.filter { $0.components[TextComponent.self]?.text == string }
+                    let after = labels.filter { $0.components[TextComponent.self]?.text == string }
+                    let shared = after.filter { candidate in before.contains { $0 === candidate } }
+                    #expect(shared.count == min(before.count, after.count))
+                    survivorCount += shared.count
+                    for entity in shared {
+                        // No wait for native text regeneration on surviving ticks.
+                        #expect(entity.visualBounds(relativeTo: entity).extents.y > 0)
+                    }
+                }
+                #expect(survivorCount > 0)
             }
             try await Task.sleep(for: .milliseconds(150))
             let label = try #require(labels.first)
@@ -970,9 +987,31 @@ struct RealityViewportSpatialResourcesTests {
         #expect(prepared.root.children.map(\.transform) == transforms)
         #expect(grid.isEnabled && grid.model?.mesh === mesh)
         #expect(placementEntity.isEnabled && placementEntity.model?.mesh === placementMesh)
+        let retainedLabels = labelRoot.children.filter { $0.components[TextComponent.self] != nil && $0.isEnabled }
         #expect(try prepared.updateCamera(camera: camera, content: content,
             gridRuler: nil, gridBasis: .axisFront(.z), gridSize: CGSize(width: 800, height: 600)) == nil)
         #expect(prepared.scaleReadout == nil)
+        for label in retainedLabels {
+            #expect(label.components[TextComponent.self] != nil && !label.isEnabled)
+        }
+        #expect(try prepared.updateCamera(camera: camera, content: content,
+            gridRuler: ruler, gridBasis: .axisFront(.z), gridSize: CGSize(width: 800, height: 600)) == nil)
+        let replacement = try await RealityViewportSpatialResources.prepare(batch: batch)
+        replacement.attachGridLabels(to: labelRoot)
+        replacement.takeGridLabels(from: prepared)
+        content.add(replacement.root)
+        defer { content.remove(replacement.root) }
+        #expect(try replacement.updateCamera(camera: camera, content: content,
+            gridRuler: ruler, gridBasis: .axisFront(.z), gridSize: CGSize(width: 800, height: 600)) == nil)
+        let transferred = labelRoot.children.filter { $0.components[TextComponent.self] != nil && $0.isEnabled }
+        #expect(Set(transferred.map(ObjectIdentifier.init)) == Set(retainedLabels.map(ObjectIdentifier.init)))
+        #expect(prepared.root.children.allSatisfy { $0.components[TextComponent.self] == nil })
+        for label in transferred { #expect(label.visualBounds(relativeTo: label).extents.y > 0) }
+        let withoutGrid = try await RealityViewportSpatialResources.prepare(batch:
+            .init(renderOrigin: .origin, retainedSurfaceByteCount: 0))
+        withoutGrid.attachGridLabels(to: labelRoot)
+        withoutGrid.takeGridLabels(from: replacement)
+        #expect(labelRoot.children.isEmpty)
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])

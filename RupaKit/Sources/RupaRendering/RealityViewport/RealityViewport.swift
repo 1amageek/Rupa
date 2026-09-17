@@ -935,6 +935,19 @@ final class RealityViewport {
         cameraCalibration = calibration
     }
 
+    func takeGridLabels(from previous: RealityViewport) {
+        guard let previous = previous.spatialResources else { return }
+        if let spatialResources {
+            spatialResources.takeGridLabels(from: previous)
+        } else {
+            previous.clearGridLabels()
+        }
+    }
+
+    func attachGridLabels(to root: Entity) {
+        spatialResources?.attachGridLabels(to: root)
+    }
+
     func unbind(owner: ObjectIdentifier? = nil) {
         guard bindingOwner == owner else { return }
         // A RealityView root has no Entity parent. Withdraw it from its actual
@@ -974,6 +987,7 @@ final class RealityViewport {
     func setPresentationEnabled(_ enabled: Bool) {
         clipper.isEnabled = enabled
         spatialResources?.root.isEnabled = enabled
+        spatialResources?.setGridLabelsEnabled(enabled)
     }
 
     func triangle(for hit: CollisionCastHit) -> MeshSourcePresentationTriangle? {

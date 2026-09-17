@@ -64,8 +64,12 @@ struct RealityViewportView: View {
             renderOrigin: viewport.renderOrigin
         ) == true
         if mount.current !== viewport {
-            mount.detach()
-            for entity in content.entities { content.remove(entity) }
+            viewport.attachGridLabels(to: mount.gridLabelRoot)
+            if let previous = mount.current { viewport.takeGridLabels(from: previous) }
+            mount.detach(preservingGridLabels: true)
+            for entity in content.entities where entity !== mount.gridLabelRoot { content.remove(entity) }
+            if !content.entities.contains(where: { $0 === mount.gridLabelRoot }) { content.add(mount.gridLabelRoot) }
+            mount.gridLabelContent = content
             content.add(viewport.root)
             mount.current = viewport
         }
@@ -109,6 +113,8 @@ struct RealityViewportView: View {
     @MainActor
     private final class Mount {
         var current: RealityViewport?
+        let gridLabelRoot = Entity()
+        var gridLabelContent: RealityViewCameraContent?
         private var lastError: MeshSourcePresentationRenderError?
         private var lastGridError: MeshSourcePresentationRenderError?
         private var lastGridReadout: ViewportProjectedGrid.ScaleReadout?
@@ -229,12 +235,16 @@ struct RealityViewportView: View {
             }
         }
 
-        func detach() {
+        func detach(preservingGridLabels: Bool = false) {
             frameSubscription?.cancel()
             frameSubscription = nil
             pending = nil
             reportTask?.cancel()
             reportTask = nil
+            if !preservingGridLabels {
+                gridLabelContent?.remove(gridLabelRoot)
+                gridLabelContent = nil
+            }
             // Owner-checked unbind also removes the root. A retiring mount
             // must not remove a root already adopted by its replacement.
             current?.unbind(owner: ObjectIdentifier(self))
