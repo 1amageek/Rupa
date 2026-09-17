@@ -36,8 +36,10 @@ func viewportNativeRegionAxisCommitsAndCancels(projection: ViewportCameraProject
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
 
     // The layout only locates a deterministic pointer fixture. The production

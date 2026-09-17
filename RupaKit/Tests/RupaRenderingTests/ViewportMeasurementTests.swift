@@ -45,8 +45,10 @@ func viewportSurfaceInputUsesNativeFrame(projection: ViewportCameraProjection, m
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     let start = CGPoint(x: 390, y: 280)
     let end = CGPoint(x: 430, y: 300)
@@ -115,8 +117,10 @@ func viewportMeshInputRejectsUnappliedNativeFrame(projection: ViewportCameraProj
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     let point = CGPoint(x: 390, y: 280)
     let deadline = ContinuousClock.now.advanced(by: .seconds(10))
@@ -160,8 +164,10 @@ func viewportCanvasPlaneInputRejectsUnappliedNativeFrame(projection: ViewportCam
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     let point = CGPoint(x: 450, y: 310)
     let deadline = ContinuousClock.now.advanced(by: .seconds(10))
@@ -219,8 +225,10 @@ func viewportMeasurementInputRequiresMatchingNativeFrame(projection: ViewportCam
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     let start = CGPoint(x: 390, y: 280)
     let end = CGPoint(x: 450, y: 300)

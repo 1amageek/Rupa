@@ -637,8 +637,10 @@ struct ViewportSketchTransformLifecycleTests {
             styleMask: [.titled], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { window.contentViewController = nil; window.close() }
 
         let pointer = try makePointer(fixture, control: control, size: size)
@@ -729,9 +731,11 @@ struct ViewportSketchTransformLifecycleTests {
             styleMask: [.titled], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
         controller.view.frame = CGRect(origin: .zero, size: size)
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { window.contentViewController = nil; window.close() }
 
         let pointer = try makePointer(fixture, control: control, size: size)

@@ -9,11 +9,8 @@
   </BuildAction>
   <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.PosixSpawn" shouldUseLaunchSchemeArgsEnv="NO">
     <Testables>
-      <!-- Foreground App tests require a separate, explicitly requested session.
-           Use RupaKit/scripts/test-ui-contracts.sh for routine verification. -->
-      <TestableReference skipped="YES">
-        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="12459AEE2FD133B200034B5E" BuildableName="RupaUITests.xctest" BlueprintName="RupaUITests" ReferencedContainer="container:Rupa.xcodeproj"/>
-      </TestableReference>
+      <!-- UI verification is owned by RupaKit/scripts/test-ui-contracts.sh.
+           The foreground UI automation target has been removed. -->
     </Testables>
   </TestAction>
   <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES">

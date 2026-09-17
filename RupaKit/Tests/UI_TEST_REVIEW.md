@@ -1,39 +1,165 @@
-# UI test review
+# UI verification replacement
 
-## Findings
+## Execution contract
 
-| ID | Evidence | Problem | Resolution |
-|---|---|---|---|
-| UI-T1 | `Rupa/Rupa/RupaUITests/AppOperationCoverageUITests.swift`, `launchApp` | Every test launches and zooms the App, then drives global pointer/keyboard input. | Routine Test selects only non-window package contracts. |
-| UI-T2 | `AppFailureSweepUITests.clearTheScreen` | Repeated activation and optional hiding of unrelated applications commandeer the desktop; cleanup cannot be guaranteed after process termination. | Remove takeover and hiding. Obstructed dedicated-session diagnostics fail without changing other apps. |
-| UI-T3 | `AppUITests.testCanvasSurfaceToolOpensSheetLoftAndRejectsMissingProfiles` | Expects an error after clicking Preview, but production disables Preview and exposes `Modeling.refusal` before execution. | Align the retained diagnostic and verify the production refusal getter without a window. |
-| UI-T4 | `testSelectingObjectShowsViewportAffordance`, Model menu coverage | Presence of a handle or menu item is not proof of the resulting coordinate or geometry. Only Box is committed by the ten-item menu test. | Retain axis/placement, CAD geometry, Mesh preview/commit and atomic Inspector transaction tests in the contract scheme. Do not label these as GUI coverage. |
-| UI-T5 | `WorkspaceCanvasToolbarNativeTests`, `ViewportNativeObjectAffordancePressTests` | Package tests also call `orderFront`; executing a whole package is not inherently non-interfering. | Use an explicit test allowlist, excluding mounted-window tests. |
-| UI-T6 | The contract runner's result bundles, compared with `Test-RupaUIPackageTests-2026.09.17_11-58-24-+0900.xcresult` | xcodebuild can return exit 0 with zero executed tests. Existing isolated tests do pass when their xcresult is inspected, so this is not a general runtime failure. | The new runner rejects zero tests, failures and skips; quiet console output is not evidence of either success or absence of tests. |
+Run `bash scripts/test-ui-contracts.sh` from RupaKit. This is the supported
+UI verification entry point, not the App scheme's empty Test action.
+It runs reviewed identifiers in bounded batches, checks every requested
+identifier in xcresult, and rejects zero results, missing tests, skips and
+failures. Static isolation checks run before compilation.
 
-## Coverage and limits
+```text
+Production view / hidden native host
+    -> hierarchy hit-test -> local NSEvent -> production input -> Workspace
+Production RealityKit scene
+    -> native projection / selection -> Metal texture readback
+Visible App
+    -> focused agent inspection -> manual evidence, never inferred from the above
+```
 
-`scripts/test-ui-contracts.sh` reuses production binding-to-Workspace, draft-to-kernel,
-Mesh preview/commit, stale-preview and affine-transform tests. Rendering's
-`ViewportBodyTransformInputTests` checks named axes, pivots, occurrence identity,
-atomic placement, Undo and preview geometry without mounting a window.
+Native hosts explicitly size their root before attaching it to a never-ordered
+window. A generated input view is not readiness: its expected bounds must be
+established before dispatch. Object-affordance clicks and drags resolve their
+receiver through the actual hosted hierarchy; direct onPick calls are not
+click evidence. Local dispatch does not emulate OS activation or menu tracking.
 
-These checks do not prove that a visible button is reachable, that rendered
-pixels match geometry, or that pointer hit testing reaches the correct native
-handle. Those remain direct inspection tasks; passing contract tests must not
-be reported as complete GUI acceptance. Historical App test results must retain
-their original snapshot and scope.
+The foreground Xcode UI-testing target has been removed, including its build
+phases, product, dependency and scheme reference. The old source directory is
+unbuilt, deprecated archival reference to preserve user edits, not an opt-in
+runner. No legacy test is counted as passing or skipped.
 
-## Execution
+## Findings resolved by the replacement
 
-Verified on macOS 27.0: 29 UI contract tests and 6 rendering contract tests
-passed with no failures or skips. Results are in
-`/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-contracts.8AgfFU/`.
-Parameterized case counts are distinct from these 35 test-function results.
+| Finding | Resolution and proof boundary |
+|---|---|
+| App launches, zooming and global pointer/key automation interrupt work | Retire the foreground target; no automated desktop input |
+| Package membership does not imply non-interference | Remove window ordering from native fixtures; check hidden/non-key state |
+| Button/handle existence is not functional behavior | Keep CAD/Mesh, binding, atomic transaction, stale/cancel and Undo assertions |
+| Direct callbacks bypass native input and occlusion | Object-affordance fixture hits the native hierarchy before local event delivery |
+| Non-visible hosting can leave the root at zero size | Assign the declared native content size before attaching; require input bounds readiness |
+| Retiring RealityKit mount removed a root owned by its successor | Delegate removal exclusively to owner-checked unbind; exercise real SwiftUI identity replacement |
+| Empty-scene test queried after attachment but before camera readiness | Wait for the production cache's hasReadyCamera contract, then assert the truthful empty hit |
+| Inspector test expected 380px user resizing despite MainView's fixed 320px contract | Assert the declared width including divider and clamp after settling; do not change production layout to satisfy the obsolete expectation |
+| A zero-test xcodebuild can exit successfully | Validate exact executed test identifiers, all outcomes and nested parameter results |
+| Old Loft diagnostic expected a post-click error despite pre-refusal | Production refusal tests own the state; manual acceptance owns displayed disabled controls |
 
-From `RupaKit`, run `bash scripts/test-ui-contracts.sh`. The run is bounded
-to 120 seconds per target. No App launch, UI runner, window ordering or system event
-injection is part of this entry point. `scripts/ui-contract-tests.txt` owns the
-reviewed test selection, passed through the existing package schemes using
-explicit command-line test IDs. The shared App scheme skips its foreground UI target;
-this skip is not a passing test result. Run still launches the App intentionally.
+## Coverage owners
+
+These are partial proofs with explicit boundaries, not equivalent replacements
+for every OS-level assertion of the retired tests.
+
+| Key | Automated owner selected by the runner | Remaining manual proof |
+|---|---|---|
+| LAYOUT | WorkspaceCanvasToolbarNativeTests, WorkspaceCanvasOverlayTrailingChromeTests, WorkspaceEditorSplitNativeTests, WorkspaceInspectorNativeLayoutTests | Visible clipping, hover hints, focus and screen composition |
+| CAD | ModelingOperationDraftTests, ModelingAndMeshOperationCoverageTests, ModelingOperationViewContractTests, ModelingPreviewStateTests | Menu -> panel -> Preview/Apply reachability and visible refusal |
+| MESH | MeshOperationDraftTests, ModelingAndMeshOperationCoverageTests | Make Editable confirmation, visible element/domain/operation selection |
+| TRANSFORM | ViewportNativeObjectAffordancePressTests and CAD/Mesh native placement functions, ViewportBodyTransformInputTests, WorkspaceTransformMatrixTests | Visible XYZ colors/labels and cursor feedback agree with the named axis |
+| INPUT | ViewportInputSurfaceTests, ViewportInputSurfaceExclusionTests | OS focus, first click and keyboard shortcut routing |
+| SELECTION | Native object/face/edge/vertex/sketch/region point and rectangle tests | Scope control activation and visible highlight |
+| FRAME | RealityViewportMountTests, native camera/frame/section tests, spatial resources and collision tests | Visible App frame is the same frame; no compositing artifacts |
+| INSPECTOR | WorkspaceInspectorPropertyBatchTests, WorkspaceTransformMatrixTests, native layout tests | Picker/text-field activation, keyboard editing, command-Z routing |
+| PLANES | WorkspaceConstructionPlaneEditBuilderTests, WorkspaceConstructionPlaneViewportDragCommitServiceTests, native plane marker/axis tests | Plane rail and inspector activation |
+| VIEWS | WorkspaceSavedViewBuilderTests | Create/apply/update/remove buttons and persistence through visible App |
+| MEASURE | ViewportMeasurementTests, WorkspaceMeasurementPresentationGateTests | Measure tool activation and displayed units/readout |
+| LOG | WorkspaceFailureLogTests, ModelingOperationViewContractTests | Logs visibility, disabled guidance and Validate's displayed diagnostics |
+| MANUAL | No complete automatic replacement claimed | Perform the scenario in an isolated test project; record result and errors |
+
+## Retired scenario ledger
+
+Every row retains its original scenario name. The automated column is only a
+related lower-layer proof. **Every row still requires manual acceptance for its
+visible/OS interaction portion; no row is implicitly green.** Work on a disposable
+project, record the source revision, operation, observed state/geometry, Undo
+where relevant, and any failure log entry. Inspect only the named workflow;
+do not run a background sweep or hide unrelated apps. Save/reopen uses a unique
+temporary .rupa file, never the user's current project.
+
+| Retired scenario | Automated subset |
+|---|---|
+| `AppUITestsLaunchTests.testLaunch` | MANUAL |
+| `AppChromeGeometryProbeUITests.testWorkspaceGeometryBeforeAndAfterTheLogsPaneOpens` | LAYOUT, FRAME |
+| `AppChromeGeometryProbeUITests.testExpandedUtilityRailBeforeAndAfterTheLogsPaneOpens` | LAYOUT, FRAME |
+| `AppUITests.testExample` | MANUAL |
+| `AppUITests.testCanvasShowsCoordinateGridAndInPlaneRuler` | FRAME |
+| `AppUITests.testNativeViewportMountsEmptyAndPopulatedFramesAcrossProjectionChanges` | FRAME |
+| `AppUITests.testWorkspaceChromeExposesSnapPlaneAndContextControls` | LAYOUT |
+| `AppUITests.testWorkspaceSavedViewRailCreatesAndExposesViewActions` | VIEWS |
+| `AppUITests.testFaceSelectionModeShowsSubobjectTarget` | SELECTION |
+| `AppUITests.testEdgeSelectionModeShowsChamferCommand` | SELECTION |
+| `AppUITests.testCanvasToolHoverShowsNamesWithoutChangingButtonBounds` | LAYOUT, FRAME |
+| `AppUITests.testLogsVisibilityRemainsUserControlledAcrossFailureAndSourceCommit` | LOG |
+| `AppUITests.testCanvasFrameAndAxisTriadRemainStableAcrossEmptyBoxAndHoverUpdates` | LAYOUT, FRAME |
+| `AppUITests.testCanvasSurfaceToolOpensSheetLoftAndRejectsMissingProfiles` | CAD, LOG |
+| `AppUITests.testActiveCustomConstructionPlaneLaunchFixtureSupportsCanvasCreation` | PLANES |
+| `AppUITests.testSelectedCustomConstructionPlaneLaunchFixtureExposesInspectorEditingControls` | PLANES |
+| `AppUITests.testSelectedCustomConstructionPlaneViewportHandlesCommitDragEdits` | PLANES |
+| `AppUITests.testSelectedCustomConstructionPlaneLaunchFixtureSupportsPlaneRailRename` | PLANES |
+| `AppUITests.testFaceSelectionCreatesSavedConstructionPlaneFromContextPanel` | PLANES |
+| `AppUITests.testSelectingObjectShowsViewportAffordance` | TRANSFORM |
+| `AppUITests.testLaunchPerformance` | MANUAL |
+| `AppOperationCoverageUITests.testModelMenuPublishesEveryDraftAndCommitsABoxFromTheToolbar` | CAD, LOG |
+| `AppOperationCoverageUITests.testInspectorPropertyPickersPublishAndUndoTheirValues` | INSPECTOR |
+| `AppOperationCoverageUITests.testAnalysisAndSceneRailSectionsPublishControlsAndReadouts` | MANUAL |
+| `AppOperationCoverageUITests.testMeasureToolReportsDistanceBetweenTwoPointsOnABody` | MEASURE |
+| `AppOperationCoverageUITests.testMeshEditingPanelCommitsAFaceDeletionFromTheCADRoute` | MESH |
+| `AppOperationCoverageUITests.testAPanelRefusalIsReadBeforeThePressAndRecordsNothing` | CAD, LOG |
+| `AppOperationCoverageUITests.testValidateReportsTheEvaluationItRanAndRecordsNoFailure` | LOG |
+| `AppOperationCoverageUITests.testInspectorToggleRelaysTheSplitWithoutDroppingTheCanvas` | LAYOUT, FRAME |
+| `AppFailureSweepUITests.testCanvasToolsOnTheLaunchDocument` | INPUT, CAD |
+| `AppFailureSweepUITests.testUtilityRailOnTheLaunchDocument` | LAYOUT |
+| `AppFailureSweepUITests.testSelectionScopesOnTheLaunchDocument` | SELECTION |
+| `AppFailureSweepUITests.testPlaneModesOnTheLaunchDocument` | PLANES |
+| `AppFailureSweepUITests.testViewportControlsOnTheLaunchDocument` | FRAME |
+| `AppFailureSweepUITests.testToolbarCommandsOnTheLaunchDocument` | INPUT, LOG |
+| `AppFailureSweepUITests.testModelingDraftsOnTheLaunchDocument` | CAD, LOG |
+| `AppFailureSweepUITests.testSidebarOnTheLaunchDocument` | LAYOUT |
+| `AppFailureSweepUITests.testEditMenuOnTheLaunchDocument` | INPUT, LOG |
+| `AppFailureSweepUITests.testCreatingAndSelectingABody` | SELECTION |
+| `AppFailureSweepUITests.testCanvasToolsWithABodySelected` | INPUT, CAD |
+| `AppFailureSweepUITests.testSelectionScopesWithABodySelected` | SELECTION |
+| `AppFailureSweepUITests.testPlaneModesWithABodySelected` | PLANES |
+| `AppFailureSweepUITests.testViewportControlsWithABodySelected` | FRAME |
+| `AppFailureSweepUITests.testToolbarCommandsWithABodySelected` | INPUT, LOG |
+| `AppFailureSweepUITests.testModelingDraftsWithABodySelected` | CAD, LOG |
+| `AppFailureSweepUITests.testEditMenuWithABodySelected` | INPUT, LOG |
+| `AppProjectRoundTripUITests.testProjectSurvivesCreateSelectEditSaveAndReload` | MANUAL |
+
+## Acceptance order and failure policy
+
+1. Run hidden UI, input, geometry/Undo and actual Metal checks.
+2. Inspect visible XYZ translation, rotation, scaling, selection and Inspector
+   editing first; then panel/rail navigation, refusal/Logs and save/reopen.
+3. A failing automated assertion remains a failure. Do not disable it, accept a
+   mock answer or restore window ordering to get a green result.
+4. Keep manual status separate. A lower-layer pass cannot close a visible
+   activation, file-panel or focus gap. No current manual pass is recorded here.
+
+## Runtime evidence
+
+A bounded hidden NSHostingView experiment did not expose the palette and
+modeling controls through the in-process accessibility traversal. It is not
+counted as coverage. Those activations remain in the manual ledger; no direct
+callback or fake accessibility tree is substituted for the missing proof.
+
+On macOS 27.0, all 224 selected test functions have passing runtime evidence:
+60 RupaUIPackageTests and 164 RupaRenderingTests. Parameterized executions are
+not counted as additional functions. No selected identifier is missing, skipped
+or left failing. This is reconciled evidence, not a claim that every initial
+batch passed: two fixture failures in the integration run were closed by focused
+reruns after fixing readiness/layout pumping. A separate red/green native
+remount test proved the production owner-removal correction.
+
+Evidence (22 result bundles):
+
+- `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-contracts.GzrSbt/`
+- `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-remaining.y7VYPS/`
+- `/tmp/rupa-hidden-frame-readiness-20260917.xcresult`
+- `/tmp/rupa-hidden-face-layout-20260917.xcresult`
+
+The full invocation also ran one pre-existing, uncommitted saved-view test;
+it passed but is excluded from the 224-function replacement manifest and proof.
+Passed tests whose assumptions did not change were not repeated after the two
+local fixture fixes. Actual GPU evidence includes native axes texture readback,
+materials, spatial resources, camera calibration and frame/selection tests.
+Static isolation guard, exact-result verifier negative checks, scheme XML and
+project plist validation passed. Visible/OS acceptance remains unverified.

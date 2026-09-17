@@ -225,9 +225,9 @@ struct RealityViewportView: View {
             pending = nil
             reportTask?.cancel()
             reportTask = nil
+            // Owner-checked unbind also removes the root. A retiring mount
+            // must not remove a root already adopted by its replacement.
             current?.unbind(owner: ObjectIdentifier(self))
-            // No frame may outlive the scene that adopted it.
-            current?.root.removeFromParent()
             current = nil
             hasReported = false
             reportsStatus = false

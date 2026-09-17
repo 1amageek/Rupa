@@ -311,25 +311,27 @@ releasing a route is a cancellation rather than a refusal and is not reported.
 
 ### Non-interfering local verification
 
-Routine local verification uses `scripts/test-ui-contracts.sh`. Its
-explicit test allowlist exercises production drafts, bindings, preview state,
-workspace transactions and transform math without creating windows or sending
-system input. Adding a test requires inspecting its transitive helpers for
-window ordering, application activation and input synthesis. Package membership
-alone does not imply non-interference. The App's shared `Rupa` scheme skips the
-foreground `RupaUITests` runner. Use the package contract script for routine
-Test; an empty/skipped App run is not passing verification evidence.
+Routine local verification uses `scripts/test-ui-contracts.sh`. Its explicit
+selection exercises production drafts, bindings, transactions, hidden native
+layout, hit routing and RealityKit/Metal behavior. Test windows may exist but
+must never be ordered, made key or activate the application. Synthetic events
+are delivered only inside the test-owned view hierarchy, never to the system.
+The foreground `RupaUITests` target is retired, not silently skipped. Its
+scenarios are owned by the automated/manual coverage map in the UI test review.
+Adding a test requires inspecting its transitive helpers for desktop effects.
+Zero executed tests, missing requested tests, skips and failures are not success.
 
 Visual layout, hit testing and native activation remain separate evidence,
-obtained through narrowly scoped direct agent inspection or an explicitly
-requested dedicated UI test session. Historical App UI evidence below is not
+obtained through narrowly scoped direct agent inspection. Hidden host tests
+prove only the in-process hierarchy, not OS focus, menus or save panels.
+Historical App UI evidence below is not
 current-snapshot acceptance and is not an instruction to run screen automation.
 No test may hide other applications to satisfy a screen precondition.
 
 Review findings and the coverage boundary are recorded in
 [the UI test review](../../Tests/UI_TEST_REVIEW.md).
 
-Direct UI inspection (or a dedicated-session App UI test) checks a shipped
+Direct agent UI inspection checks a shipped
 control whose refusal the view can evaluate and reads back three facts together: the control is disabled, the
 reason is displayed beside it, and the Logs pane count has not moved. That is
 the behavioral proof that a refusal the panel can see is read before the press
@@ -344,10 +346,10 @@ ordering, bound, reflected value, non-deduplication and clearing, and by
 select, edit, save and reload run and fails with whatever it found there.
 
 Native gesture routing also has mounted-window fixtures in
-`ViewportNativeObjectAffordancePressTests`; these are excluded from routine
-non-interfering checks because they order a window. The contract script proves
-mutation and transaction behavior, not native hit routing or visible error
-delivery. Those require direct inspection or a dedicated-session diagnostic.
+`ViewportNativeObjectAffordancePressTests`; these are included in routine
+non-interfering checks after their hosts were migrated to never-ordered windows.
+The replacement script proves mutation, transaction behavior and the selected
+hidden native input paths. Visible error delivery remains direct inspection.
 
 That sweep has run. `AppProjectRoundTripUITests` drove create, select, face
 edit, save, and reload against the shipped chrome with recording on, and read

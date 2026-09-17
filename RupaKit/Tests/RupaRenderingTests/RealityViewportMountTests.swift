@@ -40,8 +40,10 @@ struct RealityViewportMountTests {
         let controller = NSHostingController(rootView: view(.axisFront(.z), zoom: 0.05, revision: 1))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { viewport.unbind(); window.contentViewController = nil; window.close() }
         let axes = try ["X", "Y", "Z"].map { name in
             try #require(viewport.root.findEntity(named: "Reference Axis \(name)") as? ModelEntity)
@@ -239,8 +241,10 @@ struct RealityViewportMountTests {
         let controller = NSHostingController(rootView: view(zoom: 0.2, revision: 1))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { viewport.unbind(); window.contentViewController = nil; window.close() }
         func colliders(in entity: Entity) -> [Entity] {
             var result = entity.components[CollisionComponent.self] == nil ? [] : [entity]
@@ -310,8 +314,10 @@ struct RealityViewportMountTests {
         let controller = NSHostingController(rootView: view(zoom: 0.2, revision: 1))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { viewport.unbind(); window.contentViewController = nil; window.close() }
         func collider(in entity: Entity) -> Entity? {
             if entity.components[CollisionComponent.self] != nil { return entity }
@@ -420,8 +426,10 @@ struct RealityViewportMountTests {
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { viewport.unbind(); window.contentViewController = nil; window.close() }
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
         while viewport.project(.init(x: 0.5, y: 0.5, z: 0)) == nil {
@@ -536,8 +544,10 @@ struct RealityViewportMountTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             viewport.unbind()
             window.contentViewController = nil
@@ -791,8 +801,10 @@ struct RealityViewportMountTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             viewport.unbind()
             window.contentViewController = nil
@@ -925,8 +937,10 @@ struct RealityViewportMountTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             first.unbind()
             second.unbind()

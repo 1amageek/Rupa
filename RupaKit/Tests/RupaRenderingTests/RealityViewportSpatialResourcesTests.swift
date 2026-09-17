@@ -191,8 +191,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -273,8 +275,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -345,8 +349,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -446,8 +452,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root); capture.content?.remove(camera)
             capture.content = nil
@@ -529,8 +537,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root); capture.content?.remove(camera)
             capture.content = nil
@@ -663,8 +673,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -889,8 +901,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -978,8 +992,10 @@ struct RealityViewportSpatialResourcesTests {
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             viewport.unbind()
             #expect(capture.content?.entities.contains { $0 === viewport.root } == false)

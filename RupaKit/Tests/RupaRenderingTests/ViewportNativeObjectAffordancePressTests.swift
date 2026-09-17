@@ -436,15 +436,19 @@ private struct MountedObjectHandleViewport {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: fixture.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.setContentSize(fixture.size)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         self.controller = controller
         self.window = window
 
         var mounted = false
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while !mounted, ContinuousClock.now < deadline {
-            mounted = Self.inputView(in: controller.view) != nil
+            controller.view.layoutSubtreeIfNeeded()
+            mounted = Self.inputView(in: controller.view)?.bounds.size == fixture.size
             if !mounted {
                 try await Task.sleep(for: .milliseconds(30))
             }
@@ -480,14 +484,32 @@ private struct MountedObjectHandleViewport {
         return input
     }
 
+    private func receiver(at point: CGPoint) throws -> ViewportInputSurface.InputView {
+        let input = try resolvedInput()
+        let root = controller.view
+        let hitPoint = input.convert(point, to: root.superview)
+        let hit = try #require(root.hitTest(hitPoint),
+            "Hosted hit failed: input point \(point), input frame \(input.frame), root frame \(root.frame), root bounds \(root.bounds), parent \(String(describing: root.superview)), hidden \(root.isHiddenOrHasHiddenAncestor)")
+        try #require(hit === input, "Another hosted view intercepted the canvas pointer.")
+        return input
+    }
+
     func click(at point: CGPoint, size: CGSize) throws {
-        try resolvedInput().onPick?(point, size, .replace)
+        let input = try receiver(at: point)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type,
+                location: input.convert(point, to: nil), modifierFlags: [],
+                timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: 1))
+            if type == .leftMouseDown { input.mouseDown(with: event) }
+            else { input.mouseUp(with: event) }
+        }
     }
 
     func gesture(from start: CGPoint, to end: CGPoint, size: CGSize,
                  preview: CGPoint? = nil, sendsPreview: Bool = true,
                  cancel: Bool = false, beforeRelease: (() -> Void)? = nil) async throws {
-        let input = try resolvedInput()
+        let input = try receiver(at: start)
         func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
             try #require(NSEvent.mouseEvent(with: type,
                 location: input.convert(point, to: nil), modifierFlags: [],
@@ -673,8 +695,8 @@ private func translationDelta(
     return [.x: next[3] - base[3], .y: next[7] - base[7], .z: next[11] - base[11]]
 }
 
-/// The mounted tests drive a shared `NSApplication` and an ordered window, so
-/// the suite is serialized rather than sharing that state across cases.
+/// The mounted tests retain a hidden native hierarchy and deliver events to
+/// its hit-tested receiver; they never post input to the user's desktop.
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeObjectAffordancePressTests {

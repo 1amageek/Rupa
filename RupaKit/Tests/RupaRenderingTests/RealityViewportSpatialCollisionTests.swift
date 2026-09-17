@@ -51,8 +51,10 @@ struct RealityViewportSpatialCollisionTests {
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
             backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(prepared.root)
             capture.content?.remove(camera)
@@ -173,8 +175,10 @@ struct RealityViewportSpatialCollisionTests {
             let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
                 backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
+            controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
             window.contentViewController = controller
-            window.orderFront(nil)
+            window.contentView?.layoutSubtreeIfNeeded()
+            #expect(!window.isVisible && !window.isKeyWindow)
             defer { viewport.unbind(); window.contentViewController = nil; window.close() }
             func shapes(_ entity: Entity) -> [ShapeResource] {
                 var values = entity.components[CollisionComponent.self]?.shapes ?? []
@@ -296,8 +300,10 @@ struct RealityViewportSpatialCollisionTests {
         let controller = NSHostingController(rootView: view(zoom: 0.2, revision: 1))
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer { viewport.unbind(); window.contentViewController = nil; window.close() }
         func colliders(_ entity: Entity) -> [Entity] {
             var result = entity.components[CollisionComponent.self] == nil ? [] : [entity]
@@ -505,8 +511,10 @@ struct RealityViewportSpatialCollisionTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
         defer {
             capture.content?.remove(entity)
             capture.content?.remove(camera)

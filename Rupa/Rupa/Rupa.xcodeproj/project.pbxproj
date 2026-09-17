@@ -36,19 +36,11 @@
 			remoteGlobalIDString = 12459AD52FD133B100034B5E;
 			remoteInfo = Rupa;
 		};
-		12459AF02FD133B200034B5E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 12459ACE2FD133B100034B5E /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 12459AD52FD133B100034B5E;
-			remoteInfo = Rupa;
-		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		12459AD62FD133B100034B5E /* Rupa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rupa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		12459AE52FD133B200034B5E /* RupaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RupaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		12459AEF2FD133B200034B5E /* RupaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RupaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000002 /* RupaCLI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RupaCLI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -82,11 +74,6 @@
 		12459AE82FD133B200034B5E /* RupaTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = RupaTests;
-			sourceTree = "<group>";
-		};
-		12459AF22FD133B200034B5E /* RupaUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = RupaUITests;
 			sourceTree = "<group>";
 		};
 		B10000000000000000000003 /* RupaCLI */ = {
@@ -132,13 +119,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		12459AEC2FD133B200034B5E /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B10000000000000000000006 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -156,7 +136,6 @@
 				12459AD82FD133B100034B5E /* Rupa */,
 				B10000000000000000000003 /* RupaCLI */,
 				12459AE82FD133B200034B5E /* RupaTests */,
-				12459AF22FD133B200034B5E /* RupaUITests */,
 				12459AD72FD133B100034B5E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -167,7 +146,6 @@
 				12459AD62FD133B100034B5E /* Rupa.app */,
 				B10000000000000000000002 /* RupaCLI.app */,
 				12459AE52FD133B200034B5E /* RupaTests.xctest */,
-				12459AEF2FD133B200034B5E /* RupaUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -238,29 +216,6 @@
 			productReference = 12459AE52FD133B200034B5E /* RupaTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		12459AEE2FD133B200034B5E /* RupaUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 12459AFF2FD133B200034B5E /* Build configuration list for PBXNativeTarget "RupaUITests" */;
-			buildPhases = (
-				12459AEB2FD133B200034B5E /* Sources */,
-				12459AEC2FD133B200034B5E /* Frameworks */,
-				12459AED2FD133B200034B5E /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				12459AF12FD133B200034B5E /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				12459AF22FD133B200034B5E /* RupaUITests */,
-			);
-			name = RupaUITests;
-			packageProductDependencies = (
-			);
-			productName = RupaUITests;
-			productReference = 12459AEF2FD133B200034B5E /* RupaUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 		B10000000000000000000001 /* RupaCLIProduct */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B1000000000000000000000A /* Build configuration list for PBXNativeTarget "RupaCLIProduct" */;
@@ -300,10 +255,6 @@
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = 12459AD52FD133B100034B5E;
 					};
-					12459AEE2FD133B200034B5E = {
-						CreatedOnToolsVersion = 26.4.1;
-						TestTargetID = 12459AD52FD133B100034B5E;
-					};
 					B10000000000000000000001 = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -329,7 +280,6 @@
 				12459AD52FD133B100034B5E /* Rupa */,
 				B10000000000000000000001 /* RupaCLIProduct */,
 				12459AE42FD133B200034B5E /* RupaTests */,
-				12459AEE2FD133B200034B5E /* RupaUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -343,13 +293,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		12459AE32FD133B200034B5E /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		12459AED2FD133B200034B5E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -373,13 +316,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		12459AEB2FD133B200034B5E /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		B10000000000000000000005 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -394,11 +330,6 @@
 			isa = PBXTargetDependency;
 			target = 12459AD52FD133B100034B5E /* Rupa */;
 			targetProxy = 12459AE62FD133B200034B5E /* PBXContainerItemProxy */;
-		};
-		12459AF12FD133B200034B5E /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 12459AD52FD133B100034B5E /* Rupa */;
-			targetProxy = 12459AF02FD133B200034B5E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -631,44 +562,6 @@
 			};
 			name = Release;
 		};
-		12459B002FD133B200034B5E /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = WWCKBW8CKN;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.RupaUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = Rupa;
-			};
-			name = Debug;
-		};
-		12459B012FD133B200034B5E /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = WWCKBW8CKN;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = team.stamp.RupaUITests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.0;
-				TEST_TARGET_NAME = Rupa;
-			};
-			name = Release;
-		};
 		B10000000000000000000008 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -739,15 +632,6 @@
 			buildConfigurations = (
 				12459AFD2FD133B200034B5E /* Debug */,
 				12459AFE2FD133B200034B5E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		12459AFF2FD133B200034B5E /* Build configuration list for PBXNativeTarget "RupaUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				12459B002FD133B200034B5E /* Debug */,
-				12459B012FD133B200034B5E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

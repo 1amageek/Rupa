@@ -414,8 +414,10 @@ private func vertexScopePicks(
         defer: false
     )
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer {
         window.contentViewController = nil
         window.close()

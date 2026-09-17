@@ -629,8 +629,10 @@ struct RealityViewportRegionDifferentialTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
 
         let deadline = ContinuousClock.now.advanced(by: .seconds(10))
         while viewport.project(Point3D(x: 0.5, y: 0.5, z: 0)) == nil {

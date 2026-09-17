@@ -78,8 +78,10 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
         window.contentViewController = controller
-        window.orderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(!window.isVisible && !window.isKeyWindow)
 
         // The RealityView camera is not exact-ready until its first native
         // update, so the frame is observed rather than assumed.

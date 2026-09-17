@@ -267,8 +267,10 @@ func nativeMeshElementsAcceptOutsideSilhouetteTolerance(perspective: Bool) async
     ).frame(width: size.width, height: size.height))
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))
     while viewport.appliedViewportRevision != 1 || viewport.project(.origin) == nil {
@@ -383,8 +385,10 @@ func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
                           backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
 
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))
@@ -554,21 +558,25 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
         backing: .buffered, defer: false
     )
     emptyWindow.isReleasedWhenClosed = false
+    emptyController.view.frame = CGRect(origin: .zero, size: emptyWindow.contentLayoutRect.size)
     emptyWindow.contentViewController = emptyController
-    emptyWindow.orderFront(nil)
+    emptyWindow.contentView?.layoutSubtreeIfNeeded()
+    #expect(!emptyWindow.isVisible && !emptyWindow.isKeyWindow)
     defer {
         emptyWindow.contentViewController = nil
         emptyWindow.close()
     }
     let emptyDeadline = ContinuousClock.now.advanced(by: .seconds(5))
     while ContinuousClock.now < emptyDeadline,
-          (empty.appliedViewportRevision != 5 || empty.root.scene == nil) {
+          !cache.hasReadyCamera(for: emptyIdentity, revision: 5) {
         emptyController.view.layoutSubtreeIfNeeded()
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(emptyMountError == nil)
     #expect(empty.appliedViewportRevision == 5)
     #expect(empty.root.scene != nil)
+    try #require(cache.hasReadyCamera(for: emptyIdentity, revision: 5),
+                 "Mounting and applying a revision alone do not establish native query readiness.")
     let mountedEmptyMiss = try cache.surfaceHit(
         at: CGPoint(x: emptySize.width / 2, y: emptySize.height / 2),
         for: emptyIdentity, revision: 5
@@ -789,8 +797,10 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                           styleMask: [.titled], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
 
     func entities(_ entity: Entity) -> [ObjectIdentifier] {
@@ -1039,8 +1049,10 @@ func nativeSurfaceHitChoosesNearestOverlappingSurfaceAndRestoresWorldOrigin(
         backing: .buffered, defer: false
     )
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
 
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))

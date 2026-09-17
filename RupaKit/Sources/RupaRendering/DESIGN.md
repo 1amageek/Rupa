@@ -2374,6 +2374,18 @@ tests and native GPU measurements.
 
 ## Verification and Change Impact
 
+### Non-interfering native verification
+
+Native test hosts attach production views to never-ordered NSWindows and force
+layout. They retain real RealityKit preparation, camera queries and GPU renders;
+hidden mounting must not be substituted with a mock camera or CPU success value.
+Object-affordance routing tests resolve the receiver from the hosted hierarchy before
+delivering an in-process NSEvent. No application activation, global event posting
+or window ordering is part of automated verification. Hidden-state assertions
+and the runner's static guard reject accidental reintroduction. OS-level focus
+and visible compositing remain manual acceptance, not a hidden-host guarantee.
+
+
 | Invariant | Required evidence |
 |---|---|
 | Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible and continuously authoritative for CAD hit and handle lookup at the requested identity, and that a changed source or snapshot and a typed failure recorded for that identity each withdraw display and authority together. A press issued with no gap after a native axis commit, which lands inside the overlay-only rebuild that commit starts, is proved to reach the native route and commit again rather than being refused. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |

@@ -128,7 +128,9 @@ native frame.
 Each Mount identifies its binding by its own object identity. Rebinding the
 same native viewport transfers that identity with the content; an old Mount
 cannot unbind, place, or report status for the replacement binding. This is
-required because SwiftUI may create the replacement before the old view's
+also the root-removal boundary: Mount delegates all removal to owner-checked
+`RealityViewport.unbind(owner:)`, never removing the shared root independently.
+This is required because SwiftUI may create the replacement before the old view's
 `onDisappear` runs. Direct native capability fixtures use an unowned binding;
 they do not stand in for production Mount lifetime tests.
 Production-host tests must mount `RealityViewportView` itself without manually

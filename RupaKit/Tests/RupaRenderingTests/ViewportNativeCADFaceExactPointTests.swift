@@ -247,8 +247,10 @@ private func probeNativeCADFace(
         styleMask: [.titled], backing: .buffered, defer: false
     )
     window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
     window.contentViewController = controller
-    window.orderFront(nil)
+    window.contentView?.layoutSubtreeIfNeeded()
+    #expect(!window.isVisible && !window.isKeyWindow)
     defer { window.contentViewController = nil; window.close() }
     func input(in view: NSView) -> ViewportInputSurface.InputView? {
         if let value = view as? ViewportInputSurface.InputView { return value }
@@ -259,12 +261,14 @@ private func probeNativeCADFace(
     }
     let pickDeadline = ContinuousClock.now.advanced(by: .seconds(10))
     while picks.isEmpty, ContinuousClock.now < pickDeadline {
+        controller.view.layoutSubtreeIfNeeded()
         input(in: controller.view)?.onPick?(press, size, .replace)
         try await Task.sleep(for: .milliseconds(20))
     }
     let target = try #require(picks.first, "The mounted frame never answered the press at \(press).")
     let dragDeadline = ContinuousClock.now.advanced(by: .seconds(10))
     while drags.isEmpty, ContinuousClock.now < dragDeadline {
+        controller.view.layoutSubtreeIfNeeded()
         input(in: controller.view)?.onCanvasDrag?(press, dragEnd, size, .replace)
         try await Task.sleep(for: .milliseconds(20))
     }
