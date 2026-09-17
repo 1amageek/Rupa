@@ -660,7 +660,9 @@ public struct Viewport: View {
                     // The host stays mounted while no frame is current, so one
                     // canvas keeps one native scene across every rebuild.
                     RealityViewportView(
-                        viewport: presentationSurface,
+                        viewport: presentationSurface ?? preparationIdentity.flatMap {
+                            presentationPlanCache.displayCandidate(for: $0)
+                        },
                         viewportRevision: activeControlSession.revision,
                         displayMode: displayMode,
                         shading: shading,

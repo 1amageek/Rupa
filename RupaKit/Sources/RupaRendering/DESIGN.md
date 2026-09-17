@@ -105,8 +105,37 @@ contains the `ViewportControlSession` revision and camera snapshot plus bounded
 engine-neutral spatial descriptors. It contains
 no `Entity`, `MeshResource`, `RealityViewCameraContent`, `MTLBuffer`, or
 `MTLRenderCommandEncoder`; native objects are created and owned only inside
-`RealityViewport`. A frame is publishable only when all identity fields still
-match the request that produced its resources.
+`RealityViewport`. A completed frame always retains the exact identity of the
+request that produced its resources; displaying it does not relabel it as a
+newer source snapshot.
+
+### Continuous source updates
+
+Preparation owns one running worker and one replaceable latest pending request.
+New requests in the same document/project context do not cancel the running
+worker. Its successful complete frame may advance the display while the latest
+request is still pending. This guarantees preparation progress during continuous
+Inspector input without concurrent GPU builds or a debounce-until-idle policy.
+Document/project replacement, capture rejection and teardown cancel the worker
+and invalidate its publication token, including replacement by the same identity
+after teardown. Superseded failures cannot become failures of the latest request.
+
+```text
+continuous edits -> one running frame -> completed display candidate
+                       + one newest pending frame -> next worker
+current input query -> exact scene/snapshot authority only
+```
+
+The display-only candidate accessor is separate from `displaySurface(for:)`,
+which retains the existing scene/snapshot query-admission contract. Viewport may
+mount a same-context completed candidate, but all picking, projection, handles,
+markers and frame callbacks continue to require the requested scene/snapshot.
+An old picture never acquires new-source input authority. Camera and appearance
+updates remain native-host responsibilities. No cross-document candidate is
+admitted. `planCacheContinuousPropertyUpdatesDoNotCancelRunningFrame` and the
+continuous-progress cache tests own this scheduling contract; native mount and
+query-refusal tests own its composition with the host. Preparation timings do
+not establish an input-to-photon or 60-fps guarantee.
 
 The overlay revision advances whenever an input not already represented by
 `ViewportSceneSnapshotKey` can change a world or camera-relative descriptor,
@@ -180,10 +209,11 @@ once before cache lookup for a changed key; returning to an earlier key still
 gets a new revision. Overflow is a typed failure, never wraparound. This
 synchronous comparison makes the new preparation identity visible in the same
 body evaluation. A pointer can only have addressed pixels that were drawn, so one
-cache rule owns which frame answers, and the display and every CAD, handle,
+cache rule owns which frame answers, and every CAD, handle,
 projection, and section query resolve through it: the exact-ready frame when the
 requested identity is prepared, otherwise the mounted frame whose scene key and
-optional real snapshot ID are equal and whose overlay revision alone differs. An
+optional real snapshot ID are equal and whose overlay revision alone differs. The
+display-only scheduling path above grants no additional query authority. An
 overlay-only rebuild therefore never converts a press into a silent refusal. A
 changed source or snapshot, an idle cache, or a typed failure recorded for the
 requested identity withdraws authority, and no other frame inherits it, so two

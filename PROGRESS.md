@@ -1,5 +1,7 @@
 # Progress
 
+- [x] INSPECTOR-FRAME-1 Prevent continuous preparation starvation; corrected RED reproduced worker cancellation, 8 native focused tests passed in /tmp/rupa-frame-progress-green.xcresult, including 1,000-request coalescing and stale-query refusal. Commit: fix: keep viewport preparation progressing during continuous edits. `depends:none` `parallel:none`
+
 - [x] INSPECTOR-INPUT-1 Unified Inspector numeric interaction, frozen mapping, latest-request acknowledgement, bounded ordered submission, integer input and parameter submission exclusion. Commit f5d42abaa. `depends:none` `parallel:none`
 
 - [x] SSOT-1 Unified Canvas/Inspector placement admission, occurrence Center and Core source Size/radius; removed legacy Inspector scene evaluation and resize compensation. Parent/shear, shared source, all axes, hidden/locked/invalid targets and Undo/Redo verified by 3 new test functions (4 runs) plus 8 existing tests. Commit 24e34433f. `depends:none` `parallel:none`
@@ -58,3 +60,4 @@
 - [x] SSOT-IV Integration: 11 UI functions (focused3 and final-ui) and 8 Canvas/native functions (canvas-regression) passed under /tmp/rupa-ssot.IpAwZI; no foreground automation. Incremental Debug App build passed after one 120-second compile timeout; strict deep signature and new Inspector strings verified. Rupa.debug.dylib SHA-256 b6ccefd14a1b1c1539f034fa23c1908f4c976a2c3cab51cf18fff30c2525ddc9. Existing compiler warnings remain; running App not restarted and visible interaction latency not remeasured. No upstream configured. `depends:SSOT-1,INSPECTOR-LATENCY-2` `parallel:none`
 
 - [x] INSPECTOR-INPUT-IV Integrated macOS tests passed: 15 exact test functions / 16 runs, zero failures/skips in /tmp/rupa-inspector-input-integrated.xcresult. Signed Debug App built and strict deep signature verification passed; Rupa.debug.dylib SHA256 b9e7b0b546eddaa982d80abcc9e31345b14d9a942c8e89a3c992c945779d1f2f. Production binding tests cover stale publication/frozen mapping; hidden native control lookup was unavailable and actual screen interaction is not claimed. Running App PID 23965 was not restarted. No upstream configured. `depends:INSPECTOR-INPUT-1` `parallel:none`
+- [ ] INSPECTOR-FRAME-IV Run affected native cache/query/mount regression and signed-App build; report measured preparation progress separately from unmeasured screen input-to-photon latency. `depends:INSPECTOR-FRAME-1` `parallel:none`

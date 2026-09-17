@@ -139,6 +139,11 @@ is not evidence for this lifecycle.
 
 ### Native host lifetime
 
+The parent [continuous-update scheduling contract](../DESIGN.md#continuous-source-updates)
+may supply a completed display-only candidate while a newer source request is
+pending. Mounting remains the same complete-root swap; the parent cache retains
+all query and callback admission responsibility.
+
 The host view accepts an absent frame. One canvas owns exactly one native
 scene for its lifetime: the `RealityView` is mounted unconditionally, and an
 absent frame is a no-op for the host. The frame it last attached stays in that

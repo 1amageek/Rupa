@@ -1168,6 +1168,96 @@ func planCacheIgnoresARepeatedPrepareForTheSameScene() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func planCacheContinuousPropertyUpdatesDoNotCancelRunningFrame() async throws {
+    let first = try planCacheScene(suffix: "continuous-first")
+    let next = try planCacheScene(suffix: "continuous-next", projectID: first.projectID, revision: 1)
+    #expect(first.snapshotID != next.snapshotID)
+    let gate = PlanBuildGate()
+    let cancelled = Mutex(false)
+    let cache = MeshSourcePresentationPlanCache { scene in
+        await gate.arrive(scene.items[0].id.rawValue)
+        if scene.items[0].id == first.items[0].id {
+            cancelled.withLock { $0 = Task.isCancelled }
+        }
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    defer { cache.teardown() }
+    cache.prepare(for: first)
+    await gate.waitForArrival(first.items[0].id.rawValue)
+    cache.prepare(for: next)
+    await gate.open(first.items[0].id.rawValue)
+    await gate.open(next.items[0].id.rawValue)
+    try await settlePlanCache(cache)
+    #expect(!cancelled.withLock { $0 })
+    #expect(cache.surface(for: next) != nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func planCacheContinuousFramesAdvanceBeforeLatestInputSettles() async throws {
+    let first = try planCacheScene(suffix: "progress-first")
+    let middle = try planCacheScene(suffix: "progress-middle", projectID: first.projectID, revision: 1)
+    let last = try planCacheScene(suffix: "progress-last", projectID: first.projectID, revision: 2)
+    let gate = PlanBuildGate()
+    let builds = Mutex(0)
+    let cache = MeshSourcePresentationPlanCache { scene in
+        builds.withLock { $0 += 1 }
+        await gate.arrive(scene.items[0].id.rawValue)
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    defer {
+        cache.teardown()
+        Task {
+            for scene in [first, middle, last] { await gate.open(scene.items[0].id.rawValue) }
+        }
+    }
+    func request(_ scene: UniversalViewportScene, generation: UInt64) {
+        cache.prepare(.init(identity: planCacheIdentity(scene, generation: generation),
+                            scene: scene, fallbackOrigin: .origin, spatialOverlay: { origin, charge in
+            (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [])
+        }))
+    }
+    func waitForDisplay(_ scene: UniversalViewportScene,
+                        requested: RealityViewportPreparationRequest.Identity) async throws {
+        let start = ContinuousClock.now
+        let deadline = start.advanced(by: .seconds(5))
+        while cache.displayCandidate(for: requested)?.snapshotID != scene.snapshotID,
+              ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let frame = try #require(cache.displayCandidate(for: requested))
+        #expect(frame.snapshotID == scene.snapshotID)
+        try frame.validateSurfaceCompleteness()
+        print("CONTINUOUS_FRAME prepared-before-latest=\(start.duration(to: .now))")
+    }
+    request(first, generation: 1)
+    await gate.waitForArrival(first.items[0].id.rawValue)
+    for generation in 2...1_000 { request(middle, generation: UInt64(generation)) }
+    let middleIdentity = planCacheIdentity(middle, generation: 1_000)
+    await gate.open(first.items[0].id.rawValue)
+    try await waitForDisplay(first, requested: middleIdentity)
+    #expect(cache.isPreparing(middleIdentity))
+    #expect(cache.displaySurface(for: middleIdentity) == nil)
+    #expect(cache.surface(for: middleIdentity) == nil)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.surfaceHit(at: .zero, for: middleIdentity, revision: 0)
+    }
+    let lastIdentity = planCacheIdentity(last, generation: 1_001)
+    request(last, generation: 1_001)
+    await gate.open(middle.items[0].id.rawValue)
+    try await waitForDisplay(middle, requested: lastIdentity)
+    #expect(cache.isPreparing(lastIdentity))
+    #expect(cache.displaySurface(for: lastIdentity) == nil)
+    await gate.open(last.items[0].id.rawValue)
+    try await settlePlanCache(cache)
+    #expect(cache.surface(for: lastIdentity)?.snapshotID == last.snapshotID)
+    #expect(builds.withLock { $0 } == 3)
+    cache.teardown()
+    #expect(cache.displayCandidate(for: lastIdentity) == nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func planCacheDiscardsAStaleSuccess() async throws {
     let firstScene = try planCacheScene(suffix: "stale-success-first")
     let secondScene = try planCacheScene(suffix: "stale-success-second")
@@ -1934,6 +2024,7 @@ private func settlePlanCacheFailure(
 func planCacheScene(
     suffix: String,
     projectID: ProjectID? = nil,
+    revision: UInt64 = 0,
     transform: GeometryTransform3D = .identity
 ) throws -> UniversalViewportScene {
     let projectID = projectID ?? ProjectID(rawValue: "project.plan-cache.\(suffix)")
@@ -1989,7 +2080,7 @@ func planCacheScene(
         id: EvaluationSnapshotID(
             projectID: projectID,
             purpose: .presentation,
-            sourceRevision: DocumentTransactionRevision()
+            sourceRevision: DocumentTransactionRevision(revision)
         ),
         projectID: projectID,
         occurrences: [

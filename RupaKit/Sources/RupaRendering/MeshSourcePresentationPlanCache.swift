@@ -8,10 +8,10 @@ import SwiftCAD
 /// Prepares one complete native frame off-scene and publishes only matching output.
 ///
 /// The cache owns exactly one build at a time. Preparing a different scene
-/// cancels the actual worker and retains only the newest pending request until
-/// the worker exits. Cancellation therefore cannot accumulate overlapping GPU
-/// allocations. Publication requires both snapshot and request identity, which
-/// also rejects a late failure after restarting the same snapshot.
+/// retains the running worker within the same display context and keeps only
+/// the newest pending request. Completed frames advance display without giving
+/// stale snapshots query authority. Context replacement and teardown cancel the
+/// worker and invalidate its publication token; GPU builds never overlap.
 @Observable
 @MainActor
 final class MeshSourcePresentationPlanCache {
@@ -25,7 +25,7 @@ final class MeshSourcePresentationPlanCache {
     @ObservationIgnored private var buildTask: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
     @ObservationIgnored private var pendingRequest: (request: RealityViewportPreparationRequest, id: UUID)?
-    @ObservationIgnored private var current: Prepared?
+    private var current: Prepared?
 
     init(
         builder: @escaping Builder = { scene in
@@ -354,6 +354,14 @@ final class MeshSourcePresentationPlanCache {
         return current.surface
     }
 
+    /// A completed picture, not an input authority. The newest request may still
+    /// be preparing; its scene/snapshot queries must continue to use displaySurface.
+    func displayCandidate(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
+        guard state.identity == identity, let current,
+              current.identity.sharesDisplayContext(with: identity) else { return nil }
+        return current.surface
+    }
+
     func interactionRecord(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialInteractionRecord? {
         guard let surface = queryAuthority(for: identity),
               let current, current.surface === surface,
@@ -406,13 +414,15 @@ final class MeshSourcePresentationPlanCache {
         guard state.identity != request.identity else {
             return
         }
-        buildTask?.cancel()
+        if state.identity?.sharesDisplayContext(with: request.identity) != true {
+            buildTask?.cancel()
+            self.requestID = nil
+        }
         let requestID = UUID()
-        self.requestID = requestID
         if displaySurface(for: request.identity) == nil {
             current?.surface.invalidateCamera()
-            // Retain only immutable asset reuse through the existing worker.
-            // Display and queries still reject this old frame identity.
+            // The old frame may remain a picture, but cannot answer queries
+            // for the newly requested scene or snapshot.
         }
         state = .preparing(identity: request.identity)
         if buildTask != nil {
@@ -461,6 +471,7 @@ final class MeshSourcePresentationPlanCache {
     }
 
     private func start(_ request: RealityViewportPreparationRequest, requestID: UUID) {
+        self.requestID = requestID
         let builder = self.builder
         let reusable = current
         // The construction runs inside this detached task, so cancelling the
@@ -560,17 +571,22 @@ final class MeshSourcePresentationPlanCache {
                 start(next.request, requestID: next.id)
             }
         }
-        guard let result, case let .preparing(current) = state,
-              current == identity, self.requestID == requestID else { return }
+        guard let result, case let .preparing(requested) = state,
+              identity.sharesDisplayContext(with: requested),
+              self.requestID == requestID else { return }
         // CPU plan preparation ran off MainActor; native resources were awaited
         // under RealityKit's isolation contract. Publication only installs the
-        // completed owner after both snapshot and request identity checks.
+        // completed owner after display-context and worker-token checks. Only
+        // the exact requested identity can become ready for input queries.
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
             case let .success(prepared):
                 self.current = prepared
-                state = .ready(identity: identity, plan: prepared.plan, surface: prepared.surface)
+                if requested == identity {
+                    state = .ready(identity: identity, plan: prepared.plan, surface: prepared.surface)
+                }
             case let .failure(error):
+                guard requested == identity else { return }
                 if displaySurface(for: identity) == nil { self.current = nil }
                 state = .failed(identity: identity, error: error)
             }
