@@ -2436,6 +2436,9 @@ not navigation. The fit solver alone translates geometry toward the current
 fitting center; the session normalizes that explicit offset at the full viewport
 center. Selection-bar show/hide tests compare stationary world projections in
 both lens modes, then verify that explicit fit still respects occupied space.
+Before SwiftUI assigns a finite positive viewport size, frame capture returns
+nil and the session does not resolve its initial camera or publish a mount
+context. A later valid layout supplies both; no synthetic size is persisted.
 The derived presentation cache owns the active task, newest value-only pending
 request, engine-neutral descriptors, and matching failure. It retains at most
 one current native owner and one candidate being prepared. `RealityViewport`

@@ -7,6 +7,32 @@ import Testing
 
 @MainActor
 @Test
+func viewportWaitsForPositiveSizeBeforeResolvingItsCamera() throws {
+    let control = ViewportControlSession()
+    let mount = ViewportInstanceID()
+    _ = control.mount(viewportID: mount)
+    let valid = try viewportContractContext(mount: mount)
+    let resolver = ViewportCameraFrameResolver(workspaceVisibleSpanMeters: 20)
+    for size in [CGSize.zero, CGSize(width: 900, height: 0)] {
+        control.updateContext(.init(viewportID: mount, viewportSize: size,
+            fittingInsets: .zero, modelBounds: valid.modelBounds,
+            verticalBounds: valid.verticalBounds, ruler: valid.ruler,
+            sceneBounds: valid.sceneBounds, selectedBounds: nil))
+        #expect(control.camera.referenceScale == nil)
+        #expect(throws: ViewportControlError.viewportContextUnavailable) { try control.snapshot() }
+        let layout = ViewportLayout(modelBounds: valid.modelBounds, size: size)
+        #expect(resolver.frame(for: .identity, in: layout) == nil)
+    }
+    control.updateContext(valid)
+    #expect(control.camera.referenceScale != nil)
+    let layout = ViewportLayout(modelBounds: valid.modelBounds, size: valid.viewportSize,
+        camera: control.camera, basis: control.basis, verticalBounds: valid.verticalBounds)
+    #expect(resolver.frame(for: control.camera, in: layout) != nil)
+    _ = try control.snapshot()
+}
+
+@MainActor
+@Test
 func viewportSelectionChromeDoesNotMoveTheCamera() throws {
     for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
         let control = ViewportControlSession(camera: .init(projection: projection))

@@ -407,6 +407,10 @@ public final class ViewportControlSession {
         guard isMounted, mountedMountToken?.viewportID == context.viewportID else {
             return
         }
+        guard context.viewportSize.width.isFinite, context.viewportSize.height.isFinite,
+              context.viewportSize.width > 0, context.viewportSize.height > 0 else {
+            return
+        }
         guard self.context != context else {
             return
         }
