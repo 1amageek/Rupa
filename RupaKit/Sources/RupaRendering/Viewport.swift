@@ -1636,14 +1636,15 @@ public struct Viewport: View {
         key.hoveredHandle = try hoveredSpatialHandleIdentity
         key.pendingHandle = try pendingSpatialHandleIdentity
         switch nativeInputGesture {
-        case .bodyTransform(let press): key.bodyTransformMutation = press.mutation
+        case .bodyTransform(let press):
+            if presentationScene == nil { key.bodyTransformMutation = press.mutation }
         case .active(let press): key.nativeAxisValue = press.value
         case .sketchTransform(let press): key.sketchTransformMutation = press.mutation
         case .pattern(let press): key.nativePatternValue = press.value
         case .worldPoint(let press): key.nativeWorldPointValue = press.value
         case .cancelled, nil: break
         }
-        if bodyCommitHandoff.source == sourceIdentity {
+        if presentationScene == nil, bodyCommitHandoff.source == sourceIdentity {
             key.bodyTransformMutation = bodyCommitHandoff.mutation
         }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
@@ -5995,7 +5996,7 @@ extension Viewport {
             pendingHandleIdentities: try pendingSpatialHandleIdentity.map { [$0] } ?? [],
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
-        result.bodyPreviewTransforms = bodyPreviewTransforms
+        result.bodyPreviewTransforms = presentationScene == nil ? bodyPreviewTransforms : [:]
         result.allowsBodyResize = onBodyResizeCommit != nil
         result.presentationScene = presentationScene
         result.presentationNodeIDs = presentationSceneNodeIDByOccurrenceID

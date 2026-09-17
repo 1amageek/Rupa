@@ -603,6 +603,13 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
         // The mounted surface owns solid previews; affordances must not
         // duplicate the object as a wire mesh.
         #expect(source.meshes.isEmpty)
+        #expect(source.worldLines.filter { $0.route == .bodyTransform }.isEmpty)
+        #expect(source.cameraLines.filter { $0.route == .bodyTransform }.allSatisfy {
+            $0.objectPreviewOccurrenceID == selected.occurrenceID.rawValue
+        })
+        #expect(source.markers.filter { $0.route == .bodyTransform }.allSatisfy {
+            $0.objectPreviewOccurrenceID == selected.occurrenceID.rawValue
+        })
         #expect(!records.isEmpty)
     }
     var commits: [ViewportBodyPlacementDragTarget] = []

@@ -1165,7 +1165,8 @@ final class RealityViewportSpatialResources {
     func updateCamera(camera: Entity, content: RealityViewCameraContent,
                       safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
                       gridRuler: RulerConfiguration? = nil, gridBasis: ViewportProjectionBasis = .isometric,
-                      gridSize: CGSize = .zero, gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
+                      gridSize: CGSize = .zero, gridSpacing: ViewportGridVisualSpacingMode = .adaptive,
+                      objectPreviews: [String: Transform3D] = [:]) throws -> MeshSourcePresentationRenderError? {
         guard grid != nil || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !lineCollisions.isEmpty || !fillCollisions.isEmpty || !boundsRulers.isEmpty else { return nil }
         guard let projection = cameraProjection(camera: camera, content: content) else {
             for (entity, _, collider) in cameraPaths {
@@ -1231,7 +1232,9 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = true
         }
         for (entity, marker) in markers {
-            guard let placement = placement(anchor: marker.anchor, offset: marker.offset, projection: projection) else {
+            let point = try RealityViewportSpatialBatch.CameraPoint(anchor: marker.anchor, offset: marker.offset)
+                .applying(marker.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] })
+            guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection) else {
                 entity.isEnabled = false
                 continue
             }
@@ -1243,12 +1246,16 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = true
         }
         for (entity, mesh, line, proxies, strokes) in cameraLines {
+            let mutation = line.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }
             var valid = true
             var missingProvenance = false
             var bounds = BoundingBox()
+            var updateResult: Result<Void, Error> = .success(())
             mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+              updateResult = Result {
                 let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
                 for (index, point) in line.points.enumerated() {
+                    let point = try point.applying(mutation)
                     guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection,
                                                     allowsBehindCamera: true) else {
                         valid = false
@@ -1263,9 +1270,10 @@ final class RealityViewportSpatialResources {
                         let first = vertices[offset], last = vertices[offset + 1]
                         let delta = last - first
                         let length = simd_length(delta)
+                        let point = try line.points[offset].applying(mutation)
                         guard let width = line.widthPoints,
-                              let placement = placement(anchor: line.points[offset].anchor,
-                                offset: line.points[offset].offset, projection: projection, allowsBehindCamera: true) else {
+                              let placement = placement(anchor: point.anchor,
+                                offset: point.offset, projection: projection, allowsBehindCamera: true) else {
                             valid = false
                             break
                         }
@@ -1286,7 +1294,9 @@ final class RealityViewportSpatialResources {
                         lineCollisions[index].sourceLast = vertices[offset + 1]
                     }
                 }
+              }
             }
+            try updateResult.get()
             if missingProvenance {
                 throw RealityViewportSpatialBatch.invalid("The native camera line lost its prepared collision provenance.")
             }

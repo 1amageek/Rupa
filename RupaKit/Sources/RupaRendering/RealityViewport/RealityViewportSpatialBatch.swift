@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import RealityKit
 import RupaCoreTypes
+import RupaViewportScene
 import SwiftCAD
 import SwiftUI
 import simd
@@ -89,6 +90,7 @@ struct RealityViewportSpatialBatch: Sendable {
         /// Placement relative to `anchor`, resolved by the mounted camera on
         /// every update together with the marker's point diameter.
         var offset: Offset = .zero
+        var objectPreviewOccurrenceID: String? = nil
     }
 
     /// Native filled/stroked Path coordinates are screen points about this world anchor.
@@ -107,6 +109,22 @@ struct RealityViewportSpatialBatch: Sendable {
     struct CameraPoint: Sendable {
         let anchor: Point3D
         let offset: Offset
+
+        func applying(_ mutation: Transform3D?) throws -> Self {
+            guard let mutation else { return self }
+            let moved = try ViewportWorldTransformAlgebra.transformedPoint(anchor, by: mutation)
+            let delta = moved - anchor
+            let offset: Offset
+            switch self.offset {
+            case .fixed, .worldDirected: offset = self.offset
+            case .directed(let toward, let parallel, let perpendicular):
+                offset = .directed(toward: toward + delta, parallel: parallel, perpendicular: perpendicular)
+            case .projected(let toward, let minimum, let parallel, let perpendicular):
+                offset = .projected(toward: toward + delta, minimumLength: minimum,
+                                    parallel: parallel, perpendicular: perpendicular)
+            }
+            return .init(anchor: moved, offset: offset)
+        }
     }
 
     struct CameraLine: Sendable {
@@ -117,6 +135,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
         var hitTolerancePoints: Float? = nil
+        var objectPreviewOccurrenceID: String? = nil
     }
 
     struct BoundsRulers: Sendable {
@@ -457,6 +476,7 @@ struct RealityViewportSpatialBatch: Sendable {
             }
         }
         for marker in markers {
+            if let id = marker.objectPreviewOccurrenceID { try charge(id.utf8.count, stride: 1) }
             try validateHandle(marker.handleIndex)
             try validateHitTolerance(marker.hitTolerancePoints)
             try item()
@@ -478,6 +498,7 @@ struct RealityViewportSpatialBatch: Sendable {
             }
         }
         for line in cameraLines {
+            if let id = line.objectPreviewOccurrenceID { try charge(id.utf8.count, stride: 1) }
             guard line.points.count >= 2 else { throw Self.invalid("A camera-relative line requires two points.") }
             if let width = line.widthPoints {
                 guard width.isFinite, width > 0 else { throw Self.invalid("Camera line width is invalid.") }

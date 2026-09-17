@@ -80,11 +80,9 @@ struct RealityViewportView: View {
             try viewport.applyAppearance(displayMode: displayMode, shading: shading,
                                          materialColors: materialColors, interaction: interaction,
                                          sectionPlane: sectionPlane, retainedSide: retainedSide, sectionTolerance: sectionTolerance)
-            // A retained predecessor keeps its final preview until its successor
-            // mounts. Clearing it on a new source would flash the old solid.
-            try viewport.applyObjectPreviews(objectPreviewTransforms, displayMode: displayMode,
-                                             snapshotID: objectPreviewSnapshotID)
             mount.schedule(in: content, viewport: viewport,
+                           objectPreviews: objectPreviewTransforms, previewSnapshotID: objectPreviewSnapshotID,
+                           displayMode: displayMode,
                            safeRect: layout.fittingInsets.fittingRect(in: layout.viewportSize),
                            excludedRects: excludedRects, gridRuler: gridRuler, gridSpacing: gridSpacing,
                            callback: onUpdateResult, gridCallback: onGridUpdateResult,
@@ -130,6 +128,8 @@ struct RealityViewportView: View {
         }
 
         func schedule(in content: RealityViewCameraContent, viewport: RealityViewport,
+                      objectPreviews: [String: Transform3D], previewSnapshotID: EvaluationSnapshotID?,
+                      displayMode: ViewportDisplayMode,
                       safeRect: CGRect, excludedRects: [CGRect], gridRuler: RulerConfiguration?,
                       gridSpacing: ViewportGridVisualSpacingMode,
                       callback: @escaping (MeshSourcePresentationRenderError?) -> Void,
@@ -140,6 +140,10 @@ struct RealityViewportView: View {
                 guard let self, current === viewport,
                       viewport.isBound(to: ObjectIdentifier(self)) else { return true }
                 do {
+                    // Solid vertices, affordance anchors and colliders consume
+                    // one mutation without yielding or preparing another frame.
+                    try viewport.applyObjectPreviews(objectPreviews, displayMode: displayMode,
+                                                     snapshotID: previewSnapshotID)
                     let error = try viewport.updateSpatialCamera(safeRect: safeRect, excludedRects: excludedRects,
                                                                 gridRuler: gridRuler, gridSpacing: gridSpacing)
                     viewport.setPresentationEnabled(true)

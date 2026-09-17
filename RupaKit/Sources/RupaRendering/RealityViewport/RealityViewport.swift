@@ -851,7 +851,8 @@ final class RealityViewport {
         guard let content, let appliedLayout, appliedViewportRevision != nil else { return nil }
         let gridError = try spatialResources?.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: excludedRects,
                                            gridRuler: gridRuler, gridBasis: appliedLayout.basis,
-                                           gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing)
+                                           gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing,
+                                           objectPreviews: appliedObjectPreviews)
         try updateCameraCalibration(content: content)
         if let spatialResources, spatialResources.hasSectionedCameraGeometry {
             bounds = fixedBounds
@@ -1306,7 +1307,11 @@ final class RealityViewport {
             throw Self.queryFailure("The native handle query requires a finite point and matching mounted frame.")
         }
         guard let spatialResources, spatialResources.collisionBounds != nil else { return [] }
-        let query = try nativeHits(at: point, mask: [Self.surfaceCollisionGroup, Self.spatialCollisionGroup])
+        // Preview surfaces no longer match committed collision geometry.
+        // Annotation handles remain authoritative through their live colliders.
+        let previewing = !appliedObjectPreviews.isEmpty
+        let query = try nativeHits(at: point, mask: previewing ? Self.spatialCollisionGroup
+                                  : [Self.surfaceCollisionGroup, Self.spatialCollisionGroup])
         var occluder: Float?
         for hit in query.hits {
             guard hit.entity.isEnabledInHierarchy else { continue }
@@ -1330,6 +1335,7 @@ final class RealityViewport {
             guard let metadata = spatialResources.handleMetadata(for: hit.entity) else {
                 throw Self.queryFailure("The native collision hit has no prepared handle provenance.")
             }
+            if previewing && metadata.depth != .annotation { continue }
             guard let distance = try spatialResources.projectedHandleDistance(for: hit.entity, at: point,
                 section: metadata.attachment == .sectionedGeometry ? section : nil, project: {
                 self.content?.project(point: $0, to: .local)

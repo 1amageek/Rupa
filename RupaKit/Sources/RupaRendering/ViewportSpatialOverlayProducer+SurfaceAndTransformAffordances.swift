@@ -283,6 +283,7 @@ extension ViewportSpatialOverlayProducer {
             let state: SurfaceTransformAffordanceState
             var hitTolerancePoints: Float? = nil
             var occurrenceID: String? = nil
+            var objectPreviewOccurrenceID: String? = nil
         }
 
         struct CameraPath: Sendable {
@@ -313,6 +314,7 @@ extension ViewportSpatialOverlayProducer {
             /// from it states that distance here, and the mounted camera
             /// resolves it on every update.
             var offset: RealityViewportSpatialBatch.Offset = .zero
+            var objectPreviewOccurrenceID: String? = nil
         }
 
         struct Label: Sendable {
@@ -549,11 +551,12 @@ extension ViewportSpatialOverlayProducer {
             var line = RealityViewportSpatialBatch.CameraLine(
                 points: points,
                 color: color(for: value.state, fallback: value.color),
-                widthPoints: value.family == .transform ? 2 : nil,
+                widthPoints: value.family == .transform && !(value.route == .bodyTransform && value.identity == nil) ? 2 : nil,
                 depth: .annotation
             )
             line.handleIndex = index
             line.hitTolerancePoints = value.hitTolerancePoints
+            line.objectPreviewOccurrenceID = value.objectPreviewOccurrenceID
             cameraLines.append(.init(family: value.family, value: line))
             activeFamilies.insert(value.family)
         }
@@ -626,6 +629,7 @@ extension ViewportSpatialOverlayProducer {
             marker.handleIndex = index
             marker.hitTolerancePoints = value.hitTolerancePoints
             marker.offset = value.offset
+            marker.objectPreviewOccurrenceID = value.objectPreviewOccurrenceID
             markers.append(.init(family: value.family, value: marker))
             activeFamilies.insert(value.family)
         }
@@ -2686,15 +2690,15 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
+        let firstCameraLine = cameraLines.count
+        let firstMarker = markers.count
         var corners = edit.worldBoxCorners
         if input.allowsBodyResize, let member = objectMembers?.first,
            objectMembers?.count == 1, let resize = member.resize {
             let vertices: [ViewportBodyVertex] = [.frontBottomLeft, .frontBottomRight,
                 .backBottomLeft, .backBottomRight, .frontTopLeft, .frontTopRight, .backTopLeft, .backTopRight]
             corners = try vertices.map { vertex in
-                let point = try resize.point(for: .vertexMove(vertex))
-                guard let mutation = input.bodyPreviewTransforms[member.occurrenceID] else { return point }
-                return try ViewportWorldTransformAlgebra.transformedPoint(point, by: mutation)
+                try resize.point(for: .vertexMove(vertex))
             }
         }
         guard corners.count == 8, corners.allSatisfy(isFinitePoint) else {
@@ -2735,6 +2739,14 @@ private extension ViewportSpatialOverlayProducer {
             (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
         ]
         for (start, end) in edges {
+            if objectMembers != nil {
+                try appendCameraLine(.init(route: .bodyTransform,
+                    points: [corners[start], corners[end]].map {
+                        .init(anchor: $0, toward: $0, usesFixedOffset: true)
+                    }, color: selectionColor, family: .transform, identity: nil, state: .normal),
+                    to: &cameraLines, checkpoint: checkpoint)
+                continue
+            }
             try appendWorldLine(
                 .init(
                     route: .bodyTransform,
@@ -2844,10 +2856,7 @@ private extension ViewportSpatialOverlayProducer {
                 + ViewportBodyVertex.allCases.map(ViewportAffordanceAction.vertexMove)
             for action in actions {
                 let identity = try affordance(action)
-                var anchor = try resize.point(for: action)
-                if let mutation = input.bodyPreviewTransforms[member.occurrenceID] {
-                    anchor = try ViewportWorldTransformAlgebra.transformedPoint(anchor, by: mutation)
-                }
+                let anchor = try resize.point(for: action)
                 let color: SIMD4<Float>
                 if case .faceMove = action { color = SIMD4(0.24, 0.24, 0.24, 1) }
                 else { color = SIMD4(0.60, 0.63, 0.65, 1) }
@@ -2914,6 +2923,10 @@ private extension ViewportSpatialOverlayProducer {
                 to: &cameraLines,
                 checkpoint: checkpoint
             )
+        }
+        if let occurrence = objectMembers?.first?.occurrenceID {
+            for index in firstCameraLine..<cameraLines.count { cameraLines[index].objectPreviewOccurrenceID = occurrence }
+            for index in firstMarker..<markers.count { markers[index].objectPreviewOccurrenceID = occurrence }
         }
     }
 

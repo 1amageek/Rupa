@@ -745,6 +745,17 @@ Signed preview transforms reverse triangle winding and normals together on
 reflection. Collapsed triangles are omitted from surface drawing during a zero
 crossing while boundary lines and handles remain available. Recovery to a
 nonzero transform reuses the same buffers; zero is never a source commit.
+Body-affordance markers and camera lines carry an optional occurrence preview
+binding. The MainActor mount applies object previews and camera annotations in
+one non-suspending update. Anchor points receive the absolute mutation; directed
+offset reference points receive only the anchor displacement so world axes and
+screen sizes do not scale or flip. Collision proxies consume those same updated
+vertices. Immutable batch anchors remain the baseline, including through zero;
+empty preview restores them without native resource allocation or a worker.
+Bound-occurrence string storage is admitted with the batch's byte budget.
+During preview, annotation-handle queries use live spatial colliders only;
+committed surface colliders cannot supply occlusion or identity for preview
+surfaces. Scene-depth handles remain unavailable until commit or cancellation.
 
 1. Exactly one frame identity tuple `(required source identity and derived
    ViewportSceneSnapshotKey, optional real snapshotID, viewportRevision,

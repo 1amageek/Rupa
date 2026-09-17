@@ -834,6 +834,13 @@ independent tessellator is never an alternative implementation.
    the absolute world mutation, including shear, while retaining surface
    materials. They never mutate shared source assets. Empty preview state
    restores the committed mesh; release uses the existing commit handoff.
+   Presentation-backed body mutations are not semantic overlay revisions.
+   The producer retains baseline anchors with occurrence preview bindings;
+   the mounted frame applies the same mutation to solid vertices, bounds,
+   face/corner markers and the gizmo center in one synchronous update.
+   World-axis directions and point-sized decorations remain unchanged.
+   Native colliders follow those same anchors. Selection/source/route changes
+   still rebuild semantics, and press baselines never follow preview geometry.
    Release measures its own point against a matching mounted camera, including
    release without preview. An unready frame retains the closed release until
    answered; source, selection, route or release-revision changes and Escape

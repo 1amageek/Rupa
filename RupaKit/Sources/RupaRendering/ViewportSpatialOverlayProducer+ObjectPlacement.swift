@@ -37,16 +37,10 @@ extension ViewportSpatialOverlayProducer {
             default: return nil
             }
             let world = item.worldBounds
-            var bounds = ViewportObjectEditState(
+            let bounds = ViewportObjectEditState(
                 xMin: CGFloat(world.minimum.x), xMax: CGFloat(world.maximum.x),
                 yMin: CGFloat(world.minimum.y), yMax: CGFloat(world.maximum.y),
                 zMin: CGFloat(world.minimum.z), zMax: CGFloat(world.maximum.z))
-            if let mutation = input.bodyPreviewTransforms[item.occurrenceID.rawValue] {
-                let points = try bounds.worldBoxCorners.map { try ViewportWorldTransformAlgebra.transformedPoint($0, by: mutation) }
-                bounds = .init(xMin: CGFloat(points.map(\.x).min()!), xMax: CGFloat(points.map(\.x).max()!),
-                               yMin: CGFloat(points.map(\.y).min()!), yMax: CGFloat(points.map(\.y).max()!),
-                               zMin: CGFloat(points.map(\.z).min()!), zMax: CGFloat(points.map(\.z).max()!))
-            }
             let resize: ViewportBodyResizeBaseline?
             if input.allowsBodyResize, selected.count == 1, case .cad(_, let output) = item.reference,
                output == reference.featureID?.description {
