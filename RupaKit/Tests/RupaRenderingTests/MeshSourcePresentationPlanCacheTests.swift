@@ -492,10 +492,8 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     cache.prepare(request(scene, revision: 2))
     cache.prepare(request(scene, revision: 3))
     await gate.open("1")
-    await gate.waitForArrival("2")
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 1)) == nil)
     #expect(cache.isPreparing(planCacheIdentity(scene, overlayRevision: 3)))
-    await gate.open("2")
     try await settlePlanCache(cache)
     let ready = try #require(cache.surface(for: planCacheIdentity(scene, overlayRevision: 3)))
     cache.prepare(request(scene, revision: 4))
@@ -509,7 +507,7 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4)) == nil,
             "An overlay-only rebuild must not report the pending frame as prepared.")
     try await settlePlanCache(cache)
-    #expect(started.withLock { $0 } == 2, "Overlay-only replacement rebuilt the surface plan.")
+    #expect(started.withLock { $0 } == 1, "Overlay-only replacement rebuilt the surface plan.")
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 3)) == nil)
     #expect(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4))?.maximumNativeUploadDuration == .zero)
     let replacement = try #require(cache.surface(for: planCacheIdentity(scene, overlayRevision: 4)))
@@ -527,7 +525,7 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     let emptyIdentity = planCacheIdentity(nil, overlayRevision: 5)
     #expect(empty.snapshotID == nil)
     #expect(empty.root.children.contains { $0 === empty.camera })
-    #expect(started.withLock { $0 } == 2)
+    #expect(started.withLock { $0 } == 1)
 
     // The exact-ready surface is not queryable until its native root is mounted.
     #expect(throws: MeshSourcePresentationRenderError.self) {
