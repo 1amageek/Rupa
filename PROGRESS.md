@@ -1,6 +1,6 @@
 # Progress
 
-- [x] UI-P1-0917 Fixed persistent body translation/rotation/axis scaling and atomic group placement, occurrence-owned mesh previews, release-point measurement, Escape and stale source/selection/parent-frame refusal; reviewed and verified task-only changes for the local commit. New topology editing and P2 capability expansion remain out of scope. `depends:none` `parallel:none`
+- [x] UI-P1-0917 Fixed persistent body translation/rotation/axis scaling and atomic group placement, occurrence-owned mesh previews, release-point measurement, Escape and stale source/selection/parent-frame refusal; reviewed and verified task-only changes in commit 6d439eba. New topology editing and P2 capability expansion remain out of scope. `depends:none` `parallel:none`
 
 - [x] UII-1 要求されたCAD/Mesh UI gapについて、実装・caller・behavioral testからexact backend capability、authority、failure、preview/commit/cancel契約を確定し、API宣言だけをsupportedと扱わない `depends:none` `parallel:none`
   - [x] UII-1.1 file/historyを確認し、STL/OBJはAuthored Meshとして編集可能、STEP readerは存在するがexact B-rep source retentionが未接続、AppがURLを所有しCore provenanceへabsolute pathを残さない、metadataがないSTL/OBJ importは明示unit必須、STEP unitは保持、unsupported entityはtyped refusal、historyはdependency-safe reorder/suppression/parameter stageとundoが必要と確定した `depends:none` `parallel:UII-DISCOVERY`
