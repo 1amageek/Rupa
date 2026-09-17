@@ -152,7 +152,9 @@ struct WorkspaceObjectShapeInspectorView: View {
             return nil
         }
         if meters.count == values.count {
-            let range = lengthSliderRange(for: property, values: meters)
+            let cornerLimit = property.renderBinding == .cornerRadius
+                ? shapes.compactMap(\.cornerRadiusLimit).min() : nil
+            let range = cornerLimit.map { 0...$0 } ?? lengthSliderRange(for: property, values: meters)
             workspaceLengthControl(
                 property.title,
                 values: meters,

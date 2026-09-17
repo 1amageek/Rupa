@@ -34,7 +34,7 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
         }
         let configuration = CADGeometryEvaluationConfiguration(
             tolerance: document.modelingSettings.tolerance,
-            tessellationOptions: document.modelingSettings.tessellationOptions
+            tessellationOptions: try document.displayTessellationOptions()
         )
         let cadEvaluationCache = CADDocumentEvaluationCache()
         let registry = try GeometrySourceEvaluationProviderRegistry(

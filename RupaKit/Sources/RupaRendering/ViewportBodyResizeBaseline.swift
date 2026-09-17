@@ -17,7 +17,7 @@ struct ViewportBodyResizeBaseline: Sendable {
                         worldTransform: Transform3D) throws -> Self? {
         guard let node = document.productMetadata.sceneNodes[nodeID],
               let featureID = node.reference?.featureID,
-              let feature = document.cadDocument.designGraph.nodes[featureID],
+              let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
               case .extrude(let extrude) = feature.operation,
               extrude.direction == .normal,
               let profile = document.cadDocument.designGraph.nodes[extrude.profile.featureID],

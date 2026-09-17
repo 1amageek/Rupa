@@ -91,6 +91,12 @@ flowchart LR
 
 ## Contracts and Invariants
 
+Box Corner Inspector values are projected from the exact source through
+[Core's Corner contract](../RupaCore/DESIGN.md), not stale stored property defaults.
+Its slider is bounded by the smallest source dimension and modeling tolerance.
+Corner Sides remains a product display property consumed by Core's shared
+evaluation-quality resolver; it does not change the CAD radius.
+
 The object inspector follows the [Core scene placement convention](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
 Each inspector visibility, lock or material choice submits all selected nodes
 in one source command array through MainView's existing transaction boundary.

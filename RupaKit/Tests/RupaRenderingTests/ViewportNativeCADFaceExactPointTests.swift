@@ -160,9 +160,21 @@ private enum NativeCADFaceFixtureError: Error {
 /// The production pairing: a document-identified viewport supplied with the
 /// bridge's presentation scene and the same evaluation `MainView` hands it.
 @MainActor
-private func nativeCADFaceFixture() throws -> NativeCADFaceFixture {
+private func nativeCADFaceFixture(rounded: Bool = false, cube: Bool = false) throws -> NativeCADFaceFixture {
     let session = EditorSession()
-    _ = session.createDefaultExtrudedRectangle()
+    if cube {
+        _ = try session.execute(.createExtrudedRectangle(name: "Corner proof", plane: .xy,
+            width: .length(0.1, .meter), height: .length(0.1, .meter),
+            depth: .length(0.1, .meter), direction: .normal))
+    } else {
+        _ = session.createDefaultExtrudedRectangle()
+    }
+    if rounded {
+        let node = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
+        let size = try ObjectDimensionSourceResolver().resolve(target: .init(sceneNodeID: node.id), in: session.document)
+        _ = try session.execute(.setSceneNodeObjectProperty(id: node.id, propertyID: "corner.radius",
+            value: .length(min(size.sizeX, size.sizeY, size.sizeZ) / 4)))
+    }
     let currentEvaluation = try #require(session.currentEvaluation)
     let document = session.document
     let projection = try DesignDocumentProjectBridge().projection(for: document)
@@ -211,6 +223,30 @@ private func nativeCADFaceFixture() throws -> NativeCADFaceFixture {
         topology: topology,
         modelTransform: bodyItem.modelTransform
     )
+}
+
+@MainActor @Test(.timeLimit(.minutes(1)))
+func viewportRoundedBoxActuallyRemovesTheRenderedCorner() async throws {
+    _ = NSApplication.shared
+    let size = CGSize(width: 800, height: 600)
+    for rounded in [false, true] {
+        let fixture = try nativeCADFaceFixture(rounded: rounded, cube: true)
+        let control = ViewportControlSession(camera: .init(projection: .parallel), basis: .axisFront(.z))
+        let layout = ViewportSceneContext(ruler: fixture.ruler, scene: fixture.cpuScene, size: size,
+            camera: control.camera, basis: .axisFront(.z),
+            geometryBoundsSource: .geometry(fixture.presentationScene.worldBounds),
+            fittingInsets: ViewportCanvasChromeLayout(viewportSize: size,
+                viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth).fittingInsets).layout
+        let points = fixture.topology.faces.flatMap { face in
+            nativeCADFaceWorldPolygon(face, transform: fixture.modelTransform).compactMap { layout.projectedPoint($0)?.point }
+        }
+        let x0 = try #require(points.map(\.x).min()), x1 = try #require(points.map(\.x).max())
+        let y0 = try #require(points.map(\.y).min()), y1 = try #require(points.map(\.y).max())
+        let corner = CGPoint(x: x0 + (x1 - x0) * 0.04, y: y0 + (y1 - y0) * 0.04)
+        let answer = try await probeNativeCADFace(fixture: fixture, control: control, size: size,
+            selection: .empty, press: corner, dragEnd: .init(x: corner.x + 2, y: corner.y + 2))
+        #expect((answer.target.hit != nil) == !rounded)
+    }
 }
 
 @MainActor

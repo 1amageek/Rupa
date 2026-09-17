@@ -9,6 +9,16 @@ extension DesignDocument {
         value: ObjectPropertyValue?,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        var updated = self
+        try updated.applySceneNodeObjectProperty(id: id, propertyID: propertyID, value: value,
+                                               objectRegistry: objectRegistry)
+        self = updated
+    }
+
+    private mutating func applySceneNodeObjectProperty(
+        id: SceneNodeID, propertyID: PropertyID, value: ObjectPropertyValue?,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
         guard var node = productMetadata.sceneNodes[id],
               var object = node.object else {
             throw EditorError(
@@ -117,6 +127,22 @@ extension DesignDocument {
         }
         switch object.typeID {
         case .some(.cube):
+            if binding == .cornerRadius {
+                guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+                      case .length(let radius) = definition.resolvedProperties(object.properties)[property.id] else {
+                    throw EditorError(code: .commandInvalid, message: "Corner requires a length value.")
+                }
+                try setBoxCorner(featureID: featureID, radius: radius)
+                return
+            }
+            if binding == .cornerSideSegments {
+                guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+                      case .integer(let count) = definition.resolvedProperties(object.properties)[property.id],
+                      count > 0 else {
+                    throw EditorError(code: .commandInvalid, message: "Corner Sides must be positive.")
+                }
+                return
+            }
             guard binding == .sizeX || binding == .sizeY || binding == .sizeZ else {
                 return
             }

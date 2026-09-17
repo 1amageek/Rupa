@@ -42,6 +42,8 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                     case .sizeZ: properties[property.id] = .length(source.sizeZ)
                     case .radius:
                         if let radius = source.radius { properties[property.id] = .length(radius) }
+                    case .cornerRadius where object.typeID == .cube:
+                        properties[property.id] = .length(try document.boxCornerRadius(source.featureID))
                     default: break
                     }
                 }
@@ -52,7 +54,9 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 typeID: object.typeID, definition: definition, properties: properties,
                 center: bounds.map { .init(x: ($0.minimum.x + $0.maximum.x) / 2,
                     y: ($0.minimum.y + $0.maximum.y) / 2, z: ($0.minimum.z + $0.maximum.z) / 2) },
-                size: size)
+                size: size, cornerRadiusLimit: object.typeID == .cube ? size.map {
+                    max(0, min($0.x, $0.y, $0.z) / 2 - document.modelingSettings.tolerance.distance)
+                } : nil)
         }
     }
 

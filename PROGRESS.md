@@ -1,5 +1,9 @@
 # Progress
 
+- [x] CORNER-1 User confirmed exact CAD Corner and display-only Corner Sides. Preserve source authority, dimensions, placement, radius-zero reversibility, persistence and Undo. `depends:none` `parallel:none`
+- [x] CORNER-K1 Exact all-edge box fillet, volume, bounds, mesh, persistence and invalid-radius checks passed; swift-CAD `bf27eef`. `depends:CORNER-1` `parallel:none`
+- [x] CORNER-2 Connected exact Corner, display-only Corner Sides, source dimensions and Inspector bounds. Core 2 tests, project publication 1 test and hidden native rounded-corner test passed; signed App build passed. Scoped source commit accompanies this record. `depends:CORNER-K1` `parallel:none`
+
 - [x] CENTER-HANDLE-1 Native marker priority prevents shaft translation; XYZ centered displacement and native regressions passed (12 functions/33 runs). Commit 9bb674471. `depends:none` `parallel:none`
 
 - [x] AFFORDANCE-1 Anchored box source resizing, six face/eight corner handles, translation cones and centered scale; fixed-face/affine/source-geometry/native-input/Undo verification passed. Commit fd1c05b06. `depends:none` `parallel:none`

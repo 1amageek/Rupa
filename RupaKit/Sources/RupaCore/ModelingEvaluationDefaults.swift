@@ -5,10 +5,10 @@ public extension DocumentEvaluator {
     static func modelingDefault(
         for document: DesignDocument,
         objectRegistry _: ObjectTypeRegistry = .builtIn
-    ) -> DocumentEvaluator {
+    ) throws -> DocumentEvaluator {
         DocumentEvaluator(
             tolerance: document.modelingSettings.tolerance,
-            tessellationOptions: document.modelingSettings.tessellationOptions,
+            tessellationOptions: try document.displayTessellationOptions(),
             artifactPolicy: .materialized
         )
     }
@@ -18,13 +18,13 @@ public extension CADPipeline {
     static func modelingDefault(
         for document: DesignDocument,
         objectRegistry _: ObjectTypeRegistry = .builtIn
-    ) -> CADPipeline {
+    ) throws -> CADPipeline {
         let tolerance = document.modelingSettings.tolerance
         return CADPipeline(
             tolerance: tolerance,
             evaluator: DocumentEvaluator(
                 tolerance: tolerance,
-                tessellationOptions: document.modelingSettings.tessellationOptions,
+                tessellationOptions: try document.displayTessellationOptions(),
                 artifactPolicy: .materialized
             )
         )

@@ -12,6 +12,33 @@ import Testing
 @testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
+func projectCornerPropertiesPublishRoundedMeshAndDisplayOnlySubdivision() async throws {
+    let fixture = try extrudedCADDocument(named: "Corner", depth: 1)
+    let nodeID = try bodySceneNodeID(in: fixture.document, featureID: fixture.bodyFeatureID)
+    let controller = try makeCADProjectController(document: fixture.document)
+    var counts: [Int] = []
+    var fingerprints: [CADDocumentSourceFingerprint] = []
+    for (index, command) in [
+        EditorCommand.setSceneNodeObjectProperty(id: nodeID, propertyID: "corner.radius", value: .length(0.1)),
+        .setSceneNodeObjectProperty(id: nodeID, propertyID: "corner.sides", value: .integer(16))
+    ].enumerated() {
+        let result = try await controller.commit(ProjectSourceTransaction(
+            name: "corner", commands: [command], expectedProjectID: fixture.document.projectID,
+            expectedTransactionRevision: DocumentTransactionRevision(UInt64(index)),
+            expectedPublicationSequence: UInt64(index)))
+        let occurrence = try #require(result.evaluation.occurrences.values.first {
+            $0.reference.providerID == CADGeometrySourceProvider.identifier
+        })
+        counts.append(occurrence.mesh.faceIDs.count)
+        let document = await controller.currentDocument()
+        fingerprints.append(try document.cadDocument.sourceFingerprint(tolerance: .standard))
+        #expect(abs(occurrence.worldBounds.maximum.z - occurrence.worldBounds.minimum.z - 1) < 1e-6)
+    }
+    #expect(counts[1] > counts[0])
+    #expect(fingerprints[0] == fingerprints[1])
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectControllerEvaluatesCADCreatedAfterInitialization() async throws {
     let controller = try makeCADProjectController(
         document: .empty(named: "Created CAD")

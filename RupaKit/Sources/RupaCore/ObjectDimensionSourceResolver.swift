@@ -40,7 +40,7 @@ package struct ObjectDimensionSourceResolver: Sendable {
                 message: "Object dimension requires a body source feature."
             )
         }
-        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+        guard let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
               case let .extrude(extrude) = feature.operation,
               let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
               case let .sketch(sketch) = profileFeature.operation else {

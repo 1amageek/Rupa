@@ -40,6 +40,7 @@ Box resize handles are distinct from occurrence scaling. Six dark face handles
 move one source-frame bound; eight gray corner handles measure displacement in
 the mounted camera's view plane and move the three incident bounds. Opposite
 bounds remain fixed, so the center changes. A single editable rectangle-extrusion
+or its Core-owned all-edge Corner wrapper (see [Core source design](../RupaCore/DESIGN.md))
 occurrence with positive normal extrusion supplies the source frame and dimensions; unsupported sources and
 multi-selection expose placement controls only. The source frame includes the
 sketch plane and the complete occurrence affine transform, including shear.

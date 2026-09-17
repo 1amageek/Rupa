@@ -76,7 +76,8 @@ extension DesignDocument {
         let sizeXMeters = try resolvedPositiveLengthValue(sizeX, owner: "Cube size X")
         let sizeZMeters = try resolvedPositiveLengthValue(sizeZ, owner: "Cube size Z")
         let sizeYMeters = try resolvedPositiveLengthValue(sizeY, owner: "Cube size Y")
-        guard var feature = cadDocument.designGraph.nodes[featureID] else {
+        try validateBoxCorner(boxCornerRadius(featureID), sizes: [sizeXMeters, sizeYMeters, sizeZMeters])
+        guard var feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Cube dimensions require an existing body feature."
@@ -299,7 +300,7 @@ extension DesignDocument {
     func resolvedExtrudedBodyDimensions(
         featureID: FeatureID
     ) throws -> (sizeX: Double, sizeY: Double, sizeZ: Double, radius: Double?) {
-        guard let feature = cadDocument.designGraph.nodes[featureID],
+        guard let feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)],
               case let .extrude(extrude) = feature.operation,
               let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
               case let .sketch(sketch) = profileFeature.operation else {

@@ -35,7 +35,7 @@ public struct SelectionMeasurementService: Sendable {
             )
         }
 
-        let pipeline = pipelineOverride ?? .modelingDefault(
+        let pipeline = try pipelineOverride ?? .modelingDefault(
             for: document,
             objectRegistry: objectRegistry
         )

@@ -16,6 +16,24 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
+### Box Corner source
+
+`Corner` is an exact all-edge box fillet. Core retains the visible feature ID
+and scene placement, moving its original extrusion into an intermediate input
+and using the visible feature for the fillet. Setting zero restores that extrusion
+and removes only its unshared intermediate input. Dimension editing resolves
+through this all-edge wrapper; other fillets are not editable box primitives.
+The radius must be zero or greater than the modeling tolerance and strictly
+below half the shortest dimension. Rejected edits publish no source or property
+change. `Corner Sides` is a positive display subdivision count, not exact geometry.
+Verification covers source bounds, radius-zero restoration, source dimensions,
+property failure atomicity, persistence, and command history.
+Core resolves display tessellation options from the current exact radius and
+product subdivision count. Both modeling evaluation and the universal project
+provider consume that result, so a staged evaluation can seed the published
+artifact without changing its fidelity identity. Invalid quality throws before
+evaluation; the existing scheduler reports it as failure.
+
 The existing `ObjectDimensionSourceResolver` is also available within this
 package for Inspector projection from a published, validated document. It is
 the same resolver used by `setObjectDimension`; UI must not substitute placed

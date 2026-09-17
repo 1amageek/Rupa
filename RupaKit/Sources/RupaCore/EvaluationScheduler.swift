@@ -63,12 +63,10 @@ public struct EvaluationScheduler: Sendable {
             )
         }
 
-        let evaluator = evaluatorOverride ?? .modelingDefault(
-            for: document,
-            objectRegistry: objectRegistry
-        )
         let evaluatedDocument: EvaluatedDocument
         do {
+            let evaluator = try evaluatorOverride ?? .modelingDefault(
+                for: document, objectRegistry: objectRegistry)
             evaluatedDocument = try evaluator.evaluate(
                 validatedDocument.validatedCADDocument,
                 reusing: previous

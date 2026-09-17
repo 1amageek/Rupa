@@ -26,7 +26,7 @@ public struct SelectionDimensionService: Sendable {
             )
         }
 
-        let pipeline = pipelineOverride ?? .modelingDefault(
+        let pipeline = try pipelineOverride ?? .modelingDefault(
             for: document,
             objectRegistry: objectRegistry
         )

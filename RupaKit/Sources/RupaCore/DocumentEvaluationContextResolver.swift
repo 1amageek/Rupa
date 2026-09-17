@@ -29,7 +29,7 @@ public struct DocumentEvaluationContextResolver: Sendable {
         }
 
         do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
+            let pipeline = try pipelineOverride ?? .modelingDefault(
                 for: document,
                 objectRegistry: objectRegistry
             )
@@ -58,7 +58,7 @@ public struct DocumentEvaluationContextResolver: Sendable {
         }
 
         do {
-            let evaluator = exactEvaluatorOverride ?? DocumentEvaluator.modelingDefault(
+            let evaluator = try exactEvaluatorOverride ?? DocumentEvaluator.modelingDefault(
                 for: document,
                 objectRegistry: objectRegistry
             )
