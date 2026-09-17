@@ -711,6 +711,11 @@ descriptor/resource counts and platform measurements bound it, but Rupa does
 not claim an exact tessellation byte size.
 
 World polylines use native RealityKit line topology and its native width. CAD
+transform camera-lines additionally use shared native unit-box segments at 3pt
+screen thickness. Camera updates only change segment transforms; admission
+counts these entities and their geometry. Existing collision tolerances and
+handle identities are independent of visible thickness and remain unchanged.
+Other world lines retain native width. CAD
 state is distinguished by semantic color and depth plus existing fill, marker,
 or label cues; Canvas pixel widths, halos, caps, and joins are not recreated and
 their absence never makes the CAD operation unsupported. A planar

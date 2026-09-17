@@ -20,7 +20,7 @@ final class RealityViewportSpatialResources {
     private let batch: RealityViewportSpatialBatch
     private var labels: [(Entity, RealityViewportSpatialBatch.Label, Entity?)] = []
     private var markers: [(Entity, RealityViewportSpatialBatch.Marker)] = []
-    private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine, [Entity])] = []
+    private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine, [Entity], [ModelEntity])] = []
     private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
     private var grid: (entity: ModelEntity, mesh: LowLevelMesh)?
@@ -1022,7 +1022,17 @@ final class RealityViewportSpatialResources {
                         index: index, depth: line.depth, attachment: line.attachment, tolerance: tolerance))
                 }
             }
-            result.cameraLines.append((entity, mesh, line, proxies))
+            var strokes: [ModelEntity] = []
+            if line.widthPoints != nil {
+                if box == nil { box = .generateBox(size: 1) }
+                guard let box else { throw RealityViewportSpatialBatch.invalid("Native line resource is unavailable.") }
+                for _ in 1..<count {
+                    let stroke = ModelEntity(mesh: box, materials: [material(line.color, depth: line.depth)])
+                    entity.addChild(stroke)
+                    strokes.append(stroke)
+                }
+            }
+            result.cameraLines.append((entity, mesh, line, proxies, strokes))
             result.register(entity, handleIndex: line.handleIndex)
             result.root(for: line.attachment).addChild(entity)
         }
@@ -1167,7 +1177,7 @@ final class RealityViewportSpatialResources {
                 collider?.isEnabled = false
             }
             for (entity, _) in markers { entity.isEnabled = false }
-            for (entity, _, _, _) in cameraLines { entity.isEnabled = false }
+            for (entity, _, _, _, _) in cameraLines { entity.isEnabled = false }
             for (_, label, line, _) in boundsRulers {
                 label.isEnabled = false; line.isEnabled = false
             }
@@ -1232,7 +1242,7 @@ final class RealityViewportSpatialResources {
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
         }
-        for (entity, mesh, line, proxies) in cameraLines {
+        for (entity, mesh, line, proxies, strokes) in cameraLines {
             var valid = true
             var missingProvenance = false
             var bounds = BoundingBox()
@@ -1249,6 +1259,24 @@ final class RealityViewportSpatialResources {
                     bounds.formUnion(BoundingBox(min: placement.position, max: placement.position))
                 }
                 if valid {
+                    for (offset, stroke) in strokes.enumerated() {
+                        let first = vertices[offset], last = vertices[offset + 1]
+                        let delta = last - first
+                        let length = simd_length(delta)
+                        guard let width = line.widthPoints,
+                              let placement = placement(anchor: line.points[offset].anchor,
+                                offset: line.points[offset].offset, projection: projection, allowsBehindCamera: true) else {
+                            valid = false
+                            break
+                        }
+                        let thickness = width * placement.metersPerPoint
+                        stroke.isEnabled = length > 0 && thickness.isFinite && thickness > 0
+                        if stroke.isEnabled {
+                            stroke.position = (first + last) / 2
+                            stroke.orientation = simd_quatf(from: SIMD3<Float>(1, 0, 0), to: delta / length)
+                            stroke.scale = [length, thickness, thickness]
+                        }
+                    }
                     for (offset, proxy) in proxies.enumerated() {
                         guard let index = lineCollisionIndex[ObjectIdentifier(proxy)] else {
                             missingProvenance = true

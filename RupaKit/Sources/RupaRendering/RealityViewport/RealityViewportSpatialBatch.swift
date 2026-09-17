@@ -112,6 +112,7 @@ struct RealityViewportSpatialBatch: Sendable {
     struct CameraLine: Sendable {
         let points: [CameraPoint]
         let color: SIMD4<Float>
+        var widthPoints: Float? = nil
         var depth: Depth = .annotation
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
@@ -477,11 +478,27 @@ struct RealityViewportSpatialBatch: Sendable {
             }
         }
         for line in cameraLines {
+            guard line.points.count >= 2 else { throw Self.invalid("A camera-relative line requires two points.") }
+            if let width = line.widthPoints {
+                guard width.isFinite, width > 0 else { throw Self.invalid("Camera line width is invalid.") }
+                for _ in 1..<line.points.count {
+                    try item()
+                    try positions(24)
+                    let sum = triangleCount.addingReportingOverflow(12)
+                    guard !sum.overflow, sum.partialValue <= limits.maxTriangleCount else {
+                        throw Self.exhausted()
+                    }
+                    triangleCount = sum.partialValue
+                    try charge(1, stride: MemoryLayout<ModelEntity>.stride)
+                    try charge(24, stride: MemoryLayout<SIMD3<Float>>.stride)
+                    try charge(36, stride: MemoryLayout<UInt32>.stride)
+                }
+            }
             try validateHandle(line.handleIndex)
             try validateHitTolerance(line.hitTolerancePoints)
             try item()
             try positions(line.points.count)
-            try charge(1, stride: MemoryLayout<CameraLine>.stride + MemoryLayout<(ModelEntity, LowLevelMesh, CameraLine, [Entity])>.stride)
+            try charge(1, stride: MemoryLayout<CameraLine>.stride + MemoryLayout<(ModelEntity, LowLevelMesh, CameraLine, [Entity], [ModelEntity])>.stride)
             try charge(line.points.count, stride: MemoryLayout<CameraPoint>.stride + MemoryLayout<SIMD3<Float>>.stride + 2 * MemoryLayout<UInt32>.stride)
             try Self.validateColor(line.color)
             guard line.points.count >= 2 else { throw Self.invalid("A camera-relative line requires two points.") }
