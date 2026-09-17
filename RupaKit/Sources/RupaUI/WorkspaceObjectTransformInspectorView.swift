@@ -6,9 +6,7 @@ struct WorkspaceObjectTransformInspectorView: View {
     var displayUnit: LengthDisplayUnit
     var positionSliderMetersRange: ClosedRange<Double>
     var materialOptions: [WorkspaceObjectMaterialOption]
-    var onSetVisibility: (SceneNodeID, Bool) -> Void
-    var onSetLock: (SceneNodeID, Bool) -> Void
-    var onSetMaterial: (SceneNodeID, MaterialID?) -> Void
+    var onCommitProperties: ([EditorCommand], String) -> Void
     var isBusy: Bool
     var hasMatchingPreview: Bool
     var previewError: String?
@@ -78,14 +76,14 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "Visible",
                 nodes: nodes,
                 keyPath: \.isVisible,
-                apply: onSetVisibility
+                command: { .setSceneNodeVisibility(id: $0, isVisible: $1) }
             )
 
             boolChoicePicker(
                 "Locked",
                 nodes: nodes,
                 keyPath: \.isLocked,
-                apply: onSetLock
+                command: { .setSceneNodeLock(id: $0, isLocked: $1) }
             )
         }
     }
@@ -164,25 +162,7 @@ struct WorkspaceObjectTransformInspectorView: View {
         inspectorControlRow("Material") {
             Picker(
                 "",
-                selection: Binding(
-                    get: {
-                        materialChoice(for: nodes)
-                    },
-                    set: { choice in
-                        switch choice {
-                        case .mixed:
-                            return
-                        case .none:
-                            for node in nodes {
-                                onSetMaterial(node.id, nil)
-                            }
-                        case .material(let materialID):
-                            for node in nodes {
-                                onSetMaterial(node.id, materialID)
-                            }
-                        }
-                    }
-                )
+                selection: materialBinding
             ) {
                 if materialChoice(for: nodes) == .mixed {
                     Text("Mixed").tag(InspectorMaterialChoice.mixed)
@@ -196,7 +176,25 @@ struct WorkspaceObjectTransformInspectorView: View {
             .labelsHidden()
             .controlSize(.small)
             .frame(minWidth: inspectorControlWidth)
+            .disabled(isBusy)
+            .accessibilityIdentifier("WorkspaceObjectTransform.material")
         }
+    }
+
+    var materialBinding: Binding<InspectorMaterialChoice> {
+        Binding(
+            get: { materialChoice(for: nodes) },
+            set: { choice in
+                guard !isBusy else { return }
+                switch choice {
+                case .mixed: return
+                case .none:
+                    onCommitProperties(nodes.map { .setSceneNodeMaterial(id: $0.id, materialID: nil) }, "Change Object Materials")
+                case .material(let materialID):
+                    onCommitProperties(nodes.map { .setSceneNodeMaterial(id: $0.id, materialID: materialID) }, "Change Object Materials")
+                }
+            }
+        )
     }
 
     private var transformSection: some View {
@@ -227,30 +225,12 @@ struct WorkspaceObjectTransformInspectorView: View {
         _ title: String,
         nodes: [SceneNode],
         keyPath: KeyPath<SceneNode, Bool>,
-        apply: @escaping (SceneNodeID, Bool) -> Void
+        command: @escaping (SceneNodeID, Bool) -> EditorCommand
     ) -> some View {
         inspectorControlRow(title) {
             Picker(
                 "",
-                selection: Binding(
-                    get: {
-                        boolChoice(nodes: nodes, keyPath: keyPath)
-                    },
-                    set: { choice in
-                        switch choice {
-                        case .mixed:
-                            return
-                        case .on:
-                            for node in nodes {
-                                apply(node.id, true)
-                            }
-                        case .off:
-                            for node in nodes {
-                                apply(node.id, false)
-                            }
-                        }
-                    }
-                )
+                selection: boolBinding(title, keyPath: keyPath, command: command)
             ) {
                 ForEach(InspectorBoolChoice.allCases) { choice in
                     Text(choice.rawValue)
@@ -260,7 +240,26 @@ struct WorkspaceObjectTransformInspectorView: View {
             .labelsHidden()
             .controlSize(.small)
             .frame(width: inspectorControlWidth)
+            .disabled(isBusy)
+            .accessibilityIdentifier("WorkspaceObjectTransform.\(title)")
         }
+    }
+
+    func boolBinding(_ title: String, keyPath: KeyPath<SceneNode, Bool>,
+                     command: @escaping (SceneNodeID, Bool) -> EditorCommand) -> Binding<InspectorBoolChoice> {
+        Binding(
+            get: { boolChoice(nodes: nodes, keyPath: keyPath) },
+            set: { choice in
+                guard !isBusy else { return }
+                switch choice {
+                case .mixed: return
+                case .on:
+                    onCommitProperties(nodes.map { command($0.id, true) }, "Change Object \(title)")
+                case .off:
+                    onCommitProperties(nodes.map { command($0.id, false) }, "Change Object \(title)")
+                }
+            }
+        )
     }
 
     private func boolChoice(

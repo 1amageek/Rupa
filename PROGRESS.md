@@ -1,5 +1,9 @@
 # Progress
 
+- [x] UI-NORMAL-1 Inspector property bindings submit one batch for visibility, lock and material; bounded macOS test passed for all three with busy refusal, real Workspace publication, one-step Undo/Redo and atomic failure. Native activation remains an integration check; scoped commit records the implementation. `depends:none` `parallel:none`
+- [ ] UI-NORMAL-2 Implement the user-approved shear-preserving inspector contract, maintaining world-axis gizmo semantics and exact affine reconstruction; verify numeric edits and failure behavior. `depends:UI-NORMAL-1` `parallel:none`
+- [ ] UI-NORMAL-3 Close authored-mesh placement affordance and remaining exposed UI workflow gaps against production operation ownership; prove successful input, refusal and cancellation. `depends:UI-NORMAL-2` `parallel:none`
+
 - [x] UI-P1-0917 Fixed persistent body translation/rotation/axis scaling and atomic group placement, occurrence-owned mesh previews, release-point measurement, Escape and stale source/selection/parent-frame refusal; reviewed and verified task-only changes in commit 6d439eba. New topology editing and P2 capability expansion remain out of scope. `depends:none` `parallel:none`
 
 - [x] UII-1 要求されたCAD/Mesh UI gapについて、実装・caller・behavioral testからexact backend capability、authority、failure、preview/commit/cancel契約を確定し、API宣言だけをsupportedと扱わない `depends:none` `parallel:none`

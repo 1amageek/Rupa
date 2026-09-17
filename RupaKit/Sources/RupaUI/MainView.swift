@@ -7211,14 +7211,8 @@ private struct ProjectMainViewContent: View {
             displayUnit: snapshot.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
-            onSetVisibility: { id, isVisible in
-                submitSource(.setSceneNodeVisibility(id: id, isVisible: isVisible))
-            },
-            onSetLock: { id, isLocked in
-                submitSource(.setSceneNodeLock(id: id, isLocked: isLocked))
-            },
-            onSetMaterial: { id, materialID in
-                submitSource(.setSceneNodeMaterial(id: id, materialID: materialID))
+            onCommitProperties: { commands, name in
+                submitSource(commands, name: name)
             },
             isBusy: modelingPreview.isBusy,
             hasMatchingPreview: modelingPreview.phase == .ready,

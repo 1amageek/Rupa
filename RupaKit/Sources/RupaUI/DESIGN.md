@@ -71,6 +71,13 @@ flowchart LR
 ## Contracts and Invariants
 
 The object inspector follows the [Core scene placement convention](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
+Each inspector visibility, lock or material choice submits all selected nodes
+in one source command array through MainView's existing transaction boundary.
+The choice either commits in full with one Undo entry or leaves source and
+history unchanged. The view emits intent once, not once per selected node;
+busy controls cannot submit another property mutation. Picker Binding tests
+verify the emitted batch and Workspace publication, rollback and Undo/Redo;
+App UI tests own native control activation.
 XYZ rotation, translation and scale preserve the remaining TRS components.
 Unsupported matrices show an explicit error rather than editable fake values.
 No old column-major compatibility controls or layout-detection path remain.
