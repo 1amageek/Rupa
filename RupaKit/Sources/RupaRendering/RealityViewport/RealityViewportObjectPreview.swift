@@ -62,10 +62,17 @@ final class RealityViewportObjectPreview {
     func update(occurrence: MeshSourcePresentationRenderPlan.Occurrence,
                 mutation: Transform3D, origin: Point3D, showsEdges: Bool) throws {
         var bounds = BoundingBox()
+        let m = mutation.matrix.values
+        let determinant = m[0] * (m[5] * m[10] - m[6] * m[9])
+            - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])
+        guard determinant.isFinite else { throw RealityViewportSpatialBatch.invalid("Object preview basis is not finite.") }
+        let reflected = determinant < 0
         var updateResult: Result<Void, Error> = .success(())
         mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+          mesh.withUnsafeMutableIndices { indexBytes in
           updateResult = Result {
             let vertices = bytes.bindMemory(to: Vertex.self)
+            let indices = indexBytes.bindMemory(to: UInt32.self)
             for base in stride(from: 0, to: cornerCount, by: 3) {
                 if base.isMultiple(of: 768) { try Task.checkCancellation() }
                 for offset in 0..<3 {
@@ -79,11 +86,18 @@ final class RealityViewportObjectPreview {
                 let cross = simd_cross(vertices[base + 1].position - vertices[base].position,
                                        vertices[base + 2].position - vertices[base].position)
                 let length = simd_length(cross)
-                guard length.isFinite, length > 0 else {
-                    throw RealityViewportSpatialBatch.invalid("Object preview collapsed a surface triangle.")
+                guard length.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid("Object preview normal is not finite.")
                 }
-                for offset in 0..<3 { vertices[base + offset].normal = cross / length }
+                // Zero-area faces draw no fragments; retain finite attributes
+                // and restore their indices when the drag crosses the plane.
+                let normal: SIMD3<Float> = length > 0 ? cross / length * (reflected ? -1 : 1) : [0, 0, 1]
+                for offset in 0..<3 { vertices[base + offset].normal = normal }
+                indices[base] = UInt32(base)
+                indices[base + 1] = UInt32(length == 0 ? base : base + (reflected ? 2 : 1))
+                indices[base + 2] = UInt32(length == 0 ? base : base + (reflected ? 1 : 2))
             }
+          }
           }
         }
         try updateResult.get()

@@ -741,6 +741,10 @@ answering from unchanged collision geometry; camera/axis handle measurement stay
 available. A retained predecessor keeps its final preview when the host names
 a successor snapshot that has not mounted yet.
 The existing gesture owner retains the final mutation through commit handoff.
+Signed preview transforms reverse triangle winding and normals together on
+reflection. Collapsed triangles are omitted from surface drawing during a zero
+crossing while boundary lines and handles remain available. Recovery to a
+nonzero transform reuses the same buffers; zero is never a source commit.
 
 1. Exactly one frame identity tuple `(required source identity and derived
    ViewportSceneSnapshotKey, optional real snapshotID, viewportRevision,

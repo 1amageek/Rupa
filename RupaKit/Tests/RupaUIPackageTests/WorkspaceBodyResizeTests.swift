@@ -30,9 +30,12 @@ struct WorkspaceBodyResizeTests {
             + ViewportBodyVertex.allCases.map(ViewportAffordanceAction.vertexMove)
         var lastTarget: ViewportBodyResizeDragTarget?
         var lastMutation = Transform3D.identity
-        for action in actions {
+        for displacement in [Vector3D(x: 0.001, y: -0.002, z: 0.003),
+                             try ViewportWorldTransformAlgebra.transformedVector(base.size * 2, by: base.worldFromBox),
+                             try ViewportWorldTransformAlgebra.transformedVector(base.size * -2, by: base.worldFromBox)] {
+          for action in actions {
             let anchor = try base.point(for: action)
-            let measure = ResizeMeasure(displacement: Vector3D(x: 0.001, y: -0.002, z: 0.003))
+            let measure = ResizeMeasure(displacement: displacement)
             let input = try #require(try ViewportBodyTransformInput(record: .init(target: .objectTransform(
                 action: action, members: [member], bounds: member.bounds))))
             let mutation = try input.mutation(from: .zero, to: CGPoint(x: 1, y: 1), measure: measure)
@@ -48,11 +51,11 @@ struct WorkspaceBodyResizeTests {
             changed.productMetadata.sceneNodes[node.id]?.localTransform = target.placement.localTransform
             let next = try #require(try ViewportBodyResizeBaseline.resolve(document: changed, nodeID: node.id,
                 worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, target.placement.localTransform)))
+            let committedCorners = try ViewportBodyVertex.allCases.map { try next.point(for: .vertexMove($0)) }
             for vertex in ViewportBodyVertex.allCases {
                 let before = try base.point(for: .vertexMove(vertex))
                 let preview = try ViewportWorldTransformAlgebra.transformedPoint(before, by: mutation)
-                let committed = try next.point(for: .vertexMove(vertex))
-                #expect((preview - committed).length < 1e-9)
+                #expect(committedCorners.contains { (preview - $0).length < 1e-9 })
             }
             // A diagonal opposite corner is fixed for every face/corner resize.
             let fixedCount = try ViewportBodyVertex.allCases.filter { vertex in
@@ -67,6 +70,7 @@ struct WorkspaceBodyResizeTests {
             #expect(throws: Error.self) { try target.validate(in: changed) }
             lastTarget = target
             lastMutation = mutation
+          }
         }
 
         let target = try #require(lastTarget)
@@ -104,7 +108,7 @@ struct WorkspaceBodyResizeTests {
         #expect(throws: Error.self) { try WorkspaceBodyResizeCommandPlanner.commands(target, in: redone.document.document) }
         #expect(throws: Error.self) {
             try base.mutation(action: .faceMove(.left), from: .zero, to: CGPoint(x: 1, y: 1),
-                              measure: ResizeMeasure(displacement: Vector3D(x: 100, y: 100, z: 100)))
+                              measure: ResizeMeasure(displacement: Vector3D(x: .infinity, y: 100, z: 100)))
         }
     }
 }
@@ -113,7 +117,7 @@ struct WorkspaceBodyResizeTests {
 private struct ResizeMeasure: ViewportAffordanceMeasuring {
     let displacement: Vector3D
     func worldAxisDelta(from start: CGPoint, to end: CGPoint, axisOrigin: Point3D, axisDirection: Vector3D) throws -> Double {
-        displacement.length
+        displacement.dot(axisDirection)
     }
     func worldPlanePoint(at point: CGPoint, planeOrigin: Point3D, planeNormal: Vector3D) throws -> Point3D {
         throw EditorError(code: .commandInvalid, message: "Box resizing must not ask for a rotation plane.")

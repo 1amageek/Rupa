@@ -115,8 +115,8 @@ struct ViewportBodyResizeBaseline: Sendable {
             case .z: index = 2; shift = localDelta.z; extent = size.z; fixed = lower ? maximum.z : minimum.z
             }
             let factor = 1 + (lower ? -shift : shift) / extent
-            guard factor.isFinite, factor > 1e-3 else {
-                throw RealityViewportSpatialBatch.invalid("A box resize cannot cross its opposite face.")
+            guard factor.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("A box resize factor must be finite.")
             }
             values[index * 4 + index] = factor
             values[index * 4 + 3] = fixed * (1 - factor)
@@ -130,11 +130,11 @@ struct ViewportBodyResizeBaseline: Sendable {
         let local = try ViewportWorldTransformAlgebra.multiplied(
             ViewportWorldTransformAlgebra.multiplied(ViewportWorldTransformAlgebra.inverted(worldFromBox), mutation), worldFromBox)
         let m = local.matrix.values
-        let nextSize = Vector3D(x: size.x * m[0], y: size.y * m[5], z: size.z * m[10])
+        _ = try ViewportWorldTransformAlgebra.inverted(mutation)
+        let nextSize = Vector3D(x: size.x * abs(m[0]), y: size.y * abs(m[5]), z: size.z * abs(m[10]))
         guard nextSize.isFinite, min(nextSize.x, nextSize.y, nextSize.z) > 0 else {
             throw RealityViewportSpatialBatch.invalid("A box resize has invalid source dimensions.")
         }
-        guard (nextSize - size).length > 1e-12 else { return nil }
         // Core keeps the profile center fixed and extrudes from depth zero.
         // Remove that source-center motion before translating the occurrence.
         let center = Point3D(x: (minimum.x + maximum.x) / 2, y: size.y / 2,
@@ -145,6 +145,7 @@ struct ViewportBodyResizeBaseline: Sendable {
         let placement = try ViewportWorldTransformAlgebra.localTransform(
             applying: ViewportWorldTransformAlgebra.translation(shift), within: member.parentWorldTransform,
             to: member.baseLocalTransform) ?? member.baseLocalTransform
+        guard (nextSize - size).length > 1e-12 || placement != member.baseLocalTransform else { return nil }
         return .init(placement: .init(reference: member.reference, sceneNodeID: member.sceneNodeID,
                                      baseLocalTransform: member.baseLocalTransform, localTransform: placement,
                                      baseParentWorldTransform: member.parentWorldTransform),

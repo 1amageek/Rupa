@@ -179,6 +179,27 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
     #expect(nextSurfaces[0].model?.mesh === baseMesh)
     #expect(nextSurfaces[1].model?.mesh === baseMesh)
     let occurrence = try #require(MeshSourcePresentationRenderPlan(scene: nextScene).occurrences.first)
+    let crossingPreview = try RealityViewportObjectPreview(occurrence: occurrence, availableBytes: 1_000_000)
+    for factor: Double in [0, -1, 1] {
+        let crossing = Transform3D(matrix: try Matrix4x4(values: [
+            factor, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+        ]))
+        try crossingPreview.update(occurrence: occurrence, mutation: crossing, origin: .origin, showsEdges: true)
+        crossingPreview.mesh.withUnsafeIndices { bytes in
+            let indices = bytes.bindMemory(to: UInt32.self)
+            #expect(indices[1] == (factor == 0 ? 0 : factor < 0 ? 2 : 1))
+            #expect(indices[2] == (factor == 0 ? 0 : factor < 0 ? 1 : 2))
+        }
+        try nextViewport.applyObjectPreviews([baseItem.id.rawValue: crossing], displayMode: .solid)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            do {
+                try nextRenderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                                 onComplete: { _ in continuation.resume() })
+            } catch { continuation.resume(throwing: error) }
+        }
+    }
+    try nextViewport.applyObjectPreviews([:], displayMode: .solid)
+    #expect(nextSurfaces[0].model?.mesh === baseMesh)
     #expect(throws: MeshSourcePresentationRenderError.self) {
         _ = try RealityViewportObjectPreview(occurrence: occurrence, availableBytes: 1)
     }

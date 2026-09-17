@@ -78,8 +78,8 @@ struct ViewportBodyTransformInput: Sendable {
             let centered: Bool
             if case .centerScale = action { centered = true } else { centered = false }
             let factor = 1 + delta * (centered ? 2 : 1) / extent
-            guard extent.isFinite, extent > 0, factor.isFinite, factor > 1e-3 else {
-                throw RealityViewportSpatialBatch.invalid("A body scale must remain finite and positive.")
+            guard extent.isFinite, extent > 0, factor.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("A body scale must remain finite with a nonzero baseline extent.")
             }
             let anchor = centered ? pivot : pivot + axis.unitVector * (-extent / 2)
             let direction = axis.unitVector
@@ -97,6 +97,8 @@ struct ViewportBodyTransformInput: Sendable {
 
     func commits(mutation: Transform3D) throws -> [ViewportBodyPlacementDragTarget] {
         if isResize { return [] }
+        // A singular preview can cross zero, but cannot become a placement.
+        _ = try ViewportWorldTransformAlgebra.inverted(mutation)
         var result: [ViewportBodyPlacementDragTarget] = []
         var seen: Set<SceneNodeID> = []
         for member in members {

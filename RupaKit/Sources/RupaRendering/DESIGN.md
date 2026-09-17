@@ -44,7 +44,11 @@ or its Core-owned all-edge Corner wrapper (see [Core source design](../RupaCore/
 occurrence with positive normal extrusion supplies the source frame and dimensions; unsupported sources and
 multi-selection expose placement controls only. The source frame includes the
 sketch plane and the complete occurrence affine transform, including shear.
-Crossing an opposite bound is refused, never normalized into a reversed box.
+Crossing an opposite bound keeps the press alive and preserves the fixed bound.
+Preview extents are signed and may pass through zero. Commit normalizes source
+dimensions to positive magnitudes and compensates the occurrence center; it
+does not mirror the symmetric box's source frame. A zero-volume release is a
+typed refusal, not a persisted solid or a clamped minimum size.
 Colored inner markers retain center-fixed occurrence scale. Arrowheads translate.
 
 ```text
@@ -807,7 +811,7 @@ independent tessellator is never an alternative implementation.
    in the producer and therefore draws no transform gizmo; with the legacy
    selector gone it also receives no transform input, so this route no longer
    hit-tests geometry it never draws.
-   Body transform gestures persist translation, rotation and positive axis scaling
+   Body transform gestures persist translation, rotation and signed axis scaling
    for CAD and authored Mesh presentations through occurrence placement, not
    CAD feature editing. A presentation-backed frame builds the selected members
    from UniversalViewportScene bounds and the exact occurrence-to-node map.
@@ -839,8 +843,9 @@ independent tessellator is never an alternative implementation.
    an exact affine placement; the [Core placement contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention)
    requires numeric inspector edits to preserve that deformation.
    The workspace validates every local and parent-world baseline before one
-   transaction and one Undo step. Invalid frames and nonpositive scale are
-   typed refusals. Box bounds handles obey the source-resize contract above;
+   transaction and one Undo step. Invalid or singular committed frames are
+   typed refusals; zero scale is allowed only during preview so crossing does
+   not cancel the press. Box bounds handles obey the source-resize contract above;
    arbitrary topology edits still belong to their dedicated scopes and owners.
    MainActor owns mutable gesture state; worker snapshots remain immutable
    Sendable values without target-specific synchronization.
