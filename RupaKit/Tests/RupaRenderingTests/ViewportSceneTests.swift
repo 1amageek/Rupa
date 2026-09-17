@@ -2087,10 +2087,10 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
 
     #expect(layout.fittingInsets == fittingInsets)
     #expect(layout.fittingCenter == expectedCenter)
-    #expect(layout.center == expectedCenter)
+    #expect(layout.center == CGPoint(x: 400, y: 300))
     #expect(abs(layout.scale - expectedScale) < expectedScale * 1.0e-12)
-    #expect(abs(projectedOrigin.x - expectedCenter.x) < 1.0e-9)
-    #expect(abs(projectedOrigin.y - expectedCenter.y) < 1.0e-9)
+    #expect(abs(projectedOrigin.x - 400) < 1.0e-9)
+    #expect(abs(projectedOrigin.y - 300) < 1.0e-9)
 }
 
 @Test func viewportLayoutProjectsFootprintAlongCoordinateGridBasis() {

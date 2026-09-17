@@ -1633,6 +1633,9 @@ public struct ViewportLayout: Equatable {
     public var focus: Point3D
     public var scale: CGFloat
     public var fittingCenter: CGPoint
+    public var viewportCenter: CGPoint {
+        CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+    }
     public var center: CGPoint
     public var basis: ViewportProjectionBasis
     public var projection: ViewportCameraProjection
@@ -1694,8 +1697,8 @@ public struct ViewportLayout: Equatable {
         )) * clampedCamera.zoom
         self.fittingCenter = CGPoint(x: fittingRect.midX, y: fittingRect.midY)
         self.center = CGPoint(
-            x: fittingCenter.x + clampedCamera.pan.width,
-            y: fittingCenter.y + clampedCamera.pan.height
+            x: size.width / 2 + clampedCamera.pan.width,
+            y: size.height / 2 + clampedCamera.pan.height
         )
         self.basis = basis
         self.projection = clampedCamera.projection
@@ -1866,7 +1869,7 @@ public struct ViewportLayout: Equatable {
             return rows.isFinite ? rows : nil
         case .perspective(let fieldOfViewRadians):
             let tangent = tan(fieldOfViewRadians * 0.5)
-            let fittingHeight = Double(fittingInsets.fittingRect(in: viewportSize).height)
+            let fittingHeight = Double(viewportSize.height)
             let cameraDistance = fittingHeight / (2.0 * Double(scale) * tangent)
             // The depth row is the homogeneous near-plane plane. Keeping its
             // value equal to the CPU admission threshold makes Metal's
@@ -2091,7 +2094,7 @@ public struct ViewportLayout: Equatable {
     }
 
     public var visibleHeightMeters: Double {
-        let height = Double(fittingInsets.fittingRect(in: viewportSize).height)
+        let height = Double(viewportSize.height)
         guard height.isFinite, height > 0.0,
               scale.isFinite, scale > 0.0 else {
             preconditionFailure("Viewport layout has no finite visible height.")
@@ -2200,7 +2203,7 @@ public struct ViewportLayout: Equatable {
               scale.isFinite, scale > 0.0 else {
             return nil
         }
-        let height = Double(fittingInsets.fittingRect(in: viewportSize).height)
+        let height = Double(viewportSize.height)
         let tangent = tan(fieldOfViewRadians * 0.5)
         let distance = height / (2.0 * Double(scale) * tangent)
         guard distance.isFinite, distance > Self.minimumPerspectiveW else {

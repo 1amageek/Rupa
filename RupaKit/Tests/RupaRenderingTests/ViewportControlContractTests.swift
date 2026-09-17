@@ -7,6 +7,54 @@ import Testing
 
 @MainActor
 @Test
+func viewportSelectionChromeDoesNotMoveTheCamera() throws {
+    for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
+        let control = ViewportControlSession(camera: .init(projection: projection))
+        let id = ViewportInstanceID()
+        _ = control.mount(viewportID: id)
+        let base = try viewportContractContext(mount: id)
+        func context(height: CGFloat) -> ViewportControlMountContext {
+            let chrome = ViewportCanvasChromeLayout(viewportSize: base.viewportSize, bottomReservedHeight: height)
+            return .init(viewportID: id, viewportSize: base.viewportSize,
+                fittingInsets: chrome.fittingInsets, modelBounds: base.modelBounds,
+                verticalBounds: base.verticalBounds, ruler: base.ruler,
+                sceneBounds: base.sceneBounds, selectedBounds: height > 0 ? base.sceneBounds : nil)
+        }
+        func layout(_ context: ViewportControlMountContext) -> ViewportLayout {
+            .init(modelBounds: context.modelBounds, size: context.viewportSize,
+                camera: control.camera, basis: control.basis,
+                maximumZoom: context.maximumZoom(for: control.basis, camera: control.camera),
+                verticalBounds: context.verticalBounds, fittingInsets: context.fittingInsets)
+        }
+        control.updateContext(context(height: 0))
+        let camera = control.camera
+        let before = layout(context(height: 0))
+        let points: [Point3D] = [.origin, .init(x: 0.2, y: 0.3, z: -0.4)]
+        for height: CGFloat in [48, 96, 0] {
+            let next = context(height: height)
+            control.updateContext(next)
+            let after = layout(next)
+            #expect(control.camera == camera)
+            #expect(after.scale == before.scale)
+            #expect(after.visibleHeightMeters == before.visibleHeightMeters)
+            for point in points {
+                let a = before.project(point), b = after.project(point)
+                #expect(hypot(a.x - b.x, a.y - b.y) < 1e-7)
+            }
+        }
+        let selected = context(height: 96)
+        control.updateContext(selected)
+        _ = try control.perform(.fitSelected)
+        let fitted = layout(selected)
+        let safe = selected.fittingInsets.fittingRect(in: selected.viewportSize).insetBy(dx: -1e-4, dy: -1e-4)
+        for x in [-1.0, 1.0] { for y in [-1.0, 1.0] { for z in [-1.0, 1.0] {
+            #expect(safe.contains(fitted.project(.init(x: x, y: y, z: z))))
+        } } }
+    }
+}
+
+@MainActor
+@Test
 func viewportModelChangesPreserveCameraProjectionAndExplicitFitStillWorks() throws {
     for projection in [ViewportCameraProjection.parallel, .standardPerspective] {
         let control = ViewportControlSession(camera: .init(projection: projection))
@@ -275,14 +323,16 @@ func viewportOrbitKeepsFittedAndPannedFocusCenteredInBothLenses() throws {
         }
         let fitted = try control.perform(.fitSelected)
         let target = try #require(fitted.camera.focus)
-        #expect(target == Point3D(x: 5, y: 3, z: -2))
         let fittedLayout = layout(fitted)
+        let fittedObjectCenter = fittedLayout.project(Point3D(x: 5, y: 3, z: -2))
+        #expect(hypot(fittedObjectCenter.x - fittedLayout.fittingCenter.x,
+            fittedObjectCenter.y - fittedLayout.fittingCenter.y) < 1e-7)
         let turned = try control.perform(.orbit(yawDeltaDegrees: 90, elevationDeltaDegrees: 10))
         let turnedLayout = layout(turned)
         #expect(turned.camera.focus == target)
         #expect(abs(fittedLayout.visibleHeightMeters - turnedLayout.visibleHeightMeters) < 1e-8)
-        #expect(hypot(turnedLayout.project(target).x - turnedLayout.fittingCenter.x,
-            turnedLayout.project(target).y - turnedLayout.fittingCenter.y) < 1e-7)
+        #expect(hypot(turnedLayout.project(target).x - turnedLayout.viewportCenter.x,
+            turnedLayout.project(target).y - turnedLayout.viewportCenter.y) < 1e-7)
 
         let panned = try control.perform(.pan(deltaXPoints: 80, deltaYPoints: -35))
         let pannedLayout = layout(panned)
@@ -290,14 +340,14 @@ func viewportOrbitKeepsFittedAndPannedFocusCenteredInBothLenses() throws {
         #expect(focus != target)
         #expect(panned.camera.pan == .zero)
         let oldTarget = pannedLayout.project(target)
-        #expect(abs(oldTarget.x - pannedLayout.fittingCenter.x - 80) < 1e-7)
-        #expect(abs(oldTarget.y - pannedLayout.fittingCenter.y + 35) < 1e-7)
+        #expect(abs(oldTarget.x - pannedLayout.viewportCenter.x - 80) < 1e-7)
+        #expect(abs(oldTarget.y - pannedLayout.viewportCenter.y + 35) < 1e-7)
         let orbited = try control.perform(.orbit(yawDeltaDegrees: -55, elevationDeltaDegrees: -8))
         let orbitedLayout = layout(orbited)
         #expect(orbited.camera.focus == focus)
         #expect(abs(pannedLayout.visibleHeightMeters - orbitedLayout.visibleHeightMeters) < 1e-8)
-        #expect(hypot(orbitedLayout.project(focus).x - orbitedLayout.fittingCenter.x,
-            orbitedLayout.project(focus).y - orbitedLayout.fittingCenter.y) < 1e-7)
+        #expect(hypot(orbitedLayout.project(focus).x - orbitedLayout.viewportCenter.x,
+            orbitedLayout.project(focus).y - orbitedLayout.viewportCenter.y) < 1e-7)
         let original = try control.snapshot()
         let anchor = CGPoint(x: 250, y: 190)
         let anchoredWorld = try #require(orbitedLayout.worldPointOnFocusPlane(for: anchor))

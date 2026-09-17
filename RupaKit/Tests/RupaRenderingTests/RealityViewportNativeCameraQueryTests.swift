@@ -228,13 +228,15 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
         }
 
         // A resolved camera must project the same world point even when the
-        // next geometry frame changes its fit bounds and clipping extent.
+        // next geometry frame changes its fit bounds, chrome and clipping extent.
         let stableCamera = ViewportCamera(zoom: 0.6,
             projection: perspective ? .standardPerspective : .parallel,
             focus: layout.focus, referenceScale: layout.scale / 0.6)
         let changedLayout = ViewportLayout(
             modelBounds: CGRect(x: 90, y: 5, width: 30, height: 50), size: size,
-            camera: stableCamera, basis: .axisFront(.z), verticalBounds: -50...0)
+            camera: stableCamera, basis: .axisFront(.z), verticalBounds: -50...0,
+            fittingInsets: ViewportCanvasChromeLayout(
+                viewportSize: size, bottomReservedHeight: 96).fittingInsets)
         controller.rootView = RealityViewportView(
             viewport: viewport, viewportRevision: 2, displayMode: .solid,
             shading: .init(style: .flat), materialColors: [:], layout: changedLayout,

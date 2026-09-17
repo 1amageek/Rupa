@@ -42,8 +42,8 @@ import Testing
     let projectedTarget = try #require(layout.projectedPoint(target)?.point)
 
     #expect(abs(layout.visibleHeightMeters - request.visibleHeightMeters) < 1.0e-9)
-    #expect(abs(projectedTarget.x - layout.fittingCenter.x) < 1.0e-6)
-    #expect(abs(projectedTarget.y - layout.fittingCenter.y) < 1.0e-6)
+    #expect(abs(projectedTarget.x - layout.viewportCenter.x) < 1.0e-6)
+    #expect(abs(projectedTarget.y - layout.viewportCenter.y) < 1.0e-6)
     #expect(camera.focus == target)
     #expect(try #require(resolver.frame(for: camera, in: layout)).target == target)
 }
@@ -98,8 +98,8 @@ import Testing
 
     #expect(frame.camera == camera)
     #expect(abs(frame.visibleHeightMeters - layout.visibleHeightMeters) < 1.0e-9)
-    #expect(abs(projectedTarget.x - layout.fittingCenter.x) < 1.0e-6)
-    #expect(abs(projectedTarget.y - layout.fittingCenter.y) < 1.0e-6)
-    #expect(abs(projectedTarget.x - viewportSize.width / 2.0) > 1.0)
-    #expect(abs(projectedTarget.y - viewportSize.height / 2.0) > 1.0)
+    #expect(abs(projectedTarget.x - layout.viewportCenter.x) < 1.0e-6)
+    #expect(abs(projectedTarget.y - layout.viewportCenter.y) < 1.0e-6)
+    #expect(abs(projectedTarget.x - layout.fittingCenter.x) > 1.0)
+    #expect(abs(projectedTarget.y - layout.fittingCenter.y) > 1.0)
 }

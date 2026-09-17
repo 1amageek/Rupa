@@ -93,7 +93,13 @@ focus requests initial framing from the layout bounds; the mounted camera owner
 resolves and retains it before navigation. `ViewportLayout.renderOrigin` remains
 the numerical coordinate origin, never the authority for an explicit focus.
 Projection rows, CPU projection, depth, and view rays use the same camera focus.
-The fitting-rectangle center looks at that focus when the screen offset is zero.
+The full viewport center looks at that focus when the screen offset is zero.
+Chrome fitting insets are placement constraints, not camera state: changing
+selection bars, badges or overlay panels must not change the resolved camera's
+world-to-screen mapping, rays, visible height or perspective eye distance.
+Only explicit fit requests translate the camera to place geometry inside the
+current unobscured fitting rectangle. Input and annotation exclusion still use
+the current chrome rectangles.
 
 `ViewportCamera.referenceScale` is the retained points-per-meter scale at unit
 zoom. Nil requests initial framing; the mounted owner resolves it once along
@@ -153,9 +159,9 @@ from native project samples and the same camera transform; raw mounted
 camera. Both lens modes use a symmetric native lens. The layout supplies the
 full-viewport vertical span required to derive RealityKit's built-in vertical
 field of view; RealityKit's orthographic scale is the corresponding vertical
-half-extent. A fitting center displaced from the viewport center is represented
-by a finite translation of the camera in its rigid right/up plane so the focus
-projects to the fitting center; it is never encoded as lens skew, an off-center
+half-extent. An explicit fit to a center displaced from the viewport center uses
+a finite camera right/up-plane translation, normalized by the navigation owner
+into its world-space focus; it is never encoded as lens skew, an off-center
 projection term, root translation, or geometry mutation.
 This translation preserves target-plane placement and pixel scale. Perspective
 objects away from the target plane follow native pinhole parallax;
@@ -168,9 +174,9 @@ render origin using the same rigid frame, symmetric lens, and camera-plane
 translation. Perspective uses an infinite far plane and reversed depth: the
 clear value is zero, a greater value is nearer, and the near boundary is
 `w >= 1.0e-6`. Its eye distance is
-`fittingRect.height / (2 * targetPlanePixelsPerMeter *
-tan(requestedVerticalFOV / 2))`. The native camera separately converts that
-fitting-height request into a full-viewport vertical FOV, so the target plane
+`viewportSize.height / (2 * targetPlanePixelsPerMeter *
+tan(requestedVerticalFOV / 2))`. The FOV describes the full viewport independently
+of transient chrome, so the target plane
 has no size jump when the lens is toggled. Parallel projection
 preserves target-plane screen placement and also reports greater depth as
 nearer. Float conversion for native RealityKit

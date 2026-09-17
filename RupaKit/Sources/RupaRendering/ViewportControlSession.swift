@@ -414,7 +414,7 @@ public final class ViewportControlSession {
         camera = camera.clamped(maximumZoom: context.maximumZoom(for: basis, camera: camera))
         if camera.focus == nil || camera.referenceScale == nil {
             let initialLayout = layout(camera: camera, basis: basis, context: context)
-            if let focus = initialLayout.worldPointOnFocusPlane(for: initialLayout.fittingCenter), focus.isFinite {
+            if let focus = initialLayout.worldPointOnFocusPlane(for: initialLayout.viewportCenter), focus.isFinite {
                 camera.focus = focus
                 camera.referenceScale = initialLayout.scale / camera.zoom
                 camera.pan = .zero
@@ -543,7 +543,7 @@ public final class ViewportControlSession {
             throw ViewportControlError.nonFiniteInput
         }
         let layout = layout(camera: camera, basis: basis, context: context)
-        guard let focus = layout.worldPointOnFocusPlane(for: layout.fittingCenter), focus.isFinite else {
+        guard let focus = layout.worldPointOnFocusPlane(for: layout.viewportCenter), focus.isFinite else {
             throw ViewportControlError.nonFiniteInput
         }
         var result = camera
@@ -706,7 +706,7 @@ struct ViewportControlBoundsSolver {
 
         return ViewportCamera(
             zoom: requestedZoom,
-            pan: .zero,
+            pan: CGSize(width: fittingRect.midX - size.width / 2, height: fittingRect.midY - size.height / 2),
             projection: projection,
             focus: focus
         ).clamped(maximumZoom: maximumZoom)
@@ -726,9 +726,10 @@ struct ViewportControlBoundsSolver {
         let minimumZoom = ViewportCamera.minimumZoom
         let resolvedMaximumZoom = max(maximumZoom, minimumZoom)
         let focus = center(of: bounds)
+        let pan = CGSize(width: fittingRect.midX - size.width / 2, height: fittingRect.midY - size.height / 2)
 
-        func projectedBounds(for zoom: CGFloat) -> CGRect? {
-            let camera = ViewportCamera(zoom: zoom, projection: projection, focus: focus)
+        func camera(for zoom: CGFloat) -> ViewportCamera? {
+            let camera = ViewportCamera(zoom: zoom, pan: pan, projection: projection, focus: focus)
             let layout = ViewportLayout(
                 modelBounds: sceneModelBounds,
                 size: size,
@@ -737,6 +738,19 @@ struct ViewportControlBoundsSolver {
                 maximumZoom: resolvedMaximumZoom,
                 verticalBounds: verticalBounds,
                 fittingInsets: fittingInsets
+            )
+            guard let target = layout.worldPointOnFocusPlane(for: layout.viewportCenter) else {
+                return nil
+            }
+            return ViewportCamera(zoom: zoom, projection: projection, focus: target)
+        }
+
+        func projectedBounds(for zoom: CGFloat) -> CGRect? {
+            guard let camera = camera(for: zoom) else { return nil }
+            let layout = ViewportLayout(
+                modelBounds: sceneModelBounds, size: size, camera: camera,
+                basis: basis, maximumZoom: resolvedMaximumZoom,
+                verticalBounds: verticalBounds, fittingInsets: fittingInsets
             )
             var minX = CGFloat.infinity
             var minY = CGFloat.infinity
@@ -795,12 +809,9 @@ struct ViewportControlBoundsSolver {
             }
         }
 
-        let camera = ViewportCamera(
-            zoom: bestZoom,
-            pan: .zero,
-            projection: projection,
-            focus: focus
-        ).clamped(maximumZoom: resolvedMaximumZoom)
+        guard let camera = camera(for: bestZoom) else {
+            throw ViewportControlError.fitWouldExceedCameraLimits
+        }
         let finalLayout = ViewportLayout(
             modelBounds: sceneModelBounds,
             size: size,
@@ -811,10 +822,10 @@ struct ViewportControlBoundsSolver {
             fittingInsets: fittingInsets
         )
         guard let finalBounds = projectedBounds(for: camera.zoom),
-              finalBounds.minX + camera.pan.width >= fittingRect.minX - 1.0e-4,
-              finalBounds.maxX + camera.pan.width <= fittingRect.maxX + 1.0e-4,
-              finalBounds.minY + camera.pan.height >= fittingRect.minY - 1.0e-4,
-              finalBounds.maxY + camera.pan.height <= fittingRect.maxY + 1.0e-4,
+              finalBounds.minX >= fittingRect.minX - 1.0e-4,
+              finalBounds.maxX <= fittingRect.maxX + 1.0e-4,
+              finalBounds.minY >= fittingRect.minY - 1.0e-4,
+              finalBounds.maxY <= fittingRect.maxY + 1.0e-4,
               finalLayout.projectionRows(relativeTo: Point3D.origin)?.isFinite == true else {
             throw ViewportControlError.fitWouldExceedCameraLimits
         }

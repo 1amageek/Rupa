@@ -2431,6 +2431,11 @@ or an explicit framing request. Geometry-context updates never reframe an
 already resolved camera. Zoom limits use the retained reference scale, not the
 changing scene fit. The projection contract is owned by
 [RupaViewportScene](../RupaViewportScene/DESIGN.md#world-space-navigation-focus).
+Chrome-context updates change fit availability and current exclusion rectangles,
+not navigation. The fit solver alone translates geometry toward the current
+fitting center; the session normalizes that explicit offset at the full viewport
+center. Selection-bar show/hide tests compare stationary world projections in
+both lens modes, then verify that explicit fit still respects occupied space.
 The derived presentation cache owns the active task, newest value-only pending
 request, engine-neutral descriptors, and matching failure. It retains at most
 one current native owner and one candidate being prepared. `RealityViewport`

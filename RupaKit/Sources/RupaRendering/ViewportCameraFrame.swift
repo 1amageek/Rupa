@@ -95,7 +95,7 @@ public struct ViewportCameraFrameResolver: Sendable {
         in layout: ViewportLayout
     ) -> ViewportCameraFrame? {
         guard let target = camera.pan == .zero
-                ? layout.focus : layout.worldPointOnFocusPlane(for: layout.fittingCenter),
+                ? layout.focus : layout.worldPointOnFocusPlane(for: layout.viewportCenter),
               target.isFinite else {
             return nil
         }
