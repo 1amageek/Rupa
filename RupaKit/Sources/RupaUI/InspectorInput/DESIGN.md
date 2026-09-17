@@ -29,6 +29,8 @@ Project snapshot ---------------------------------> idle display
 ## Contracts and Invariants
 
 - Incomplete text is retained but never submitted as a number.
+- Numeric text uses the normal foreground color, including negative values and
+  incomplete signed input. Parsing does not determine text color.
 - Mapping is frozen until editing ends and the latest request settles.
 - Earlier acknowledgements cannot retire newer requests.
 - Numeric callbacks submit absolute values. Consecutive unstarted requests from

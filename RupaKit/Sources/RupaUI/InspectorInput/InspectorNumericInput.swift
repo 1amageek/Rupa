@@ -28,8 +28,7 @@ struct InspectorNumericInput: View {
                         }))
                         .focused($isFocused)
                         .onSubmit { isFocused = false }
-                        .foregroundStyle(edit.text.map { activeMapping.parse($0) == nil } == true
-                                         ? Color.red : Color.primary)
+                        .foregroundStyle(.primary)
                         .multilineTextAlignment(.trailing)
                         .frame(width: inspectorControlWidth)
                     if !activeMapping.unit.isEmpty {
