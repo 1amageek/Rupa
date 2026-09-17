@@ -731,6 +731,9 @@ independent tessellator is never an alternative implementation.
    answered; source, selection, route or release-revision changes and Escape
    cancel it and consume subsequent release. No old preview authorizes a commit.
    Each member composes P^-1 * M * P * L against its retained parent frame.
+   World-axis nonuniform scaling may produce shear after rotation. This remains
+   an exact affine placement; the [Core placement contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention)
+   requires numeric inspector edits to preserve that deformation.
    The workspace validates every local and parent-world baseline before one
    transaction and one Undo step. Invalid frames and nonpositive scale are
    typed refusals. Synthetic object-scope vertex/face handles are not emitted:

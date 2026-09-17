@@ -139,12 +139,16 @@ overlays must use this same convention. The old column-major UI convention is
 removed by explicit product decision; no decoder guessing or migration fallback
 is provided. Existing user files are not deleted automatically.
 
-The TRS inspector accepts finite, non-singular affine matrices with orthogonal
-basis columns. It rejects shear and perspective instead of replacing them with
-an identity or diagonal approximation. Rotation uses degrees with the explicit
-local-placement composition `T * Rz * Ry * Rx * S`; mirrored transforms retain
-their reflection in signed X scale. Near a gimbal lock the displayed equivalent
-Euler form fixes Z to zero without changing the represented transform.
+The placement inspector accepts finite, non-singular affine matrices, including
+shear produced by world-axis scaling after rotation. Its canonical decomposition
+is `T * Rz * Ry * Rx * H * S`, where H is upper triangular with unit diagonal
+and dimensionless XY, XZ and YZ shear. QR decomposition fixes Y/Z scales positive
+and retains reflection in signed X scale. Numeric TRS edits retain H; no
+orthogonalization may discard deformation. Perspective and singular matrices
+remain typed refusals. Near gimbal lock an equivalent Euler form fixes Z to zero.
+Round-trip tests cover world-axis scale after rotation, reflection, shear,
+numeric edits and explicit failure. Existing shear-free placements keep their
+TRS interpretation and serialized matrix format unchanged.
 
 `ModelingOperationDraftTests`, `WorkspaceTransformMatrixTests` and viewport
 transform tests own UI intent and geometry agreement; signed-App verification

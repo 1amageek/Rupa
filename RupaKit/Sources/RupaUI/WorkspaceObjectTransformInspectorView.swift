@@ -32,6 +32,14 @@ struct WorkspaceObjectTransformInspectorView: View {
             positionSection
             rotationSection(components)
             scaleSection(components)
+            if components.contains(where: { abs($0.shear.x) + abs($0.shear.y) + abs($0.shear.z) > 1.0e-12 }) {
+                inspectorSection("Retained Shear (XY, XZ, YZ)") {
+                    ForEach(Array(components.enumerated()), id: \.offset) { _, component in
+                        Text("\(component.shear.x), \(component.shear.y), \(component.shear.z)")
+                            .font(.caption.monospacedDigit())
+                    }
+                }
+            }
         case .failure(let error):
             Text(error.localizedDescription).font(.callout).foregroundStyle(.red)
                 .accessibilityIdentifier("WorkspaceObjectTransform.componentsError")

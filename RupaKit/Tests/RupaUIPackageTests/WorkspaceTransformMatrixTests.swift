@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import RupaGeometry
@@ -42,12 +43,65 @@ struct WorkspaceTransformMatrixTests {
         }
     }
 
+    @Test func worldAxisScaleAfterRotationRetainsShearDuringEveryNumericEdit() throws {
+        let q = sqrt(0.5)
+        // World X scale by two after Z rotation by 45 degrees: S_world * R.
+        let original = Transform3D(matrix: try Matrix4x4(values: [
+            2*q, -2*q, 0, 3, q, q, 0, 4, 0, 0, 1, 5, 0, 0, 0, 1
+        ]))
+        let baseline = try WorkspaceTransformMatrix.components(of: original)
+        #expect(abs(baseline.shear.x) > 0.1)
+        let rebuilt = try WorkspaceTransformMatrix.transform(from: baseline)
+        #expect(zip(original.matrix.values, rebuilt.matrix.values).allSatisfy { abs($0 - $1) < 1e-10 })
+        let edits: [(InspectorTransformComponent, Double)] = [
+            (.translationX, 7), (.translationY, 8), (.translationZ, 9),
+            (.rotationX, 15), (.rotationY, 25), (.rotationZ, 35),
+            (.scaleX, 2), (.scaleY, 3), (.scaleZ, 4)
+        ]
+        for (component, value) in edits {
+            let edited = try WorkspaceTransformMatrix.replacing(component, with: value, in: original)
+            let result = try WorkspaceTransformMatrix.components(of: edited)
+            let actual: Double = switch component {
+            case .translationX: result.translation.x
+            case .translationY: result.translation.y
+            case .translationZ: result.translation.z
+            case .rotationX: result.rotationDegrees.x
+            case .rotationY: result.rotationDegrees.y
+            case .rotationZ: result.rotationDegrees.z
+            case .scaleX: result.scale.x
+            case .scaleY: result.scale.y
+            case .scaleZ: result.scale.z
+            }
+            #expect(abs(actual - value) < 1e-10)
+            #expect(abs(result.shear.x - baseline.shear.x) < 1e-10)
+            #expect(abs(result.shear.y - baseline.shear.y) < 1e-10)
+            #expect(abs(result.shear.z - baseline.shear.z) < 1e-10)
+            let roundTrip = try WorkspaceTransformMatrix.transform(from: result)
+            #expect(zip(edited.matrix.values, roundTrip.matrix.values).allSatisfy { abs($0 - $1) < 1e-10 })
+        }
+    }
+
+    @Test func reflectedShearedAffineMatricesRoundTrip() throws {
+        for y in [-90.0, -30, 45, 90] {
+            let input = WorkspaceTransformMatrix.Components(
+                translation: .init(x: 1, y: 2, z: 3),
+                rotationDegrees: .init(x: 20, y: y, z: 70),
+                scale: .init(x: -2, y: 3, z: 4),
+                shear: .init(x: 0.3, y: -0.7, z: 0.8))
+            let matrix = try WorkspaceTransformMatrix.transform(from: input)
+            let components = try WorkspaceTransformMatrix.components(of: matrix)
+            #expect(components.scale.x < 0)
+            let rebuilt = try WorkspaceTransformMatrix.transform(from: components)
+            #expect(zip(matrix.matrix.values, rebuilt.matrix.values).allSatisfy { abs($0 - $1) < 1e-9 })
+        }
+    }
+
     @Test func unsupportedMatricesAndNumbersFailInsteadOfResetting() throws {
-        var shear = Matrix4x4.identity.values
-        shear[1] = 0.3
+        var singular = Matrix4x4.identity.values
+        singular[5] = 0
         var perspective = Matrix4x4.identity.values
         perspective[12] = 0.2
-        for values in [shear, perspective] {
+        for values in [singular, perspective] {
             let transform = Transform3D(matrix: try Matrix4x4(values: values))
             #expect(throws: EditorError.self) { try WorkspaceTransformMatrix.components(of: transform) }
         }

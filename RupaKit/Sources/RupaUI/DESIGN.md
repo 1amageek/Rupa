@@ -78,7 +78,9 @@ history unchanged. The view emits intent once, not once per selected node;
 busy controls cannot submit another property mutation. Picker Binding tests
 verify the emitted batch and Workspace publication, rollback and Undo/Redo;
 App UI tests own native control activation.
-XYZ rotation, translation and scale preserve the remaining TRS components.
+XYZ rotation, translation and scale preserve the remaining components,
+including the shear owned by Core's affine placement convention. The inspector
+shows retained XY/XZ/YZ shear values rather than hiding all numeric controls.
 Unsupported matrices show an explicit error rather than editable fake values.
 No old column-major compatibility controls or layout-detection path remain.
 
