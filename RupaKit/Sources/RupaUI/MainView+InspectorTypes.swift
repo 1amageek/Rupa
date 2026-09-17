@@ -23,7 +23,7 @@ enum InspectorBoolChoice: String, CaseIterable, Identifiable {
     }
 }
 
-enum InspectorTransformComponent {
+enum InspectorTransformComponent: Hashable {
     case translationX
     case translationY
     case translationZ

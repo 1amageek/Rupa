@@ -8,6 +8,80 @@ import Testing
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func projectWorkspaceOperationSequencerCoalescesOnlyConsecutivePendingEdits() async throws {
+    let sequencer = ProjectWorkspaceOperationSequencer()
+    var release: CheckedContinuation<Void, Never>?
+    var events: [String] = []
+    let running = sequencer.enqueue {
+        events.append("running")
+        await withCheckedContinuation { release = $0 }
+        events.append("finished")
+    }
+    while release == nil { await Task.yield() }
+    for value in 1...1_000 {
+        sequencer.enqueueReplacingPending(key: "x") { events.append("x:\(value)") }
+    }
+    sequencer.enqueueReplacingPending(key: "y") { events.append("y") }
+    sequencer.enqueueReplacingPending(key: "x") { events.append("x:after-y") }
+    let barrier = sequencer.enqueue { events.append("undo") }
+    sequencer.enqueueReplacingPending(key: "x") { events.append("x:after-undo") }
+    #expect(events == ["running"])
+    release?.resume()
+    _ = try await running.value
+    _ = try await barrier.value
+    try await sequencer.run {}
+    #expect(events == ["running", "finished", "x:1000", "y", "x:after-y", "undo", "x:after-undo"])
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceOperationSequencerCoalescedTransformsPublishAndUndo() async throws {
+    let node = SceneNode(name: "Object")
+    var document = DesignDocument.empty(named: "Live Edits")
+    document.productMetadata = ProductMetadata(sceneNodes: [node.id: node], rootSceneNodeIDs: [node.id])
+    let controller = try ProjectController(document: document,
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge())
+    let workspace = ProjectWorkspace(project: controller)
+    _ = try await workspace.evaluate()
+    let initial = try #require(workspace.view)
+    let sequencer = ProjectWorkspaceOperationSequencer()
+    var commits = 0
+    var failures = 0
+    func edit(_ component: InspectorTransformComponent, _ value: Double) {
+        sequencer.enqueueReplacingPending(key: component) {
+            do {
+                let current = try #require(workspace.view)
+                let commands = try WorkspaceTransformMatrix.commands(replacing: component,
+                    with: value, nodeIDs: [node.id], in: current.document.document)
+                let action = try DefaultProjectWorkspaceActionPlanner().source(
+                    name: "Transform Objects", commands: commands, from: current)
+                _ = try await workspace.perform(action)
+                commits += 1
+            } catch { failures += 1 }
+        }
+    }
+    for value in 1...1_000 { edit(.translationX, Double(value)) }
+    edit(.translationY, 2)
+    edit(.scaleZ, .nan)
+    edit(.translationZ, 3)
+    try await sequencer.run {}
+    #expect(commits == 3)
+    #expect(failures == 1)
+    let final = try #require(workspace.view?.document.document.productMetadata.sceneNodes[node.id])
+    let components = try WorkspaceTransformMatrix.components(of: final.localTransform)
+    #expect(components.translation.x == 1_000)
+    #expect(components.translation.y == 2)
+    #expect(components.translation.z == 3)
+    #expect(components.scale.z == 1)
+    for _ in 0..<3 { _ = try await workspace.undo() }
+    #expect(workspace.view?.document.document.productMetadata == initial.document.document.productMetadata)
+    _ = try await workspace.redo()
+    let redone = try #require(workspace.view?.document.document.productMetadata.sceneNodes[node.id])
+    #expect(try WorkspaceTransformMatrix.components(of: redone.localTransform).translation.x == 1_000)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func projectWorkspaceOperationSequencerPreservesSubmissionOrderAcrossSuspension() async throws {
     let sequencer = ProjectWorkspaceOperationSequencer()
     var events: [String] = []

@@ -8,26 +8,11 @@ struct WorkspaceObjectTransformInspectorView: View {
     var materialOptions: [WorkspaceObjectMaterialOption]
     var onCommitProperties: ([EditorCommand], String) -> Void
     var isBusy: Bool
-    var hasMatchingPreview: Bool
-    var previewError: String?
-    var onDraftChanged: () -> Void
-    var onPreview: ([EditorCommand]) -> Void
-    var onApply: () -> Void
-    var onCancel: () -> Void
-    @State private var transforms: [SceneNodeID: Transform3D] = [:]
-    @State private var transformError: String?
-
-    private var draftNodes: [SceneNode] {
-        nodes.map { node in
-            var draft = node
-            if let transform = transforms[node.id] { draft.localTransform = transform }
-            return draft
-        }
-    }
+    var onEditTransform: (InspectorTransformComponent, Double) -> Void
 
     var body: some View {
         stateSection
-        switch Result(catching: { try draftNodes.map { try WorkspaceTransformMatrix.components(of: $0.localTransform) } }) {
+        switch Result(catching: { try nodes.map { try WorkspaceTransformMatrix.components(of: $0.localTransform) } }) {
         case .success(let components):
             positionSection
             rotationSection(components)
@@ -46,36 +31,11 @@ struct WorkspaceObjectTransformInspectorView: View {
         }
         materialSection
         transformSection
-            .onChange(of: nodes) { _, _ in transforms.removeAll(); transformError = nil }
-        if let error = transformError ?? previewError {
-            Text(error).foregroundStyle(.red).font(.callout)
-                .accessibilityIdentifier("WorkspaceObjectTransform.error")
-        }
-        if !transforms.isEmpty {
-            inspectorActionRow {
-                Button("Cancel") { transforms.removeAll(); transformError = nil; onCancel() }
-                Button("Preview") {
-                    onPreview(nodes.compactMap { node in transforms[node.id].map { .setSceneNodeTransform(id: node.id, localTransform: $0) } })
-                }.disabled(isBusy)
-                Button("Apply", action: onApply).disabled(isBusy || !hasMatchingPreview)
-            }
-        }
     }
 
-    private func onSetTransformComponent(_ component: InspectorTransformComponent, _ value: Double) {
+    func onSetTransformComponent(_ component: InspectorTransformComponent, _ value: Double) {
         guard !isBusy else { return }
-        do {
-            var next = transforms
-            for node in draftNodes {
-                guard !node.isLocked else { throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their transforms.") }
-                next[node.id] = try WorkspaceTransformMatrix.replacing(component, with: value, in: node.localTransform)
-            }
-            transforms = next
-            transformError = nil
-            onDraftChanged()
-        } catch {
-            transformError = WorkspaceFailureLog.shared.record(error)
-        }
+        onEditTransform(component, value)
     }
 
     private var stateSection: some View {
@@ -100,7 +60,7 @@ struct WorkspaceObjectTransformInspectorView: View {
         inspectorSection("Position") {
             workspaceLengthControl(
                 "X",
-                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
+                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -108,7 +68,7 @@ struct WorkspaceObjectTransformInspectorView: View {
             }
             workspaceLengthControl(
                 "Y",
-                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
+                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -116,7 +76,7 @@ struct WorkspaceObjectTransformInspectorView: View {
             }
             workspaceLengthControl(
                 "Z",
-                values: draftNodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
+                values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
                 displayUnit: displayUnit,
                 sliderMetersRange: positionSliderMetersRange
             ) { meters in
@@ -221,8 +181,7 @@ struct WorkspaceObjectTransformInspectorView: View {
 
             inspectorActionRow {
                 Button("Reset Transform") {
-                    transforms = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, Transform3D.identity) })
-                    onDraftChanged()
+                    onCommitProperties(nodes.map { .setSceneNodeTransform(id: $0.id, localTransform: .identity) }, "Reset Object Transforms")
                 }
                 .disabled(isBusy || nodes.contains(where: \.isLocked) || nodes.allSatisfy { $0.localTransform.matrix == .identity })
             }

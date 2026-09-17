@@ -3,6 +3,25 @@ import RupaCore
 import simd
 
 enum WorkspaceTransformMatrix {
+    static func commands(
+        replacing component: InspectorTransformComponent,
+        with value: Double,
+        nodeIDs: [SceneNodeID],
+        in document: DesignDocument
+    ) throws -> [EditorCommand] {
+        try nodeIDs.compactMap { id in
+            guard let node = document.productMetadata.sceneNodes[id] else {
+                throw EditorError(code: .referenceUnresolved, message: "An edited object no longer exists.")
+            }
+            guard !node.isLocked else {
+                throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their transforms.")
+            }
+            let updated = try replacing(component, with: value, in: node.localTransform)
+            guard updated != node.localTransform else { return nil }
+            return .setSceneNodeTransform(id: id, localTransform: updated)
+        }
+    }
+
     struct Components {
         var translation: InspectorVector3D
         var rotationDegrees: InspectorVector3D

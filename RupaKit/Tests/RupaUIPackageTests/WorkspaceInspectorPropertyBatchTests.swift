@@ -9,6 +9,71 @@ import Testing
 @MainActor
 @Suite("Inspector property transactions", .serialized, .timeLimit(.minutes(1)))
 struct WorkspaceInspectorPropertyBatchTests {
+    @Test func transformIntentsPublishImmediatelyFromLatestSnapshotAndUndo() async throws {
+        let nodes = [SceneNode(name: "First"), SceneNode(name: "Second")]
+        var document = DesignDocument.empty(named: "Live Inspector")
+        document.productMetadata = ProductMetadata(
+            sceneNodes: Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) }),
+            rootSceneNodeIDs: nodes.map(\.id)
+        )
+        let controller = try ProjectController(document: document,
+            evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge())
+        let workspace = ProjectWorkspace(project: controller)
+        _ = try await workspace.evaluate()
+        var intents: [(InspectorTransformComponent, Double)] = []
+        var view = WorkspaceObjectTransformInspectorView(nodes: nodes, displayUnit: .meter,
+            positionSliderMetersRange: -10...10, materialOptions: [],
+            onCommitProperties: { _, _ in }, isBusy: false,
+            onEditTransform: { intents.append(($0, $1)) })
+        let edits: [(InspectorTransformComponent, Double)] = [
+            (.translationX, 1), (.translationY, 2), (.translationZ, 3),
+            (.rotationX, 15), (.rotationY, 25), (.rotationZ, 35),
+            (.scaleX, 2), (.scaleY, 3), (.scaleZ, 4)
+        ]
+        view.isBusy = true
+        view.onSetTransformComponent(.translationX, 99)
+        #expect(intents.isEmpty)
+        view.isBusy = false
+        // Emit all edits before any publication: queued controls hold old nodes.
+        for (component, value) in edits { view.onSetTransformComponent(component, value) }
+        #expect(intents.count == edits.count)
+        var expected = Transform3D.identity
+        for (component, value) in intents {
+            let before = try #require(workspace.view)
+            let commands = try WorkspaceTransformMatrix.commands(replacing: component, with: value,
+                nodeIDs: nodes.map(\.id), in: before.document.document)
+            let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Transform Objects", commands: commands, from: before)
+            _ = try await workspace.perform(action)
+            expected = try WorkspaceTransformMatrix.replacing(component, with: value, in: expected)
+            let after = try #require(workspace.view)
+            for node in nodes {
+                #expect(after.document.document.productMetadata.sceneNodes[node.id]?.localTransform == expected)
+            }
+            let undone = try await workspace.undo()
+            #expect(undone.document.document.productMetadata == before.document.document.productMetadata)
+            let redone = try await workspace.redo()
+            #expect(redone.document.document.productMetadata == after.document.document.productMetadata)
+        }
+        let current = try #require(workspace.view)
+        #expect(try WorkspaceTransformMatrix.commands(replacing: .translationY, with: 0,
+            nodeIDs: nodes.map(\.id), in: document).isEmpty)
+        #expect(throws: Error.self) {
+            try WorkspaceTransformMatrix.commands(replacing: .translationY, with: .nan,
+                nodeIDs: nodes.map(\.id), in: current.document.document)
+        }
+        #expect(throws: Error.self) {
+            try WorkspaceTransformMatrix.commands(replacing: .translationY, with: 1,
+                nodeIDs: [nodes[0].id, SceneNodeID()], in: current.document.document)
+        }
+        var lockedDocument = current.document.document
+        lockedDocument.productMetadata.sceneNodes[nodes[1].id]?.isLocked = true
+        #expect(throws: Error.self) {
+            try WorkspaceTransformMatrix.commands(replacing: .translationY, with: 1,
+                nodeIDs: nodes.map(\.id), in: lockedDocument)
+        }
+        #expect(workspace.view?.authorityCoordinate == current.authorityCoordinate)
+    }
+
     @Test func pickerBindingsCommitOnceAndUndoAllSelectedNodes() async throws {
         let nodes = [SceneNode(name: "First"), SceneNode(name: "Second")]
         let material = Material(name: "Blue", baseColor: ColorRGBA(r: 0, g: 0, b: 1, a: 1),
@@ -28,7 +93,7 @@ struct WorkspaceInspectorPropertyBatchTests {
             positionSliderMetersRange: -10...10,
             materialOptions: [.init(id: material.id, name: material.name)],
             onCommitProperties: { submissions.append(($0, $1)) }, isBusy: false,
-            hasMatchingPreview: false, onDraftChanged: {}, onPreview: { _ in }, onApply: {}, onCancel: {})
+            onEditTransform: { _, _ in })
         for identifier in ["Visible", "Locked", "material"] {
             func choose() {
                 switch identifier {

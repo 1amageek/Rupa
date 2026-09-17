@@ -7214,17 +7214,29 @@ private struct ProjectMainViewContent: View {
                 submitSource(commands, name: name)
             },
             isBusy: modelingPreview.isBusy,
-            hasMatchingPreview: modelingPreview.phase == .ready,
-            previewError: modelingPreview.errorMessage,
-            onDraftChanged: invalidateModelingPreview,
-            onPreview: { commands in
-                do {
-                    let action = try DefaultProjectWorkspaceActionPlanner().source(name: "Transform Objects", commands: commands, from: snapshot)
-                    startModelingPreview(.source(action))
-                } catch { modelingPreview.errorMessage = recordFailure(error) }
-            },
-            onApply: applyModelingOperation,
-            onCancel: invalidateModelingPreview
+            onEditTransform: { component, value in
+                let ids = nodes.map(\.id)
+                let lifetime = snapshot.documentLifetimeID
+                let key = [AnyHashable(lifetime), AnyHashable(ids), AnyHashable(component)]
+                operationSequencer.enqueueReplacingPending(key: key) {
+                    do {
+                        guard workspace.view?.documentLifetimeID == lifetime else {
+                            throw ProjectWorkspaceActionError(
+                                code: .documentLifetimeMismatch,
+                                message: "The queued Inspector edit belongs to a replaced project document."
+                            )
+                        }
+                        _ = try await executeSource(name: "Transform Objects") { current in
+                            try WorkspaceTransformMatrix.commands(
+                                replacing: component, with: value, nodeIDs: ids,
+                                in: current.document.document
+                            )
+                        }
+                    } catch {
+                        reportToolStatus(error.localizedDescription, severity: .warning)
+                    }
+                }
+            }
         )
     }
 

@@ -87,6 +87,31 @@ shows retained XY/XZ/YZ shear values rather than hiding all numeric controls.
 Unsupported matrices show an explicit error rather than editable fake values.
 No old column-major compatibility controls or layout-detection path remain.
 
+Inspector property edits are live: each valid value change submits its intent
+to the existing serialized Workspace source boundary without a Preview/Apply
+step. Object transform controls retain no private transform draft. MainView
+captures target identities, then resolves the edited component against the
+latest snapshot inside that boundary so queued edits cannot restore stale
+values of other components. One accepted edit affects all targets atomically
+and is undoable. Locked or missing targets and invalid transforms fail without
+partial publication; failed edits keep the last published values. Modeling
+operations that create geometry retain their separate Preview/Apply contract.
+
+Verification must exercise control intents through actual Workspace publication
+and presentation transforms, not just affine arithmetic or control existence.
+
+Consecutive object-transform intents with the same document lifetime, ordered
+target IDs and component replace only the last unstarted intent in the existing
+operation sequencer. There is no debounce timer and no cancellation of an
+executing source transaction. A different key or any ordinary operation seals
+that slot, preserving component order, selection, save and Undo boundaries.
+Each executed value remains an atomic, undoable Workspace transaction; replaced
+values never become source authority or history entries. The pending slot is
+MainActor-owned and retains one closure regardless of the input burst length.
+Tests suspend an executing operation, submit a burst, and verify final-value
+delivery, barriers, latest-snapshot rebasing, failures and Undo. This bounds
+obsolete queued work; it does not establish a GPU frame-latency guarantee.
+
 1. `ProjectViewSnapshot.projectName` is the sole navigation/window title input.
 2. Empty project names display the bounded fallback `Untitled`; CAD metadata,
    file names, transport state, and Agent responses never replace a nonempty

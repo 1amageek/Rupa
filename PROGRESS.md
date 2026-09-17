@@ -1,5 +1,7 @@
 # Progress
 
+- [x] INSPECTOR-LATENCY Replaced deferred transforms with live latest-snapshot intents and bounded consecutive pending edits; 1,000 pending values execute once, component/barrier order, real Workspace final values, failure and Undo/Redo verified. Seven focused macOS tests passed in /tmp/rupa-inspector-coalescing-20260917.xcresult and /tmp/rupa-inspector-sequencer-regression-20260917.xcresult; App build and strict signature verification passed. Scoped commit accompanies this record; running App was not restarted. `depends:none` `parallel:none`
+
 - [x] UI-REPLACE-1 Replaced foreground UI automation with hidden native/GPU contracts and explicit automated/manual ownership for all 47 retired scenarios; fixed stale Mount root removal. Commit 223fe8be. `depends:none` `parallel:none`
 
 - [x] UI-QUIET-1 Six findings recorded in RupaKit/Tests/UI_TEST_REVIEW.md; replaced routine screen automation with explicit non-window contract selection, removed screen takeover, aligned Loft refusal and rejected zero-test false greens. Integrated script passed 29 UI and 6 rendering test functions with no failures/skips; scoped commit includes implementation and evidence. Visual inspection remains separate, not inferred from these tests. `depends:none` `parallel:none`
