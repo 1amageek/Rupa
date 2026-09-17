@@ -255,28 +255,14 @@ final class RealityViewport {
                 nativeResources.append(previous.resources[reusedIndex])
                 continue
             }
-            var descriptor = MeshDescriptor(name: "group.\(groupIndex)")
-            descriptor.positions = MeshBuffers.Positions(group.geometry.positions)
-            // Face-rate normals ask RealityKit to preserve hard CAD face boundaries.
-            descriptor.normals = MeshBuffers.Normals(group.geometry.normals).usingRate(.face)
-            // The representative occurrence's buffer is the original visual
-            // prefix of collisionIndices; retaining it avoids another index copy.
-            descriptor.primitives = .triangles(group.visualIndices)
-            let mesh = try await MeshResource(from: [descriptor])
+            // One admitted group has three independent resources. Structured
+            // children overlap SDK waits without creating another frame worker.
+            async let mesh = makeSurfaceResource(group, index: groupIndex)
+            async let collision = makeCollisionResource(group.geometry, index: groupIndex)
+            async let lines = makeLineResource(group.geometry)
+            let resources = try await NativeResourceReference(visual: mesh, collision: collision, lines: lines)
             try Task.checkCancellation()
-            // The macOS 27 runtime observes one-sided static collisions regardless
-            // of material culling. A double-winding mesh keeps both sides pickable
-            // without changing visual topology or source provenance.
-            var collisionDescriptor = MeshDescriptor(name: "group.\(groupIndex).collision")
-            collisionDescriptor.positions = MeshBuffers.Positions(group.geometry.positions)
-            collisionDescriptor.primitives = .triangles(group.geometry.collisionIndices)
-            let collisionMesh = try await MeshResource(from: [collisionDescriptor])
-            try Task.checkCancellation()
-            let collision = try await ShapeResource.generateStaticMesh(from: collisionMesh)
-            try Task.checkCancellation()
-            let lines = try await makeLineResource(group.geometry)
-            try Task.checkCancellation()
-            nativeResources.append(NativeResourceReference(visual: mesh, collision: collision, lines: lines))
+            nativeResources.append(resources)
         }
 
         var bounds = BoundingBox()
@@ -320,6 +306,27 @@ final class RealityViewport {
             }
             entries.append((surface, lines))
         }
+    }
+
+    private func makeSurfaceResource(_ group: GeometryGroupRecord, index: Int) async throws -> MeshResource {
+        try Task.checkCancellation()
+        var descriptor = MeshDescriptor(name: "group.\(index)")
+        descriptor.positions = MeshBuffers.Positions(group.geometry.positions)
+        descriptor.normals = MeshBuffers.Normals(group.geometry.normals).usingRate(.face)
+        descriptor.primitives = .triangles(group.visualIndices)
+        return try await MeshResource(from: [descriptor])
+    }
+
+    private func makeCollisionResource(_ geometry: Geometry, index: Int) async throws -> ShapeResource {
+        try Task.checkCancellation()
+        // Native static collisions are one-sided regardless of material culling.
+        // The existing double winding preserves both sides and triangle order.
+        var descriptor = MeshDescriptor(name: "group.\(index).collision")
+        descriptor.positions = MeshBuffers.Positions(geometry.positions)
+        descriptor.primitives = .triangles(geometry.collisionIndices)
+        let mesh = try await MeshResource(from: [descriptor])
+        try Task.checkCancellation()
+        return try await ShapeResource.generateStaticMesh(from: mesh)
     }
 
     /// Validated once before publication. Only this owner may mutate surface
@@ -507,8 +514,15 @@ final class RealityViewport {
             }
             mesh.parts.replaceAll([.init(indexCount: geometry.lineIndices.count, topology: .line,
                                         bounds: .init(min: geometry.minimum, max: geometry.maximum))])
+            return try Self.nativeResource(from: mesh)
         }
-        return try await MeshResource(from: mesh)
+    }
+
+    /// Selects the synchronous SDK overload for an already initialized buffer.
+    /// Descriptor tessellation and collision generation retain their async path.
+    static func nativeResource(from mesh: LowLevelMesh) throws -> MeshResource {
+        try Task.checkCancellation()
+        return try MeshResource(from: mesh)
     }
 
     /// Applies one camera frame. The display scale carries no default: the

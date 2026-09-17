@@ -240,6 +240,24 @@ plan, provenance, bounds, frame Entities, appearance, and spatial resources
 always belong to the replacement generation. This is reuse inside the existing
 cache lifecycle, not an additional cache, history, allocation lane, or worker;
 native objects never become producer input or leave their declared isolation.
+Within one admitted geometry group, visual-mesh upload, collision construction,
+and boundary-line upload are independent structured child operations. They
+overlap their SDK suspension rather than serially waiting for each resource.
+There are at most three child operations, and groups remain sequential inside
+the existing single candidate worker. All children finish or cancel before the
+group scope exits; nothing attaches or publishes until all resources succeed.
+This preserves the admitted resource count, immutable asset ownership, exact
+double-winding collision geometry, and frame identity. The Inspector latency
+fixture in RupaUIPackageTests measures repeated CAD rotation through Workspace
+publication and native preparation; native resource reuse and GPU tests own
+geometry, collision and rendering correctness.
+Already allocated and initialized `LowLevelMesh` buffers are wrapped using the
+SDK's synchronous `MeshResource.init(from:)` overload on MainActor. This avoids
+one asynchronous engine scheduling round trip per grid, axis or handle line;
+it does not move tessellation, collision generation or geometry conversion onto
+MainActor. Native allocation/copy admission and nonescaping borrows remain
+unchanged. The same latency fixture includes selected-body overlays to measure
+the complete preparation cost rather than surface-only throughput.
 During an overlay-only replacement, the current complete root remains enabled
 as display-only continuity. Its old spatial entities may remain visible, but
 their native handle indices have no CAD meaning without the cache's exact-ready

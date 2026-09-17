@@ -698,7 +698,7 @@ final class RealityViewportSpatialResources {
                 .init(indexCount: 0, topology: .line, materialIndex: $0,
                       bounds: .init(min: .zero, max: .zero))
             })
-            let resource = try await MeshResource(from: mesh)
+            let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [
                 material([1, 1, 1, 0.055], depth: .scene),
@@ -726,7 +726,7 @@ final class RealityViewportSpatialResources {
             }
             mesh.parts.replaceAll([.init(indexCount: 8, topology: .line, materialIndex: 0,
                                          bounds: .init(min: [-0.5, -0.5, 0], max: [0.5, 0.5, 0]))])
-            let resource = try await MeshResource(from: mesh)
+            let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(placement.color, depth: .annotation)])
             entity.isEnabled = false
@@ -749,7 +749,7 @@ final class RealityViewportSpatialResources {
                 }
                 mesh.parts.replaceAll([.init(indexCount: 2, topology: .line, materialIndex: 0,
                                              bounds: .init(min: .zero, max: .zero))])
-                let resource = try await MeshResource(from: mesh)
+                let resource = try RealityViewport.nativeResource(from: mesh)
                 try Task.checkCancellation()
                 let line = ModelEntity(mesh: resource, materials: [material(axisColor(axis), depth: .annotation)])
                 line.name = "Reference Axis \(axis.label)"
@@ -807,7 +807,7 @@ final class RealityViewportSpatialResources {
                 geometry.indices.withUnsafeBytes { destination.copyMemory(from: $0) }
             }
             mesh.parts.replaceAll(geometry.parts)
-            let resource = try await MeshResource(from: mesh)
+            let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: geometry.appearances.map { material($0.color, depth: $0.depth) })
             result.register(entity, handleIndex: group.handleIndex)
@@ -994,7 +994,7 @@ final class RealityViewportSpatialResources {
                 }
             }
             mesh.parts.replaceAll([.init(indexCount: (count - 1) * 2, topology: .line, bounds: .init(min: .zero, max: .zero))])
-            let resource = try await MeshResource(from: mesh)
+            let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(line.color, depth: line.depth)])
             entity.isEnabled = false
@@ -1068,7 +1068,7 @@ final class RealityViewportSpatialResources {
                     for index in 0..<6 { indices[index] = UInt32(index) }
                 }
                 mesh.parts.replaceAll([.init(indexCount: 6, topology: .line, bounds: .init(min: .zero, max: .zero))])
-                let lineResource = try await MeshResource(from: mesh)
+                let lineResource = try RealityViewport.nativeResource(from: mesh)
                 try Task.checkCancellation()
                 let line = ModelEntity(mesh: lineResource, materials: [material(group.color, depth: .annotation)])
                 line.isEnabled = false
@@ -1840,7 +1840,7 @@ final class RealityViewportSpatialResources {
         }
         mesh.parts.replaceAll([.init(indexCount: 12, topology: .triangle,
                                      bounds: .init(min: [-0.5, -0.5, 0], max: [0.5, 0.5, 0]))])
-        let resource = try await MeshResource(from: mesh)
+        let resource = try RealityViewport.nativeResource(from: mesh)
         try Task.checkCancellation()
         return try await ShapeResource.generateStaticMesh(from: resource)
     }
