@@ -60,6 +60,7 @@ public struct Viewport: View {
     @State private var hoveredNativeHandleIdentity: ViewportSpatialHandleIdentity?
     @State private var constructionPlaneHandleMarkers: [ViewportConstructionPlaneHandleMarker] = []
     @State private var nativeInputGesture: NativeInputGesture?
+    @State private var bodyCommitHandoff = ViewportBodyCommitHandoff()
 
     private struct NativeAxisPress {
         let input: ViewportNativeAxisInput
@@ -224,7 +225,7 @@ public struct Viewport: View {
     private let onReferenceLineAnchor: ((Point2D) -> Bool)?
     private let onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)?
     private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
-    private let onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) -> Void)?
+    private let onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -412,7 +413,7 @@ public struct Viewport: View {
         onReferenceLineAnchor: ((Point2D) -> Bool)? = nil,
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
-        onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) -> Void)? = nil,
+        onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -991,6 +992,7 @@ public struct Viewport: View {
                 clearCanvasHover()
             }
             .onChange(of: sourceIdentity) { _, _ in
+                bodyCommitHandoff.observe(sourceIdentity)
                 cancelNativeInputGesture()
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution()
@@ -998,6 +1000,7 @@ public struct Viewport: View {
                 resetMeasurement()
             }
             .onDisappear {
+                bodyCommitHandoff.reset()
                 clearPendingCanvasInteractionTargets()
                 previewEvaluationCache.clear()
                 presentationPlanCache.teardown()
@@ -1634,6 +1637,9 @@ public struct Viewport: View {
         case .pattern(let press): key.nativePatternValue = press.value
         case .worldPoint(let press): key.nativeWorldPointValue = press.value
         case .cancelled, nil: break
+        }
+        if bodyCommitHandoff.source == sourceIdentity {
+            key.bodyTransformMutation = bodyCommitHandoff.mutation
         }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
         if let drag = activeCanvasDrag, case .creation(let kind) = drag.kind {
@@ -4026,7 +4032,7 @@ public struct Viewport: View {
 
     private var bodyPreviewTransforms: [String: Transform3D] {
         guard case .bodyTransform(let press) = nativeInputGesture,
-              let mutation = press.mutation else { return [:] }
+              let mutation = press.mutation else { return bodyCommitHandoff.transforms(for: sourceIdentity) }
         return Dictionary(uniqueKeysWithValues: press.input.members.map { ($0.occurrenceID, mutation) })
     }
 
@@ -4060,11 +4066,12 @@ public struct Viewport: View {
         guard case .bodyTransform(let press) = nativeInputGesture, let finish = press.finish else { return }
         guard bodyTransformBaselineMatches(press) else { cancelNativeInputGesture(); return }
         let targets: [ViewportBodyPlacementDragTarget]
+        let mutation: Transform3D
         do {
             let identity = try presentationPreparation.get()
             if let failure = presentationPlanCache.failure(for: identity) { throw failure }
             guard presentationPlanCache.hasReadyCamera(for: identity, revision: finish.revision) else { return }
-            let mutation = try press.input.mutation(from: press.start, to: finish.point, measure: affordanceMeasure())
+            mutation = try press.input.mutation(from: press.start, to: finish.point, measure: affordanceMeasure())
             targets = try press.input.commits(mutation: mutation)
             for target in targets { try target.validate(in: document) }
         } catch {
@@ -4073,9 +4080,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             return
         }
+        if !targets.isEmpty, let onBodyPlacementCommit {
+            bodyCommitHandoff.begin(
+                source: sourceIdentity, mutation: mutation,
+                occurrenceIDs: press.input.members.map(\.occurrenceID),
+                commit: { try await onBodyPlacementCommit(targets) },
+                onFailure: reportNativeGestureFailure
+            )
+        }
         clearPendingCanvasInteractionTargets()
         activeCanvasDrag = nil
-        if !targets.isEmpty { onBodyPlacementCommit?(targets) }
     }
 
     /// Reads the mounted frame once for the single query this role names.
@@ -4403,6 +4417,10 @@ public struct Viewport: View {
     }
 
     private func beginViewportPress(at point: CGPoint) {
+        guard !bodyCommitHandoff.isPending else {
+            nativeInputGesture = .cancelled
+            return
+        }
         if measurementToolActive {
             clearPendingCanvasInteractionTargets()
             activeCanvasDrag = nil

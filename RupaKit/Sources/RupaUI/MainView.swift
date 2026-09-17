@@ -2011,12 +2011,12 @@ private struct ProjectMainViewContent: View {
         )
     }
 
-    private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) -> Void)? {
+    private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? {
         guard selectedTool == .select, selectionScope == .object else {
             return nil
         }
         return { target in
-            handleViewportBodyPlacementCommit(target)
+            try await handleViewportBodyPlacementCommit(target)
         }
     }
 
@@ -5340,18 +5340,22 @@ private struct ProjectMainViewContent: View {
     /// land on the one command that owns a scene node's frame.
     private func handleViewportBodyPlacementCommit(
         _ targets: [ViewportBodyPlacementDragTarget]
-    ) {
+    ) async throws -> ViewportSourceIdentity {
         guard selectedTool == .select, selectionScope == .object else {
-            reportToolStatus(
-                "Body transforms commit only with the Select tool "
-                    + "in object scope.",
-                severity: .warning
+            throw ProjectWorkspaceActionError(
+                code: .actionResultMismatch,
+                message: "Body transforms commit only with the Select tool in object scope."
             )
-            return
         }
-        guard !targets.isEmpty else { return }
-        submitSource(name: "transformBodyPlacements") { current in
-            try WorkspaceTransformMatrix.commands(placements: targets, in: current.document.document)
+        return try await runWorkspaceOperation {
+            _ = try await executeSource(name: "transformBodyPlacements") { current in
+                try WorkspaceTransformMatrix.commands(placements: targets, in: current.document.document)
+            }
+            guard let published = workspace.view else {
+                throw ProjectWorkspaceActionError(code: .snapshotUnavailable,
+                                                  message: "The committed source has no published view.")
+            }
+            return .document(id: published.document.document.id, generation: published.documentGeneration)
         }
     }
 

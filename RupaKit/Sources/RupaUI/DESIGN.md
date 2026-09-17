@@ -1,5 +1,11 @@
 # RupaUI
 
+Object placement callbacks await the existing workspace operation sequencer and
+source publication, then return the published `ViewportSourceIdentity` to the
+[Rendering handoff owner](../RupaRendering/DESIGN.md#continuous-source-updates).
+They throw failures to that owner rather than returning before publication;
+source storage, batch validation and Undo remain owned by ProjectWorkspace.
+
 ## Purpose and Scope
 
 `RupaUI` presents immutable `ProjectViewSnapshot` state and submits user intent

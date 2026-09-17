@@ -111,6 +111,26 @@ newer source snapshot.
 
 ### Continuous source updates
 
+Object transform release transfers the final measured mutation from pointer
+ownership to `ViewportBodyCommitHandoff` before clearing pointer state. Its
+preview is display-only and applies only to the original source identity.
+`onBodyPlacementCommit` asynchronously returns the published source identity,
+or throws. Success for a new identity retains the preview until Viewport observes
+that source change; task completion alone does not mean SwiftUI consumed it.
+An acknowledged no-op or failure clears the preview; failure is reported through
+the native refusal channel. Source replacement/teardown invalidates late
+completions. A pending handoff refuses another pointer press. Cancellation before
+release remains unchanged; after release the source owner owns the transaction.
+The normal native-frame retention path bridges preparation of the new source;
+the mutation is never applied a second time to that source.
+
+```text
+final pointer sample -> retained transform preview -> source commit/publication
+                              |                           |
+                              +-- old source only --------+
+new source observed -> preview retired -> native frame replaces retained picture
+```
+
 Preparation owns one running worker and one replaceable latest pending request.
 New requests in the same document/project context do not cancel the running
 worker. Its successful complete frame may advance the display while the latest

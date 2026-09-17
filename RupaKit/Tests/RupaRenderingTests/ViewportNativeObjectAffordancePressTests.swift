@@ -8,6 +8,7 @@ import SwiftCAD
 import RupaViewportScene
 import SwiftUI
 import Testing
+import Synchronization
 @testable import RupaRendering
 
 private typealias BodyMetrics = ViewportSpatialOverlayProducer.BodyTransformMetrics
@@ -403,7 +404,8 @@ private struct MountedObjectHandleViewport {
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onPick: @escaping (ViewportCanvasTarget) -> Void,
         onCanvasDrag: @escaping (ViewportModelDrag) -> Void,
-        onBodyPlacementCommit: @escaping ([ViewportBodyPlacementDragTarget]) -> Void
+        onBodyPlacementCommit: @escaping ([ViewportBodyPlacementDragTarget]) -> Void,
+        commitCompletion: (@MainActor () async throws -> ViewportSourceIdentity)? = nil
     ) async throws {
         _ = NSApplication.shared
         func viewport(invalidation: Invalidation? = nil) -> AnyView {
@@ -424,7 +426,11 @@ private struct MountedObjectHandleViewport {
             onPick: onPick,
             onCanvasDrag: onCanvasDrag,
             onSelectionDrag: onSelectionDrag,
-            onBodyPlacementCommit: invalidation == .route ? nil : onBodyPlacementCommit
+            onBodyPlacementCommit: invalidation == .route ? nil : { targets in
+                onBodyPlacementCommit(targets)
+                if let commitCompletion { return try await commitCompletion() }
+                return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+            }
         ).frame(width: fixture.size.width, height: fixture.size.height))
         }
         let controller = NSHostingController(rootView: viewport())
@@ -700,6 +706,38 @@ private func translationDelta(
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeObjectAffordancePressTests {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func releasedHandleWaitsForPublicationAndRecovers(fails: Bool) async throws {
+        let fixture = try ObjectHandlePressFixture(pressCase: .translateY)
+        let released = Mutex(false)
+        var commits = 0
+        let mounted = try await MountedObjectHandleViewport(
+            fixture: fixture, onPick: { _ in }, onCanvasDrag: { _ in },
+            onBodyPlacementCommit: { _ in commits += 1 }, commitCompletion: {
+                let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+                while !released.withLock({ $0 }), ContinuousClock.now < deadline {
+                    try await Task.sleep(for: .milliseconds(1))
+                }
+                try #require(released.withLock { $0 })
+                if fails { throw ObjectAffordancePressFixtureError(message: "Rejected placement.") }
+                return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+            })
+        defer { released.withLock { $0 = true }; mounted.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+        while commits == 0, ContinuousClock.now < deadline {
+            try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        }
+        try #require(commits == 1)
+        // Release has returned, but the source owner has not acknowledged it.
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        #expect(commits == 1)
+        released.withLock { $0 = true }
+        try await Task.sleep(for: .milliseconds(200))
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        #expect(commits == 2)
+        #expect(!mounted.window.isVisible && !mounted.window.isKeyWindow)
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func escapeConsumesSelectionRectangleAndNextRectangleStillCommits() async throws {
         let fixture = try ObjectHandlePressFixture(pressCase: .translateY)

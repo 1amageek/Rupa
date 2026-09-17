@@ -5,10 +5,73 @@ import RupaProject
 import RupaViewportScene
 import SwiftCAD
 import Testing
+import Synchronization
 @testable import RupaRendering
 
 @MainActor
 @Suite struct ViewportBodyTransformInputTests {
+    @Test(.timeLimit(.minutes(1)))
+    func releasedPreviewSurvivesCommitUntilSourceIsObserved() async throws {
+        let document = DesignDocument.empty()
+        let original = ViewportSourceIdentity.document(id: document.id, generation: DocumentGeneration(1))
+        let published = ViewportSourceIdentity.document(id: document.id, generation: DocumentGeneration(2))
+        let mutation = try ViewportWorldTransformAlgebra.translation(.unitY)
+        let handoff = ViewportBodyCommitHandoff()
+        let release = Mutex(false)
+        var commits = 0
+        let completion = handoff.begin(source: original, mutation: mutation, occurrenceIDs: ["body"], commit: {
+            commits += 1
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while !release.withLock({ $0 }), ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(1)) }
+            try #require(release.withLock { $0 })
+            return published
+        }, onFailure: { Issue.record($0) })
+        #expect(handoff.isPending)
+        #expect(handoff.transforms(for: original)["body"] == mutation)
+        try await Task.sleep(for: .milliseconds(20))
+        handoff.observe(original)
+        #expect(handoff.transforms(for: original)["body"] == mutation)
+        release.withLock { $0 = true }
+        await completion.value
+        #expect(commits == 1)
+        // Completion can run before SwiftUI consumes the published source.
+        #expect(handoff.transforms(for: original)["body"] == mutation)
+        #expect(handoff.transforms(for: published).isEmpty)
+        handoff.observe(published)
+        #expect(!handoff.isPending)
+        #expect(handoff.transforms(for: original).isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func handoffFailureNoOpAndReplacementRetireOnlyTheirOwnPreview() async throws {
+        let source = ViewportSourceIdentity.document(id: DesignDocument.empty().id, generation: DocumentGeneration(1))
+        let mutation = try ViewportWorldTransformAlgebra.translation(.unitY)
+        let handoff = ViewportBodyCommitHandoff()
+        var failures = 0
+        let failure = MeshSourcePresentationRenderError(code: .failed, message: "Rejected commit.")
+        await handoff.begin(source: source, mutation: mutation, occurrenceIDs: ["body"],
+                            commit: { throw failure }, onFailure: { _ in failures += 1 }).value
+        #expect(failures == 1)
+        #expect(!handoff.isPending)
+        await handoff.begin(source: source, mutation: mutation, occurrenceIDs: ["body"],
+                            commit: { source }, onFailure: { Issue.record($0) }).value
+        #expect(!handoff.isPending)
+        let abandoned = handoff.begin(source: source, mutation: mutation, occurrenceIDs: ["body"],
+                                      commit: { throw failure }, onFailure: { _ in failures += 1 })
+        handoff.reset()
+        let replacement = ViewportSourceIdentity.document(id: DesignDocument.empty().id, generation: DocumentGeneration(1))
+        let replacementPublished = ViewportSourceIdentity.document(id: DesignDocument.empty().id, generation: DocumentGeneration(2))
+        let current = handoff.begin(source: replacement, mutation: mutation, occurrenceIDs: ["new"],
+                                    commit: { replacementPublished }, onFailure: { Issue.record($0) })
+        await abandoned.value
+        await current.value
+        #expect(failures == 1)
+        #expect(handoff.transforms(for: replacement)["new"] == mutation)
+        #expect(handoff.transforms(for: source).isEmpty)
+        handoff.observe(replacementPublished)
+        #expect(!handoff.isPending)
+    }
+
     private func input(_ action: ViewportAffordanceAction, count: Int = 1) throws -> ViewportBodyTransformInput {
         let feature = FeatureID()
         let bounds = ViewportObjectEditState(xMin: -1, xMax: 1, yMin: -1, yMax: 1, zMin: -1, zMax: 1)

@@ -1,5 +1,7 @@
 # Progress
 
+- [x] HANDLE-HANDOFF-1 Preserve released object-handle preview through asynchronous source publication; delayed success/failure/no-op/replacement, duplicate refusal and real translation/rotation/scaling verified: 10 functions/15 runs in /tmp/rupa-handle-handoff-focused.xcresult and 5 functions/11 runs in /tmp/rupa-handle-handoff-native.xcresult. Scoped commit: fix: retain released handle preview until source publication. `depends:none` `parallel:none`
+
 - [x] INSPECTOR-FRAME-1 Prevent continuous preparation starvation; commit f7fc4bc77; corrected RED and 8 native focused tests prove 1,000-request coalescing, progress before input settles and stale-query refusal (/tmp/rupa-frame-progress-green.xcresult). `depends:none` `parallel:none`
 
 - [x] INSPECTOR-INPUT-1 Unified Inspector numeric interaction, frozen mapping, latest-request acknowledgement, bounded ordered submission, integer input and parameter submission exclusion. Commit f5d42abaa. `depends:none` `parallel:none`
@@ -61,3 +63,4 @@
 
 - [x] INSPECTOR-INPUT-IV Integrated macOS tests passed: 15 exact test functions / 16 runs, zero failures/skips in /tmp/rupa-inspector-input-integrated.xcresult. Signed Debug App built and strict deep signature verification passed; Rupa.debug.dylib SHA256 b9e7b0b546eddaa982d80abcc9e31345b14d9a942c8e89a3c992c945779d1f2f. Production binding tests cover stale publication/frozen mapping; hidden native control lookup was unavailable and actual screen interaction is not claimed. Running App PID 23965 was not restarted. No upstream configured. `depends:INSPECTOR-INPUT-1` `parallel:none`
 - [x] INSPECTOR-FRAME-IV Native mount/query/lifecycle integration: 6 functions passed, no skips (/tmp/rupa-frame-mount-integration-2.xcresult); updated old cancellation-dependent fixture to assert one reusable plan. Signed App build and strict signature verification passed. No foreground UI input or restart; screen input-to-photon latency remains unmeasured. `depends:INSPECTOR-FRAME-1` `parallel:none`
+- [ ] HANDLE-HANDOFF-IV Verify native preview-to-source handoff and affected App integration, build/sign, commit evidence and restart normally without discarding unsaved data. `depends:HANDLE-HANDOFF-1` `parallel:none`

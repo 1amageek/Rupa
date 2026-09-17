@@ -628,7 +628,10 @@ struct ViewportSketchTransformLifecycleTests {
             allowsObjectAffordances: false,
             selectedPresentationHasExactCADContext: true,
             onCanvasDrag: { _ in canvasDrags += 1 },
-            onBodyPlacementCommit: { _ in bodyPlacementCommits += 1 },
+            onBodyPlacementCommit: { _ in
+                bodyPlacementCommits += 1
+                return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+            },
             onSketchTransformCommit: { commits.append($0) }
         ).frame(width: size.width, height: size.height)
         let controller = NSHostingController(rootView: viewport)
