@@ -13,16 +13,6 @@ private struct ObjectAffordancePressFixtureError: Error {
     let message: String
 }
 
-/// What production promises for one object gizmo action once the press is
-/// claimed. `Viewport.committedBodyPlacementDragTarget` is the only commit path
-/// the transform gizmo owns, and it answers a target only for `translate`, so
-/// every other action is drawn, claimed, and previewed but leaves nothing
-/// behind at release.
-enum ViewportObjectHandleOutcome {
-    case commitsPlacement
-    case claimsWithoutCommitting
-}
-
 /// One gizmo station per case. All three translate axes commit, because a
 /// placement is the scene node's own frame rather than an edit of the profile
 /// sketch one of them happens to lie in.
@@ -33,15 +23,6 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     case centerScaleX
     case oneSidedScaleX
     case rotateX
-
-    var outcome: ViewportObjectHandleOutcome {
-        switch self {
-        case .translateX, .translateZ, .translateY:
-            return .commitsPlacement
-        case .centerScaleX, .oneSidedScaleX, .rotateX:
-            return .claimsWithoutCommitting
-        }
-    }
 
     /// The world axis a released drag on this station must move the body
     /// along. The gizmo's arrows are the world axes, so naming one here is
@@ -402,8 +383,10 @@ private struct ObjectHandlePressFixture {
 
 @MainActor
 private struct MountedObjectHandleViewport {
+    enum Invalidation: CaseIterable { case source, selection, route }
     let window: NSWindow
     let controller: NSViewController
+    let invalidate: (Invalidation) -> Void
 
     /// `onBodyPlacementCommit` is the only commit callback the transform gizmo
     /// has, and `allowsObjectAffordances` is what makes the gizmo interactive
@@ -413,26 +396,33 @@ private struct MountedObjectHandleViewport {
     init(
         fixture: ObjectHandlePressFixture,
         allowsObjectAffordances: Bool = true,
+        onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onPick: @escaping (ViewportCanvasTarget) -> Void,
         onCanvasDrag: @escaping (ViewportModelDrag) -> Void,
-        onBodyPlacementCommit: @escaping (ViewportBodyPlacementDragTarget) -> Void
+        onBodyPlacementCommit: @escaping ([ViewportBodyPlacementDragTarget]) -> Void
     ) async throws {
         _ = NSApplication.shared
-        let viewport = Viewport(
+        func viewport(invalidation: Invalidation? = nil) -> AnyView {
+        let selection = invalidation == .selection ? SelectionModel() : fixture.selection
+        return AnyView(Viewport(
             document: fixture.document,
-            sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(1)),
+            sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(invalidation == .source ? 2 : 1)),
             controlSession: fixture.control,
             workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: fixture.ruler),
-            selection: fixture.selection,
-            objectSelectionIndex: .init(document: fixture.document, selection: fixture.selection),
+            selection: selection,
+            objectSelectionIndex: .init(document: fixture.document, selection: selection),
             canvasDragSketchPlaneOverride: ObjectHandlePressFixture.canvasSketchPlane,
-            allowsObjectAffordances: allowsObjectAffordances,
+            allowsSelectionRectangle: onSelectionDrag != nil,
+            allowsObjectAffordances: allowsObjectAffordances && invalidation != .route,
             selectedPresentationHasExactCADContext: true,
             onPick: onPick,
             onCanvasDrag: onCanvasDrag,
+            onSelectionDrag: onSelectionDrag,
             onBodyPlacementCommit: onBodyPlacementCommit
-        ).frame(width: fixture.size.width, height: fixture.size.height)
-        let controller = NSHostingController(rootView: viewport)
+        ).frame(width: fixture.size.width, height: fixture.size.height))
+        }
+        let controller = NSHostingController(rootView: viewport())
+        self.invalidate = { controller.rootView = viewport(invalidation: $0) }
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: fixture.size),
             styleMask: [.titled],
@@ -488,13 +478,26 @@ private struct MountedObjectHandleViewport {
         try resolvedInput().onPick?(point, size, .replace)
     }
 
-    func gesture(from start: CGPoint, to end: CGPoint, size: CGSize) async throws {
+    func gesture(from start: CGPoint, to end: CGPoint, size: CGSize,
+                 preview: CGPoint? = nil, sendsPreview: Bool = true,
+                 cancel: Bool = false, beforeRelease: (() -> Void)? = nil) async throws {
         let input = try resolvedInput()
-        input.onPress?(start, size, .replace)
+        func event(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type,
+                location: input.convert(point, to: nil), modifierFlags: [],
+                timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+        input.mouseDown(with: try event(.leftMouseDown, start))
         try await Task.sleep(for: .milliseconds(500))
-        input.onDragPreview?(start, end, size)
-        input.onCanvasDrag?(start, end, size, .replace)
-        try await Task.sleep(for: .milliseconds(30))
+        if sendsPreview { input.mouseDragged(with: try event(.leftMouseDragged, preview ?? end)) }
+        if cancel { input.cancelOperation(nil) }
+        if let beforeRelease {
+            beforeRelease()
+            try await Task.sleep(for: .milliseconds(200))
+        }
+        input.mouseUp(with: try event(.leftMouseUp, end))
+        try await Task.sleep(for: .milliseconds(500))
     }
 }
 
@@ -521,13 +524,51 @@ private func translationDelta(
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeObjectAffordancePressTests {
-    /// Proves the object gizmo on the mounted path: each translate station
-    /// reaches `onBodyPlacementCommit` having moved the body along the world
-    /// axis its arrow points down, and every other station is claimed by the
-    /// affordance route -- it reaches neither the canvas owner nor the
-    /// placement owner -- while the same round shows the frame still answers
-    /// both. What a claimed station computed during its preview is not
-    /// asserted here; the measuring-surface tests own that.
+    @Test(.timeLimit(.minutes(1)))
+    func escapeConsumesSelectionRectangleAndNextRectangleStillCommits() async throws {
+        let fixture = try ObjectHandlePressFixture(pressCase: .translateY)
+        var selections = 0
+        let mounted = try await MountedObjectHandleViewport(fixture: fixture,
+            onSelectionDrag: { _ in selections += 1 }, onPick: { _ in },
+            onCanvasDrag: { _ in Issue.record("Selection rectangle escaped to canvas creation.") },
+            onBodyPlacementCommit: { _ in Issue.record("Selection rectangle changed a body.") })
+        defer { mounted.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while selections == 0, ContinuousClock.now < deadline {
+            try await mounted.gesture(from: fixture.emptyPoint, to: fixture.emptyDragEnd, size: fixture.size)
+        }
+        try #require(selections > 0)
+        selections = 0
+        try await mounted.gesture(from: fixture.emptyPoint, to: fixture.emptyDragEnd, size: fixture.size, cancel: true)
+        #expect(selections == 0)
+        try await mounted.gesture(from: fixture.emptyPoint, to: fixture.emptyDragEnd, size: fixture.size)
+        #expect(selections == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: MountedObjectHandleViewport.Invalidation.allCases)
+    private func invalidatedGestureCannotCommit(reason: MountedObjectHandleViewport.Invalidation) async throws {
+        let fixture = try ObjectHandlePressFixture(pressCase: .translateY)
+        var moves = 0
+        var canvasDrags = 0
+        let mounted = try await MountedObjectHandleViewport(fixture: fixture, onPick: { _ in },
+            onCanvasDrag: { _ in canvasDrags += 1 }, onBodyPlacementCommit: { _ in moves += 1 })
+        defer { mounted.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while moves == 0, ContinuousClock.now < deadline {
+            try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size)
+        }
+        try #require(moves > 0)
+        moves = 0
+        canvasDrags = 0
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+                                  beforeRelease: { mounted.invalidate(reason) })
+        #expect(moves == 0)
+        #expect(canvasDrags == 0)
+        try await mounted.gesture(from: fixture.emptyPoint, to: fixture.emptyDragEnd, size: fixture.size)
+        #expect(canvasDrags == 1, "Cancellation must release ownership for the next gesture.")
+    }
+
+    /// Every drawn transform station commits through real AppKit input.
     @Test(.timeLimit(.minutes(3)), arguments: ViewportObjectHandlePressCase.allCases)
     func objectHandleGestureFollowsItsCommitContract(
         pressCase: ViewportObjectHandlePressCase
@@ -539,7 +580,7 @@ struct ViewportNativeObjectAffordancePressTests {
             fixture: fixture,
             onPick: { _ in },
             onCanvasDrag: { _ in canvasDrags += 1 },
-            onBodyPlacementCommit: { bodyMoves.append($0) }
+            onBodyPlacementCommit: { bodyMoves.append(contentsOf: $0) }
         )
         // Closing an already closed window is a no-op, so the explicit close
         // before the gate control coexists with the throw-path cleanup.
@@ -577,11 +618,10 @@ struct ViewportNativeObjectAffordancePressTests {
             rawValue: "\(pressCase.handleName) at \(fixture.press) produced "
                 + "\(canvasDrags) canvas drags and \(bodyMoves.count) body moves."
         )
-        switch pressCase.outcome {
-        case .commitsPlacement:
             try #require(bodyMoves.count == 1, report)
             let committed = try #require(bodyMoves.first, report)
-            let axis = try #require(pressCase.committedAxis, report)
+            #expect(committed.localTransform != committed.baseLocalTransform, report)
+            if let axis = pressCase.committedAxis {
             let moved = try translationDelta(of: committed)
             // The drag moves along one arrow, so the committed frame has to
             // move the body along that world axis and leave the other two
@@ -595,11 +635,34 @@ struct ViewportNativeObjectAffordancePressTests {
                     #expect(abs(component) <= 1.0e-9, report)
                 }
             }
+            }
             #expect(committed.sceneNodeID == fixture.target.sceneNodeID, report)
-        case .claimsWithoutCommitting:
-            #expect(bodyMoves.isEmpty, report)
-        }
         #expect(canvasDrags == 0, report)
+
+        let expected = try #require(bodyMoves.first).localTransform
+        bodyMoves.removeAll()
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+                                  sendsPreview: false)
+        #expect(bodyMoves.count == 1)
+        #expect(bodyMoves.first?.localTransform == expected)
+
+        bodyMoves.removeAll()
+        let halfway = CGPoint(x: (fixture.press.x + fixture.dragEnd.x) / 2,
+                              y: (fixture.press.y + fixture.dragEnd.y) / 2)
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+                                  preview: halfway)
+        #expect(bodyMoves.count == 1)
+        #expect(bodyMoves.first?.localTransform == expected,
+                "Release must be measured independently of the last preview.")
+
+        bodyMoves.removeAll()
+        try await mounted.gesture(from: fixture.press, to: fixture.dragEnd, size: fixture.size,
+                                  cancel: true)
+        #expect(bodyMoves.isEmpty, "Escape must consume the body release.")
+        #expect(canvasDrags == 0)
+        try await mounted.gesture(from: fixture.emptyPoint, to: fixture.emptyDragEnd,
+                                  size: fixture.size, cancel: true)
+        #expect(canvasDrags == 0, "Escape must consume an ordinary canvas release.")
 
         // The fixture is still live, so the silence above is the affordance
         // route claiming the press rather than a viewport that stopped

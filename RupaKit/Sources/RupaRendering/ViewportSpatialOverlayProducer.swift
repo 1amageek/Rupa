@@ -408,6 +408,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     let analysisSource: AnalysisSource?
     let sectionSource: SectionSource?
     let editedBodies: [FeatureID: ViewportObjectEditState]
+    let bodyPreviewTransforms: [String: Transform3D]
     let world: WorldContext
     let snapReference: SnapReference?
     let placement: Placement?
@@ -427,6 +428,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         analysisSource: AnalysisSource? = nil,
         sectionSource: SectionSource? = nil,
         editedBodies: [FeatureID: ViewportObjectEditState],
+        bodyPreviewTransforms: [String: Transform3D] = [:],
         world: WorldContext,
         snapReference: SnapReference? = nil,
         placement: Placement? = nil,
@@ -445,6 +447,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         self.analysisSource = analysisSource
         self.sectionSource = sectionSource
         self.editedBodies = editedBodies
+        self.bodyPreviewTransforms = bodyPreviewTransforms
         self.world = world
         self.snapReference = snapReference
         self.placement = placement
@@ -758,6 +761,7 @@ enum ViewportSpatialOverlayProducer {
                     || item.sceneNodeID.map(hoveredNodes.contains) == true
                 let shouldDrawBody = snapshot.drawsLegacyBodies
                     || snapshot.drawsDragPreviewBodies
+                    || snapshot.bodyPreviewTransforms[item.id] != nil
                     || snapshot.editedBodies[item.featureID] != nil
                 guard shouldDrawBody else { continue }
                 let color = isSelected ? selectionColor : bodyColor
@@ -805,10 +809,13 @@ enum ViewportSpatialOverlayProducer {
                     transformedPositions.reserveCapacity(mesh.positions.count)
                     for position in mesh.positions {
                         try Task.checkCancellation()
-                        let transformed = ViewportLayout.transformedPoint(
+                        var transformed = ViewportLayout.transformedPoint(
                             position,
                             by: item.modelTransform
                         )
+                        if let mutation = snapshot.bodyPreviewTransforms[item.id] {
+                            transformed = try ViewportWorldTransformAlgebra.transformedPoint(transformed, by: mutation)
+                        }
                         guard transformed.isFinite else {
                             throw RealityViewportSpatialBatch.invalid(
                                 "Body mesh transform produced a non-finite position."
@@ -827,8 +834,11 @@ enum ViewportSpatialOverlayProducer {
                     ))
                     activeFamilies.insert(.body)
                 } else {
-                    let corners = snapshot.editedBodies[item.featureID]?.worldBoxCorners
+                    var corners = snapshot.editedBodies[item.featureID]?.worldBoxCorners
                         ?? fallbackBodyCorners(item: item, component: component)
+                    if let mutation = snapshot.bodyPreviewTransforms[item.id] {
+                        corners = try corners.map { try ViewportWorldTransformAlgebra.transformedPoint($0, by: mutation) }
+                    }
                     guard corners.count == 8, corners.allSatisfy(isFinitePoint) else {
                         throw RealityViewportSpatialBatch.invalid(
                             "Body fallback bounds do not contain eight finite world corners."

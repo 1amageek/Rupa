@@ -1979,7 +1979,7 @@ private struct ProjectMainViewContent: View {
         )
     }
 
-    private var viewportBodyPlacementCommitHandler: ((ViewportBodyPlacementDragTarget) -> Void)? {
+    private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) -> Void)? {
         guard selectionScope.allowsPresentationOccurrencePick(for: selectedTool),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
@@ -5303,12 +5303,12 @@ private struct ProjectMainViewContent: View {
         return targets
     }
 
-    /// Commits a released body translate as the scene node's placement, the
+    /// Commits a released body transform as an atomic batch of placements, the
     /// way a released sketch transform commits its own. Both gizmos measure a
     /// world mutation and hand over the local frame that realises it, so both
     /// land on the one command that owns a scene node's frame.
     private func handleViewportBodyPlacementCommit(
-        _ target: ViewportBodyPlacementDragTarget
+        _ targets: [ViewportBodyPlacementDragTarget]
     ) {
         guard selectedTool == .select, selectionScope == .object else {
             reportToolStatus(
@@ -5318,25 +5318,13 @@ private struct ProjectMainViewContent: View {
             )
             return
         }
-        submitSource(name: "moveBodyPlacement") { current in
-            guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Body scene node \(target.sceneNodeID) no longer exists."
-                )
+        guard !targets.isEmpty else { return }
+        submitSource(name: "transformBodyPlacements") { current in
+            guard Set(targets.map(\.sceneNodeID)).count == targets.count else {
+                throw EditorError(code: .commandInvalid, message: "A body transform repeats a scene node.")
             }
-            // The gesture measured its translation against the frame read at
-            // press, so committing onto a frame that changed since then would
-            // move the body by a delta the pointer never described.
-            guard node.localTransform == target.baseLocalTransform else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "The body frame changed during the transform gesture."
-                )
-            }
-            return [
-                .setSceneNodeTransform(id: node.id, localTransform: target.localTransform)
-            ]
+            for target in targets { try target.validate(in: current.document.document) }
+            return targets.map { .setSceneNodeTransform(id: $0.sceneNodeID, localTransform: $0.localTransform) }
         }
     }
 

@@ -26,6 +26,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
         let sceneNodeID: SceneNodeID?
         let modelTransform: Transform3D
         let edit: ViewportObjectEditState
+        var placement: ViewportBodyPlacementBaseline? = nil
     }
 
     case sketchCurveHandle(ViewportSketchCurveHandleTarget)

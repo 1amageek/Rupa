@@ -121,7 +121,13 @@ struct ViewportSpatialInteractionRecord: Sendable {
             case .constructionPlane(_, _, _, _, let corners): try array(corners)
             case .affordance(_, let members, _, let placement):
                 try array(members)
-                for member in members { try string(member.occurrenceID) }
+                for member in members {
+                    try string(member.occurrenceID)
+                    if let baseline = member.placement {
+                        try array(baseline.baseLocalTransform.matrix.values)
+                        try array(baseline.parentWorldTransform.matrix.values)
+                    }
+                }
                 if let placement {
                     // Both frames own heap matrix storage the producer
                     // allocated for this table, the way a sketch baseline's do.

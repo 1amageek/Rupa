@@ -16,6 +16,15 @@ live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
+Body transform commits consume the occurrence-scoped batch defined by
+[RupaRendering](../RupaRendering/DESIGN.md). Before producing any command, the
+UI validates every retained node, local frame and parent world frame against
+the current workspace snapshot. It submits all placements in one existing
+source transaction, preserving atomic failure and a single Undo entry.
+Translation, rotation and axis scaling use the same boundary. Cancellation
+submits nothing. Verification includes stale ancestors and shared-feature
+placements, not only callback receipt.
+
 The module owns workspace presentation, viewport/UI interaction, visible
 project-title projection, and observation of the RealityKit frame cache.
 It does not own project source, package persistence, file URLs, application

@@ -57,7 +57,7 @@ struct ViewportBodyTransformScreenExtentTests {
             ))
         )
         let raw = Source.RawInput(
-            document: .empty(),
+            document: bodyTransformTestDocument([item]),
             scene: ViewportScene(items: [item]),
             selection: SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: nodeID)]),
             ruler: .standard(for: .meter),

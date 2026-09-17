@@ -705,54 +705,41 @@ independent tessellator is never an alternative implementation.
    `Viewport.beginViewportPress` and `Viewport.hover` read only the leading
    prepared interaction record at the point, and its `.affordance` case owns
    the press, the hover highlight, and the drag for `translate`,
-   `oneSidedScale`, `centerScale`, `rotate`, `vertexMove`, and `faceMove`. The
+   `oneSidedScale`, `centerScale`, and `rotate`. The
    legacy CPU projection selector is removed from this route: a native miss, a
    typed query failure, or a leading record whose action is not one of those
-   six ends the route with no body transform hit instead of consulting the
+   four ends the route with no body transform hit instead of consulting the
    legacy gizmo. That fallback is prohibited rather than merely unused,
    because the legacy gizmo sizes its handles from the body's projected span
    while the native handles hold the point lengths fixed below, so
    reintroducing it would restore the scale-dependent hit geometry those
    lengths replace.
-   The press retains the record's own member list, per-member edit baseline,
-   and group edit, and the drag materializes `baseEdits` and `baseGroupEdit`
-   from exactly those retained values, as the record contract above requires.
-   Nothing on this route is re-read from the current scene, the current
-   selection, or the live per-feature edit table: the record is admitted only
-   from a frame prepared for the current overlay revision, and the edit table
-   is one of that revision's own inputs, so a live re-read could only restate
-   the prepared value under a second owner. Re-deriving the grouping is
-   additionally unsound, because the producer groups by the selected
-   scene-node addresses: a feature selected through more than one scene node
-   yields a group handle there, while a feature-keyed re-derivation resolves a
-   single body, matches no scene item, and ends the drag as a silent no-op.
+   The press retains the record's occurrence members, local and parent frames,
+   and group bounds. Preview and commit use those immutable baselines, not a
+   live feature-keyed edit table. Current source and selection are checked only
+   to cancel stale input; they never replace the captured operands.
    A body scene item carrying no scene-node address matches no selected target
    in the producer and therefore draws no transform gizmo; with the legacy
    selector gone it also receives no transform input, so this route no longer
    hit-tests geometry it never draws.
-   All three components of `translate` reach a commit callback, because the
-   gesture moves the body's placement instead of rewriting the profile it was
-   built from. A profile edit could express neither height nor a body whose
-   feature owns no profile, and it expressed the two in-plane components in
-   the profile's own basis rather than the world basis the arrow names, so an
-   arrow committed a translation along whichever world axis that basis
-   happened to carry. `Viewport.committedBodyPlacementDragTarget` is the
-   route's whole commit contract: it answers a
-   `ViewportBodyPlacementDragTarget` when the finished drag's action is
-   `translate`, the drag holds no group edit, the press captured a placement
-   baseline, and the ghost edit moved the body centre at all. The ghost is a
-   world translation of the item's own world box, so the centre offset is the
-   world delta itself and is composed, not projected: the release asks the
-   shared algebra for the local frame that realises it under the parent frame
-   the press captured, and refuses rather than clamps a parent it cannot
-   invert. Both scales, the rotation, the object vertex move, the object face
-   move, a group translate, and a body whose scene item carries no scene-node
-   address reach no callback at all, so the release drops their ghost edits
-   and the gesture ends as a preview. The handle promise stated below
-   therefore covers the claim, the preview, and the drag on this route;
-   giving the remaining actions a persistent result needs commit owners this
-   design does not name, which is a feature rather than a step of this
-   migration.
+   Body transform gestures persist translation, rotation and positive axis scaling
+   through one atomic batch of scene-node placements. The press retains one
+   baseline per occurrence, the source/snapshot, selection and press point.
+   Preview uses occurrence-keyed world mutations, never a feature-keyed box.
+   Release measures its own point against a matching mounted camera, including
+   release without preview. An unready frame retains the closed release until
+   answered; source, selection, route or release-revision changes and Escape
+   cancel it and consume subsequent release. No old preview authorizes a commit.
+   Each member composes P^-1 * M * P * L against its retained parent frame.
+   The workspace validates every local and parent-world baseline before one
+   transaction and one Undo step. Invalid frames and nonpositive scale are
+   typed refusals. Synthetic object-scope vertex/face handles are not emitted:
+   topology edits belong to their dedicated scopes and existing commit owners.
+   MainActor owns mutable gesture state; worker snapshots remain immutable
+   Sendable values without target-specific synchronization.
+   Verification covers all actions, distinct preview/release points, Escape,
+   duplicate-feature occurrences, stale parent frames and atomic group undo.
+   The consuming boundary is [RupaUI](../RupaUI/DESIGN.md).
    The sketch transform affordance is native-enabled under this same authority
    and under its own identity family. The producer registers one record per
    drawn handle only while the route is interactive, which is exactly a bound
@@ -2376,7 +2363,7 @@ tests and native GPU measurements.
 | Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, one-sided scale marker, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. `ViewportSketchTransformLifecycleTests` proves the sketch transform gizmo registers one record per handle only while the route is interactive, and that a pending mutation moves the emitted outline, arrows, arcs, corner handles, and centre marker to the mutated world geometry while the `scene` and `document` inputs the route reads are unchanged. |
 | Selection rectangle readiness | `Tests/RupaRenderingTests/ViewportSelectionDragFailurePolicyTests.swift` proves the policy publishes a resolved answer, retains the preview in silence for `frameNotReady`, and refuses every other typed failure — another `MeshSourcePresentationRenderError.Code`, and an error of an unrelated type — together with the code-and-message description the refusal reports. `Tests/RupaRenderingTests/ViewportSelectionDragFrameReadinessTests.swift` proves the producers those branches depend on: an idle plan cache answers `surfaceHit` and `occurrenceIDs` with `frameNotReady`, a cache holding a failure recorded for the queried identity rethrows that stored failure unchanged, an unmounted `RealityViewport` answers `surfaceHit`, `occurrenceIDs` and `cameraDepthInterval` with `frameNotReady` for a revision it never applied, and the same viewport mounted in a real window answers a revision other than the one it applied with a stale-revision refusal. The two `Viewport` call sites that dispatch on the policy are covered by source review, because the drag state they read is private SwiftUI `@State`; the mounted end-to-end drag belongs to the integration verification. |
 | Affordance drag measurement | Value tests solve each action against a fake measuring surface that records the queries it was asked and answers them from a stated camera, proving the world axis and world origin each action names, the orthonormal decomposition of the two-point routes, the absolute-pair form of `rotate`, and the typed refusals for a degenerate axis, a degenerate plane -- which is the edge-on rotation plane the removed screen-polar fallback answered anyway -- and a non-finite answer, plus the retained-value answer for a pointer at the pivot and the rule that only an unjudged frame counts as transient. A mapping test pins `ViewportProfileFaceDragMapping`'s face-to-axis rule against its three-delta distance for every face, so the single-axis form stays equivalent to the form its own tests pin. `Tests/RupaRenderingTests/ViewportNativeProfileAffordancePressTests.swift` drives nine mounted handle-and-camera cases -- profile face, profile corner, edge fillet, and edge chamfer under a parallel isometric and under a standard perspective camera, plus profile face under an axis-front camera whose projection collapses one world axis -- through the real press, preview, and release route with the drag end taken as the projection of a stated world displacement, and requires every case to commit on its own callback for the pressed target with a non-zero quantity while no other profile route and no canvas drag answers that round; the perspective cases are the counterexample the removed one-metre axis probe answered with nothing, and the axis-front case is the counterexample the all-three-axes face form refused. Each case contrasts that against a gesture on empty space whose press and whose release are both searched on the construction plane the canvas drag itself resolves on -- the release outward until its screen travel clears the viewport's drag threshold -- so an empty gesture is a routing answer rather than a point the camera cannot solve. A tenth mounted test moves the camera between the claimed drag's baseline and its release and requires the commit, the other profile routes, and the canvas owner to stay silent while the next gesture routes again, which is the stale-revision refusal rather than a not-ready wait. Source review still covers the update failure branch, because the drag state it reads is private SwiftUI `@State`, and it likewise covers the owner-facing refusal callback: one funnel reports it, no fixture in this module constructs a `Viewport`, and the behavioral proof that a refused gesture reaches the owner's record is the shipped-chrome sweep `RupaUI/DESIGN.md` owns. |
-| Body transform affordance press | `Tests/RupaRenderingTests/ViewportNativeObjectAffordancePressTests.swift` drives six mounted stations of the object gizmo -- the three translate arrows, the centre-scale and the one-sided-scale marker of one axis, and one rotation-ring sample -- through the real press, preview, and release route under a parallel isometric camera, where all three axes stay non-degenerate. The fixture derives every station from the production lengths in `BodyTransformMetrics` and the tolerances the emit site passes, resolving the arrow and the two axis markers as screen offsets and the ring as the projection of a scene-space step, because a `.worldDirected` offset is solved in scene space and the ring is therefore a foreshortened arc rather than a screen circle; it refuses to run unless exactly one drawn footprint claims the station, so a case cannot pass by pressing a handle it does not name. All three translate arrows are required to commit on `onBodyPlacementCommit` for the selected scene node, each carrying a local frame whose translation differs from the captured baseline along the world axis the arrow names and along no other, which is the counterexample the profile-sketch commit answered by moving a named axis along a different one and by answering height with nothing at all. A non-mounted value test drives the same contract end to end for all three axes -- it asks the shared algebra for the local frame that realises a stated world translation under a non-identity parent, writes it through `setSceneNodeTransform`, rebuilds the scene, and requires the rebuilt body's world box to have moved along that world axis and along no other -- so the axis agreement is proven against the scene the viewport actually draws rather than against the gizmo's own arithmetic. Every other station is required to reach neither the canvas owner nor the placement owner, which is the preview contract above rather than a routing defect: the same round first commits the `translate(.x)` control station and afterwards answers an empty canvas drag, so the silence is not a frame that stopped answering, and a second mounted viewport with the object-affordance gate closed is required to reach the canvas owner from the same station, so the silence is attributable to the gizmo rather than to a point the canvas could not solve. Object `vertexMove` and `faceMove` are not pressed here: at the framing this fixture shares with the rest of its evidence the body's face-centre and corner markers project within a few points of one another, so no station exists that exactly one footprint claims. What a claimed station computed during its preview is owned by the affordance drag measurement row above, and a preview refused for a permanent reason reaches the refusal funnel rather than a mutation callback, so it carries the same callback signature as a claim. |
+| Body transform affordance press | `ViewportNativeObjectAffordancePressTests` drives translation on all world axes, centre/one-sided scale and rotation through mounted AppKit mouse events. Every station must commit; release without preview and release beyond the last preview must agree with a normally sampled release. Escape consumes both body and canvas gestures. `ViewportBodyTransformInputTests` checks signed rotation, scale pivots/refusal, distinct occurrences sharing a feature, and stale parent frames. `ViewportBodyPlacementWorldAxisTests` reads back committed geometry from the scene builder. Synthetic object vertex/face handles are absent; topology editing remains owned by its dedicated scopes. |
 | Construction-plane handle markers | `Tests/RupaRenderingTests/ViewportConstructionPlaneHandleMarkerResolverTests.swift` mounts a plan-cache frame under an orthographic and a perspective camera and proves the accessibility markers are that frame's own projection of the prepared `.constructionPlane` records: each handle's point equals the mounted probe's projection of the record's own origin or normal end, the two handles land on different points, and the reported world origin and normal stay the record's. The same fixture proves the readiness split -- before any camera is applied, for a revision the frame never applied, and after the frame is unmounted, the resolver yields no marker and no failure, while the projection queries themselves refuse that revision and a withdrawn cache answers no record at all. The applied revision is driven through the real `RealityViewportView` mount, so the overlay learns the frame position from the frame rather than from the body that ran before `applyCamera`. The `Viewport` call site that publishes the markers is covered by source review, because the state it writes is private SwiftUI `@State`, and the identifiers, labels, and values the markers carry are unchanged, so the application's existing canvas accessibility tests stay the evidence for them. |
 | View-ray anchor on the creation and pick routes | `Tests/RupaRenderingTests/ViewportCanvasViewRayAnchorTests.swift` mounts a plan-cache frame under an orthographic and a perspective camera and proves the anchor a canvas drag and a pick carry is the frame's own answer for that pixel: the anchor lies on the displayed canvas plane the current projection basis names, the mounted probe projects it back to the pixel that produced it, and two different pixels yield two different anchors. The same fixture proves the refusals -- a canvas plane that names no normal, a revision the frame never applied, and an unmounted viewport each yield no anchor rather than an anchor derived from a different ray origin, so the gesture that would have carried it is refused whole. |
 | Body preview geometry under an edit state | A spatial overlay fixture whose body item carries a snapshot mesh draws that mesh with no edit state and the edit state's world box corners while one exists, proving a prepared identity never decides what a drag previews. |

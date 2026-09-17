@@ -21,6 +21,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var nativePatternValue: ViewportNativePatternInput.Value?
     var nativeWorldPointValue: ViewportNativeWorldPointInput.Value?
     var sketchTransformMutation: Transform3D?
+    var bodyTransformMutation: Transform3D?
     var hoveredHit: ViewportHit?
     var creation: Creation?
     var hasCanvasDrag = false

@@ -5,6 +5,16 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
+func bodyTransformTestDocument(_ items: [ViewportSceneItem]) -> DesignDocument {
+    var document = DesignDocument.empty()
+    for item in items {
+        guard let id = item.sceneNodeID else { continue }
+        document.productMetadata.sceneNodes[id] = SceneNode(id: id, name: item.id, reference: .body(item.featureID))
+        document.productMetadata.rootSceneNodeIDs.append(id)
+    }
+    return document
+}
+
 @Test
 func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() throws {
     let featureID = FeatureID()
@@ -38,7 +48,7 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
     let scene = ViewportScene(items: [item])
     let selection = SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: nodeID)])
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
-        document: .empty(),
+        document: bodyTransformTestDocument([item]),
         scene: scene,
         selection: selection,
         ruler: .standard(for: .meter),
@@ -59,7 +69,7 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
     // length, so the camera lines are three axis arrows plus three rings.
     #expect(source.worldLines.count == 12)
     #expect(source.worldLines.allSatisfy { $0.points.count == 2 })
-    #expect(source.markers.count >= 15)
+    #expect(source.markers.count == 7)
     #expect(source.cameraLines.count == 6)
     #expect(source.cameraPaths.isEmpty)
     let bodyRecord = try #require(interactionRecords.first { record in
@@ -141,7 +151,7 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
     )
     var editedBodies: [FeatureID: ViewportObjectEditState] = [featureID: baseline]
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
-        document: .empty(),
+        document: bodyTransformTestDocument([first, second]),
         scene: ViewportScene(items: [first, second]),
         selection: SelectionModel(selectedTargets: [
             SelectionTarget(sceneNodeID: firstNodeID),
@@ -177,19 +187,20 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
     #expect(members.map(\.featureID) == [featureID, featureID])
     #expect(members[0].sceneNodeID == firstNodeID)
     #expect(members[1].sceneNodeID == secondNodeID)
-    #expect(members.map(\.edit) == [baseline, baseline])
-    #expect(groupEdit?.xMin == baseline.xMin)
-    #expect(groupEdit?.xMax == baseline.xMax)
-    #expect(groupEdit?.yMin == baseline.yMin)
-    #expect(groupEdit?.yMax == baseline.yMax)
-    #expect(groupEdit?.zMin == baseline.zMin)
-    #expect(groupEdit?.zMax == baseline.zMax)
+    #expect(members.map(\.edit) == [ViewportObjectEditState(item: first), ViewportObjectEditState(item: second)])
+    #expect(members.allSatisfy { $0.placement != nil })
+    #expect(groupEdit?.xMin == -1)
+    #expect(groupEdit?.xMax == 7)
+    #expect(groupEdit?.yMin == 0)
+    #expect(groupEdit?.yMax == 1)
+    #expect(groupEdit?.zMin == -1)
+    #expect(groupEdit?.zMax == 7)
 
     let replacement = ViewportObjectEditState(
         xMin: -9, xMax: 9, yMin: -8, yMax: 8, zMin: -7, zMax: 7
     )
     let replacementRaw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
-        document: .empty(),
+        document: bodyTransformTestDocument([first]),
         scene: ViewportScene(items: [first]),
         selection: SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: firstNodeID)]),
         editedBodies: [featureID: replacement],
@@ -216,7 +227,7 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
     #expect(replacementRecord.occurrenceID == first.id)
     #expect(replacementMembers.count == 1)
     #expect(replacementMembers[0].occurrenceID == first.id)
-    #expect(replacementMembers[0].edit == replacement)
+    #expect(replacementMembers[0].edit == ViewportObjectEditState(item: first))
     #expect(replacementGroupEdit == nil)
 }
 

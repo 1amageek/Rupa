@@ -155,6 +155,7 @@ extension ViewportSpatialOverlayProducer {
             let scene: ViewportScene
             let selection: SelectionModel
             let editedBodies: [FeatureID: ViewportObjectEditState]
+            var bodyPreviewTransforms: [String: Transform3D] = [:]
             let ruler: RulerConfiguration
             let enabledRoutes: Set<SurfaceTransformAffordanceRoute>
             let interactiveRoutes: Set<SurfaceTransformAffordanceRoute>
@@ -2580,13 +2581,18 @@ private extension ViewportSpatialOverlayProducer {
         if drawsBodyGizmo {
             let isGroup = bodyItems.count > 1
             let featureID = bodyItems.last?.featureID ?? bodyItems[0].featureID
-            let bodyMembers = bodyItems.map { item in
-                ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
+            let bodyMembers = try bodyItems.map { item in
+                let frames = try sceneNodeCommitFrames(item: item, parentFrames: parentFrames, input: input)
+                let placement = frames.map { ViewportBodyPlacementBaseline(featureID: item.featureID,
+                    sceneNodeID: $0.sceneNodeID, baseLocalTransform: $0.baseLocalTransform,
+                    parentWorldTransform: $0.parentWorldTransform) }
+                return ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
                     occurrenceID: item.id,
                     featureID: item.featureID,
                     sceneNodeID: item.sceneNodeID,
                     modelTransform: item.modelTransform,
-                    edit: input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+                    edit: try bodyTransformPreviewBounds(item: item, input: input),
+                    placement: placement
                 )
             }
             let edit: ViewportObjectEditState
@@ -2602,29 +2608,12 @@ private extension ViewportSpatialOverlayProducer {
                     zMax: edits.map(\.zMax).max() ?? first.zMax
                 )
             } else {
-                edit = input.editedBodies[featureID] ?? ViewportObjectEditState(item: bodyItems[0])
+                edit = bodyMembers[0].edit
             }
             let target = bodyItems.count == 1
                 ? input.selection.selectedTargets.first(where: { $0.sceneNodeID == bodyItems[0].sceneNodeID && $0.component == .object })
                 : nil
-            // A translate commits the body's placement, which is one scene
-            // node's local frame. A group gizmo stands for no single node, and
-            // a body whose item names no addressable node has no commit target,
-            // so both draw a gizmo that previews and commits nothing.
-            let placement: ViewportBodyPlacementBaseline?
-            if bodyItems.count == 1,
-               let frames = try sceneNodeCommitFrames(
-                   item: bodyItems[0], parentFrames: parentFrames, input: input
-               ) {
-                placement = ViewportBodyPlacementBaseline(
-                    featureID: bodyItems[0].featureID,
-                    sceneNodeID: frames.sceneNodeID,
-                    baseLocalTransform: frames.baseLocalTransform,
-                    parentWorldTransform: frames.parentWorldTransform
-                )
-            } else {
-                placement = nil
-            }
+            let placement = bodyMembers.count == 1 ? bodyMembers[0].placement : nil
             try emitBodyTransform(
                 featureID: featureID,
                 selectionTarget: target,
@@ -2718,6 +2707,7 @@ private extension ViewportSpatialOverlayProducer {
             )
         }
 
+        guard bodyMembers.allSatisfy({ $0.placement != nil }) else { return }
         let center = edit.worldPoint(edit.centerPoint)
         let maxSpan = max(
             Double(edit.xMax - edit.xMin),
@@ -2819,46 +2809,6 @@ private extension ViewportSpatialOverlayProducer {
             to: &markers,
             checkpoint: checkpoint
         )
-        for face in ViewportBodyFace.editableCases {
-            let actionIdentity = try affordance(.faceMove(face))
-            let point = edit.worldPoint(edit.position(for: face))
-            try appendMarker(
-                .init(
-                    route: .bodyTransform,
-                    anchor: point,
-                    shape: .sphere,
-                    diameterPoints: 9,
-                    color: selectionColor,
-                    family: .transform,
-                    identity: actionIdentity,
-                    state: state(for: actionIdentity, input: input),
-                    hitTolerancePoints: 10.0,
-                    occurrenceID: occurrenceID
-                ),
-                to: &markers,
-                checkpoint: checkpoint
-            )
-        }
-        for vertex in ViewportBodyVertex.allCases {
-            let actionIdentity = try affordance(.vertexMove(vertex))
-            let point = edit.worldPoint(edit.position(for: vertex))
-            try appendMarker(
-                .init(
-                    route: .bodyTransform,
-                    anchor: point,
-                    shape: .box,
-                    diameterPoints: 9,
-                    color: selectionColor,
-                    family: .transform,
-                    identity: actionIdentity,
-                    state: state(for: actionIdentity, input: input),
-                    hitTolerancePoints: 10.0,
-                    occurrenceID: occurrenceID
-                ),
-                to: &markers,
-                checkpoint: checkpoint
-            )
-        }
         let orientedAxes = [
             normalized(worldVector(edit.orientation.xAxis)) ?? Vector3D.unitX,
             normalized(worldVector(edit.orientation.yAxis)) ?? Vector3D.unitY,
@@ -3093,16 +3043,21 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
-    /// The scene node one transform gizmo commits into, with the frame that
-    /// node currently holds and the world frame that local frame is applied
-    /// within. Both gizmos ask this, because both commit the same command
-    /// against the same three answers.
-    ///
-    /// Returns `nil` for the three items that name no such node: one drawn
-    /// without a scene-node address, one placed through a component instance,
-    /// whose local frame the instance owns and the scene-node transform command
-    /// cannot address, and one whose node has left the document. Such an item
-    /// still draws its gizmo, and that gizmo commits nothing.
+    /// World-aligned handle bounds follow this occurrence's preview mutation.
+    static func bodyTransformPreviewBounds(
+        item: ViewportSceneItem, input: SurfaceTransformAffordanceSource.RawInput
+    ) throws -> ViewportObjectEditState {
+        let base = ViewportObjectEditState(item: item)
+        guard let mutation = input.bodyPreviewTransforms[item.id] else { return base }
+        let points = try base.worldBoxCorners.map { try ViewportWorldTransformAlgebra.transformedPoint($0, by: mutation) }
+        return ViewportObjectEditState(
+            xMin: CGFloat(points.map(\.x).min()!), xMax: CGFloat(points.map(\.x).max()!),
+            yMin: CGFloat(points.map(\.y).min()!), yMax: CGFloat(points.map(\.y).max()!),
+            zMin: CGFloat(points.map(\.z).min()!), zMax: CGFloat(points.map(\.z).max()!))
+    }
+
+    /// Addressable, unlocked node frames shared by body and sketch gizmos.
+    /// Instance-owned placements need their own command and expose no handles here.
     static func sceneNodeCommitFrames(
         item: ViewportSceneItem,
         parentFrames: ViewportSceneNodeParentFrames,
@@ -3113,7 +3068,7 @@ private extension ViewportSpatialOverlayProducer {
         parentWorldTransform: Transform3D
     )? {
         guard let sceneNodeID = item.sceneNodeID, item.componentInstanceID == nil else { return nil }
-        guard let node = input.document.productMetadata.sceneNodes[sceneNodeID] else { return nil }
+        guard let node = input.document.productMetadata.sceneNodes[sceneNodeID], !node.isLocked else { return nil }
         guard let parentWorldTransform = try parentFrames.parentWorldTransform(of: sceneNodeID) else {
             return nil
         }

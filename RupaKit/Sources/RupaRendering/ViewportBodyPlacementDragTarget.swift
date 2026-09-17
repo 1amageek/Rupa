@@ -1,4 +1,5 @@
 import RupaCore
+import SwiftCAD
 
 /// One committed body placement: the scene node whose local frame changes, the
 /// frame that node held when the gesture began, and the frame the gesture
@@ -15,16 +16,31 @@ public struct ViewportBodyPlacementDragTarget: Equatable, Sendable {
     public var sceneNodeID: SceneNodeID
     public var baseLocalTransform: Transform3D
     public var localTransform: Transform3D
+    public var baseParentWorldTransform: Transform3D
 
     public init(
         featureID: FeatureID,
         sceneNodeID: SceneNodeID,
         baseLocalTransform: Transform3D,
-        localTransform: Transform3D
+        localTransform: Transform3D,
+        baseParentWorldTransform: Transform3D = .identity
     ) {
         self.featureID = featureID
         self.sceneNodeID = sceneNodeID
         self.baseLocalTransform = baseLocalTransform
         self.localTransform = localTransform
+        self.baseParentWorldTransform = baseParentWorldTransform
+    }
+
+    /// Validates all coordinates used by the gesture against the current source.
+    public func validate(in document: DesignDocument) throws {
+        guard let node = document.productMetadata.sceneNodes[sceneNodeID],
+              node.reference == .body(featureID), !node.isLocked,
+              node.localTransform == baseLocalTransform,
+              try ViewportSceneNodeParentFrames(document: document)
+                .parentWorldTransform(of: sceneNodeID) == baseParentWorldTransform else {
+            throw EditorError(code: .commandInvalid,
+                              message: "The body placement baseline changed during the gesture.")
+        }
     }
 }
