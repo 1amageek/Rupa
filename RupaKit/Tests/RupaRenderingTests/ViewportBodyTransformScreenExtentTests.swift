@@ -111,7 +111,7 @@ struct ViewportBodyTransformScreenExtentTests {
             // Both axis markers share the arrow's own `toward` point, so they
             // resolve on the drawn shaft at every camera angle instead of
             // foreshortening off it.
-            let tip = try #require(source.markers.first { action($0.identity) == .oneSidedScale(axis) })
+            let tip = try #require(source.markers.first { action($0.identity) == .translate(axis) })
             #expect(pointLength(tip.offset) == Expected.axisLengthPoints)
             #expect(towardPoint(tip.offset) == arrow.points[1].toward)
             #expect(tip.anchor == arrow.points[1].anchor)
@@ -140,7 +140,7 @@ struct ViewportBodyTransformScreenExtentTests {
         let axis = ViewportCoordinateAxis.x
         let ring = try #require(source.cameraLines.first { action($0.identity) == .rotate(axis) })
         let centre = try #require(source.markers.first { action($0.identity) == .centerScale(axis) })
-        let tip = try #require(source.markers.first { action($0.identity) == .oneSidedScale(axis) })
+        let tip = try #require(source.markers.first { action($0.identity) == .translate(axis) })
         let ringRadius = try #require(ring.points.first.map(\.parallel))
         let centreLength = try #require(pointLength(centre.offset))
         let tipLength = try #require(pointLength(tip.offset))

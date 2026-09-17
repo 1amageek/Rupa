@@ -929,6 +929,7 @@ final class RealityViewportSpatialResources {
         }
         var sphere: MeshResource?
         var box: MeshResource?
+        var cone: MeshResource?
         for marker in batch.markers {
             try Task.checkCancellation()
             let mesh: MeshResource
@@ -941,10 +942,25 @@ final class RealityViewportSpatialResources {
                 if box == nil { box = .generateBox(size: 1) }
                 guard let box else { throw RealityViewportSpatialBatch.invalid("Native marker resource is unavailable.") }
                 mesh = box
+            case .cone:
+                if cone == nil { cone = .generateCone(height: 1, radius: 0.35) }
+                guard let cone else { throw RealityViewportSpatialBatch.invalid("Native arrow resource is unavailable.") }
+                mesh = cone
             }
             let entity = ModelEntity(mesh: mesh, materials: [material(marker.color, depth: marker.depth)])
             let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(marker.anchor, relativeTo: batch.renderOrigin)
             entity.position = nativeAnchor
+            if case .cone = marker.shape {
+                guard case .directed(let toward, _, _) = marker.offset else {
+                    throw RealityViewportSpatialBatch.invalid("An arrowhead requires an explicit axis direction.")
+                }
+                let end = try RealityViewportSpatialBatch.nativePoint(toward, relativeTo: batch.renderOrigin)
+                let direction = end - nativeAnchor
+                guard simd_length_squared(direction) > 0 else {
+                    throw RealityViewportSpatialBatch.invalid("An arrowhead axis is degenerate.")
+                }
+                entity.orientation = simd_quatf(from: SIMD3(0, 1, 0), to: simd_normalize(direction))
+            }
             entity.isEnabled = false
             result.markers.append((entity, marker))
             result.register(entity, handleIndex: marker.handleIndex)

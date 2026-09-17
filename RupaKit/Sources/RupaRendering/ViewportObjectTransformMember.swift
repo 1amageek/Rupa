@@ -10,4 +10,5 @@ struct ViewportObjectTransformMember: Sendable {
     let baseLocalTransform: Transform3D
     let parentWorldTransform: Transform3D
     let bounds: ViewportObjectEditState
+    var resize: ViewportBodyResizeBaseline? = nil
 }

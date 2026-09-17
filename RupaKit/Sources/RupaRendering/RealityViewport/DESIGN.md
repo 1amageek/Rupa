@@ -15,6 +15,11 @@ Parent: [RupaRendering](../DESIGN.md). It has no child components.
 
 ## Responsibilities and Boundaries
 
+Directed transform arrowheads use a shared native `MeshResource.generateCone`
+mesh oriented along the producer's explicit world axis. Their point-sized
+placement and spherical hit tolerance use the same marker owner as other handles;
+camera changes update placement without rebuilding the cone resource.
+
 The component owns:
 
 - bounded native `MeshResource`/`LowLevelMesh` and collision resource creation;

@@ -2153,6 +2153,8 @@ extension ViewportSpatialOverlayProducer {
             glyphPath = Path(ellipseIn: glyphBounds)
         case .box:
             glyphPath = Path(roundedRect: glyphBounds, cornerRadius: 1.5)
+        case .cone:
+            throw RealityViewportSpatialBatch.invalid("Pattern glyphs do not accept spatial arrowheads.")
         }
         var glyph = RealityViewportSpatialBatch.CameraPath(
             path: glyphPath,

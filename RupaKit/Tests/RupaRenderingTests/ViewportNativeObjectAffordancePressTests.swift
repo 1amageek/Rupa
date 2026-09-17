@@ -25,7 +25,7 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     case translateZ
     case translateY
     case centerScaleX
-    case oneSidedScaleX
+    case translateTipX
     case rotateX
 
     /// The world axis a released drag on this station must move the body
@@ -33,10 +33,10 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     /// what separates "it moved" from "it moved where the pointer pointed".
     var committedAxis: ViewportCoordinateAxis? {
         switch self {
-        case .translateX: return .x
+        case .translateX, .translateTipX: return .x
         case .translateY: return .y
         case .translateZ: return .z
-        case .centerScaleX, .oneSidedScaleX, .rotateX: return nil
+        case .centerScaleX, .rotateX: return nil
         }
     }
 
@@ -46,7 +46,7 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
         case .translateZ: return "translate(.z)"
         case .translateY: return "translate(.y)"
         case .centerScaleX: return "centerScale(.x)"
-        case .oneSidedScaleX: return "oneSidedScale(.x)"
+        case .translateTipX: return "translate(.x)"
         case .rotateX: return "rotate(.x)"
         }
     }
@@ -236,7 +236,7 @@ private struct ObjectHandlePressFixture {
             )
             footprints.append(
                 ObjectHandleFootprint(
-                    name: "oneSidedScale(.\(axis))", shape: .marker(tip), tolerance: 10.0
+                    name: "translate(.\(axis))", shape: .marker(tip), tolerance: 10.0
                 )
             )
             footprints.append(
@@ -304,7 +304,7 @@ private struct ObjectHandlePressFixture {
         let axisIndex: Int
         let pressPoint: CGPoint
         switch pressCase {
-        case .translateX, .centerScaleX, .oneSidedScaleX, .rotateX:
+        case .translateX, .centerScaleX, .translateTipX, .rotateX:
             axisIndex = 0
         case .translateY:
             axisIndex = 1
@@ -320,7 +320,7 @@ private struct ObjectHandlePressFixture {
                 BodyMetrics.centerScalePoints,
                 perpendicular: Self.markerOffsetPoints
             )
-        case .oneSidedScaleX:
+        case .translateTipX:
             pressPoint = station(
                 directions[axisIndex],
                 BodyMetrics.axisLengthPoints,
@@ -405,11 +405,19 @@ private struct MountedObjectHandleViewport {
         onPick: @escaping (ViewportCanvasTarget) -> Void,
         onCanvasDrag: @escaping (ViewportModelDrag) -> Void,
         onBodyPlacementCommit: @escaping ([ViewportBodyPlacementDragTarget]) -> Void,
-        commitCompletion: (@MainActor () async throws -> ViewportSourceIdentity)? = nil
+        commitCompletion: (@MainActor () async throws -> ViewportSourceIdentity)? = nil,
+        onBodyResizeCommit: ((ViewportBodyResizeDragTarget) -> Void)? = nil
     ) async throws {
         _ = NSApplication.shared
         func viewport(invalidation: Invalidation? = nil) -> AnyView {
         let selection = invalidation == .selection ? SelectionModel() : fixture.selection
+        let resizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)?
+        if let onBodyResizeCommit, invalidation != .route {
+            resizeCommit = { target in
+                onBodyResizeCommit(target)
+                return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+            }
+        } else { resizeCommit = nil }
         return AnyView(Viewport(
             document: presentation?.document.document ?? fixture.document,
             sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(invalidation == .source ? 2 : 1)),
@@ -430,7 +438,8 @@ private struct MountedObjectHandleViewport {
                 onBodyPlacementCommit(targets)
                 if let commitCompletion { return try await commitCompletion() }
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
-            }
+            },
+            onBodyResizeCommit: resizeCommit
         ).frame(width: fixture.size.width, height: fixture.size.height))
         }
         let controller = NSHostingController(rootView: viewport())
@@ -637,6 +646,59 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
     #expect(undone.document.document.productMetadata == document.productMetadata)
     let redone = try await workspace.redo()
     #expect(redone.document.document.productMetadata == changed.document.document.productMetadata)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func boxFaceAndCornerHandlesReachSourceResizeWithoutPlacementFallback() async throws {
+    let fixture = try ObjectHandlePressFixture(pressCase: .translateX)
+    let workspace = ProjectWorkspace(project: try ProjectController(document: fixture.document,
+        evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge()))
+    let snapshot = try await workspace.evaluate()
+    var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: fixture.document, scene: .init(items: []), selection: fixture.selection,
+        ruler: fixture.ruler, enabledRoutes: [.bodyTransform], interactiveRoutes: [.bodyTransform])
+    raw.presentationScene = snapshot.viewport
+    raw.presentationNodeIDs = snapshot.sceneNodeIDByOccurrenceID
+    raw.allowsBodyResize = true
+    var records: [ViewportSpatialInteractionRecord] = []
+    let source = try #require(try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+        from: raw, interactionRecords: &records, checkpoint: { _, _, _ in }))
+    let resizeRecords = records.filter {
+        guard case .objectTransform(let action, _, _) = $0.target else { return false }
+        switch action { case .faceMove, .vertexMove: return true; default: return false }
+    }
+    #expect(resizeRecords.count == 14)
+    #expect(source.markers.filter { if case .cone = $0.shape { true } else { false } }.count == 3)
+    var resizes: [ViewportBodyResizeDragTarget] = []
+    var placements = 0
+    var canvas = 0
+    let mounted = try await MountedObjectHandleViewport(fixture: fixture, presentation: snapshot,
+        onPick: { _ in }, onCanvasDrag: { _ in canvas += 1 }, onBodyPlacementCommit: { _ in placements += 1 },
+        onBodyResizeCommit: { resizes.append($0) })
+    defer { mounted.close() }
+    let layout = ViewportSceneContext(ruler: fixture.ruler, scene: fixture.scene, size: fixture.size,
+        camera: fixture.control.camera, basis: fixture.control.basis,
+        fittingInsets: ViewportCanvasChromeLayout(viewportSize: fixture.size,
+            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth).fittingInsets).layout
+    for action: ViewportAffordanceAction in [.faceMove(.right), .vertexMove(.frontBottomRight)] {
+        let marker = try #require(source.markers.first {
+            guard case .objectTransform(_, let value) = $0.identity else { return false }
+            return value == action
+        })
+        let start = try #require(layout.projectedPoint(marker.anchor)?.point)
+        let end = CGPoint(x: start.x + 12, y: start.y + 8)
+        let count = resizes.count
+        let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+        while resizes.count == count, ContinuousClock.now < deadline {
+            try await mounted.gesture(from: start, to: end, size: fixture.size)
+        }
+        #expect(resizes.count > count, "The actual mounted face/corner must reach the source resize callback.")
+        let after = resizes.count
+        try await mounted.gesture(from: start, to: end, size: fixture.size, cancel: true)
+        #expect(resizes.count == after)
+    }
+    #expect(placements == 0 && canvas == 0)
 }
 
 @MainActor

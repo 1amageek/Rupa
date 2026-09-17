@@ -226,6 +226,7 @@ public struct Viewport: View {
     private let onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)?
     private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
     private let onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)?
+    private let onBodyResizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -414,6 +415,7 @@ public struct Viewport: View {
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? = nil,
+        onBodyResizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -549,6 +551,7 @@ public struct Viewport: View {
         self.onSelectionDrag = onSelectionDrag
         self.onSelectionDragPreview = onSelectionDragPreview
         self.onBodyPlacementCommit = onBodyPlacementCommit
+        self.onBodyResizeCommit = onBodyResizeCommit
         self.onVertexDrag = onVertexDrag
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
@@ -1694,6 +1697,7 @@ public struct Viewport: View {
         if onFaceDrag != nil { key.availableRoutes |= 1 << 24 }
         if onEdgeChamferDrag != nil { key.availableRoutes |= 1 << 25 }
         if onBodyPlacementCommit != nil { key.availableRoutes |= 1 << 26 }
+        if onBodyResizeCommit != nil { key.availableRoutes |= 1 << 27 }
         return key
     }
 
@@ -4045,6 +4049,7 @@ public struct Viewport: View {
             && press.selectedTargets == selection.selectedTargets
             && press.selectedReferences == selection.selectedReferences
             && bodyTransformRouteEnabled
+            && (!press.input.isResize || onBodyResizeCommit != nil)
             && (press.finish == nil || press.finish?.revision == activeControlSession.revision)
     }
 
@@ -4066,6 +4071,7 @@ public struct Viewport: View {
         guard case .bodyTransform(let press) = nativeInputGesture, let finish = press.finish else { return }
         guard bodyTransformBaselineMatches(press) else { cancelNativeInputGesture(); return }
         let targets: [ViewportBodyPlacementDragTarget]
+        let resizeTarget: ViewportBodyResizeDragTarget?
         let mutation: Transform3D
         do {
             let identity = try presentationPreparation.get()
@@ -4073,6 +4079,8 @@ public struct Viewport: View {
             guard presentationPlanCache.hasReadyCamera(for: identity, revision: finish.revision) else { return }
             mutation = try press.input.mutation(from: press.start, to: finish.point, measure: affordanceMeasure())
             targets = try press.input.commits(mutation: mutation)
+            resizeTarget = try press.input.resizeCommit(mutation: mutation)
+            if let resizeTarget { try resizeTarget.validate(in: document) }
             for target in targets { try target.validate(in: document) }
         } catch {
             reportNativeGestureFailure(error)
@@ -4080,7 +4088,14 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             return
         }
-        if !targets.isEmpty, let onBodyPlacementCommit {
+        if let resizeTarget, let onBodyResizeCommit {
+            bodyCommitHandoff.begin(
+                source: sourceIdentity, mutation: mutation,
+                occurrenceIDs: press.input.members.map(\.occurrenceID),
+                commit: { try await onBodyResizeCommit(resizeTarget) },
+                onFailure: reportNativeGestureFailure
+            )
+        } else if !targets.isEmpty, let onBodyPlacementCommit {
             bodyCommitHandoff.begin(
                 source: sourceIdentity, mutation: mutation,
                 occurrenceIDs: press.input.members.map(\.occurrenceID),
@@ -4430,6 +4445,9 @@ public struct Viewport: View {
         do {
             if let record = try nativeInteractionRecord(at: point) {
                 if let input = try ViewportBodyTransformInput(record: record) {
+                    guard !input.isResize || onBodyResizeCommit != nil else {
+                        throw RealityViewportSpatialBatch.invalid("Box resize is unavailable in this viewport.")
+                    }
                     guard bodyTransformRouteEnabled else {
                         nativeInputGesture = .cancelled
                         return
@@ -5976,6 +5994,7 @@ extension Viewport {
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
         result.bodyPreviewTransforms = bodyPreviewTransforms
+        result.allowsBodyResize = onBodyResizeCommit != nil
         result.presentationScene = presentationScene
         result.presentationNodeIDs = presentationSceneNodeIDByOccurrenceID
         return result

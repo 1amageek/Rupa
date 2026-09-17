@@ -20,6 +20,10 @@ struct ViewportSpatialInteractionRecord: Sendable {
             }
             switch action {
             case .translate, .rotate, .centerScale, .oneSidedScale: break
+            case .faceMove, .vertexMove:
+                guard members.count == 1, members[0].resize != nil else {
+                    throw RealityViewportSpatialBatch.invalid("Box resize requires one editable source occurrence.")
+                }
             default: throw RealityViewportSpatialBatch.invalid("Object placement received a topology action.")
             }
         }
@@ -137,6 +141,7 @@ struct ViewportSpatialInteractionRecord: Sendable {
                     try string(member.occurrenceID)
                     try array(member.baseLocalTransform.matrix.values)
                     try array(member.parentWorldTransform.matrix.values)
+                    if let resize = member.resize { try array(resize.worldFromBox.matrix.values) }
                 }
             case .affordance(_, let members, _, let placement):
                 try array(members)

@@ -50,6 +50,11 @@ struct ViewportBodyTransformInput: Sendable {
                   measure: some ViewportAffordanceMeasuring) throws -> Transform3D {
         let pivot = bounds.worldPoint(bounds.centerPoint)
         switch action {
+        case .faceMove, .vertexMove:
+            guard members.count == 1, let resize = members[0].resize else {
+                throw RealityViewportSpatialBatch.invalid("The box resize baseline is unavailable.")
+            }
+            return try resize.mutation(action: action, from: start, to: end, measure: measure)
         case .translate(let axis):
             let delta = try measure.worldAxisDelta(from: start, to: end,
                 axisOrigin: pivot, axisDirection: axis.unitVector)
@@ -91,6 +96,7 @@ struct ViewportBodyTransformInput: Sendable {
     }
 
     func commits(mutation: Transform3D) throws -> [ViewportBodyPlacementDragTarget] {
+        if isResize { return [] }
         var result: [ViewportBodyPlacementDragTarget] = []
         var seen: Set<SceneNodeID> = []
         for member in members {
@@ -104,5 +110,14 @@ struct ViewportBodyTransformInput: Sendable {
                 baseParentWorldTransform: member.parentWorldTransform))
         }
         return result
+    }
+
+    var isResize: Bool {
+        switch action { case .faceMove, .vertexMove: true; default: false }
+    }
+
+    func resizeCommit(mutation: Transform3D) throws -> ViewportBodyResizeDragTarget? {
+        guard isResize, members.count == 1, let resize = members[0].resize else { return nil }
+        return try resize.commit(mutation: mutation, member: members[0])
     }
 }

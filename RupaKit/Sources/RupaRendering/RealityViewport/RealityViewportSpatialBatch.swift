@@ -77,7 +77,7 @@ struct RealityViewportSpatialBatch: Sendable {
     }
 
     struct Marker: Sendable {
-        enum Shape: Sendable { case sphere, box }
+        enum Shape: Sendable { case sphere, box, cone }
         let shape: Shape
         let anchor: Point3D
         let diameterPoints: Float

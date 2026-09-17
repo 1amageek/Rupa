@@ -87,9 +87,15 @@ extension ViewportSpatialOverlayProducer {
                                yMin: CGFloat(points.map(\.y).min()!), yMax: CGFloat(points.map(\.y).max()!),
                                zMin: CGFloat(points.map(\.z).min()!), zMax: CGFloat(points.map(\.z).max()!))
             }
+            let resize: ViewportBodyResizeBaseline?
+            if input.allowsBodyResize, selected.count == 1, case .cad(_, let output) = item.reference,
+               output == reference.featureID?.description {
+                resize = try ViewportBodyResizeBaseline.resolve(document: input.document, nodeID: nodeID,
+                    worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, node.localTransform))
+            } else { resize = nil }
             members.append(.init(occurrenceID: item.occurrenceID.rawValue, reference: reference,
                                  sceneNodeID: nodeID, baseLocalTransform: node.localTransform,
-                                 parentWorldTransform: parent, bounds: bounds))
+                                 parentWorldTransform: parent, bounds: bounds, resize: resize))
         }
         return admitted == selected ? members : nil
     }

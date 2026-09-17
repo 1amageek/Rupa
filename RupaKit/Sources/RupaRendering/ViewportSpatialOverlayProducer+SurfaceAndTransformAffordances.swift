@@ -156,6 +156,7 @@ extension ViewportSpatialOverlayProducer {
             let selection: SelectionModel
             let editedBodies: [FeatureID: ViewportObjectEditState]
             var bodyPreviewTransforms: [String: Transform3D] = [:]
+            var allowsBodyResize = false
             var presentationScene: UniversalViewportScene?
             var presentationNodeIDs: [SceneOccurrenceID: SceneNodeID] = [:]
             let ruler: RulerConfiguration
@@ -2685,7 +2686,17 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
-        let corners = edit.worldBoxCorners
+        var corners = edit.worldBoxCorners
+        if input.allowsBodyResize, let member = objectMembers?.first,
+           objectMembers?.count == 1, let resize = member.resize {
+            let vertices: [ViewportBodyVertex] = [.frontBottomLeft, .frontBottomRight,
+                .backBottomLeft, .backBottomRight, .frontTopLeft, .frontTopRight, .backTopLeft, .backTopRight]
+            corners = try vertices.map { vertex in
+                let point = try resize.point(for: .vertexMove(vertex))
+                guard let mutation = input.bodyPreviewTransforms[member.occurrenceID] else { return point }
+                return try ViewportWorldTransformAlgebra.transformedPoint(point, by: mutation)
+            }
+        }
         guard corners.count == 8, corners.allSatisfy(isFinitePoint) else {
             throw RealityViewportSpatialBatch.invalid("Body transform bounds do not contain eight finite corners.")
         }
@@ -2781,13 +2792,13 @@ private extension ViewportSpatialOverlayProducer {
                 checkpoint: checkpoint,
                 cameraLines: &cameraLines
             )
-            let endIdentity = try affordance(.oneSidedScale(axis))
+            let endIdentity = translateIdentity
             try appendMarker(
                 .init(
                     route: .bodyTransform,
                     anchor: center,
-                    shape: .box,
-                    diameterPoints: 11,
+                    shape: .cone,
+                    diameterPoints: 16,
                     color: axisColor(axis),
                     family: .transform,
                     identity: endIdentity,
@@ -2825,6 +2836,27 @@ private extension ViewportSpatialOverlayProducer {
                 to: &markers,
                 checkpoint: checkpoint
             )
+        }
+
+        if input.allowsBodyResize, let member = objectMembers?.first,
+           objectMembers?.count == 1, let resize = member.resize {
+            let actions = ViewportBodyFace.allCases.filter { $0 != .side }.map(ViewportAffordanceAction.faceMove)
+                + ViewportBodyVertex.allCases.map(ViewportAffordanceAction.vertexMove)
+            for action in actions {
+                let identity = try affordance(action)
+                var anchor = try resize.point(for: action)
+                if let mutation = input.bodyPreviewTransforms[member.occurrenceID] {
+                    anchor = try ViewportWorldTransformAlgebra.transformedPoint(anchor, by: mutation)
+                }
+                let color: SIMD4<Float>
+                if case .faceMove = action { color = SIMD4(0.24, 0.24, 0.24, 1) }
+                else { color = SIMD4(0.60, 0.63, 0.65, 1) }
+                try appendMarker(.init(route: .bodyTransform, anchor: anchor, shape: .box,
+                                       diameterPoints: 10, color: color, family: .transform,
+                                       identity: identity, state: state(for: identity, input: input),
+                                       hitTolerancePoints: 8, occurrenceID: occurrenceID),
+                                 to: &markers, checkpoint: checkpoint)
+            }
         }
 
         try appendMarker(

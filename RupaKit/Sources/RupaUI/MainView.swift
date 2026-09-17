@@ -1867,6 +1867,7 @@ private struct ProjectMainViewContent: View {
             onSelectionDrag: handleViewportSelectionDrag,
             onSelectionDragPreview: viewportSelectionDragPreviewHandler,
             onBodyPlacementCommit: viewportBodyPlacementCommitHandler,
+            onBodyResizeCommit: handleViewportBodyResizeCommit,
             onVertexDrag: viewportVertexDragHandler,
             onFaceDrag: viewportFaceDragHandler,
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -5354,6 +5355,22 @@ private struct ProjectMainViewContent: View {
             guard let published = workspace.view else {
                 throw ProjectWorkspaceActionError(code: .snapshotUnavailable,
                                                   message: "The committed source has no published view.")
+            }
+            return .document(id: published.document.document.id, generation: published.documentGeneration)
+        }
+    }
+
+    private func handleViewportBodyResizeCommit(_ target: ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity {
+        guard selectedTool == .select, selectionScope == .object else {
+            throw ProjectWorkspaceActionError(code: .actionResultMismatch,
+                                              message: "Box resize requires Select in object scope.")
+        }
+        return try await runWorkspaceOperation {
+            _ = try await executeSource(name: "resizeBody") { current in
+                try WorkspaceBodyResizeCommandPlanner.commands(target, in: current.document.document)
+            }
+            guard let published = workspace.view else {
+                throw ProjectWorkspaceActionError(code: .snapshotUnavailable, message: "The resized source has no published view.")
             }
             return .document(id: published.document.document.id, generation: published.documentGeneration)
         }

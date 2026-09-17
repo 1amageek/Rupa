@@ -22,6 +22,13 @@ live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
+Box face/corner resize intents follow the
+[Rendering resize contract](../RupaRendering/DESIGN.md#responsibilities-and-boundaries).
+The UI submits source dimensions and the compensating occurrence translation
+in one Workspace transaction after validating the retained CAD revisions and
+placement baseline. Publication acknowledgement and failure use the existing
+viewport handoff; no separate mutable geometry or history is introduced.
+
 Numeric Inspector interaction is owned by [InspectorInput](InspectorInput/DESIGN.md).
 MainView captures the existing sequencer completion after synchronous numeric
 submission. It coalesces only consecutive unstarted absolute edits from the same
