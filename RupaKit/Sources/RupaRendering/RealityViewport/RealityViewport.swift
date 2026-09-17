@@ -1269,7 +1269,7 @@ final class RealityViewport {
                 throw Self.queryFailure("The native collision hit has an ambiguous classification.")
             }
         }
-        var candidates: [(index: UInt32, annotation: Bool, projected: CGFloat, distance: Float)] = []
+        var candidates: [(index: UInt32, annotation: Bool, marker: Bool, projected: CGFloat, distance: Float)] = []
         for hit in query.hits where hit.entity.isEnabledInHierarchy
             && hit.entity.components[CollisionComponent.self]?.filter.group == Self.spatialCollisionGroup {
             guard let metadata = spatialResources.handleMetadata(for: hit.entity) else {
@@ -1292,10 +1292,12 @@ final class RealityViewport {
                 continue
             }
             if metadata.depth == .scene, let occluder, depth > occluder { continue }
-            candidates.append((metadata.index, metadata.depth == .annotation, distance.distance, hit.distance))
+            candidates.append((metadata.index, metadata.depth == .annotation, metadata.isMarker, distance.distance, hit.distance))
         }
         candidates.sort {
             if $0.annotation != $1.annotation { return $0.annotation }
+            // A discrete handle must win over the shaft underneath its footprint.
+            if $0.marker != $1.marker { return $0.marker }
             if $0.projected != $1.projected { return $0.projected < $1.projected }
             if $0.distance != $1.distance { return $0.distance < $1.distance }
             return $0.index < $1.index

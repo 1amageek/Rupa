@@ -445,7 +445,14 @@ prepared occurrence/source-triangle map; a spatial Entity must resolve through
 the prepared handle index. Neither may be rejected as though it were a corrupt
 member of the other class. Within an interaction route, eligible annotation-
 depth handles preserve the existing affordance-before-object priority and are
-ordered by projected tolerance distance then native ray distance; scene-depth
+ordered by marker priority, projected tolerance distance, then native ray distance.
+An admitted marker footprint wins over an overlapping shaft: pressing an inner
+axis marker must select centered scaling, not shaft translation. This implements
+the [parent affordance contract](../DESIGN.md); the UI does not rerank native hits.
+`ViewportNativeObjectAffordancePressTests.innerMarkerOverlappingShaftKeepsCenterAndMovesBothSurfaces`
+presses the center and both on-shaft sides of each XYZ marker through native input,
+and checks center preservation and equal/opposite axial displacement.
+Scene-depth
 handles must also pass occlusion by the nearest retained surface. Sectioned
 handles obey the same native clip half-space, world-attached handles retain the
 existing unsectioned policy, and disabled/hidden fragments are never returned.

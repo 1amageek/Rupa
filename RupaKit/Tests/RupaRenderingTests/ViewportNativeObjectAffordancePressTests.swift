@@ -25,6 +25,8 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
     case translateZ
     case translateY
     case centerScaleX
+    case centerScaleY
+    case centerScaleZ
     case translateTipX
     case rotateX
 
@@ -36,7 +38,7 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
         case .translateX, .translateTipX: return .x
         case .translateY: return .y
         case .translateZ: return .z
-        case .centerScaleX, .rotateX: return nil
+        case .centerScaleX, .centerScaleY, .centerScaleZ, .rotateX: return nil
         }
     }
 
@@ -46,6 +48,8 @@ enum ViewportObjectHandlePressCase: String, CaseIterable {
         case .translateZ: return "translate(.z)"
         case .translateY: return "translate(.y)"
         case .centerScaleX: return "centerScale(.x)"
+        case .centerScaleY: return "centerScale(.y)"
+        case .centerScaleZ: return "centerScale(.z)"
         case .translateTipX: return "translate(.x)"
         case .rotateX: return "rotate(.x)"
         }
@@ -96,10 +100,9 @@ private struct ObjectHandleFootprint {
 @MainActor
 private struct ObjectHandlePressFixture {
     static let canvasSketchPlane: SketchPlane = .xy
-    /// Both marker stations sit on their own axis arrow, so no perpendicular
-    /// offset can separate them from the line by ordering: the arrow tolerance
-    /// is 7 and the marker tolerance is 10, and only an offset strictly inside
-    /// that open interval leaves exactly one claimant.
+    /// Isolate markers for lifecycle checks: the shaft tolerance is 7 and the
+    /// marker tolerance is 10. The overlap test removes this offset to verify
+    /// native priority at the visible marker and on the shaft beneath it.
     static let markerOffsetPoints: CGFloat = 8.5
     /// Far enough from the centre decoration, which carries no collider, and
     /// short of the rotation ring's axial endpoints.
@@ -306,15 +309,15 @@ private struct ObjectHandlePressFixture {
         switch pressCase {
         case .translateX, .centerScaleX, .translateTipX, .rotateX:
             axisIndex = 0
-        case .translateY:
+        case .translateY, .centerScaleY:
             axisIndex = 1
-        case .translateZ:
+        case .translateZ, .centerScaleZ:
             axisIndex = 2
         }
         switch pressCase {
         case .translateX, .translateY, .translateZ:
             pressPoint = station(directions[axisIndex], Self.translateStationPoints)
-        case .centerScaleX:
+        case .centerScaleX, .centerScaleY, .centerScaleZ:
             pressPoint = station(
                 directions[axisIndex],
                 BodyMetrics.centerScalePoints,
@@ -768,6 +771,56 @@ private func translationDelta(
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeObjectAffordancePressTests {
+    @Test(.timeLimit(.minutes(1)), arguments: [ViewportObjectHandlePressCase.centerScaleX, .centerScaleY, .centerScaleZ])
+    func innerMarkerOverlappingShaftKeepsCenterAndMovesBothSurfaces(
+        pressCase: ViewportObjectHandlePressCase
+    ) async throws {
+        let fixture = try ObjectHandlePressFixture(pressCase: pressCase)
+        let item = try #require(fixture.scene.items.first { $0.sceneNodeID == fixture.target.sceneNodeID })
+        let edit = ViewportObjectEditState(item: item)
+        let center = edit.worldPoint(edit.centerPoint)
+        let axis: Vector3D = switch pressCase {
+        case .centerScaleY: .init(x: 0, y: 1, z: 0)
+        case .centerScaleZ: .init(x: 0, y: 0, z: 1)
+        default: .init(x: 1, y: 0, z: 0)
+        }
+        var commits: [ViewportBodyPlacementDragTarget] = []
+        let mounted = try await MountedObjectHandleViewport(fixture: fixture,
+            onPick: { _ in }, onCanvasDrag: { _ in },
+            onBodyPlacementCommit: { commits.append(contentsOf: $0) })
+        defer { mounted.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while commits.isEmpty, ContinuousClock.now < deadline {
+            try await mounted.gesture(from: fixture.translateStation,
+                to: fixture.translateStationDragEnd, size: fixture.size)
+        }
+        try #require(!commits.isEmpty, "The translation control must establish native input readiness.")
+        let dx = (fixture.dragEnd.x - fixture.press.x) / ObjectHandlePressFixture.dragPoints
+        let dy = (fixture.dragEnd.y - fixture.press.y) / ObjectHandlePressFixture.dragPoints
+        // Undo the fixture's off-shaft offset: these presses deliberately hit
+        // both the marker and its translation shaft, including the visible center.
+        for offset: CGFloat in [0, -3, 3] {
+            commits.removeAll()
+            let start = CGPoint(x: fixture.press.x + dy * ObjectHandlePressFixture.markerOffsetPoints + dx * offset,
+                                y: fixture.press.y - dx * ObjectHandlePressFixture.markerOffsetPoints + dy * offset)
+            let end = CGPoint(x: start.x + dx * 24, y: start.y + dy * 24)
+            try await mounted.gesture(from: start, to: end, size: fixture.size)
+            try #require(commits.count == 1)
+            let target = try #require(commits.first)
+            let baseWorld = try ViewportWorldTransformAlgebra.multiplied(target.baseParentWorldTransform, target.baseLocalTransform)
+            let nextWorld = try ViewportWorldTransformAlgebra.multiplied(target.baseParentWorldTransform, target.localTransform)
+            let mutation = try ViewportWorldTransformAlgebra.multiplied(nextWorld, ViewportWorldTransformAlgebra.inverted(baseWorld))
+            #expect(try (ViewportWorldTransformAlgebra.transformedPoint(center, by: mutation) - center).length < 1e-7)
+            let low = center + axis * -1
+            let high = center + axis
+            let lowDelta = try ViewportWorldTransformAlgebra.transformedPoint(low, by: mutation) - low
+            let highDelta = try ViewportWorldTransformAlgebra.transformedPoint(high, by: mutation) - high
+            #expect(highDelta.dot(axis) > 1e-7)
+            #expect((lowDelta + highDelta).length < 1e-7)
+            #expect(highDelta.cross(axis).length < 1e-7)
+        }
+    }
+
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func releasedHandleWaitsForPublicationAndRecovers(fails: Bool) async throws {
         let fixture = try ObjectHandlePressFixture(pressCase: .translateY)

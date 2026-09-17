@@ -130,21 +130,21 @@ final class RealityViewportSpatialResources {
     }
 
     func handleMetadata(for entity: Entity) -> (
-        index: UInt32, depth: RealityViewportSpatialBatch.Depth,
+        index: UInt32, isMarker: Bool, depth: RealityViewportSpatialBatch.Depth,
         attachment: RealityViewportSpatialBatch.Attachment
     )? {
         if let record = fillCollisions[ObjectIdentifier(entity)] {
-            return (record.index, record.depth, record.attachment)
+            return (record.index, false, record.depth, record.attachment)
         }
         if let record = labelCollisions[ObjectIdentifier(entity)] {
-            return (record.index, record.depth, record.attachment)
+            return (record.index, false, record.depth, record.attachment)
         }
         if let record = markerCollisions[ObjectIdentifier(entity)] {
-            return (record.index, record.depth, record.attachment)
+            return (record.index, true, record.depth, record.attachment)
         }
         if let index = lineCollisionIndex[ObjectIdentifier(entity)] {
             let record = lineCollisions[index]
-            return (record.index, record.depth, record.attachment)
+            return (record.index, false, record.depth, record.attachment)
         }
         return nil
     }
