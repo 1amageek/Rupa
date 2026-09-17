@@ -727,6 +727,21 @@ of screen-baked dashes.
 
 ## Contracts and Invariants
 
+Object gesture previews are MainActor-owned, frame-local LowLevelMesh buffers.
+Each affected occurrence borrows immutable plan positions and triangle indices;
+the absolute mutation transforms expanded corners and recomputes face normals.
+The native owner initializes fixed-capacity vertex/index buffers before mounting,
+keeps scoped pointers inside their closures, and admits cumulative preview bytes
+against the frame's native byte ceiling before allocation. Source meshes and
+unselected occurrences remain unchanged. Empty preview state restores original
+meshes and placement. Surface query provenance remains the committed snapshot;
+preview drawing does not grant a new source identity or authorize a commit.
+Point and region surface queries return not-ready during a preview rather than
+answering from unchanged collision geometry; camera/axis handle measurement stays
+available. A retained predecessor keeps its final preview when the host names
+a successor snapshot that has not mounted yet.
+The existing gesture owner retains the final mutation through commit handoff.
+
 1. Exactly one frame identity tuple `(required source identity and derived
    ViewportSceneSnapshotKey, optional real snapshotID, viewportRevision,
    overlayRevision)` owns the root, camera,

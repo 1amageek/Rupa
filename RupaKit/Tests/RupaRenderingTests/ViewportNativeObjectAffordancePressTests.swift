@@ -600,15 +600,9 @@ func authoredMeshHandlesCommitThroughNativeInput(pressCase: ViewportObjectHandle
         var records: [ViewportSpatialInteractionRecord] = []
         let source = try #require(try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
             from: raw, interactionRecords: &records, checkpoint: { _, _, _ in }))
-        #expect(source.meshes.count == 1)
-        let preview = try #require(source.meshes.first)
-        #expect(preview.occurrenceID == selected.occurrenceID.rawValue)
-        #expect(preview.positions.count == selected.mesh.vertexPositions.count)
-        for index in preview.positions.indices {
-            let base = try selected.worldTransform.applying(to: selected.mesh.vertexPositions[index])
-            #expect(abs(preview.positions[index].x - base.x - 0.25) < 1e-10)
-            #expect(abs(preview.positions[index].y - base.y) < 1e-10)
-        }
+        // The mounted surface owns solid previews; affordances must not
+        // duplicate the object as a wire mesh.
+        #expect(source.meshes.isEmpty)
         #expect(!records.isEmpty)
     }
     var commits: [ViewportBodyPlacementDragTarget] = []

@@ -826,8 +826,10 @@ independent tessellator is never an alternative implementation.
    through one atomic batch of scene-node placements. The press retains one
    baseline per occurrence, the source/snapshot, selection and press point.
    Preview uses occurrence-keyed world mutations, never a feature-keyed box.
-   Presentation previews draw the transformed source edges as a wireframe;
-   they do not replace the committed solid or mutate shared mesh assets.
+   Presentation previews update occurrence-local native drawing buffers with
+   the absolute world mutation, including shear, while retaining surface
+   materials. They never mutate shared source assets. Empty preview state
+   restores the committed mesh; release uses the existing commit handoff.
    Release measures its own point against a matching mounted camera, including
    release without preview. An unready frame retains the closed release until
    answered; source, selection, route or release-revision changes and Escape

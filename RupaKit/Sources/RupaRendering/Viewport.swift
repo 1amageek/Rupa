@@ -677,6 +677,8 @@ public struct Viewport: View {
                         retainedSide: sectionClippingPlan?.retainedSide ?? .front,
                         sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
                         excludedRects: chromeLayout.inputExclusionRects,
+                        objectPreviewTransforms: bodyPreviewTransforms,
+                        objectPreviewSnapshotID: presentationScene?.snapshotID,
                         gridRuler: workspaceRuler,
                         gridSpacing: gridVisualSpacingMode,
                         onGridUpdateResult: { error, readout in

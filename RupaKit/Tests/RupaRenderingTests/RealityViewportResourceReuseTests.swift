@@ -114,6 +114,7 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
         pixelFormat: .bgra8Unorm, width: 64, height: 64, mipmapped: false
     )
     descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+    descriptor.storageMode = .shared
     let texture = try #require(device.makeTexture(descriptor: descriptor))
     let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -133,6 +134,54 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
     )
     let addedTriangle = try #require(nextViewport.triangle(for: addedHit))
     #expect(addedTriangle.occurrenceID == addedID)
+    func pixels() -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: 64 * 64 * 4)
+        bytes.withUnsafeMutableBytes {
+            texture.getBytes($0.baseAddress!, bytesPerRow: 64 * 4,
+                             from: MTLRegionMake2D(0, 0, 64, 64), mipmapLevel: 0)
+        }
+        return bytes
+    }
+    let committedPixels = pixels()
+
+    // Solid previews own drawing buffers, preserve shear, and never mutate
+    // another occurrence sharing the committed native asset.
+    let mutation = Transform3D(matrix: try Matrix4x4(values: [
+        1, 0.5, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+    ]))
+    try nextViewport.applyObjectPreviews([baseItem.id.rawValue: mutation], displayMode: .solid)
+    let previewMesh = try #require(nextSurfaces[0].model?.mesh)
+    #expect(previewMesh !== baseMesh)
+    #expect(nextSurfaces[1].model?.mesh === baseMesh)
+    let previewBounds = nextSurfaces[0].visualBounds(relativeTo: nextViewport.root)
+    #expect(abs(previewBounds.min.x - 1) < 0.00001)
+    #expect(abs(previewBounds.max.x - 2.5) < 0.00001)
+    #expect(nextSurfaces[0].model?.materials.isEmpty == false)
+    try nextViewport.applyObjectPreviews([baseItem.id.rawValue: mutation], displayMode: .solid)
+    #expect(nextSurfaces[0].model?.mesh === previewMesh)
+    try nextViewport.applyObjectPreviews([:], displayMode: .solid, snapshotID: changedScene.snapshotID)
+    #expect(nextSurfaces[0].model?.mesh === previewMesh, "A retained predecessor must not flash its baseline.")
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try nextViewport.surfaceHit(at: .zero, revision: 1)
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try nextViewport.occurrenceIDs(intersecting: .init(x: 0, y: 0, width: 64, height: 64), revision: 1)
+    }
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        do {
+            try nextRenderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                                             onComplete: { _ in continuation.resume() })
+        } catch { continuation.resume(throwing: error) }
+    }
+    try nextViewport.applyObjectPreviews([:], displayMode: .solid)
+    #expect(zip(committedPixels, pixels()).filter { $0 != $1 }.count > 100,
+            "The GPU must draw the changed solid, not merely update metadata.")
+    #expect(nextSurfaces[0].model?.mesh === baseMesh)
+    #expect(nextSurfaces[1].model?.mesh === baseMesh)
+    let occurrence = try #require(MeshSourcePresentationRenderPlan(scene: nextScene).occurrences.first)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try RealityViewportObjectPreview(occurrence: occurrence, availableBytes: 1)
+    }
 }
 
 @MainActor

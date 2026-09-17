@@ -5,46 +5,6 @@ import RupaViewportScene
 import SwiftCAD
 
 extension ViewportSpatialOverlayProducer {
-    /// Preview the actual source edges, not a bounding-box substitute. The one
-    /// output position buffer is required by the native overlay boundary.
-    static func appendPresentationTransformPreviews(
-        input: SurfaceTransformAffordanceSource.RawInput,
-        checkpoint: (Int, Int, Int) throws -> Void,
-        meshes: inout [SurfaceTransformAffordanceSource.Mesh]
-    ) throws {
-        guard let scene = input.presentationScene, !input.bodyPreviewTransforms.isEmpty else { return }
-        for item in scene.items {
-            guard let mutation = input.bodyPreviewTransforms[item.occurrenceID.rawValue] else { continue }
-            let source = item.mesh
-            let indexCount = source.edgeEndpoints.count.multipliedReportingOverflow(by: 2)
-            guard !indexCount.overflow else { throw RealityViewportSpatialBatch.exhausted() }
-            try checkpoint(1, source.vertexPositions.count, indexCount.partialValue)
-            guard source.vertexPositions.count <= Int(UInt32.max) else { throw RealityViewportSpatialBatch.exhausted() }
-            let index = try source.makeTriangulationIndex()
-            var positions: [Point3D] = []
-            positions.reserveCapacity(source.vertexPositions.count)
-            for point in source.vertexPositions {
-                try Task.checkCancellation()
-                let world = try item.worldTransform.applying(to: point)
-                positions.append(try ViewportWorldTransformAlgebra.transformedPoint(
-                    Point3D(x: world.x, y: world.y, z: world.z), by: mutation))
-            }
-            var indices: [UInt32] = []
-            indices.reserveCapacity(indexCount.partialValue)
-            for edge in source.edgeEndpoints {
-                try Task.checkCancellation()
-                guard let a = index.positionIndex(for: edge.start), let b = index.positionIndex(for: edge.end) else {
-                    throw RealityViewportSpatialBatch.invalid("Mesh preview edge has no source vertex.")
-                }
-                indices.append(UInt32(a)); indices.append(UInt32(b))
-            }
-            guard !indices.isEmpty else { continue }
-            meshes.append(.init(route: .bodyTransform, positions: positions, indices: indices,
-                                topology: .lines, color: editColor, family: .transform,
-                                identity: nil, state: .preview, occurrenceID: item.occurrenceID.rawValue))
-        }
-    }
-
     /// Admit the whole selected set or none, using the presentation's actual
     /// occurrence addresses. Geometry is borrowed; only placement values survive.
     static func presentationTransformMembers(

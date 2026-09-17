@@ -23,6 +23,8 @@ struct RealityViewportView: View {
     let retainedSide: SectionAnalysisRetainedSide
     let sectionTolerance: Double
     var excludedRects: [CGRect] = []
+    var objectPreviewTransforms: [String: Transform3D] = [:]
+    var objectPreviewSnapshotID: EvaluationSnapshotID? = nil
     var gridRuler: RulerConfiguration? = nil
     var gridSpacing: ViewportGridVisualSpacingMode = .adaptive
     var onGridUpdateResult: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)? = nil
@@ -78,6 +80,10 @@ struct RealityViewportView: View {
             try viewport.applyAppearance(displayMode: displayMode, shading: shading,
                                          materialColors: materialColors, interaction: interaction,
                                          sectionPlane: sectionPlane, retainedSide: retainedSide, sectionTolerance: sectionTolerance)
+            // A retained predecessor keeps its final preview until its successor
+            // mounts. Clearing it on a new source would flash the old solid.
+            try viewport.applyObjectPreviews(objectPreviewTransforms, displayMode: displayMode,
+                                             snapshotID: objectPreviewSnapshotID)
             mount.schedule(in: content, viewport: viewport,
                            safeRect: layout.fittingInsets.fittingRect(in: layout.viewportSize),
                            excludedRects: excludedRects, gridRuler: gridRuler, gridSpacing: gridSpacing,

@@ -2566,7 +2566,6 @@ private extension ViewportSpatialOverlayProducer {
                 || input.enabledRoutes.contains(.sketchTransform) else { return }
         if input.enabledRoutes.contains(.bodyTransform), input.presentationScene != nil,
            let members = try presentationTransformMembers(input: input), !members.isEmpty {
-            try appendPresentationTransformPreviews(input: input, checkpoint: checkpoint, meshes: &meshes)
             let bounds = ViewportObjectEditState(
                 xMin: members.map { $0.bounds.xMin }.min()!, xMax: members.map { $0.bounds.xMax }.max()!,
                 yMin: members.map { $0.bounds.yMin }.min()!, yMax: members.map { $0.bounds.yMax }.max()!,

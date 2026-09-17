@@ -33,6 +33,9 @@ final class RealityViewport {
     private var bounds = BoundingBox()
     private var fixedBounds = BoundingBox()
     private var entries: [(surface: ModelEntity, lines: ModelEntity?)] = []
+    private var objectPreviews: [Int: RealityViewportObjectPreview] = [:]
+    private var appliedObjectPreviews: [String: Transform3D] = [:]
+    private var previewDisplayMode: ViewportDisplayMode?
     private var occurrenceByEntity: [ObjectIdentifier: Int] = [:]
     private var content: RealityViewCameraContent?
     private var bindingOwner: ObjectIdentifier?
@@ -701,6 +704,51 @@ final class RealityViewport {
         }
         lighting.orientation = simd_quatf(angle: Float(shading.studioRotationDegrees * .pi / 180), axis: [0, 0, 1])
         appearance = key
+        previewDisplayMode = nil
+    }
+
+    func applyObjectPreviews(_ requested: [String: Transform3D], displayMode: ViewportDisplayMode,
+                             snapshotID: EvaluationSnapshotID? = nil) throws {
+        let mutations = snapshotID != nil && snapshotID != self.snapshotID ? appliedObjectPreviews : requested
+        guard mutations != appliedObjectPreviews || displayMode != previewDisplayMode else { return }
+        guard let surfaceResources else { return }
+        let available = surfaceResources.plan.nativePreparationByteLimit
+            - (spatialResources?.preparedByteCount ?? surfaceResources.plan.retainedByteCount)
+        for index in Array(objectPreviews.keys) where
+            mutations[surfaceResources.plan.occurrences[index].occurrenceID.rawValue] == nil {
+            objectPreviews.removeValue(forKey: index)
+        }
+        var used = objectPreviews.values.reduce(0) { $0 + $1.byteCount }
+        for (index, occurrence) in surfaceResources.plan.occurrences.enumerated() {
+            let entry = entries[index]
+            let instance = surfaceResources.instances[index]
+            guard let mutation = mutations[occurrence.occurrenceID.rawValue] else {
+                if appliedObjectPreviews[occurrence.occurrenceID.rawValue] != nil {
+                    entry.surface.model?.mesh = surfaceResources.resources[instance.groupIndex].visual
+                    entry.surface.position = instance.translation
+                    entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
+                }
+                continue
+            }
+            let preview: RealityViewportObjectPreview
+            if let existing = objectPreviews[index] { preview = existing }
+            else {
+                preview = try .init(occurrence: occurrence, availableBytes: available - used)
+                objectPreviews[index] = preview
+                used += preview.byteCount
+            }
+            try preview.update(occurrence: occurrence, mutation: mutation, origin: renderOrigin,
+                               showsEdges: displayMode == .wireframe || displayMode == .solidWithEdges)
+            entry.surface.model?.mesh = preview.resource
+            if let surfaceMaterial = entry.surface.model?.materials.first,
+               let lineMaterial = entry.lines?.model?.materials.first {
+                entry.surface.model?.materials = [surfaceMaterial, lineMaterial]
+            }
+            entry.surface.position = .zero
+            entry.lines?.isEnabled = false
+        }
+        appliedObjectPreviews = mutations
+        previewDisplayMode = displayMode
     }
 
     /// One native clipping volume owns the cut for both surfaces and boundary lines.
@@ -928,6 +976,7 @@ final class RealityViewport {
     }
 
     func triangle(for hit: CollisionCastHit) -> MeshSourcePresentationTriangle? {
+        guard appliedObjectPreviews.isEmpty else { return nil }
         guard let plan = surfaceResources?.plan,
               let occurrence = occurrenceByEntity[ObjectIdentifier(hit.entity)], let face = hit.triangleHit?.faceIndex,
               let sourceFace = Self.sourceTriangleIndex(for: face, triangleCount: plan.occurrences[occurrence].triangleCount) else { return nil }
@@ -938,6 +987,9 @@ final class RealityViewport {
     /// miss after the native ray and all visibility/provenance filters run;
     /// readiness, camera, conversion, and provenance failures remain typed.
     func surfaceHit(at point: CGPoint, revision: UInt64) throws -> (triangle: MeshSourcePresentationTriangle, point: Point3D)? {
+        guard appliedObjectPreviews.isEmpty else {
+            throw Self.notReadyFailure("Surface selection waits for the object preview to commit or cancel.")
+        }
         guard point.x.isFinite, point.y.isFinite else {
             throw Self.queryFailure("The native surface query point is not finite.")
         }
@@ -1081,6 +1133,9 @@ final class RealityViewport {
     private func regionRaster(
         describing subject: String, revision: UInt64
     ) throws -> RealityViewportRegionRaster? {
+        guard appliedObjectPreviews.isEmpty else {
+            throw Self.notReadyFailure("Region selection waits for the object preview to commit or cancel.")
+        }
         try validateMountedFrame(describing: subject)
         try validateAppliedRevision(revision, describing: subject)
         guard !entries.isEmpty, geometryRoot.isEnabled,
