@@ -1,20 +1,20 @@
 import Foundation
 import SwiftCAD
 
-struct ObjectDimensionSource: Equatable, Sendable {
+package struct ObjectDimensionSource: Equatable, Sendable {
     enum Shape: String, Equatable, Sendable {
         case box
         case cylinder
     }
 
     var target: SelectionTarget
-    var featureID: FeatureID
+    package var featureID: FeatureID
     var sceneNodeID: SceneNodeID
     var shape: Shape
-    var sizeX: Double
-    var sizeY: Double
-    var sizeZ: Double
-    var radius: Double?
+    package var sizeX: Double
+    package var sizeY: Double
+    package var sizeZ: Double
+    package var radius: Double?
     var radiusExpression: CADExpression?
     var depthExpression: CADExpression
 }

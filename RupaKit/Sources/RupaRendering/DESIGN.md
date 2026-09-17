@@ -36,6 +36,14 @@ predicate now belongs to [ViewportMeasurement](ViewportMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
+The existing throwing `ViewportWorldTransformAlgebra` translation/composition
+and `ViewportSceneNodeParentFrames` queries are package-visible to RupaUI's
+world-Center adapter. Canvas and Inspector therefore use the same `P^-1 M P L`
+placement conversion and refusal semantics. These stateless queries do not
+transfer source authority or preview ownership. UI cross-adapter tests cover
+parented/sheared occurrence placement; existing gesture tests retain ownership
+of pointer measurement and cancellation.
+
 The module owns:
 
 - admission and cancellation of one bounded derived presentation request;

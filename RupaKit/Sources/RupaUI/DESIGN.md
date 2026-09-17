@@ -100,6 +100,43 @@ operations that create geometry retain their separate Preview/Apply contract.
 Verification must exercise control intents through actual Workspace publication
 and presentation transforms, not just affine arithmetic or control existence.
 
+### Object editing authority
+
+```text
+Canvas placement / Inspector local TRS / Inspector world Center
+    -> WorkspaceTransformMatrix command admission -> Workspace -> localTransform
+Canvas dimension / Inspector source Size
+    -> setObjectDimension -> Core source resolver -> CAD source
+published source -> occurrence presentation -> center measurement (not source size)
+```
+
+`WorkspaceTransformMatrix` is the common UI placement command boundary. Canvas
+baselines are validated before admission; numeric components are resolved from
+the latest serialized document. Both refuse locked/missing nodes and preserve
+unmodified affine components. A drag preview remains a non-authoritative
+projection of its baseline; cancellation never writes source.
+
+Shape Center is the world-space bounding center of the addressed occurrence,
+not the first occurrence of its feature. Editing it translates that occurrence
+by the measured world delta using the same parent-frame algebra as the gizmo.
+No translation is added a second time. Transform controls explicitly name
+their parent-local coordinate system. Shape Size is a source dimension resolved
+by Core, independent of placement, scale, rotation, shear and render bounds.
+Its edit uses the same `setObjectDimension` command as Canvas dimension input;
+it preserves source profile origin/plane, not a UI-only center-pinning rule.
+Shared source edits affect every occurrence; placement edits affect only the
+addressed node. Unsupported source dimensions are not inferred from pixels.
+Missing evaluated occurrences are explicitly unavailable for Center editing;
+source properties remain usable. Invalid dimensions surface errors, not values
+that could overwrite source. Center reads the published universal viewport's
+world bounds and occurrence-to-node mapping; it never rebuilds or evaluates a
+legacy scene inside an Inspector update.
+
+`WorkspaceObjectEditingSSOTTests` owns real Workspace publication/Undo and
+cross-adapter tests for parent frames, shear, shared features, invalid inputs and
+source-size invariance. Existing Rendering gesture tests own preview/cancel and
+world-axis measurement. No new authority, cache or preview lifetime is added.
+
 Consecutive object-transform intents with the same document lifetime, ordered
 target IDs and component replace only the last unstarted intent in the existing
 operation sequencer. There is no debounce timer and no cancellation of an

@@ -34,8 +34,12 @@ struct WorkspaceObjectShapeInspectorView: View {
                 $0.definition?.generatedRepresentation(for: $0.properties).title ?? "Unknown"
             })
         )
-        objectCenterControls(shapes)
-        if shapes.allSatisfy({ $0.typeID == .cube || $0.typeID == .cylinder }) {
+        if shapes.allSatisfy({ $0.center != nil }) {
+            objectCenterControls(shapes)
+        } else {
+            workspaceInspectorValueRow("World Center", "No evaluated occurrence")
+        }
+        if shapes.allSatisfy({ $0.size != nil }) {
             objectSizeControls(shapes)
         }
         objectSchemaPropertyRows(shapes)
@@ -44,24 +48,24 @@ struct WorkspaceObjectShapeInspectorView: View {
     @ViewBuilder
     private func objectCenterControls(_ shapes: [InspectorObjectShape]) -> some View {
         workspaceLengthControl(
-            "Center X",
-            values: shapes.map(\.center.x),
+            "World Center X",
+            values: shapes.compactMap(\.center?.x),
             displayUnit: displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onSetCenter(.x, meters, shapes)
         }
         workspaceLengthControl(
-            "Center Y",
-            values: shapes.map(\.center.y),
+            "World Center Y",
+            values: shapes.compactMap(\.center?.y),
             displayUnit: displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onSetCenter(.y, meters, shapes)
         }
         workspaceLengthControl(
-            "Center Z",
-            values: shapes.map(\.center.z),
+            "World Center Z",
+            values: shapes.compactMap(\.center?.z),
             displayUnit: displayUnit,
             sliderMetersRange: positionSliderMetersRange
         ) { meters in
@@ -72,24 +76,24 @@ struct WorkspaceObjectShapeInspectorView: View {
     @ViewBuilder
     private func objectSizeControls(_ shapes: [InspectorObjectShape]) -> some View {
         workspaceLengthControl(
-            "Size X",
-            values: shapes.map(\.size.x),
+            "Source Size X",
+            values: shapes.compactMap(\.size?.x),
             displayUnit: displayUnit,
             sliderMetersRange: sizeSliderMetersRange
         ) { meters in
             onSetSize(.x, meters, shapes)
         }
         workspaceLengthControl(
-            "Size Y",
-            values: shapes.map(\.size.y),
+            "Source Size Y",
+            values: shapes.compactMap(\.size?.y),
             displayUnit: displayUnit,
             sliderMetersRange: sizeSliderMetersRange
         ) { meters in
             onSetSize(.y, meters, shapes)
         }
         workspaceLengthControl(
-            "Size Z",
-            values: shapes.map(\.size.z),
+            "Source Size Z",
+            values: shapes.compactMap(\.size?.z),
             displayUnit: displayUnit,
             sliderMetersRange: sizeSliderMetersRange
         ) { meters in

@@ -65,10 +65,8 @@ struct InspectorObjectShape: Identifiable, Equatable {
     var typeID: ObjectTypeID?
     var definition: ObjectTypeDefinition?
     var properties: ObjectPropertySet
-    var sourceCenter: InspectorVector3D
-    var center: InspectorVector3D
-    var size: InspectorVector3D
-    var cylinder: InspectorCylinderShape?
+    var center: InspectorVector3D?
+    var size: InspectorVector3D?
 }
 
 struct InspectorSketchEntity: Equatable {
@@ -229,18 +227,6 @@ struct InspectorSplineEndpointCandidate: Identifiable, Equatable {
     var reference: SketchSplineEndpointReference {
         SketchSplineEndpointReference(splineID: splineID, endpoint: endpoint)
     }
-}
-
-struct InspectorCylinderShape: Equatable {
-    var topRadius: Double
-    var bottomRadius: Double
-    var sideSegments: Int
-    var verticalSegments: Int
-    var angleDegrees: Double
-    var hasCaps: Bool
-    var hollow: Double
-    var cornerRadius: Double
-    var cornerSideSegments: Int
 }
 
 enum InspectorObjectAxis: Equatable, Sendable {

@@ -5319,11 +5319,7 @@ private struct ProjectMainViewContent: View {
         }
         guard !targets.isEmpty else { return }
         submitSource(name: "transformBodyPlacements") { current in
-            guard Set(targets.map(\.sceneNodeID)).count == targets.count else {
-                throw EditorError(code: .commandInvalid, message: "A body transform repeats a scene node.")
-            }
-            for target in targets { try target.validate(in: current.document.document) }
-            return targets.map { .setSceneNodeTransform(id: $0.sceneNodeID, localTransform: $0.localTransform) }
+            try WorkspaceTransformMatrix.commands(placements: targets, in: current.document.document)
         }
     }
 
@@ -5780,9 +5776,8 @@ private struct ProjectMainViewContent: View {
                     message: "The sketch frame changed during the transform gesture."
                 )
             }
-            return [
-                .setSceneNodeTransform(id: node.id, localTransform: target.localTransform)
-            ]
+            return try WorkspaceTransformMatrix.command(setting: target.localTransform,
+                for: node.id, in: current.document.document).map { [$0] } ?? []
         }
     }
 
@@ -7211,7 +7206,15 @@ private struct ProjectMainViewContent: View {
             positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
             onCommitProperties: { commands, name in
-                submitSource(commands, name: name)
+                submitSource(name: name) { current in
+                    try commands.compactMap { command in
+                        if case .setSceneNodeTransform(let id, let transform) = command {
+                            return try WorkspaceTransformMatrix.command(setting: transform,
+                                for: id, in: current.document.document)
+                        }
+                        return command
+                    }
+                }
             },
             isBusy: modelingPreview.isBusy,
             onEditTransform: { component, value in
@@ -8013,24 +8016,27 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func objectShapeSection(_ nodes: [SceneNode]) -> some View {
-        let shapes = WorkspaceObjectShapeInspectorStateBuilder(
-            document: snapshot.document.document,
-            currentEvaluation: snapshot.cadInteraction,
-            documentGeneration: snapshot.documentGeneration,
-            objectRegistry: objectRegistry,
-            ruler: snapshot.workspaceState.ruler
-        )
-        .shapes(for: nodes)
-        WorkspaceObjectShapeInspectorView(
-            shapes: shapes,
-            displayUnit: snapshot.workspaceState.displayUnit,
-            positionSliderMetersRange: transformPositionSliderMetersRange,
-            sizeSliderMetersRange: sizeSliderMetersRange,
-            fallbackLengthSliderMetersRange: lengthSliderMetersRange(for: 0.0),
-            onSetCenter: setObjectCenter,
-            onSetSize: setObjectSize,
-            onSetProperty: setObjectProperty
-        )
+        switch Result(catching: {
+            try objectShapeBuilder(in: snapshot).shapes(for: nodes)
+        }) {
+        case .success(let shapes):
+            WorkspaceObjectShapeInspectorView(
+                shapes: shapes,
+                displayUnit: snapshot.workspaceState.displayUnit,
+                positionSliderMetersRange: transformPositionSliderMetersRange,
+                sizeSliderMetersRange: sizeSliderMetersRange,
+                fallbackLengthSliderMetersRange: lengthSliderMetersRange(for: 0.0),
+                onSetCenter: setObjectCenter,
+                onSetSize: setObjectSize,
+                onSetProperty: setObjectProperty
+            )
+        case .failure(let error):
+            Text(error.localizedDescription).foregroundStyle(.red)
+        }
+    }
+
+    private func objectShapeBuilder(in current: ProjectViewSnapshot) -> WorkspaceObjectShapeInspectorStateBuilder {
+        WorkspaceObjectShapeInspectorStateBuilder(snapshot: current)
     }
 
     private func setObjectCenter(
@@ -8038,41 +8044,9 @@ private struct ProjectMainViewContent: View {
         to meters: Double,
         for shapes: [InspectorObjectShape]
     ) {
-        let sceneNodeIDs = shapes.map(\.id)
+        let ids = shapes.map(\.id)
         submitSource(name: "setObjectCenter") { current in
-            let currentShapes = currentObjectShapes(sceneNodeIDs: sceneNodeIDs, in: current)
-            guard currentShapes.count == sceneNodeIDs.count else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "One or more edited object shapes no longer exist."
-                )
-            }
-            var commands: [EditorCommand] = []
-            for shape in currentShapes {
-                guard let node = current.document.document.productMetadata.sceneNodes[shape.id] else {
-                    throw EditorError(
-                        code: .referenceUnresolved,
-                        message: "Object scene node \(shape.id) no longer exists."
-                    )
-                }
-                var values = node.localTransform.matrix.values
-                switch axis {
-                case .x:
-                    values[3] = meters - shape.sourceCenter.x
-                case .y:
-                    values[7] = meters - shape.sourceCenter.y
-                case .z:
-                    values[11] = meters - shape.sourceCenter.z
-                }
-                let matrix = try Matrix4x4(values: values)
-                commands.append(
-                    .setSceneNodeTransform(
-                        id: node.id,
-                        localTransform: Transform3D(matrix: matrix)
-                    )
-                )
-            }
-            return commands
+            try objectShapeBuilder(in: current).centerCommands(axis, meters: meters, nodeIDs: ids)
         }
     }
 
@@ -8081,62 +8055,11 @@ private struct ProjectMainViewContent: View {
         to meters: Double,
         for shapes: [InspectorObjectShape]
     ) {
-        let sizeMeters = max(meters, 1.0e-9)
-        let sceneNodeIDs = shapes.map(\.id)
+        let ids = shapes.map(\.id)
         submitSource(name: "setObjectSize") { current in
-            let currentShapes = currentObjectShapes(sceneNodeIDs: sceneNodeIDs, in: current)
-            guard currentShapes.count == sceneNodeIDs.count else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "One or more resized object shapes no longer exist."
-                )
-            }
-            var commands: [EditorCommand] = []
-            for shape in currentShapes {
-                switch shape.typeID {
-                case .some(.cube):
-                    commands.append(
-                        contentsOf: try cubeSizeCommands(
-                            axis,
-                            to: sizeMeters,
-                            for: shape,
-                            document: current.document.document
-                        )
-                    )
-                case .some(.cylinder):
-                    commands.append(
-                        contentsOf: try cylinderSizeCommands(
-                            axis,
-                            to: sizeMeters,
-                            for: shape,
-                            document: current.document.document
-                        )
-                    )
-                default:
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Object \(shape.id) no longer supports direct size editing."
-                    )
-                }
-            }
-            return commands
+            try WorkspaceObjectShapeInspectorStateBuilder.sizeCommands(
+                axis, meters: meters, nodeIDs: ids, in: current.document.document)
         }
-    }
-
-    private func currentObjectShapes(
-        sceneNodeIDs: [SceneNodeID],
-        in current: ProjectViewSnapshot
-    ) -> [InspectorObjectShape] {
-        let document = current.document.document
-        let nodes = sceneNodeIDs.compactMap { document.productMetadata.sceneNodes[$0] }
-        return WorkspaceObjectShapeInspectorStateBuilder(
-            document: document,
-            currentEvaluation: current.cadInteraction,
-            documentGeneration: current.documentGeneration,
-            objectRegistry: current.objectRegistry,
-            ruler: current.workspaceState.ruler
-        )
-        .shapes(for: nodes) ?? []
     }
 
     private func offsetSelectedFace(
@@ -9281,81 +9204,6 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    private func cubeSizeCommands(
-        _ axis: InspectorObjectAxis,
-        to meters: Double,
-        for shape: InspectorObjectShape,
-        document: DesignDocument
-    ) throws -> [EditorCommand] {
-        var commands: [EditorCommand] = [
-            .setCubeDimensions(
-                featureID: shape.featureID,
-                sizeX: .length(axis == .x ? meters : shape.size.x, .meter),
-                sizeY: .length(axis == .y ? meters : shape.size.y, .meter),
-                sizeZ: .length(axis == .z ? meters : shape.size.z, .meter)
-            )
-        ]
-        if axis == .y,
-           let centerCommand = try preserveObjectCenterCommandAfterYResize(
-               to: meters,
-               for: shape,
-               document: document
-           ) {
-            commands.append(centerCommand)
-        }
-        return commands
-    }
-
-    private func cylinderSizeCommands(
-        _ axis: InspectorObjectAxis,
-        to meters: Double,
-        for shape: InspectorObjectShape,
-        document: DesignDocument
-    ) throws -> [EditorCommand] {
-        guard shape.cylinder != nil else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Object \(shape.id) is no longer a cylinder."
-            )
-        }
-        let radius = axis == .y ? max(shape.size.x, shape.size.z) / 2.0 : meters / 2.0
-        var commands: [EditorCommand] = [
-            .setCylinderDimensions(
-                featureID: shape.featureID,
-                radius: .length(max(radius, 1.0e-9), .meter),
-                sizeY: .length(axis == .y ? meters : shape.size.y, .meter)
-            )
-        ]
-        if axis == .y,
-           let centerCommand = try preserveObjectCenterCommandAfterYResize(
-               to: meters,
-               for: shape,
-               document: document
-           ) {
-            commands.append(centerCommand)
-        }
-        return commands
-    }
-
-    private func preserveObjectCenterCommandAfterYResize(
-        to sizeYMeters: Double,
-        for shape: InspectorObjectShape,
-        document: DesignDocument
-    ) throws -> EditorCommand? {
-        guard shape.size.y > 1.0e-9,
-              let node = document.productMetadata.sceneNodes[shape.id] else {
-            return nil
-        }
-        let sourceCenterRatio = shape.sourceCenter.y / shape.size.y
-        let nextSourceCenterY = sourceCenterRatio * sizeYMeters
-        var values = node.localTransform.matrix.values
-        values[7] = shape.center.y - nextSourceCenterY
-        let matrix = try Matrix4x4(values: values)
-        return .setSceneNodeTransform(
-            id: node.id,
-            localTransform: Transform3D(matrix: matrix)
-        )
-    }
 
     private var transformPositionSliderMetersRange: ClosedRange<Double> {
         let span = snapshot.workspaceState.ruler.normalizedForWorkspaceScale().visibleSpanMeters
@@ -9408,6 +9256,22 @@ private struct ProjectMainViewContent: View {
         for shapes: [InspectorObjectShape]
     ) {
         guard value.valueKind == property.valueKind else {
+            return
+        }
+        let dimension: ObjectDimensionKind? = switch property.renderBinding {
+        case .sizeX: .sizeX
+        case .sizeY: .sizeY
+        case .sizeZ: .sizeZ
+        case .radius: .radius
+        default: nil
+        }
+        if let dimension, case .length(let meters) = value,
+           shapes.allSatisfy({ $0.size != nil }) {
+            let ids = shapes.map(\.id)
+            submitSource(name: "setObjectDimension") { current in
+                try WorkspaceObjectShapeInspectorStateBuilder.dimensionCommands(
+                    dimension, meters: meters, nodeIDs: ids, in: current.document.document)
+            }
             return
         }
         submitSource(

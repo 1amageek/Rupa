@@ -16,6 +16,13 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
+The existing `ObjectDimensionSourceResolver` is also available within this
+package for Inspector projection from a published, validated document. It is
+the same resolver used by `setObjectDimension`; UI must not substitute placed
+render bounds or copied object-property defaults for source dimensions. Its
+read-only query throws for unsupported or unresolved source. This widens no
+external API and changes no persistence or mutation authority.
+
 `RupaCore` owns:
 
 - server allocation of every persistent CAD, sketch-entity, Product, Scene,

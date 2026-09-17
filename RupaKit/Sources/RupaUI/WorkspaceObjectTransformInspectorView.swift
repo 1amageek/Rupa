@@ -57,7 +57,7 @@ struct WorkspaceObjectTransformInspectorView: View {
     }
 
     private var positionSection: some View {
-        inspectorSection("Position") {
+        inspectorSection("Position (Parent Local)") {
             workspaceLengthControl(
                 "X",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
@@ -86,7 +86,7 @@ struct WorkspaceObjectTransformInspectorView: View {
     }
 
     private func rotationSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
-        inspectorSection("Rotation (X → Y → Z)") {
+        inspectorSection("Rotation (Local X → Y → Z)") {
             numericControl("X", values: components.map { $0.rotationDegrees.x }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationX, $0) }, unitLabel: { "°" })
             numericControl("Y", values: components.map { $0.rotationDegrees.y }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationY, $0) }, unitLabel: { "°" })
             numericControl("Z", values: components.map { $0.rotationDegrees.z }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationZ, $0) }, unitLabel: { "°" })
@@ -94,7 +94,7 @@ struct WorkspaceObjectTransformInspectorView: View {
     }
 
     private func scaleSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
-        inspectorSection("Transform Scale") {
+        inspectorSection("Transform Scale (Local)") {
             workspaceScaleFactorControl(
                 "X",
                 values: components.map { $0.scale.x }

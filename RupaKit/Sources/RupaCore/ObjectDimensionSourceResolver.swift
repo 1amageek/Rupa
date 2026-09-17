@@ -2,8 +2,10 @@ import Foundation
 import SwiftCAD
 import RupaCoreTypes
 
-struct ObjectDimensionSourceResolver: Sendable {
-    func resolve(
+package struct ObjectDimensionSourceResolver: Sendable {
+    package init() {}
+
+    package func resolve(
         target: SelectionTarget,
         in document: DesignDocument
     ) throws -> ObjectDimensionSource {

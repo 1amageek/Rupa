@@ -13,7 +13,7 @@ import SwiftCAD
 ///
 /// The stored convention is row-major with column vectors: translation occupies
 /// indices 3, 7 and 11, and `multiplied(a, b)` applies `b` first.
-enum ViewportWorldTransformAlgebra {
+package enum ViewportWorldTransformAlgebra {
     /// A basis whose determinant does not clear this floor cannot be inverted
     /// back into the node's local frame, so the mutation is refused rather
     /// than committed against a reconstructed frame.
@@ -72,7 +72,7 @@ enum ViewportWorldTransformAlgebra {
     /// how they build `worldMutation` and in nothing after it, so a second
     /// composition would be a second chance to disagree about what a released
     /// gesture means.
-    static func localTransform(
+    package static func localTransform(
         applying worldMutation: Transform3D,
         within parent: Transform3D,
         to baseLocal: Transform3D
@@ -91,7 +91,7 @@ enum ViewportWorldTransformAlgebra {
         return localTransform
     }
 
-    static func translation(_ vector: Vector3D) throws -> Transform3D {
+    package static func translation(_ vector: Vector3D) throws -> Transform3D {
         guard vector.isFinite else {
             throw RealityViewportSpatialBatch.invalid("A viewport translation is not finite.")
         }

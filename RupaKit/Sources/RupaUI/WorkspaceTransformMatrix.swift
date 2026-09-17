@@ -1,8 +1,35 @@
 import Foundation
 import RupaCore
+import RupaRendering
 import simd
 
 enum WorkspaceTransformMatrix {
+    static func command(
+        setting transform: Transform3D, for id: SceneNodeID, in document: DesignDocument
+    ) throws -> EditorCommand? {
+        guard let node = document.productMetadata.sceneNodes[id] else {
+            throw EditorError(code: .referenceUnresolved, message: "An edited object no longer exists.")
+        }
+        guard !node.isLocked else {
+            throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their transforms.")
+        }
+        try transform.validate()
+        guard transform != node.localTransform else { return nil }
+        return .setSceneNodeTransform(id: id, localTransform: transform)
+    }
+
+    static func commands(
+        placements: [ViewportBodyPlacementDragTarget], in document: DesignDocument
+    ) throws -> [EditorCommand] {
+        guard Set(placements.map(\.sceneNodeID)).count == placements.count else {
+            throw EditorError(code: .commandInvalid, message: "A body transform repeats a scene node.")
+        }
+        return try placements.compactMap { target in
+            try target.validate(in: document)
+            return try command(setting: target.localTransform, for: target.sceneNodeID, in: document)
+        }
+    }
+
     static func commands(
         replacing component: InspectorTransformComponent,
         with value: Double,
@@ -13,12 +40,8 @@ enum WorkspaceTransformMatrix {
             guard let node = document.productMetadata.sceneNodes[id] else {
                 throw EditorError(code: .referenceUnresolved, message: "An edited object no longer exists.")
             }
-            guard !node.isLocked else {
-                throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their transforms.")
-            }
             let updated = try replacing(component, with: value, in: node.localTransform)
-            guard updated != node.localTransform else { return nil }
-            return .setSceneNodeTransform(id: id, localTransform: updated)
+            return try command(setting: updated, for: id, in: document)
         }
     }
 

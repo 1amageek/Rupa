@@ -10,7 +10,7 @@ import RupaViewportScene
 /// substituted for `P` would commit a frame nobody authored.
 /// Every answer here is therefore a resolved frame, a typed refusal, or a
 /// documented absence the caller reads as "this node names no commit target".
-struct ViewportSceneNodeParentFrames: Sendable {
+package struct ViewportSceneNodeParentFrames: Sendable {
     /// The frame a node inherits from its ancestors, carried down the walk.
     private enum Inherited {
         case frame(Transform3D)
@@ -30,7 +30,7 @@ struct ViewportSceneNodeParentFrames: Sendable {
     /// representable inherits the refusal instead of disappearing, so the
     /// absence of a frame always means "not in the tree" and never "the walk
     /// gave up here".
-    init(document: DesignDocument) throws {
+    package init(document: DesignDocument) throws {
         let nodes = document.productMetadata.sceneNodes
         var visited = Set<SceneNodeID>()
         var stack: [(id: SceneNodeID, inherited: Inherited)] = document.productMetadata
@@ -75,7 +75,7 @@ struct ViewportSceneNodeParentFrames: Sendable {
     /// Returns `nil` when the node is not part of the document's scene tree at
     /// all; the caller draws that sketch's outline and no handles, because
     /// there is no scene node for a commit to address.
-    func parentWorldTransform(of sceneNodeID: SceneNodeID) throws -> Transform3D? {
+    package func parentWorldTransform(of sceneNodeID: SceneNodeID) throws -> Transform3D? {
         guard !collisions.contains(sceneNodeID) else {
             throw RealityViewportSpatialBatch.invalid(
                 "A scene node appears more than once in the scene tree, so its sketch transform has no single parent frame."
