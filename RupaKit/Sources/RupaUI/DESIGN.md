@@ -309,8 +309,28 @@ releasing a route is a cancellation rather than a refusal and is not reported.
 
 ## Verification and Change Impact
 
-A focused App UI test must drive a shipped control whose refusal the view can
-evaluate and read back three facts together: the control is disabled, the
+### Non-interfering local verification
+
+Routine local verification uses `scripts/test-ui-contracts.sh`. Its
+explicit test allowlist exercises production drafts, bindings, preview state,
+workspace transactions and transform math without creating windows or sending
+system input. Adding a test requires inspecting its transitive helpers for
+window ordering, application activation and input synthesis. Package membership
+alone does not imply non-interference. The App's shared `Rupa` scheme skips the
+foreground `RupaUITests` runner. Use the package contract script for routine
+Test; an empty/skipped App run is not passing verification evidence.
+
+Visual layout, hit testing and native activation remain separate evidence,
+obtained through narrowly scoped direct agent inspection or an explicitly
+requested dedicated UI test session. Historical App UI evidence below is not
+current-snapshot acceptance and is not an instruction to run screen automation.
+No test may hide other applications to satisfy a screen precondition.
+
+Review findings and the coverage boundary are recorded in
+[the UI test review](../../Tests/UI_TEST_REVIEW.md).
+
+Direct UI inspection (or a dedicated-session App UI test) checks a shipped
+control whose refusal the view can evaluate and reads back three facts together: the control is disabled, the
 reason is displayed beside it, and the Logs pane count has not moved. That is
 the behavioral proof that a refusal the panel can see is read before the press
 and never becomes an entry.
@@ -323,12 +343,11 @@ ordering, bound, reflected value, non-deduplication and clearing, and by
 `AppProjectRoundTripUITests`, which reads the pane at every stage of a create,
 select, edit, save and reload run and fails with whatever it found there.
 
-The native gesture channel has no cheaper proof than that. Its report is
-private to `Viewport`, no fixture in either module constructs that view, and
-`RupaRendering` already owns the classification test that decides which
-failures reach the funnel, so the behavioral evidence that a refused gesture
-becomes a record is the shipped-chrome sweep reading the Logs pane after a
-real drag.
+Native gesture routing also has mounted-window fixtures in
+`ViewportNativeObjectAffordancePressTests`; these are excluded from routine
+non-interfering checks because they order a window. The contract script proves
+mutation and transaction behavior, not native hit routing or visible error
+delivery. Those require direct inspection or a dedicated-session diagnostic.
 
 That sweep has run. `AppProjectRoundTripUITests` drove create, select, face
 edit, save, and reload against the shipped chrome with recording on, and read

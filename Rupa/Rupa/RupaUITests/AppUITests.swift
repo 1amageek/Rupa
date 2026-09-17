@@ -244,52 +244,29 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
-    func testCanvasToolbarToolsReachEditorState() throws {
+    func testCanvasSurfaceToolOpensSheetLoftAndRejectsMissingProfiles() throws {
         let app = launchApp()
-        let canvas = app.otherElements["CanvasViewport"]
-        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
-
-        let sketchTool = app.buttons["CanvasTool.sketch"]
-        XCTAssertTrue(sketchTool.waitForExistence(timeout: 8))
-        sketchTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.sketch"].value as? String, "Selected")
-        XCTAssertFalse(app.staticTexts["Rectangle Sketch"].exists)
-        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.50)).click()
-        XCTAssertTrue(app.staticTexts["Rectangle Sketch"].waitForExistence(timeout: 3))
-
-        let solidTool = app.buttons["CanvasTool.solid"]
-        XCTAssertTrue(solidTool.waitForExistence(timeout: 3))
-        solidTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.solid"].value as? String, "Selected")
-        XCTAssertFalse(app.staticTexts["Box"].exists)
-        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.35)).click()
-        XCTAssertTrue(app.staticTexts["Box"].waitForExistence(timeout: 3))
-
         let surfaceTool = app.buttons["CanvasTool.surface"]
-        XCTAssertTrue(surfaceTool.waitForExistence(timeout: 3))
+        XCTAssertTrue(surfaceTool.waitForExistence(timeout: 8))
         surfaceTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.surface"].value as? String, "Selected")
+        XCTAssertNotEqual(app.buttons["CanvasTool.surface"].value as? String, "Selected")
         XCTAssertFalse(app.staticTexts["Circle Sketch"].exists)
-        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.40)).click()
-        XCTAssertTrue(app.staticTexts["Circle Sketch"].waitForExistence(timeout: 3))
-
-        let sectionTool = app.buttons["CanvasTool.section"]
-        XCTAssertTrue(sectionTool.waitForExistence(timeout: 3))
-        sectionTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.section"].value as? String, "Selected")
-        XCTAssertFalse(app.staticTexts["Section Plane"].exists)
-        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.70, dy: 0.35)).click()
-        XCTAssertTrue(app.staticTexts["Section Plane"].waitForExistence(timeout: 3))
-
-        let measureTool = app.buttons["CanvasTool.measure"]
-        XCTAssertTrue(measureTool.waitForExistence(timeout: 3))
-        measureTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.measure"].value as? String, "Selected")
-
-        let meshTool = app.buttons["CanvasTool.mesh"]
-        XCTAssertTrue(meshTool.waitForExistence(timeout: 3))
-        meshTool.click()
-        XCTAssertEqual(app.buttons["CanvasTool.mesh"].value as? String, "Selected")
+        let loftDraft = app.descendants(matching: .any)["Modeling.operation"]
+        XCTAssertTrue(loftDraft.waitForExistence(timeout: 3))
+        let sheetOutput = app.checkBoxes["Sheet output"]
+        XCTAssertTrue(sheetOutput.waitForExistence(timeout: 3))
+        XCTAssertEqual((sheetOutput.value as? NSNumber)?.boolValue, true)
+        XCTAssertTrue(loftDraft.frame.contains(app.buttons["Modeling.apply"].frame))
+        XCTAssertFalse(app.buttons["Modeling.preview"].isEnabled)
+        XCTAssertTrue(app.staticTexts["Modeling.refusal"].waitForExistence(timeout: 3))
+        let refusal = app.staticTexts["Modeling.refusal"]
+        let errorText = (refusal.value as? String) ?? refusal.label
+        XCTAssertEqual(errorText, "Select at least two ordered sketch profiles.")
+        XCTAssertFalse(app.staticTexts["Modeling.error"].exists)
+        XCTAssertFalse(app.buttons["Modeling.apply"].isEnabled)
+        loftDraft.buttons["Cancel"].click()
+        XCTAssertFalse(loftDraft.waitForExistence(timeout: 1))
+        XCTAssertEqual(app.buttons["CanvasTool.select"].value as? String, "Selected")
     }
 
     @MainActor

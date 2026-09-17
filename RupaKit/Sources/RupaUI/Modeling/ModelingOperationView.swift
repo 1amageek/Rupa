@@ -20,7 +20,7 @@ struct ModelingOperationView: View {
     /// preconditions. The answer is a function of the draft and the document
     /// read while the body is built, not an event, so it is displayed and not
     /// recorded. See `Modeling/DESIGN.md`.
-    private var planningRefusal: String? {
+    var planningRefusal: String? {
         switch Result(catching: { try draft.command(in: document) }) {
         case .success: nil
         case .failure(let error): error.localizedDescription

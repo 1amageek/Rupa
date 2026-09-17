@@ -200,6 +200,14 @@ as success rejects the run.
 
 ## Verification and Change Impact
 
+Routine UI contract verification follows the
+[non-interfering RupaUI policy](../../../RupaKit/Sources/RupaUI/DESIGN.md#non-interfering-local-verification).
+The shared `Rupa` scheme skips the foreground UI automation runner during
+Test. Routine tests run through `RupaKit/scripts/test-ui-contracts.sh` instead;
+an empty/skipped App test run is not verification evidence. Run and Archive
+still target the normal application. Screen-driven legacy tests are retained
+only as explicit dedicated-session diagnostics, not as the local default.
+
 App tests prove buffered open URLs precede coordinator launch, coordinator
 launch and exact registration precede discovery publication, and one cold
 activation performs exactly one registration. They also prove
