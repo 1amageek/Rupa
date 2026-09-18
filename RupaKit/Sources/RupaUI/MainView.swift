@@ -2538,10 +2538,10 @@ private struct ProjectMainViewContent: View {
     /// as its only gate. It deliberately does not require an exact CAD
     /// affordance context: that permission is resolved from mesh presentations,
     /// and a sketch feature has none.
-    private var viewportSketchTransformCommitHandler: ((ViewportSketchTransformDragTarget) -> Void)? {
+    private var viewportSketchTransformCommitHandler: ((ViewportSketchTransformDragTarget) async throws -> ViewportSourceIdentity)? {
         guard selectedTool == .select, selectionScope == .object else { return nil }
         return { target in
-            handleViewportSketchTransformCommit(target)
+            try await handleViewportSketchTransformCommit(target)
         }
     }
 
@@ -5804,16 +5804,13 @@ private struct ProjectMainViewContent: View {
     }
     private func handleViewportSketchTransformCommit(
         _ target: ViewportSketchTransformDragTarget
-    ) {
+    ) async throws -> ViewportSourceIdentity {
         guard selectedTool == .select, selectionScope == .object else {
-            reportToolStatus(
-                "Sketch transforms commit only with the Select tool "
-                    + "in object scope.",
-                severity: .warning
-            )
-            return
+            throw ProjectWorkspaceActionError(code: .actionResultMismatch,
+                message: "Sketch transforms commit only with the Select tool in object scope.")
         }
-        submitSource(name: "transformSketch") { current in
+        return try await runWorkspaceOperation {
+          _ = try await executeSource(name: "transformSketch") { current in
             guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
                 throw EditorError(
                     code: .referenceUnresolved,
@@ -5831,6 +5828,12 @@ private struct ProjectMainViewContent: View {
             }
             return try WorkspaceTransformMatrix.command(setting: target.localTransform,
                 for: node.id, in: current.document.document).map { [$0] } ?? []
+          }
+          guard let published = workspace.view else {
+              throw ProjectWorkspaceActionError(code: .snapshotUnavailable,
+                  message: "The transformed sketch has no published view.")
+          }
+          return .document(id: published.document.document.id, generation: published.documentGeneration)
         }
     }
 

@@ -19,10 +19,20 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         .init(anchor: anchor, offset: .directed(toward: anchor + .unitX, parallel: 40, perpendicular: 0))
     ], color: [1, 0, 0, 1], widthPoints: 2, handleIndex: 1, hitTolerancePoints: 7,
        objectPreviewOccurrenceID: id)
+    let curveEnd = Point3D(x: 0.8, y: 0.5, z: 0.2)
+    let curve = RealityViewportSpatialBatch.CameraLine(points: [
+        .init(anchor: anchor, offset: .zero), .init(anchor: curveEnd, offset: .zero)
+    ], color: [1, 1, 1, 1], widthPoints: 2, handleIndex: 2, hitTolerancePoints: 2,
+       objectPreviewOccurrenceID: id)
     let batch = try RealityViewportSpatialBatch(markers: [
         .init(shape: .box, anchor: anchor, diameterPoints: 10, color: [1, 1, 1, 1],
               handleIndex: 0, hitTolerancePoints: 8, objectPreviewOccurrenceID: id)
-    ], cameraLines: [arrow], handleCount: 2, renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
+    ], cameraLines: [arrow, curve], cameraPaths: [
+        .init(path: Path(ellipseIn: CGRect(x: -4, y: -4, width: 8, height: 8))
+            .strokedPath(StrokeStyle(lineWidth: 2)), anchor: anchor, offset: .zero,
+              color: [1, 1, 1, 1], handleIndex: 3, hitTolerancePoints: 12,
+              objectPreviewOccurrenceID: id)
+    ], handleCount: 4, renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
     let viewport = try await RealityViewport.prepare(plan: plan, spatialBatch: batch, reusing: nil)
     let size = CGSize(width: 512, height: 384)
     var reported: MeshSourcePresentationRenderError?
@@ -57,6 +67,13 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         viewport.spatialHandleIndex(for: $0) == 1 && $0.model?.mesh.lowLevelMesh != nil
     })
     let lineResource = try #require(line.model?.mesh)
+    let editHandle = try #require(entities.first {
+        viewport.spatialHandleIndex(for: $0) == 3 && $0 is ModelEntity
+    })
+    let curveEntity = try #require(entities.compactMap { $0 as? ModelEntity }.first {
+        viewport.spatialHandleIndex(for: $0) == 2 && $0.model?.mesh.lowLevelMesh != nil
+    })
+    let curveResource = try #require(curveEntity.model?.mesh)
     let surface = try #require(entities.compactMap { $0 as? ModelEntity }.first {
         $0.components[CollisionComponent.self]?.filter.group == RealityViewport.surfaceCollisionGroup
     })
@@ -72,11 +89,21 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         let position = marker.position(relativeTo: viewport.root)
         #expect(abs(Double(position.x) - moved.x) < 1e-5)
         #expect(abs(Double(position.y) - moved.y) < 1e-5)
+        #expect(abs(Double(editHandle.position(relativeTo: viewport.root).x) - moved.x) < 1e-5)
         #expect(surface.model?.mesh !== sourceMesh)
         let bounds = surface.visualBounds(relativeTo: viewport.root)
         #expect(abs(Double(bounds.min.x) - (0.4 + min(0, factor))) < 1e-5)
         #expect(abs(Double(bounds.max.x) - (0.4 + max(0, factor))) < 1e-5)
         #expect(line.model?.mesh === lineResource)
+        #expect(curveEntity.model?.mesh === curveResource)
+        let curveMesh = try #require(curveResource.lowLevelMesh)
+        let expectedEnd = try ViewportWorldTransformAlgebra.transformedPoint(curveEnd, by: mutation)
+        curveMesh.withUnsafeBytes(bufferIndex: 0) {
+            let points = $0.bindMemory(to: SIMD3<Float>.self)
+            #expect(abs(Double(points[0].x) - moved.x) < 1e-5)
+            #expect(abs(Double(points[1].x) - expectedEnd.x) < 1e-5)
+            #expect(abs(Double(points[1].z) - expectedEnd.z) < 1e-5)
+        }
         let mesh = try #require(lineResource.lowLevelMesh)
         var first = SIMD3<Float>.zero, last = SIMD3<Float>.zero
         mesh.withUnsafeBytes(bufferIndex: 0) {
@@ -88,6 +115,7 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         #expect(abs(hypot(b.x - a.x, b.y - a.y) - 40) < 0.5)
         let screen = try #require(viewport.project(moved))
         #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(0))
+        #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(3))
         for step in 0..<8 {
             let angle = Double(step) * .pi / 4
             for radius: Double in [7.99, 8.01] {

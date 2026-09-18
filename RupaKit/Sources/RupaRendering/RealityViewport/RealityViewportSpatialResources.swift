@@ -1190,7 +1190,9 @@ final class RealityViewportSpatialResources {
         for (entity, path, collider) in cameraPaths {
             entity.isEnabled = false
             collider?.isEnabled = false
-            guard let placement = placement(anchor: path.anchor, offset: path.offset, projection: projection) else {
+            let point = try RealityViewportSpatialBatch.CameraPoint(anchor: path.anchor, offset: path.offset)
+                .applying(path.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] })
+            guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection) else {
                 continue
             }
             entity.position = placement.position

@@ -2941,6 +2941,10 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
+        let firstCameraLine = cameraLines.count
+        let firstMarker = markers.count
+        // Validate the gesture payload without baking the native preview twice.
+        _ = try activeSketchTransformMutation(for: item.sceneNodeID, input: input)
         let bounds = item.modelBounds
         guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0 else {
             throw RealityViewportSpatialBatch.invalid("Sketch transform bounds are invalid.")
@@ -2961,29 +2965,22 @@ private extension ViewportSpatialOverlayProducer {
         let commit = try sceneNodeCommitFrames(
             item: item, parentFrames: parentFrames, input: input
         )
-        // While a drag is open the document is untouched, so the handles are
-        // redrawn at the mutated geometry and the sketch curves stay put. That
-        // difference is the preview this route promises.
-        let mutation = try activeSketchTransformMutation(for: commit?.sceneNodeID, input: input)
-        let corners: [Point3D]
-        if let mutation {
-            corners = try drawnCorners.map {
-                try ViewportWorldTransformAlgebra.transformedPoint($0, by: mutation)
-            }
-        } else {
-            corners = drawnCorners
-        }
-        try appendWorldLine(
+        // Geometry and handles retain one baseline; the mounted native frame
+        // applies the same preview mutation to both without rebuilding resources.
+        let corners = drawnCorners
+        try appendCameraLine(
             .init(
                 route: .sketchTransform,
-                points: corners,
-                closed: true,
-                color: selectionColor,
+                points: (corners + [corners[0]]).map {
+                    .init(anchor: $0, toward: $0, usesFixedOffset: true)
+                },
+                color: SIMD4<Float>(0.6, 0.63, 0.66, 0.7),
                 family: .transform,
                 identity: nil,
-                state: .normal
+                state: .normal,
+                objectPreviewOccurrenceID: item.id
             ),
-            to: &worldLines,
+            to: &cameraLines,
             checkpoint: checkpoint
         )
         // A sketch that names no scene node has nothing for a commit to
@@ -3079,20 +3076,6 @@ private extension ViewportSpatialOverlayProducer {
             to: &cameraLines,
             checkpoint: checkpoint
         )
-        try appendMarker(
-            .init(
-                route: .sketchTransform,
-                anchor: pivot,
-                shape: .box,
-                diameterPoints: 10,
-                color: selectionColor,
-                family: .transform,
-                identity: nil,
-                state: .normal
-            ),
-            to: &markers,
-            checkpoint: checkpoint
-        )
         for (corner, point) in zip(ViewportSketchTransformHandleIdentity.Corner.allCases, corners) {
             let radius = point - pivot
             guard let direction = normalized(radius) else {
@@ -3107,7 +3090,7 @@ private extension ViewportSpatialOverlayProducer {
                     anchor: point,
                     shape: .box,
                     diameterPoints: 9,
-                    color: selectionColor,
+                    color: SIMD4<Float>(0.78, 0.80, 0.82, 1),
                     family: .transform,
                     identity: identity,
                     state: state(for: identity, input: input),
@@ -3118,6 +3101,8 @@ private extension ViewportSpatialOverlayProducer {
                 checkpoint: checkpoint
             )
         }
+        for index in firstCameraLine..<cameraLines.count { cameraLines[index].objectPreviewOccurrenceID = item.id }
+        for index in firstMarker..<markers.count { markers[index].objectPreviewOccurrenceID = item.id }
     }
 
     /// World-aligned handle bounds follow this occurrence's preview mutation.

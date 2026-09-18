@@ -103,6 +103,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var attachment: Attachment = .world
         var handleIndex: UInt32? = nil
         var hitTolerancePoints: Float? = nil
+        var objectPreviewOccurrenceID: String? = nil
     }
 
     /// A screen offset at an explicit world anchor's depth, never guessed depth.
@@ -534,6 +535,7 @@ struct RealityViewportSpatialBatch: Sendable {
             try validateHitTolerance(path.hitTolerancePoints)
             try Task.checkCancellation()
             try item()
+            if let id = path.objectPreviewOccurrenceID { try charge(id.utf8.count, stride: 1) }
             try charge(1, stride: MemoryLayout<CameraPath>.stride + MemoryLayout<(Entity, CameraPath, Entity?)>.stride)
             if path.handleIndex != nil, let tolerance = path.hitTolerancePoints, tolerance > 0 {
                 try item()

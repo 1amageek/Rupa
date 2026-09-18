@@ -541,6 +541,7 @@ enum ViewportSpatialOverlayProducer {
             meshes: &meshes,
             paths: &paths,
             markers: &markers,
+            cameraLines: &cameraLines,
             activeFamilies: &activeFamilies
         )
         try appendMeshSelection(
@@ -718,6 +719,7 @@ enum ViewportSpatialOverlayProducer {
         meshes: inout [ViewportSpatialOverlayInput.Mesh],
         paths: inout [ViewportSpatialOverlayInput.Path],
         markers: inout [ViewportSpatialOverlayInput.Marker],
+        cameraLines: inout [ViewportSpatialOverlayInput.CameraLine],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>
     ) throws {
         let selectedFeatures = snapshot.interaction.selectedFeatureIDs
@@ -970,33 +972,18 @@ enum ViewportSpatialOverlayProducer {
                             )
                         ))
                     } else {
-                        meshes.append(.init(
-                            family: .sketch,
-                            value: try line(points, color: primitiveColor)
-                        ))
-                        if primitiveIsClosed(primitive) {
-                            meshes.append(.init(
-                                family: .sketch,
-                                value: try closedLine(
-                                    points,
-                                    color: primitiveColor,
-                                    depth: .scene
-                                )
-                            ))
+                        var vertices = points
+                        if primitiveIsClosed(primitive), vertices.first != vertices.last {
+                            vertices.append(points[0])
                         }
+                        cameraLines.append(.init(family: .sketch, value: .init(
+                            points: vertices.map { .init(anchor: $0, offset: .zero) },
+                            color: primitiveColor, widthPoints: 2, depth: .scene,
+                            objectPreviewOccurrenceID: item.id
+                        )))
                     }
-                    if isEntitySelected || isEntityHovered {
-                        for point in points {
-                            markers.append(.init(
-                                family: .sketch,
-                                value: marker(
-                                    anchor: point,
-                                    diameterPoints: 6,
-                                    color: primitiveColor
-                                )
-                            ))
-                        }
-                    }
+                    // Sampling vertices describe tessellation, not editable control points.
+                    // The affordance producer alone owns edit markers and their hit targets.
                     activeFamilies.insert(.sketch)
                 }
             }

@@ -155,16 +155,16 @@ struct ViewportSketchTransformLifecycleTests {
             return false
         })
 
-        let outlines = source.worldLines.filter { $0.route == .sketchTransform }
+        let outlines = source.cameraLines.filter { $0.route == .sketchTransform && $0.identity == nil }
         #expect(outlines.count == 1)
         let outline = try #require(outlines.first)
-        #expect(outline.closed)
         #expect(outline.identity == nil)
         #expect(outline.hitTolerancePoints == nil)
-        #expect(outline.points.count == 4)
+        #expect(outline.points.count == 5)
+        #expect(outline.points.first?.anchor == outline.points.last?.anchor)
 
         let sketchCameraLines = source.cameraLines.filter { $0.route == .sketchTransform }
-        #expect(sketchCameraLines.count == 3)
+        #expect(sketchCameraLines.count == 4)
         let arrows = sketchCameraLines.filter { $0.points.count == 2 }
         #expect(arrows.count == 2)
         for arrow in arrows {
@@ -177,7 +177,7 @@ struct ViewportSketchTransformLifecycleTests {
             #expect(arrow.hitTolerancePoints == 7.0)
             #expect(arrow.occurrenceID == fixture.item.id)
         }
-        let rings = sketchCameraLines.filter { $0.points.count != 2 }
+        let rings = sketchCameraLines.filter { $0.points.count != 2 && $0.identity != nil }
         #expect(rings.count == 1)
         let ring = try #require(rings.first)
         #expect(ring.points.count == Expected.rotationSegmentCount + 1)
@@ -188,14 +188,9 @@ struct ViewportSketchTransformLifecycleTests {
         #expect(ring.occurrenceID == fixture.item.id)
 
         let sketchMarkers = source.markers.filter { $0.route == .sketchTransform }
-        #expect(sketchMarkers.count == 5)
+        #expect(sketchMarkers.count == 4)
         let centres = sketchMarkers.filter { $0.identity == nil }
-        #expect(centres.count == 1)
-        let centre = try #require(centres.first)
-        #expect(centre.diameterPoints == 10)
-        #expect(centre.hitTolerancePoints == nil)
-        #expect(centre.occurrenceID == nil)
-        #expect(centre.state == .normal)
+        #expect(centres.isEmpty)
         let cornerMarkers = sketchMarkers.filter { $0.identity != nil }
         #expect(cornerMarkers.count == 4)
         #expect(cornerMarkers.allSatisfy { $0.diameterPoints == 9 })
@@ -225,9 +220,9 @@ struct ViewportSketchTransformLifecycleTests {
         // Materialization resolves the handles the emit step registered; it
         // never registers one of its own.
         #expect(materialized.count == 7)
-        #expect(meshes.count == 1)
-        #expect(nativeCameraLines.count == 3)
-        #expect(nativeMarkers.count == 5)
+        #expect(meshes.isEmpty)
+        #expect(nativeCameraLines.count == 4)
+        #expect(nativeMarkers.count == 4)
         #expect(nativeCameraPaths.isEmpty)
         #expect(labels.isEmpty)
         #expect(families.contains(.transform))
@@ -241,13 +236,13 @@ struct ViewportSketchTransformLifecycleTests {
         // production never separates the two sets. The producer's own contract
         // still does: a drawn handle is not by itself a registered one.
         #expect(records.isEmpty)
-        #expect(source.worldLines.filter { $0.route == .sketchTransform }.count == 1)
-        #expect(source.cameraLines.filter { $0.route == .sketchTransform }.count == 3)
-        #expect(source.markers.filter { $0.route == .sketchTransform }.count == 5)
+        #expect(source.worldLines.filter { $0.route == .sketchTransform }.isEmpty)
+        #expect(source.cameraLines.filter { $0.route == .sketchTransform }.count == 4)
+        #expect(source.markers.filter { $0.route == .sketchTransform }.count == 4)
     }
 
     @Test
-    func pendingSketchMutationMovesEveryEmittedHandle() throws {
+    func pendingSketchMutationRetainsOneNativeBaselineForGeometryAndHandles() throws {
         let fixture = try makeFixture()
         let shift = Vector3D(x: 0.25, y: 0, z: -0.125)
         let mutation = try Algebra.translation(shift)
@@ -261,28 +256,20 @@ struct ViewportSketchTransformLifecycleTests {
                 activeValues: [.init(identity: .sketchTransform(identity), transform: mutation)]
             )
         )
-        func shifted(_ point: Point3D) -> Point3D {
-            Point3D(x: point.x + shift.x, y: point.y + shift.y, z: point.z + shift.z)
-        }
-
-        #expect(base.worldLines.count == moved.worldLines.count)
-        for (before, after) in zip(base.worldLines, moved.worldLines) {
-            #expect(before.points.count == after.points.count)
-            for (from, to) in zip(before.points, after.points) {
-                expectClose(to, shifted(from), "The outline follows the pending mutation.")
-            }
-        }
+        #expect(base.worldLines.isEmpty && moved.worldLines.isEmpty)
         #expect(base.cameraLines.count == moved.cameraLines.count)
         for (before, after) in zip(base.cameraLines, moved.cameraLines) {
             #expect(before.points.count == after.points.count)
             for (from, to) in zip(before.points, after.points) {
-                expectClose(to.anchor, shifted(from.anchor), "The arrows and arc follow the mutation.")
-                expectClose(to.toward, shifted(from.toward), "The arrow tips follow the mutation.")
+                expectClose(to.anchor, from.anchor, "The native frame owns the preview transform, applied exactly once.")
+                expectClose(to.toward, from.toward, "Worker output retains the immutable source baseline.")
             }
+            #expect(after.objectPreviewOccurrenceID == fixture.item.id)
         }
         #expect(base.markers.count == moved.markers.count)
         for (before, after) in zip(base.markers, moved.markers) {
-            expectClose(after.anchor, shifted(before.anchor), "The centre and corners follow the mutation.")
+            expectClose(after.anchor, before.anchor, "Handle and outline retain the same baseline.")
+            #expect(after.objectPreviewOccurrenceID == fixture.item.id)
         }
         // The preview is drawn from the drag value alone: the document the route
         // reads still holds the frame the gesture has not committed.
@@ -632,7 +619,10 @@ struct ViewportSketchTransformLifecycleTests {
                 bodyPlacementCommits += 1
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             },
-            onSketchTransformCommit: { commits.append($0) }
+            onSketchTransformCommit: {
+                commits.append($0)
+                return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+            }
         ).frame(width: size.width, height: size.height)
         let controller = NSHostingController(rootView: viewport)
         let window = NSWindow(
@@ -714,7 +704,7 @@ struct ViewportSketchTransformLifecycleTests {
         // The concrete view type is named rather than opaque so the same
         // structural identity can be remounted with a different callback.
         func makeViewport(
-            onCommit: ((ViewportSketchTransformDragTarget) -> Void)?
+            onCommit: ((ViewportSketchTransformDragTarget) async throws -> ViewportSourceIdentity)?
         ) -> Viewport {
             Viewport(
                 document: fixture.document,
@@ -728,7 +718,10 @@ struct ViewportSketchTransformLifecycleTests {
                 onSketchTransformCommit: onCommit
             )
         }
-        let controller = NSHostingController(rootView: makeViewport(onCommit: { commits.append($0) }))
+        let controller = NSHostingController(rootView: makeViewport(onCommit: {
+            commits.append($0)
+            return .document(id: fixture.document.id, generation: DocumentGeneration(1))
+        }))
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.titled], backing: .buffered, defer: false

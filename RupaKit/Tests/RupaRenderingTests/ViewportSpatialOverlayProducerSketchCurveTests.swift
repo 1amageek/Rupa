@@ -67,11 +67,14 @@ func rawSketchWorkerBuildsDimensionAndHandleDescriptorsFromScene() throws {
     #expect(meshes.count == 1)
     #expect(cameraLines.count == 1)
     #expect(labels.count == 2)
-    #expect(markers.count == 2)
+    #expect(markers.isEmpty)
+    let editHandles = cameraPaths.filter { $0.value.hitTolerancePoints == 12 }
+    #expect(editHandles.count == 2)
     #expect(families == [.sketch, .curve])
-    #expect(markers.map(\.value.anchor).contains(Point3D(x: 1, y: 0, z: 2)))
-    #expect(markers.map(\.value.anchor).contains(Point3D(x: 3, y: 0, z: 2)))
-    #expect(markers.allSatisfy { $0.value.hitTolerancePoints == 12.0 })
+    #expect(editHandles.map(\.value.anchor).contains(Point3D(x: 1, y: 0, z: 2)))
+    #expect(editHandles.map(\.value.anchor).contains(Point3D(x: 3, y: 0, z: 2)))
+    #expect(editHandles.allSatisfy { $0.value.color == SIMD4<Float>(0.96, 0.96, 0.96, 1) })
+    #expect(editHandles.allSatisfy { $0.value.objectPreviewOccurrenceID == "sketch" })
 
     let lineDimensionIndices = handles.enumerated().compactMap { index, identity in
         if case .sketchDimension = identity { return UInt32(index) }
@@ -276,10 +279,11 @@ func rawSketchWorkerAppliesUncommittedPointOverrideInWorldXzSpace() throws {
     )
 
     let handles = interactionRecords.map(\.identity)
-    #expect(markers.count == 2)
-    #expect(markers.map(\.value.anchor).contains(Point3D(x: 2.5, y: 0.0, z: 2.25)))
-    #expect(markers.map(\.value.anchor).contains(Point3D(x: 3.0, y: 0.0, z: 2.0)))
-    #expect(markers.first(where: { $0.value.handleIndex != nil })?.value.handleIndex
+    #expect(markers.isEmpty)
+    #expect(cameraPaths.count == 2)
+    #expect(cameraPaths.map(\.value.anchor).contains(Point3D(x: 2.5, y: 0.0, z: 2.25)))
+    #expect(cameraPaths.map(\.value.anchor).contains(Point3D(x: 3.0, y: 0.0, z: 2.0)))
+    #expect(cameraPaths.first(where: { $0.value.handleIndex != nil })?.value.handleIndex
         == handles.firstIndex(of: identity).map(UInt32.init))
 }
 
@@ -803,7 +807,8 @@ func rawWorkerCoversCircleArcSplineAndOffsetRoutes() throws {
     #expect(handles.contains { if case .slotWidth(let value) = $0 { return value.entityID == arcID }; return false })
     #expect(handles.contains { if case .sketchVertexOffset(let value) = $0 { return value.entityID == arcID && value.handle == .arcStart }; return false })
     #expect(meshes.isEmpty == false)
-    #expect(markers.isEmpty == false)
+    #expect(markers.isEmpty)
+    #expect(cameraPaths.contains { $0.value.handleIndex != nil && $0.value.hitTolerancePoints == 12 })
     #expect(cameraLines.isEmpty == false)
 }
 

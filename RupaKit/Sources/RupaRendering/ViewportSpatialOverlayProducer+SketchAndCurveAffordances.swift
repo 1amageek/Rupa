@@ -668,7 +668,7 @@ extension ViewportSpatialOverlayProducer {
             interaction: interaction,
             activeOverrides: activeOverrides
         )
-        let color = color(for: state)
+        let color = color(for: state, role: entry.role)
         var descriptorCount = 0
 
         let isOffsetRoute: Bool = switch entry.route {
@@ -707,6 +707,7 @@ extension ViewportSpatialOverlayProducer {
             var value = line
             value.handleIndex = interactive ? handleIndex : nil
             value.hitTolerancePoints = interactive ? 10.0 : nil
+            value.objectPreviewOccurrenceID = entry.occurrenceID
             cameraLines.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
@@ -749,6 +750,7 @@ extension ViewportSpatialOverlayProducer {
             )
             value.handleIndex = source.hitTolerancePoints == nil ? nil : handleIndex
             value.hitTolerancePoints = source.hitTolerancePoints
+            value.objectPreviewOccurrenceID = entry.occurrenceID
             cameraPaths.append(.init(family: entry.family, value: value))
             descriptorCount += 1
         }
@@ -898,12 +900,33 @@ extension ViewportSpatialOverlayProducer {
                     "Sketch/curve affordance marker is not finite."
                 )
             }
-            appendMarker(Self.marker(
-                sourceMarker.shape,
-                anchor: sourceMarker.anchor,
-                diameterPoints: sourceMarker.diameterPoints,
-                color: sourceMarker.color ?? color
-            ), tolerance: markerTolerance)
+            if markerTolerance != nil,
+               entry.role == .curvePoint || entry.role == .curveHandle || entry.role == .splineControlPoint {
+                let diameter = CGFloat(sourceMarker.diameterPoints)
+                let rect = CGRect(x: -diameter / 2, y: -diameter / 2, width: diameter, height: diameter)
+                let outline: Path
+                switch sourceMarker.shape {
+                case .box: outline = Path(rect)
+                case .sphere, .cone: outline = Path(ellipseIn: rect)
+                }
+                var marker = RealityViewportSpatialBatch.CameraPath(
+                    path: outline.strokedPath(StrokeStyle(lineWidth: 2)),
+                    anchor: sourceMarker.anchor, offset: .fixed(.zero),
+                    color: color, depth: .annotation
+                )
+                marker.handleIndex = handleIndex
+                marker.hitTolerancePoints = markerTolerance
+                marker.objectPreviewOccurrenceID = entry.occurrenceID
+                cameraPaths.append(.init(family: entry.family, value: marker))
+                descriptorCount += 1
+            } else {
+                appendMarker(Self.marker(
+                    sourceMarker.shape,
+                    anchor: sourceMarker.anchor,
+                    diameterPoints: sourceMarker.diameterPoints,
+                    color: sourceMarker.color ?? color
+                ), tolerance: markerTolerance)
+            }
         }
 
         guard descriptorCount > 0 else {
@@ -1044,10 +1067,10 @@ extension ViewportSpatialOverlayProducer {
                             entityID: primitive.entityID,
                             selection: source.selection
                         ),
-                        state: entitySelected ? .pending : (entityHovered ? .hovered : .normal),
+                        state: .normal,
                         showsPointHandles: emitsPointHandles && (pointDisplayVisible || entityHighlighted),
                         showsCurveHandles: emitsCurveHandles && entityHighlighted,
-                        showsDimensions: emitsDimensions && (entityHighlighted
+                        showsDimensions: emitsDimensions && (selectedEntities.contains(primitive.entityID) || entityHovered
                             || hasActiveDimensionOverride(
                                 for: effectivePrimitive,
                                 featureID: item.featureID,
@@ -2799,7 +2822,8 @@ extension ViewportSpatialOverlayProducer {
                             entityID: entityID,
                             controlPointIndex: index
                         )),
-                        markers: [.init(anchor: point, diameterPoints: 8)],
+                        markers: [.init(anchor: point, diameterPoints: 8,
+                                        shape: index.isMultiple(of: 3) ? .box : .sphere)],
                         preparedTarget: splinePointTarget(index, at: controlPoints[index])
                     ))
                 }
@@ -3484,9 +3508,18 @@ extension ViewportSpatialOverlayProducer {
     }
 
     private static func color(
-        for state: SketchCurveAffordanceState
+        for state: SketchCurveAffordanceState,
+        role: SketchCurveAffordanceRole
     ) -> SIMD4<Float> {
-        switch state {
+        if role == .splineControlNet {
+            return SIMD4<Float>(0.65, 0.68, 0.70, 0.8)
+        }
+        if role == .curvePoint || role == .curveHandle || role == .splineControlPoint {
+            return state == .normal
+                ? SIMD4<Float>(0.96, 0.96, 0.96, 1)
+                : SIMD4<Float>(1, 0.82, 0.12, 1)
+        }
+        return switch state {
         case .normal:
             editColor
         case .hovered:

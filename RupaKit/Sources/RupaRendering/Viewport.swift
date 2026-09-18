@@ -76,10 +76,11 @@ public struct Viewport: View {
     /// One open sketch transform gesture.
     ///
     /// The press owns the prepared baseline for the whole drag, so no later
-    /// frame can change what is committed, and `mutation` is the preview the
-    /// producer redraws this route's handles at until the release resolves.
+    /// frame can change what is committed. The native renderer applies
+    /// `mutation` to the geometry and handles together until publication.
     private struct SketchTransformPress {
         let input: ViewportSketchTransformInput
+        let occurrenceID: String
         let identity: ViewportSpatialHandleIdentity
         let source: ViewportSourceIdentity
         let snapshotID: EvaluationSnapshotID?
@@ -257,7 +258,7 @@ public struct Viewport: View {
     private let onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)?
     private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
     private let onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)?
-    private let onSketchTransformCommit: ((ViewportSketchTransformDragTarget) -> Void)?
+    private let onSketchTransformCommit: ((ViewportSketchTransformDragTarget) async throws -> ViewportSourceIdentity)?
     private let onCommandConfirm: (() -> Void)?
     private let onFitWorkspaceScaleToModel: (() -> Void)?
     private let onSelectSmallerWorkspaceScale: (() -> Void)?
@@ -453,7 +454,7 @@ public struct Viewport: View {
         onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? = nil,
         onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
         onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)? = nil,
-        onSketchTransformCommit: ((ViewportSketchTransformDragTarget) -> Void)? = nil,
+        onSketchTransformCommit: ((ViewportSketchTransformDragTarget) async throws -> ViewportSourceIdentity)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
         onFitWorkspaceScaleToModel: (() -> Void)? = nil,
         onSelectSmallerWorkspaceScale: (() -> Void)? = nil,
@@ -4045,6 +4046,9 @@ public struct Viewport: View {
     private var sketchTransformRouteEnabled: Bool { onSketchTransformCommit != nil }
 
     private var bodyPreviewTransforms: [String: Transform3D] {
+        if case .sketchTransform(let press) = nativeInputGesture, let mutation = press.mutation {
+            return [press.occurrenceID: mutation]
+        }
         guard case .bodyTransform(let press) = nativeInputGesture,
               let mutation = press.mutation else { return bodyCommitHandoff.transforms(for: sourceIdentity) }
         return Dictionary(uniqueKeysWithValues: press.input.members.map { ($0.occurrenceID, mutation) })
@@ -4199,6 +4203,7 @@ public struct Viewport: View {
             return
         }
         let target: ViewportSketchTransformDragTarget?
+        var mutation: Transform3D?
         do {
             let identity = try presentationPreparation.get()
             if let failure = presentationPlanCache.failure(for: identity) { throw failure }
@@ -4206,20 +4211,25 @@ public struct Viewport: View {
             let sample = try sketchTransformSample(
                 for: press.input, from: press.start, to: finish.point
             )
-            target = try press.input.commit(
-                worldMutation: try press.input.worldMutation(for: sample)
-            )
+            let finalMutation = try press.input.worldMutation(for: sample)
+            target = try press.input.commit(worldMutation: finalMutation)
+            mutation = finalMutation
         } catch {
             // The frame answered for this revision, so the refusal belongs to
             // the gesture and never reaches the scene-node mutation callback.
             reportNativeGestureFailure(error)
             target = nil
         }
-        // Release input ownership before calling external mutation callbacks.
+        if let target, let mutation, let onSketchTransformCommit {
+            bodyCommitHandoff.begin(
+                source: sourceIdentity, mutation: mutation, occurrenceIDs: [press.occurrenceID],
+                commit: { try await onSketchTransformCommit(target) },
+                onFailure: reportNativeGestureFailure
+            )
+        }
+        // The common handoff owns the picture before pointer state is released.
         clearPendingCanvasInteractionTargets()
         activeCanvasDrag = nil
-        guard let target else { return }
-        onSketchTransformCommit?(target)
     }
 
     /// Opens a world-point gesture from the prepared record the mounted frame
@@ -4482,12 +4492,13 @@ public struct Viewport: View {
                     return
                 }
                 if let input = try ViewportSketchTransformInput(record: record) {
-                    guard sketchTransformRouteEnabled else {
+                    guard sketchTransformRouteEnabled, let occurrenceID = record.occurrenceID else {
                         nativeInputGesture = .cancelled
                         return
                     }
                     nativeInputGesture = .sketchTransform(.init(
                         input: input,
+                        occurrenceID: occurrenceID,
                         identity: record.identity,
                         source: sourceIdentity,
                         snapshotID: presentationScene?.snapshotID,
@@ -5838,10 +5849,15 @@ extension Viewport {
     ) throws -> ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.RawInput {
         typealias Route = ViewportSpatialOverlayProducer.SketchCurveAffordanceRoute
         typealias Override = ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.ActiveOverride
-        var routes: Set<Route> = [
-            .lineDimension, .circleDimension, .arcDimension, .curvePointControl,
-            .splineControl, .curvatureComb, .bridgeCurveEndpoint,
-        ]
+        var routes: Set<Route> = [.curvatureComb]
+        if onSketchDimensionDrag != nil {
+            routes.formUnion([.lineDimension, .circleDimension, .arcDimension])
+        }
+        if onSketchPointHandleDrag != nil && onSketchCurveHandleDrag != nil {
+            routes.insert(.curvePointControl)
+        }
+        if onSplineControlPointDrag != nil { routes.insert(.splineControl) }
+        if onBridgeCurveEndpointDrag != nil { routes.insert(.bridgeCurveEndpoint) }
         if onRegionOffsetDrag != nil { routes.insert(.regionOffset) }
         if onEdgeOffsetDrag != nil { routes.insert(.edgeOffset) }
         if onSlotWidthDrag != nil { routes.insert(.slotWidth) }

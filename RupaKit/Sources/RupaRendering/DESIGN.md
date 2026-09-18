@@ -355,6 +355,18 @@ independent tessellator is never an alternative implementation.
 
 ## Contracts and Invariants
 
+### Source edit visual semantics
+
+Sketch/path editing markers use white outlines for available points, yellow for
+hovered/selected/dragged points, and neutral thin lines for the control net.
+Anchor knots are square; tangent handles are circular. Geometry and dimension
+annotations do not inherit the editing-marker color. A noneditable point must not
+advertise a hit target. Cube/object transform colors and geometry are unchanged.
+Object-scope sketch placement applies one native transform to the curve and its
+handles in the same update. Release retains that transform until the committed
+source is observed, following the existing object-transform handoff contract
+below. Point/tangent source edits are a separate, unfinished preview migration.
+
 ### Source, frame, and provenance
 
 1. Required `ViewportSourceIdentity` plus any active drag-preview revision and
