@@ -176,7 +176,8 @@ caller's evaluation context are selected as well. They were run by themselves
 on macOS 27.0 and read by the same verifier, which reported two passing
 functions and no skip or failure.
 
-Evidence (22 result bundles):
+Evidence (22 result bundles from that run, and one bundle for each
+identifier selected since):
 
 - `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-contracts.GzrSbt/`
 - `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-remaining.y7VYPS/`
