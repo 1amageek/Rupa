@@ -1243,6 +1243,7 @@ final class RealityViewportSpatialResources {
         }
         for (entity, mesh, line, proxies, strokes) in cameraLines {
             let mutation = line.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }
+            let isWorldPolyline = line.isWorldPolyline
             var valid = true
             var missingProvenance = false
             var bounds = BoundingBox()
@@ -1252,6 +1253,12 @@ final class RealityViewportSpatialResources {
                 let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
                 for (index, point) in line.points.enumerated() {
                     let point = try point.applying(mutation)
+                    if isWorldPolyline {
+                        let position = try RealityViewportSpatialBatch.nativePoint(point.anchor, relativeTo: batch.renderOrigin)
+                        vertices[index] = position
+                        bounds.formUnion(BoundingBox(min: position, max: position))
+                        continue
+                    }
                     guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection,
                                                     allowsBehindCamera: true) else {
                         valid = false

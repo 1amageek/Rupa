@@ -26,6 +26,32 @@ func nativePolygonFillPreservesConcavityAndRejectsDegenerateInput() throws {
     }
 }
 
+@Test(.timeLimit(.minutes(1)))
+func sampledSketchCurvesShareNativeMeshesWithinTheGridBudget() async throws {
+    let scene = ViewportScene(items: (0..<32).map { index in
+        ViewportSceneItem(id: "curve-\(index)", featureID: FeatureID(),
+            modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+            kind: .sketch(primitives: [.circle(entityID: SketchEntityID(),
+                center: .zero, radiusMeters: 1)]))
+    })
+    let snapshot = ViewportSpatialOverlaySemanticSnapshot(scene: scene,
+        interaction: .init(selectedFeatureIDs: [], selectedSceneNodeIDs: [],
+            hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [],
+            selectedSketchEntities: [], previewSketchEntities: [], hoveredSketchEntity: nil,
+            selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
+        editedBodies: [:], world: .init(modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2)),
+        includesGrid: true, measurement: nil, drawsLegacyBodies: true, drawsDragPreviewBodies: false)
+    let builder = ViewportSpatialOverlayProducer.makeBuilder(from: snapshot, topologyRevision: 1)
+    let output = try await Task.detached { try builder(.origin, 0) }.value
+    #expect(output.spatialBatch.cameraLines.count == 32)
+    #expect(output.spatialBatch.cameraLines.allSatisfy { $0.isWorldPolyline })
+    #expect(output.spatialBatch.cameraLines.allSatisfy {
+        $0.points.count == 50 && $0.points.first?.anchor == $0.points.last?.anchor
+    })
+    #expect(output.spatialBatch.itemCount < 640)
+    #expect(output.spatialBatch.positionCount >= 32 * 49)
+}
+
 @Test
 func combinedRawAffordancesFitTheNativeGridBudgetForASelectedBody() async throws {
     let session = EditorSession()

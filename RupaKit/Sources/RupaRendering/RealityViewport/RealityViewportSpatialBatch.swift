@@ -137,6 +137,13 @@ struct RealityViewportSpatialBatch: Sendable {
         var handleIndex: UInt32? = nil
         var hitTolerancePoints: Float? = nil
         var objectPreviewOccurrenceID: String? = nil
+
+        var isWorldPolyline: Bool {
+            widthPoints == nil && points.allSatisfy {
+                if case .fixed(let offset) = $0.offset { return offset == .zero }
+                return false
+            }
+        }
     }
 
     struct BoundsRulers: Sendable {
@@ -511,10 +518,11 @@ struct RealityViewportSpatialBatch: Sendable {
             try charge(line.points.count, stride: MemoryLayout<CameraPoint>.stride + MemoryLayout<SIMD3<Float>>.stride + 2 * MemoryLayout<UInt32>.stride)
             try Self.validateColor(line.color)
             guard line.points.count >= 2 else { throw Self.invalid("A camera-relative line requires two points.") }
+            let isWorldPolyline = line.isWorldPolyline
             for point in line.points {
-                // Per-camera placements share the existing item ceiling; a line
-                // cannot hide an unbounded camera-frame loop in its point array.
-                try item()
+                // Projection-dependent placements use the item budget; world
+                // vertices are bounded by the position and byte budgets above.
+                if !isWorldPolyline { try item() }
                 _ = try Self.nativePoint(point.anchor, relativeTo: renderOrigin)
                 try validateOffset(point.offset)
             }

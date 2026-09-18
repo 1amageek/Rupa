@@ -310,9 +310,11 @@ ceiling. Exceeding any count or checked byte sum throws the existing typed
 resource-exhaustion failure. Prefix truncation, omitted geometry, and empty
 success are not admission strategies. Native SDK allocations remain opaque and
 are bounded only by admitted resource counts plus measured platform evidence.
-Every camera-relative anchor placement also consumes the item ceiling; packing
-multiple points into one camera-line or marker array cannot bypass the per-frame
-work bound.
+Every camera-relative anchor placement also consumes the item ceiling. A plain
+world-space polyline (zero offsets, no point-width stroke) uses one native line
+mesh; its vertices consume the position and byte ceilings, not camera-placement
+items. Its update directly transforms world positions without projection.
+Point-width affordances retain their existing placement and segment charges.
 Interactive top-level descriptors carry an optional frame-local `UInt32`
 `handleIndex`. The parent producer owns an immutable frame table whose record
 contains the normalized typed CAD identity and the exact prepared

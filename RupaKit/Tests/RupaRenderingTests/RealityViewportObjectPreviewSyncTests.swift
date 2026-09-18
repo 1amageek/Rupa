@@ -20,9 +20,9 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
     ], color: [1, 0, 0, 1], widthPoints: 2, handleIndex: 1, hitTolerancePoints: 7,
        objectPreviewOccurrenceID: id)
     let curveEnd = Point3D(x: 0.8, y: 0.5, z: 0.2)
-    let curve = RealityViewportSpatialBatch.CameraLine(points: [
-        .init(anchor: anchor, offset: .zero), .init(anchor: curveEnd, offset: .zero)
-    ], color: [1, 1, 1, 1], widthPoints: 2, handleIndex: 2, hitTolerancePoints: 2,
+    let curve = RealityViewportSpatialBatch.CameraLine(points: (0...1024).map { index in
+        .init(anchor: anchor + (curveEnd - anchor) * (Double(index) / 1024), offset: .zero)
+    }, color: [1, 1, 1, 1], handleIndex: 2,
        objectPreviewOccurrenceID: id)
     let batch = try RealityViewportSpatialBatch(markers: [
         .init(shape: .box, anchor: anchor, diameterPoints: 10, color: [1, 1, 1, 1],
@@ -33,6 +33,13 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
               color: [1, 1, 1, 1], handleIndex: 3, hitTolerancePoints: 12,
               objectPreviewOccurrenceID: id)
     ], handleCount: 4, renderOrigin: .origin, retainedSurfaceByteCount: plan.retainedByteCount)
+    #expect(batch.itemCount < 100)
+    #expect(batch.positionCount >= 1025)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try RealityViewportSpatialBatch(cameraLines: [curve], renderOrigin: .origin,
+            retainedSurfaceByteCount: 0, limits: .init(maxItemCount: 1,
+                maxPositionCount: 1024, maxTriangleCount: 0, maxRetainedByteCount: 1_000_000))
+    }
     let viewport = try await RealityViewport.prepare(plan: plan, spatialBatch: batch, reusing: nil)
     let size = CGSize(width: 512, height: 384)
     var reported: MeshSourcePresentationRenderError?
@@ -101,8 +108,8 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         curveMesh.withUnsafeBytes(bufferIndex: 0) {
             let points = $0.bindMemory(to: SIMD3<Float>.self)
             #expect(abs(Double(points[0].x) - moved.x) < 1e-5)
-            #expect(abs(Double(points[1].x) - expectedEnd.x) < 1e-5)
-            #expect(abs(Double(points[1].z) - expectedEnd.z) < 1e-5)
+            #expect(abs(Double(points[1024].x) - expectedEnd.x) < 1e-5)
+            #expect(abs(Double(points[1024].z) - expectedEnd.z) < 1e-5)
         }
         let mesh = try #require(lineResource.lowLevelMesh)
         var first = SIMD3<Float>.zero, last = SIMD3<Float>.zero

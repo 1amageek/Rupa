@@ -978,7 +978,7 @@ enum ViewportSpatialOverlayProducer {
                         }
                         cameraLines.append(.init(family: .sketch, value: .init(
                             points: vertices.map { .init(anchor: $0, offset: .zero) },
-                            color: primitiveColor, widthPoints: 2, depth: .scene,
+                            color: primitiveColor, depth: .scene,
                             objectPreviewOccurrenceID: item.id
                         )))
                     }
