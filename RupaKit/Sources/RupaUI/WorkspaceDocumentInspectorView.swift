@@ -301,8 +301,9 @@ struct WorkspaceDocumentInspectorView: View {
                 unit: unit.symbol, sliderRange: RulerScaleControl.sliderRange(for: kind),
                 sliderValue: { RulerScaleControl.sliderValue(fromMeters: $0, for: kind) },
                 value: { RulerScaleControl.meters(fromSliderValue: $0, for: kind) },
-                format: { WorkspaceInspectorNumberText.string(from: unit.value(fromMeters: $0)) },
-                parse: { RulerScaleControl.meters(fromFieldText: $0, unit: unit, for: kind) }),
+                format: { WorkspaceInspectorNumberText.compact(unit.value(fromMeters: $0)) },
+                parse: { RulerScaleControl.meters(fromFieldText: $0, unit: unit, for: kind) },
+                editingFormat: { String(unit.value(fromMeters: $0)) }),
             onChange: onChange)
     }
 }

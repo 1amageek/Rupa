@@ -28,6 +28,16 @@ Project snapshot ---------------------------------> idle display
 
 ## Contracts and Invariants
 
+- Scalar properties share one label/value/custom-slider row. XYZ properties
+  share one label and three equal-width numeric fields. Sections use separators,
+  not nested cards. Numeric controls own these visuals; callers own semantics.
+- Idle display uses at most two fractional digits, with scientific notation
+  for nonzero values that would otherwise display as zero. Formatting never
+  rounds stored values or submits an edit. Focus permits full-precision entry.
+- The slider uses the existing frozen mapping and submission binding. Pointer,
+  keyboard and accessibility adjustment share clamping and integer stepping.
+  Disabled controls submit nothing; release/disappearance ends the gesture.
+
 - Incomplete text is retained but never submitted as a number.
 - Numeric text uses the normal foreground color, including negative values and
   incomplete signed input. Parsing does not determine text color.

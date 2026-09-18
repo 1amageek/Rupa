@@ -11,12 +11,13 @@ struct WorkspaceObjectTransformInspectorView: View {
     var onEditTransform: (InspectorTransformComponent, Double) -> Void
 
     var body: some View {
-        stateSection
         switch Result(catching: { try nodes.map { try WorkspaceTransformMatrix.components(of: $0.localTransform) } }) {
         case .success(let components):
-            positionSection
-            rotationSection(components)
-            scaleSection(components)
+            inspectorSection("Transform") {
+                positionSection
+                scaleSection(components)
+                rotationSection(components)
+            }
             if components.contains(where: { abs($0.shear.x) + abs($0.shear.y) + abs($0.shear.z) > 1.0e-12 }) {
                 inspectorSection("Retained Shear (XY, XZ, YZ)") {
                     ForEach(Array(components.enumerated()), id: \.offset) { _, component in
@@ -29,8 +30,9 @@ struct WorkspaceObjectTransformInspectorView: View {
             Text(error.localizedDescription).font(.callout).foregroundStyle(.red)
                 .accessibilityIdentifier("WorkspaceObjectTransform.componentsError")
         }
-        materialSection
-        transformSection
+        stateSection
+        DisclosureGroup("Material") { materialSection }
+        DisclosureGroup("Transform Details") { transformSection }
     }
 
     func onSetTransformComponent(_ component: InspectorTransformComponent, _ value: Double) {
@@ -57,12 +59,12 @@ struct WorkspaceObjectTransformInspectorView: View {
     }
 
     private var positionSection: some View {
-        inspectorSection("Position (Parent Local)") {
+        InspectorVectorRow(title: "Position") {
             workspaceLengthControl(
                 "X",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
                 displayUnit: displayUnit,
-                sliderMetersRange: positionSliderMetersRange
+                sliderMetersRange: positionSliderMetersRange, axisField: true
             ) { meters in
                 onSetTransformComponent(.translationX, meters)
             }
@@ -70,7 +72,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "Y",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
                 displayUnit: displayUnit,
-                sliderMetersRange: positionSliderMetersRange
+                sliderMetersRange: positionSliderMetersRange, axisField: true
             ) { meters in
                 onSetTransformComponent(.translationY, meters)
             }
@@ -78,7 +80,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "Z",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
                 displayUnit: displayUnit,
-                sliderMetersRange: positionSliderMetersRange
+                sliderMetersRange: positionSliderMetersRange, axisField: true
             ) { meters in
                 onSetTransformComponent(.translationZ, meters)
             }
@@ -86,30 +88,30 @@ struct WorkspaceObjectTransformInspectorView: View {
     }
 
     private func rotationSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
-        inspectorSection("Rotation (Local X → Y → Z)") {
-            numericControl("X", values: components.map { $0.rotationDegrees.x }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationX, $0) }, unitLabel: { "°" })
-            numericControl("Y", values: components.map { $0.rotationDegrees.y }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationY, $0) }, unitLabel: { "°" })
-            numericControl("Z", values: components.map { $0.rotationDegrees.z }, sliderRange: -180...180, onChange: { onSetTransformComponent(.rotationZ, $0) }, unitLabel: { "°" })
+        InspectorVectorRow(title: "Rotation") {
+            numericControl("X", values: components.map { $0.rotationDegrees.x }, sliderRange: -180...180, axisField: true, onChange: { onSetTransformComponent(.rotationX, $0) }, unitLabel: { "°" })
+            numericControl("Y", values: components.map { $0.rotationDegrees.y }, sliderRange: -180...180, axisField: true, onChange: { onSetTransformComponent(.rotationY, $0) }, unitLabel: { "°" })
+            numericControl("Z", values: components.map { $0.rotationDegrees.z }, sliderRange: -180...180, axisField: true, onChange: { onSetTransformComponent(.rotationZ, $0) }, unitLabel: { "°" })
         }
     }
 
     private func scaleSection(_ components: [WorkspaceTransformMatrix.Components]) -> some View {
-        inspectorSection("Transform Scale (Local)") {
+        InspectorVectorRow(title: "Scale") {
             workspaceScaleFactorControl(
                 "X",
-                values: components.map { $0.scale.x }
+                values: components.map { $0.scale.x }, axisField: true
             ) { value in
                 onSetTransformComponent(.scaleX, value)
             }
             workspaceScaleFactorControl(
                 "Y",
-                values: components.map { $0.scale.y }
+                values: components.map { $0.scale.y }, axisField: true
             ) { value in
                 onSetTransformComponent(.scaleY, value)
             }
             workspaceScaleFactorControl(
                 "Z",
-                values: components.map { $0.scale.z }
+                values: components.map { $0.scale.z }, axisField: true
             ) { value in
                 onSetTransformComponent(.scaleZ, value)
             }

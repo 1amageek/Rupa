@@ -10,12 +10,13 @@ struct InspectorNumericMapping {
     var format: (Double) -> String
     var parse: (String) -> Double?
     var step: Double? = nil
+    var editingFormat: ((Double) -> String)? = nil
 
     static func number(range: ClosedRange<Double>, unit: String = "") -> Self {
         Self(unit: unit, sliderRange: range,
              sliderValue: { min(max($0, range.lowerBound), range.upperBound) },
-             value: { $0 }, format: { WorkspaceInspectorNumberText.string(from: $0) },
-             parse: WorkspaceInspectorNumberText.value)
+             value: { $0 }, format: WorkspaceInspectorNumberText.compact,
+             parse: WorkspaceInspectorNumberText.value, editingFormat: { String($0) })
     }
 
     static func integer(range: ClosedRange<Double>) -> Self {

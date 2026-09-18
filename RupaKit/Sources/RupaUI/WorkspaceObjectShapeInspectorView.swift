@@ -47,58 +47,64 @@ struct WorkspaceObjectShapeInspectorView: View {
 
     @ViewBuilder
     private func objectCenterControls(_ shapes: [InspectorObjectShape]) -> some View {
-        workspaceLengthControl(
-            "World Center X",
-            values: shapes.compactMap(\.center?.x),
-            displayUnit: displayUnit,
-            sliderMetersRange: positionSliderMetersRange
-        ) { meters in
-            onSetCenter(.x, meters, shapes)
+        InspectorVectorRow(title: "Center") {
+            workspaceLengthControl(
+                "X",
+                values: shapes.compactMap(\.center?.x),
+                displayUnit: displayUnit,
+                sliderMetersRange: positionSliderMetersRange, axisField: true
+            ) { meters in
+                onSetCenter(.x, meters, shapes)
+            }
+            workspaceLengthControl(
+                "Y",
+                values: shapes.compactMap(\.center?.y),
+                displayUnit: displayUnit,
+                sliderMetersRange: positionSliderMetersRange, axisField: true
+            ) { meters in
+                onSetCenter(.y, meters, shapes)
+            }
+            workspaceLengthControl(
+                "Z",
+                values: shapes.compactMap(\.center?.z),
+                displayUnit: displayUnit,
+                sliderMetersRange: positionSliderMetersRange, axisField: true
+            ) { meters in
+                onSetCenter(.z, meters, shapes)
+            }
         }
-        workspaceLengthControl(
-            "World Center Y",
-            values: shapes.compactMap(\.center?.y),
-            displayUnit: displayUnit,
-            sliderMetersRange: positionSliderMetersRange
-        ) { meters in
-            onSetCenter(.y, meters, shapes)
-        }
-        workspaceLengthControl(
-            "World Center Z",
-            values: shapes.compactMap(\.center?.z),
-            displayUnit: displayUnit,
-            sliderMetersRange: positionSliderMetersRange
-        ) { meters in
-            onSetCenter(.z, meters, shapes)
-        }
+        .help("World center")
     }
 
     @ViewBuilder
     private func objectSizeControls(_ shapes: [InspectorObjectShape]) -> some View {
-        workspaceLengthControl(
-            "Source Size X",
-            values: shapes.compactMap(\.size?.x),
-            displayUnit: displayUnit,
-            sliderMetersRange: sizeSliderMetersRange
-        ) { meters in
-            onSetSize(.x, meters, shapes)
+        InspectorVectorRow(title: "Size") {
+            workspaceLengthControl(
+                "X",
+                values: shapes.compactMap(\.size?.x),
+                displayUnit: displayUnit,
+                sliderMetersRange: sizeSliderMetersRange, axisField: true
+            ) { meters in
+                onSetSize(.x, meters, shapes)
+            }
+            workspaceLengthControl(
+                "Y",
+                values: shapes.compactMap(\.size?.y),
+                displayUnit: displayUnit,
+                sliderMetersRange: sizeSliderMetersRange, axisField: true
+            ) { meters in
+                onSetSize(.y, meters, shapes)
+            }
+            workspaceLengthControl(
+                "Z",
+                values: shapes.compactMap(\.size?.z),
+                displayUnit: displayUnit,
+                sliderMetersRange: sizeSliderMetersRange, axisField: true
+            ) { meters in
+                onSetSize(.z, meters, shapes)
+            }
         }
-        workspaceLengthControl(
-            "Source Size Y",
-            values: shapes.compactMap(\.size?.y),
-            displayUnit: displayUnit,
-            sliderMetersRange: sizeSliderMetersRange
-        ) { meters in
-            onSetSize(.y, meters, shapes)
-        }
-        workspaceLengthControl(
-            "Source Size Z",
-            values: shapes.compactMap(\.size?.z),
-            displayUnit: displayUnit,
-            sliderMetersRange: sizeSliderMetersRange
-        ) { meters in
-            onSetSize(.z, meters, shapes)
-        }
+        .help("Source size")
     }
 
     @ViewBuilder

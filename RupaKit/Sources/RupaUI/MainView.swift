@@ -7180,7 +7180,13 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private func objectInspectorSections(_ nodes: [SceneNode]) -> some View {
         let overviewState = workspaceObjectOverviewInspectorState(for: nodes)
-        WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
+        objectTransformInspectorSection(nodes)
+        objectShapeSection(nodes)
+        DisclosureGroup("Object Details") {
+            WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
+            WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
+            WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
+        }
         WorkspaceConstructionPlaneInspectorView(
             state: selectedConstructionPlaneInspectorState,
             displayUnit: snapshot.workspaceState.displayUnit,
@@ -7195,8 +7201,6 @@ private struct ProjectMainViewContent: View {
             patternArrayInspectorSection(patternArrayState)
         }
 
-        WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
-        WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
         sectionAnalysisInspectorSection(nodes)
 
         WorkspaceSurfaceInspectorView(
@@ -7264,8 +7268,10 @@ private struct ProjectMainViewContent: View {
             }
         )
 
-        objectShapeSection(nodes)
 
+    }
+
+    private func objectTransformInspectorSection(_ nodes: [SceneNode]) -> some View {
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,
             displayUnit: snapshot.workspaceState.displayUnit,

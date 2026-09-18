@@ -5,6 +5,7 @@ struct InspectorNumericInput: View {
     let value: Double?
     let mapping: InspectorNumericMapping
     let onChange: (Double) -> Void
+    var axisField: Bool = false
 
     @Environment(\.inspectorInputSequencer) private var sequencer
     @State private var edit = InspectorNumericEdit()
@@ -17,54 +18,31 @@ struct InspectorNumericInput: View {
     private var activeMapping: InspectorNumericMapping { edit.mapping ?? mapping }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, text: Binding(
-                        get: { edit.text ?? value.map(activeMapping.format) ?? "Mixed" },
-                        set: { text in
-                            if isFocused { edit.begin(mapping) }
-                            if let value = edit.setText(text, mapping: mapping) { submit(value) }
-                        }))
-                        .focused($isFocused)
-                        .onSubmit { isFocused = false }
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    if !activeMapping.unit.isEmpty {
-                        Text(activeMapping.unit)
-                            .foregroundStyle(.secondary)
-                            .frame(width: inspectorUnitWidth, alignment: .leading)
+        Group {
+            if axisField {
+                numberField
+            } else {
+                inspectorControlRow(title) {
+                    HStack(spacing: 4) {
+                        numberField.frame(width: 62)
+                        InspectorSlider(title: title,
+                            value: Self.sliderBinding(edit: $edit, value: value, mapping: mapping, onChange: submit),
+                            range: activeMapping.sliderRange, step: activeMapping.step,
+                            valueDescription: (edit.value ?? value).map(activeMapping.format).map {
+                                activeMapping.unit.isEmpty ? $0 : "\($0) \(activeMapping.unit)"
+                            } ?? "Mixed") { editing in
+                            isDragging = editing
+                            if editing {
+                                isFocused = false
+                                edit.begin(mapping)
+                            } else {
+                                edit.end()
+                            }
+                        }
                     }
                 }
             }
-            if let step = activeMapping.step {
-                Stepper(title, value: Binding(
-                    get: { edit.value ?? value ?? activeMapping.sliderRange.lowerBound },
-                    set: { value in
-                        edit.begin(mapping)
-                        submit(edit.setSlider(value, mapping: mapping))
-                        if !isFocused { edit.end() }
-                    }), in: activeMapping.sliderRange, step: step)
-                    .labelsHidden()
-                    .padding(.leading, inspectorSliderLeadingPadding)
-            } else {
-                Slider(value: Self.sliderBinding(edit: $edit, value: value,
-                                                mapping: mapping, onChange: submit),
-                       in: activeMapping.sliderRange, onEditingChanged: { editing in
-                    isDragging = editing
-                    if editing {
-                        isFocused = false
-                        edit.begin(mapping)
-                    } else {
-                        edit.end()
-                    }
-                })
-                .padding(.leading, inspectorSliderLeadingPadding)
-                .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
-            }
         }
-        .padding(.vertical, 2)
         .onChange(of: isFocused) { _, focused in
             if focused { edit.begin(mapping) } else if !isDragging { edit.end() }
         }
@@ -75,7 +53,32 @@ struct InspectorNumericInput: View {
         }
     }
 
-    /// Shared by the native Slider and non-foreground binding contract tests.
+    private var numberField: some View {
+        HStack(spacing: 3) {
+            if axisField { Text(title).foregroundStyle(.secondary) }
+            TextField(title, text: Binding(
+                get: {
+                    edit.text ?? value.map(isFocused ? (activeMapping.editingFormat ?? activeMapping.format)
+                        : activeMapping.format) ?? "Mixed"
+                },
+                set: { text in
+                    if isFocused { edit.begin(mapping) }
+                    if let value = edit.setText(text, mapping: mapping) { submit(value) }
+                }))
+                .textFieldStyle(.plain)
+                .focused($isFocused)
+                .onSubmit { isFocused = false }
+                .foregroundStyle(.primary)
+                .accessibilityLabel(title + (activeMapping.unit.isEmpty ? "" : " (\(activeMapping.unit))"))
+        }
+        .font(.system(size: 11).monospacedDigit())
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24)
+        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 5))
+        .help(activeMapping.unit.isEmpty ? title : "\(title) (\(activeMapping.unit))")
+    }
+
+    /// Shared by the custom slider and non-foreground binding contract tests.
     static func sliderBinding(
         edit: Binding<InspectorNumericEdit>, value: Double?,
         mapping: InspectorNumericMapping, onChange: @escaping (Double) -> Void

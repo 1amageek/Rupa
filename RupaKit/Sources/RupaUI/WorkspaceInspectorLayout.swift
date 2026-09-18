@@ -10,10 +10,10 @@ enum WorkspaceInspectorLayout {
     static let sectionHeaderVerticalPadding: CGFloat = 7
     static let sectionContentVerticalPadding: CGFloat = 4
     static let rowHorizontalPadding: CGFloat = 10
-    static let rowVerticalPadding: CGFloat = 5
+    static let rowVerticalPadding: CGFloat = 2
     static let rowMinimumHeight: CGFloat = 26
-    static let rowSpacing: CGFloat = 8
-    static let labelWidth: CGFloat = 116
+    static let rowSpacing: CGFloat = 4
+    static let labelWidth: CGFloat = 64
     static let controlWidth: CGFloat = 104
     static let unitWidth: CGFloat = 36
 }
@@ -338,14 +338,12 @@ func inspectorSection<Content: View>(
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
-                .textCase(.uppercase)
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, WorkspaceInspectorLayout.sectionHeaderHorizontalPadding)
         .padding(.vertical, WorkspaceInspectorLayout.sectionHeaderVerticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.035))
 
         VStack(alignment: .leading, spacing: 0) {
             content()
@@ -354,17 +352,8 @@ func inspectorSection<Content: View>(
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(
-        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
-            .fill(Color.primary.opacity(0.035))
-    )
-    .overlay {
-        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
-            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-    }
-    .clipShape(
-        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
-    )
+    .padding(.bottom, 10)
+    .overlay(alignment: .bottom) { Divider() }
 }
 
 @MainActor
@@ -374,24 +363,19 @@ func inspectorControlRow<Content: View>(
 ) -> some View {
     HStack(alignment: .center, spacing: inspectorRowSpacing) {
         Text(title)
-            .font(.callout)
+            .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .help(title)
             .frame(width: inspectorLabelWidth, alignment: .leading)
         content()
-            .font(.callout)
+            .font(.system(size: 11))
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
     .padding(.horizontal, WorkspaceInspectorLayout.rowHorizontalPadding)
     .padding(.vertical, WorkspaceInspectorLayout.rowVerticalPadding)
     .frame(minHeight: WorkspaceInspectorLayout.rowMinimumHeight)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .overlay(alignment: .bottom) {
-        Rectangle()
-            .fill(Color.primary.opacity(0.055))
-            .frame(height: 1)
-            .padding(.leading, WorkspaceInspectorLayout.rowHorizontalPadding + inspectorLabelWidth + inspectorRowSpacing)
-    }
 }
 
 @MainActor
@@ -429,17 +413,19 @@ func numericControl(
     _ title: String,
     values: [Double],
     sliderRange: ClosedRange<Double>,
+    axisField: Bool = false,
     onChange: @escaping (Double) -> Void,
     unitLabel: () -> String = { "" }
 ) -> some View {
     InspectorNumericInput(title: title, value: commonWorkspaceInspectorValue(values),
-                          mapping: .number(range: sliderRange, unit: unitLabel()), onChange: onChange)
+                          mapping: .number(range: sliderRange, unit: unitLabel()), onChange: onChange, axisField: axisField)
 }
 
 @MainActor
 func workspaceScaleFactorControl(
     _ title: String,
     values: [Double],
+    axisField: Bool = false,
     onChange: @escaping (Double) -> Void
 ) -> some View {
     let range = workspaceScaleFactorSliderRange(for: values)
@@ -448,8 +434,9 @@ func workspaceScaleFactorControl(
         title: title, value: commonWorkspaceInspectorValue(values),
         mapping: InspectorNumericMapping(
             unit: "x", sliderRange: 0...1, sliderValue: scale.sliderValue,
-            value: scale.value, format: { WorkspaceInspectorNumberText.string(from: $0) },
-            parse: WorkspaceInspectorNumberText.value), onChange: onChange)
+            value: scale.value, format: WorkspaceInspectorNumberText.compact,
+            parse: WorkspaceInspectorNumberText.value, editingFormat: { String($0) }),
+        onChange: onChange, axisField: axisField)
 }
 
 func commonWorkspaceInspectorValue(_ values: [Double]) -> Double? {
@@ -472,6 +459,7 @@ func workspaceLengthControl(
     values: [Double],
     displayUnit: LengthDisplayUnit,
     sliderMetersRange: ClosedRange<Double>,
+    axisField: Bool = false,
     onChange: @escaping (Double) -> Void
 ) -> some View {
     let common = commonWorkspaceInspectorValue(values)
@@ -484,7 +472,8 @@ func workspaceLengthControl(
         mapping: InspectorNumericMapping(
             unit: unit.symbol, sliderRange: 0...1,
             sliderValue: scale.sliderValue, value: scale.meters,
-            format: { WorkspaceInspectorNumberText.string(from: unit.value(fromMeters: $0)) },
-            parse: { workspaceLengthMeters(fromFieldText: $0, defaultUnit: unit) }),
-        onChange: onChange)
+            format: { WorkspaceInspectorNumberText.compact(unit.value(fromMeters: $0)) },
+            parse: { workspaceLengthMeters(fromFieldText: $0, defaultUnit: unit) },
+            editingFormat: { String(unit.value(fromMeters: $0)) }),
+        onChange: onChange, axisField: axisField)
 }

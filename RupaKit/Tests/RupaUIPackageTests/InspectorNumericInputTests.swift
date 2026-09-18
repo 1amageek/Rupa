@@ -1,10 +1,62 @@
 import SwiftUI
+import AppKit
 import Testing
 @testable import RupaUI
 
 @MainActor
 @Suite(.timeLimit(.minutes(1)))
 struct InspectorNumericInputTests {
+    @Test func compactControlsRenderInHiddenHost() async throws {
+        let content = VStack(spacing: 12) {
+            inspectorSection("Transform") {
+                InspectorVectorRow(title: "Position") {
+                    ForEach(["X", "Y", "Z"], id: \.self) { axis in
+                        InspectorNumericInput(title: axis, value: -464.471234,
+                            mapping: .number(range: -1000...1000), onChange: { _ in }, axisField: true)
+                    }
+                }
+            }
+            inspectorSection("Path") {
+                InspectorNumericInput(title: "Corner", value: 0,
+                    mapping: .number(range: 0...100), onChange: { _ in })
+                InspectorNumericInput(title: "Subdivision", value: 12,
+                    mapping: .integer(range: 1...32), onChange: { _ in })
+            }
+        }.padding(8).frame(width: 320).preferredColorScheme(.dark)
+        let host = NSHostingView(rootView: content)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.contentView = nil; window.close() }
+        for _ in 0..<10 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(!window.isVisible && !window.isKeyWindow)
+        #expect(host.fittingSize.width <= 320)
+        #expect(host.fittingSize.height < 240)
+        let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let data = try #require(bitmap.representation(using: .png, properties: [:]))
+        try data.write(to: URL(fileURLWithPath: "/tmp/rupa-inspector-compact.png"))
+    }
+
+    @Test func compactDisplayPreservesEditingPrecisionAndSliderBounds() {
+        let mapping = InspectorNumericMapping.number(range: -1000...1000)
+        let value = -464.47123456789
+        #expect(mapping.format(value) == "-464.47")
+        #expect(mapping.parse(mapping.editingFormat!(value)) == value)
+        #expect(WorkspaceInspectorNumberText.compact(0.000001) != "0")
+        #expect(InspectorSlider.position(-20, travel: 100, range: 0...10, step: nil) == 0)
+        #expect(InspectorSlider.position(120, travel: 100, range: 0...10, step: nil) == 10)
+        #expect(InspectorSlider.position(26, travel: 100, range: 0...10, step: 1) == 3)
+        var edit = InspectorNumericEdit()
+        #expect(edit.setSlider(value, mapping: mapping) == value)
+        #expect(edit.value == value)
+        #expect(edit.text == "-464.47")
+    }
+
     @Test func frozenMappingAndLatestAcknowledgement() {
         var edit = InspectorNumericEdit()
         let initial = InspectorNumericMapping.number(range: -100...100)

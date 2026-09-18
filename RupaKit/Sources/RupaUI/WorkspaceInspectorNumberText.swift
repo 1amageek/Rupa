@@ -2,6 +2,13 @@ import Foundation
 import RupaCore
 
 enum WorkspaceInspectorNumberText {
+    static func compact(_ value: Double) -> String {
+        if value != 0, abs(value) < 0.005 {
+            return String(format: "%.2g", locale: Locale(identifier: "en_US_POSIX"), value)
+        }
+        return string(from: value, maximumFractionDigits: 2)
+    }
+
     static func string(
         from value: Double,
         maximumFractionDigits: Int = 6
