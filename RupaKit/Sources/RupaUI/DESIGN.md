@@ -402,8 +402,10 @@ selection exercises production drafts, bindings, transactions, hidden native
 layout, hit routing and RealityKit/Metal behavior. Test windows may exist but
 must never be ordered, made key or activate the application. Synthetic events
 are delivered only inside the test-owned view hierarchy, never to the system.
-The foreground `RupaUITests` target is retired, not silently skipped. Its
-scenarios are owned by the automated/manual coverage map in the UI test review.
+The foreground `RupaUITests` target is retired and its sources are deleted,
+not silently skipped. Its scenarios are owned by the automated/manual coverage
+map in the UI test review. Evidence below that a retired scenario once produced
+is history, not a runnable route.
 Adding a test requires inspecting its transitive helpers for desktop effects.
 Zero executed tests, missing requested tests, skips and failures are not success.
 

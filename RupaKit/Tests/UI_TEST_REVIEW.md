@@ -24,9 +24,13 @@ receiver through the actual hosted hierarchy; direct onPick calls are not
 click evidence. Local dispatch does not emulate OS activation or menu tracking.
 
 The foreground Xcode UI-testing target has been removed, including its build
-phases, product, dependency and scheme reference. The old source directory is
-unbuilt, deprecated archival reference to preserve user edits, not an opt-in
-runner. No legacy test is counted as passing or skipped.
+phases, product, dependency and scheme reference, and its source directory is
+deleted rather than kept as reference. A suite whose every assertion needs the
+real desktop is not retained where it can be reattached, and an unbuilt copy of
+it answers no question the ledger below does not already answer. That ledger
+keeps each retired scenario name, so what still owes manual acceptance stays
+named without the sources existing. No legacy test is counted as passing or
+skipped.
 
 ## Findings resolved by the replacement
 
