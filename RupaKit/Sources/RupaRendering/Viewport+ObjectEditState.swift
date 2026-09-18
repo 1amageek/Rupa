@@ -143,7 +143,8 @@ struct ViewportObjectEditState: Equatable, Sendable {
         yMin: CGFloat,
         yMax: CGFloat,
         zMin: CGFloat,
-        zMax: CGFloat
+        zMax: CGFloat,
+        preservesZeroExtents: Bool = false
     ) {
         self.xMin = xMin
         self.xMax = xMax
@@ -152,7 +153,7 @@ struct ViewportObjectEditState: Equatable, Sendable {
         self.zMin = zMin
         self.zMax = zMax
         self.orientation = .identity
-        normalize()
+        if !preservesZeroExtents { normalize() }
     }
 
     func projectedBodyProjection(layout: ViewportLayout) -> ViewportBodyProjection? {

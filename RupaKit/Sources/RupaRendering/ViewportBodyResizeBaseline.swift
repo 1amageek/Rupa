@@ -13,6 +13,39 @@ struct ViewportBodyResizeBaseline: Sendable {
     let designRevision: DocumentRevision
     let parameterRevision: DocumentRevision
 
+    static func placement(bounds: ViewportObjectEditState, document: DesignDocument) -> Self {
+        .init(worldFromBox: .identity,
+              minimum: .init(x: bounds.xMin, y: bounds.yMin, z: bounds.zMin),
+              maximum: .init(x: bounds.xMax, y: bounds.yMax, z: bounds.zMax),
+              size: .init(x: bounds.xMax - bounds.xMin, y: bounds.yMax - bounds.yMin,
+                          z: bounds.zMax - bounds.zMin),
+              documentID: document.cadDocument.id,
+              designRevision: document.cadDocument.designGraph.revision,
+              parameterRevision: document.cadDocument.parameters.revision)
+    }
+
+    func supports(_ axis: ViewportCoordinateAxis) -> Bool {
+        switch axis { case .x: size.x > 0; case .y: size.y > 0; case .z: size.z > 0 }
+    }
+
+    var handleActions: [ViewportAffordanceAction] {
+        let faces = ViewportBodyFace.allCases.filter { $0 != .side }.map(ViewportAffordanceAction.faceMove)
+            .filter { action in
+                guard case .faceMove(let face) = action else { return false }
+                switch face {
+                case .left, .right: return supports(.x)
+                case .front, .back: return supports(.y)
+                case .top, .bottom: return supports(.z)
+                case .side: return false
+                }
+            }
+        let corners = ViewportBodyVertex.allCases.filter {
+            (supports(.x) || $0.usesMinX) && (supports(.y) || $0.usesMinY)
+                && (supports(.z) || $0.usesMinZ)
+        }.map(ViewportAffordanceAction.vertexMove)
+        return faces + corners
+    }
+
     static func resolve(document: DesignDocument, nodeID: SceneNodeID,
                         worldTransform: Transform3D) throws -> Self? {
         guard let node = document.productMetadata.sceneNodes[nodeID],
@@ -92,7 +125,10 @@ struct ViewportBodyResizeBaseline: Sendable {
     @MainActor
     func mutation(action: ViewportAffordanceAction, from start: CGPoint, to end: CGPoint,
                   measure: some ViewportAffordanceMeasuring) throws -> Transform3D {
-        let sides = try sides(for: action)
+        let sides = try sides(for: action).filter { supports($0.0) }
+        guard !sides.isEmpty else {
+            throw RealityViewportSpatialBatch.invalid("A resize needs a nonzero bounds extent.")
+        }
         let anchor = try point(for: action)
         let delta: Vector3D
         if sides.count == 1 {

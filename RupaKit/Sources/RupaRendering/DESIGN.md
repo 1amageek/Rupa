@@ -36,6 +36,27 @@ predicate now belongs to [ViewportMeasurement](ViewportMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
+### Unified object controls
+
+Object-scope editing uses `emitBodyTransform` and `ViewportBodyTransformInput`
+for CAD bodies, authored meshes, and sketch occurrences. Arrows translate on
+world XYZ, colored inner markers scale about the bounds center, and colored
+arcs rotate about world XYZ. Dark face and gray corner markers keep opposite
+bounds fixed. Generic occurrences commit affine placement through the existing
+workspace transaction; editable boxes retain their source-dimension commit.
+An exactly zero bounds extent has no scale/face handle and contributes no
+factor to a corner resize. Coincident corners are emitted once. Crossing is
+signed; singular release is refused, never clamped. Cube behavior is unchanged.
+
+All paths share native geometry/handle preview and publication handoff. Source
+point and tangent editing remains separate. The older sketch-only callback
+and seven-handle route below are deprecated compatibility behavior, used only
+when no common placement callback is bound; the application binds the common
+callback. Remove this compatibility route when that public callback is removed.
+These rules supersede the historical sketch-only restrictions below.
+Verification must exercise the common producer, fixed-bound mutation,
+placement validation, native drag/cancel/release, and cube regressions.
+
 Box resize handles are distinct from occurrence scaling. Six dark face handles
 move one source-frame bound; eight gray corner handles measure displacement in
 the mounted camera's view plane and move the three incident bounds. Opposite

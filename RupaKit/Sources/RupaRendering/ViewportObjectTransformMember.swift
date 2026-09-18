@@ -11,4 +11,8 @@ struct ViewportObjectTransformMember: Sendable {
     let parentWorldTransform: Transform3D
     let bounds: ViewportObjectEditState
     var resize: ViewportBodyResizeBaseline? = nil
+    /// Bounds-only resize commits placement, never CAD source dimensions.
+    var placementResize: ViewportBodyResizeBaseline? = nil
+
+    var handleResize: ViewportBodyResizeBaseline? { resize ?? placementResize }
 }

@@ -127,6 +127,59 @@ struct ViewportSketchTransformLifecycleTests {
 
     // MARK: - Producer
 
+    @MainActor
+    @Test
+    func commonObjectControlsUseCubeRolesAndFixedOppositeBounds() throws {
+        let fixture = try makeFixture()
+        let raw = Source.RawInput(document: fixture.document, scene: fixture.scene,
+            selection: fixture.selection, ruler: fixture.ruler,
+            enabledRoutes: [.bodyTransform], interactiveRoutes: [.bodyTransform])
+        let (source, records) = try makeSource(raw)
+        let inputs = try records.map { try #require(try ViewportBodyTransformInput(record: $0)) }
+        #expect(inputs.count == 16) // Three translations/rotations, two scales, four faces/corners.
+        #expect(!inputs.contains { $0.action == .centerScale(.y) })
+        let colors: [ViewportCoordinateAxis: SIMD4<Float>] = [
+            .x: SIMD4(0.96, 0.26, 0.26, 1), .y: SIMD4(0.36, 0.92, 0.44, 1),
+            .z: SIMD4(0.32, 0.56, 1.0, 1)]
+        for axis in ViewportCoordinateAxis.allCases {
+            let arrow = try #require(source.markers.first {
+                guard case .objectTransform(_, .translate(axis)) = $0.identity else { return false }
+                return $0.shape == .cone
+            })
+            #expect(arrow.color == colors[axis])
+            let input = try #require(inputs.first { $0.action == .translate(axis) })
+            let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: .origin)
+            let mutation = try input.mutation(from: measure.projected(.origin),
+                to: measure.projected(.origin + axis.unitVector * 0.1), measure: measure)
+            let commit = try #require(try input.commits(mutation: mutation).first)
+            try commit.validate(in: fixture.document)
+            expectClose(try Algebra.transformedPoint(.origin, by: commit.localTransform),
+                        .origin + axis.unitVector * 0.1, "All arrows translate on their named world axis.")
+        }
+        #expect(source.cameraLines.allSatisfy { $0.objectPreviewOccurrenceID == fixture.item.id })
+        #expect(source.markers.allSatisfy { $0.objectPreviewOccurrenceID == fixture.item.id })
+        let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: .origin)
+        for input in inputs {
+            guard case .faceMove = input.action else { continue }
+            let resize = try #require(input.members.first?.handleResize)
+            let pressed = try resize.point(for: input.action)
+            let center = input.bounds.worldPoint(input.bounds.centerPoint)
+            let opposite = center + (center - pressed)
+            // Cross the opposite bound instead of stopping at collapse.
+            let delta = (opposite - pressed) * 1.5
+            let mutation = try input.mutation(from: measure.projected(pressed),
+                to: measure.projected(pressed + delta), measure: measure)
+            expectClose(try Algebra.transformedPoint(opposite, by: mutation), opposite,
+                        "The opposite surface remains fixed through crossing.")
+            expectClose(try Algebra.transformedPoint(pressed, by: mutation), pressed + delta,
+                        "The dragged surface follows the pointer through crossing.")
+            #expect(!input.isResize)
+            let commit = try #require(try input.commits(mutation: mutation).first)
+            try commit.validate(in: fixture.document)
+            #expect(try input.resizeCommit(mutation: mutation) == nil)
+        }
+    }
+
     @Test
     func sketchTransformRegistersOneRecordPerHandleWhileInteractive() throws {
         let fixture = try makeFixture()
@@ -602,9 +655,9 @@ struct ViewportSketchTransformLifecycleTests {
         let fixture = try makeFixture()
         let control = ViewportControlSession(camera: .init(projection: projection), basis: .axisFront(.y))
         let size = CGSize(width: 800, height: 600)
-        var commits: [ViewportSketchTransformDragTarget] = []
+        var commits: [ViewportBodyPlacementDragTarget] = []
         var canvasDrags = 0
-        var bodyPlacementCommits = 0
+        var legacyCommits = 0
         let viewport = Viewport(
             document: fixture.document,
             sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(1)),
@@ -615,12 +668,13 @@ struct ViewportSketchTransformLifecycleTests {
             allowsObjectAffordances: false,
             selectedPresentationHasExactCADContext: true,
             onCanvasDrag: { _ in canvasDrags += 1 },
-            onBodyPlacementCommit: { _ in
-                bodyPlacementCommits += 1
+            onBodyPlacementCommit: {
+                commits.append(contentsOf: $0)
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             },
             onSketchTransformCommit: {
-                commits.append($0)
+                _ = $0
+                legacyCommits += 1
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             }
         ).frame(width: size.width, height: size.height)
@@ -664,9 +718,10 @@ struct ViewportSketchTransformLifecycleTests {
         #expect(
             distance(moved, pointer.pivotWorld) > distance(pointer.cornerWorld, pointer.pivotWorld)
         )
-        // The press claimed the sketch handle, so neither the body-move route
-        // nor the canvas fallback ever saw this gesture.
-        #expect(bodyPlacementCommits == 0)
+        let opposite = pointer.pivotWorld + (pointer.pivotWorld - pointer.cornerWorld)
+        expectClose(try Algebra.transformedPoint(opposite, by: commit.localTransform), opposite,
+                    "The common corner keeps the opposite corner fixed.")
+        #expect(legacyCommits == 0)
         #expect(canvasDrags == 0)
 
         let surface = try #require(inputView(in: controller.view))
@@ -690,7 +745,7 @@ struct ViewportSketchTransformLifecycleTests {
         surface.mouseUp(with: try event(.leftMouseUp, at: pointer.end))
         try await Task.sleep(for: .milliseconds(800))
         #expect(commits.count == count)
-        #expect(bodyPlacementCommits == 0)
+        #expect(legacyCommits == 0)
     }
 
     @MainActor

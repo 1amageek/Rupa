@@ -46,7 +46,7 @@ public struct ViewportBodyPlacementDragTarget: Equatable, Sendable {
     /// Validates all coordinates used by the gesture against the current source.
     public func validate(in document: DesignDocument) throws {
         guard let node = document.productMetadata.sceneNodes[sceneNodeID],
-              reference.kind == .body || reference.kind == .authoredMesh,
+              reference.kind == .body || reference.kind == .authoredMesh || reference.kind == .sketch,
               node.reference == reference, !node.isLocked,
               node.localTransform == baseLocalTransform,
               try ViewportSceneNodeParentFrames(document: document)

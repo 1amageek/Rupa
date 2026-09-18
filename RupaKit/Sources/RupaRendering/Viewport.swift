@@ -4056,7 +4056,11 @@ public struct Viewport: View {
     }
 
     private var bodyTransformRouteEnabled: Bool {
-        onBodyPlacementCommit != nil && (presentationScene != nil || allowsObjectAffordances)
+        onBodyPlacementCommit != nil && (presentationScene != nil || allowsObjectAffordances
+            || (!selection.selectedTargets.isEmpty && selection.selectedTargets.allSatisfy {
+                $0.component == .object
+                    && document.productMetadata.sceneNodes[$0.sceneNodeID]?.reference?.kind == .sketch
+            }))
     }
 
     private func bodyTransformBaselineMatches(_ press: BodyTransformPress) -> Bool {

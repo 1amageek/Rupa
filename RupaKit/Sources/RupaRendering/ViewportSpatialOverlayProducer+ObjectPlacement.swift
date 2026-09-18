@@ -40,7 +40,7 @@ extension ViewportSpatialOverlayProducer {
             let bounds = ViewportObjectEditState(
                 xMin: CGFloat(world.minimum.x), xMax: CGFloat(world.maximum.x),
                 yMin: CGFloat(world.minimum.y), yMax: CGFloat(world.maximum.y),
-                zMin: CGFloat(world.minimum.z), zMax: CGFloat(world.maximum.z))
+                zMin: CGFloat(world.minimum.z), zMax: CGFloat(world.maximum.z), preservesZeroExtents: true)
             let resize: ViewportBodyResizeBaseline?
             if input.allowsBodyResize, selected.count == 1, case .cad(_, let output) = item.reference,
                output == reference.featureID?.description {
@@ -49,7 +49,8 @@ extension ViewportSpatialOverlayProducer {
             } else { resize = nil }
             members.append(.init(occurrenceID: item.occurrenceID.rawValue, reference: reference,
                                  sceneNodeID: nodeID, baseLocalTransform: node.localTransform,
-                                 parentWorldTransform: parent, bounds: bounds, resize: resize))
+                                 parentWorldTransform: parent, bounds: bounds, resize: resize,
+                                 placementResize: .placement(bounds: bounds, document: input.document)))
         }
         return admitted == selected ? members : nil
     }

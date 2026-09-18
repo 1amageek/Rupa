@@ -2573,7 +2573,8 @@ private extension ViewportSpatialOverlayProducer {
             let bounds = ViewportObjectEditState(
                 xMin: members.map { $0.bounds.xMin }.min()!, xMax: members.map { $0.bounds.xMax }.max()!,
                 yMin: members.map { $0.bounds.yMin }.min()!, yMax: members.map { $0.bounds.yMax }.max()!,
-                zMin: members.map { $0.bounds.zMin }.min()!, zMax: members.map { $0.bounds.zMax }.max()!)
+                zMin: members.map { $0.bounds.zMin }.min()!, zMax: members.map { $0.bounds.zMax }.max()!,
+                preservesZeroExtents: true)
             try emitBodyTransform(featureID: nil, selectionTarget: nil,
                 occurrenceID: members.count == 1 ? members[0].occurrenceID : nil,
                 modelTransform: .identity, edit: bounds, bodyMembers: [], groupEdit: nil,
@@ -2594,7 +2595,8 @@ private extension ViewportSpatialOverlayProducer {
             return item
         }
         let drawsBodyGizmo = input.presentationScene == nil && input.enabledRoutes.contains(.bodyTransform) && !bodyItems.isEmpty
-        let drawsSketchGizmo = input.enabledRoutes.contains(.sketchTransform) && !sketchItems.isEmpty
+        let drawsSketchGizmo = (input.enabledRoutes.contains(.sketchTransform)
+            || input.enabledRoutes.contains(.bodyTransform)) && !sketchItems.isEmpty
         guard drawsBodyGizmo || drawsSketchGizmo else { return }
         // One walk of the scene tree answers every transform gizmo in this
         // frame, and it is taken only when the frame draws at least one. Both
@@ -2659,6 +2661,35 @@ private extension ViewportSpatialOverlayProducer {
 
         guard drawsSketchGizmo else { return }
         for item in sketchItems {
+            if input.interactiveRoutes.contains(.bodyTransform) {
+                guard let frame = try sceneNodeCommitFrames(item: item, parentFrames: parentFrames, input: input),
+                      let reference = input.document.productMetadata.sceneNodes[frame.sceneNodeID]?.reference else { continue }
+                let rect = item.modelBounds
+                let points = [Point3D(x: rect.minX, y: 0, z: rect.minY),
+                              Point3D(x: rect.maxX, y: 0, z: rect.minY),
+                              Point3D(x: rect.minX, y: 0, z: rect.maxY),
+                              Point3D(x: rect.maxX, y: 0, z: rect.maxY)]
+                    .map { item.modelTransform.viewportTransformedPoint($0) }
+                guard points.allSatisfy(isFinitePoint) else {
+                    throw RealityViewportSpatialBatch.invalid("Object bounds are not finite.")
+                }
+                let bounds = ViewportObjectEditState(
+                    xMin: points.map(\.x).min()!, xMax: points.map(\.x).max()!,
+                    yMin: points.map(\.y).min()!, yMax: points.map(\.y).max()!,
+                    zMin: points.map(\.z).min()!, zMax: points.map(\.z).max()!, preservesZeroExtents: true)
+                let member = ViewportObjectTransformMember(occurrenceID: item.id, reference: reference,
+                    sceneNodeID: frame.sceneNodeID, baseLocalTransform: frame.baseLocalTransform,
+                    parentWorldTransform: frame.parentWorldTransform, bounds: bounds,
+                    placementResize: .placement(bounds: bounds, document: input.document))
+                try emitBodyTransform(featureID: nil, selectionTarget: nil, occurrenceID: item.id,
+                    modelTransform: item.modelTransform, edit: bounds, bodyMembers: [], groupEdit: nil,
+                    placement: nil, objectMembers: [member], input: input, interactionRecords: &interactionRecords,
+                    checkpoint: checkpoint, worldLines: &worldLines, cameraLines: &cameraLines,
+                    cameraPaths: &cameraPaths, markers: &markers)
+                continue
+            }
+            // Deprecated compatibility route for clients binding only the old sketch callback.
+            // The application binds the common placement callback above.
             try emitSketchTransform(
                 item: item,
                 parentFrames: parentFrames,
@@ -2693,8 +2724,8 @@ private extension ViewportSpatialOverlayProducer {
         let firstCameraLine = cameraLines.count
         let firstMarker = markers.count
         var corners = edit.worldBoxCorners
-        if input.allowsBodyResize, let member = objectMembers?.first,
-           objectMembers?.count == 1, let resize = member.resize {
+        if let member = objectMembers?.first,
+           objectMembers?.count == 1, let resize = member.handleResize {
             let vertices: [ViewportBodyVertex] = [.frontBottomLeft, .frontBottomRight,
                 .backBottomLeft, .backBottomRight, .frontTopLeft, .frontTopRight, .backTopLeft, .backTopRight]
             corners = try vertices.map { vertex in
@@ -2826,6 +2857,13 @@ private extension ViewportSpatialOverlayProducer {
                 to: &markers,
                 checkpoint: checkpoint
             )
+            let extent: CGFloat
+            switch axis {
+            case .x: extent = edit.xMax - edit.xMin
+            case .y: extent = edit.yMax - edit.yMin
+            case .z: extent = edit.zMax - edit.zMin
+            }
+            guard extent > 0 else { continue }
             let centerIdentity = try affordance(.centerScale(axis))
             try appendMarker(
                 .init(
@@ -2850,11 +2888,9 @@ private extension ViewportSpatialOverlayProducer {
             )
         }
 
-        if input.allowsBodyResize, let member = objectMembers?.first,
-           objectMembers?.count == 1, let resize = member.resize {
-            let actions = ViewportBodyFace.allCases.filter { $0 != .side }.map(ViewportAffordanceAction.faceMove)
-                + ViewportBodyVertex.allCases.map(ViewportAffordanceAction.vertexMove)
-            for action in actions {
+        if let member = objectMembers?.first,
+           objectMembers?.count == 1, let resize = member.handleResize {
+            for action in resize.handleActions {
                 let identity = try affordance(action)
                 let anchor = try resize.point(for: action)
                 let color: SIMD4<Float>
