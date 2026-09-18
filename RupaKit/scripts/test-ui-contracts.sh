@@ -3,6 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # Run only reviewed contracts and hidden hosts; never substitute a whole target.
 bash scripts/check-ui-test-isolation.sh
+ruby scripts/check-ui-contract-selection.rb --self-test
+ruby scripts/check-ui-contract-selection.rb
 ruby scripts/check-ui-test-results.rb --self-test
 result_dir=$(mktemp -d "${TMPDIR:-/tmp}/rupa-ui-contracts.XXXXXX")
 echo "Results: $result_dir"

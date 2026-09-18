@@ -6,7 +6,13 @@ Run `bash scripts/test-ui-contracts.sh` from RupaKit. This is the supported
 UI verification entry point, not the App scheme's empty Test action.
 It runs reviewed identifiers in bounded batches, checks every requested
 identifier in xcresult, and rejects zero results, missing tests, skips and
-failures. Static isolation checks run before compilation.
+failures. Static isolation checks run before compilation, and so does a
+selection check. `scripts/ui-contract-tests.txt` is the only record of what
+this entry point runs, so every identifier in it must name a test the sources
+still declare, under the suite the identifier names, exactly once, in one of
+the two supported targets. A test that is renamed, moved or deleted without
+the manifest following it is then reported in a second, before any batch is
+built, instead of surfacing minutes later as a result that never arrived.
 
 ```text
 Production view / hidden native host
@@ -145,13 +151,25 @@ modeling controls through the in-process accessibility traversal. It is not
 counted as coverage. Those activations remain in the manual ledger; no direct
 callback or fake accessibility tree is substituted for the missing proof.
 
-On macOS 27.0, all 224 selected test functions have passing runtime evidence:
-60 RupaUIPackageTests and 164 RupaRenderingTests. Parameterized executions are
-not counted as additional functions. No selected identifier is missing, skipped
+On macOS 27.0, the 224 identifiers selected at the time of that run have
+passing runtime evidence: 60 RupaUIPackageTests and 164 RupaRenderingTests.
+Those counts describe that run, not the current manifest. An identifier
+selected afterwards owes its own evidence and does not inherit this
+paragraph's. Parameterized executions are not counted as additional
+functions. No selected identifier is missing, skipped
 or left failing. This is reconciled evidence, not a claim that every initial
 batch passed: two fixture failures in the integration run were closed by focused
 reruns after fixing readiness/layout pumping. A separate red/green native
 remount test proved the production owner-removal correction.
+
+Three selected identifiers were renamed in the sources afterwards without the
+manifest following them, and the selection check named all three the first time
+it ran against the real manifest. The manifest now carries
+`axisScalingCrossesItsPivotButDoesNotCommitCollapse(centered:axis:)`,
+`rotationCommitsGeometryRatherThanOnlyAnOrientationPreview(axis:)` and
+`pendingSketchMutationRetainsOneNativeBaselineForGeometryAndHandles()`, and
+those three were run by themselves on macOS 27.0 and read by the exact-result
+verifier, which reported three passing functions and no skip or failure.
 
 Evidence (22 result bundles):
 
@@ -159,9 +177,10 @@ Evidence (22 result bundles):
 - `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-remaining.y7VYPS/`
 - `/tmp/rupa-hidden-frame-readiness-20260917.xcresult`
 - `/tmp/rupa-hidden-face-layout-20260917.xcresult`
+- `t13-rename.xcresult` for the three renamed identifiers
 
 The full invocation also ran one pre-existing, uncommitted saved-view test;
-it passed but is excluded from the 224-function replacement manifest and proof.
+it passed but is excluded from that run's replacement manifest and proof.
 Passed tests whose assumptions did not change were not repeated after the two
 local fixture fixes. Actual GPU evidence includes native axes texture readback,
 materials, spatial resources, camera calibration and frame/selection tests.
