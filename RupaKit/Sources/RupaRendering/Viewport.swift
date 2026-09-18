@@ -272,6 +272,7 @@ public struct Viewport: View {
     private let onProjectedGridStepChange: ((Double) -> Void)?
     private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
     private let onNativeGestureRefusal: ((any Error) -> Void)?
+    private let onPresentationFailure: ((any Error) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
     private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
     private let selectedPresentationHasExactCADContext: Bool
@@ -467,7 +468,8 @@ public struct Viewport: View {
         onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
         onProjectedGridStepChange: ((Double) -> Void)? = nil,
         onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
-        onNativeGestureRefusal: ((any Error) -> Void)? = nil
+        onNativeGestureRefusal: ((any Error) -> Void)? = nil,
+        onPresentationFailure: ((any Error) -> Void)? = nil
         ) {
         self.controlSession = controlSession
         self._localControlSession = State(
@@ -604,6 +606,7 @@ public struct Viewport: View {
         self.onProjectedGridStepChange = onProjectedGridStepChange
         self.onMeasurementStateChange = onMeasurementStateChange
         self.onNativeGestureRefusal = onNativeGestureRefusal
+        self.onPresentationFailure = onPresentationFailure
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
             sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
@@ -617,7 +620,7 @@ public struct Viewport: View {
     @ViewBuilder
     public var body: some View {
         if let failure = sourceValidationFailure {
-            presentationFailureOverlay(error: failure, previewFailureMessage: nil)
+            presentationFailureReporter(error: failure, previewFailureMessage: nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(viewportBackground)
         } else {
@@ -750,8 +753,8 @@ public struct Viewport: View {
                         viewportBadgeOverlay(scaleReadout: gridReadout, chromeLayout: chromeLayout)
                     }
                 }
-                .overlay(alignment: .topTrailing) {
-                    presentationFailureOverlay(
+                .background {
+                    presentationFailureReporter(
                         error: presentationFailure,
                         previewFailureMessage: previewEvaluationCache.failureMessage(for: dragPreviewRevision)
                     )
@@ -2443,23 +2446,21 @@ public struct Viewport: View {
         return published.disabled
     }
 
-    @ViewBuilder
-    private func presentationFailureOverlay(
+    func presentationFailureReporter(
         error: MeshSourcePresentationRenderError?,
         previewFailureMessage: String?
     ) -> some View {
-        if let message = error?.localizedDescription ?? previewFailureMessage {
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(Color.red)
-                .padding(8.0)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8.0))
-                .padding(12.0)
-                .accessibilityIdentifier(error == nil ? "CanvasPreviewFailure" : "CanvasPresentationFailure")
-                .accessibilityLabel(error == nil ? "Preview geometry unavailable" : "Presentation geometry unavailable")
-                .accessibilityValue(message)
-                .allowsHitTesting(false)
+        let failure = error ?? previewFailureMessage.map {
+            MeshSourcePresentationRenderError(code: .failed, message: $0)
         }
+        return Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onChange(of: failure, initial: true) { _, _ in
+                guard let failure else { return }
+                Self.nativeGestureLogger.error("Viewport presentation failed: \(failure.localizedDescription, privacy: .public)")
+                onPresentationFailure?(failure)
+            }
     }
 
     private func measurementDistanceMeters(

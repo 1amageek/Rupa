@@ -635,6 +635,14 @@ private struct ProjectMainViewContent: View {
         failureLog.record(error, operation: operation)
     }
 
+    private func reportViewportPresentationFailure(_ error: any Error) {
+        reportToolStatus(
+            recordFailure(error, operation: "Viewport.presentation"),
+            severity: .error,
+            recordsFailure: false
+        )
+    }
+
     /// Publishes a tool status line. `.info` is progress; anything else is a
     /// refused operation and is recorded unless the caller already recorded it
     /// with the originating error.
@@ -1727,7 +1735,8 @@ private struct ProjectMainViewContent: View {
                         objectSelectionIndex: ViewportObjectSelectionIndex(document: payload.document, selection: .empty),
                         canvasDragPreviewKind: nil,
                         allowsObjectAffordances: false,
-                        selectedPresentationHasExactCADContext: false
+                        selectedPresentationHasExactCADContext: false,
+                        onPresentationFailure: reportViewportPresentationFailure
                     )
                     .overlay(alignment: .topLeading) {
                         Label("Preview — not applied", systemImage: "eye")
@@ -1927,7 +1936,8 @@ private struct ProjectMainViewContent: View {
                     severity: .warning,
                     recordsFailure: false
                 )
-            }
+            },
+            onPresentationFailure: reportViewportPresentationFailure
         )
     }
 

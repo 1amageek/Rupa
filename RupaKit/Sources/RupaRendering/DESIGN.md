@@ -355,6 +355,11 @@ independent tessellator is never an alternative implementation.
 
 ## Contracts and Invariants
 
+Presentation, source-validation and preview failures are reported to the owning
+workspace log, never as text over the canvas. Reporting is edge-triggered:
+unchanged failure state is not repeated; recovery permits a later recurrence.
+Failure state still gates rendering and interaction independently of reporting.
+
 ### Source edit visual semantics
 
 Sketch/path editing markers use white outlines for available points, yellow for

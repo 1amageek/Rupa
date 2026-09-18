@@ -1,4 +1,5 @@
 # Progress
+- [x] CANVAS-ERROR-1 Routed source/render/preview failures to existing Logs, removed canvas error text, preserved failure gates. Hidden-host transition/recovery test and app build passed. Commit: fix: route viewport failures to workspace logs. `depends:none` `parallel:none`
 - [x] GEOMETRY-FEEDBACK-1 White/yellow edit outlines, neutral guides, callback-gated handles, and native sketch placement/handle synchronization with cube publication handoff. Native lifecycle/GPU tests and color checks passed; app build passed. Commit: fix: synchronize sketch transform feedback and clarify edit handles. Individual point/tangent source-edit preview remains GEOMETRY-EDIT-3. `depends:none` `parallel:none`
 - [x] CANVAS-CHROME-1 Navigation isolation: 53354fb6c; zero-size startup capture fixed and verified in `fix: defer camera capture until viewport size is valid`. `depends:none` `parallel:none`
 - [x] CANVAS-STABLE-1 Retained camera scale independent of geometry; focused control and mounted native projection passed. Commit 33b4a3861. `depends:none` `parallel:none`
