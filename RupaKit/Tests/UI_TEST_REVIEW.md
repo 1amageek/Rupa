@@ -171,6 +171,11 @@ it ran against the real manifest. The manifest now carries
 those three were run by themselves on macOS 27.0 and read by the exact-result
 verifier, which reported three passing functions and no skip or failure.
 
+The two guards that hold canvas and construction-plane drag snapping to the
+caller's evaluation context are selected as well. They were run by themselves
+on macOS 27.0 and read by the same verifier, which reported two passing
+functions and no skip or failure.
+
 Evidence (22 result bundles):
 
 - `/var/folders/c4/bcbjzcj556d3xj45z64rzjmw0000gn/T/rupa-ui-contracts.GzrSbt/`
@@ -178,6 +183,7 @@ Evidence (22 result bundles):
 - `/tmp/rupa-hidden-frame-readiness-20260917.xcresult`
 - `/tmp/rupa-hidden-face-layout-20260917.xcresult`
 - `t13-rename.xcresult` for the three renamed identifiers
+- `t13b-drag.xcresult` for the two drag snap guards
 
 The full invocation also ran one pre-existing, uncommitted saved-view test;
 it passed but is excluded from that run's replacement manifest and proof.
