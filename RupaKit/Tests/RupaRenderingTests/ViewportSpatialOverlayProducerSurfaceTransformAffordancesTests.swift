@@ -955,11 +955,17 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
     // The sketch here names a scene node the document does not hold, so a
     // commit has no address to send. That is the route's documented no-handle
     // branch: it draws the bounds outline and registers nothing, rather than
-    // offering a handle whose drag could not be applied.
-    #expect(source.worldLines.contains { $0.route == .sketchTransform && $0.closed })
-    #expect(source.worldLines.filter { $0.route == .sketchTransform && $0.identity != nil }.isEmpty)
-    #expect(source.worldLines.filter { $0.route == .sketchTransform }.allSatisfy { $0.hitTolerancePoints == nil })
-    #expect(source.cameraLines.filter { $0.route == .sketchTransform }.isEmpty)
+    // offering a handle whose drag could not be applied. The outline is
+    // camera-anchored so it keeps its screen width at any zoom, and it closes
+    // by repeating its first corner rather than by carrying a closed flag.
+    let sketchOutlines = source.cameraLines.filter { $0.route == .sketchTransform }
+    #expect(sketchOutlines.count == 1)
+    let sketchOutline = try #require(sketchOutlines.first)
+    #expect(sketchOutline.points.count == 5)
+    #expect(sketchOutline.points.first?.anchor == sketchOutline.points.last?.anchor)
+    #expect(sketchOutline.identity == nil)
+    #expect(sketchOutline.hitTolerancePoints == nil)
+    #expect(source.worldLines.filter { $0.route == .sketchTransform }.isEmpty)
     #expect(source.markers.filter { $0.route == .sketchTransform }.isEmpty)
     #expect(!interactionRecords.contains { record in
         if case .sketchTransform = record.target { return true }
@@ -991,9 +997,11 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty)
-    // Neither route emits camera-anchored geometry here: the construction plane
-    // draws in world space, and the outline-only sketch draws no gizmo.
-    #expect(cameraLines.isEmpty)
+    // The construction plane draws in world space, so the outline-only sketch
+    // is the single camera-anchored line here, and it carries no handle index
+    // because the route registered nothing to drag.
+    #expect(cameraLines.count == 1)
+    #expect(cameraLines[0].value.handleIndex == nil)
     #expect(families.contains(.construction))
     #expect(families.contains(.transform))
 }
