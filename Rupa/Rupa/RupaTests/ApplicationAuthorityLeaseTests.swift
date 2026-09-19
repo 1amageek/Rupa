@@ -14,6 +14,7 @@ func applicationAuthorityLeaseRejectsASecondOwnerAndReleasesOnDeinit() throws {
     let expectedLockURL = directory.standardizedFileURL.appendingPathComponent(
         ApplicationAuthorityLease.lockFileName
     )
+    #expect(first?.lockFileURL == expectedLockURL)
 
     #expect(throws: ApplicationAuthorityLeaseError.alreadyRunning(expectedLockURL)) {
         try ApplicationAuthorityLease.acquire(in: directory)

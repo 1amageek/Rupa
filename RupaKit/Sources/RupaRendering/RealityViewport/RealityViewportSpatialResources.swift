@@ -1808,12 +1808,25 @@ final class RealityViewportSpatialResources {
     private static func textResource(_ value: String, cache: inout [String: MeshResource]) async throws -> MeshResource {
         try Task.checkCancellation()
         if let existing = cache[value] { return existing }
-        var text = AttributedString(value)
         // Shape extrusion emits one mesh unit per `textPointsPerMeshUnit`
         // typographic points, so sizing the font at that value makes one em
         // exactly one unit. Callers scale the glyph by their requested point
         // height, which therefore names the font size the label is drawn at.
-        text.font = NSFont.monospacedSystemFont(ofSize: Self.textPointsPerMeshUnit, weight: .medium)
+        //
+        // The font enters through the untyped legacy attribute dictionary
+        // because the typed AppKit attribute requires a `Sendable` value and
+        // `NSFont` ships that conformance as unavailable. Extrusion reads the
+        // same AppKit font attribute from either spelling.
+        let styled = NSAttributedString(
+            string: value,
+            attributes: [
+                .font: NSFont.monospacedSystemFont(
+                    ofSize: Self.textPointsPerMeshUnit,
+                    weight: .medium
+                )
+            ]
+        )
+        let text = try AttributedString(styled, including: \.appKit)
         var extrusion = MeshResource.ShapeExtrusionOptions()
         extrusion.extrusionMethod = .linear(depth: 0)
         let resource = try await MeshResource(extruding: text, extrusionOptions: extrusion)

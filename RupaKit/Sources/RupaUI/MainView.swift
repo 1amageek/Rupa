@@ -203,7 +203,6 @@ private struct ProjectMainViewContent: View {
         newProject: @escaping @MainActor () -> Void = {}
     ) {
         let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
-        let ruler = snapshot.workspaceState.ruler.normalizedForWorkspaceScale()
         self.workspace = workspace
         self.snapshot = snapshot
         self.operationSequencer = operationSequencer
