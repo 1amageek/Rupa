@@ -2,7 +2,7 @@
 
 - [x] S1 Product hierarchy lifecycle (group, ungroup, delete) reachable from the workspace. Commit b700eade. `depends:none` `parallel:none`
 - [x] S2 Editor commands reachable from the workspace menus and keys: Escape unwinding, selection scope keys, the Tools menu with per-tool prompts, and the answered construction plane key. Commit c3e35355. `depends:S1` `parallel:none`
-- [x] S3 What the workspace says reaches the screen, and the canvas stops carrying build notes. `depends:S1` `parallel:none`
+- [x] S3 What the workspace says reaches the screen, and the canvas stops carrying build notes. Commit 8f6b2fa1. `depends:S1` `parallel:none`
 - [ ] S4 Workspace chrome: inspector width, folded rail, header and status line `depends:S1` `parallel:none`
   - [ ] S4.1 Inspector keeps a fixed pane width `depends:none` `parallel:none`
   - [ ] S4.2 Folded utility rail keeps its functions `depends:none` `parallel:s4-chrome`
