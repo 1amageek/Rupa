@@ -1226,9 +1226,9 @@ final class RealityViewportSpatialResources {
                 entity.isEnabled = false
                 continue
             }
-            // The collider is a child of this entity and both the collision
-            // bounds union and the projected handle distance read live
-            // transforms, so moving the parent needs no separate bookkeeping.
+            // The collider is a sibling, so the loop below re-derives its
+            // placement from this entity's position after each move. The
+            // scale set here stays visual and never reaches the tolerance.
             entity.position = placement.position
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
