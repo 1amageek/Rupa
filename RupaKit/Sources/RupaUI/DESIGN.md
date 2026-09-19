@@ -120,7 +120,7 @@ evaluation-quality resolver; it does not change the CAD radius.
 
 ### Viewport-side tool routing
 
-The left palette has eleven explicit routes. Activation may be a nonmutating
+The left palette has twelve explicit routes. Activation may be a nonmutating
 mode change; completeness means that the next required input, the resulting
 state or command, and the applicable refusal and cancellation path are visible.
 The palette does not own source state, perform rendering preparation, or bypass
@@ -131,6 +131,7 @@ The palette does not own source state, perform rendering preparation, or bypass
 | Select | Selection scope and a viewport hit, or a drag on an object-scope transform gizmo | A hit changes the existing interaction selection and does not mutate the source; an object-scope body or sketch transform drag commits one scene-node transform command through Workspace | Unresolved or stale hits report a reason; a refused transform commit is a typed editor error that leaves the document untouched; choosing another tool or leaving object scope withdraws the gizmo route |
 | Sketch | Click or drag, effective plane, snap, width and height | Rectangle sketch through the existing viewport planner and Workspace | Nonfinite or degenerate input is nonmutating; Select cancels before submission |
 | Polygon | Click or drag plus side, sizing, inclination and optional face-cut settings | Polygon sketch, or the existing face split when a valid face is targeted | Invalid side/face/input reports a reason without mutation; Select cancels before submission |
+| Circle | Click for a center, taking the active length or the scale default as radius, or drag from center to edge for a measured radius on the effective plane | Circle sketch through the existing planner and Workspace | Nonfinite coordinates, or a drag radius that is not positive, are typed refusals that mutate nothing; Select cancels before submission |
 | Arc | Click or drag plus radius/span and plane settings | Arc sketch through the existing planner | Invalid or degenerate input is nonmutating; Select cancels before submission |
 | Spline | Click or drag plus plane, snap and existing curve input | Spline sketch through the existing planner | Invalid or degenerate input is nonmutating; Select cancels before submission |
 | Solid | Empty-space click/drag for a box, or a valid sketch target for extrusion | Existing box or profile-extrusion command through Workspace | Unsupported target/input reports a reason; Select cancels before submission |
@@ -351,8 +352,9 @@ in one source command array through MainView's existing transaction boundary.
 The choice either commits in full with one Undo entry or leaves source and
 history unchanged. The view emits intent once, not once per selected node;
 busy controls cannot submit another property mutation. Picker Binding tests
-verify the emitted batch and Workspace publication, rollback and Undo/Redo;
-App UI tests own native control activation.
+verify the emitted batch and Workspace publication, rollback and Undo/Redo.
+Native control activation has no test owner while the App UI runner stays
+retired; it is a manual check in the UI test review.
 XYZ rotation, translation and scale preserve the remaining components,
 including the shear owned by Core's affine placement convention. The inspector
 shows retained XY/XZ/YZ shear values rather than hiding all numeric controls.
@@ -722,35 +724,38 @@ measured height. Neither check is sound without the other.
 
 ### UI operation ownership
 
-The workspace exposes thirty-three operations: eleven canvas tools, seven
+The workspace exposes thirty-four operations: twelve canvas tools, seven
 utility rail destinations, ten Model drafts, and five Mesh drafts. Each row
 names the control a user clicks and the test that owns that control's
 contract, and records what the evidence for that operation actually covers. A
-package test owns the command a control produces; an App UI test owns the fact
-that the shipped control reaches it.
+package test owns the command a control produces. Nothing owns the fact that
+the shipped control reaches it: the App UI runner is retired, so that half of
+every row is currently unowned.
 
 | Family | Operations | Control identifier | Owning test | Evidence |
 |---|---|---|---|---|
-| Canvas tool | `select`, `solid` | `CanvasTool.select`, `CanvasTool.solid` | `AppProjectRoundTripUITests` | GUI-success verified |
-| Canvas tool | `sketch` | `CanvasTool.sketch` | `AppUITests.testActiveCustomConstructionPlaneLaunchFixtureSupportsCanvasCreation` | GUI-success verified |
-| Canvas tool | `surface`, `mesh` | `CanvasTool.surface`, `CanvasTool.mesh` | `AppUITests`, draft and refusal only, nothing committed | activation/refusal verified |
-| Canvas tool | `polygon`, `arc`, `spline`, `sweep`, `section` | `CanvasTool.<case>` | `WorkspaceCanvasCommandPlannerTests` | lower-layer verified on a GUI-verified bridge |
-| Canvas tool | `measure` | `CanvasTool.measure` | `AppOperationCoverageUITests.testMeasureToolReportsDistanceBetweenTwoPointsOnABody` | GUI-success verified |
-| Rail destination | `controls`, `selection` | `WorkspaceUtilityRail.expand`, `WorkspaceUtilityRail.selection` | `AppProjectRoundTripUITests` | GUI-success verified |
-| Rail destination | `snap`, `views`, `plane`, `analysis`, `scene` | `WorkspaceUtilityRail.<case>` | `WorkspaceUtilityRailDestinationTests` | source-audit verified, by contract |
-| Rail section body | Snap toggles, saved views, active plane name | `WorkspaceSnap.*`, `WorkspaceSavedView.*`, `WorkspacePlane.activeName` | `AppUITests` | GUI-success verified |
-| Rail section body | Surface analysis overlay and sample density | `WorkspaceSurfaceAnalysis.<option>`, `WorkspaceSurfaceAnalysis.density.<density>` | `AppOperationCoverageUITests.testAnalysisAndSceneRailSectionsPublishControlsAndReadouts` | GUI-success verified |
-| Rail section body | Analysis and Scene readouts | `WorkspaceAnalysis.<row>`, `WorkspaceScene.<row>` | `AppOperationCoverageUITests.testAnalysisAndSceneRailSectionsPublishControlsAndReadouts` | GUI-success verified, read-only |
-| Model draft | box, cylinder, sphere, extrude, revolve, sweep, loft, boolean, fillet, chamfer | `Modeling.begin.<title>` | `AppOperationCoverageUITests.testModelMenuPublishesEveryDraftAndCommitsABoxFromTheToolbar`, `ModelingOperationDraftTests` | GUI-success verified for box, lower-layer verified for the other nine |
-| Mesh draft | translate, position, extrude, delete, addFace | `Modeling.mesh` panel | `AppOperationCoverageUITests.testMeshEditingPanelCommitsAFaceDeletionFromTheCADRoute`, `MeshOperationDraftTests` | GUI-success verified for delete, lower-layer verified for the other four |
+| Canvas tool | `sketch`, `polygon`, `circle`, `arc`, `spline`, `solid`, `sweep`, `section` | `CanvasTool.<case>` | `WorkspaceCanvasCommandPlannerTests` | lower-layer verified |
+| Canvas tool | `surface` | `CanvasTool.surface` | `WorkspaceCanvasCommandPlannerTests` for the canvas refusal, `ModelingOperationDraftTests` for the sheet loft it defers to | lower-layer verified, nothing committed from the canvas |
+| Canvas tool | `select` | `CanvasTool.select` | `WorkspaceCanvasCommandPlannerTests` for the absent canvas command, `ViewportBodyTransformInputTests` and `ViewportSelectionDragFrameReadinessTests` for the gizmo drag | lower-layer verified |
+| Canvas tool | `measure` | `CanvasTool.measure` | `ViewportMeasurementTests`, `WorkspaceMeasurementPresentationGateTests` | lower-layer verified |
+| Canvas tool | `mesh` | `CanvasTool.mesh` | `WorkspaceCanvasCommandPlannerTests` for the absent canvas command, `MeshOperationDraftTests` and `ModelingAndMeshOperationCoverageTests` for the element route | lower-layer verified |
+| Rail destination | `controls`, `selection`, `snap`, `views`, `plane`, `analysis`, `scene` | `WorkspaceUtilityRail.<case>` | `WorkspaceUtilityRailDestinationTests` | source-audit verified, by contract |
+| Rail section body | Saved views | `WorkspaceSavedView.*` | the `workspaceSavedViewBuilder*` tests in `RupaUIPackageTests` | lower-layer verified |
+| Rail section body | Snap toggles | `WorkspaceSnap.*` | none | unverified |
+| Rail section body | Active plane name | `WorkspacePlane.activeName` | none | unverified, read-only |
+| Rail section body | Surface analysis overlay and sample density | `WorkspaceSurfaceAnalysis.<option>`, `WorkspaceSurfaceAnalysis.density.<density>` | none | unverified |
+| Rail section body | Analysis and Scene readouts | `WorkspaceAnalysis.<row>`, `WorkspaceScene.<row>` | none | unverified, read-only |
+| Model draft | box, cylinder, sphere, extrude, revolve, sweep, loft, boolean, fillet, chamfer | `Modeling.begin.<title>` | `ModelingOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
+| Mesh draft | translate, position, extrude, delete, addFace | `Modeling.mesh` panel | `MeshOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
 
-Five statuses classify the rows. GUI-success verified means an App UI test
-drives the shipped control and observes the result. Lower-layer verified
-means a package test owns what the operation produces and no App UI test
-drives the control that reaches it. Activation/refusal verified means an App
-UI test opens the operation and observes its refusal, with nothing committed.
-Unverified means no test of either kind reaches the operation. No row is
-broken in the sense of an observed failure, and structure alone does not
+Three statuses classify the rows. Lower-layer verified means a package test
+owns what the operation produces and nothing drives the shipped control that
+reaches it. Source-audit verified means a package test reads the shipped
+sources for a claim no runtime test can observe. Unverified means no test of
+either kind reaches the operation. No row can claim GUI evidence while the App
+UI runner stays retired; the scenarios that once carried it are recorded in
+[the UI test review](../../Tests/UI_TEST_REVIEW.md). No row is broken in the
+sense of an observed failure, and structure alone does not
 license the stronger claim that nothing is broken, so every row carries an
 evidence state rather than a verdict.
 
@@ -761,11 +766,12 @@ GUI evidence. `WorkspaceToolPalette` builds every button from one
 tool to `setActiveTool`. `handleViewportPick` routes every tool other than
 `select` and `mesh` through one `submitSource` into
 `WorkspaceCanvasCommandPlanner.clickCommand(tool:)`, which branches on all
-eleven cases with no default. `solid` and `sketch` prove that bridge from the
-GUI and `WorkspaceCanvasCommandPlannerTests` owns each per-tool branch, so a
-tool whose branch is proven reaches the GUI over a route another tool has
-already exercised. `measure` is the exception, because `clickCommand` returns
-nil for it; its route runs through `measurementToolActive` into the viewport
+twelve cases with no default. `WorkspaceCanvasCommandPlannerTests` owns each
+per-tool branch, so every tool is proven at the command it produces and all of
+them share one route. Nothing proves that the palette button reaches that
+route; that is the half the retired App UI runner used to close. `measure` is
+the exception, because `clickCommand` returns nil for it; its route runs
+through `measurementToolActive` into the viewport
 and back out as `WorkspaceMeasure.distance`. A measurement click needs a point
 the viewport can anchor, and clicking empty space with no construction plane is
 refused with "Choose a construction plane before measuring empty space.", so a
@@ -782,11 +788,11 @@ open draft, forces `selectedTool` to `.select`, and stores a
 `ModelingOperationDraft` whose only per-kind input is the kind. Every draft
 therefore opens the same `ModelingOperationView` at `Modeling.operation` and
 commits over the same `Modeling.preview` and `Modeling.apply` pair.
-`AppOperationCoverageUITests` reads all ten `Modeling.begin.*` items from the
-shipped menu and drives one of them to a committed feature, and
-`ModelingOperationDraftTests` owns each per-kind command, so a kind whose
-command is proven reaches the GUI over a route another kind has already
-exercised. `CanvasTool.surface` lands on the same bridge, because
+`ModelingOperationDraftTests` and `ModelingAndMeshOperationCoverageTests` own
+each per-kind command, so every kind is proven at the command it produces and
+all of them share one presentation route. Nothing reads the shipped menu, so
+nothing proves that the ten `Modeling.begin.*` items still publish that route.
+`CanvasTool.surface` lands on the same bridge, because
 `beginSurfaceModelingOperation` stores a `modelingDraft` that the same view
 presents and the same `Modeling.apply` commits.
 
@@ -827,18 +833,14 @@ path as `WorkspaceAnalysis.target`, `.overlay`, `.samples` and
 `WorkspaceScene.bodies`, `.nodes`, `.issues`, which is what lets a test read
 the overlay summary and the sample density change when a control is clicked.
 
-Two limitations that once blocked App UI evidence are resolved, and the
-measurements that closed them define three contracts an App UI test depends
-on.
+The App `RupaUITests` runner is retired, so no row above carries GUI evidence,
+and `scripts/test-ui-contracts.sh` is the supported verification entry point.
+The three facts below are measured properties of the shipped chrome rather than
+of any runner, so they stay true while no runner exists and any runner written
+against them inherits them.
 
-The App `RupaUITests` runner previously connected with Automation Mode enabled.
-That runner is now retired. The App-test rows above are historical evidence,
-not current-source acceptance; their current verification owners and remaining
-manual checks are listed in the UI test review.
-
-`AppUITests` looks the canvas up one way. `CanvasViewport` resolves as a
-`Group`, so `otherElements["CanvasViewport"]` matches nothing and every call
-site uses `descendants(matching: .any)`.
+`CanvasViewport` resolves as a `Group`, so `otherElements["CanvasViewport"]`
+matches nothing and a lookup must use `descendants(matching: .any)`.
 
 A body face or edge marker reports where that sub-shape projects and takes no
 pointer input, which `RupaRendering` owns as the marker contract. A test that
@@ -863,11 +865,11 @@ The inspector is open when the workspace launches and
 `WorkspaceCommand.inspector` toggles it, so a test that needs the inspector
 checks for the content it wants before deciding to click.
 
-`AppOperationCoverageUITests` owns one invariant per route it covers. The
+Four route invariants have no owner while the App UI runner stays retired. The
 Model menu publishes all ten drafts and one of them commits a feature. The
 Analysis controls change the overlay and density readouts in the same
 expansion that publishes the Scene readouts. The measure tool reports a
 distance between two points on a body. The CAD-to-mesh route opens
 `Modeling.mesh` with an element selected and commits one mesh operation. Each
-test builds what it needs from the shipped chrome, so none of them depends on
-a launch fixture.
+is stated so that it can be built from the shipped chrome, so claiming it needs
+no launch fixture.
