@@ -5807,35 +5807,6 @@ private func twoCircleConstraintCommandDocument(
 }
 
 @MainActor
-@Test func moveBodyTranslatesExtrudedBoxProfileSketch() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first {
-        $0.value.reference == .body(bodyFeatureID)
-    }?.key)
-    let before = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
-    let beforeBounds = try #require(before.bounds)
-
-    let result = session.moveBody(
-        target: SelectionTarget(sceneNodeID: bodyNodeID),
-        deltaX: .length(5.0, .millimeter),
-        deltaY: .length(3.0, .millimeter)
-    )
-
-    // The gizmo translate commits by translating the consumed profile sketch,
-    // so the rebuilt body shifts by exactly the drag delta (the consumed
-    // sketch itself is hidden and does not appear in sketch summaries).
-    #expect(result != nil)
-    let after = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
-    let afterBounds = try #require(after.bounds)
-    #expect(abs(afterBounds.minX - beforeBounds.minX - 0.005) < 1.0e-9)
-    #expect(abs(afterBounds.minY - beforeBounds.minY - 0.003) < 1.0e-9)
-    #expect(abs(afterBounds.minZ - beforeBounds.minZ) < 1.0e-9)
-    #expect(session.evaluationStatus == .valid)
-}
-
-@MainActor
 @Test func combinedBoxNestsAndHidesConsumedProfileSketch() async throws {
     let session = EditorSession()
 

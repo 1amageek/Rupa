@@ -2164,24 +2164,6 @@ public final class EditorSession {
         )
     }
 
-    /// Deprecated: performs `EditorCommand.moveBody`, whose documentation
-    /// names why a placement belongs to `setSceneNodeTransform` instead and
-    /// when this convenience goes away with it.
-    @discardableResult
-    public func moveBody(
-        target: SelectionTarget,
-        deltaX: CADExpression,
-        deltaY: CADExpression
-    ) -> CommandExecutionResult? {
-        perform(
-            .moveBody(
-                target: target,
-                deltaX: deltaX,
-                deltaY: deltaY
-            )
-        )
-    }
-
     public func moveBodyVertex(
         target: SelectionTarget,
         deltaX: CADExpression,

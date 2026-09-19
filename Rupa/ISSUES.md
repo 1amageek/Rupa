@@ -44,7 +44,7 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 
 | ID | Issue | Detail | Found |
 |---|---|---|---|
-| U-1 | Transform gizmo: height translate, rotate, and scale still revert on release | In-plane translation now commits via moveBody (profile-sketch translation, 2026-07-07); height translation, rotation, scaling, vertexMove/faceMove still have no commit path and revert on release. Sketch selection gizmo is drawn but never hit-tested. | 2026-07-07 UI audit |
+| U-1 | Transform gizmo: rotate, scale, and vertexMove/faceMove commit paths unverified | A released body transform commits as the node's own placement through `setSceneNodeTransform` (`handleViewportBodyPlacementCommit` -> `WorkspaceTransformMatrix.commands(placements:)`), and `ViewportBodyPlacementDragTarget` carries any affine local frame, so the commit path is no longer translation-only. Whether the gizmo emits rotation and scale drags, and whether vertexMove/faceMove commit, is unverified. Sketch selection gizmo is drawn but never hit-tested. | 2026-07-07 UI audit |
 | U-8 | Interaction selectors still recompute candidate arrays per target class | hover() and beginViewportPress now share one ordered resolver and one ViewportSceneContext per event, but target helpers still rebuild candidate arrays independently; pointer-move performance needs a per-event candidate cache. | 2026-07-07 UI audit |
 
 ## Hardening

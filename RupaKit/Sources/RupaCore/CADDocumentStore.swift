@@ -1751,26 +1751,6 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .moveBody:
-            func run() throws {
-                guard case .moveBody(let target, let deltaX, let deltaY) = command else {
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Command dispatch expected moveBody."
-                    )
-                }
-                var updatedDocument = document
-                try updatedDocument.moveBody(
-                    target: target,
-                    deltaX: deltaX,
-                    deltaY: deltaY,
-                    objectRegistry: objectRegistry
-                )
-                document = updatedDocument
-                try commitMutation()
-                evaluateCurrentDocument()
-            }
-            try run()
         case .moveBodyEdge:
             func run() throws {
                 guard case .moveBodyEdge(let target, let deltaX, let deltaY) = command else {
