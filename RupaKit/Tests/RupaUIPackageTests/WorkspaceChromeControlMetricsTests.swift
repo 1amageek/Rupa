@@ -20,6 +20,17 @@ import Testing
     #expect(WorkspaceChromeControlMetrics.containerHeight == 26.0)
 }
 
+/// A status sentence sits in the window toolbar beside the document title and the commands, so the
+/// width it may take is declared rather than left to the sentence. It has to be wide enough to read
+/// as a sentence and narrow enough to leave the toolbar its own controls.
+@Test func workspaceStatusMessageDeclaresTheWidthASentenceMayTake() {
+    #expect(WorkspaceChromeControlMetrics.statusMessageMaximumWidth == 360.0)
+    #expect(
+        WorkspaceChromeControlMetrics.statusMessageMaximumWidth
+            > ViewportCanvasChromeMetrics.topControlMaximumWidth
+    )
+}
+
 @Test func workspaceChromeControlsUseSharedBorderlessLiquidGlassControlShape() {
     #expect(WorkspaceChromeControlMetrics.cornerRadius < ViewportCanvasChromeMetrics.cornerRadius)
     #expect(

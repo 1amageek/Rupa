@@ -196,7 +196,9 @@ private extension SurfaceAnalysisSampleDensity {
         }
     }
 
+    /// "Low", "Std" and "High" name a choice without saying what the choice costs, so the tooltip
+    /// carries the sample grid the density actually asks the analysis to evaluate.
     var help: String {
-        "\(title) Surface Analysis"
+        "\(title) Surface Analysis · \(samplesPerDirection) × \(samplesPerDirection) samples"
     }
 }

@@ -327,6 +327,81 @@ beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
+### What the workspace says, and where the canvas stops
+
+The workspace answers the user on three channels, and they stay three because
+each has a different owner and a different lifetime. `CADDocumentStore` holds
+the evaluator's `EditorDiagnostic` values in the document snapshot, which is
+replaced whenever the document is evaluated or restored. `WorkspaceFailureLog`
+holds every refusal and failure, ordered and never cleared by a view.
+MainView's `transientDiagnostics` holds what the workspace itself just said —
+the prompt a tool activation asks for, and the sentence that names why a key
+refused. `reportToolStatus` is the only writer of that third channel, and it
+records the non-`.info` ones to the failure log on the way, so a refusal
+survives the sentence that displayed it.
+
+Because the three are separate arrays, no writer overwrites another and
+`EditorDiagnostic` needs no code to say which channel an entry came from. The
+type keeps the meaning `Failure surfacing` gives it, and the newest thing the
+workspace said is `transientDiagnostics.last` rather than a filtered search
+through a merged list.
+
+The transcript is bounded. It is appended to on every tool activation, and it
+is now read on every layout pass, so its length is a contract and not an
+accident: `reportToolStatus` keeps the newest
+`MainView.transientDiagnosticLimit` entries and drops the rest. The failure
+log, not this array, is the authority for what failed; dropping the oldest
+sentence loses a view, never a record.
+
+Those sentences reach the screen through two window-toolbar items in the
+`.status` placement. `workspaceStatusMessageItem` carries the newest
+transcript line, and `workspaceEvaluationFailureItem` carries
+`EvaluationStatus.failed` for as long as the document will not build. They are
+in the window toolbar rather than the canvas chrome because both describe the
+document and the session rather than the view, and because a sentence is wider
+than a badge: over the canvas it would cover the model it is talking about.
+The message item is the one automatic route into the Logs pane — pressing it
+expands the pane, and nothing else opens it on the user's behalf.
+
+`WorkspaceChrome` owns how a severity looks, beside `workspaceStatusChip`,
+which already owns the chip's shape:
+`workspaceStatusSystemImage(for:)` and `workspaceStatusTint(for:)` are the
+single mapping from `EditorDiagnostic.Severity` to icon and tint, so a prompt,
+a refusal and a failure cannot read alike. `WorkspaceChromeControlMetrics`
+owns the width a sentence is allowed, `statusMessageMaximumWidth`. Build state
+is state and not a message, so the failure item reads its icon and tint from
+`evaluationStatusSystemImage` and `evaluationStatusTint`, which describe the
+document's status rather than a severity.
+
+The canvas chrome and the utility rail carry what is about the model and can
+be acted on where it stands. Three kinds of content therefore do not belong on
+them. The project's own development notes are the first: an implementation
+rating and the gate an area has not yet met describe this repository's
+progress, not the user's document, and the user can neither act on them nor
+dismiss them. Values a control beside them already carries are the second: the
+ruler the canvas scale badge holds together with the menu that changes it, the
+selection count the top bar carries beside the scope that explains it, the
+visible and locked tallies the eye and the lock beside them already show, the
+overlay the analysis toggles above it are already set to, and the node count
+the outliner lists in full. Where such a control genuinely withholds the value
+— the density buttons read "Low", "Std" and "High" and never the sample grid
+those cost — the value belongs in that control's tooltip and not in a row of
+its own. Values another surface both shows and edits are the third: a single
+selected node's position belongs to the object transform inspector.
+
+The eye and the lock in the selection strip act on the whole selection, so
+neither may read its state off one member of it.
+`WorkspaceSelectionDisplayAction` decides one state for the selection and
+names it in the icon and the help; the buttons then give that state to every
+node. A selection that mixes hidden and visible nodes hides, a selection that
+mixes locked and unlocked nodes locks, and a second press undoes the first.
+
+`WorkspaceSelectionDisplayActionTests` owns the single, mixed and reversing
+selections. `WorkspaceChromeControlMetricsTests` owns the declared status
+width. The toolbar items themselves are view-local composition over `@State`
+and the document snapshot; no package test mounts them, so they are recorded
+here and in the UI test review rather than claimed as verified.
+
 ### Sidebar symbols
 
 `WorkspaceSidebarSymbol` is a stateless native SwiftUI platform adapter in this

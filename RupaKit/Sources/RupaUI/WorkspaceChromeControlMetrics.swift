@@ -11,6 +11,11 @@ enum WorkspaceChromeControlMetrics {
     static let cornerRadius: CGFloat = ViewportCanvasChromeMetrics.cornerRadius - 2.0
     static let dividerHeight: CGFloat = ViewportCanvasChromeMetrics.topControlDividerHeight
 
+    /// A status message is a sentence, and the window toolbar it sits in also holds the document
+    /// title and the commands. The sentence is allowed this much and truncates past it; the Logs
+    /// pane the chip opens carries the rest.
+    static let statusMessageMaximumWidth: CGFloat = 360.0
+
     static var iconButtonSize: CGSize {
         CGSize(width: controlHeight, height: controlHeight)
     }

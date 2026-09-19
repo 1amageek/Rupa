@@ -1,3 +1,4 @@
+import RupaCore
 import SwiftUI
 
 enum WorkspaceUtilityRailLayout {
@@ -170,6 +171,31 @@ func workspaceStatusChip(
             style: .continuous
         )
             .fill(tint.opacity(0.12))
+    }
+}
+
+/// A prompt, a refusal and a failure all reach the user through the same chip, so the chip has to
+/// say which one it is carrying before the sentence is read. The icon and the tint are that answer,
+/// and they have to differ per severity or a command that would not run reads like an instruction.
+func workspaceStatusSystemImage(for severity: EditorDiagnostic.Severity) -> String {
+    switch severity {
+    case .info:
+        "info.circle"
+    case .warning:
+        "exclamationmark.triangle"
+    case .error:
+        "xmark.octagon"
+    }
+}
+
+func workspaceStatusTint(for severity: EditorDiagnostic.Severity) -> Color {
+    switch severity {
+    case .info:
+        .secondary
+    case .warning:
+        .orange
+    case .error:
+        .red
     }
 }
 

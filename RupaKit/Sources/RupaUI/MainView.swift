@@ -119,6 +119,9 @@ private struct ProjectMainViewContent: View {
     @State private var selectedTool: ModelingTool
     @State private var polygonToolState: PolygonToolState
     @State private var sketchInputState: SketchInputState
+    /// How many of the workspace's own sentences the transcript keeps. The newest is what the
+    /// status item shows; the rest are the recent history the Logs pane lists.
+    private static let transientDiagnosticLimit = 200
     @State private var transientDiagnostics: [EditorDiagnostic]
     @State private var hoveredTarget: SelectionTarget?
     @State private var hoveredReference: SelectionReference?
@@ -688,6 +691,14 @@ private struct ProjectMainViewContent: View {
         transientDiagnostics.append(
             EditorDiagnostic(severity: severity, message: message)
         )
+        // The status item reads this array on every layout pass and a tool activation appends to
+        // it, so its length is a contract rather than an accident. `failureLog` is the authority
+        // for what failed; dropping the oldest sentence loses a view, never a record.
+        if transientDiagnostics.count > Self.transientDiagnosticLimit {
+            transientDiagnostics.removeFirst(
+                transientDiagnostics.count - Self.transientDiagnosticLimit
+            )
+        }
     }
 
     private func enqueueWorkspaceOperation<Result: Sendable>(
@@ -1444,10 +1455,6 @@ private struct ProjectMainViewContent: View {
             return "Off"
         }
         return enabled.joined(separator: " + ")
-    }
-
-    private var surfaceAnalysisDensitySummary: String {
-        "\(surfaceAnalysisOptions.sampleDensity.samplesPerDirection) x \(surfaceAnalysisOptions.sampleDensity.samplesPerDirection)"
     }
 
     private var constructionPlaneSnapPlane: SketchPlane? {
@@ -3098,8 +3105,73 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// A document that would not build, left standing until it does.
+    @ViewBuilder
+    private var workspaceEvaluationFailureItem: some View {
+        if case .failed(let message) = snapshot.evaluationSnapshot.status {
+            Button {
+                isPreviewExpanded = true
+            } label: {
+                workspaceStatusChip(
+                    "Build failed: \(message)",
+                    systemImage: evaluationStatusSystemImage,
+                    tint: evaluationStatusTint
+                )
+                .frame(
+                    maxWidth: WorkspaceChromeControlMetrics.statusMessageMaximumWidth,
+                    alignment: .leading
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Show Logs")
+            .accessibilityLabel("Document Build Status")
+            .accessibilityValue(message)
+            .accessibilityIdentifier("WorkspaceDocument.evaluationFailure")
+        }
+    }
+
+    /// The workspace's own prompts and refusals, on screen.
+    ///
+    /// Every pick instruction and every refused key is appended to `transientDiagnostics`, which
+    /// until now was rendered only inside the Logs pane, and that pane starts closed. A user was
+    /// being asked to pick a curve, and told why a command would not run, by sentences nothing
+    /// displayed. This lives in the window toolbar rather than the canvas chrome because a
+    /// sentence over the canvas covers the model it is talking about, and it opens the pane,
+    /// because what fits here is the newest sentence and not the ones before it.
+    @ViewBuilder
+    private var workspaceStatusMessageItem: some View {
+        if let diagnostic = transientDiagnostics.last {
+            Button {
+                isPreviewExpanded = true
+            } label: {
+                workspaceStatusChip(
+                    diagnostic.message,
+                    systemImage: workspaceStatusSystemImage(for: diagnostic.severity),
+                    tint: workspaceStatusTint(for: diagnostic.severity)
+                )
+                .frame(
+                    maxWidth: WorkspaceChromeControlMetrics.statusMessageMaximumWidth,
+                    alignment: .leading
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Show Logs")
+            .accessibilityLabel("Workspace Status")
+            .accessibilityValue(diagnostic.message)
+            .accessibilityIdentifier("WorkspaceCommand.status")
+        }
+    }
+
     @ToolbarContentBuilder
     private var editorToolbar: some ToolbarContent {
+        ToolbarItem(placement: .status) {
+            workspaceEvaluationFailureItem
+        }
+
+        ToolbarItem(placement: .status) {
+            workspaceStatusMessageItem
+        }
+
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
                 newProject()
@@ -3291,12 +3363,6 @@ private struct ProjectMainViewContent: View {
                                 accessibilityIdentifier: "WorkspaceGrid.fixed"
                             )
                         }
-                        let scaleSummary = workspaceScaleSummary
-                        workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                        workspaceValueRow("Grid", snapshot.workspaceState.viewportGridSettings.visualSpacingMode.title)
-                        workspaceValueRow("Step", scaleSummary.minorStepTitle)
-                        workspaceValueRow("Major", scaleSummary.majorStepTitle)
-                        workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
                     }
                     .id(WorkspaceUtilityRailDestination.snap)
 
@@ -3372,16 +3438,6 @@ private struct ProjectMainViewContent: View {
                             selectedSurfaceAnalysisSummary == nil ? "No supported target" : "Selected target",
                             accessibilityIdentifier: "WorkspaceAnalysis.target"
                         )
-                        workspaceValueRow(
-                            "Overlay",
-                            surfaceAnalysisOverlaySummary,
-                            accessibilityIdentifier: "WorkspaceAnalysis.overlay"
-                        )
-                        workspaceValueRow(
-                            "Samples",
-                            surfaceAnalysisDensitySummary,
-                            accessibilityIdentifier: "WorkspaceAnalysis.samples"
-                        )
                     }
                     .id(WorkspaceUtilityRailDestination.analysis)
 
@@ -3419,11 +3475,6 @@ private struct ProjectMainViewContent: View {
                             "Bodies",
                             "\(snapshot.evaluationSnapshot.bodyCount)",
                             accessibilityIdentifier: "WorkspaceScene.bodies"
-                        )
-                        workspaceValueRow(
-                            "Nodes",
-                            "\(snapshot.document.document.productMetadata.sceneNodes.count)",
-                            accessibilityIdentifier: "WorkspaceScene.nodes"
                         )
                         workspaceValueRow(
                             "Issues",
@@ -3712,7 +3763,7 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func selectionContextPanelContent(_ nodes: [SceneNode]) -> some View {
-        let primaryNode = nodes.last
+        let displayAction = WorkspaceSelectionDisplayAction(nodes: nodes)
         if let boundsSummary = viewportMeasurementState.boundsSummary {
             Text(boundsSummary)
                 .font(.caption2.monospacedDigit())
@@ -3720,28 +3771,11 @@ private struct ProjectMainViewContent: View {
                 .help(boundsSummary)
                 .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
         }
-        workspaceValuePill("Targets", "\(selectedTargetCount)")
         workspaceValuePill(
             "Target",
             selectedTargetSummary,
             accessibilityIdentifier: "WorkspaceSelection.target"
         )
-        if let qualitySummary = selectionQualitySummary {
-            workspaceValuePill(
-                "Quality",
-                qualitySummary.ratingTitle,
-                accessibilityIdentifier: "WorkspaceQuality.rating"
-            )
-            workspaceValuePill(
-                "Gate",
-                qualitySummary.attentionGateTitle,
-                accessibilityIdentifier: "WorkspaceQuality.gate"
-            )
-        }
-        if nodes.isEmpty == false {
-            workspaceValuePill("Visible", "\(nodes.filter(\.isVisible).count)")
-            workspaceValuePill("Locked", "\(nodes.filter(\.isLocked).count)")
-        }
 
         if regionOffsetCommandState.isActive, selectedRegionTargets.isEmpty == false {
             workspaceContextDivider
@@ -3776,13 +3810,6 @@ private struct ProjectMainViewContent: View {
             surfaceControlPointSlideContextPanelContent(selectedSurfaceControlPointReferences)
         }
 
-        if nodes.count == 1, let node = nodes.first {
-            let nodeTranslation = WorkspaceTransformMatrix.translation(for: node)
-            workspaceValuePill("X", formatted(nodeTranslation.x))
-            workspaceValuePill("Y", formatted(nodeTranslation.y))
-            workspaceValuePill("Z", formatted(nodeTranslation.z))
-        }
-
         if selectedConstructionPlaneTargets != nil {
             workspaceContextDivider
             workspaceIconButton(
@@ -3797,39 +3824,41 @@ private struct ProjectMainViewContent: View {
         workspaceContextDivider
 
         workspaceIconButton(
-            systemImage: primaryNode?.isVisible == false ? "eye.slash" : "eye",
-            help: primaryNode?.isVisible == false ? "Show Selection" : "Hide Selection",
+            systemImage: displayAction.visibilitySystemImage,
+            help: displayAction.visibilityHelp,
             accessibilityIdentifier: "WorkspaceSelection.visible"
         ) {
             let nodeIDs = nodes.map(\.id)
+            let isVisible = displayAction.hidesSelection == false
             submitSource(name: "setSelectionVisibility") { current in
                 try nodeIDs.map { id in
-                    guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                    guard current.document.document.productMetadata.sceneNodes[id] != nil else {
                         throw EditorError(
                             code: .referenceUnresolved,
                             message: "Selected scene node \(id) no longer exists."
                         )
                     }
-                    return .setSceneNodeVisibility(id: id, isVisible: !node.isVisible)
+                    return .setSceneNodeVisibility(id: id, isVisible: isVisible)
                 }
             }
         }
 
         workspaceIconButton(
-            systemImage: primaryNode?.isLocked == true ? "lock" : "lock.open",
-            help: primaryNode?.isLocked == true ? "Unlock Selection" : "Lock Selection",
+            systemImage: displayAction.lockSystemImage,
+            help: displayAction.lockHelp,
             accessibilityIdentifier: "WorkspaceSelection.locked"
         ) {
             let nodeIDs = nodes.map(\.id)
+            let isLocked = displayAction.locksSelection
             submitSource(name: "setSelectionLock") { current in
                 try nodeIDs.map { id in
-                    guard let node = current.document.document.productMetadata.sceneNodes[id] else {
+                    guard current.document.document.productMetadata.sceneNodes[id] != nil else {
                         throw EditorError(
                             code: .referenceUnresolved,
                             message: "Selected scene node \(id) no longer exists."
                         )
                     }
-                    return .setSceneNodeLock(id: id, isLocked: !node.isLocked)
+                    return .setSceneNodeLock(id: id, isLocked: isLocked)
                 }
             }
         }
@@ -4482,10 +4511,6 @@ private struct ProjectMainViewContent: View {
             return "Missing"
         }
         return sweepSectionSummary(section)
-    }
-
-    private var selectionQualitySummary: WorkspaceSelectionQualitySummary? {
-        WorkspaceSelectionQualitySummary(scope: selectionScope)
     }
 
     private var evaluationStatusSystemImage: String {
