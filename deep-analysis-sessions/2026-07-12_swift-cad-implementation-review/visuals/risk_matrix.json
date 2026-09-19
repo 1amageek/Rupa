@@ -1,0 +1,75 @@
+[
+  {
+    "id": "R1",
+    "risk": "Consumers and clean CI cannot resolve the package",
+    "likelihood": 5,
+    "impact": 5,
+    "score": 25,
+    "priority": "P0",
+    "evidence": "Package.swift:53 and current CI"
+  },
+  {
+    "id": "R2",
+    "risk": "Different documents produce contradictory support decisions",
+    "likelihood": 5,
+    "impact": 5,
+    "score": 25,
+    "priority": "P1",
+    "evidence": "SPEC official scope vs later feature sections and roadmap"
+  },
+  {
+    "id": "R3",
+    "risk": "Native files evolve under the same schema version",
+    "likelihood": 4,
+    "impact": 5,
+    "score": 20,
+    "priority": "P1",
+    "evidence": "selectionDimensions with SchemaVersion 1.0.0"
+  },
+  {
+    "id": "R4",
+    "risk": "Rupa/UI/Agent expose divergent operations",
+    "likelihood": 4,
+    "impact": 4,
+    "score": 16,
+    "priority": "P1",
+    "evidence": "17/15/14/13 parity counts"
+  },
+  {
+    "id": "R5",
+    "risk": "External CAD exchange is mistaken for exact editable CAD exchange",
+    "likelihood": 4,
+    "impact": 4,
+    "score": 16,
+    "priority": "P1",
+    "evidence": "STEP tessellated and IGES triangle-wire profiles"
+  },
+  {
+    "id": "R6",
+    "risk": "Advanced feature breadth rests on missing robust intersection/healing primitives",
+    "likelihood": 4,
+    "impact": 5,
+    "score": 20,
+    "priority": "P1",
+    "evidence": "roadmap requirements and constrained evaluator paths"
+  },
+  {
+    "id": "R7",
+    "risk": "Performance/WASM claims regress without quantitative budgets",
+    "likelihood": 3,
+    "impact": 4,
+    "score": 12,
+    "priority": "P1",
+    "evidence": "no benchmark target or thresholds"
+  },
+  {
+    "id": "R8",
+    "risk": "Untrusted imports consume unbounded memory or time",
+    "likelihood": 3,
+    "impact": 4,
+    "score": 12,
+    "priority": "P2",
+    "evidence": "no resource-limit contract"
+  }
+]
+

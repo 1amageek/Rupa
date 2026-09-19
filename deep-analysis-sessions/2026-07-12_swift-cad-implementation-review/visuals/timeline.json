@@ -1,0 +1,48 @@
+[
+  {
+    "phase": "Gate 0",
+    "title": "Build truth",
+    "items": [
+      "Remote dependency resolution",
+      "Green macOS and WASM CI",
+      "Reliable source-rule checks"
+    ]
+  },
+  {
+    "phase": "Gate 1",
+    "title": "Contract truth",
+    "items": [
+      "Normative capability ledger",
+      "Current vs roadmap separation",
+      "Typed supported-subset descriptors"
+    ]
+  },
+  {
+    "phase": "Gate 2",
+    "title": "Compatibility truth",
+    "items": [
+      "Schema/version bump",
+      "Migration fixtures",
+      "API diff and deprecation policy"
+    ]
+  },
+  {
+    "phase": "Gate 3",
+    "title": "Vertical kernel slice",
+    "items": [
+      "Robust geometry primitives",
+      "Stable split/merge naming",
+      "Facade/UI/Agent parity"
+    ]
+  },
+  {
+    "phase": "Gate 4",
+    "title": "Operational proof",
+    "items": [
+      "Conformance corpus",
+      "Performance budgets",
+      "WASM runtime and resource limits"
+    ]
+  }
+]
+

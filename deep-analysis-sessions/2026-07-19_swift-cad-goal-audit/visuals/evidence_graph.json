@@ -1,0 +1,21 @@
+{
+  "nodes": [
+    { "id": "E001", "kind": "evidence", "label": "0/8 gate check" },
+    { "id": "E002", "kind": "evidence", "label": "55 catalog entries" },
+    { "id": "E005", "kind": "evidence", "label": "Parametric-only Curve3D" },
+    { "id": "I001", "kind": "insight", "label": "Product incomplete" },
+    { "id": "I002", "kind": "insight", "label": "Denominator must be inventory-derived" },
+    { "id": "I003", "kind": "insight", "label": "Implicit truth required" },
+    { "id": "T100", "kind": "outcome", "label": "Uncompromising goal" },
+    { "id": "T101", "kind": "outcome", "label": "NOT ACHIEVED" }
+  ],
+  "edges": [
+    { "from": "E001", "to": "I001", "relation": "supports" },
+    { "from": "E002", "to": "I001", "relation": "supports" },
+    { "from": "E002", "to": "I002", "relation": "supports" },
+    { "from": "E005", "to": "I003", "relation": "supports" },
+    { "from": "I001", "to": "T101", "relation": "supportsClaim" },
+    { "from": "I002", "to": "T100", "relation": "supportsClaim" },
+    { "from": "I003", "to": "T100", "relation": "supportsClaim" }
+  ]
+}

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rupa Current Implementation Status — 2026-07-22</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0e1b2d;
+      --panel-2: #13243a;
+      --text: #eef5ff;
+      --muted: #9eb0c8;
+      --line: #29405e;
+      --cyan: #53d8fb;
+      --green: #63d69a;
+      --amber: #ffc857;
+      --red: #ff7185;
+      --violet: #a795ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% -10%, #15375b 0, transparent 34rem),
+        radial-gradient(circle at 95% 5%, #2b245f 0, transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font: 15px/1.65 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 56px 0 80px; }
+    header { display: grid; grid-template-columns: 1.5fr 0.8fr; gap: 24px; align-items: end; }
+    .eyebrow { color: var(--cyan); letter-spacing: .16em; text-transform: uppercase; font-size: 12px; }
+    h1 { max-width: 780px; margin: 8px 0 14px; font-size: clamp(34px, 6vw, 70px); line-height: 1.02; letter-spacing: -.045em; }
+    h2 { margin: 0 0 18px; font-size: 22px; letter-spacing: -.02em; }
+    h3 { margin: 0 0 8px; font-size: 16px; }
+    p { margin: 0; }
+    .lead { max-width: 760px; color: #cfdbeb; font-size: 18px; }
+    .verdict { padding: 22px; border: 1px solid #705060; background: linear-gradient(145deg, #2a1a2a, #111b2b); border-radius: 18px; }
+    .verdict strong { display: block; margin-top: 6px; color: var(--red); font-size: 27px; }
+    .grid { display: grid; gap: 18px; }
+    .metrics { grid-template-columns: repeat(4, 1fr); margin: 34px 0; }
+    .card { border: 1px solid var(--line); background: linear-gradient(150deg, rgba(19,36,58,.96), rgba(11,24,40,.96)); border-radius: 18px; padding: 22px; box-shadow: 0 18px 50px rgba(0,0,0,.14); }
+    .metric .value { font-size: 38px; font-weight: 750; letter-spacing: -.04em; }
+    .metric .label { color: var(--muted); }
+    .ok { color: var(--green); } .warn { color: var(--amber); } .bad { color: var(--red); } .info { color: var(--cyan); }
+    section { margin-top: 42px; }
+    .two { grid-template-columns: 1fr 1fr; }
+    .bar-row { display: grid; grid-template-columns: 160px 1fr 72px; gap: 12px; align-items: center; margin: 13px 0; }
+    .track { height: 13px; background: #07111f; border-radius: 99px; overflow: hidden; border: 1px solid #213955; }
+    .fill { height: 100%; border-radius: 99px; }
+    .stack { display: flex; height: 18px; overflow: hidden; border-radius: 99px; background: #07111f; }
+    .stack .pass { background: var(--green); } .stack .fail { background: var(--red); }
+    .legend { display: flex; gap: 18px; color: var(--muted); margin-top: 16px; font-size: 13px; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); align-items: stretch; gap: 22px; }
+    .node { position: relative; min-height: 126px; padding: 18px; border-radius: 15px; border: 1px solid var(--line); background: #0b1828; }
+    .node:not(:last-child)::after { content: "→"; position: absolute; right: -19px; top: 43px; color: var(--muted); font-size: 22px; }
+    .node .state { display: inline-block; padding: 3px 8px; border-radius: 99px; background: #192c44; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .node strong { display: block; margin-top: 13px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    td:first-child { font-weight: 650; }
+    .pill { display: inline-block; min-width: 72px; padding: 3px 8px; text-align: center; border-radius: 99px; font-size: 12px; background: #1a2d45; }
+    ol { margin: 0; padding-left: 22px; }
+    li { margin: 10px 0; }
+    .note { color: var(--muted); font-size: 13px; }
+    code { color: #bfe9ff; }
+    footer { margin-top: 50px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 22px; }
+    @media (max-width: 900px) {
+      header, .two { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .node:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -24px; }
+    }
+    @media (max-width: 560px) {
+      .metrics { grid-template-columns: 1fr; }
+      .bar-row { grid-template-columns: 125px 1fr 54px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <div class="eyebrow">Implementation evidence report · 2026-07-22</div>
+      <h1>Rupa / Swift-CAD<br>実装状況</h1>
+      <p class="lead">Universal 3D の基盤実装は実体を持つ一方、アプリ経路への統合、依存 API の整合、カーネル回帰の解消が未完了です。</p>
+    </div>
+    <aside class="verdict">
+      <span>現在の判定</span>
+      <strong>リリース可能ではない</strong>
+      <p class="note">Rupa は現在の Swift-CAD 作業ツリーに対してビルドできず、完走した下位テスト 2 系統も失敗しています。</p>
+    </aside>
+  </header>
+
+  <div class="grid metrics">
+    <article class="card metric"><div class="value info">3 / 19</div><div class="label">Universal 表の Complete 行</div></article>
+    <article class="card metric"><div class="value bad">0 / 8</div><div class="label">Swift-CAD 完了ゲート</div></article>
+    <article class="card metric"><div class="value bad">18</div><div class="label">CADGeometry 失敗</div></article>
+    <article class="card metric"><div class="value bad">48</div><div class="label">CADKernel 失敗</div></article>
+  </div>
+
+  <section class="grid two">
+    <article class="card">
+      <h2>Universal 3D の成熟度</h2>
+      <div class="bar-row"><span>Complete</span><div class="track"><div class="fill" style="width:15.8%;background:var(--green)"></div></div><b>3</b></div>
+      <div class="bar-row"><span>First slice</span><div class="track"><div class="fill" style="width:78.9%;background:var(--amber)"></div></div><b>15</b></div>
+      <div class="bar-row"><span>In progress</span><div class="track"><div class="fill" style="width:5.3%;background:var(--red)"></div></div><b>1</b></div>
+      <p class="note">「First slice complete」はマイルストーン完了を意味しません。計画書自身が M1 の統合未完を明記しています。</p>
+    </article>
+    <article class="card">
+      <h2>実行したテスト</h2>
+      <h3>CADGeometry-Tests — 224 / 242 pass</h3>
+      <div class="stack"><div class="pass" style="width:92.56%"></div><div class="fail" style="width:7.44%"></div></div>
+      <h3 style="margin-top:20px">CADKernel-Tests — 416 / 464 pass</h3>
+      <div class="stack"><div class="pass" style="width:89.66%"></div><div class="fail" style="width:10.34%"></div></div>
+      <div class="legend"><span><i class="dot" style="background:var(--green)"></i>Pass 640</span><span><i class="dot" style="background:var(--red)"></i>Fail 66</span></div>
+    </article>
+  </section>
+
+  <section>
+    <h2>ユーザー到達経路</h2>
+    <div class="flow">
+      <div class="node"><span class="state ok">implemented</span><strong>Universal source + evaluation</strong><p class="note">検証・provider 解決・snapshot 生成</p></div>
+      <div class="node"><span class="state warn">partial</span><strong>DesignDocument bridge</strong><p class="note">read-only projection</p></div>
+      <div class="node"><span class="state ok">implemented</span><strong>Universal viewport snapshot</strong><p class="note">immutable scene projection</p></div>
+      <div class="node"><span class="state bad">missing</span><strong>Renderer + input consumer</strong><p class="note">実運用 call site は legacy builder</p></div>
+      <div class="node"><span class="state bad">blocked</span><strong>App workflow</strong><p class="note">ビルド失敗のため runtime 未検証</p></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>検証マトリクス</h2>
+    <table>
+      <thead><tr><th>領域</th><th>状態</th><th>根拠</th></tr></thead>
+      <tbody>
+        <tr><td>Rupa workspace build</td><td><span class="pill bad">failed</span></td><td>Swift-CAD API の変更・削除と tolerance 引数追加に RupaKit が未追随</td></tr>
+        <tr><td>RupaKit package tests</td><td><span class="pill warn">blocked</span></td><td>package-wide compile が CAD integration target で失敗</td></tr>
+        <tr><td>CADGeometry-Tests</td><td><span class="pill bad">failed</span></td><td>224 passed / 18 failed</td></tr>
+        <tr><td>CADKernel-Tests</td><td><span class="pill bad">failed</span></td><td>416 passed / 48 failed</td></tr>
+        <tr><td>Universal app path</td><td><span class="pill warn">not wired</span></td><td>production call sites は legacy <code>ViewportSceneBuilder</code> を使用</td></tr>
+        <tr><td>Swift-CAD conformance</td><td><span class="pill bad">open</span></td><td>0 / 8 gates、final evidence manifest 0</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="grid two">
+    <article class="card">
+      <h2>確認できた実装</h2>
+      <ul>
+        <li>Mesh source/edit の validation と typed failure</li>
+        <li>Project model の hierarchy・cycle・reference validation</li>
+        <li>Provider-based project evaluation と immutable snapshot</li>
+        <li>revision recheck を伴う actor-based transaction publication</li>
+        <li>CAD source provider と Universal viewport projection</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h2>優先アクション</h2>
+      <ol>
+        <li>Swift-CAD API と RupaKit 呼び出しを同一 revision 契約へ揃える</li>
+        <li>CADGeometry / CADKernel の失敗クラスタを解消する</li>
+        <li>未追跡 mesh-selection slice を契約確認後に統合または除外する</li>
+        <li>Universal viewport を renderer / input の実経路へ接続する</li>
+        <li>clean worktree・同一 revision で証拠セットを再取得する</li>
+      </ol>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>判定上の制約</h2>
+    <p>RupaKit の下位テスト、アプリ起動、永続化 round trip、UI workflow、クロスプラットフォーム／WASM、性能測定は、現在のビルド阻害または今回の調査範囲により未検証です。個別テスト指定が 0 件実行で成功終了するケースを確認したため、成功コードのみは証拠に数えていません。</p>
+  </section>
+
+  <footer>
+    <p>Source of truth: repository source, git state, xcodebuild output, xcresult summaries, Universal 3D plan, and Swift-CAD roadmap. Structured evidence is stored beside this report in <code>08_report_data.json</code> and <code>visuals/</code>.</p>
+  </footer>
+</main>
+</body>
+</html>

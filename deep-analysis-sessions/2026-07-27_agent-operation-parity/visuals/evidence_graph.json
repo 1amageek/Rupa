@@ -1,0 +1,71 @@
+{
+  "nodes": [
+    {
+      "id": "app",
+      "label": "Rupa App / Viewer",
+      "kind": "host"
+    },
+    {
+      "id": "socket",
+      "label": "AgentHost Unix socket",
+      "kind": "transport"
+    },
+    {
+      "id": "registry",
+      "label": "WorkspaceRegistry live session",
+      "kind": "state"
+    },
+    {
+      "id": "capability",
+      "label": "Capability / AutomationCommand",
+      "kind": "contract"
+    },
+    {
+      "id": "runner",
+      "label": "AutomationRunner transaction",
+      "kind": "execution"
+    },
+    {
+      "id": "session",
+      "label": "EditorSession",
+      "kind": "state"
+    },
+    {
+      "id": "persist",
+      "label": "Save / Export",
+      "kind": "output"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app",
+      "to": "socket",
+      "label": "starts"
+    },
+    {
+      "from": "app",
+      "to": "registry",
+      "label": "publishes"
+    },
+    {
+      "from": "socket",
+      "to": "capability",
+      "label": "JSON-RPC"
+    },
+    {
+      "from": "capability",
+      "to": "runner",
+      "label": "lowers"
+    },
+    {
+      "from": "runner",
+      "to": "session",
+      "label": "mutates"
+    },
+    {
+      "from": "session",
+      "to": "persist",
+      "label": "serializes"
+    }
+  ]
+}

@@ -4,8 +4,12 @@ xcuserdata/
 *.xcuserstate
 
 **/.build/
+**/.cache/
 **/.swiftpm/configuration/registries.json
 **/.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+
+.verification/
+*.profraw
 
 swift-CAD/
 swift-OpenUSD/

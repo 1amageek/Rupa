@@ -1,0 +1,10 @@
+{
+  "risks": [
+    {"risk": "Fixture-count illusion", "likelihood": "high", "impact": "high", "control": "Binary gates and catalog status are authoritative"},
+    {"risk": "Special-case accumulation", "likelihood": "high", "impact": "high", "control": "Remove shape-envelope rejection from full valid public domains"},
+    {"risk": "Unproven numerical robustness", "likelihood": "high", "impact": "critical", "control": "Property tests, interval certification, adversarial predicates, external oracles"},
+    {"risk": "Late topology failure", "likelihood": "high", "impact": "critical", "control": "Close G2 before expanding modeling breadth"},
+    {"risk": "Evidence drift across revisions", "likelihood": "medium", "impact": "high", "control": "All eight manifests must name one tested revision"}
+  ]
+}
+

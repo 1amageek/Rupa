@@ -1,0 +1,10 @@
+{
+  "actions": [
+    {"priority":1,"action":"Reconcile Swift-CAD API changes with RupaKit","unlocks":"Rupa build and RupaKit tests","ownerBoundary":"integration"},
+    {"priority":2,"action":"Fix CADGeometry and CADKernel regression clusters","unlocks":"stable exact modeling foundation","ownerBoundary":"Swift-CAD"},
+    {"priority":3,"action":"Integrate or remove untracked mesh-selection slice","unlocks":"typed source-element selection baseline","ownerBoundary":"RupaGeometry / RupaProjectModel"},
+    {"priority":4,"action":"Wire UniversalViewportScene into renderer and input","unlocks":"user-reachable universal scene path","ownerBoundary":"RupaViewportScene / RupaRendering / RupaUI"},
+    {"priority":5,"action":"Run clean same-revision evidence","unlocks":"bounded conformance assessment","ownerBoundary":"integration / release"}
+  ]
+}
+

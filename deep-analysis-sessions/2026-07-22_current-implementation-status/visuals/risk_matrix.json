@@ -1,0 +1,11 @@
+{
+  "risks": [
+    {"risk":"Rupa/Swift-CAD API drift","likelihood":5,"impact":5,"evidence":"current build failure"},
+    {"risk":"Exact geometry certification regressions","likelihood":5,"impact":5,"evidence":"18 CADGeometry failures"},
+    {"risk":"Kernel topology/modeling regressions","likelihood":5,"impact":5,"evidence":"48 CADKernel failures"},
+    {"risk":"Foundation remains unreachable in app","likelihood":5,"impact":4,"evidence":"legacy viewport consumers"},
+    {"risk":"Unreproducible large dirty worktree","likelihood":5,"impact":4,"evidence":"445 changed/untracked Swift-CAD files"},
+    {"risk":"Focused test false-positive from zero matches","likelihood":4,"impact":3,"evidence":"individual command executed zero tests"}
+  ]
+}
+

@@ -1,0 +1,82 @@
+{
+  "nodes": [
+    {
+      "id": "C1",
+      "type": "claim",
+      "label": "Not release-ready"
+    },
+    {
+      "id": "C2",
+      "type": "claim",
+      "label": "Requirements are not one release contract"
+    },
+    {
+      "id": "C3",
+      "type": "claim",
+      "label": "Strategic goal is incomplete"
+    },
+    {
+      "id": "E-build",
+      "type": "evidence",
+      "label": "Clean resolve and CI fail"
+    },
+    {
+      "id": "E-docs",
+      "type": "evidence",
+      "label": "Scope/spec drift"
+    },
+    {
+      "id": "E-parity",
+      "type": "evidence",
+      "label": "17 / 15 / 14 / 13 operation surfaces"
+    },
+    {
+      "id": "E-features",
+      "type": "evidence",
+      "label": "Missing and constrained kernel workstreams"
+    },
+    {
+      "id": "E-verify",
+      "type": "evidence",
+      "label": "618 tests but blocked CI and narrow corpus"
+    }
+  ],
+  "edges": [
+    {
+      "from": "E-build",
+      "to": "C1",
+      "relation": "supports"
+    },
+    {
+      "from": "E-docs",
+      "to": "C2",
+      "relation": "supports"
+    },
+    {
+      "from": "E-parity",
+      "to": "C3",
+      "relation": "supports"
+    },
+    {
+      "from": "E-features",
+      "to": "C3",
+      "relation": "supports"
+    },
+    {
+      "from": "E-verify",
+      "to": "C1",
+      "relation": "supports"
+    },
+    {
+      "from": "C2",
+      "to": "C1",
+      "relation": "contributes"
+    },
+    {
+      "from": "C3",
+      "to": "C1",
+      "relation": "contributes"
+    }
+  ]
+}
+

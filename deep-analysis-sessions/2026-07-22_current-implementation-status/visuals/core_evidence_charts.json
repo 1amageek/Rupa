@@ -1,0 +1,17 @@
+{
+  "universalSlices": [
+    {"status":"Complete","count":3,"completionCredit":"contract slice only"},
+    {"status":"First slice complete","count":15,"completionCredit":"not milestone complete"},
+    {"status":"In progress","count":1,"completionCredit":"none"}
+  ],
+  "testOutcomes": [
+    {"target":"CADGeometry-Tests","passed":224,"failed":18,"skipped":0,"total":242},
+    {"target":"CADKernel-Tests","passed":416,"failed":48,"skipped":0,"total":464}
+  ],
+  "capabilityStatus": [
+    {"status":"Supported","count":23},
+    {"status":"Partial","count":32}
+  ],
+  "completionGates": {"passed":0,"open":8,"evidenceManifests":0}
+}
+

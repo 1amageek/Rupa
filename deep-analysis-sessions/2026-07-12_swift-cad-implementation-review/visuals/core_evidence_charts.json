@@ -1,0 +1,79 @@
+{
+  "capability_status_counts": [
+    {
+      "status": "ready-subset",
+      "count": 3
+    },
+    {
+      "status": "partial",
+      "count": 10
+    },
+    {
+      "status": "missing",
+      "count": 5
+    },
+    {
+      "status": "blocked",
+      "count": 2
+    }
+  ],
+  "operation_parity": [
+    {
+      "surface": "FeatureOperation IR",
+      "count": 17,
+      "unit": "operations"
+    },
+    {
+      "surface": "CADAgent feature commands",
+      "count": 15,
+      "unit": "operations"
+    },
+    {
+      "surface": "DocumentBuilder",
+      "count": 14,
+      "unit": "operations"
+    },
+    {
+      "surface": "Common across all three",
+      "count": 13,
+      "unit": "operations"
+    }
+  ],
+  "test_inventory": [
+    {
+      "target": "CADCoreTests",
+      "tests": 21
+    },
+    {
+      "target": "CADIRTests",
+      "tests": 165
+    },
+    {
+      "target": "CADKernelTests",
+      "tests": 252
+    },
+    {
+      "target": "CADExchangeTests",
+      "tests": 147
+    },
+    {
+      "target": "CADUSDImportTests",
+      "tests": 4
+    },
+    {
+      "target": "SwiftCADTests",
+      "tests": 29
+    }
+  ],
+  "verification_evidence": {
+    "declared_tests": 618,
+    "tests_with_time_limit": 615,
+    "current_focused_passes": 25,
+    "benchmark_targets": 0,
+    "unique_external_fixtures": 1,
+    "recent_github_runs": 140,
+    "failed_github_runs": 137,
+    "successful_github_runs": 3
+  }
+}
+

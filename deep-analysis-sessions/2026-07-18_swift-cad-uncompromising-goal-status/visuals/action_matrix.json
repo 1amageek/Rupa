@@ -1,0 +1,10 @@
+{
+  "actions": [
+    {"priority": 1, "action": "Close G1 exact geometry", "dependsOn": ["G0 contract"], "exit": "Complete projection/intersection matrix plus property and oracle evidence"},
+    {"priority": 2, "action": "Close G2 validated topology", "dependsOn": ["G1"], "exit": "General invariant, repair, lineage, volume, and oracle evidence"},
+    {"priority": 3, "action": "Generalize G3 modeling", "dependsOn": ["G1", "G2"], "exit": "Every named operation accepts the full valid public IR without shape-envelope rejection"},
+    {"priority": 4, "action": "Prove G4 and G5 contracts", "dependsOn": ["G3"], "exit": "One command/query path, stable selection/cache proof, complete constraint proof"},
+    {"priority": 5, "action": "Close G6 and G7", "dependsOn": ["G1", "G2", "G3", "G4", "G5"], "exit": "External exchange/oracle evidence and same-revision release attestation"}
+  ]
+}
+

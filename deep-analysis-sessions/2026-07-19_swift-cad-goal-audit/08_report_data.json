@@ -1,0 +1,55 @@
+{
+  "framing": {
+    "decision": "Whether swift-CAD can be considered complete or close to complete",
+    "answer": "No. The only defensible status is NOT ACHIEVED, with 0/8 final gates and an unclosed capability inventory.",
+    "tested_revision": null,
+    "observed_head": "a875eeb8c1c1e8a0db9ae34555f0c21a418ff28f",
+    "worktree_clean": false
+  },
+  "key_claims": [
+    {
+      "id": "T101",
+      "claim": "Current product completion is 0/8.",
+      "evidence": ["E001", "E002", "E003", "E004"]
+    },
+    {
+      "id": "T100",
+      "claim": "Completion requires an inventory-derived denominator and certified implicit geometry.",
+      "evidence": ["E002", "E005"]
+    }
+  ],
+  "claim_evidence_patterns": [
+    {
+      "claim": "Current completion",
+      "pattern": "gap",
+      "observed": "0/8 gates; 4 supported of provisional 55; 51 partial",
+      "target": "8/8 gates; 100% inventory registration; N/N supported"
+    },
+    {
+      "claim": "Representation completeness",
+      "pattern": "dependency",
+      "observed": "Parametric-only Curve3D truth",
+      "target": "Parametric or certified implicit truth with bounded derived caches"
+    }
+  ],
+  "visual_plan": [
+    "Gate scorecard",
+    "Capability status by domain",
+    "Exact-geometry dependency flow",
+    "Blocking-action matrix"
+  ],
+  "source_index": [
+    "ROADMAP.md",
+    "CAPABILITY_LEDGER.md",
+    "Sources/CADKernel/KernelCapabilities+*.swift",
+    "Sources/CADGeometry/Curve3D.swift",
+    "Sources/CADGeometry/SurfaceSurfaceIntersectionCurve.swift",
+    "Scripts/check_goal_contract.py",
+    "Scripts/check_capability_ledger.py",
+    "git status"
+  ],
+  "residual_uncertainties": [
+    "The final number of capabilities is unknown until public-contract inventory automation is implemented.",
+    "The latest dirty worktree has not produced final same-revision platform and test evidence."
+  ]
+}

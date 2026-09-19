@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rupa Agent Operation Parity</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#151c31;--text:#eef3ff;--muted:#a8b3cc;--ok:#4ade80;--warn:#fbbf24;--bad:#fb7185;--line:#33415f}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;background:linear-gradient(145deg,#080d1a,#11182a);color:var(--text)}
+main{max-width:1040px;margin:auto;padding:40px 24px 64px}h1{font-size:34px;margin:0 0 8px}.lead{color:var(--muted);font-size:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:24px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}.big{font-size:30px;font-weight:750}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0}.node{padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#111a2d}.arrow{color:var(--muted)}
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:14px;overflow:hidden}th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted)}code{color:#c4b5fd}
+.note{border-left:4px solid var(--warn);padding:12px 16px;background:#211d16;border-radius:8px;margin:22px 0}footer{margin-top:28px;color:var(--muted);font-size:13px}
+</style></head><body><main>
+<h1>Rupa Agent 操作パリティ評価</h1>
+<p class="lead">結論: Agentは広範なライブ編集が可能。ただし全操作は未達で、現在のworktreeは実行不能。RupaのViewer化は有力な目標です。</p>
+<div class="grid">
+<div class="card"><div class="big ok">接続実装済み</div><p>App lifecycle、Unix socket、live EditorSession publication。</p></div>
+<div class="card"><div class="big ok">158</div><p>静的Capability。Automation 126、typed request 32。</p></div>
+<div class="card"><div class="big warn">操作差分あり</div><p>undo/redo、session/file lifecycle、reset、general feature removal。</p></div>
+<div class="card"><div class="big bad">Build: Failed</div><p>現行Swift-CADとの型契約不一致によりAgent targetがcompile不可。</p></div>
+</div>
+<h2>実装フロー</h2><div class="flow"><span class="node">Rupa Viewer/Host</span><span class="arrow">→</span><span class="node">AgentHost + Unix socket</span><span class="arrow">→</span><span class="node">Capability / Command</span><span class="arrow">→</span><span class="node">AutomationRunner</span><span class="arrow">→</span><span class="node">EditorSession</span></div>
+<h2>Viewer化ゲート</h2>
+<table><thead><tr><th>領域</th><th>現在</th><th>判定</th></tr></thead><tbody>
+<tr><td>ライブ接続・session列挙</td><td>実装・テストあり</td><td class="ok">通過</td></tr>
+<tr><td>作成・編集・選択・評価</td><td>広範なCapabilityあり</td><td class="ok">概ね通過</td></tr>
+<tr><td>atomic batch / stale revision</td><td>成功・失敗テストあり</td><td class="ok">通過</td></tr>
+<tr><td>undo / redo</td><td>Coreのみ</td><td class="bad">未通過</td></tr>
+<tr><td>open / create / close / reset</td><td>Agent契約なし</td><td class="bad">未通過</td></tr>
+<tr><td>default live save</td><td>documentURLがnil</td><td class="bad">未通過</td></tr>
+<tr><td>current executable verification</td><td>RupaAgent build失敗</td><td class="bad">未通過</td></tr>
+</tbody></table>
+<div class="note"><strong>推奨:</strong> UI機能追加より先に、全persistent mutationをAgent capabilityへ対応付けるパリティmanifestと生成テストを作る。その後Rupaを「open/render/select/approve」を担う薄いViewerへ縮退可能。</div>
+<footer>Evidence session: 2026-07-27_agent-operation-parity · as of 2026-07-27T22:13:00+09:00</footer>
+</main></body></html>

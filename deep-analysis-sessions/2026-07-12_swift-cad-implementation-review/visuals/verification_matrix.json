@@ -1,0 +1,183 @@
+[
+  {
+    "id": "CAP-01",
+    "area": "Standalone package installation",
+    "goal": "Public Swift Package",
+    "status": "blocked",
+    "current": "Fails without sibling swift-OpenUSD",
+    "evidence": "Package.swift:53; isolated resolve reproduction",
+    "priority": "P0"
+  },
+  {
+    "id": "CAP-02",
+    "area": "Continuous integration",
+    "goal": "Green build/test/WASM evidence",
+    "status": "blocked",
+    "current": "Current run fails dependency resolution; grep has latent deterministic failures",
+    "evidence": "ci.yml:25-58; run 29155022055",
+    "priority": "P0"
+  },
+  {
+    "id": "CAP-03",
+    "area": "Minimal parametric pipeline",
+    "goal": "Parameters -> sketch -> extrude -> B-rep -> mesh",
+    "status": "ready-subset",
+    "current": "Implemented with strict validation and substantial tests",
+    "evidence": "README:19-28; SPEC:1472-1501",
+    "priority": "P2"
+  },
+  {
+    "id": "CAP-04",
+    "area": "Exact curve/surface math",
+    "goal": "Analytic and rational parametric geometry",
+    "status": "ready-subset",
+    "current": "Line/circle/B-spline curves and plane/cylinder/B-spline surfaces",
+    "evidence": "Curve3D.swift:30-32; Surface3D.swift:57-59",
+    "priority": "P2"
+  },
+  {
+    "id": "CAP-05",
+    "area": "Advanced feature evaluators",
+    "goal": "Revolve/sweep/loft/PolySpline/bridge",
+    "status": "partial",
+    "current": "Implemented through explicit constrained subsets",
+    "evidence": "DefaultFeatureEvaluator.swift:52-132; 174 unsupported-operation branches",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-06",
+    "area": "General booleans",
+    "goal": "Exact B-rep union/difference/intersection/slice",
+    "status": "partial",
+    "current": "Axis-aligned rectangular-prism/cell-union subset",
+    "evidence": "BoxBRepBooleanEvaluator.swift:575-631,830-859",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-07",
+    "area": "Fillet/chamfer/blend/shell/patch/thicken",
+    "goal": "Plasticity-class solid/surface edits",
+    "status": "missing",
+    "current": "No FeatureOperation or evaluator types",
+    "evidence": "CAD_KERNEL_REQUIREMENTS.md:42-47; FeatureOperation.swift:1-18",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-08",
+    "area": "Sketch constraint solving",
+    "goal": "General constraint system",
+    "status": "partial",
+    "current": "Constraint graph plus sequential direct dimension mutation",
+    "evidence": "SketchDimensionSolver.swift:13-42,105-165",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-09",
+    "area": "Direct topology editing",
+    "goal": "Face/edge/vertex editing with healing",
+    "status": "partial",
+    "current": "Rectangle/planar subsets; move face/edge/vertex, shell, thicken absent",
+    "evidence": "FaceLoopOffsetFeatureEvaluator.swift:109-135; EdgeOffsetFeatureEvaluator.swift:199-225",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-10",
+    "area": "Stable subobject identity",
+    "goal": "References survive recomputation and topology change",
+    "status": "partial",
+    "current": "Basic generated coverage; trim/generated-surface and split/merge stability remain roadmap",
+    "evidence": "CAD_KERNEL_REQUIREMENTS.md:83-86,94",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-11",
+    "area": "Facade/UI/Agent operation parity",
+    "goal": "Every operation shares one request path",
+    "status": "partial",
+    "current": "17 IR cases; 14 builder operations; 15 agent feature commands; 13 common",
+    "evidence": "FeatureOperation.swift:1-18; DocumentBuilder.swift; CADAgentCommand.swift:1-18",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-12",
+    "area": "Pattern and array evaluation",
+    "goal": "Linear/radial/grid/curve/placement repetition",
+    "status": "missing",
+    "current": "No feature implementation",
+    "evidence": "CAD_KERNEL_REQUIREMENTS.md:49",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-13",
+    "area": "Technical drawing and inspection",
+    "goal": "Hidden-line/section/hatching/view metadata",
+    "status": "missing",
+    "current": "PDF is a count summary; SVG is triangle XY projection",
+    "evidence": "PDFExporter.swift:8-25; SVGExchange.swift:8-51",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-14",
+    "area": "Exact CAD exchange",
+    "goal": "Curves/surfaces/trims/topology/units",
+    "status": "missing",
+    "current": "STEP uses triangulated face sets; IGES uses Type 110 triangle wires",
+    "evidence": "STEPExchange.swift:8-90; IGESExchange.swift:8-97",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-15",
+    "area": "Mesh/profile exchange",
+    "goal": "Declared strict exchange subsets",
+    "status": "ready-subset",
+    "current": "Implemented with strict fail-closed parsers; external corpus limited",
+    "evidence": "SPEC.md:127-144,1363-1375",
+    "priority": "P2"
+  },
+  {
+    "id": "CAP-16",
+    "area": "Native schema evolution",
+    "goal": "Versioned compatibility and explicit migration",
+    "status": "partial",
+    "current": "selectionDimensions added while current remains 1.0.0; no migration layer/fixtures",
+    "evidence": "SchemaVersion.swift:12-20; CADDocument.swift:9-18",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-17",
+    "area": "WASM deployment",
+    "goal": "Portable operational kernel",
+    "status": "partial",
+    "current": "Local 6.3.1 build passes with sibling dependency; clean CI build fails; no runtime acceptance",
+    "evidence": "README.md:66-86; ci.yml:62-90",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-18",
+    "area": "Performance and memory",
+    "goal": "Allocation/timing budgets and borrowed/COW dense data",
+    "status": "partial",
+    "current": "Incremental reuse exists; no benchmark target, thresholds, or dense COW buffers",
+    "evidence": "CAD_KERNEL_REQUIREMENTS.md:49-50,87-98",
+    "priority": "P1"
+  },
+  {
+    "id": "CAP-19",
+    "area": "Zero-copy import boundary",
+    "goal": "Borrowed/streamed file transport",
+    "status": "partial",
+    "current": "ByteSource boundary exists, but multiple text importers create whole-file String values",
+    "evidence": "SPEC.md:45-76; STEPExchange.swift:93-99",
+    "priority": "P2"
+  },
+  {
+    "id": "CAP-20",
+    "area": "Resource-limit safety",
+    "goal": "Bounded untrusted-file processing",
+    "status": "missing",
+    "current": "Strict shape validation exists; size/count/depth/time ceilings are not specified",
+    "evidence": "SPEC.md:1227-1241",
+    "priority": "P2"
+  }
+]
+

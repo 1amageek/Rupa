@@ -1,0 +1,53 @@
+{
+  "assessmentDate": "2026-08-22",
+  "workspaceRevision": "3ab73b9e3fb1b941b67c9c9e1a3b74747e4700fd",
+  "verdict": {
+    "classification": "Advanced experimental foundation",
+    "overallAttainmentRangePercent": [25, 35],
+    "boundedMechanicalWorkflowRangePercent": [45, 60],
+    "formalConformancePercent": 0,
+    "releaseReady": false
+  },
+  "officialMetrics": [
+    {"metric": "Static Agent capabilities", "value": 164, "unit": "capabilities"},
+    {"metric": "Unified automation-command routes", "value": 126, "unit": "routes"},
+    {"metric": "Typed legacy Agent-request routes", "value": 38, "unit": "routes"},
+    {"metric": "Supported swift-CAD capabilities", "value": 25, "denominator": 67, "unit": "capabilities"},
+    {"metric": "Partial swift-CAD capabilities", "value": 42, "denominator": 67, "unit": "capabilities"},
+    {"metric": "swift-CAD completion gates passed", "value": 0, "denominator": 8, "unit": "gates"},
+    {"metric": "Tests executed in current focused run", "value": 0, "unit": "tests"},
+    {"metric": "Dirty swift-CAD worktree entries", "value": 366, "unit": "paths"}
+  ],
+  "estimatedDimensions": [
+    {"dimension": "Agent operation surface", "score": 65, "basis": "Large typed catalog and real transport; 38 routes remain outside generic capability invocation and MCP is absent."},
+    {"dimension": "Transaction safety", "score": 70, "basis": "Generation checks, dry-run, one-history-entry batching, and rollback are implemented."},
+    {"dimension": "CAD kernel breadth", "score": 37, "basis": "Official ledger reports 25/67 supported capability contracts."},
+    {"dimension": "Universal product architecture", "score": 30, "basis": "Universal evaluation types exist, but the CAD-first session remains the current mutation authority."},
+    {"dimension": "Specialized product domains", "score": 10, "basis": "Manufacturing is explicitly experimental; architecture, turbomachinery, DCC, and simulation profiles lack complete implementations."},
+    {"dimension": "Exchange and handoff", "score": 20, "basis": "Initial export exists while format policy, exact exchange, imports, IFC, and solver handoff remain open."},
+    {"dimension": "Reproducibility", "score": 5, "basis": "Current focused build fails and the local kernel dependency is dirty."},
+    {"dimension": "Formal conformance", "score": 0, "basis": "No versioned machine-readable conformance manifest was found."}
+  ],
+  "workflowReadiness": [
+    {"workflow": "Bounded parametric mechanical part", "state": "Experimental, materially implemented"},
+    {"workflow": "Agent-generated mechanical variants", "state": "Partial"},
+    {"workflow": "Printable manufacturing enclosure", "state": "Experimental"},
+    {"workflow": "Architecture product", "state": "Unavailable as a complete workflow"},
+    {"workflow": "Turbomachinery handoff", "state": "Unavailable as a complete workflow"},
+    {"workflow": "DCC asset", "state": "Unavailable as a complete workflow"},
+    {"workflow": "Simulation execution", "state": "Unavailable"}
+  ],
+  "blockingChain": [
+    "Restore a clean reproducible integration baseline",
+    "Make the universal project transaction the sole mutation authority",
+    "Conform the Core Precision CAD workflow",
+    "Conform the Agent Variant workflow with visual and structured readback",
+    "Add specialized product profiles one vertical slice at a time"
+  ],
+  "currentBuildFailure": {
+    "file": "RupaKit/Sources/RupaCADIntegration/CADGeometrySourceProvider.swift",
+    "line": 128,
+    "message": "Cannot find type 'DocumentTransactionRevision' in scope",
+    "testResult": "Testing cancelled because the build failed."
+  }
+}

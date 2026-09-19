@@ -1,0 +1,9 @@
+{
+  "actions": [
+    { "priority": 1, "action": "Certified implicit intersection truth type", "unblocks": ["G1", "G2", "G3", "G6"], "state": "not implemented" },
+    { "priority": 2, "action": "Complete general geometry intersections and projection", "unblocks": ["G1", "G2", "G3"], "state": "partial" },
+    { "priority": 3, "action": "Public-contract inventory generator", "unblocks": ["G0", "G4", "G7"], "state": "not implemented" },
+    { "priority": 4, "action": "General topology closure", "unblocks": ["G2", "G3", "G6"], "state": "partial" },
+    { "priority": 5, "action": "Same-revision acceptance evidence", "unblocks": ["G0", "G7"], "state": "absent" }
+  ]
+}

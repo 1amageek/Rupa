@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>swift-CAD Goal Audit</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7fb; --card:#fff; --ink:#171a21; --muted:#626b7a; --line:#d9deea; --red:#c9364f; --amber:#c47b12; --green:#1e8b62; --blue:#315fd6; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f1218; --card:#171b24; --ink:#f1f4fa; --muted:#9ba6b8; --line:#303847; --red:#ff6f83; --amber:#f2ad45; --green:#55d5a3; --blue:#82a2ff; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 system-ui,-apple-system,sans-serif; }
+    main { max-width:1120px; margin:auto; padding:40px 20px 72px; }
+    h1 { font-size:clamp(30px,5vw,54px); line-height:1.08; margin:0 0 12px; }
+    h2 { margin:44px 0 14px; font-size:24px; }
+    p { max-width:850px; }
+    .lead { font-size:18px; color:var(--muted); }
+    .verdict { border:1px solid var(--red); background:color-mix(in srgb,var(--red) 10%,var(--card)); border-radius:16px; padding:22px; margin:28px 0; }
+    .verdict strong { color:var(--red); font-size:24px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+    .metric { font-size:34px; font-weight:750; letter-spacing:-.03em; }
+    .label { color:var(--muted); }
+    .zero { color:var(--red); }
+    .partial { color:var(--amber); }
+    .supported { color:var(--green); }
+    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); }
+    th,td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+    .bar { height:12px; background:color-mix(in srgb,var(--line) 75%,transparent); border-radius:999px; overflow:hidden; min-width:160px; }
+    .bar > span { display:block; height:100%; background:var(--green); }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; align-items:center; }
+    .flow div { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; text-align:center; min-height:72px; display:grid; place-items:center; }
+    .flow .arrow { border:0; background:transparent; color:var(--muted); min-height:auto; }
+    .contract { font-family:ui-monospace,SFMono-Regular,monospace; white-space:pre-wrap; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+    .note { color:var(--muted); font-size:13px; }
+    @media(max-width:760px){ .flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg)} table{font-size:13px} }
+    @media print { body{background:white;color:black}.card,.verdict,table,.contract,.flow div{break-inside:avoid} }
+  </style>
+</head>
+<body>
+<main>
+  <h1>swift-CAD 完成状況監査</h1>
+  <p class="lead">実装活動と製品完成を分離し、限定envelopeやfocused testを完成率へ加算しない二値監査です。</p>
+  <section class="verdict">
+    <strong>NOT ACHIEVED — 0 / 8 gates</strong>
+    <p>現在は基盤と限定sliceが多数ある開発カーネルです。完成した一般CADカーネルではなく、最終Capability分母もまだ閉じていません。</p>
+  </section>
+
+  <div class="grid">
+    <div class="card"><div class="metric zero">0 / 8</div><div class="label">final gates passed</div></div>
+    <div class="card"><div class="metric supported">4</div><div class="label">supported capabilities</div></div>
+    <div class="card"><div class="metric partial">51</div><div class="label">partial capabilities</div></div>
+    <div class="card"><div class="metric">40</div><div class="label">development envelopes</div></div>
+    <div class="card"><div class="metric zero">0</div><div class="label">final evidence manifests</div></div>
+    <div class="card"><div class="metric partial">OPEN</div><div class="label">public-contract inventory</div></div>
+  </div>
+
+  <h2>登録済みCapabilityの内訳</h2>
+  <table>
+    <thead><tr><th>Domain</th><th>Registered</th><th>Supported</th><th>Partial</th><th>Supported share</th></tr></thead>
+    <tbody>
+      <tr><td>Geometry</td><td>7</td><td>4</td><td>3</td><td><div class="bar"><span style="width:57.1%"></span></div></td></tr>
+      <tr><td>Topology</td><td>4</td><td>0</td><td>4</td><td><div class="bar"><span style="width:0%"></span></div></td></tr>
+      <tr><td>Modeling &amp; constraints</td><td>40</td><td>0</td><td>40</td><td><div class="bar"><span style="width:0%"></span></div></td></tr>
+      <tr><td>Shared API</td><td>1</td><td>0</td><td>1</td><td><div class="bar"><span style="width:0%"></span></div></td></tr>
+      <tr><td>Exchange</td><td>3</td><td>0</td><td>3</td><td><div class="bar"><span style="width:0%"></span></div></td></tr>
+    </tbody>
+  </table>
+  <p class="note">4/55は登録済み契約の状態であり、製品完成率ではありません。公開契約棚卸しが閉じると分母は増える可能性があります。</p>
+
+  <h2>最大の構造的不足</h2>
+  <div class="flow" aria-label="Exact geometry dependency flow">
+    <div>General NURBS inputs</div><div class="arrow">→</div><div>Certified implicit intersection truth</div><div class="arrow">→</div><div>Validated B-rep / Boolean / STEP・IGES</div>
+  </div>
+  <p>現在の <code>Curve3D</code> は解析曲線とB-splineだけです。しかし一般の有理NURBS面交線は有理パラメータ化できるとは限りません。従って、operandで定義された交線branchとinterval enclosureを正本にし、fitted splineを検証済み派生cacheにする必要があります。</p>
+
+  <h2>できていること／できていないこと</h2>
+  <table>
+    <thead><tr><th>Area</th><th>Working foundation</th><th>Completion blocker</th></tr></thead>
+    <tbody>
+      <tr><td>Development contract</td><td>Remote OpenUSD revision pin、module分離、strict schema、static check</td><td>fresh checkout全platform・同一revision evidenceなし</td></tr>
+      <tr><td>Geometry</td><td>analytic curves/surfaces、rational B-spline curves、adaptive planar predicates、限定intersection slice</td><td>一般intersection/projection、singularity、implicit truth、oracle coverage</td></tr>
+      <tr><td>Topology</td><td>coedge B-rep、pcurve、validation/sewing/lineageの基盤</td><td>一般curved shellのmanifold/watertight/orientation/volume/repair closure</td></tr>
+      <tr><td>Modeling</td><td>40 capabilityにexactな限定envelope</td><td>全40件がpartial。一般Boolean、sweep/loft、blend、shell/edit、pattern、offset/trim/extend/match</td></tr>
+      <tr><td>Shared path</td><td>CADCommand/EvaluatedDocumentとparity fixtureの基盤</td><td>全public path、stable selection、cache determinismのrepository-wide proof</td></tr>
+      <tr><td>Constraints</td><td>solver foundation</td><td>全relation、AD/Jacobian、DOF分類、conflict/singular診断、document integration</td></tr>
+      <tr><td>Exchange</td><td>STEP/IGESの限定exact subset、mesh exchange実装</td><td>一般topology/entity、implicit transfer bounds、external corpus/oracle、inventory registration</td></tr>
+    </tbody>
+  </table>
+
+  <h2>妥協のない完成式</h2>
+  <div class="contract">100% public contracts registered under Capability IDs
+AND N/N registered capabilities supported
+AND G0..G7 PASS on one tested source revision
+AND no exact evaluator has a mesh fallback
+AND no valid public input is rejected for an implementation envelope</div>
+
+  <h2>次のクリティカルパス</h2>
+  <ol>
+    <li>certified implicit intersection-curve正本型を設計・実装する。</li>
+    <li>G1の一般intersection/projectionを閉じ、未証明partial resultを禁止する。</li>
+    <li>新しいcurve truthでG2 topology invariantsを閉じる。</li>
+    <li>general Boolean vertical sliceをIRからlineage/parity/persistenceまで完成させる。</li>
+    <li>公開契約inventoryをsourceから生成し、未登録APIを登録または削除する。</li>
+  </ol>
+  <p class="note">監査日: 2026-07-19。観測HEAD: a875eeb8c1c1e8a0db9ae34555f0c21a418ff28f。worktreeはdirtyであり、tested revisionとしては扱っていません。</p>
+</main>
+</body>
+</html>

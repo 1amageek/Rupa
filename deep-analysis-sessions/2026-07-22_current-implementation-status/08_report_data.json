@@ -1,0 +1,62 @@
+{
+  "framing": {
+    "title": "Rupa Current Implementation Status",
+    "asOf": "2026-07-22T09:53:07+09:00",
+    "decisionQuestion": "What is implemented, reachable, verified, and release-ready in the current worktree?",
+    "answer": "The universal foundation is real and substantial, but integration is incomplete, the app does not build against the current Swift-CAD worktree, and lower-level kernel suites are red."
+  },
+  "key_claims": [
+    {
+      "id": "claim-foundation",
+      "claim": "Universal 3D foundations have concrete implementation.",
+      "support": ["E001", "E008"],
+      "limitation": "First-slice completion is not milestone completion."
+    },
+    {
+      "id": "claim-reachability",
+      "claim": "The universal path is not yet the active app rendering/input path.",
+      "support": ["E002"],
+      "limitation": "Runtime launch could not be checked because the app build is broken."
+    },
+    {
+      "id": "claim-verification",
+      "claim": "Current executable verification is red.",
+      "support": ["E003", "E004", "E005"],
+      "limitation": "Only two Swift-CAD test targets completed full runs."
+    },
+    {
+      "id": "claim-readiness",
+      "claim": "No release or conformance claim is supportable from this worktree.",
+      "support": ["E003", "E006", "E007"],
+      "limitation": "No Rupa release manifest was selected."
+    }
+  ],
+  "claim_evidence_patterns": [
+    {"claim":"claim-foundation","pattern":"maturity distribution","visual":"universal-slices"},
+    {"claim":"claim-reachability","pattern":"consumer path gap","visual":"integration-flow"},
+    {"claim":"claim-verification","pattern":"passed versus failed","visual":"test-outcomes"},
+    {"claim":"claim-readiness","pattern":"binary gate gap","visual":"completion-gates"}
+  ],
+  "visual_plan": [
+    {"id":"universal-slices","type":"horizontal bars","source":"visuals/core_evidence_charts.json"},
+    {"id":"test-outcomes","type":"stacked bars","source":"visuals/core_evidence_charts.json"},
+    {"id":"integration-flow","type":"flow","source":"visuals/evidence_graph.json"},
+    {"id":"risk-priority","type":"matrix","source":"visuals/risk_matrix.json"}
+  ],
+  "source_index": [
+    {"id":"E001","source":"Rupa/UNIVERSAL_3D_IMPLEMENTATION_PLAN.md"},
+    {"id":"E002","source":"RupaKit app-facing call sites"},
+    {"id":"E003","source":"Rupa workspace xcodebuild output"},
+    {"id":"E004","source":"CADGeometry-Tests xcresult"},
+    {"id":"E005","source":"CADKernel-Tests xcresult"},
+    {"id":"E006","source":"swift-CAD/ROADMAP.md"},
+    {"id":"E007","source":"Git worktree statistics"},
+    {"id":"E008","source":"RupaKit universal implementation source"}
+  ],
+  "residual_uncertainties": [
+    "RupaKit lower-level test behavior in this exact worktree remains blocked by package-wide compilation failure.",
+    "No app runtime, persistence round trip, UI workflow, cross-platform build, WASM build, or performance campaign was executed.",
+    "The next selected Rupa conformance manifest is unspecified."
+  ]
+}
+

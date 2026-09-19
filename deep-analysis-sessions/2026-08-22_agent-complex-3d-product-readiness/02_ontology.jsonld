@@ -1,0 +1,517 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "layer": "https://deep-analysis.dev/layers#",
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": {"@id": "ea:sessionMetadata", "@type": "@json"},
+    "view": {"@id": "ea:view", "@type": "@json"},
+    "tags": {"@id": "ea:tag", "@container": "@set"},
+    "epistemicStatus": {"@id": "ea:epistemicStatus"},
+    "confidence": {"@id": "ea:confidence", "@type": "xsd:decimal"},
+    "priorConfidence": {"@id": "ea:priorConfidence", "@type": "xsd:decimal"},
+    "posteriorConfidence": {"@id": "ea:posteriorConfidence", "@type": "xsd:decimal"},
+    "parent": {"@id": "ea:parent", "@type": "@id"},
+    "children": {"@id": "ea:children", "@type": "@id", "@container": "@set"},
+    "decompositionStrategy": {"@id": "ea:decompositionStrategy"},
+    "derivedFrom": {"@id": "ea:derivedFrom", "@type": "@id", "@container": "@set"},
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": {"@id": "ea:inferenceType"},
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": {"@id": "ea:inferenceStrength", "@type": "xsd:decimal"},
+    "synthesis": {"@id": "ea:synthesis", "@type": "@json"},
+    "claimRole": {"@id": "ea:claimRole"},
+    "primaryEvidence": {"@id": "ea:primaryEvidence", "@type": "@id", "@container": "@set"},
+    "counterEvidence": {"@id": "ea:counterEvidence", "@type": "@id", "@container": "@set"},
+    "sourceTopics": {"@id": "ea:sourceTopics", "@type": "@id", "@container": "@set"},
+    "reasoningPattern": {"@id": "ea:reasoningPattern"},
+    "synthesisStrength": {"@id": "ea:synthesisStrength", "@type": "xsd:decimal"},
+    "limitations": {"@id": "ea:limitations"},
+    "visualEvidenceRequirement": {"@id": "ea:visualEvidenceRequirement", "@type": "@json"},
+    "evidencePattern": {"@id": "ea:evidencePattern"},
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": {"@id": "ea:evidence", "@type": "@json"},
+    "investigations": {"@id": "ea:investigations", "@type": "@json"},
+    "insights": {"@id": "ea:insights", "@type": "@json"},
+    "chartableData": {"@id": "ea:chartableData", "@type": "@json"},
+    "questionStatus": {"@id": "ea:questionStatus"},
+    "supports": {"@id": "rel:supports", "@type": "@id", "@container": "@set"},
+    "refutes": {"@id": "rel:refutes", "@type": "@id", "@container": "@set"},
+    "asksAbout": {"@id": "rel:asksAbout", "@type": "@id", "@container": "@set"},
+    "resolvedBy": {"@id": "rel:resolvedBy", "@type": "@id", "@container": "@set"},
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": {"@id": "ea:supportsClaim", "@type": "@id", "@container": "@set"},
+    "visualRole": {"@id": "ea:visualRole"},
+    "appliedFrameworks": {"@id": "ea:appliedFrameworks", "@container": "@set"},
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": {"@id": "prov:generatedAtTime", "@type": "xsd:dateTime"},
+    "updatedAt": {"@id": "ea:updatedAt", "@type": "xsd:dateTime"},
+    "wasGeneratedBy": {"@id": "prov:wasGeneratedBy"},
+    "wasRevisionOf": {"@id": "prov:wasRevisionOf"},
+    "source": "ea:source",
+    "sourceUrl": {"@id": "schema:url"},
+    "reliability": {"@id": "ea:reliability", "@type": "xsd:decimal"},
+    "causes": {"@id": "rel:causes", "@type": "@id"},
+    "causedBy": {"@id": "rel:causedBy", "@type": "@id", "@reverse": "rel:causes"},
+    "enables": {"@id": "rel:enables", "@type": "@id"},
+    "prevents": {"@id": "rel:prevents", "@type": "@id"},
+    "correlatesWith": {"@id": "rel:correlatesWith", "@type": "@id"},
+    "implies": {"@id": "rel:implies", "@type": "@id"},
+    "contradicts": {"@id": "rel:contradicts", "@type": "@id"},
+    "partOf": {"@id": "rel:partOf", "@type": "@id"},
+    "hasComponent": {"@id": "rel:hasComponent", "@type": "@id", "@reverse": "rel:partOf"},
+    "generalizes": {"@id": "rel:generalizes", "@type": "@id"},
+    "specializes": {"@id": "rel:specializes", "@type": "@id", "@reverse": "rel:generalizes"},
+    "analogousTo": {"@id": "rel:analogousTo", "@type": "@id"},
+    "precedes": {"@id": "rel:precedes", "@type": "@id"},
+    "triggers": {"@id": "rel:triggers", "@type": "@id"},
+    "coOccursWith": {"@id": "rel:coOccursWith", "@type": "@id"},
+    "manifestsAs": {"@id": "rel:manifestsAs", "@type": "@id"},
+    "addresses": {"@id": "rel:addresses", "@type": "@id"},
+    "addressedBy": {"@id": "rel:addressedBy", "@type": "@id", "@reverse": "rel:addresses"},
+    "operatesIn": {"@id": "rel:operatesIn", "@type": "@id"},
+    "produces": {"@id": "rel:produces", "@type": "@id"},
+    "strength": {"@id": "rel:strength", "@type": "xsd:decimal"},
+    "polarity": {"@id": "rel:polarity"},
+    "evidenceCount": {"@id": "epi:evidenceCount", "@type": "xsd:integer"},
+    "counterEvidenceCount": {"@id": "epi:counterEvidenceCount", "@type": "xsd:integer"},
+    "investigationCount": {"@id": "epi:investigationCount", "@type": "xsd:integer"},
+    "lastUpdated": {"@id": "epi:lastUpdated", "@type": "xsd:dateTime"},
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": {"@id": "epi:fromConfidence", "@type": "xsd:decimal"},
+    "toConfidence": {"@id": "epi:toConfidence", "@type": "xsd:decimal"},
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence"
+  },
+  "session": {
+    "id": "2026-08-22_agent-complex-3d-product-readiness",
+    "title": "Agent-generated complex 3D product readiness",
+    "createdAt": "2026-08-22T19:00:00+09:00",
+    "workspaceRevision": "3ab73b9e3fb1b941b67c9c9e1a3b74747e4700fd"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/goal",
+            "kind": "category",
+            "title": "Goal contract",
+            "layer": "Context",
+            "category": "goal",
+            "members": ["topic:goal", "evidence:goal-contract", "question:attainment"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/system",
+            "kind": "category",
+            "title": "Current system",
+            "layer": "Situation",
+            "category": "system",
+            "members": ["topic:agent", "topic:kernel", "topic:universal", "topic:domains", "topic:conformance"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/operation",
+        "kind": "layer",
+        "title": "Operation",
+        "layer": "Operation",
+        "children": [
+          {
+            "id": "group:category/operation/verified-paths",
+            "kind": "category",
+            "title": "Verified paths",
+            "layer": "Operation",
+            "category": "verified-paths",
+            "members": ["evidence:agent-routes", "evidence:transaction-path", "evidence:modeling-tests", "evidence:kernel-ledger", "evidence:kernel-gates"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/completion-blockers",
+            "kind": "category",
+            "title": "Completion blockers",
+            "layer": "Problem",
+            "category": "completion-blockers",
+            "members": ["evidence:dual-authority", "evidence:missing-domains", "evidence:missing-mcp", "evidence:no-manifests"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/issue",
+        "kind": "layer",
+        "title": "Issue",
+        "layer": "Issue",
+        "children": [
+          {
+            "id": "group:category/issue/reproducibility",
+            "kind": "category",
+            "title": "Reproducibility",
+            "layer": "Issue",
+            "category": "reproducibility",
+            "members": ["topic:reproducibility", "evidence:build-failure", "evidence:dirty-dependency", "insight:reproducibility-root"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/critical-path",
+            "kind": "category",
+            "title": "Critical path",
+            "layer": "Solution",
+            "category": "critical-path",
+            "members": ["insight:critical-path"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/verdict",
+            "kind": "category",
+            "title": "Verdict",
+            "layer": "Outcome",
+            "category": "verdict",
+            "members": ["insight:bounded-real", "insight:broad-incomplete", "insight:readiness-verdict"]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "topic:goal",
+      "@type": "Topic",
+      "title": "Complex 3D product generation by Agents",
+      "content": "The declared goal spans editable source, commands, evaluation, interaction, Agent automation, diagnostics, handoff, performance, and verification across multiple product profiles.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "children": ["topic:agent", "topic:kernel", "topic:universal", "topic:domains", "topic:conformance"]
+    },
+    {
+      "@id": "evidence:goal-contract",
+      "@type": "Evidence",
+      "title": "Goal and conformance documents define workflow-level completion",
+      "content": "GOAL_STATEMENT, CONFORMANCE_PROFILES, and ACCEPTANCE_WORKFLOW_CONTRACTS require end-to-end evidence rather than isolated feature presence.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Rupa product contracts",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/CONFORMANCE_PROFILES.md",
+      "reliability": 0.98,
+      "supports": ["topic:goal"]
+    },
+    {
+      "@id": "question:attainment",
+      "@type": "Question",
+      "title": "How much of the stated purpose is currently achieved?",
+      "content": "Assess bounded Agent CAD, full mechanical workflow, broad complex-product profiles, and release reproducibility separately.",
+      "epistemicStatus": "Answered",
+      "confidence": 0.95,
+      "questionStatus": "Answered",
+      "asksAbout": ["topic:goal"],
+      "resolvedBy": ["insight:readiness-verdict"]
+    },
+    {
+      "@id": "topic:agent",
+      "@type": "Topic",
+      "title": "Agent control plane",
+      "content": "Typed discovery, JSON-RPC requests, CLI access, capability execution, and deterministic readback form the external Agent surface.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.95,
+      "parent": "topic:goal"
+    },
+    {
+      "@id": "topic:kernel",
+      "@type": "Topic",
+      "title": "CAD kernel capability envelope",
+      "content": "Swift-CAD owns exact geometry, topology, modeling operations, and exchange primitives used by Rupa.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.97,
+      "parent": "topic:goal"
+    },
+    {
+      "@id": "topic:universal",
+      "@type": "Topic",
+      "title": "Universal project authority",
+      "content": "The target architecture requires one project transaction and evaluation authority shared by UI, CLI, Agent, and other adapters.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.94,
+      "parent": "topic:goal"
+    },
+    {
+      "@id": "topic:domains",
+      "@type": "Topic",
+      "title": "Specialized product domains",
+      "content": "Architecture, manufacturing, turbomachinery, DCC, Agent variants, and simulation require distinct conforming profiles on the shared foundation.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96,
+      "parent": "topic:goal"
+    },
+    {
+      "@id": "topic:conformance",
+      "@type": "Topic",
+      "title": "Machine-readable conformance",
+      "content": "A release claim exists only through a versioned manifest with case sets, fixtures, compatibility tuple, and evidence.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "parent": "topic:goal"
+    },
+    {
+      "@id": "evidence:agent-routes",
+      "@type": "Evidence",
+      "title": "164 static Agent capabilities are discoverable",
+      "content": "The catalog contains 126 automation-command routes and 38 typed Agent-request routes; the generic capability executor rejects the latter route class.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "AgentCapabilityCatalog and AgentCapabilityInvocationExecutor",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaAgentRuntime/AgentCapabilityCatalog.swift",
+      "reliability": 0.99,
+      "supports": ["topic:agent"],
+      "chartableData": {"automationCommand": 126, "agentRequest": 38, "total": 164}
+    },
+    {
+      "@id": "evidence:transaction-path",
+      "@type": "Evidence",
+      "title": "Agent mutations use generation-safe atomic transactions",
+      "content": "AutomationRunner stages source batches, checks revisions, commits one history entry, and EditorSession restores document, workspace, and history state on failure.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "source": "AutomationRunner+Batch and EditorSession",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaAutomation/AutomationRunner+Batch.swift",
+      "reliability": 0.98,
+      "supports": ["topic:agent", "insight:bounded-real"]
+    },
+    {
+      "@id": "evidence:modeling-tests",
+      "@type": "Evidence",
+      "title": "Representative tests inspect real evaluated geometry",
+      "content": "Sweep, revolve, loft, guide, and boolean Agent integration tests assert source features and evaluated bodies, surfaces, and curves rather than declaration presence alone.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.88,
+      "source": "RupaAgentModelingTests",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Tests/RupaAgentModelingTests/AgentLoftIntegrationTests.swift",
+      "reliability": 0.90,
+      "supports": ["topic:agent", "topic:kernel", "insight:bounded-real"],
+      "limitations": "The current checkout did not compile, so these tests were inspected but not executed in this assessment."
+    },
+    {
+      "@id": "evidence:kernel-ledger",
+      "@type": "Evidence",
+      "title": "25 of 67 swift-CAD capability contracts are supported",
+      "content": "The ledger check reports 25 supported, 42 partial, and 0 planned capabilities across 112 unique envelopes.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "swift-CAD capability ledger checker",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Scripts/check_capability_ledger.py",
+      "reliability": 0.99,
+      "supports": ["topic:kernel", "insight:broad-incomplete"],
+      "chartableData": {"supported": 25, "partial": 42, "total": 67}
+    },
+    {
+      "@id": "evidence:kernel-gates",
+      "@type": "Evidence",
+      "title": "Zero of eight swift-CAD completion gates pass",
+      "content": "The goal-contract checker reports G0 through G7 open, including reproducibility, exact geometry, topology, modeling, public path, constraints, exchange, and release verification.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "swift-CAD goal contract checker",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Scripts/check_goal_contract.py",
+      "reliability": 0.99,
+      "supports": ["topic:kernel", "insight:broad-incomplete"],
+      "chartableData": {"passed": 0, "total": 8}
+    },
+    {
+      "@id": "evidence:dual-authority",
+      "@type": "Evidence",
+      "title": "Universal project migration retains two authority paths",
+      "content": "The current editor mutation/evaluation path is CAD-first through EditorSession and EvaluationScheduler, while ProjectController provides the target universal actor path but is not yet the Agent mutation authority.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96,
+      "source": "RupaKit architecture and implementation",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/ARCHITECTURE.md",
+      "reliability": 0.96,
+      "supports": ["topic:universal", "insight:broad-incomplete"]
+    },
+    {
+      "@id": "evidence:missing-domains",
+      "@type": "Evidence",
+      "title": "Most specialized product profiles lack complete source modules",
+      "content": "Manufacturing is explicitly experimental; architecture, turbomachinery, DCC, and simulation profiles exist as contracts without corresponding complete source/evaluation/handoff targets.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "source": "Source target inventory and implementation status",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/IMPLEMENTATION_STATUS.md",
+      "reliability": 0.96,
+      "supports": ["topic:domains", "insight:broad-incomplete"]
+    },
+    {
+      "@id": "evidence:missing-mcp",
+      "@type": "Evidence",
+      "title": "MCP and vision-Agent feedback are not implemented",
+      "content": "The known issue backlog states that no MCP bridge exists, preventing vision-LLM Agents from directly consuming capabilities and renders.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Known Issues Backlog W-5",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/ISSUES.md",
+      "reliability": 0.98,
+      "supports": ["topic:agent", "insight:broad-incomplete"]
+    },
+    {
+      "@id": "evidence:no-manifests",
+      "@type": "Evidence",
+      "title": "No versioned conformance claim was found",
+      "content": "The repository contains the manifest contract and human profile catalog, but no machine-readable profile manifest satisfying the release-claim rule.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Repository artifact inventory",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/CONFORMANCE_MANIFEST_CONTRACT.md",
+      "reliability": 0.97,
+      "supports": ["topic:conformance", "insight:broad-incomplete"]
+    },
+    {
+      "@id": "topic:reproducibility",
+      "@type": "Topic",
+      "title": "Current integration reproducibility",
+      "content": "The current source revision must compile and use a deterministic dependency tuple before behavior can be claimed for a release.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "prevents": "insight:readiness-verdict"
+    },
+    {
+      "@id": "evidence:build-failure",
+      "@type": "Evidence",
+      "title": "Focused current-checkout test build fails",
+      "content": "xcodebuild cancelled testing because CADGeometrySourceProvider cannot resolve DocumentTransactionRevision; zero tests executed.",
+      "epistemicStatus": "Verified",
+      "confidence": 1.0,
+      "source": "2026-08-22 xcodebuild xcresult",
+      "sourceUrl": "file:///Users/1amageek/Library/Developer/Xcode/DerivedData/RupaKit-gnbihugemdbrejbercooyzieeofj/Logs/Test/Test-RupaKit-Package-2026.08.22_18-31-57-+0900.xcresult",
+      "reliability": 1.0,
+      "supports": ["topic:reproducibility", "insight:reproducibility-root"]
+    },
+    {
+      "@id": "evidence:dirty-dependency",
+      "@type": "Evidence",
+      "title": "RupaKit resolves a dirty local swift-CAD checkout",
+      "content": "Package.swift uses ../swift-CAD and that worktree contains 366 modified or untracked entries, so the effective kernel is not represented by the recorded commit alone.",
+      "epistemicStatus": "Verified",
+      "confidence": 1.0,
+      "source": "Package.swift and git status",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Package.swift",
+      "reliability": 1.0,
+      "supports": ["topic:reproducibility", "insight:reproducibility-root"]
+    },
+    {
+      "@id": "insight:reproducibility-root",
+      "@type": "Insight",
+      "title": "Dependency-baseline drift is a root blocker",
+      "content": "The missing import is the immediate compile defect, while the architectural root is that an uncommitted local kernel state participates in the product build without a passing compatibility tuple.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "derivedFrom": ["evidence:build-failure", "evidence:dirty-dependency"],
+      "rationale": "A one-line import can restore compilation but cannot make the evaluated dependency state reproducible or release-verifiable.",
+      "supportsClaim": ["insight:broad-incomplete", "insight:readiness-verdict"]
+    },
+    {
+      "@id": "insight:critical-path",
+      "@type": "Insight",
+      "title": "Completion should proceed by vertical conformance",
+      "content": "Restore a clean baseline, unify project authority, conform Core Precision CAD, conform Agent Variant with observation and export, then add specialized domains.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.94,
+      "derivedFrom": ["evidence:goal-contract", "evidence:kernel-gates", "evidence:dual-authority", "evidence:build-failure"],
+      "rationale": "Every downstream profile depends on Core, and additional isolated operations do not close workflow gates.",
+      "addresses": "insight:broad-incomplete"
+    },
+    {
+      "@id": "insight:bounded-real",
+      "@type": "Insight",
+      "title": "Bounded Agent-driven mechanical modeling is real",
+      "content": "Rupa has substantive vertical slices for typed, atomic, generation-safe Agent operations that evaluate into actual CAD bodies and surfaces.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.92,
+      "derivedFrom": ["evidence:agent-routes", "evidence:transaction-path", "evidence:modeling-tests"],
+      "rationale": "The route reaches concrete command and evaluator implementations and the tests inspect geometry results.",
+      "supportsClaim": ["insight:readiness-verdict"]
+    },
+    {
+      "@id": "insight:broad-incomplete",
+      "@type": "Insight",
+      "title": "The broad complex-product goal is not yet achieved",
+      "content": "Kernel breadth, universal authority, specialized domains, Agent observation, handoff, reproducibility, and formal conformance are all incomplete.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "derivedFrom": ["evidence:kernel-ledger", "evidence:kernel-gates", "evidence:dual-authority", "evidence:missing-domains", "evidence:missing-mcp", "evidence:no-manifests", "evidence:build-failure", "evidence:dirty-dependency"],
+      "rationale": "The goal requires complete product workflows; multiple required gates have direct negative evidence.",
+      "supportsClaim": ["insight:readiness-verdict"]
+    },
+    {
+      "@id": "insight:readiness-verdict",
+      "@type": "Insight",
+      "title": "Advanced experimental foundation, roughly 25-35% of the broad purpose",
+      "content": "The strongest accurate claim is a real but bounded Agent-driven mechanical CAD foundation. It is not currently a reproducible production system for complex 3D products across the declared profiles.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "derivedFrom": ["insight:bounded-real", "insight:broad-incomplete", "insight:reproducibility-root"],
+      "rationale": "A range is used because the goal mixes control-plane, kernel, product-domain, handoff, and release criteria that do not share one official denominator.",
+      "primaryEvidence": ["evidence:agent-routes", "evidence:kernel-ledger", "evidence:kernel-gates", "evidence:build-failure", "evidence:no-manifests"],
+      "sourceTopics": ["topic:goal", "topic:agent", "topic:kernel", "topic:universal", "topic:domains", "topic:conformance", "topic:reproducibility"],
+      "synthesis": {
+        "claimRole": "final-claim",
+        "reasoningPattern": "convergent-evidence",
+        "synthesisStrength": 0.95,
+        "limitations": "The overall percentage is an engineering estimate; official metrics are reported separately."
+      },
+      "visualEvidenceRequirement": {
+        "evidencePattern": "coverage-and-blocker-chain",
+        "requiredChartType": "stacked-bars-and-critical-path"
+      }
+    }
+  ]
+}

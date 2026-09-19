@@ -1,0 +1,50 @@
+{
+  "framing": {
+    "decision": "Whether swift-CAD has reached its uncompromising pre-v1 kernel goal",
+    "answer": "No",
+    "overallStatus": "NOT ACHIEVED",
+    "gatesPassed": 0,
+    "gatesRequired": 8
+  },
+  "key_claims": [
+    {
+      "id": "C1",
+      "claim": "The project has a substantial foundation but is not close to binary completion.",
+      "evidence": ["E001", "E002", "E003"]
+    },
+    {
+      "id": "C2",
+      "claim": "Successful macOS and WebAssembly builds do not close any final gate.",
+      "evidence": ["E001", "E004", "E005"]
+    },
+    {
+      "id": "C3",
+      "claim": "The critical path is complete geometry, then topology, then general modeling.",
+      "evidence": ["E003", "E006"]
+    }
+  ],
+  "claim_evidence_patterns": [
+    {"claim": "C1", "pattern": "gap", "visual": "capability-gap"},
+    {"claim": "C1", "pattern": "completion", "visual": "gate-matrix"},
+    {"claim": "C3", "pattern": "dependency", "visual": "closure-sequence"}
+  ],
+  "visual_plan": [
+    "Capability status comparison",
+    "Eight-gate verification matrix",
+    "Dependency-ordered closure flow",
+    "Gate-by-gate foundation and blocker table"
+  ],
+  "source_index": [
+    "/Users/1amageek/Desktop/3D/swift-CAD/ROADMAP.md",
+    "/Users/1amageek/Desktop/3D/swift-CAD/CAPABILITY_LEDGER.md",
+    "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel/KernelCapabilities+Geometry.swift",
+    "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel/KernelCapabilities+Feature.swift",
+    "/Users/1amageek/Desktop/3D/swift-CAD/Scripts/check_goal_contract.py",
+    "/Users/1amageek/Desktop/3D/swift-CAD/.github/workflows/ci.yml"
+  ],
+  "residual_uncertainties": [
+    "The final independent CAD oracle products and fixture corpora are not yet selected.",
+    "The current dirty worktree has not been tested as a complete revision-bound milestone."
+  ]
+}
+

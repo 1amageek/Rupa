@@ -1,0 +1,11 @@
+{
+  "rows": [
+    {"area":"Rupa workspace build","status":"failed","evidence":"removed/changed Swift-CAD APIs and required tolerance arguments"},
+    {"area":"RupaKit package tests","status":"blocked","evidence":"package-wide compile reaches broken CAD integration target"},
+    {"area":"CADGeometry-Tests","status":"failed","evidence":"224 passed, 18 failed"},
+    {"area":"CADKernel-Tests","status":"failed","evidence":"416 passed, 48 failed"},
+    {"area":"Universal app path","status":"not wired","evidence":"production call sites use legacy ViewportSceneBuilder"},
+    {"area":"Swift-CAD completion","status":"open","evidence":"0/8 gates and zero evidence manifests"}
+  ]
+}
+

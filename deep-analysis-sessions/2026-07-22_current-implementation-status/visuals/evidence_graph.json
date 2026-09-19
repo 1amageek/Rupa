@@ -1,0 +1,18 @@
+{
+  "nodes": [
+    {"id":"foundation","label":"Universal source + evaluation foundation","state":"implemented"},
+    {"id":"bridge","label":"Read-only DesignDocument bridge","state":"partial"},
+    {"id":"snapshot","label":"Universal viewport snapshot","state":"implemented"},
+    {"id":"renderer","label":"Renderer + input consumer","state":"missing"},
+    {"id":"app","label":"User-reachable app workflow","state":"blocked"},
+    {"id":"build","label":"Rupa integration build","state":"failed"}
+  ],
+  "edges": [
+    {"from":"foundation","to":"bridge","relation":"feeds"},
+    {"from":"bridge","to":"snapshot","relation":"evaluates"},
+    {"from":"snapshot","to":"renderer","relation":"requires consumer"},
+    {"from":"renderer","to":"app","relation":"enables"},
+    {"from":"build","to":"app","relation":"blocks verification"}
+  ]
+}
+

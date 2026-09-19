@@ -1,0 +1,70 @@
+[
+  {
+    "order": 0,
+    "action": "Restore a truth-bearing build",
+    "outcome": "A fresh clone resolves dependencies and current macOS/WASM CI is green",
+    "dependencies": [],
+    "effort": 2,
+    "impact": 5,
+    "exit_criteria": "Remote consumer fixture + clean CI; forbidden-pattern check cannot false-positive"
+  },
+  {
+    "order": 1,
+    "action": "Separate normative release scope from roadmap",
+    "outcome": "One capability ledger is the authority for support state",
+    "dependencies": [
+      0
+    ],
+    "effort": 2,
+    "impact": 5,
+    "exit_criteria": "Every public capability has ID, geometry subset, failure codes, parity state, and evidence links"
+  },
+  {
+    "order": 2,
+    "action": "Freeze schema and public API evolution",
+    "outcome": "Wire and API changes are versioned and migratable",
+    "dependencies": [
+      1
+    ],
+    "effort": 3,
+    "impact": 5,
+    "exit_criteria": "Schema bump, migration pipeline, historical fixtures, API-diff/deprecation gate"
+  },
+  {
+    "order": 3,
+    "action": "Complete one vertical modeling slice",
+    "outcome": "Feature, topology, stable naming, UI/Agent parity, persistence, and tests complete together",
+    "dependencies": [
+      1,
+      2
+    ],
+    "effort": 5,
+    "impact": 5,
+    "exit_criteria": "Chosen capability passes explicit supported/unsupported geometry matrix and regeneration tests"
+  },
+  {
+    "order": 4,
+    "action": "Build a verification and conformance program",
+    "outcome": "Claims have external, platform, performance, and adversarial evidence",
+    "dependencies": [
+      0,
+      1
+    ],
+    "effort": 4,
+    "impact": 5,
+    "exit_criteria": "Trait/non-macOS tests, external format corpus, benchmarks, fuzz/resource limits, coverage reporting"
+  },
+  {
+    "order": 5,
+    "action": "Resume feature breadth",
+    "outcome": "New operation cases do not create incomplete product surfaces",
+    "dependencies": [
+      3,
+      4
+    ],
+    "effort": 5,
+    "impact": 4,
+    "exit_criteria": "All release gates automatically enforced for each new operation"
+  }
+]
+

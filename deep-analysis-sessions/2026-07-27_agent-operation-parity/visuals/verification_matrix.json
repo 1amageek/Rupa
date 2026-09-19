@@ -1,0 +1,60 @@
+{
+  "columns": [
+    "area",
+    "implemented",
+    "behavior_tested",
+    "current_executable",
+    "viewer_gate"
+  ],
+  "rows": [
+    [
+      "Socket connection",
+      true,
+      true,
+      false,
+      "blocked by build/runtime"
+    ],
+    [
+      "Live session discovery",
+      true,
+      true,
+      false,
+      "blocked by build/runtime"
+    ],
+    [
+      "Document/workspace mutation",
+      true,
+      true,
+      false,
+      "partial"
+    ],
+    [
+      "Atomic batch rollback",
+      true,
+      true,
+      false,
+      "partial"
+    ],
+    [
+      "Undo/redo remote control",
+      false,
+      false,
+      false,
+      "open"
+    ],
+    [
+      "Session/file lifecycle",
+      false,
+      false,
+      false,
+      "open"
+    ],
+    [
+      "Default live save",
+      false,
+      false,
+      false,
+      "open"
+    ]
+  ]
+}

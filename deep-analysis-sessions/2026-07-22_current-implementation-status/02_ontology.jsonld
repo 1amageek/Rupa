@@ -1,0 +1,548 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": { "@id": "ea:sessionMetadata", "@type": "@json" },
+    "view": { "@id": "ea:view", "@type": "@json" },
+    "tags": { "@id": "ea:tag", "@container": "@set" },
+    "epistemicStatus": { "@id": "ea:epistemicStatus" },
+    "confidence": { "@id": "ea:confidence", "@type": "xsd:decimal" },
+    "priorConfidence": { "@id": "ea:priorConfidence", "@type": "xsd:decimal" },
+    "posteriorConfidence": { "@id": "ea:posteriorConfidence", "@type": "xsd:decimal" },
+    "parent": { "@id": "ea:parent", "@type": "@id" },
+    "children": { "@id": "ea:children", "@type": "@id", "@container": "@set" },
+    "decompositionStrategy": { "@id": "ea:decompositionStrategy" },
+    "derivedFrom": { "@id": "ea:derivedFrom", "@type": "@id", "@container": "@set" },
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": { "@id": "ea:inferenceType" },
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": { "@id": "ea:inferenceStrength", "@type": "xsd:decimal" },
+    "synthesis": { "@id": "ea:synthesis", "@type": "@json" },
+    "claimRole": { "@id": "ea:claimRole" },
+    "primaryEvidence": { "@id": "ea:primaryEvidence", "@type": "@id", "@container": "@set" },
+    "counterEvidence": { "@id": "ea:counterEvidence", "@type": "@id", "@container": "@set" },
+    "sourceTopics": { "@id": "ea:sourceTopics", "@type": "@id", "@container": "@set" },
+    "reasoningPattern": { "@id": "ea:reasoningPattern" },
+    "synthesisStrength": { "@id": "ea:synthesisStrength", "@type": "xsd:decimal" },
+    "limitations": { "@id": "ea:limitations" },
+    "visualEvidenceRequirement": { "@id": "ea:visualEvidenceRequirement", "@type": "@json" },
+    "evidencePattern": { "@id": "ea:evidencePattern" },
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": { "@id": "ea:evidence", "@type": "@json" },
+    "investigations": { "@id": "ea:investigations", "@type": "@json" },
+    "insights": { "@id": "ea:insights", "@type": "@json" },
+    "chartableData": { "@id": "ea:chartableData", "@type": "@json" },
+    "questionStatus": { "@id": "ea:questionStatus" },
+    "supports": { "@id": "rel:supports", "@type": "@id", "@container": "@set" },
+    "refutes": { "@id": "rel:refutes", "@type": "@id", "@container": "@set" },
+    "asksAbout": { "@id": "rel:asksAbout", "@type": "@id", "@container": "@set" },
+    "resolvedBy": { "@id": "rel:resolvedBy", "@type": "@id", "@container": "@set" },
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": { "@id": "ea:supportsClaim", "@type": "@id", "@container": "@set" },
+    "visualRole": { "@id": "ea:visualRole" },
+    "appliedFrameworks": { "@id": "ea:appliedFrameworks", "@container": "@set" },
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": { "@id": "prov:generatedAtTime", "@type": "xsd:dateTime" },
+    "updatedAt": { "@id": "ea:updatedAt", "@type": "xsd:dateTime" },
+    "wasGeneratedBy": { "@id": "prov:wasGeneratedBy" },
+    "wasRevisionOf": { "@id": "prov:wasRevisionOf" },
+    "source": "ea:source",
+    "sourceUrl": { "@id": "schema:url" },
+    "reliability": { "@id": "ea:reliability", "@type": "xsd:decimal" },
+    "layer": "https://deep-analysis.dev/layers#",
+    "causes": { "@id": "rel:causes", "@type": "@id" },
+    "causedBy": { "@id": "rel:causedBy", "@type": "@id", "@reverse": "rel:causes" },
+    "enables": { "@id": "rel:enables", "@type": "@id" },
+    "prevents": { "@id": "rel:prevents", "@type": "@id" },
+    "correlatesWith": { "@id": "rel:correlatesWith", "@type": "@id" },
+    "implies": { "@id": "rel:implies", "@type": "@id" },
+    "contradicts": { "@id": "rel:contradicts", "@type": "@id" },
+    "partOf": { "@id": "rel:partOf", "@type": "@id" },
+    "hasComponent": { "@id": "rel:hasComponent", "@type": "@id", "@reverse": "rel:partOf" },
+    "generalizes": { "@id": "rel:generalizes", "@type": "@id" },
+    "specializes": { "@id": "rel:specializes", "@type": "@id", "@reverse": "rel:generalizes" },
+    "analogousTo": { "@id": "rel:analogousTo", "@type": "@id" },
+    "precedes": { "@id": "rel:precedes", "@type": "@id" },
+    "triggers": { "@id": "rel:triggers", "@type": "@id" },
+    "coOccursWith": { "@id": "rel:coOccursWith", "@type": "@id" },
+    "manifestsAs": { "@id": "rel:manifestsAs", "@type": "@id" },
+    "addresses": { "@id": "rel:addresses", "@type": "@id" },
+    "addressedBy": { "@id": "rel:addressedBy", "@type": "@id", "@reverse": "rel:addresses" },
+    "operatesIn": { "@id": "rel:operatesIn", "@type": "@id" },
+    "produces": { "@id": "rel:produces", "@type": "@id" },
+    "strength": { "@id": "rel:strength", "@type": "xsd:decimal" },
+    "polarity": { "@id": "rel:polarity" },
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "evidenceCount": { "@id": "epi:evidenceCount", "@type": "xsd:integer" },
+    "counterEvidenceCount": { "@id": "epi:counterEvidenceCount", "@type": "xsd:integer" },
+    "investigationCount": { "@id": "epi:investigationCount", "@type": "xsd:integer" },
+    "lastUpdated": { "@id": "epi:lastUpdated", "@type": "xsd:dateTime" },
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": { "@id": "epi:fromConfidence", "@type": "xsd:decimal" },
+    "toConfidence": { "@id": "epi:toConfidence", "@type": "xsd:decimal" },
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence"
+  },
+  "session": {
+    "id": "session:current-implementation-status",
+    "title": "Rupa Current Implementation Status Audit",
+    "createdAt": "2026-07-22T09:53:07+09:00",
+    "updatedAt": "2026-07-22T09:53:07+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/repository-state",
+            "kind": "category",
+            "title": "Repository State",
+            "layer": "Context",
+            "category": "Repository State",
+            "members": [
+              "ea:session/current-implementation-status/topic/T001",
+              "ea:session/current-implementation-status/evidence/E007"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/universal-foundation",
+            "kind": "category",
+            "title": "Universal Foundation",
+            "layer": "Situation",
+            "category": "Universal Foundation",
+            "members": [
+              "ea:session/current-implementation-status/topic/T002",
+              "ea:session/current-implementation-status/evidence/E001",
+              "ea:session/current-implementation-status/evidence/E008"
+            ]
+          },
+          {
+            "id": "group:category/situation/swift-cad-contract",
+            "kind": "category",
+            "title": "Swift-CAD Contract",
+            "layer": "Situation",
+            "category": "Swift-CAD Contract",
+            "members": [
+              "ea:session/current-implementation-status/topic/T004",
+              "ea:session/current-implementation-status/evidence/E006"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/operation",
+        "kind": "layer",
+        "title": "Operation",
+        "layer": "Operation",
+        "children": [
+          {
+            "id": "group:category/operation/executed-verification",
+            "kind": "category",
+            "title": "Executed Verification",
+            "layer": "Operation",
+            "category": "Executed Verification",
+            "members": [
+              "ea:session/current-implementation-status/topic/T005",
+              "ea:session/current-implementation-status/evidence/E003",
+              "ea:session/current-implementation-status/evidence/E004",
+              "ea:session/current-implementation-status/evidence/E005"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/integration-blockers",
+            "kind": "category",
+            "title": "Integration Blockers",
+            "layer": "Problem",
+            "category": "Integration Blockers",
+            "members": [
+              "ea:session/current-implementation-status/topic/T003",
+              "ea:session/current-implementation-status/evidence/E002",
+              "ea:session/current-implementation-status/insight/I001"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/issue",
+        "kind": "layer",
+        "title": "Issue",
+        "layer": "Issue",
+        "children": [
+          {
+            "id": "group:category/issue/release-readiness",
+            "kind": "category",
+            "title": "Release Readiness",
+            "layer": "Issue",
+            "category": "Release Readiness",
+            "members": [
+              "ea:session/current-implementation-status/topic/T006",
+              "ea:session/current-implementation-status/insight/I002",
+              "ea:session/current-implementation-status/insight/I003",
+              "ea:session/current-implementation-status/question/Q001"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/recovery-sequence",
+            "kind": "category",
+            "title": "Recovery Sequence",
+            "layer": "Solution",
+            "category": "Recovery Sequence",
+            "members": ["ea:session/current-implementation-status/topic/T007"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/current-assessment",
+            "kind": "category",
+            "title": "Current Assessment",
+            "layer": "Outcome",
+            "category": "Current Assessment",
+            "members": ["ea:session/current-implementation-status/topic/T008"]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/current-implementation-status/topic/T001",
+      "@type": "Topic",
+      "title": "The audited state is a multi-repository pre-v1 worktree",
+      "content": "Rupa and RupaKit are on root main, Swift-CAD is a separate dirty repository one commit ahead of origin/main, and swift-OpenUSD is clean at its pinned revision.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "investigations": [{"title":"Git state inspection","status":"Completed","findings":"Root and nested repository states were inspected without modification.","completedAt":"2026-07-22T09:53:07+09:00"}]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T002",
+      "@type": "Topic",
+      "title": "Universal 3D foundation has substantial first-slice implementation",
+      "content": "Stable values, universal capabilities, mesh source/editing/attributes, project source, evaluation providers, CAD projection, viewport snapshot, and project transactions have concrete implementations and focused tests in source.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.92,
+      "decompositionStrategy": "structural",
+      "investigations": [{"title":"Source path inspection","status":"Completed","findings":"Public methods include validation, typed errors, and mutation/evaluation logic rather than placeholders.","completedAt":"2026-07-22T09:53:07+09:00"}]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T003",
+      "@type": "Topic",
+      "title": "Universal 3D is not yet the active application path",
+      "content": "The app and rendering layer still build CAD-specific ViewportScene values; the universal viewport snapshot has no production renderer or input consumer, and mesh selection remains untracked and unwired.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "manifestsAs": "ea:session/current-implementation-status/topic/T008"
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T004",
+      "@type": "Topic",
+      "title": "Swift-CAD completion remains 0 of 8 gates",
+      "content": "The normative roadmap records 55 provisional capabilities, 23 supported, 32 partial, 52 development envelopes, zero final evidence manifests, and all eight completion gates open.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T005",
+      "@type": "Topic",
+      "title": "Current executable verification is red",
+      "content": "Rupa does not build against the current Swift-CAD worktree; CADGeometry has 18 failing tests and CADKernel has 48 failing tests in complete target runs.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "causes": "ea:session/current-implementation-status/topic/T006"
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T006",
+      "@type": "Topic",
+      "title": "No release or conformance claim is supportable from this worktree",
+      "content": "The build failure, failing lower-level suites, dirty repositories, absent final evidence manifests, and incomplete application integration block release readiness.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "addressedBy": "ea:session/current-implementation-status/topic/T007"
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T007",
+      "@type": "Topic",
+      "title": "Restore the vertical integration gate before adding breadth",
+      "content": "First reconcile Swift-CAD API changes with RupaKit, then fix geometry/kernel regressions, integrate the universal viewport and mixed CAD/mesh persistence path, and finally rerun same-revision app and package evidence.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.95,
+      "addresses": "ea:session/current-implementation-status/topic/T006",
+      "produces": "ea:session/current-implementation-status/topic/T008"
+    },
+    {
+      "@id": "ea:session/current-implementation-status/topic/T008",
+      "@type": "Topic",
+      "title": "Current status: real foundation, incomplete integration, non-green kernel",
+      "content": "Implementation progress is substantial at the foundation level, but the current product state is not buildable, not end-to-end reachable through the universal path, and not release-ready.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "visualEvidenceRequirement": {"evidencePattern":"gap","requiredChartType":"status matrix and flow"},
+      "primaryEvidence": [
+        "ea:session/current-implementation-status/evidence/E003",
+        "ea:session/current-implementation-status/evidence/E004",
+        "ea:session/current-implementation-status/evidence/E005",
+        "ea:session/current-implementation-status/evidence/E006"
+      ],
+      "sourceTopics": [
+        "ea:session/current-implementation-status/topic/T002",
+        "ea:session/current-implementation-status/topic/T003",
+        "ea:session/current-implementation-status/topic/T004",
+        "ea:session/current-implementation-status/topic/T005",
+        "ea:session/current-implementation-status/topic/T006"
+      ],
+      "synthesis": {"claimRole":"final-claim","reasoningPattern":"contrastive integration audit","synthesisStrength":0.98,"limitations":"No selected versioned conformance manifest; lower-level RupaKit tests are blocked by package-wide compilation failure."}
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E001",
+      "@type": "Evidence",
+      "title": "Universal plan declares 3 complete and 15 first-slice rows",
+      "content": "The plan distinguishes three complete contract slices, fifteen first-slice-complete rows, and one integration row in progress; it explicitly says first slices are not milestone completion.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Rupa/UNIVERSAL_3D_IMPLEMENTATION_PLAN.md",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/UNIVERSAL_3D_IMPLEMENTATION_PLAN.md",
+      "reliability": 0.95,
+      "supports": ["ea:session/current-implementation-status/topic/T002"],
+      "chartableData": [
+        {"seriesLabel":"Universal plan rows","subject":"Complete","value":3,"unit":"rows","period":"2026-07-22","status":"observed","source":"E001","visualRole":"baseline"},
+        {"seriesLabel":"Universal plan rows","subject":"First slice complete","value":15,"unit":"rows","period":"2026-07-22","status":"observed","source":"E001","visualRole":"history"},
+        {"seriesLabel":"Universal plan rows","subject":"In progress","value":1,"unit":"rows","period":"2026-07-22","status":"observed","source":"E001","visualRole":"history"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E002",
+      "@type": "Evidence",
+      "title": "Production UI still consumes the legacy viewport builder",
+      "content": "RupaRendering.Viewport and WorkspaceObjectShapeInspectorStateBuilder call ViewportSceneBuilder; no RupaUI, RupaRendering, or app call site consumes UniversalViewportSceneBuilder.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "RupaKit source call-site search",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaRendering/Viewport.swift",
+      "reliability": 0.99,
+      "supports": ["ea:session/current-implementation-status/topic/T003"],
+      "chartableData": [
+        {"seriesLabel":"Production consumers","subject":"Legacy ViewportSceneBuilder","value":2,"unit":"observed call sites","period":"2026-07-22","status":"observed","source":"E002","visualRole":"baseline"},
+        {"seriesLabel":"Production consumers","subject":"UniversalViewportSceneBuilder","value":0,"unit":"observed call sites","period":"2026-07-22","status":"observed","source":"E002","visualRole":"driver"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E003",
+      "@type": "Evidence",
+      "title": "Rupa workspace build fails against current Swift-CAD",
+      "content": "xcodebuild fails on removed PersistentName, changed SelectionReference/SurfaceReference contracts, unavailable ParameterResolver, and newly required tolerance arguments.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "xcodebuild build -workspace Rupa/Rupa.xcworkspace -scheme Rupa",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/Rupa.xcworkspace",
+      "reliability": 1.0,
+      "supports": ["ea:session/current-implementation-status/topic/T005", "ea:session/current-implementation-status/topic/T006"],
+      "chartableData": [
+        {"seriesLabel":"Integration build","subject":"Rupa workspace","value":0,"unit":"pass flag","period":"2026-07-22","status":"observed","source":"E003","visualRole":"baseline"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E004",
+      "@type": "Evidence",
+      "title": "CADGeometry target has 18 failures",
+      "content": "The complete CADGeometry-Tests run executed 242 tests: 224 passed and 18 failed. Failures cluster in certified B-spline/analytic surface intersection, resource budgets, typed diagnostics, and degeneracy handling.",
+      "epistemicStatus": "Verified",
+      "confidence": 1.0,
+      "source": "Xcode result bundle for CADGeometry-Tests",
+      "sourceUrl": "file:///Users/1amageek/Library/Developer/Xcode/DerivedData/SwiftCAD-eygvayaohnarbvacofxtpbbgsqub/Logs/Test/Test-CADGeometry-Tests-2026.07.22_09-40-37-+0900.xcresult",
+      "reliability": 1.0,
+      "supports": ["ea:session/current-implementation-status/topic/T005"],
+      "chartableData": [
+        {"seriesLabel":"CADGeometry-Tests","subject":"Passed","value":224,"unit":"tests","period":"2026-07-22","status":"observed","source":"E004","visualRole":"history"},
+        {"seriesLabel":"CADGeometry-Tests","subject":"Failed","value":18,"unit":"tests","period":"2026-07-22","status":"observed","source":"E004","visualRole":"driver"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E005",
+      "@type": "Evidence",
+      "title": "CADKernel target has 48 failures",
+      "content": "The complete CADKernel-Tests run executed 464 tests: 416 passed and 48 failed. Failures include Boolean classification, Sweep/Loft exactness, pcurve/topology invariants, surface trim, selection/query behavior, resource limits, and one timeout.",
+      "epistemicStatus": "Verified",
+      "confidence": 1.0,
+      "source": "Xcode result bundle for CADKernel-Tests",
+      "sourceUrl": "file:///Users/1amageek/Library/Developer/Xcode/DerivedData/SwiftCAD-eygvayaohnarbvacofxtpbbgsqub/Logs/Test/Test-CADKernel-Tests-2026.07.22_09-43-32-+0900.xcresult",
+      "reliability": 1.0,
+      "supports": ["ea:session/current-implementation-status/topic/T005"],
+      "chartableData": [
+        {"seriesLabel":"CADKernel-Tests","subject":"Passed","value":416,"unit":"tests","period":"2026-07-22","status":"observed","source":"E005","visualRole":"history"},
+        {"seriesLabel":"CADKernel-Tests","subject":"Failed","value":48,"unit":"tests","period":"2026-07-22","status":"observed","source":"E005","visualRole":"driver"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E006",
+      "@type": "Evidence",
+      "title": "Swift-CAD roadmap records no passed completion gate",
+      "content": "The roadmap reports 0/8 gates, 23/55 supported capabilities, 32 partial capabilities, 52 development-only envelopes, and zero final evidence manifests.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "swift-CAD/ROADMAP.md",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/ROADMAP.md",
+      "reliability": 0.99,
+      "supports": ["ea:session/current-implementation-status/topic/T004", "ea:session/current-implementation-status/topic/T006"],
+      "chartableData": [
+        {"seriesLabel":"Capability status","subject":"Supported","value":23,"unit":"capabilities","period":"2026-07-22","status":"observed","source":"E006","visualRole":"history"},
+        {"seriesLabel":"Capability status","subject":"Partial","value":32,"unit":"capabilities","period":"2026-07-22","status":"observed","source":"E006","visualRole":"driver"},
+        {"seriesLabel":"Completion gates","subject":"Passed","value":0,"unit":"gates","period":"2026-07-22","status":"observed","source":"E006","visualRole":"baseline"},
+        {"seriesLabel":"Completion gates","subject":"Open","value":8,"unit":"gates","period":"2026-07-22","status":"observed","source":"E006","visualRole":"driver"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E007",
+      "@type": "Evidence",
+      "title": "The worktree is not reproducible as a clean revision",
+      "content": "Root has four untracked implementation/test files. Swift-CAD has 259 tracked diff files with 26,520 insertions and 9,233 deletions plus 186 untracked files containing approximately 52,885 lines; it is one commit ahead of origin/main.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "git status and git diff statistics",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/.git",
+      "reliability": 1.0,
+      "supports": ["ea:session/current-implementation-status/topic/T001", "ea:session/current-implementation-status/topic/T006"],
+      "chartableData": [
+        {"seriesLabel":"Worktree files","subject":"Swift-CAD tracked diffs","value":259,"unit":"files","period":"2026-07-22","status":"observed","source":"E007","visualRole":"driver"},
+        {"seriesLabel":"Worktree files","subject":"Swift-CAD untracked","value":186,"unit":"files","period":"2026-07-22","status":"observed","source":"E007","visualRole":"driver"},
+        {"seriesLabel":"Worktree files","subject":"Root untracked implementation/test","value":4,"unit":"files","period":"2026-07-22","status":"observed","source":"E007","visualRole":"driver"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/evidence/E008",
+      "@type": "Evidence",
+      "title": "Universal implementations contain real validation and failure paths",
+      "content": "MeshEditBuffer rejects unremapped topology attributes, ProjectEvaluationEngine rejects unregistered providers and mismatched results, ProjectController evaluates before publication and checks revisions, and Agent invocation explicitly rejects unsupported typed routes.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96,
+      "source": "RupaKit implementation source",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources",
+      "reliability": 0.98,
+      "supports": ["ea:session/current-implementation-status/topic/T002"],
+      "chartableData": [
+        {"seriesLabel":"Reviewed universal implementations","subject":"Concrete validation and error paths","value":4,"unit":"critical paths","period":"2026-07-22","status":"observed","source":"E008","visualRole":"history"}
+      ]
+    },
+    {
+      "@id": "ea:session/current-implementation-status/insight/I001",
+      "@type": "Insight",
+      "title": "Foundation maturity and user reachability are currently decoupled",
+      "content": "Substantial universal source and evaluation code can exist without changing product behavior because the renderer, input, persistence, and app composition still use the legacy CAD-specific route.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.96,
+      "derivedFrom": [
+        "ea:session/current-implementation-status/topic/T002",
+        "ea:session/current-implementation-status/topic/T003",
+        "ea:session/current-implementation-status/evidence/E001",
+        "ea:session/current-implementation-status/evidence/E002"
+      ],
+      "rationale": "The universal builder is implemented and tested in isolation, while production call-site search finds only the legacy builder in app-facing modules.",
+      "supportsClaim": ["ea:session/current-implementation-status/topic/T008"],
+      "primaryEvidence": ["ea:session/current-implementation-status/evidence/E001", "ea:session/current-implementation-status/evidence/E002"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/current-implementation-status/topic/T002", "ea:session/current-implementation-status/topic/T003"],
+      "synthesis": {"claimRole":"intermediate-claim","reasoningPattern":"contrastive call-path analysis","synthesisStrength":0.96,"limitations":"No runtime UI launch was possible because the app does not compile."}
+    },
+    {
+      "@id": "ea:session/current-implementation-status/insight/I002",
+      "@type": "Insight",
+      "title": "The current worktree cannot be a release evidence revision",
+      "content": "A dirty multi-repository state with a broken app build and no same-revision evidence cannot satisfy either Rupa conformance gates or Swift-CAD completion gates.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "derivedFrom": [
+        "ea:session/current-implementation-status/topic/T005",
+        "ea:session/current-implementation-status/topic/T006",
+        "ea:session/current-implementation-status/evidence/E003",
+        "ea:session/current-implementation-status/evidence/E006",
+        "ea:session/current-implementation-status/evidence/E007"
+      ],
+      "rationale": "All completion contracts require successful evidence on a specific revision; the present state has neither a clean revision nor green verification.",
+      "supportsClaim": ["ea:session/current-implementation-status/topic/T008"],
+      "primaryEvidence": ["ea:session/current-implementation-status/evidence/E003", "ea:session/current-implementation-status/evidence/E006", "ea:session/current-implementation-status/evidence/E007"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/current-implementation-status/topic/T005", "ea:session/current-implementation-status/topic/T006"],
+      "synthesis": {"claimRole":"decision-claim","reasoningPattern":"gate compliance","synthesisStrength":0.99,"limitations":"Does not diminish useful development progress inside the dirty worktree."}
+    },
+    {
+      "@id": "ea:session/current-implementation-status/insight/I003",
+      "@type": "Insight",
+      "title": "Kernel regressions are broad enough to block vertical integration",
+      "content": "Failures are not isolated to one assertion: they span geometry certification, resource limits, Boolean classification, exact Sweep/Loft behavior, pcurve and topology invariants, trim, selection, and measurement.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "derivedFrom": [
+        "ea:session/current-implementation-status/evidence/E004",
+        "ea:session/current-implementation-status/evidence/E005"
+      ],
+      "rationale": "Two complete target runs show independent failure clusters across lower and orchestration layers.",
+      "supportsClaim": ["ea:session/current-implementation-status/topic/T008"],
+      "primaryEvidence": ["ea:session/current-implementation-status/evidence/E004", "ea:session/current-implementation-status/evidence/E005"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/current-implementation-status/topic/T005"],
+      "synthesis": {"claimRole":"intermediate-claim","reasoningPattern":"failure-cluster synthesis","synthesisStrength":0.98,"limitations":"Only CADGeometry and CADKernel targets were fully executed in this audit."}
+    },
+    {
+      "@id": "ea:session/current-implementation-status/question/Q001",
+      "@type": "Question",
+      "title": "Which versioned Rupa conformance manifest is the next release target?",
+      "content": "A selected manifest is required to convert repository progress into a bounded release claim and exact evidence plan.",
+      "epistemicStatus": "Inconclusive",
+      "confidence": 0.5,
+      "questionStatus": "Open",
+      "asksAbout": ["ea:session/current-implementation-status/topic/T006"],
+      "resolvedBy": []
+    }
+  ]
+}

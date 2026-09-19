@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rupa Agent 3D Product Readiness</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f4f6f8; --card:#fff; --ink:#17202a; --muted:#5c6773; --line:#d9e0e7; --good:#147d64; --partial:#c78513; --bad:#b23838; --accent:#3157a4; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#11161d; --card:#19212b; --ink:#edf2f7; --muted:#a8b3c0; --line:#35404c; --good:#43c9a3; --partial:#f2b84b; --bad:#ff7b7b; --accent:#87a9ff; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 system-ui,-apple-system,sans-serif; }
+    main { width:min(1120px,calc(100% - 32px)); margin:32px auto 80px; }
+    h1,h2,h3 { line-height:1.25; }
+    h1 { font-size:clamp(2rem,5vw,4.4rem); margin:.2rem 0 .5rem; max-width:15ch; }
+    h2 { margin-top:2.8rem; }
+    .eyebrow { color:var(--accent); font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+    .lead { max-width:72ch; font-size:1.16rem; color:var(--muted); }
+    .verdict { display:grid; grid-template-columns:minmax(200px,.8fr) 2fr; gap:20px; margin:28px 0; }
+    .score,.card { border:1px solid var(--line); border-radius:18px; background:var(--card); padding:22px; box-shadow:0 8px 28px color-mix(in srgb,var(--ink) 7%,transparent); }
+    .score strong { display:block; font-size:clamp(3rem,9vw,6.8rem); line-height:1; color:var(--partial); }
+    .score span { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+    .bar { display:flex; overflow:hidden; height:32px; border-radius:9px; background:var(--line); margin:.55rem 0; }
+    .bar > span { display:flex; align-items:center; justify-content:center; min-width:2px; color:#fff; font-size:.75rem; font-weight:700; }
+    .good { background:var(--good); } .partial { background:var(--partial); } .bad { background:var(--bad); } .accent { background:var(--accent); }
+    .legend { display:flex; flex-wrap:wrap; gap:14px; color:var(--muted); font-size:.9rem; }
+    .dot { display:inline-block; width:.7rem; height:.7rem; border-radius:50%; margin-right:.35rem; }
+    table { width:100%; border-collapse:collapse; background:var(--card); border-radius:14px; overflow:hidden; }
+    th,td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--muted); font-size:.9rem; }
+    .flow { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; align-items:center; }
+    .step { min-height:116px; padding:15px; border:1px solid var(--line); border-radius:13px; background:var(--card); position:relative; }
+    .step:not(:last-child)::after { content:"→"; position:absolute; right:-13px; top:42%; z-index:2; color:var(--accent); font-weight:900; }
+    .step b { display:block; color:var(--accent); }
+    code { background:color-mix(in srgb,var(--line) 55%,transparent); padding:.1em .35em; border-radius:5px; }
+    .callout { border-left:5px solid var(--bad); padding:14px 18px; background:color-mix(in srgb,var(--bad) 10%,var(--card)); border-radius:0 12px 12px 0; }
+    .small { color:var(--muted); font-size:.9rem; }
+    @media (max-width:760px) { .verdict,.grid { grid-template-columns:1fr; } .flow { grid-template-columns:1fr; } .step:not(:last-child)::after { content:"↓"; right:50%; top:auto; bottom:-21px; } table { display:block; overflow-x:auto; } }
+    @media print { body { background:#fff; color:#000; } main { width:100%; margin:0; } .card,.score,table { box-shadow:none; break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">Evidence report · 2026-08-22</p>
+  <h1>実体はある。まだ「複雑な3Dプロダクト生成基盤」の完成形ではない。</h1>
+  <p class="lead">Rupa は、外部Agentが型付き操作を発見し、世代安全なトランザクションで実CAD形状を生成するところまで到達しています。一方、広い製品目標に対しては、現在の妥当な評価は<strong>高度な実験基盤</strong>です。</p>
+
+  <section class="verdict" aria-label="総合評価">
+    <div class="score"><strong>25–35%</strong><span>広い製品目的に対する工学的推定</span></div>
+    <div class="card">
+      <h2 style="margin-top:0">判定の境界</h2>
+      <p><strong>限定された機械CAD:</strong> 45–60%程度。実際の sweep / revolve / loft / boolean、原子batch、rollbackの実装経路があります。</p>
+      <p><strong>複雑製品全般:</strong> 未達。Architecture、Turbomachinery、DCC、Simulationは完全な縦断workflowになっていません。</p>
+      <p><strong>正式な完成:</strong> 0%。machine-readable conformance manifestは見つからず、swift-CADの完成gateは0/8です。</p>
+    </div>
+  </section>
+
+  <h2>実装の厚みと不足の幅</h2>
+  <div class="grid">
+    <article class="card">
+      <h3>swift-CAD capability contract</h3>
+      <div class="bar" aria-label="25 supported and 42 partial out of 67">
+        <span class="good" style="width:37.31%">25</span><span class="partial" style="width:62.69%">42</span>
+      </div>
+      <div class="legend"><span><i class="dot good"></i>Supported 25</span><span><i class="dot partial"></i>Partial 42</span></div>
+      <p class="small">公式checkerの値。対応宣言ではなく、入力envelopeの完成度を含む契約判定です。</p>
+    </article>
+    <article class="card">
+      <h3>Agent capability route</h3>
+      <div class="bar" aria-label="126 unified routes and 38 typed legacy routes out of 164">
+        <span class="accent" style="width:76.83%">126</span><span class="partial" style="width:23.17%">38</span>
+      </div>
+      <div class="legend"><span><i class="dot accent"></i>Unified automation route</span><span><i class="dot partial"></i>Typed legacy route</span></div>
+      <p class="small">Discoveryは164件ある一方、generic capability invocationは38件の<code>agentRequest</code> routeを実行しません。</p>
+    </article>
+  </div>
+
+  <h2>現在の実行経路</h2>
+  <div class="flow" role="img" aria-label="Agent request to CAD output execution flow">
+    <div class="step"><b>1. External Agent</b>JSON-RPC / CLIから型付きrequest</div>
+    <div class="step"><b>2. Capability</b>catalog discovery、validation、preflight</div>
+    <div class="step"><b>3. Transaction</b>generation check、dry-run、atomic batch、rollback</div>
+    <div class="step"><b>4. Swift-CAD</b>source evaluation、B-rep / mesh / topology</div>
+    <div class="step"><b>5. Readback</b>measurement、diagnostics、initial export</div>
+  </div>
+  <p>この経路はmockではありません。ただし、Agentの計画器そのもの、MCP adapter、レンダーを観測して再計画するvision feedback loopはプロジェクト内に未実装です。</p>
+
+  <h2>今回の実機検証</h2>
+  <div class="callout">
+    <strong>テストは0件実行。</strong> focused <code>xcodebuild test</code> は <code>CADGeometrySourceProvider.swift:128</code> の <code>DocumentTransactionRevision</code> 型解決エラーでbuildが失敗し、xcresultは “Testing cancelled because the build failed.” を記録しました。
+  </div>
+  <p>直接原因はimport欠落ですが、根はさらに深く、RupaKitが<code>../swift-CAD</code>をpath dependencyとして解決し、そのworktreeに366件の変更・未追跡pathがあることです。現在の実効kernel状態をcommitだけから再現できません。</p>
+
+  <h2>製品workflow別の現在地</h2>
+  <table>
+    <thead><tr><th>Workflow</th><th>判定</th><th>根拠</th></tr></thead>
+    <tbody>
+      <tr><td>限定されたparametric mechanical part</td><td>実験的だが実体あり</td><td>複数featureの実評価、atomic mutation、inspectionが存在</td></tr>
+      <tr><td>Agent-generated mechanical variants</td><td>Partial</td><td>transaction/dry-runは強いがfan-out、paging、観測loop、conformanceが不足</td></tr>
+      <tr><td>Printable enclosure</td><td>Experimental</td><td>Manufacturing自身がworld +Y、copy、quadratic scan等の制約を明記</td></tr>
+      <tr><td>Architecture / Turbomachinery / DCC</td><td>完全workflowはUnavailable</td><td>契約はあるが専用source、評価、handoff、fixture、manifestが揃わない</td></tr>
+      <tr><td>Simulation execution</td><td>Unavailable</td><td>prepare/import/execute/validateのprofile実装がない</td></tr>
+    </tbody>
+  </table>
+
+  <h2>根本原因</h2>
+  <div class="grid">
+    <article class="card"><h3>横方向の機能追加が縦断完成を上回った</h3><p>多数のcommandとtestはありますが、1つの製品workflowについてsourceからhandoffまで全gateを閉じた証拠がありません。</p></article>
+    <article class="card"><h3>authority migrationが途中</h3><p>現在のCAD-first <code>EditorSession</code> と、理想のuniversal <code>ProjectController</code> が併存し、Agent mutationの唯一のauthorityになっていません。</p></article>
+    <article class="card"><h3>dependency baselineが製品契約化されていない</h3><p>dirty local kernelを統合する状態では、個々のfixが通ってもreleaseの再現性を証明できません。</p></article>
+    <article class="card"><h3>Agentの閉ループが未完成</h3><p>操作面は厚い一方、MCP、render/inspection observation、compact diff、失敗からの再計画が一つの外部contractとして閉じていません。</p></article>
+  </div>
+
+  <h2>最短の完成順序</h2>
+  <div class="flow" role="img" aria-label="Critical path to completion">
+    <div class="step"><b>P0</b>clean revision tupleと全体buildを復旧</div>
+    <div class="step"><b>P1</b>ProjectControllerを唯一のtransaction authorityへ</div>
+    <div class="step"><b>P2</b>Core Precision CAD profileをconformingへ</div>
+    <div class="step"><b>P3</b>Agent Variant + observation + handoffをconformingへ</div>
+    <div class="step"><b>P4</b>domainを1 profileずつ縦断追加</div>
+  </div>
+  <p class="small">Source: workspace revision 3ab73b9e, local swift-CAD 10d3416 plus dirty state. Machine data: <code>08_report_data.json</code> and <code>visuals/core_evidence_charts.json</code>.</p>
+</main>
+</body>
+</html>

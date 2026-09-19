@@ -1,0 +1,13 @@
+{
+  "gates": [
+    {"gate": "G0", "status": "OPEN", "foundation": "Remote revision pin, CI matrix, local macOS and WASM builds", "blocker": "No isolated all-platform and runtime proof on one clean revision"},
+    {"gate": "G1", "status": "OPEN", "foundation": "Analytic curves/surfaces, rational curves, predicates, partial intersections", "blocker": "Projection/intersection matrix, singular cases, property and oracle proof incomplete"},
+    {"gate": "G2", "status": "OPEN", "foundation": "Coedge B-rep, validators, sewer, repair requests, lineage", "blocker": "General analytic/NURBS shell invariants, repair, volume, and oracle proof incomplete"},
+    {"gate": "G3", "status": "OPEN", "foundation": "Named feature evaluators and exact slice fixtures", "blocker": "All named operations remain shape-envelope limited"},
+    {"gate": "G4", "status": "OPEN", "foundation": "CADCommand, DocumentEditor, KernelQuery, EvaluatedDocument", "blocker": "No repository-wide API inventory, arbitrary edit-chain parity, selection, and cache proof"},
+    {"gate": "G5", "status": "OPEN", "foundation": "DOF/residual/Jacobian and LM solver types", "blocker": "Complete relation, Jacobian oracle, diagnostic, and document integration proof absent"},
+    {"gate": "G6", "status": "OPEN", "foundation": "Exact STEP/IGES subsets and resource budgets", "blocker": "General exact entity/topology coverage, external corpus, fuzz, and third-party oracle absent"},
+    {"gate": "G7", "status": "OPEN", "foundation": "Focused fixtures and CI scaffolding", "blocker": "No same-revision full integration, property, fuzz, benchmark, or all-platform evidence"}
+  ]
+}
+

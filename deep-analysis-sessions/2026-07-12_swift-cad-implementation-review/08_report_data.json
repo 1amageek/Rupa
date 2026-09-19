@@ -1,0 +1,174 @@
+{
+  "framing": {
+    "reviewed_revision": "35ffd6e",
+    "repository": "/Users/1amageek/Desktop/3D/swift-CAD",
+    "decision_question": "Is swift-CAD functionally sufficient, are its requirements valid, and have strategic goals been underestimated or left unimplemented?",
+    "verdict": "The repository is a substantial CAD-kernel foundation for a narrow declared subset, but it is not a releasable standalone SDK and is not sufficient for the broader Rupa/Plasticity-class goal.",
+    "scope_note": "Readiness is evaluated separately for the narrow official rectangle/extrude pipeline and the strategic product-parity roadmap."
+  },
+  "key_claims": [
+    {
+      "id": "C1",
+      "claim": "Standalone distribution and CI are blocked by the local swift-OpenUSD path dependency.",
+      "severity": "P0",
+      "evidence": [
+        "E002",
+        "E003",
+        "E004"
+      ]
+    },
+    {
+      "id": "C2",
+      "claim": "The requirements contain sound architectural principles but do not form one authoritative, traceable release contract.",
+      "severity": "P1",
+      "evidence": [
+        "E001",
+        "E010",
+        "E013"
+      ]
+    },
+    {
+      "id": "C3",
+      "claim": "The broad product goal is materially incomplete: critical modeling, topology, parity, exchange, and operational capabilities are missing or constrained.",
+      "severity": "P1",
+      "evidence": [
+        "E006",
+        "E007",
+        "E008",
+        "E009",
+        "E011",
+        "E016"
+      ]
+    },
+    {
+      "id": "C4",
+      "claim": "The native schema compatibility promise is not enforced by schema-version evolution or migration fixtures.",
+      "severity": "P1",
+      "evidence": [
+        "E010",
+        "E016"
+      ]
+    },
+    {
+      "id": "C5",
+      "claim": "Test volume is strong, but current green verification, conformance breadth, platform coverage, and quantitative performance evidence are insufficient.",
+      "severity": "P1",
+      "evidence": [
+        "E003",
+        "E004",
+        "E005",
+        "E011",
+        "E015",
+        "E016"
+      ]
+    }
+  ],
+  "claim_evidence_patterns": [
+    {
+      "claim_id": "C1",
+      "pattern": "causal chain",
+      "shape": "fresh checkout -> missing sibling dependency -> build failure -> no CI/test evidence"
+    },
+    {
+      "claim_id": "C2",
+      "pattern": "contrast",
+      "shape": "normative official scope vs implementation-state prose vs strategic roadmap"
+    },
+    {
+      "claim_id": "C3",
+      "pattern": "capability gap",
+      "shape": "declared workstream -> public operation -> evaluator subset -> test/acceptance evidence"
+    },
+    {
+      "claim_id": "C4",
+      "pattern": "version contradiction",
+      "shape": "wire field addition + unchanged 1.0.0 + no explicit migration"
+    },
+    {
+      "claim_id": "C5",
+      "pattern": "coverage gap",
+      "shape": "618 declared tests vs blocked CI, limited current execution, one unique external fixture, zero benchmarks"
+    }
+  ],
+  "visual_plan": [
+    {
+      "id": "V1",
+      "title": "Capability readiness matrix",
+      "source": "visuals/verification_matrix.json"
+    },
+    {
+      "id": "V2",
+      "title": "Public operation parity",
+      "source": "visuals/core_evidence_charts.json"
+    },
+    {
+      "id": "V3",
+      "title": "Risk matrix",
+      "source": "visuals/risk_matrix.json"
+    },
+    {
+      "id": "V4",
+      "title": "Recovery sequence",
+      "source": "visuals/timeline.json"
+    }
+  ],
+  "source_index": [
+    {
+      "id": "S1",
+      "title": "README",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/README.md"
+    },
+    {
+      "id": "S2",
+      "title": "Normative specification",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/SPEC.md"
+    },
+    {
+      "id": "S3",
+      "title": "Kernel roadmap",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/CAD_KERNEL_REQUIREMENTS.md"
+    },
+    {
+      "id": "S4",
+      "title": "Package manifest",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/Package.swift"
+    },
+    {
+      "id": "S5",
+      "title": "CI workflow",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/.github/workflows/ci.yml"
+    },
+    {
+      "id": "S6",
+      "title": "Current CI run",
+      "url": "https://github.com/1amageek/swift-CAD/actions/runs/29155022055"
+    },
+    {
+      "id": "S7",
+      "title": "Feature operation IR",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADIR/FeatureOperation.swift"
+    },
+    {
+      "id": "S8",
+      "title": "Kernel evaluators",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel"
+    },
+    {
+      "id": "S9",
+      "title": "Public facade",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/Sources/SwiftCAD"
+    },
+    {
+      "id": "S10",
+      "title": "Test suites",
+      "url": "/Users/1amageek/Desktop/3D/swift-CAD/Tests"
+    }
+  ],
+  "residual_uncertainties": [
+    "The current complete test suite could not start within the 30-second command timeout because the package scheme rebuilds a 32-target graph.",
+    "Focused current bundles proved CADCoreTests 21/21 and CADUSDImportTests 4/4; the current full kernel and facade suites remain unverified in this review.",
+    "External STEP, IGES, 3MF, OBJ, DXF, SVG, and GLB interoperability was not independently validated with third-party conformance corpora.",
+    "The intended authority relationship among SPEC.md, CAD_KERNEL_REQUIREMENTS.md, and implementation-state prose is not stated."
+  ]
+}
+

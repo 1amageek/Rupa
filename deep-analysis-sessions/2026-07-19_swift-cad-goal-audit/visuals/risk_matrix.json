@@ -1,0 +1,8 @@
+{
+  "risks": [
+    { "risk": "False completion from frozen denominator", "impact": "critical", "likelihood": "high", "control": "source-generated public-contract inventory" },
+    { "risk": "Unsound exactness claim for fitted intersection splines", "impact": "critical", "likelihood": "high", "control": "certified implicit truth plus two-sided enclosures" },
+    { "risk": "Partial shape envelopes mistaken for operation support", "impact": "high", "likelihood": "high", "control": "partial earns zero completion credit" },
+    { "risk": "Local results mistaken for release evidence", "impact": "high", "likelihood": "medium", "control": "same-revision manifests and clean worktree" }
+  ]
+}

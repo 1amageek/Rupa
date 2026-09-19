@@ -1,0 +1,12 @@
+{
+  "gates": [
+    { "gate": "G0", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G1", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G2", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G3", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G4", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G5", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G6", "status": "OPEN", "evidenceManifest": false },
+    { "gate": "G7", "status": "OPEN", "evidenceManifest": false }
+  ]
+}

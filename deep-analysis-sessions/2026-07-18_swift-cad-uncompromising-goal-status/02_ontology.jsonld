@@ -1,0 +1,501 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "layer": "https://deep-analysis.dev/layers#",
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": {"@id": "ea:sessionMetadata", "@type": "@json"},
+    "view": {"@id": "ea:view", "@type": "@json"},
+    "tags": {"@id": "ea:tag", "@container": "@set"},
+    "epistemicStatus": {"@id": "ea:epistemicStatus"},
+    "confidence": {"@id": "ea:confidence", "@type": "xsd:decimal"},
+    "priorConfidence": {"@id": "ea:priorConfidence", "@type": "xsd:decimal"},
+    "posteriorConfidence": {"@id": "ea:posteriorConfidence", "@type": "xsd:decimal"},
+    "parent": {"@id": "ea:parent", "@type": "@id"},
+    "children": {"@id": "ea:children", "@type": "@id", "@container": "@set"},
+    "decompositionStrategy": {"@id": "ea:decompositionStrategy"},
+    "derivedFrom": {"@id": "ea:derivedFrom", "@type": "@id", "@container": "@set"},
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": {"@id": "ea:inferenceType"},
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": {"@id": "ea:inferenceStrength", "@type": "xsd:decimal"},
+    "synthesis": {"@id": "ea:synthesis", "@type": "@json"},
+    "claimRole": {"@id": "ea:claimRole"},
+    "primaryEvidence": {"@id": "ea:primaryEvidence", "@type": "@id", "@container": "@set"},
+    "counterEvidence": {"@id": "ea:counterEvidence", "@type": "@id", "@container": "@set"},
+    "sourceTopics": {"@id": "ea:sourceTopics", "@type": "@id", "@container": "@set"},
+    "reasoningPattern": {"@id": "ea:reasoningPattern"},
+    "synthesisStrength": {"@id": "ea:synthesisStrength", "@type": "xsd:decimal"},
+    "limitations": {"@id": "ea:limitations"},
+    "visualEvidenceRequirement": {"@id": "ea:visualEvidenceRequirement", "@type": "@json"},
+    "evidencePattern": {"@id": "ea:evidencePattern"},
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": {"@id": "ea:evidence", "@type": "@json"},
+    "investigations": {"@id": "ea:investigations", "@type": "@json"},
+    "insights": {"@id": "ea:insights", "@type": "@json"},
+    "chartableData": {"@id": "ea:chartableData", "@type": "@json"},
+    "questionStatus": {"@id": "ea:questionStatus"},
+    "supports": {"@id": "rel:supports", "@type": "@id", "@container": "@set"},
+    "refutes": {"@id": "rel:refutes", "@type": "@id", "@container": "@set"},
+    "asksAbout": {"@id": "rel:asksAbout", "@type": "@id", "@container": "@set"},
+    "resolvedBy": {"@id": "rel:resolvedBy", "@type": "@id", "@container": "@set"},
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": {"@id": "ea:supportsClaim", "@type": "@id", "@container": "@set"},
+    "visualRole": {"@id": "ea:visualRole"},
+    "appliedFrameworks": {"@id": "ea:appliedFrameworks", "@container": "@set"},
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": {"@id": "prov:generatedAtTime", "@type": "xsd:dateTime"},
+    "updatedAt": {"@id": "ea:updatedAt", "@type": "xsd:dateTime"},
+    "wasGeneratedBy": {"@id": "prov:wasGeneratedBy"},
+    "wasRevisionOf": {"@id": "prov:wasRevisionOf"},
+    "source": "ea:source",
+    "sourceUrl": {"@id": "schema:url"},
+    "reliability": {"@id": "ea:reliability", "@type": "xsd:decimal"},
+    "evidenceCount": {"@id": "epi:evidenceCount", "@type": "xsd:integer"},
+    "counterEvidenceCount": {"@id": "epi:counterEvidenceCount", "@type": "xsd:integer"},
+    "investigationCount": {"@id": "epi:investigationCount", "@type": "xsd:integer"},
+    "lastUpdated": {"@id": "epi:lastUpdated", "@type": "xsd:dateTime"},
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": {"@id": "epi:fromConfidence", "@type": "xsd:decimal"},
+    "toConfidence": {"@id": "epi:toConfidence", "@type": "xsd:decimal"},
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence",
+    "causes": {"@id": "rel:causes", "@type": "@id"},
+    "causedBy": {"@id": "rel:causedBy", "@type": "@id", "@reverse": "rel:causes"},
+    "enables": {"@id": "rel:enables", "@type": "@id"},
+    "prevents": {"@id": "rel:prevents", "@type": "@id"},
+    "correlatesWith": {"@id": "rel:correlatesWith", "@type": "@id"},
+    "implies": {"@id": "rel:implies", "@type": "@id"},
+    "contradicts": {"@id": "rel:contradicts", "@type": "@id"},
+    "partOf": {"@id": "rel:partOf", "@type": "@id"},
+    "hasComponent": {"@id": "rel:hasComponent", "@type": "@id", "@reverse": "rel:partOf"},
+    "generalizes": {"@id": "rel:generalizes", "@type": "@id"},
+    "specializes": {"@id": "rel:specializes", "@type": "@id", "@reverse": "rel:generalizes"},
+    "analogousTo": {"@id": "rel:analogousTo", "@type": "@id"},
+    "precedes": {"@id": "rel:precedes", "@type": "@id"},
+    "triggers": {"@id": "rel:triggers", "@type": "@id"},
+    "coOccursWith": {"@id": "rel:coOccursWith", "@type": "@id"},
+    "manifestsAs": {"@id": "rel:manifestsAs", "@type": "@id"},
+    "addresses": {"@id": "rel:addresses", "@type": "@id"},
+    "addressedBy": {"@id": "rel:addressedBy", "@type": "@id", "@reverse": "rel:addresses"},
+    "operatesIn": {"@id": "rel:operatesIn", "@type": "@id"},
+    "produces": {"@id": "rel:produces", "@type": "@id"},
+    "strength": {"@id": "rel:strength", "@type": "xsd:decimal"},
+    "polarity": {"@id": "rel:polarity"}
+  },
+  "session": {
+    "id": "session:2026-07-18_swift-cad-uncompromising-goal-status",
+    "title": "swift-CAD Uncompromising Goal Status",
+    "createdAt": "2026-07-18T22:25:30+09:00",
+    "updatedAt": "2026-07-18T22:27:00+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/completion-contract",
+            "kind": "category",
+            "title": "Completion Contract",
+            "layer": "Context",
+            "category": "Completion Contract",
+            "members": ["ea:session/swift-cad-status/question/Q001"]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/current-state",
+            "kind": "category",
+            "title": "Current State",
+            "layer": "Situation",
+            "category": "Current State",
+            "members": [
+              "ea:session/swift-cad-status/topic/T002",
+              "ea:session/swift-cad-status/topic/T003",
+              "ea:session/swift-cad-status/topic/T012"
+            ]
+          },
+          {
+            "id": "group:category/situation/repository-evidence",
+            "kind": "category",
+            "title": "Repository Evidence",
+            "layer": "Situation",
+            "category": "Repository Evidence",
+            "members": [
+              "ea:session/swift-cad-status/evidence/E001",
+              "ea:session/swift-cad-status/evidence/E002",
+              "ea:session/swift-cad-status/evidence/E003",
+              "ea:session/swift-cad-status/evidence/E004",
+              "ea:session/swift-cad-status/evidence/E005",
+              "ea:session/swift-cad-status/evidence/E006"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/open-gates",
+            "kind": "category",
+            "title": "Open Gates",
+            "layer": "Problem",
+            "category": "Open Gates",
+            "members": [
+              "ea:session/swift-cad-status/topic/T004",
+              "ea:session/swift-cad-status/topic/T005",
+              "ea:session/swift-cad-status/topic/T006",
+              "ea:session/swift-cad-status/topic/T007",
+              "ea:session/swift-cad-status/topic/T008",
+              "ea:session/swift-cad-status/topic/T009",
+              "ea:session/swift-cad-status/topic/T010"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/closure-sequence",
+            "kind": "category",
+            "title": "Closure Sequence",
+            "layer": "Solution",
+            "category": "Closure Sequence",
+            "members": [
+              "ea:session/swift-cad-status/topic/T011",
+              "ea:session/swift-cad-status/insight/I003"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/binary-acceptance",
+            "kind": "category",
+            "title": "Binary Acceptance",
+            "layer": "Outcome",
+            "category": "Binary Acceptance",
+            "members": [
+              "ea:session/swift-cad-status/topic/T001",
+              "ea:session/swift-cad-status/insight/I001",
+              "ea:session/swift-cad-status/insight/I002"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/swift-cad-status/topic/T001",
+      "@type": "Topic",
+      "title": "Uncompromising completion condition",
+      "content": "Completion requires 55 of 55 general capabilities supported, zero partial or planned capabilities, no valid public input rejected because of an implementation shape envelope, exact analytic or rational NURBS results with validated B-rep and deterministic lineage, no exact mesh fallback, and G0 through G7 passing on one tested clean revision.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "visualEvidenceRequirement": {"evidencePattern": "gap", "requiredChartType": "capability and gate completion matrix"},
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T002",
+      "@type": "Topic",
+      "title": "Capability catalog remains predominantly partial",
+      "content": "The compiled catalog contains 55 capability IDs. Four are supported and 51 are partial.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "decompositionStrategy": "structural",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T003",
+      "@type": "Topic",
+      "title": "No final gate is passed",
+      "content": "ROADMAP and the goal-contract checker report zero of eight gates passed, and no final evidence manifest is recorded.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T004",
+      "@type": "Topic",
+      "title": "G1 exact geometry is incomplete",
+      "content": "Analytic and rational evaluation foundations exist, but projections, the complete curve/surface and surface/surface intersection matrix, higher-order singular cases, property coverage, and external oracle evidence are incomplete.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.95,
+      "causes": "ea:session/swift-cad-status/topic/T005",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T005",
+      "@type": "Topic",
+      "title": "G2 validated topology is incomplete",
+      "content": "Coedge B-rep, pcurves, validation scopes, sewing, explicit repair, and lineage exist, but general analytic/NURBS shell invariants, volume, healing, split/merge behavior, and oracle comparison are not closed.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.94,
+      "causes": "ea:session/swift-cad-status/topic/T006",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T006",
+      "@type": "Topic",
+      "title": "G3 exact modeling is shape-envelope limited",
+      "content": "Named feature evaluators and exact fixtures exist, but Boolean, Sweep, Loft, blends, shell, direct edits, patterns, and curve/surface editing remain partial and reject valid public inputs outside implemented shape envelopes.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "causes": "ea:session/swift-cad-status/topic/T007",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T007",
+      "@type": "Topic",
+      "title": "G4 public path proof is incomplete",
+      "content": "CADCommand, DocumentEditor, KernelQuery, and EvaluatedDocument exist and CADAgentCommand is absent, but repository-wide bypass inventory, arbitrary edit-chain parity, stable selection, and deterministic cache proof are missing.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.92,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T008",
+      "@type": "Topic",
+      "title": "G5 constraint proof is incomplete",
+      "content": "The IR names the requested relation set and the kernel contains DOF/residual/Jacobian and Levenberg-Marquardt foundations, but complete relation, Jacobian oracle, diagnostic, singular, and document-edit integration evidence is absent.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.92,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T009",
+      "@type": "Topic",
+      "title": "G6 exact exchange is incomplete",
+      "content": "STEP and IGES exact subsets and import budgets exist, but general supported geometry/topology coverage, external corpora, resource fuzzing, and third-party CAD oracle validation are absent.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.94,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T010",
+      "@type": "Topic",
+      "title": "G7 release verification is absent",
+      "content": "No one-revision evidence set covers complete integration, property tests, parser fuzzing, external oracles, large models, allocations, incremental evaluation, and all-platform runtime.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T011",
+      "@type": "Topic",
+      "title": "Dependency-ordered closure sequence",
+      "content": "Close the reproducible contract, then exact geometry, validated topology, general exact modeling, shared public paths, constraints, exact exchange, and finally one-revision release verification.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.91,
+      "decompositionStrategy": "causal and temporal",
+      "addresses": "ea:session/swift-cad-status/topic/T003",
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/topic/T012",
+      "@type": "Topic",
+      "title": "Current source builds on macOS and WebAssembly",
+      "content": "The dirty working source built the SwiftCAD facade on macOS and the full package for WebAssembly, including the pinned swift-OpenUSD dependency.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "investigations": []
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E001",
+      "@type": "Evidence",
+      "title": "Goal contract reports zero of eight gates",
+      "content": "Scripts/check_goal_contract.py completed successfully and printed Goal contract check passed (0/8 gates passed).",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local goal-contract execution and ROADMAP.md",
+      "sourceUrl": "/Users/1amageek/Desktop/3D/swift-CAD/ROADMAP.md",
+      "reliability": 0.99,
+      "supports": ["ea:session/swift-cad-status/topic/T003"],
+      "chartableData": [
+        {"seriesLabel": "Current", "subject": "Passed gates", "value": 0, "unit": "gates", "period": "2026-07-18", "status": "observed", "source": "ROADMAP.md", "visualRole": "baseline"},
+        {"seriesLabel": "Required", "subject": "Passed gates", "value": 8, "unit": "gates", "period": "completion", "status": "required", "source": "ROADMAP.md", "visualRole": "target"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E002",
+      "@type": "Evidence",
+      "title": "Capability ledger contract counts",
+      "content": "The ledger checker passed with 55 unique capabilities, 40 unique envelopes, and 319 capability-fixture bindings.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local capability-ledger contract execution",
+      "sourceUrl": "/Users/1amageek/Desktop/3D/swift-CAD/CAPABILITY_LEDGER.md",
+      "reliability": 0.99,
+      "supports": ["ea:session/swift-cad-status/topic/T002"],
+      "chartableData": [
+        {"seriesLabel": "Current", "subject": "Catalog capabilities", "value": 55, "unit": "capabilities", "period": "2026-07-18", "status": "observed", "source": "CAPABILITY_LEDGER.md", "visualRole": "baseline"},
+        {"seriesLabel": "Current", "subject": "Development envelopes", "value": 40, "unit": "envelopes", "period": "2026-07-18", "status": "observed", "source": "CAPABILITY_LEDGER.md", "visualRole": "baseline"},
+        {"seriesLabel": "Current", "subject": "Fixture bindings", "value": 319, "unit": "bindings", "period": "2026-07-18", "status": "observed", "source": "CAPABILITY_LEDGER.md", "visualRole": "context"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E003",
+      "@type": "Evidence",
+      "title": "Compiled capability status counts",
+      "content": "Four direct catalog entries are supported. The remaining 51 entries are partial, including 39 feature-helper entries and 12 other direct partial entries.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "KernelCapabilities source inventory",
+      "sourceUrl": "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel",
+      "reliability": 0.99,
+      "supports": ["ea:session/swift-cad-status/topic/T002", "ea:session/swift-cad-status/topic/T006"],
+      "chartableData": [
+        {"seriesLabel": "Current", "subject": "Supported capabilities", "value": 4, "unit": "capabilities", "period": "2026-07-18", "status": "observed", "source": "KernelCapabilities", "visualRole": "baseline"},
+        {"seriesLabel": "Required", "subject": "Supported capabilities", "value": 55, "unit": "capabilities", "period": "completion", "status": "required", "source": "ROADMAP.md", "visualRole": "target"},
+        {"seriesLabel": "Current", "subject": "Partial capabilities", "value": 51, "unit": "capabilities", "period": "2026-07-18", "status": "observed", "source": "KernelCapabilities", "visualRole": "baseline"},
+        {"seriesLabel": "Required", "subject": "Partial capabilities", "value": 0, "unit": "capabilities", "period": "completion", "status": "required", "source": "ROADMAP.md", "visualRole": "target"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E004",
+      "@type": "Evidence",
+      "title": "Current macOS and WebAssembly builds pass",
+      "content": "xcodebuild for the SwiftCAD facade on macOS and swift build with the Swift 6.3.1 WebAssembly SDK both succeeded.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "source": "Local build logs",
+      "sourceUrl": "/tmp/swift-cad-status-dd",
+      "reliability": 0.98,
+      "supports": ["ea:session/swift-cad-status/topic/T012"],
+      "chartableData": [
+        {"seriesLabel": "Local current-source checks", "subject": "macOS SwiftCAD build", "value": 1, "unit": "pass", "period": "2026-07-18", "status": "observed", "source": "xcodebuild", "visualRole": "foundation"},
+        {"seriesLabel": "Local current-source checks", "subject": "WebAssembly package build", "value": 1, "unit": "pass", "period": "2026-07-18", "status": "observed", "source": "swift build", "visualRole": "foundation"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E005",
+      "@type": "Evidence",
+      "title": "Final revision attestation is impossible in the current worktree",
+      "content": "The branch is ahead of origin/main by one commit and the worktree contains extensive modified, deleted, and untracked files. The final goal contract requires a clean worktree and revision-bound evidence.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "git status and goal contract",
+      "sourceUrl": "/Users/1amageek/Desktop/3D/swift-CAD/Scripts/check_goal_contract.py",
+      "reliability": 0.99,
+      "supports": ["ea:session/swift-cad-status/topic/T003"],
+      "chartableData": [
+        {"seriesLabel": "Current", "subject": "Clean attested revision", "value": 0, "unit": "boolean", "period": "2026-07-18", "status": "observed", "source": "git status", "visualRole": "baseline"},
+        {"seriesLabel": "Required", "subject": "Clean attested revision", "value": 1, "unit": "boolean", "period": "completion", "status": "required", "source": "check_goal_contract.py", "visualRole": "target"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/evidence/E006",
+      "@type": "Evidence",
+      "title": "Capability contracts explicitly encode narrow shape envelopes",
+      "content": "Modeling inputs repeatedly constrain operations to orthogonal, rectangular, convex, coaxial, single-edge, or otherwise bounded cases, and unsupportedCapability remains a declared outcome for partial operations.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "source": "KernelCapabilities modeling source",
+      "sourceUrl": "/Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel/KernelCapabilities+ModelingEdit.swift",
+      "reliability": 0.97,
+      "supports": ["ea:session/swift-cad-status/topic/T004", "ea:session/swift-cad-status/topic/T005", "ea:session/swift-cad-status/topic/T006"],
+      "chartableData": [
+        {"seriesLabel": "Current", "subject": "Development envelope rows", "value": 40, "unit": "envelopes", "period": "2026-07-18", "status": "observed", "source": "CAPABILITY_LEDGER.md", "visualRole": "baseline"},
+        {"seriesLabel": "Required", "subject": "Completion envelope exemptions", "value": 0, "unit": "envelopes", "period": "completion", "status": "required", "source": "ROADMAP.md", "visualRole": "target"}
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-status/insight/I001",
+      "@type": "Insight",
+      "title": "The project is foundational, not completion-near",
+      "content": "A large source tree and many fixtures demonstrate engineering progress, but binary completion remains zero because almost every capability is partial and every final gate is open.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "rationale": "The authoritative compiled status and gate contract override subjective impressions based on file or test volume.",
+      "derivedFrom": ["ea:session/swift-cad-status/evidence/E001", "ea:session/swift-cad-status/evidence/E002", "ea:session/swift-cad-status/evidence/E003"],
+      "supportsClaim": ["ea:session/swift-cad-status/topic/T001"],
+      "primaryEvidence": ["ea:session/swift-cad-status/evidence/E001", "ea:session/swift-cad-status/evidence/E003"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/swift-cad-status/topic/T002", "ea:session/swift-cad-status/topic/T003"],
+      "synthesis": {"claimRole": "final-claim", "reasoningPattern": "gap analysis", "synthesisStrength": 0.98, "limitations": "Current uncommitted source; no claim about eventual feasibility."}
+    },
+    {
+      "@id": "ea:session/swift-cad-status/insight/I002",
+      "@type": "Insight",
+      "title": "Build success is necessary but insufficient",
+      "content": "The macOS and WebAssembly builds prove that the current dependency alignment and source graph compile, but they do not prove isolated reproducibility, numerical completeness, topology correctness, modeling generality, or release quality.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "rationale": "G0 and later gates require substantially more evidence than a local build and require one clean tested revision.",
+      "derivedFrom": ["ea:session/swift-cad-status/evidence/E001", "ea:session/swift-cad-status/evidence/E004", "ea:session/swift-cad-status/evidence/E005"],
+      "supportsClaim": ["ea:session/swift-cad-status/topic/T001"],
+      "primaryEvidence": ["ea:session/swift-cad-status/evidence/E004", "ea:session/swift-cad-status/evidence/E005"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/swift-cad-status/topic/T003", "ea:session/swift-cad-status/topic/T012"],
+      "synthesis": {"claimRole": "intermediate-claim", "reasoningPattern": "necessary-versus-sufficient", "synthesisStrength": 0.97, "limitations": "No iOS or visionOS local build was run in this analysis."}
+    },
+    {
+      "@id": "ea:session/swift-cad-status/insight/I003",
+      "@type": "Insight",
+      "title": "Geometry and topology must precede modeling breadth",
+      "content": "Adding more special-case feature evaluators before closing general geometry and topology would increase envelope count without removing the completion blockers.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.93,
+      "rationale": "Every exact modeling slice depends on intersections, classification, sewing, validation, volume, and lineage; incomplete foundations force new shape-specific branches.",
+      "derivedFrom": ["ea:session/swift-cad-status/topic/T004", "ea:session/swift-cad-status/topic/T005", "ea:session/swift-cad-status/topic/T006", "ea:session/swift-cad-status/evidence/E006"],
+      "supportsClaim": ["ea:session/swift-cad-status/topic/T001", "ea:session/swift-cad-status/topic/T011"],
+      "primaryEvidence": ["ea:session/swift-cad-status/evidence/E003", "ea:session/swift-cad-status/evidence/E006"],
+      "counterEvidence": [],
+      "sourceTopics": ["ea:session/swift-cad-status/topic/T004", "ea:session/swift-cad-status/topic/T005", "ea:session/swift-cad-status/topic/T006"],
+      "synthesis": {"claimRole": "decision-claim", "reasoningPattern": "dependency and leverage-point analysis", "synthesisStrength": 0.93, "limitations": "Individual vertical fixtures remain useful only when they close general kernel primitives rather than add isolated envelopes."}
+    },
+    {
+      "@id": "ea:session/swift-cad-status/question/Q001",
+      "@type": "Question",
+      "title": "Independent oracle selection remains open",
+      "content": "Which independent CAD systems and fixture corpora will serve as the final geometry, topology, STEP, and IGES oracles?",
+      "epistemicStatus": "Investigating",
+      "confidence": 0.5,
+      "questionStatus": "Open",
+      "asksAbout": ["ea:session/swift-cad-status/topic/T004", "ea:session/swift-cad-status/topic/T005", "ea:session/swift-cad-status/topic/T009"],
+      "resolvedBy": []
+    }
+  ]
+}

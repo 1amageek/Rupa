@@ -1,0 +1,32 @@
+{
+  "charts": [
+    {
+      "id": "kernel-capability-maturity",
+      "type": "stacked-bar",
+      "title": "swift-CAD capability contract maturity",
+      "series": [
+        {"label": "Supported", "value": 25},
+        {"label": "Partial", "value": 42},
+        {"label": "Planned", "value": 0}
+      ],
+      "total": 67
+    },
+    {
+      "id": "agent-route-unification",
+      "type": "stacked-bar",
+      "title": "Static Agent capability access routes",
+      "series": [
+        {"label": "Unified automation command", "value": 126},
+        {"label": "Typed legacy Agent request", "value": 38}
+      ],
+      "total": 164
+    },
+    {
+      "id": "formal-gates",
+      "type": "progress",
+      "title": "swift-CAD formal completion gates",
+      "value": 0,
+      "total": 8
+    }
+  ]
+}

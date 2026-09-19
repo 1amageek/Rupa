@@ -1,0 +1,12 @@
+{
+  "sequence": [
+    {"order": 0, "gate": "G0", "title": "Reproducible contract"},
+    {"order": 1, "gate": "G1", "title": "Exact geometry"},
+    {"order": 2, "gate": "G2", "title": "Validated topology"},
+    {"order": 3, "gate": "G3", "title": "General exact modeling"},
+    {"order": 4, "gate": "G4", "title": "One public path"},
+    {"order": 5, "gate": "G5", "title": "Complete constraints"},
+    {"order": 6, "gate": "G6", "title": "Exact exchange"},
+    {"order": 7, "gate": "G7", "title": "Release verification"}
+  ]
+}

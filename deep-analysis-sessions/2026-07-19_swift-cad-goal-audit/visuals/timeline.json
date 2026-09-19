@@ -1,0 +1,12 @@
+{
+  "sequence": [
+    { "order": 1, "milestone": "G0 contract foundation", "status": "OPEN" },
+    { "order": 2, "milestone": "G1 exact geometry", "status": "OPEN" },
+    { "order": 3, "milestone": "G2 validated topology", "status": "OPEN" },
+    { "order": 4, "milestone": "G3 exact modeling", "status": "OPEN" },
+    { "order": 5, "milestone": "G4 public paths", "status": "OPEN" },
+    { "order": 6, "milestone": "G5 constraints", "status": "OPEN" },
+    { "order": 7, "milestone": "G6 exact exchange", "status": "OPEN" },
+    { "order": 8, "milestone": "G7 final verification", "status": "OPEN" }
+  ]
+}

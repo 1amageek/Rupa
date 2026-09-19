@@ -1,0 +1,32 @@
+{
+  "axes": {
+    "x": "likelihood",
+    "y": "impact"
+  },
+  "items": [
+    {
+      "id": "build-contract",
+      "label": "Swift-CAD contract drift",
+      "likelihood": 5,
+      "impact": 5
+    },
+    {
+      "id": "operation-gap",
+      "label": "Untracked UI/Core-only mutation",
+      "likelihood": 4,
+      "impact": 5
+    },
+    {
+      "id": "save-path",
+      "label": "Live session has no save path",
+      "likelihood": 5,
+      "impact": 4
+    },
+    {
+      "id": "socket-lifecycle",
+      "label": "Socket unavailable while app inactive",
+      "likelihood": 3,
+      "impact": 3
+    }
+  ]
+}

@@ -1,0 +1,1349 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": {
+      "@id": "ea:sessionMetadata",
+      "@type": "@json"
+    },
+    "view": {
+      "@id": "ea:view",
+      "@type": "@json"
+    },
+    "tags": {
+      "@id": "ea:tag",
+      "@container": "@set"
+    },
+    "epistemicStatus": {
+      "@id": "ea:epistemicStatus"
+    },
+    "confidence": {
+      "@id": "ea:confidence",
+      "@type": "xsd:decimal"
+    },
+    "priorConfidence": {
+      "@id": "ea:priorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "posteriorConfidence": {
+      "@id": "ea:posteriorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "parent": {
+      "@id": "ea:parent",
+      "@type": "@id"
+    },
+    "children": {
+      "@id": "ea:children",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "decompositionStrategy": {
+      "@id": "ea:decompositionStrategy"
+    },
+    "derivedFrom": {
+      "@id": "ea:derivedFrom",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": {
+      "@id": "ea:inferenceType"
+    },
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": {
+      "@id": "ea:inferenceStrength",
+      "@type": "xsd:decimal"
+    },
+    "synthesis": {
+      "@id": "ea:synthesis",
+      "@type": "@json"
+    },
+    "claimRole": {
+      "@id": "ea:claimRole"
+    },
+    "primaryEvidence": {
+      "@id": "ea:primaryEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "counterEvidence": {
+      "@id": "ea:counterEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "sourceTopics": {
+      "@id": "ea:sourceTopics",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "reasoningPattern": {
+      "@id": "ea:reasoningPattern"
+    },
+    "synthesisStrength": {
+      "@id": "ea:synthesisStrength",
+      "@type": "xsd:decimal"
+    },
+    "limitations": {
+      "@id": "ea:limitations"
+    },
+    "visualEvidenceRequirement": {
+      "@id": "ea:visualEvidenceRequirement",
+      "@type": "@json"
+    },
+    "evidencePattern": {
+      "@id": "ea:evidencePattern"
+    },
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": {
+      "@id": "ea:evidence",
+      "@type": "@json"
+    },
+    "investigations": {
+      "@id": "ea:investigations",
+      "@type": "@json"
+    },
+    "insights": {
+      "@id": "ea:insights",
+      "@type": "@json"
+    },
+    "chartableData": {
+      "@id": "ea:chartableData",
+      "@type": "@json"
+    },
+    "questionStatus": {
+      "@id": "ea:questionStatus"
+    },
+    "supports": {
+      "@id": "rel:supports",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "refutes": {
+      "@id": "rel:refutes",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "asksAbout": {
+      "@id": "rel:asksAbout",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "resolvedBy": {
+      "@id": "rel:resolvedBy",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": {
+      "@id": "ea:supportsClaim",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "visualRole": {
+      "@id": "ea:visualRole"
+    },
+    "appliedFrameworks": {
+      "@id": "ea:appliedFrameworks",
+      "@container": "@set"
+    },
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": {
+      "@id": "prov:generatedAtTime",
+      "@type": "xsd:dateTime"
+    },
+    "updatedAt": {
+      "@id": "ea:updatedAt",
+      "@type": "xsd:dateTime"
+    },
+    "wasGeneratedBy": {
+      "@id": "prov:wasGeneratedBy"
+    },
+    "wasRevisionOf": {
+      "@id": "prov:wasRevisionOf"
+    },
+    "source": "ea:source",
+    "sourceUrl": {
+      "@id": "schema:url"
+    },
+    "reliability": {
+      "@id": "ea:reliability",
+      "@type": "xsd:decimal"
+    },
+    "layer": "https://deep-analysis.dev/layers#",
+    "causes": {
+      "@id": "rel:causes",
+      "@type": "@id"
+    },
+    "causedBy": {
+      "@id": "rel:causedBy",
+      "@type": "@id",
+      "@reverse": "rel:causes"
+    },
+    "enables": {
+      "@id": "rel:enables",
+      "@type": "@id"
+    },
+    "prevents": {
+      "@id": "rel:prevents",
+      "@type": "@id"
+    },
+    "correlatesWith": {
+      "@id": "rel:correlatesWith",
+      "@type": "@id"
+    },
+    "implies": {
+      "@id": "rel:implies",
+      "@type": "@id"
+    },
+    "contradicts": {
+      "@id": "rel:contradicts",
+      "@type": "@id"
+    },
+    "partOf": {
+      "@id": "rel:partOf",
+      "@type": "@id"
+    },
+    "hasComponent": {
+      "@id": "rel:hasComponent",
+      "@type": "@id",
+      "@reverse": "rel:partOf"
+    },
+    "generalizes": {
+      "@id": "rel:generalizes",
+      "@type": "@id"
+    },
+    "specializes": {
+      "@id": "rel:specializes",
+      "@type": "@id",
+      "@reverse": "rel:generalizes"
+    },
+    "analogousTo": {
+      "@id": "rel:analogousTo",
+      "@type": "@id"
+    },
+    "precedes": {
+      "@id": "rel:precedes",
+      "@type": "@id"
+    },
+    "triggers": {
+      "@id": "rel:triggers",
+      "@type": "@id"
+    },
+    "coOccursWith": {
+      "@id": "rel:coOccursWith",
+      "@type": "@id"
+    },
+    "manifestsAs": {
+      "@id": "rel:manifestsAs",
+      "@type": "@id"
+    },
+    "addresses": {
+      "@id": "rel:addresses",
+      "@type": "@id"
+    },
+    "addressedBy": {
+      "@id": "rel:addressedBy",
+      "@type": "@id",
+      "@reverse": "rel:addresses"
+    },
+    "operatesIn": {
+      "@id": "rel:operatesIn",
+      "@type": "@id"
+    },
+    "produces": {
+      "@id": "rel:produces",
+      "@type": "@id"
+    },
+    "strength": {
+      "@id": "rel:strength",
+      "@type": "xsd:decimal"
+    },
+    "polarity": {
+      "@id": "rel:polarity"
+    },
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "evidenceCount": {
+      "@id": "epi:evidenceCount",
+      "@type": "xsd:integer"
+    },
+    "counterEvidenceCount": {
+      "@id": "epi:counterEvidenceCount",
+      "@type": "xsd:integer"
+    },
+    "investigationCount": {
+      "@id": "epi:investigationCount",
+      "@type": "xsd:integer"
+    },
+    "lastUpdated": {
+      "@id": "epi:lastUpdated",
+      "@type": "xsd:dateTime"
+    },
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": {
+      "@id": "epi:fromConfidence",
+      "@type": "xsd:decimal"
+    },
+    "toConfidence": {
+      "@id": "epi:toConfidence",
+      "@type": "xsd:decimal"
+    },
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence"
+  },
+  "session": {
+    "id": "session:swift-cad-implementation-review",
+    "title": "swift-CAD implementation and requirements review",
+    "createdAt": "2026-07-12T00:00:00+09:00",
+    "updatedAt": "2026-07-12T09:00:00+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/product-boundary",
+            "kind": "category",
+            "title": "Product Boundary",
+            "layer": "Context",
+            "category": "Product Boundary",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T004",
+              "ea:session/swift-cad-implementation-review/question/Q001",
+              "ea:session/swift-cad-implementation-review/evidence/E001",
+              "ea:session/swift-cad-implementation-review/evidence/E013"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/build-verification",
+            "kind": "category",
+            "title": "Build and Verification",
+            "layer": "Situation",
+            "category": "Build and Verification",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T005",
+              "ea:session/swift-cad-implementation-review/topic/T006",
+              "ea:session/swift-cad-implementation-review/topic/T007",
+              "ea:session/swift-cad-implementation-review/topic/T014",
+              "ea:session/swift-cad-implementation-review/evidence/E002",
+              "ea:session/swift-cad-implementation-review/evidence/E003",
+              "ea:session/swift-cad-implementation-review/evidence/E004",
+              "ea:session/swift-cad-implementation-review/evidence/E005",
+              "ea:session/swift-cad-implementation-review/evidence/E014",
+              "ea:session/swift-cad-implementation-review/evidence/E015",
+              "ea:session/swift-cad-implementation-review/evidence/E016"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/requirements-contract",
+            "kind": "category",
+            "title": "Requirements Contract",
+            "layer": "Problem",
+            "category": "Requirements Contract",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T002",
+              "ea:session/swift-cad-implementation-review/topic/T009",
+              "ea:session/swift-cad-implementation-review/topic/T015",
+              "ea:session/swift-cad-implementation-review/topic/T017",
+              "ea:session/swift-cad-implementation-review/question/Q002",
+              "ea:session/swift-cad-implementation-review/evidence/E010"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/issue",
+        "kind": "layer",
+        "title": "Issue",
+        "layer": "Issue",
+        "children": [
+          {
+            "id": "group:category/issue/capability-gaps",
+            "kind": "category",
+            "title": "Capability Gaps",
+            "layer": "Issue",
+            "category": "Capability Gaps",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T003",
+              "ea:session/swift-cad-implementation-review/topic/T008",
+              "ea:session/swift-cad-implementation-review/topic/T010",
+              "ea:session/swift-cad-implementation-review/topic/T011",
+              "ea:session/swift-cad-implementation-review/topic/T012",
+              "ea:session/swift-cad-implementation-review/topic/T013",
+              "ea:session/swift-cad-implementation-review/topic/T016",
+              "ea:session/swift-cad-implementation-review/topic/T018",
+              "ea:session/swift-cad-implementation-review/question/Q003",
+              "ea:session/swift-cad-implementation-review/evidence/E006",
+              "ea:session/swift-cad-implementation-review/evidence/E007",
+              "ea:session/swift-cad-implementation-review/evidence/E008",
+              "ea:session/swift-cad-implementation-review/evidence/E009",
+              "ea:session/swift-cad-implementation-review/evidence/E011",
+              "ea:session/swift-cad-implementation-review/evidence/E012"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/recovery",
+            "kind": "category",
+            "title": "Recovery",
+            "layer": "Solution",
+            "category": "Recovery",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T019",
+              "ea:session/swift-cad-implementation-review/topic/T020",
+              "ea:session/swift-cad-implementation-review/topic/T021",
+              "ea:session/swift-cad-implementation-review/insight/I005"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/outcome",
+        "kind": "layer",
+        "title": "Outcome",
+        "layer": "Outcome",
+        "children": [
+          {
+            "id": "group:category/outcome/readiness",
+            "kind": "category",
+            "title": "Readiness",
+            "layer": "Outcome",
+            "category": "Readiness",
+            "members": [
+              "ea:session/swift-cad-implementation-review/topic/T001",
+              "ea:session/swift-cad-implementation-review/insight/I001",
+              "ea:session/swift-cad-implementation-review/insight/I002",
+              "ea:session/swift-cad-implementation-review/insight/I003",
+              "ea:session/swift-cad-implementation-review/insight/I004"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T001",
+      "@type": "Topic",
+      "title": "Functional sufficiency verdict",
+      "content": "swift-CAD is substantial for a narrow declared modeling subset, but it is not a releasable standalone SDK and is not sufficient for the broader Rupa/Plasticity-class goal.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.94,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "gap",
+        "requiredChartType": "capability readiness matrix"
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T002",
+      "@type": "Topic",
+      "title": "Requirement validity verdict",
+      "content": "The architectural principles are sound, but the current documents do not form one authoritative, internally consistent, traceable release contract.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.94,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "comparison",
+        "requiredChartType": "requirement authority matrix"
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T003",
+      "@type": "Topic",
+      "title": "Underestimated and unimplemented goals",
+      "content": "The goal has been underestimated primarily in depth: capabilities are named and partially implemented without complete robustness, parity, compatibility, performance, and conformance gates.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97,
+      "visualEvidenceRequirement": {
+        "evidencePattern": "gap",
+        "requiredChartType": "risk and capability gap matrix"
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T004",
+      "@type": "Topic",
+      "title": "Two distinct product boundaries",
+      "content": "The repository contains a narrow official rectangle/extrude exchange scope and a separate strategic Rupa/Plasticity-class kernel roadmap.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T005",
+      "@type": "Topic",
+      "title": "Standalone distribution is blocked",
+      "content": "A clean checkout cannot resolve the local sibling swift-OpenUSD dependency, contradicting the documented remote Swift Package installation.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T006",
+      "@type": "Topic",
+      "title": "CI is not truth-bearing",
+      "content": "The current CI fails before testing, and its forbidden-pattern grep contains deterministic false-positive and real-failure matches.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T007",
+      "@type": "Topic",
+      "title": "Minimal kernel foundation is substantive",
+      "content": "Typed IR, unit and tolerance validation, analytic/NURBS geometry, deterministic evaluation, B-rep validation, tessellation, and strict exchange subsets are materially implemented.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.86
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T008",
+      "@type": "Topic",
+      "title": "Public operation parity is incomplete",
+      "content": "FeatureOperation, DocumentBuilder, and CADAgentCommand expose different operation sets despite the shared UI/Agent parity requirement.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T009",
+      "@type": "Topic",
+      "title": "Native schema evolution is incomplete",
+      "content": "Persisted source fields and operation variants have expanded while SchemaVersion.current remains 1.0.0 and no explicit migration layer or historical fixture set exists.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.97
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T010",
+      "@type": "Topic",
+      "title": "Advanced modeling capabilities are incomplete",
+      "content": "General booleans, full sketch constraints, direct editing, advanced surfaces, and stable naming are limited to explicit subsets; fillet, chamfer, shell, patch, and thicken are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T011",
+      "@type": "Topic",
+      "title": "Exact CAD exchange goal is incomplete",
+      "content": "STEP and IGES currently exchange tessellated meshes or triangle wires rather than editable curves, surfaces, trims, topology, and design intent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T012",
+      "@type": "Topic",
+      "title": "Performance and memory goal is unverified",
+      "content": "Incremental reuse exists, but the required allocation/timing budgets, benchmark target, and borrowed/COW dense data contracts are absent.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T013",
+      "@type": "Topic",
+      "title": "Zero-copy boundary is only partial",
+      "content": "ByteSource and ByteSink establish explicit transport ownership, while several text importers still materialize whole-file String values.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.9
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T014",
+      "@type": "Topic",
+      "title": "Test inventory is large but incomplete as product evidence",
+      "content": "The repository has 618 tests and strong negative validation, but current full-suite evidence, platform/trait coverage, conformance corpora, and performance evidence are missing.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T015",
+      "@type": "Topic",
+      "title": "Requirement traceability is absent",
+      "content": "The documents contain many normative statements but no stable requirement IDs or automated mapping to APIs, supported geometry subsets, tests, and release gates.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T016",
+      "@type": "Topic",
+      "title": "Robust B-rep enabling platform is under-scoped",
+      "content": "The roadmap names general booleans, blends, shells, and patches without separately defining the intersection, trimming, sewing/healing, topology mutation, and tolerance-escalation capabilities they depend on.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.86
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T017",
+      "@type": "Topic",
+      "title": "Specification schema is stale",
+      "content": "selectionDimensions is persisted and validated in code but absent from the normative CADDocument and document.json field tables.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T018",
+      "@type": "Topic",
+      "title": "Pattern and technical drawing workstreams are absent",
+      "content": "Pattern/array evaluation and deterministic hidden-line, section, hatching, and view-metadata output have requirements but no corresponding feature implementation.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T019",
+      "@type": "Topic",
+      "title": "Restore a truth-bearing build",
+      "content": "Make a fresh clone resolve all dependencies, make macOS and WASM CI green, and replace brittle text grep with reliable source-rule checks.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.92,
+      "addresses": [
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006"
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T020",
+      "@type": "Topic",
+      "title": "Establish a normative capability ledger",
+      "content": "Separate current support from roadmap and give every capability a stable ID, supported geometry matrix, typed failure codes, parity state, and evidence links.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.91,
+      "addresses": [
+        "ea:session/swift-cad-implementation-review/topic/T002",
+        "ea:session/swift-cad-implementation-review/topic/T008",
+        "ea:session/swift-cad-implementation-review/topic/T015",
+        "ea:session/swift-cad-implementation-review/topic/T017"
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/topic/T021",
+      "@type": "Topic",
+      "title": "Complete vertical slices before adding breadth",
+      "content": "For each prioritized modeling capability, finish geometry, topology, persistent naming, facade and agent parity, persistence, conformance, and performance gates together.",
+      "epistemicStatus": "Evidenced",
+      "confidence": 0.9,
+      "addresses": [
+        "ea:session/swift-cad-implementation-review/topic/T003",
+        "ea:session/swift-cad-implementation-review/topic/T009",
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T012",
+        "ea:session/swift-cad-implementation-review/topic/T016",
+        "ea:session/swift-cad-implementation-review/topic/T018"
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E001",
+      "@type": "Evidence",
+      "title": "Documents define conflicting support scopes",
+      "content": "SPEC declares a narrow official sketch/extrude pipeline while later SPEC sections and CAD_KERNEL_REQUIREMENTS describe much broader implemented and strategic surfaces.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "SPEC.md and CAD_KERNEL_REQUIREMENTS.md",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/SPEC.md",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T002",
+        "ea:session/swift-cad-implementation-review/topic/T004",
+        "ea:session/swift-cad-implementation-review/topic/T015"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E002",
+      "@type": "Evidence",
+      "title": "Fresh package resolution fails",
+      "content": "An isolated git archive followed by swift package resolve fails because /private/tmp/swift-OpenUSD does not exist.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Local isolated resolution reproduction",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Package.swift#L53",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T005"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E003",
+      "@type": "Evidence",
+      "title": "Current and recent CI are failing",
+      "content": "The current run fails both SwiftPM and WebAssembly build jobs on the missing sibling dependency; 137 of 140 recorded runs are failures and the latest 100 are failures.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "GitHub Actions",
+      "sourceUrl": "https://github.com/1amageek/swift-CAD/actions/runs/29155022055",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "chartableData": [
+        {
+          "seriesLabel": "GitHub run outcomes",
+          "subject": "failure",
+          "value": 137,
+          "unit": "runs",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "GitHub Actions",
+          "visualRole": "history"
+        },
+        {
+          "seriesLabel": "GitHub run outcomes",
+          "subject": "success",
+          "value": 3,
+          "unit": "runs",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "GitHub Actions",
+          "visualRole": "baseline"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E004",
+      "@type": "Evidence",
+      "title": "Forbidden-pattern check cannot pass",
+      "content": "The exact CI grep matches FeatureEvaluationCacheEntry? as try? and two real precondition calls in LoftFeatureTests, then exits with failure.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "CI workflow reproduction",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/.github/workflows/ci.yml#L50",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T006"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E005",
+      "@type": "Evidence",
+      "title": "Large test inventory with limited current execution",
+      "content": "There are 618 @Test declarations and 27,879 test LOC. Current focused bundles passed CADCore 21/21 and CADUSDImport 4/4; full current build timed out before test start.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96,
+      "source": "Test inventory and xcodebuild verification",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Tests",
+      "reliability": 0.96,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T007",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "chartableData": [
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "CADCoreTests",
+          "value": 21,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        },
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "CADIRTests",
+          "value": 165,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        },
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "CADKernelTests",
+          "value": 252,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        },
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "CADExchangeTests",
+          "value": 147,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        },
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "CADUSDImportTests",
+          "value": 4,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        },
+        {
+          "seriesLabel": "Declared tests",
+          "subject": "SwiftCADTests",
+          "value": 29,
+          "unit": "tests",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "component"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E006",
+      "@type": "Evidence",
+      "title": "Operation surfaces diverge",
+      "content": "FeatureOperation has 17 cases, CADAgentCommand has 15 feature-add cases, DocumentBuilder exposes 14 unique feature methods, and 13 operations are common to all three.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "FeatureOperation, DocumentBuilder, CADAgentCommand",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADIR/FeatureOperation.swift#L1",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T008",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": [
+        {
+          "seriesLabel": "Operation parity",
+          "subject": "FeatureOperation IR",
+          "value": 17,
+          "unit": "operations",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Source audit",
+          "visualRole": "baseline"
+        },
+        {
+          "seriesLabel": "Operation parity",
+          "subject": "CADAgent feature commands",
+          "value": 15,
+          "unit": "operations",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Source audit",
+          "visualRole": "comparison"
+        },
+        {
+          "seriesLabel": "Operation parity",
+          "subject": "DocumentBuilder",
+          "value": 14,
+          "unit": "operations",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Source audit",
+          "visualRole": "comparison"
+        },
+        {
+          "seriesLabel": "Operation parity",
+          "subject": "Common across all three",
+          "value": 13,
+          "unit": "operations",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Source audit",
+          "visualRole": "gap"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E007",
+      "@type": "Evidence",
+      "title": "Critical workstreams are absent or constrained",
+      "content": "No feature/evaluator types exist for fillet, chamfer, shell, patch, thicken, pattern, hidden-line, or hatching. General boolean evaluation requires axis-aligned rectangular-prism topology.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Kernel source audit",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel/BoxBRepBooleanEvaluator.swift#L575",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T016",
+        "ea:session/swift-cad-implementation-review/topic/T018",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E008",
+      "@type": "Evidence",
+      "title": "Sketch solver is a direct sequential mutator",
+      "content": "SketchDimensionSolver applies measurements in sequence, supports specific writable references, and reports unsupported angle/distance cases instead of solving the full constraint graph.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "SketchDimensionSolver.swift",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADIR/SketchDimensionSolver.swift#L13",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E009",
+      "@type": "Evidence",
+      "title": "STEP and IGES are mesh-profile exchange",
+      "content": "STEP writes CARTESIAN_POINT_LIST_3D and TRIANGULATED_FACE_SET from meshes; IGES writes Type 110 lines for triangle edges.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "STEPExchange.swift and IGESExchange.swift",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADExchange/STEPExchange.swift#L8",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E010",
+      "@type": "Evidence",
+      "title": "Schema changes are not versioned as specified",
+      "content": "SchemaVersion.current is 1.0.0. selectionDimensions was added to CADDocument persistence after the initial release while the normative schema table remains unchanged; no migration implementation is present.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "SchemaVersion.swift, CADDocument.swift, SPEC.md",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADCore/SchemaVersion.swift#L12",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T002",
+        "ea:session/swift-cad-implementation-review/topic/T009",
+        "ea:session/swift-cad-implementation-review/topic/T017"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E011",
+      "@type": "Evidence",
+      "title": "Required performance evidence is absent",
+      "content": "The roadmap requires performance-budget and allocation/timing tests, but Package.swift defines no benchmark target and the repository contains no benchmark measurements or thresholds.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "CAD_KERNEL_REQUIREMENTS.md and Package.swift",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/CAD_KERNEL_REQUIREMENTS.md#L49",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T012",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": [
+        {
+          "seriesLabel": "Performance evidence",
+          "subject": "Benchmark targets",
+          "value": 0,
+          "unit": "targets",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Package.swift",
+          "visualRole": "gap"
+        },
+        {
+          "seriesLabel": "Performance evidence",
+          "subject": "Quantitative thresholds",
+          "value": 0,
+          "unit": "thresholds",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Requirements audit",
+          "visualRole": "gap"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E012",
+      "@type": "Evidence",
+      "title": "Text importers materialize whole files",
+      "content": "STEP, IGES, OBJ, and DXF import paths convert borrowed Data into full String values despite the whole-file-copy prohibition in the philosophy.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.94,
+      "source": "CADExchange source audit",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADExchange/STEPExchange.swift#L93",
+      "reliability": 0.94,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T013",
+        "ea:session/swift-cad-implementation-review/topic/T012"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E013",
+      "@type": "Evidence",
+      "title": "Normative SPEC is stale relative to code",
+      "content": "The SPEC FeatureOperation and CADDocument excerpts omit current cases and selectionDimensions while unknown fields are specified to fail.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "SPEC.md",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/SPEC.md#L220",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T002",
+        "ea:session/swift-cad-implementation-review/topic/T015",
+        "ea:session/swift-cad-implementation-review/topic/T017"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E014",
+      "@type": "Evidence",
+      "title": "Local WASM build passes with the required toolchain and sibling",
+      "content": "With PATH selecting swiftly Swift 6.3.1 and the configured WASM SDK, swift build succeeds locally when ../swift-OpenUSD exists.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.92,
+      "source": "Local WASM build verification",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/README.md#L66",
+      "reliability": 0.92,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T007",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E015",
+      "@type": "Evidence",
+      "title": "Focused current tests pass",
+      "content": "Current CADCoreTests passed 21/21 and current CADUSDImportTests passed 4/4 via xcodebuild test-without-building with no failures or skips.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "source": "xcodebuild xcresult evidence",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/.xcode/DerivedData/Logs/Test",
+      "reliability": 0.95,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T007",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "chartableData": []
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/evidence/E016",
+      "@type": "Evidence",
+      "title": "Conformance and compatibility corpus is narrow",
+      "content": "The fixture tree contains two copies of the same 981-byte minimal_mesh.usdc file, no historical native package fixtures, and no broad OpenUSD or CAD-format corpus.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "source": "Test fixture inventory",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/swift-CAD/Tests/CADExchangeTests/Fixtures",
+      "reliability": 0.99,
+      "supports": [
+        "ea:session/swift-cad-implementation-review/topic/T009",
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T014",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "chartableData": [
+        {
+          "seriesLabel": "External fixture corpus",
+          "subject": "Fixture files",
+          "value": 2,
+          "unit": "files",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "observed"
+        },
+        {
+          "seriesLabel": "External fixture corpus",
+          "subject": "Unique fixture payloads",
+          "value": 1,
+          "unit": "files",
+          "period": "2026-07-12",
+          "status": "observed",
+          "source": "Tests",
+          "visualRole": "gap"
+        }
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/insight/I001",
+      "@type": "Insight",
+      "title": "A narrow foundation is not a releasable SDK",
+      "content": "The narrow modeling subset has substantive code and tests, but distribution and CI failures prevent even that subset from being claimed as a standalone supported product.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.94,
+      "derivedFrom": [
+        "ea:session/swift-cad-implementation-review/topic/T004",
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T007",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "rationale": "Positive implementation evidence is outweighed at the product boundary by reproducible clean-install and verification blockers.",
+      "supportsClaim": [
+        "ea:session/swift-cad-implementation-review/topic/T001"
+      ],
+      "primaryEvidence": [
+        "ea:session/swift-cad-implementation-review/evidence/E002",
+        "ea:session/swift-cad-implementation-review/evidence/E003",
+        "ea:session/swift-cad-implementation-review/evidence/E004",
+        "ea:session/swift-cad-implementation-review/evidence/E005",
+        "ea:session/swift-cad-implementation-review/evidence/E014",
+        "ea:session/swift-cad-implementation-review/evidence/E015"
+      ],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/swift-cad-implementation-review/topic/T004",
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T007",
+        "ea:session/swift-cad-implementation-review/topic/T014"
+      ],
+      "synthesis": {
+        "claimRole": "final-claim",
+        "reasoningPattern": "requirements-to-implementation synthesis",
+        "synthesisStrength": 0.94,
+        "limitations": "The complete current test suite was not executed within the review timeout."
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/insight/I002",
+      "@type": "Insight",
+      "title": "The requirements are principles plus changelog, not one acceptance contract",
+      "content": "Current support, implementation status, and strategic roadmap are mixed across documents, so compliance can reverse depending on which section is treated as authoritative.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "derivedFrom": [
+        "ea:session/swift-cad-implementation-review/evidence/E001",
+        "ea:session/swift-cad-implementation-review/evidence/E010",
+        "ea:session/swift-cad-implementation-review/evidence/E013"
+      ],
+      "rationale": "Contradictory schemas and support statements prevent deterministic acceptance decisions.",
+      "supportsClaim": [
+        "ea:session/swift-cad-implementation-review/topic/T002"
+      ],
+      "primaryEvidence": [
+        "ea:session/swift-cad-implementation-review/evidence/E001",
+        "ea:session/swift-cad-implementation-review/evidence/E010",
+        "ea:session/swift-cad-implementation-review/evidence/E013"
+      ],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/swift-cad-implementation-review/topic/T015",
+        "ea:session/swift-cad-implementation-review/topic/T017"
+      ],
+      "synthesis": {
+        "claimRole": "intermediate-claim",
+        "reasoningPattern": "requirements-to-implementation synthesis",
+        "synthesisStrength": 0.95,
+        "limitations": "The intended document authority hierarchy is not explicitly stated."
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/insight/I003",
+      "@type": "Insight",
+      "title": "The goal is underestimated in vertical depth",
+      "content": "The roadmap counts named features, while product readiness also requires robust geometry primitives, topology mutation and naming, facade/agent parity, schema evolution, conformance, performance, and resource limits.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.96,
+      "derivedFrom": [
+        "ea:session/swift-cad-implementation-review/topic/T008",
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T012",
+        "ea:session/swift-cad-implementation-review/topic/T016",
+        "ea:session/swift-cad-implementation-review/topic/T018"
+      ],
+      "rationale": "Independent gaps converge on the same pattern: broad public concepts exist before the complete supporting contract and evidence chain.",
+      "supportsClaim": [
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "primaryEvidence": [
+        "ea:session/swift-cad-implementation-review/evidence/E006",
+        "ea:session/swift-cad-implementation-review/evidence/E007",
+        "ea:session/swift-cad-implementation-review/evidence/E008",
+        "ea:session/swift-cad-implementation-review/evidence/E009",
+        "ea:session/swift-cad-implementation-review/evidence/E011",
+        "ea:session/swift-cad-implementation-review/evidence/E016"
+      ],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/swift-cad-implementation-review/topic/T008",
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T012",
+        "ea:session/swift-cad-implementation-review/topic/T016",
+        "ea:session/swift-cad-implementation-review/topic/T018"
+      ],
+      "synthesis": {
+        "claimRole": "intermediate-claim",
+        "reasoningPattern": "requirements-to-implementation synthesis",
+        "synthesisStrength": 0.96,
+        "limitations": "Some enabling algorithms may exist under different names, but the supported general contracts and evidence are absent."
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/insight/I004",
+      "@type": "Insight",
+      "title": "Breadth has advanced faster than product truth",
+      "content": "Seventeen feature-operation cases and extensive evaluator code coexist with box-centric acceptance criteria, a stale schema, broken distribution, and ungreen CI.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "derivedFrom": [
+        "ea:session/swift-cad-implementation-review/insight/I002",
+        "ea:session/swift-cad-implementation-review/insight/I003",
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T009"
+      ],
+      "rationale": "The repeated structure indicates a systemic release-governance gap rather than isolated missing functions.",
+      "supportsClaim": [
+        "ea:session/swift-cad-implementation-review/topic/T001",
+        "ea:session/swift-cad-implementation-review/topic/T003"
+      ],
+      "primaryEvidence": [
+        "ea:session/swift-cad-implementation-review/evidence/E002",
+        "ea:session/swift-cad-implementation-review/evidence/E003",
+        "ea:session/swift-cad-implementation-review/evidence/E006",
+        "ea:session/swift-cad-implementation-review/evidence/E010",
+        "ea:session/swift-cad-implementation-review/evidence/E013"
+      ],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T009"
+      ],
+      "synthesis": {
+        "claimRole": "final-claim",
+        "reasoningPattern": "requirements-to-implementation synthesis",
+        "synthesisStrength": 0.95,
+        "limitations": "This is an architectural process inference from repository evidence."
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/insight/I005",
+      "@type": "Insight",
+      "title": "Recovery must proceed from truth to vertical capability",
+      "content": "Restore clean builds, establish one capability authority, version compatibility, complete one vertical modeling slice, and add operational proof before resuming broad feature expansion.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.91,
+      "derivedFrom": [
+        "ea:session/swift-cad-implementation-review/insight/I001",
+        "ea:session/swift-cad-implementation-review/insight/I002",
+        "ea:session/swift-cad-implementation-review/insight/I003",
+        "ea:session/swift-cad-implementation-review/insight/I004"
+      ],
+      "rationale": "This order removes blockers and makes later capability claims mechanically verifiable.",
+      "supportsClaim": [
+        "ea:session/swift-cad-implementation-review/topic/T019",
+        "ea:session/swift-cad-implementation-review/topic/T020",
+        "ea:session/swift-cad-implementation-review/topic/T021"
+      ],
+      "primaryEvidence": [
+        "ea:session/swift-cad-implementation-review/evidence/E002",
+        "ea:session/swift-cad-implementation-review/evidence/E003",
+        "ea:session/swift-cad-implementation-review/evidence/E006",
+        "ea:session/swift-cad-implementation-review/evidence/E010",
+        "ea:session/swift-cad-implementation-review/evidence/E011",
+        "ea:session/swift-cad-implementation-review/evidence/E016"
+      ],
+      "counterEvidence": [],
+      "sourceTopics": [
+        "ea:session/swift-cad-implementation-review/topic/T005",
+        "ea:session/swift-cad-implementation-review/topic/T006",
+        "ea:session/swift-cad-implementation-review/topic/T008",
+        "ea:session/swift-cad-implementation-review/topic/T009",
+        "ea:session/swift-cad-implementation-review/topic/T010",
+        "ea:session/swift-cad-implementation-review/topic/T011",
+        "ea:session/swift-cad-implementation-review/topic/T012",
+        "ea:session/swift-cad-implementation-review/topic/T015",
+        "ea:session/swift-cad-implementation-review/topic/T016"
+      ],
+      "synthesis": {
+        "claimRole": "intermediate-claim",
+        "reasoningPattern": "requirements-to-implementation synthesis",
+        "synthesisStrength": 0.91,
+        "limitations": "Effort estimates are directional and require implementation planning."
+      }
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/question/Q001",
+      "@type": "Question",
+      "title": "What is the authoritative product boundary?",
+      "content": "Determine whether the release claim is the narrow official pipeline or the strategic Rupa/Plasticity-class kernel.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "questionStatus": "Answered",
+      "asksAbout": [
+        "ea:session/swift-cad-implementation-review/topic/T004"
+      ],
+      "resolvedBy": [
+        "ea:session/swift-cad-implementation-review/insight/I001",
+        "ea:session/swift-cad-implementation-review/insight/I002"
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/question/Q002",
+      "@type": "Question",
+      "title": "Which requirements are normative and verifiable?",
+      "content": "Identify the release authority, support profiles, and acceptance evidence.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "questionStatus": "Answered",
+      "asksAbout": [
+        "ea:session/swift-cad-implementation-review/topic/T002",
+        "ea:session/swift-cad-implementation-review/topic/T015"
+      ],
+      "resolvedBy": [
+        "ea:session/swift-cad-implementation-review/insight/I002"
+      ]
+    },
+    {
+      "@id": "ea:session/swift-cad-implementation-review/question/Q003",
+      "@type": "Question",
+      "title": "Which broad capability names hide constrained implementations?",
+      "content": "Identify missing operations and geometry-specific evaluator subsets.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.95,
+      "questionStatus": "Answered",
+      "asksAbout": [
+        "ea:session/swift-cad-implementation-review/topic/T003",
+        "ea:session/swift-cad-implementation-review/topic/T010"
+      ],
+      "resolvedBy": [
+        "ea:session/swift-cad-implementation-review/insight/I003"
+      ]
+    }
+  ]
+}
+

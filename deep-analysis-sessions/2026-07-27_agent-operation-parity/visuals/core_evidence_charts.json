@@ -1,0 +1,20 @@
+{
+  "title": "Agent capability surface",
+  "unit": "capabilities",
+  "series": [
+    {
+      "label": "Automation command routes",
+      "value": 126
+    },
+    {
+      "label": "Typed Agent request routes",
+      "value": 32
+    },
+    {
+      "label": "Injected domain routes",
+      "value": 1,
+      "note": "Fixture/current registry dependent"
+    }
+  ],
+  "note": "Counts describe exposed surface, not complete operation parity."
+}

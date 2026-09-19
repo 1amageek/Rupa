@@ -1,0 +1,672 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "ea": "https://deep-analysis.dev/vocab#",
+    "rel": "https://deep-analysis.dev/relations#",
+    "schema": "https://schema.org/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dc": "http://purl.org/dc/terms/",
+    "Topic": "ea:Topic",
+    "Evidence": "ea:Evidence",
+    "Insight": "ea:Insight",
+    "Question": "ea:Question",
+    "title": "rdfs:label",
+    "content": "schema:description",
+    "session": {
+      "@id": "ea:sessionMetadata",
+      "@type": "@json"
+    },
+    "view": {
+      "@id": "ea:view",
+      "@type": "@json"
+    },
+    "tags": {
+      "@id": "ea:tag",
+      "@container": "@set"
+    },
+    "epistemicStatus": {
+      "@id": "ea:epistemicStatus"
+    },
+    "confidence": {
+      "@id": "ea:confidence",
+      "@type": "xsd:decimal"
+    },
+    "priorConfidence": {
+      "@id": "ea:priorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "posteriorConfidence": {
+      "@id": "ea:posteriorConfidence",
+      "@type": "xsd:decimal"
+    },
+    "parent": {
+      "@id": "ea:parent",
+      "@type": "@id"
+    },
+    "children": {
+      "@id": "ea:children",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "decompositionStrategy": {
+      "@id": "ea:decompositionStrategy"
+    },
+    "derivedFrom": {
+      "@id": "ea:derivedFrom",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "rationale": "ea:rationale",
+    "summary": "ea:summary",
+    "inferenceType": {
+      "@id": "ea:inferenceType"
+    },
+    "inferenceRationale": "ea:inferenceRationale",
+    "inferenceStrength": {
+      "@id": "ea:inferenceStrength",
+      "@type": "xsd:decimal"
+    },
+    "synthesis": {
+      "@id": "ea:synthesis",
+      "@type": "@json"
+    },
+    "claimRole": {
+      "@id": "ea:claimRole"
+    },
+    "primaryEvidence": {
+      "@id": "ea:primaryEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "counterEvidence": {
+      "@id": "ea:counterEvidence",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "sourceTopics": {
+      "@id": "ea:sourceTopics",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "reasoningPattern": {
+      "@id": "ea:reasoningPattern"
+    },
+    "synthesisStrength": {
+      "@id": "ea:synthesisStrength",
+      "@type": "xsd:decimal"
+    },
+    "limitations": {
+      "@id": "ea:limitations"
+    },
+    "visualEvidenceRequirement": {
+      "@id": "ea:visualEvidenceRequirement",
+      "@type": "@json"
+    },
+    "evidencePattern": {
+      "@id": "ea:evidencePattern"
+    },
+    "requiredChartType": "ea:requiredChartType",
+    "evidence": {
+      "@id": "ea:evidence",
+      "@type": "@json"
+    },
+    "investigations": {
+      "@id": "ea:investigations",
+      "@type": "@json"
+    },
+    "insights": {
+      "@id": "ea:insights",
+      "@type": "@json"
+    },
+    "chartableData": {
+      "@id": "ea:chartableData",
+      "@type": "@json"
+    },
+    "questionStatus": {
+      "@id": "ea:questionStatus"
+    },
+    "supports": {
+      "@id": "rel:supports",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "refutes": {
+      "@id": "rel:refutes",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "asksAbout": {
+      "@id": "rel:asksAbout",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "resolvedBy": {
+      "@id": "rel:resolvedBy",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "seriesLabel": "ea:seriesLabel",
+    "subject": "ea:subject",
+    "value": "schema:value",
+    "unit": "schema:unitText",
+    "period": "schema:temporalCoverage",
+    "status": "ea:status",
+    "supportsClaim": {
+      "@id": "ea:supportsClaim",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    "visualRole": {
+      "@id": "ea:visualRole"
+    },
+    "appliedFrameworks": {
+      "@id": "ea:appliedFrameworks",
+      "@container": "@set"
+    },
+    "frameworkApplication": "ea:frameworkApplication",
+    "createdAt": {
+      "@id": "prov:generatedAtTime",
+      "@type": "xsd:dateTime"
+    },
+    "updatedAt": {
+      "@id": "ea:updatedAt",
+      "@type": "xsd:dateTime"
+    },
+    "wasGeneratedBy": {
+      "@id": "prov:wasGeneratedBy"
+    },
+    "wasRevisionOf": {
+      "@id": "prov:wasRevisionOf"
+    },
+    "source": "ea:source",
+    "sourceUrl": {
+      "@id": "schema:url"
+    },
+    "reliability": {
+      "@id": "ea:reliability",
+      "@type": "xsd:decimal"
+    },
+    "layer": "https://deep-analysis.dev/layers#",
+    "causes": {
+      "@id": "rel:causes",
+      "@type": "@id"
+    },
+    "causedBy": {
+      "@id": "rel:causedBy",
+      "@type": "@id",
+      "@reverse": "rel:causes"
+    },
+    "enables": {
+      "@id": "rel:enables",
+      "@type": "@id"
+    },
+    "prevents": {
+      "@id": "rel:prevents",
+      "@type": "@id"
+    },
+    "correlatesWith": {
+      "@id": "rel:correlatesWith",
+      "@type": "@id"
+    },
+    "implies": {
+      "@id": "rel:implies",
+      "@type": "@id"
+    },
+    "contradicts": {
+      "@id": "rel:contradicts",
+      "@type": "@id"
+    },
+    "partOf": {
+      "@id": "rel:partOf",
+      "@type": "@id"
+    },
+    "hasComponent": {
+      "@id": "rel:hasComponent",
+      "@type": "@id",
+      "@reverse": "rel:partOf"
+    },
+    "generalizes": {
+      "@id": "rel:generalizes",
+      "@type": "@id"
+    },
+    "specializes": {
+      "@id": "rel:specializes",
+      "@type": "@id",
+      "@reverse": "rel:generalizes"
+    },
+    "analogousTo": {
+      "@id": "rel:analogousTo",
+      "@type": "@id"
+    },
+    "precedes": {
+      "@id": "rel:precedes",
+      "@type": "@id"
+    },
+    "triggers": {
+      "@id": "rel:triggers",
+      "@type": "@id"
+    },
+    "coOccursWith": {
+      "@id": "rel:coOccursWith",
+      "@type": "@id"
+    },
+    "manifestsAs": {
+      "@id": "rel:manifestsAs",
+      "@type": "@id"
+    },
+    "addresses": {
+      "@id": "rel:addresses",
+      "@type": "@id"
+    },
+    "addressedBy": {
+      "@id": "rel:addressedBy",
+      "@type": "@id",
+      "@reverse": "rel:addresses"
+    },
+    "operatesIn": {
+      "@id": "rel:operatesIn",
+      "@type": "@id"
+    },
+    "produces": {
+      "@id": "rel:produces",
+      "@type": "@id"
+    },
+    "strength": {
+      "@id": "rel:strength",
+      "@type": "xsd:decimal"
+    },
+    "polarity": {
+      "@id": "rel:polarity"
+    },
+    "epi": "https://deep-analysis.dev/epistemic#",
+    "evidenceCount": {
+      "@id": "epi:evidenceCount",
+      "@type": "xsd:integer"
+    },
+    "counterEvidenceCount": {
+      "@id": "epi:counterEvidenceCount",
+      "@type": "xsd:integer"
+    },
+    "investigationCount": {
+      "@id": "epi:investigationCount",
+      "@type": "xsd:integer"
+    },
+    "lastUpdated": {
+      "@id": "epi:lastUpdated",
+      "@type": "xsd:dateTime"
+    },
+    "confidenceUpdate": "epi:confidenceUpdate",
+    "fromConfidence": {
+      "@id": "epi:fromConfidence",
+      "@type": "xsd:decimal"
+    },
+    "toConfidence": {
+      "@id": "epi:toConfidence",
+      "@type": "xsd:decimal"
+    },
+    "updateReason": "epi:updateReason",
+    "updateEvidence": "epi:updateEvidence"
+  },
+  "session": {
+    "id": "session:agent-operation-parity",
+    "title": "Rupa Agent Operation Parity Assessment",
+    "createdAt": "2026-07-27T22:13:00+09:00",
+    "updatedAt": "2026-07-27T22:13:00+09:00"
+  },
+  "view": {
+    "groups": [
+      {
+        "id": "group:layer/context",
+        "kind": "layer",
+        "title": "Context",
+        "layer": "Context",
+        "children": [
+          {
+            "id": "group:category/context/connection",
+            "kind": "category",
+            "title": "Connection",
+            "layer": "Context",
+            "category": "Connection",
+            "members": [
+              "ea:session/agent-operation-parity/topic/T001",
+              "ea:session/agent-operation-parity/evidence/E001",
+              "ea:session/agent-operation-parity/evidence/E002",
+              "ea:session/agent-operation-parity/evidence/E003"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/situation",
+        "kind": "layer",
+        "title": "Situation",
+        "layer": "Situation",
+        "children": [
+          {
+            "id": "group:category/situation/capabilities",
+            "kind": "category",
+            "title": "Capabilities",
+            "layer": "Situation",
+            "category": "Capabilities",
+            "members": [
+              "ea:session/agent-operation-parity/topic/T002",
+              "ea:session/agent-operation-parity/evidence/E004",
+              "ea:session/agent-operation-parity/evidence/E005",
+              "ea:session/agent-operation-parity/evidence/E006"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/problem",
+        "kind": "layer",
+        "title": "Problem",
+        "layer": "Problem",
+        "children": [
+          {
+            "id": "group:category/problem/parity-gaps",
+            "kind": "category",
+            "title": "Parity Gaps",
+            "layer": "Problem",
+            "category": "Parity Gaps",
+            "members": [
+              "ea:session/agent-operation-parity/topic/T003",
+              "ea:session/agent-operation-parity/evidence/E007",
+              "ea:session/agent-operation-parity/evidence/E008"
+            ]
+          },
+          {
+            "id": "group:category/problem/runtime",
+            "kind": "category",
+            "title": "Runtime Availability",
+            "layer": "Problem",
+            "category": "Runtime Availability",
+            "members": [
+              "ea:session/agent-operation-parity/topic/T004",
+              "ea:session/agent-operation-parity/evidence/E009",
+              "ea:session/agent-operation-parity/evidence/E010",
+              "ea:session/agent-operation-parity/evidence/E011"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "group:layer/solution",
+        "kind": "layer",
+        "title": "Solution",
+        "layer": "Solution",
+        "children": [
+          {
+            "id": "group:category/solution/viewer-first",
+            "kind": "category",
+            "title": "Viewer First",
+            "layer": "Solution",
+            "category": "Viewer First",
+            "members": [
+              "ea:session/agent-operation-parity/insight/I001",
+              "ea:session/agent-operation-parity/insight/I002",
+              "ea:session/agent-operation-parity/question/Q001"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "@graph": [
+    {
+      "@id": "ea:session/agent-operation-parity/topic/T001",
+      "@type": "Topic",
+      "title": "Rupa live Agent connection is implemented",
+      "content": "The app owns AgentHost, starts its Unix-domain socket listener while active, and publishes the MainView EditorSession into the Agent registry.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "evidence": [
+        "ea:session/agent-operation-parity/evidence/E001",
+        "ea:session/agent-operation-parity/evidence/E002",
+        "ea:session/agent-operation-parity/evidence/E003"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E001",
+      "@type": "Evidence",
+      "title": "Application lifecycle owns AgentHost",
+      "content": "ApplicationRoot constructs AgentHost, passes it to MainView, starts it on active scene phase, and stops it in background.",
+      "source": "Rupa/Rupa/Rupa/ApplicationRoot.swift:16-55",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/Rupa/Rupa/Rupa/ApplicationRoot.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T001"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E002",
+      "@type": "Evidence",
+      "title": "UI session publication boundary",
+      "content": "MainView publishes its EditorSession and optional documentURL; publication registers and unregisters the same live session with AgentHost.",
+      "source": "RupaKit/Sources/RupaUI/MainView.swift:188-205; WorkspaceAgentSessionPublication.swift:5-38",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaUI/MainView.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T001"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E003",
+      "@type": "Evidence",
+      "title": "Socket command integration tests exist",
+      "content": "AgentSocketListenerTests routes a rename command through MainActorAgentBridge and verifies the live EditorSession changes; AgentHostTests verifies socket startup and session listing.",
+      "source": "RupaKit/Tests/RupaAgentTransportTests/AgentSocketListenerTests.swift; RupaKit/Tests/RupaUIPackageTests/AgentHostTests.swift",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Tests/RupaAgentTransportTests/AgentSocketListenerTests.swift",
+      "reliability": 0.97,
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T001"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/topic/T002",
+      "@type": "Topic",
+      "title": "Agent can perform broad document and workspace mutation",
+      "content": "The catalog contains 158 static capabilities: 126 AutomationCommand routes and 32 typed Agent-request routes, plus injected domain capabilities. It includes modeling, parameter, selection, saved-view, evaluation, save, and export operations.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "evidence": [
+        "ea:session/agent-operation-parity/evidence/E004",
+        "ea:session/agent-operation-parity/evidence/E005",
+        "ea:session/agent-operation-parity/evidence/E006"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E004",
+      "@type": "Evidence",
+      "title": "Broad public Agent request surface",
+      "content": "AgentRequest exposes discovery, single and batch commands, domain execution, universal capability invocation, document inspection, selection, save, and export.",
+      "source": "RupaKit/Sources/RupaAgentProtocol/AgentMessage.swift:7-210",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaAgentProtocol/AgentMessage.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T002"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E005",
+      "@type": "Evidence",
+      "title": "Universal capability execution lowers into AutomationRunner",
+      "content": "Automation capabilities decode to AutomationCommand, validate effects and revisions, execute as a batch transaction, and commit only outside dry-run.",
+      "source": "RupaKit/Sources/RupaAgentRuntime/AgentCapabilityInvocationExecutor.swift:20-128",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaAgentRuntime/AgentCapabilityInvocationExecutor.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T002"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E006",
+      "@type": "Evidence",
+      "title": "Mutation behavior tests cover atomicity",
+      "content": "Agent batch tests verify rollback on failure and one grouped undo entry plus final generation on success; capability tests verify round-trip mutation and stale-revision rejection.",
+      "source": "RupaKit/Tests/RupaAgentTests/AgentBatchIntegrationTests.swift:8-98; RupaKit/Tests/RupaAgentContractTests/AgentProtocolCodecTests.swift:52-137",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Tests/RupaAgentTests/AgentBatchIntegrationTests.swift",
+      "reliability": 0.97,
+      "epistemicStatus": "Verified",
+      "confidence": 0.98,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T002"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/topic/T003",
+      "@type": "Topic",
+      "title": "Agent does not yet own every user operation",
+      "content": "The public Agent and Automation contracts do not expose undo, redo, session open/create/close, resetDocument, replaceProductMetadata, or arbitrary feature removal. Core and UI still own some of these operations directly.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "evidence": [
+        "ea:session/agent-operation-parity/evidence/E007",
+        "ea:session/agent-operation-parity/evidence/E008"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E007",
+      "@type": "Evidence",
+      "title": "Missing operations in Agent contracts",
+      "content": "Repository-wide search of AgentProtocol, AgentRuntime, and Automation found no public routes for undo, redo, session lifecycle, resetDocument, replaceProductMetadata, or general feature removal.",
+      "source": "rg audit on RupaAgentProtocol, RupaAgentRuntime, and RupaAutomation",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T003"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E008",
+      "@type": "Evidence",
+      "title": "Core and UI retain direct-only operations",
+      "content": "EditorSession implements resetDocument, replaceProductMetadata, undo, and redo; MainView invokes resetDocument directly for New Document.",
+      "source": "RupaKit/Sources/RupaCore/EditorSession.swift:1003-1019,3875-3885; RupaKit/Sources/RupaUI/MainView.swift:1381-1401",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaCore/EditorSession.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T003"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/topic/T004",
+      "@type": "Topic",
+      "title": "Persistence and runtime availability are currently incomplete",
+      "content": "The app creates an empty session without a document URL, so Agent document.save cannot succeed for the default live session. At audit time no Rupa process or socket was running, and the current RupaAgent build failed against the dirty Swift-CAD worktree.",
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "evidence": [
+        "ea:session/agent-operation-parity/evidence/E009",
+        "ea:session/agent-operation-parity/evidence/E010",
+        "ea:session/agent-operation-parity/evidence/E011"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E009",
+      "@type": "Evidence",
+      "title": "Default live session has no save path",
+      "content": "ApplicationRoot calls MainView without documentURL, while Agent save requires WorkspaceRegistry.documentURL and fails when no path is registered.",
+      "source": "Rupa/Rupa/Rupa/ApplicationRoot.swift:35-41; RupaKit/Sources/RupaAgentRuntime/WorkspaceRegistry.swift:43-57; AgentCommandController.swift:599-613",
+      "sourceUrl": "file:///Users/1amageek/Desktop/3D/RupaKit/Sources/RupaAgentRuntime/WorkspaceRegistry.swift",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T004"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E010",
+      "@type": "Evidence",
+      "title": "No live process or socket at audit time",
+      "content": "Process and socket inspection found no running Rupa application or default Agent socket.",
+      "source": "pgrep and socket filesystem inspection on 2026-07-27",
+      "sourceUrl": "urn:local-audit:rupa-runtime-2026-07-27",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T004"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/evidence/E011",
+      "@type": "Evidence",
+      "title": "Current Agent product build fails",
+      "content": "xcodebuild for the RupaAgent scheme fails in RupaCore because current Swift-CAD no longer exports several expected types and multiple call sites require new tolerance arguments. Agent tests therefore could not be executed in this worktree.",
+      "source": "xcodebuild build -scheme RupaAgent output on 2026-07-27",
+      "sourceUrl": "urn:local-command:xcodebuild-rupa-agent-2026-07-27",
+      "reliability": 0.99,
+      "epistemicStatus": "Verified",
+      "confidence": 0.99,
+      "supports": [
+        "ea:session/agent-operation-parity/topic/T004"
+      ]
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/insight/I001",
+      "@type": "Insight",
+      "title": "Viewer-first Rupa is architecturally viable but not currently complete",
+      "content": "Rupa can become a thin host/viewer because the live Agent already mutates the same EditorSession through guarded transactions. The transition is safe only after lifecycle, history, persistence, and feature-removal parity are explicit Agent capabilities and verified end to end.",
+      "epistemicStatus": "StronglySupported",
+      "confidence": 0.95,
+      "derivedFrom": [
+        "ea:session/agent-operation-parity/topic/T001",
+        "ea:session/agent-operation-parity/topic/T002",
+        "ea:session/agent-operation-parity/topic/T003",
+        "ea:session/agent-operation-parity/topic/T004"
+      ],
+      "inferenceType": "Deduction",
+      "inferenceStrength": "Strong",
+      "inferenceRationale": "The shared session and command pipeline remove the need for duplicate editing logic, while missing public operations and a broken build prevent an all-Agent claim."
+      ,"rationale": "The shared session and command pipeline support a thin viewer, but missing lifecycle/history/persistence controls and the failed build block completion."
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/insight/I002",
+      "@type": "Insight",
+      "title": "The next milestone should be operation parity, not more UI editing surface",
+      "content": "A machine-checkable parity manifest mapping every persistent Core/UI mutation to an Agent capability, with success and failure transport tests, is the shortest route to making Rupa a reliable viewer.",
+      "epistemicStatus": "StronglySupported",
+      "confidence": 0.94,
+      "derivedFrom": [
+        "ea:session/agent-operation-parity/topic/T003",
+        "ea:session/agent-operation-parity/topic/T004"
+      ],
+      "inferenceType": "Recommendation",
+      "inferenceStrength": "Strong",
+      "inferenceRationale": "The Agent surface is already broad; the decisive risk is untracked gaps and unavailable integrated execution."
+      ,"rationale": "A parity manifest converts an open-ended capability list into a bounded and testable viewer-readiness contract."
+    },
+    {
+      "@id": "ea:session/agent-operation-parity/question/Q001",
+      "@type": "Question",
+      "title": "Should Rupa retain local undo/redo and file lifecycle as viewer responsibilities?",
+      "content": "A product decision is required on whether viewer responsibilities include local history and file lifecycle, or whether these must also be remotely controlled by Agent.",
+      "epistemicStatus": "Inconclusive",
+      "confidence": 0.5,
+      "questionStatus": "Open",
+      "asksAbout": [
+        "ea:session/agent-operation-parity/insight/I001"
+      ],
+      "resolvedBy": []
+    }
+  ]
+}

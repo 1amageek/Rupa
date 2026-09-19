@@ -1,0 +1,144 @@
+{
+  "framing": {
+    "title": "Rupa Agent Operation Parity Assessment",
+    "asOf": "2026-07-27T22:13:00+09:00",
+    "decisionQuestion": "Can Agent manipulate all Rupa data so that Rupa can be reduced to a viewer?",
+    "answer": "Agent can already mutate a broad live-session surface, but it does not own all operations and the current worktree is not executable. Viewer-first is a sound target, not a current completion claim."
+  },
+  "key_claims": [
+    {
+      "id": "connection",
+      "claim": "The live Rupa-to-Agent Unix socket and session publication path is implemented.",
+      "support": [
+        "E001",
+        "E002",
+        "E003"
+      ],
+      "limitation": "No live Rupa process/socket was running during the audit."
+    },
+    {
+      "id": "mutation",
+      "claim": "Agent has 158 static capabilities and reaches the shared transaction pipeline.",
+      "support": [
+        "E004",
+        "E005",
+        "E006"
+      ],
+      "limitation": "Catalog breadth is not complete parity."
+    },
+    {
+      "id": "gaps",
+      "claim": "Undo/redo, file/session lifecycle, reset, metadata replacement, and arbitrary feature removal are not public Agent operations.",
+      "support": [
+        "E007",
+        "E008",
+        "E009"
+      ],
+      "limitation": "Some may intentionally remain viewer responsibilities, but that contract is not recorded."
+    },
+    {
+      "id": "runtime",
+      "claim": "Current Agent execution is unavailable in this worktree.",
+      "support": [
+        "E010",
+        "E011"
+      ],
+      "limitation": "Historical and source-level tests exist, but current executable verification is blocked."
+    }
+  ],
+  "claim_evidence_patterns": [
+    {
+      "claim": "connection",
+      "pattern": "runtime flow",
+      "visual": "agent-flow"
+    },
+    {
+      "claim": "mutation",
+      "pattern": "capability counts",
+      "visual": "capability-surface"
+    },
+    {
+      "claim": "gaps",
+      "pattern": "operation parity matrix",
+      "visual": "verification-matrix"
+    },
+    {
+      "claim": "runtime",
+      "pattern": "binary gate",
+      "visual": "risk-matrix"
+    }
+  ],
+  "visual_plan": [
+    {
+      "id": "capability-surface",
+      "type": "bar",
+      "source": "visuals/core_evidence_charts.json"
+    },
+    {
+      "id": "agent-flow",
+      "type": "flow",
+      "source": "visuals/evidence_graph.json"
+    },
+    {
+      "id": "verification-matrix",
+      "type": "matrix",
+      "source": "visuals/verification_matrix.json"
+    },
+    {
+      "id": "risk-matrix",
+      "type": "matrix",
+      "source": "visuals/risk_matrix.json"
+    }
+  ],
+  "source_index": [
+    {
+      "id": "E001",
+      "source": "Rupa/Rupa/Rupa/ApplicationRoot.swift"
+    },
+    {
+      "id": "E002",
+      "source": "RupaKit MainView and session publication"
+    },
+    {
+      "id": "E003",
+      "source": "Agent socket and host tests"
+    },
+    {
+      "id": "E004",
+      "source": "AgentMessage.swift"
+    },
+    {
+      "id": "E005",
+      "source": "AgentCapabilityInvocationExecutor.swift"
+    },
+    {
+      "id": "E006",
+      "source": "Agent batch and capability integration tests"
+    },
+    {
+      "id": "E007",
+      "source": "Agent/Automation route audit"
+    },
+    {
+      "id": "E008",
+      "source": "EditorSession and MainView direct operations"
+    },
+    {
+      "id": "E009",
+      "source": "WorkspaceRegistry and Agent save path"
+    },
+    {
+      "id": "E010",
+      "source": "Runtime process/socket inspection"
+    },
+    {
+      "id": "E011",
+      "source": "RupaAgent xcodebuild output"
+    }
+  ],
+  "residual_uncertainties": [
+    "The intended viewer responsibility boundary for local undo/redo and file lifecycle is not yet recorded.",
+    "Current Agent tests could not run because the product target does not compile against the active Swift-CAD worktree.",
+    "There is no generated parity test proving every persistent UI/Core mutation is represented in the Agent catalog."
+  ]
+}

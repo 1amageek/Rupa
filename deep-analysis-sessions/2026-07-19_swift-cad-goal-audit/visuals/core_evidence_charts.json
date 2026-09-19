@@ -1,0 +1,11 @@
+{
+  "gate_status": { "passed": 0, "open": 8, "required": 8 },
+  "catalog_status": { "registered": 55, "supported": 4, "partial": 51, "planned": 0, "inventoryClosed": false },
+  "domain_status": [
+    { "domain": "Geometry", "registered": 7, "supported": 4, "partial": 3 },
+    { "domain": "Topology", "registered": 4, "supported": 0, "partial": 4 },
+    { "domain": "Modeling and constraints", "registered": 40, "supported": 0, "partial": 40 },
+    { "domain": "Shared API", "registered": 1, "supported": 0, "partial": 1 },
+    { "domain": "Exchange", "registered": 3, "supported": 0, "partial": 3 }
+  ]
+}

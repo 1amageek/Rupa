@@ -1,0 +1,34 @@
+{
+  "columns": [
+    "priority",
+    "action",
+    "outcome"
+  ],
+  "rows": [
+    [
+      "P0",
+      "Restore RupaKit to current Swift-CAD contract",
+      "Agent target builds and tests can run"
+    ],
+    [
+      "P0",
+      "Define viewer/Agent responsibility ADR",
+      "Clear ownership for history and file lifecycle"
+    ],
+    [
+      "P0",
+      "Add operation parity manifest and generated tests",
+      "Every persistent mutation is traceable"
+    ],
+    [
+      "P1",
+      "Expose missing lifecycle/history capabilities",
+      "Agent can own full editing workflow"
+    ],
+    [
+      "P1",
+      "Run socket-level create-edit-save-reopen test",
+      "Viewer-first architecture is behaviorally proven"
+    ]
+  ]
+}

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>swift-CAD 妥協のないゴール状況</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --text: #16202a;
+      --muted: #5f6b76;
+      --line: #d9e0e6;
+      --danger: #c93434;
+      --danger-soft: #fde8e8;
+      --good: #16834f;
+      --good-soft: #e3f6eb;
+      --accent: #315be8;
+      --partial: #d17b00;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f141a;
+        --panel: #171e26;
+        --text: #edf2f7;
+        --muted: #aab5c0;
+        --line: #303a45;
+        --danger: #ff7777;
+        --danger-soft: #3a2024;
+        --good: #57d18b;
+        --good-soft: #153326;
+        --accent: #89a2ff;
+        --partial: #ffb84d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.58 system-ui, sans-serif; }
+    main { max-width: 1160px; margin: 0 auto; padding: 40px 24px 72px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.5rem); }
+    h2 { margin: 48px 0 18px; font-size: 1.55rem; }
+    p { max-width: 82ch; }
+    .eyebrow { color: var(--danger); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .lede { color: var(--muted); font-size: 1.15rem; margin: 0 0 28px; }
+    .verdict { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 28px; background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 18px; }
+    .verdict strong { display: block; font-size: clamp(1.8rem, 4vw, 3rem); color: var(--danger); }
+    .score { width: 138px; height: 138px; border-radius: 50%; display: grid; place-items: center; border: 12px solid var(--danger); font-size: 2rem; font-weight: 850; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+    .metric { font-size: 2.15rem; font-weight: 850; }
+    .metric.danger { color: var(--danger); }
+    .metric.good { color: var(--good); }
+    .label { color: var(--muted); }
+    .bar-row { margin: 18px 0; }
+    .bar-label { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 7px; }
+    .bar { height: 18px; border-radius: 999px; background: var(--line); overflow: hidden; }
+    .bar > span { display: block; height: 100%; border-radius: inherit; }
+    .bar .supported { width: 7.27%; background: var(--good); }
+    .bar .partial { width: 92.73%; background: var(--partial); }
+    .gates { display: grid; grid-template-columns: repeat(8, minmax(58px, 1fr)); gap: 8px; }
+    .gate { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); border-radius: 10px; padding: 15px 6px; text-align: center; font-weight: 850; }
+    .flow { display: flex; align-items: center; gap: 8px; overflow-x: auto; padding: 12px 0; }
+    .flow span { flex: 0 0 auto; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; font-weight: 750; }
+    .flow b { color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); }
+    th, td { padding: 13px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-size: .88rem; }
+    td:first-child { white-space: nowrap; font-weight: 850; }
+    .open { color: var(--danger); font-weight: 850; }
+    .pass { color: var(--good); font-weight: 850; }
+    .contract { border-left: 5px solid var(--accent); }
+    .contract ul { margin-bottom: 0; }
+    code { font-family: ui-monospace, monospace; font-size: .92em; }
+    footer { margin-top: 48px; color: var(--muted); font-size: .9rem; }
+    @media (max-width: 760px) {
+      main { padding: 24px 14px 52px; }
+      .verdict { grid-template-columns: 1fr; }
+      .score { width: 110px; height: 110px; }
+      .grid { grid-template-columns: 1fr; }
+      .gates { grid-template-columns: repeat(4, 1fr); }
+      .table-wrap { overflow-x: auto; }
+      table { min-width: 860px; }
+    }
+    @media print {
+      :root { color-scheme: light; }
+      body { background: white; }
+      main { max-width: none; padding: 12mm; }
+      .card, .verdict, table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Binary completion audit</div>
+  <h1>swift-CAD 妥協のないゴール状況</h1>
+  <p class="lede">2026-07-18時点。API数・ファイル数・fixture数ではなく、同一revisionでの受入証拠に基づく判定です。</p>
+
+  <section class="verdict" aria-labelledby="verdict-title">
+    <div>
+      <strong id="verdict-title">未達成 — 0/8ゲート</strong>
+      <p>実装基盤は大きく前進していますが、完成したCADカーネルとは判定できません。55 capabilityのうち一般対応は4件、51件はPartialです。</p>
+    </div>
+    <div class="score" aria-label="8ゲート中0ゲート合格">0 / 8</div>
+  </section>
+
+  <h2>数値で見る現在地</h2>
+  <section class="grid" aria-label="Current metrics">
+    <article class="card">
+      <div class="metric good">4 / 55</div>
+      <div class="label">一般Supported capability</div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Supported</span><strong>4</strong></div>
+        <div class="bar"><span class="supported"></span></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label"><span>Partial</span><strong>51</strong></div>
+        <div class="bar"><span class="partial"></span></div>
+      </div>
+    </article>
+    <article class="card">
+      <div class="metric danger">40</div>
+      <div class="label">開発用input envelope。完成時の免責は0でなければならない。</div>
+      <p>fixtureを通した形状範囲が増えたことは進捗ですが、名前付き操作の一般対応ではありません。</p>
+    </article>
+    <article class="card">
+      <div class="metric">319</div>
+      <div class="label">Capability–fixture bindings</div>
+      <p>fixtureの存在は局所的な挙動の証拠です。property/oracle/adversarial coverageを代替しません。</p>
+    </article>
+    <article class="card">
+      <div class="metric good">2 builds pass</div>
+      <div class="label">現working sourceのmacOS SwiftCAD / WASM package</div>
+      <p>依存整合とコンパイル可能性は確認済み。ただし隔離checkout・iOS・visionOS・runtime・同一revision証拠は未完了です。</p>
+    </article>
+  </section>
+
+  <h2>8つの最終ゲート</h2>
+  <div class="gates" aria-label="All eight gates are open">
+    <div class="gate">G0<br>OPEN</div><div class="gate">G1<br>OPEN</div><div class="gate">G2<br>OPEN</div><div class="gate">G3<br>OPEN</div>
+    <div class="gate">G4<br>OPEN</div><div class="gate">G5<br>OPEN</div><div class="gate">G6<br>OPEN</div><div class="gate">G7<br>OPEN</div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Gate</th><th>できている基盤</th><th>未達の本質</th><th>閉じるための証拠</th></tr></thead>
+      <tbody>
+        <tr><td>G0 <span class="open">OPEN</span></td><td>remote revision pin、CI matrix、macOS/WASM build</td><td>隔離checkoutで全platform・runtime・schema/policy/ledgerを同一clean revisionで証明していない</td><td>macOS/iOS/visionOS/WASM、WASM runtime、schema/policy/capability contract</td></tr>
+        <tr><td>G1 <span class="open">OPEN</span></td><td>analytic curve/surface、rational curve、predicate、部分intersection</td><td>全projection/intersection行列、特異・高次接触、property、外部oracleが未完</td><td>property、geometry oracle、intersection matrix、adversarial predicate</td></tr>
+        <tr><td>G2 <span class="open">OPEN</span></td><td>coedge B-rep、pcurve、validator、sewer、repair、lineage</td><td>一般analytic/NURBS shellのmanifold/watertight/orientation/volume/repair/lineageが閉じていない</td><td>topology invariant、oracle、lineage edit、repair suites</td></tr>
+        <tr><td>G3 <span class="open">OPEN</span></td><td>全named featureのIR/evaluatorと多数のexact slice</td><td>shape envelope外の有効入力を拒否する。General Boolean等は一般化未完</td><td>全modeling capability、general Boolean、command parity、no-mesh audit</td></tr>
+        <tr><td>G4 <span class="open">OPEN</span></td><td><code>CADCommand</code>、<code>DocumentEditor</code>、<code>KernelQuery</code>、<code>EvaluatedDocument</code></td><td>公開API inventory、任意edit chainのselection/cache/query parity証明なし</td><td>API inventory、command/query parity、stable selection、cache determinism</td></tr>
+        <tr><td>G5 <span class="open">OPEN</span></td><td>DOF/residual/Jacobian、forward mode、LM solver foundation</td><td>全relation・Jacobian oracle・typed diagnostic・document統合の完結証拠なし</td><td>relation、Jacobian oracle、diagnostic、document integration suites</td></tr>
+        <tr><td>G6 <span class="open">OPEN</span></td><td>STEP/IGES exact subset、units/topology subset、resource budgets</td><td>一般entity/topology、外部corpus、fuzz、third-party CAD oracleなし</td><td>STEP/IGES corpus、round-trip、resource fuzz、third-party oracle</td></tr>
+        <tr><td>G7 <span class="open">OPEN</span></td><td>focused fixtures、CI scaffolding</td><td>同一revisionのfull integration/property/fuzz/benchmark/all-platform証拠なし</td><td>catalog completionと全release evidence</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>妥協のない完成条件</h2>
+  <section class="card contract">
+    <p><strong>次のすべてがANDで成立した時だけ完成です。</strong></p>
+    <ul>
+      <li>55/55 capabilityが<code>supported</code>。<code>partial</code>と<code>planned</code>は0。</li>
+      <li>public IRで表現できる有限・構造的に有効な入力を、未実装shape envelopeを理由に拒否しない。</li>
+      <li>正当な拒否理由は、数学的にnon-discrete、要求公差内でsingular、ambiguity、明示resource budget超過だけ。</li>
+      <li>全modeling結果がanalyticまたはrational NURBS + fully validated B-rep + deterministic lineage。</li>
+      <li>meshは常にderived。exact evaluatorのfallbackとして使わない。</li>
+      <li>全mutationは<code>CADCommand</code>、全queryは対応する<code>EvaluatedDocument</code>を通る。</li>
+      <li>STEP/IGESはgeometry/topology/units/placement/orientationを公差内で保持する。</li>
+      <li>G0〜G7の全証拠が同じGit revisionを指し、最終worktreeがclean。</li>
+    </ul>
+  </section>
+
+  <h2>正しい実装順序</h2>
+  <div class="flow" aria-label="Dependency ordered completion sequence">
+    <span>G0 Contract</span><b>→</b><span>G1 Geometry</span><b>→</b><span>G2 Topology</span><b>→</b><span>G3 Modeling</span><b>→</b><span>G4 Public paths</span><b>→</b><span>G5 Constraints</span><b>→</b><span>G6 Exchange</span><b>→</b><span>G7 Verification</span>
+  </div>
+  <p>最重要な判断は、G3の特殊ケースを増やす前にG1とG2を閉じることです。GeometryとTopologyが一般化されない限り、feature追加はenvelope数を増やすだけになりやすく、完成条件には近づきません。</p>
+
+  <h2>直近の実装成果の位置づけ</h2>
+  <section class="grid">
+    <article class="card">
+      <h3>成立したこと</h3>
+      <ul>
+        <li>swift-OpenUSDはremote固定revisionで解決。</li>
+        <li>現sourceでmacOS SwiftCAD facade build成功。</li>
+        <li>現sourceでSwift 6.3.1 WASM package build成功。</li>
+        <li>Capability ledger整合: 55 / 40 / 319。</li>
+        <li>bounded rational B-spline surface交差でisolated/contact/branchingとcubic curve/pcurve経路を追加。</li>
+      </ul>
+    </article>
+    <article class="card">
+      <h3>成立していないこと</h3>
+      <ul>
+        <li>現在のdirty worktree全体を対象にしたmilestone test。</li>
+        <li>G0の隔離all-platform proof。</li>
+        <li>G1の完全intersection/projection matrix。</li>
+        <li>G2以降の一般入力domain。</li>
+        <li>1つでもPASSになったfinal evidence manifest。</li>
+      </ul>
+    </article>
+  </section>
+
+  <footer>
+    根拠: ROADMAP.md、CAPABILITY_LEDGER.md、KernelCapabilities source、goal/ledger contract checker、CI workflow、2026-07-18のlocal build実行結果。詳細データは同ディレクトリのJSON-LDおよびvisuals JSONに保存。
+  </footer>
+</main>
+</body>
+</html>

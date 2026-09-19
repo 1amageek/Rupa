@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "order": 1,
+      "label": "App active",
+      "result": "AgentHost starts"
+    },
+    {
+      "order": 2,
+      "label": "MainView appears",
+      "result": "EditorSession is registered"
+    },
+    {
+      "order": 3,
+      "label": "External Agent connects",
+      "result": "Capabilities and sessions are discovered"
+    },
+    {
+      "order": 4,
+      "label": "Command executes",
+      "result": "AutomationRunner mutates EditorSession transactionally"
+    },
+    {
+      "order": 5,
+      "label": "Persist",
+      "result": "Export works by output path; save requires registered documentURL"
+    }
+  ]
+}

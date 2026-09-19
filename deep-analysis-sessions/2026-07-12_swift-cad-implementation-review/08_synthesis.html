@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>swift-CAD 実装・要件レビュー</title>
+  <style>
+    :root {
+      --ink: #e8f1ef;
+      --muted: #98aaa8;
+      --paper: #091315;
+      --panel: rgba(14, 29, 31, 0.88);
+      --panel-2: #102326;
+      --line: #29484b;
+      --grid: rgba(91, 213, 205, 0.07);
+      --cyan: #72e0d8;
+      --cyan-deep: #2a8f89;
+      --amber: #ffc45c;
+      --red: #ff6b65;
+      --green: #8bd88f;
+      --blue: #82b7ff;
+      --shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+        radial-gradient(circle at 84% 8%, rgba(42, 143, 137, 0.22), transparent 29rem),
+        radial-gradient(circle at 4% 42%, rgba(255, 196, 92, 0.09), transparent 24rem),
+        var(--paper);
+      background-size: 32px 32px, 32px 32px, auto, auto, auto;
+      font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", sans-serif;
+      line-height: 1.68;
+    }
+    a { color: var(--cyan); text-underline-offset: 0.18em; }
+    a:hover { color: #b7fff9; }
+    code {
+      font-family: "SFMono-Regular", "Cascadia Code", monospace;
+      font-size: 0.9em;
+      color: #c7fffb;
+    }
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .hero {
+      min-height: 82vh;
+      display: grid;
+      align-items: end;
+      padding: 90px 0 66px;
+      position: relative;
+    }
+    .hero::before {
+      content: "REVIEW / 35FFD6E";
+      position: absolute;
+      top: 42px;
+      right: 0;
+      font-family: "SFMono-Regular", monospace;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      padding: 8px 12px;
+      border-radius: 999px;
+    }
+    .eyebrow {
+      color: var(--cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-family: "SFMono-Regular", monospace;
+      font-size: 12px;
+      margin: 0 0 18px;
+    }
+    h1, h2, h3 { font-family: "DIN Alternate", "Avenir Next Condensed", sans-serif; }
+    h1 {
+      margin: 0;
+      max-width: 980px;
+      font-size: clamp(46px, 8.4vw, 112px);
+      line-height: 0.9;
+      letter-spacing: -0.055em;
+      font-weight: 800;
+    }
+    h1 span { display: block; color: var(--amber); }
+    .lede {
+      max-width: 800px;
+      margin: 34px 0 0;
+      font-size: clamp(18px, 2.2vw, 27px);
+      color: #c6d3d1;
+      line-height: 1.5;
+    }
+    .verdict-line {
+      margin-top: 40px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .stamp {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(255, 107, 101, 0.7);
+      color: #ffd6d3;
+      background: rgba(255, 107, 101, 0.1);
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-family: "SFMono-Regular", monospace;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+    }
+    .stamp::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 18px var(--red); }
+    .hero-meta { color: var(--muted); font-size: 14px; }
+    section { padding: 72px 0; }
+    .section-head {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 22px;
+      margin-bottom: 32px;
+      align-items: start;
+    }
+    .section-no {
+      font-family: "SFMono-Regular", monospace;
+      color: var(--cyan);
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      padding-top: 9px;
+    }
+    h2 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 62px);
+      line-height: 1;
+      letter-spacing: -0.035em;
+    }
+    .section-note {
+      margin: 15px 0 0;
+      color: var(--muted);
+      max-width: 760px;
+    }
+    .three {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .card {
+      background: linear-gradient(145deg, rgba(18, 39, 42, 0.94), rgba(9, 22, 24, 0.96));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+    .card h3 { margin: 0 0 12px; font-size: 25px; line-height: 1.15; }
+    .card p { margin: 0; color: #bfd0cd; }
+    .answer {
+      display: inline-block;
+      margin-bottom: 14px;
+      font-family: "SFMono-Regular", monospace;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--red);
+    }
+    .answer.mixed { color: var(--amber); }
+    .scope-fork {
+      display: grid;
+      grid-template-columns: 1fr 84px 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+    .scope {
+      border-radius: var(--radius);
+      padding: 28px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .scope.good { border-color: rgba(139, 216, 143, 0.45); }
+    .scope.bad { border-color: rgba(255, 107, 101, 0.5); }
+    .scope-tag {
+      font-family: "SFMono-Regular", monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .scope h3 { margin: 10px 0 16px; font-size: 30px; }
+    .scope ul { margin: 0; padding-left: 1.2em; color: #c3d0ce; }
+    .scope li + li { margin-top: 8px; }
+    .versus {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-family: "SFMono-Regular", monospace;
+      font-size: 12px;
+      writing-mode: vertical-rl;
+      letter-spacing: 0.2em;
+    }
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .pipe-node {
+      min-height: 92px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 12px 8px;
+      border: 1px solid var(--line);
+      background: rgba(11, 27, 29, 0.92);
+      border-radius: 12px;
+      position: relative;
+      font-size: 14px;
+    }
+    .pipe-node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -16px;
+      color: var(--cyan);
+      z-index: 2;
+    }
+    .findings { display: grid; gap: 14px; }
+    .finding {
+      display: grid;
+      grid-template-columns: 78px minmax(220px, 0.7fr) minmax(280px, 1.3fr);
+      gap: 18px;
+      align-items: start;
+      padding: 22px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(10, 24, 26, 0.88);
+    }
+    .priority {
+      font-family: "SFMono-Regular", monospace;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    .priority.p0 { color: var(--red); }
+    .priority.p1 { color: var(--amber); }
+    .finding h3 { font-size: 22px; margin: 0; }
+    .finding p { margin: 0; color: #b9c9c7; }
+    .evidence {
+      margin-top: 8px;
+      color: var(--muted);
+      font-family: "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+    .chart-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 18px; }
+    .chart { padding: 25px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+    .chart h3 { margin: 0 0 20px; font-size: 24px; }
+    .bar-row { margin: 14px 0; }
+    .bar-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 14px; }
+    .track { height: 12px; background: #071113; border: 1px solid #203b3e; border-radius: 999px; overflow: hidden; }
+    .fill { height: 100%; background: linear-gradient(90deg, var(--cyan-deep), var(--cyan)); border-radius: inherit; }
+    .fill.amber { background: linear-gradient(90deg, #9d6c16, var(--amber)); }
+    .fill.red { background: linear-gradient(90deg, #973d39, var(--red)); }
+    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .stat { padding: 18px; border-radius: 12px; background: #0b1c1e; border: 1px solid #254245; }
+    .stat strong { display: block; font-family: "DIN Alternate", sans-serif; font-size: 42px; line-height: 1; color: var(--amber); }
+    .stat span { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .matrix-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+    table { width: 100%; border-collapse: collapse; min-width: 860px; }
+    th, td { text-align: left; padding: 15px 16px; border-bottom: 1px solid #203b3e; vertical-align: top; }
+    th { position: sticky; top: 0; background: #0e2528; color: var(--cyan); font-family: "SFMono-Regular", monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+    td { font-size: 14px; color: #c4d2d0; }
+    tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-block; padding: 4px 9px; border-radius: 999px; font-family: "SFMono-Regular", monospace; font-size: 10px; letter-spacing: 0.06em; white-space: nowrap; }
+    .pill.ready { color: #c9ffd0; background: rgba(139, 216, 143, 0.14); border: 1px solid rgba(139, 216, 143, 0.42); }
+    .pill.partial { color: #ffe2aa; background: rgba(255, 196, 92, 0.12); border: 1px solid rgba(255, 196, 92, 0.4); }
+    .pill.missing, .pill.blocked { color: #ffd2cf; background: rgba(255, 107, 101, 0.12); border: 1px solid rgba(255, 107, 101, 0.42); }
+    .iceberg {
+      display: grid;
+      grid-template-rows: auto 1px auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: linear-gradient(#102b2e 0 32%, #081719 32% 100%);
+    }
+    .visible, .hidden { padding: 28px; }
+    .waterline { background: var(--cyan); box-shadow: 0 0 18px rgba(114, 224, 216, 0.7); position: relative; }
+    .waterline::after { content: "FEATURE EXISTS"; position: absolute; right: 20px; top: -22px; font-family: "SFMono-Regular", monospace; font-size: 10px; color: var(--cyan); letter-spacing: 0.12em; }
+    .iceberg h3 { margin: 0 0 12px; font-size: 28px; }
+    .hidden-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .hidden-item { border: 1px solid #214044; border-radius: 10px; padding: 12px; color: #b8c9c6; font-size: 13px; background: rgba(8, 22, 24, 0.75); }
+    .risk-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .risk {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--amber);
+      border-radius: 12px;
+      padding: 18px;
+      background: rgba(11, 26, 28, 0.88);
+    }
+    .risk.critical { border-left-color: var(--red); }
+    .risk strong { display: block; margin-bottom: 6px; }
+    .risk span { color: var(--muted); font-size: 13px; }
+    .timeline { display: grid; gap: 0; }
+    .step {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 18px;
+      position: relative;
+      padding-bottom: 24px;
+    }
+    .step:not(:last-child)::before {
+      content: "";
+      position: absolute;
+      left: 35px;
+      top: 44px;
+      bottom: 0;
+      width: 1px;
+      background: var(--line);
+    }
+    .step-no {
+      width: 70px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--cyan-deep);
+      border-radius: 999px;
+      color: var(--cyan);
+      background: #0b1c1e;
+      font-family: "SFMono-Regular", monospace;
+      z-index: 1;
+    }
+    .step-body { padding: 4px 0 22px; border-bottom: 1px solid rgba(41, 72, 75, 0.55); }
+    .step-body h3 { margin: 0 0 8px; font-size: 25px; }
+    .step-body p { margin: 0; color: #bbcac8; }
+    .exit { margin-top: 9px; color: var(--cyan); font-size: 13px; }
+    .method { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .method ul { margin: 0; padding-left: 1.2em; color: #bdcdca; }
+    .method li + li { margin-top: 8px; }
+    .footer {
+      padding: 40px 0 70px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .footer strong { color: var(--ink); }
+    @media (max-width: 860px) {
+      .three, .chart-grid, .method, .risk-list { grid-template-columns: 1fr; }
+      .scope-fork { grid-template-columns: 1fr; }
+      .versus { writing-mode: horizontal-tb; }
+      .pipeline { grid-template-columns: 1fr; }
+      .pipe-node:not(:last-child)::after { content: "↓"; right: 50%; bottom: -19px; top: auto; }
+      .finding { grid-template-columns: 58px 1fr; }
+      .finding p { grid-column: 2; }
+      .hidden-grid { grid-template-columns: 1fr 1fr; }
+      .section-head { grid-template-columns: 68px 1fr; }
+    }
+    @media (max-width: 520px) {
+      .shell { width: min(100% - 24px, 1180px); }
+      .hero { min-height: auto; padding-top: 110px; }
+      .hidden-grid, .stats { grid-template-columns: 1fr; }
+      .finding { grid-template-columns: 1fr; }
+      .finding p { grid-column: auto; }
+      .hero::before { left: 0; right: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    @media print {
+      :root { --ink: #142021; --muted: #536466; --paper: #fff; --panel: #fff; --panel-2: #f4f8f8; --line: #b7c7c8; --grid: transparent; }
+      body { background: #fff; color: #142021; }
+      .hero { min-height: auto; padding-top: 50px; }
+      .card, .chart, .scope, .matrix-wrap, .iceberg, .risk { box-shadow: none; background: #fff; break-inside: avoid; }
+      section { padding: 34px 0; }
+      a { color: #126c68; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero shell">
+    <div>
+      <p class="eyebrow">Evidence report · implementation / requirements / goal</p>
+      <h1>swift-CAD<span>完成度レビュー</span></h1>
+      <p class="lede">実装量は多い。しかし、現在の成果は「狭いサブセットの強い基盤」であり、単独配布できる SDK、まして Rupa / Plasticity 級の製品カーネルとしては未完成です。</p>
+      <div class="verdict-line">
+        <span class="stamp">RELEASE READINESS: BLOCKED</span>
+        <span class="hero-meta">revision 35ffd6e · 2026-07-12 · read-only review</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="shell" aria-labelledby="answers">
+      <div class="section-head">
+        <div class="section-no">01 / 08</div>
+        <div>
+          <h2 id="answers">先に、3つの回答</h2>
+          <p class="section-note">評価対象を「公式の狭いパイプライン」と「戦略ゴール」に分けると、結論は明確です。</p>
+        </div>
+      </div>
+      <div class="three">
+        <article class="card">
+          <span class="answer">NO — BROAD GOAL</span>
+          <h3>機能は十分か</h3>
+          <p>矩形押し出しを中心とするサブセットには実体があります。一方、一般制約、一般 Boolean、fillet / shell / patch、pattern、技術図面、exact CAD 交換は未完成です。さらに単独 package 解決と CI が停止しています。</p>
+        </article>
+        <article class="card">
+          <span class="answer mixed">MIXED</span>
+          <h3>要件は妥当か</h3>
+          <p>source-of-truth、単位、tolerance、決定性、fail-closed は妥当です。ただし現行サポート、実装状況、ロードマップが混在し、受入契約としては一意・追跡可能ではありません。</p>
+        </article>
+        <article class="card">
+          <span class="answer">YES — MATERIAL</span>
+          <h3>ゴールは過小評価されたか</h3>
+          <p>はい。過小評価されたのは機能数より「1機能を製品化する深さ」です。堅牢幾何、命名、API parity、schema migration、conformance、性能、運用証拠が横断ゲートになっていません。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="scope">
+      <div class="section-head">
+        <div class="section-no">02 / 08</div>
+        <div>
+          <h2 id="scope">同じ repository に2つのゴールがある</h2>
+          <p class="section-note">ここを分けない限り、同じ実装が「十分」にも「未完成」にも見えます。</p>
+        </div>
+      </div>
+      <div class="scope-fork">
+        <article class="scope good">
+          <div class="scope-tag">Official narrow scope</div>
+          <h3>狭い公式パイプライン</h3>
+          <ul>
+            <li>parameter / sketch / extrude</li>
+            <li>planar B-rep と deterministic mesh</li>
+            <li>厳密に限定した exchange profile</li>
+            <li>source-only native package</li>
+          </ul>
+        </article>
+        <div class="versus">VERSUS</div>
+        <article class="scope bad">
+          <div class="scope-tag">Strategic product goal</div>
+          <h3>Rupa / Plasticity-class kernel</h3>
+          <ul>
+            <li>一般 constraint、blend、shell、patch、boolean</li>
+            <li>安定 subobject selection と topology 変更</li>
+            <li>UI / Agent / public API の完全 parity</li>
+            <li>exact CAD exchange と大規模 WASM 運用</li>
+          </ul>
+        </article>
+      </div>
+      <div class="pipeline" aria-label="現在の基本パイプライン">
+        <div class="pipe-node">CADDocument<br><code>source truth</code></div>
+        <div class="pipe-node">CADKernel<br><code>evaluate</code></div>
+        <div class="pipe-node">BRepModel<br><code>derived exact</code></div>
+        <div class="pipe-node">Mesh<br><code>derived display</code></div>
+        <div class="pipe-node">Exchange<br><code>bounded profiles</code></div>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="findings">
+      <div class="section-head">
+        <div class="section-no">03 / 08</div>
+        <div>
+          <h2 id="findings">最優先 findings</h2>
+          <p class="section-note">重要度順。最初の2件は、他の品質証拠を成立させる前提条件です。</p>
+        </div>
+      </div>
+      <div class="findings">
+        <article class="finding">
+          <div class="priority p0">P0</div>
+          <h3>remote install と clean CI が成立しない</h3>
+          <p><code>swift-OpenUSD</code> を <code>../swift-OpenUSD</code> で参照しています。単独 clone の隔離再現でも、現行 GitHub Actions でも依存解決に失敗しました。README の URL 導入契約と矛盾します。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Package.swift#L53">Package.swift:53</a> · <a href="https://github.com/1amageek/swift-CAD/actions/runs/29155022055">current CI run</a></span></p>
+        </article>
+        <article class="finding">
+          <div class="priority p0">P0</div>
+          <h3>依存解決後も source-rule grep が必ず落ちる</h3>
+          <p>CI の正規表現は <code>FeatureEvaluationCacheEntry?</code> 末尾の <code>try?</code> を誤検出し、テスト内の実際の <code>precondition</code> も2件検出します。テスト工程まで到達しても green になりません。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/.github/workflows/ci.yml#L50">ci.yml:50</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADKernel/DocumentEvaluationEngine.swift#L233">DocumentEvaluationEngine.swift:233</a></span></p>
+        </article>
+        <article class="finding">
+          <div class="priority p1">P1</div>
+          <h3>SPEC が正本として stale</h3>
+          <p>公式 scope は sketch / extrude としつつ、後半では高度 feature を current support と記述します。<code>CADDocument</code> の normative schema は <code>selectionDimensions</code> を欠き、FeatureOperation の掲載 enum も実装より小さいままです。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/SPEC.md#L110">SPEC.md:110</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/SPEC.md#L220">SPEC.md:220</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/SPEC.md#L747">SPEC.md:747</a></span></p>
+        </article>
+        <article class="finding">
+          <div class="priority p1">P1</div>
+          <h3>native compatibility promise に version / migration が追随しない</h3>
+          <p>永続 field と union case は増えていますが <code>SchemaVersion.current</code> は 1.0.0 のままです。明示 migration 層と旧版実ファイル fixture もありません。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADCore/SchemaVersion.swift#L12">SchemaVersion.swift:12</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADIR/CADDocument.swift#L9">CADDocument.swift:9</a></span></p>
+        </article>
+        <article class="finding">
+          <div class="priority p1">P1</div>
+          <h3>UI / Agent / builder parity は 13 / 17</h3>
+          <p>IR は17 operation、Agent feature command は15、DocumentBuilder は14、3面共通は13です。<code>revolve</code>、<code>boolean</code>、<code>edgeOffset</code>、<code>bSplineSurface</code> が面ごとに欠けます。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADIR/FeatureOperation.swift#L1">FeatureOperation.swift:1</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/SwiftCAD/CADAgentCommand.swift#L1">CADAgentCommand.swift:1</a></span></p>
+        </article>
+        <article class="finding">
+          <div class="priority p1">P1</div>
+          <h3>“CAD exchange” は現状 mesh profile</h3>
+          <p>STEP は <code>TRIANGULATED_FACE_SET</code>、IGES は triangle edge の Type 110 です。実装自体は仕様に正直ですが、M6 の editable curve / surface / trim / topology 交換とは別機能です。<span class="evidence"><a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADExchange/STEPExchange.swift#L8">STEPExchange.swift:8</a> · <a href="file:///Users/1amageek/Desktop/3D/swift-CAD/Sources/CADExchange/IGESExchange.swift#L8">IGESExchange.swift:8</a></span></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="evidence">
+      <div class="section-head">
+        <div class="section-no">04 / 08</div>
+        <div>
+          <h2 id="evidence">数字で見る支援証拠</h2>
+          <p class="section-note">テスト量は強みです。ただし量と release evidence は同義ではありません。</p>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <article class="chart">
+          <h3>Operation parity</h3>
+          <div class="bar-row"><div class="bar-label"><span>FeatureOperation IR</span><strong>17</strong></div><div class="track"><div class="fill" style="width:100%"></div></div></div>
+          <div class="bar-row"><div class="bar-label"><span>CADAgent feature commands</span><strong>15</strong></div><div class="track"><div class="fill amber" style="width:88.2%"></div></div></div>
+          <div class="bar-row"><div class="bar-label"><span>DocumentBuilder</span><strong>14</strong></div><div class="track"><div class="fill amber" style="width:82.4%"></div></div></div>
+          <div class="bar-row"><div class="bar-label"><span>3面共通</span><strong>13</strong></div><div class="track"><div class="fill red" style="width:76.5%"></div></div></div>
+        </article>
+        <article class="chart">
+          <h3>Verification snapshot</h3>
+          <div class="stats">
+            <div class="stat"><strong>618</strong><span>宣言された @Test</span></div>
+            <div class="stat"><strong>25</strong><span>今回 current bundle で確認できた pass</span></div>
+            <div class="stat"><strong>0</strong><span>benchmark target</span></div>
+            <div class="stat"><strong>1</strong><span>unique external fixture payload</span></div>
+            <div class="stat"><strong>137</strong><span>140 GitHub runs 中の failure</span></div>
+            <div class="stat"><strong>615</strong><span>timeLimit 付き test</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="matrix">
+      <div class="section-head">
+        <div class="section-no">05 / 08</div>
+        <div>
+          <h2 id="matrix">Capability matrix</h2>
+          <p class="section-note">“ready-subset” は限定条件の内側での実装を意味し、広い製品ゴールの完了を意味しません。</p>
+        </div>
+      </div>
+      <div class="matrix-wrap">
+        <table>
+          <thead><tr><th>能力</th><th>判定</th><th>現在地</th><th>優先度</th></tr></thead>
+          <tbody>
+            <tr><td>Standalone package / CI</td><td><span class="pill blocked">BLOCKED</span></td><td>sibling path dependency と failing checks</td><td>P0</td></tr>
+            <tr><td>Minimal parametric pipeline</td><td><span class="pill ready">READY SUBSET</span></td><td>parameter → sketch → extrude → B-rep → mesh</td><td>P2</td></tr>
+            <tr><td>Exact curve / surface math</td><td><span class="pill ready">READY SUBSET</span></td><td>line / circle / rational B-spline、plane / cylinder / B-spline</td><td>P2</td></tr>
+            <tr><td>Advanced feature evaluators</td><td><span class="pill partial">PARTIAL</span></td><td>revolve / sweep / loft / PolySpline を限定 subset で評価</td><td>P1</td></tr>
+            <tr><td>General booleans</td><td><span class="pill partial">PARTIAL</span></td><td>axis-aligned rectangular prism / cell union</td><td>P1</td></tr>
+            <tr><td>Fillet / chamfer / shell / patch / thicken</td><td><span class="pill missing">MISSING</span></td><td>FeatureOperation / evaluator が存在しない</td><td>P1</td></tr>
+            <tr><td>Sketch constraint solving</td><td><span class="pill partial">PARTIAL</span></td><td>constraint graph + direct sequential dimension mutation</td><td>P1</td></tr>
+            <tr><td>Direct topology editing</td><td><span class="pill partial">PARTIAL</span></td><td>planar / rectangle subset。heal / move / thicken 不足</td><td>P1</td></tr>
+            <tr><td>Stable subobject naming</td><td><span class="pill partial">PARTIAL</span></td><td>basic coverage。trim / generated surface / split-merge 安定性不足</td><td>P1</td></tr>
+            <tr><td>Facade / UI / Agent parity</td><td><span class="pill partial">PARTIAL</span></td><td>共通 13 / IR 17</td><td>P1</td></tr>
+            <tr><td>Pattern / array</td><td><span class="pill missing">MISSING</span></td><td>要求のみ</td><td>P1</td></tr>
+            <tr><td>Technical drawing</td><td><span class="pill missing">MISSING</span></td><td>PDF は count summary、SVG は triangle XY projection</td><td>P1</td></tr>
+            <tr><td>Exact CAD exchange</td><td><span class="pill missing">MISSING</span></td><td>STEP / IGES は mesh profile</td><td>P1</td></tr>
+            <tr><td>Native schema evolution</td><td><span class="pill partial">PARTIAL</span></td><td>1.0.0 固定、migration / historical fixture 不足</td><td>P1</td></tr>
+            <tr><td>WASM operation</td><td><span class="pill partial">PARTIAL</span></td><td>local build は成功、clean CI と runtime acceptance は未成立</td><td>P1</td></tr>
+            <tr><td>Performance / dense data ownership</td><td><span class="pill partial">PARTIAL</span></td><td>incremental reuse は存在、budget / COW / benchmark 不足</td><td>P1</td></tr>
+            <tr><td>Resource-limit safety</td><td><span class="pill missing">MISSING</span></td><td>厳格 validation はあるが size / count / depth / time 上限なし</td><td>P2</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="underestimate">
+      <div class="section-head">
+        <div class="section-no">06 / 08</div>
+        <div>
+          <h2 id="underestimate">何が過小評価されたのか</h2>
+          <p class="section-note">公開 enum に case があることは、機能完成の水面上だけです。</p>
+        </div>
+      </div>
+      <div class="iceberg">
+        <div class="visible">
+          <h3>見える成果 — Feature exists</h3>
+          <p>typed request、Codable IR、evaluator、happy-path geometry、テストケース。</p>
+        </div>
+        <div class="waterline"></div>
+        <div class="hidden">
+          <h3>製品化に必要な水面下</h3>
+          <div class="hidden-grid">
+            <div class="hidden-item">supported geometry / topology matrix</div>
+            <div class="hidden-item">intersection / trim / heal / sew</div>
+            <div class="hidden-item">persistent naming across split / merge</div>
+            <div class="hidden-item">structured capability discovery</div>
+            <div class="hidden-item">public builder / UI / Agent parity</div>
+            <div class="hidden-item">schema version / migration fixtures</div>
+            <div class="hidden-item">external conformance corpus</div>
+            <div class="hidden-item">performance / memory budgets</div>
+            <div class="hidden-item">WASM runtime acceptance</div>
+            <div class="hidden-item">resource ceilings / fuzzing</div>
+            <div class="hidden-item">API diff / deprecation policy</div>
+            <div class="hidden-item">green reproducible CI</div>
+          </div>
+        </div>
+      </div>
+      <div class="risk-list" style="margin-top:18px">
+        <div class="risk critical"><strong>25 / 25 · Package / CI blocker</strong><span>利用者が導入できず、全品質証拠が更新されない。</span></div>
+        <div class="risk critical"><strong>25 / 25 · Requirements authority drift</strong><span>同じ feature が文書箇所によって supported / out-of-scope になる。</span></div>
+        <div class="risk critical"><strong>20 / 25 · Schema drift</strong><span>同じ 1.0.0 の native wire shape が時間で変わる。</span></div>
+        <div class="risk critical"><strong>20 / 25 · Robust B-rep foundation</strong><span>複数の高度 feature が共通の未定義基盤に依存する。</span></div>
+        <div class="risk"><strong>16 / 25 · Operation parity</strong><span>Rupa と Agent が異なる能力面を見る。</span></div>
+        <div class="risk"><strong>16 / 25 · CAD exchange semantics</strong><span>mesh profile と editable exact CAD を取り違える。</span></div>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="actions">
+      <div class="section-head">
+        <div class="section-no">07 / 08</div>
+        <div>
+          <h2 id="actions">推奨する回復順序</h2>
+          <p class="section-note">新機能追加を止めること自体が目的ではありません。次の追加が「完成した能力」になる順序です。</p>
+        </div>
+      </div>
+      <div class="timeline">
+        <article class="step"><div class="step-no">GATE 0</div><div class="step-body"><h3>Build truth</h3><p>remote dependency を成立させ、clean macOS / WASM CI を green にし、source-rule check の誤検出を除く。</p><div class="exit">Exit: fresh consumer fixture + current CI green</div></div></article>
+        <article class="step"><div class="step-no">GATE 1</div><div class="step-body"><h3>Contract truth</h3><p>現行 support と roadmap を分離し、能力 ID、入力 geometry、unsupported code、parity、受入証拠を1つの ledger にする。</p><div class="exit">Exit: public capability → requirement → test の traversal が可能</div></div></article>
+        <article class="step"><div class="step-no">GATE 2</div><div class="step-body"><h3>Compatibility truth</h3><p>schema version を実態に合わせ、migration、historical fixture、API diff、deprecated lifecycle を導入する。</p><div class="exit">Exit: 旧 native file と前 release client の互換性を CI で証明</div></div></article>
+        <article class="step"><div class="step-no">GATE 3</div><div class="step-body"><h3>Vertical kernel slice</h3><p>1つの高価値 feature を geometry、topology、naming、builder、Agent、persistence、negative matrix まで通して完成させる。</p><div class="exit">Exit: supported / unsupported subset が machine-readable かつ安定</div></div></article>
+        <article class="step"><div class="step-no">GATE 4</div><div class="step-body"><h3>Operational proof</h3><p>外部 format corpus、trait / non-macOS test、performance budget、fuzz、resource limit、WASM runtime を受入条件にする。</p><div class="exit">Exit: “works” がコード量ではなく再現可能な証拠になる</div></div></article>
+      </div>
+    </section>
+
+    <section class="shell" aria-labelledby="method">
+      <div class="section-head">
+        <div class="section-no">08 / 08</div>
+        <div>
+          <h2 id="method">検証範囲と留保</h2>
+        </div>
+      </div>
+      <div class="method">
+        <article class="card">
+          <h3>確認したもの</h3>
+          <ul>
+            <li>README / PHILOSOPHY / SPEC / CAD_KERNEL_REQUIREMENTS</li>
+            <li>Package graph、public facade、FeatureOperation、主要 evaluator</li>
+            <li>native schema、STEP / IGES / PDF / SVG exchange</li>
+            <li>618 tests の静的 inventory と CI workflow</li>
+            <li>isolated package resolve、GitHub run、WASM build</li>
+            <li>current CADCore 21/21、CADUSDImport 4/4</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>未確定のもの</h3>
+          <ul>
+            <li>current full suite は30秒内に build graph を抜けず未実行</li>
+            <li>SwiftCAD 25件の pass は stale bundle のため現行保証に不使用</li>
+            <li>第三者 CAD tool による全 format 相互運用は未検証</li>
+            <li>SPEC と roadmap の正式な authority hierarchy は未記載</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="shell">
+      <strong>Bottom line:</strong> swift-CAD は失敗した実装ではありません。むしろ厳格な IR と多くのテストを持つ有望な kernel foundation です。現在の問題は、breadth を release truth に閉じる governance と横断的な完成条件が追いついていないことです。
+    </div>
+  </footer>
+</body>
+</html>
+

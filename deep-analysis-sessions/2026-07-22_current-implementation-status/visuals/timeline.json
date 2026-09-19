@@ -1,0 +1,8 @@
+{
+  "events": [
+    {"date":"2026-07-10","event":"Rupa implementation status audit snapshot","meaning":"predates Universal 3D commit series"},
+    {"date":"2026-07-12","event":"Universal capability, geometry, project, evaluation, viewport, and invocation slices committed","meaning":"foundation expansion"},
+    {"date":"2026-07-18","event":"Swift-CAD exact kernel architecture commit","meaning":"nested repository ahead of origin/main"},
+    {"date":"2026-07-22","event":"Current audit","meaning":"Rupa build failed; CADGeometry and CADKernel suites red"}
+  ]
+}
