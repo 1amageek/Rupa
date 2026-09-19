@@ -27,7 +27,7 @@ implementation, or a second project writer.
 | [RupaAgentTransport](../../../RupaKit/Sources/RupaAgentTransport/DESIGN.md) | depends on | loopback HTTP listener | Carries authenticated semantic requests. | The listener never owns project state. |
 | [RupaProjectAccessPlatform](../../../RupaKit/Sources/RupaProjectAccessPlatform/DESIGN.md) | depends on | discovery-record writer | Publishes port, HMAC key, and generation after readiness. | Only this App writes the record. |
 | [RupaAgentRuntime](../../../RupaKit/Sources/RupaAgentRuntime/DESIGN.md) | uses | registered-workspace semantic dispatch | Executes requests against the App workspace. | Runtime does not open projects. |
-| [Rupa UI](../../../RupaKit/Sources/RupaUI/DESIGN.md) | uses | immutable project view | Shows the same publication as API reads. | UI is not an authority. |
+| [Rupa UI](../../../RupaKit/Sources/RupaUI/DESIGN.md) | uses | immutable project view, focused workspace tool commands | Shows the same publication as API reads, and publishes the focused workspace's tool selection to the menu bar. | UI is not an authority; the menu holds no tool state of its own. |
 | [RupaRendering](../../../RupaKit/Sources/RupaRendering/DESIGN.md) | uses | cancellable snapshot-matched derived plan | Prepares bounded render data outside MainActor. | Plan failure never changes project publication. |
 | [Rupa CLI Product](../RupaCLI/DESIGN.md) | coordinates with | Keychain reader and API session | Reads discovery and sends API requests. | CLI never writes discovery. |
 
@@ -200,6 +200,14 @@ replaces the current .rupa file association. Import appends through the
 and the same operation sequencer as other UI/API mutations. The panel offers an
 explicit unit for unmarked STL/OBJ data; automatic mode requires file metadata.
 Postcommit projection failure uses the existing recovery/no-retry contract.
+
+`ApplicationToolCommands` presents the Tools menu from the focused scene's
+`WorkspaceToolCommands` value and owns nothing else: the selected tool and
+its activation belong to the focused workspace, and the menu is disabled
+while no workspace publishes them. Tool keys and names come from
+`ModelingTool` through that value, so the menu never carries its own copy of
+either. The keyboard reach this menu completes is owned by the
+[UI keyboard and menu contract](../../../RupaKit/Sources/RupaUI/DESIGN.md#workspace-keyboard-and-menu-reach).
 
 `ApplicationRoot` owns process composition. `ApplicationLifecycleDelegate`
 owns launch, pre-launch URL buffering, Agent-host startup, and process

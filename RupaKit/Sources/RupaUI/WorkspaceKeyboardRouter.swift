@@ -97,6 +97,10 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
 
 enum WorkspaceKeyboardAction: Equatable, Sendable {
     case deleteSelection
+    /// Back out of whatever the workspace is in the middle of.
+    case cancelActiveInteraction
+    /// Choose what a click in the viewport selects.
+    case setSelectionScope(WorkspaceSelectionScope)
     case beginSnapCandidateKindBypass
     case endSnapCandidateKindBypass
     case createConstructionPlane(alignsView: Bool)
@@ -138,7 +142,6 @@ struct WorkspaceKeyboardContext: Sendable {
     var selectionScope: WorkspaceSelectionScope
     var hasCurveControlVertexSlideInput: Bool
     var hasSurfaceControlVertexSlideTargets: Bool
-    var hasConstructionPlaneTargets: Bool
 
     /// Whether a command is currently taking typed input.
     ///
@@ -190,9 +193,19 @@ struct WorkspaceKeyboardRouter: Sendable {
         if let dimensionAction = dimensionAction(for: input, context: context) {
             return dimensionAction
         }
+        // Every other command here is entered by a key the user has to know and left
+        // by no key at all, so a workspace that had drifted into a mode could only be
+        // talked out of it by guessing which mode it was in. Escape leaves whichever
+        // one is running.
+        if input.isEscape {
+            return .cancelActiveInteraction
+        }
         if input.isTab,
            context.usesSketchAxisConstraint {
             return .focusNextSketchDimensionInput
+        }
+        if let selectionScopeAction = selectionScopeAction(for: input, context: context) {
+            return selectionScopeAction
         }
 
         let key = input.characters.lowercased()
@@ -222,6 +235,28 @@ struct WorkspaceKeyboardRouter: Sendable {
         default:
             return nil
         }
+    }
+
+    /// What a click selects is a mode, and it was reachable only through six 25 point
+    /// icons.
+    ///
+    /// Picking a face and then an edge of the same body is an ordinary sequence, so the
+    /// mode is switched often enough that a trip to the rail costs more than the pick
+    /// it precedes. The digits follow the order the rail already shows. A command that
+    /// is running owns the keyboard, and its numeric fields would otherwise lose the
+    /// digits typed into them.
+    private func selectionScopeAction(
+        for input: WorkspaceKeyboardInput,
+        context: WorkspaceKeyboardContext
+    ) -> WorkspaceKeyboardAction? {
+        guard context.isSelectToolActive,
+              !context.ownsTextEditingKeys,
+              input.characters.count == 1,
+              let key = input.characters.first,
+              let scope = WorkspaceSelectionScope.scope(forKeyEquivalent: key) else {
+            return nil
+        }
+        return .setSelectionScope(scope)
     }
 
     private func snapOverrideAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
@@ -256,9 +291,10 @@ struct WorkspaceKeyboardRouter: Sendable {
                 pickOrigin: input.modifiers.contains(.shift)
             )
         }
-        guard context.hasConstructionPlaneTargets else {
-            return nil
-        }
+        // Whether the current selection can build a plane is a question about the
+        // document, and answering it here turned an unsupported selection into a key
+        // that did nothing. The request goes through and the workspace names the
+        // operands it accepts.
         return .createConstructionPlane(
             alignsView: !input.modifiers.contains(.shift)
         )

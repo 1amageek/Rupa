@@ -14,6 +14,24 @@ enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
         rawValue
     }
 
+    /// The digit that chooses this scope, and the scope a digit chooses.
+    ///
+    /// The rail already shows the scopes in `allCases` order, so the keys follow
+    /// that order and stay discoverable from the control they duplicate. Both
+    /// directions live here so the router and the rail's tooltip cannot disagree
+    /// about which digit means which scope.
+    var keyEquivalent: Character? {
+        guard let position = Self.allCases.firstIndex(of: self),
+              position < 9 else {
+            return nil
+        }
+        return Character(String(position + 1))
+    }
+
+    static func scope(forKeyEquivalent key: Character) -> WorkspaceSelectionScope? {
+        allCases.first { $0.keyEquivalent == key }
+    }
+
     var title: String {
         switch self {
         case .object:

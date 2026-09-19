@@ -69,10 +69,19 @@ struct WorkspaceSelectionScopeControl: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .help(scope.help)
+        .help(helpText(for: scope))
         .accessibilityLabel(scope.title)
         .accessibilityValue(accessibilityValue(scope, isSelected: isSelected))
         .accessibilityIdentifier("WorkspaceSelectionScope.\(scope.rawValue)")
+    }
+
+    /// The tooltip carries the digit so the key is discoverable from the control
+    /// it duplicates.
+    private func helpText(for scope: WorkspaceSelectionScope) -> String {
+        guard let key = scope.keyEquivalent else {
+            return scope.help
+        }
+        return "\(scope.help) (\(key))"
     }
 
     private func foregroundStyle(isSelected: Bool, isEnabled: Bool) -> Color {

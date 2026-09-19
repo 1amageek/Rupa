@@ -239,6 +239,94 @@ identifier. Expansion, section focus and collapse never change source,
 selection, camera, analysis settings or Undo history. Collapse is the cancel
 transition for rail navigation.
 
+### Workspace keyboard and menu reach
+
+`ModelingTool` owns what a tool is called, what it does, what it asks for
+once it is picked, and which key selects it from a menu. The workspace holds
+no second copy of those descriptions: the palette's hover name, its
+accessibility hint, the Tools menu item and the line reported on activation
+all read `title`, `summary`, `activationPrompt` and `menuKeyEquivalent` from
+the Core value, so the same tool cannot be described one way on the canvas
+and another way in the menu bar. `menuKeyEquivalent` is the ordinal of the
+tool within `allCases` for the first ten tools and absent for the rest,
+because ten digits are the whole budget a growing list can be given; a tool
+without a key shows no key in either surface rather than an invented one.
+
+`activationPrompt` states the input the tool still needs, and
+`activateTool` reports it at `.info` when the tool becomes active. A tool
+that returns to Select on its own after one use sets the tool without
+reporting, because the report that matters at that moment is the result the
+use just produced. Reporting is presentation only: no prompt changes source,
+selection, or camera state.
+
+The canvas keyboard is routed by `WorkspaceKeyboardRouter` alone. The router
+is a pure function from one key and one context to at most one
+`WorkspaceKeyboardAction`; MainView owns every state change the action
+names, and the router reads no view state. A key the router does not claim
+is reported unhandled so that it reaches whatever is presented above the
+workspace, which is how the modeling sheet keeps its own Cancel.
+
+Escape is the key every mode answers, and it backs out of one layer at a
+time. A running command is the most likely thing the user means, so
+dimension, slot profile, edge offset, region offset, slide, the pattern
+array path pick and a pending view-aligned plane request are left first and
+the selection they were working on survives. A modeling, Mesh or history
+preview draft is next, because a draft opened by a tool that already
+returned to Select is otherwise reachable only through the panel that opened
+it. With nothing running the tool itself is the mode the user is stuck
+inside, and only then does Escape mean the selection. Nothing left to leave
+is unhandled, not handled-and-ignored, so the key still travels outward.
+Escape while a dimension command is taking typed input stays that command's
+own cancellation, which is decided before the general path is reached.
+
+Digits 1 through 6 choose what a click selects. The scope is a mode that was
+otherwise reachable only through six 25 pt icons, and picking a face and
+then an edge of the same body is an ordinary sequence, so the trip to the
+rail costs more than the pick it precedes. `WorkspaceSelectionScope` owns
+both directions of the mapping, so the router and the rail cannot disagree
+about which digit means which scope; the digits follow the order the rail
+already shows, which is `allCases`, and the rail's tooltip carries the digit
+so the key is discoverable from the control it duplicates. The scope keys are offered only while Select is the active
+tool and no command is taking typed input, because a numeric field would
+otherwise lose the digits typed into it. Changing the scope changes no
+source, and the top bar names the scope beside the selection count so that a
+scope changed by key is visible without opening the rail.
+
+Space asks for a construction plane from the current selection, and the
+router always delivers the request. Whether a plane can be built is a
+question about the selection that only the workspace can answer, and a
+router that answered it first turned an unsupported selection into a key
+that did nothing. `createConstructionPlaneFromSelectedTargets` now refuses in
+the open, naming the selections it does accept -- one face, region or plane;
+a face with an edge; several faces, regions and planes; or two or more
+points -- so the refusal teaches the operand instead of hiding the key.
+`WorkspaceKeyboardContext` consequently carries no construction plane
+targets; the selection reaches the decision through the same
+`WorkspaceConstructionPlaneTargetSelectionBuilder` the command itself uses,
+once, inside the submission.
+
+The Tools menu is presented by the App and the active tool lives in MainView,
+so the two are joined by one focused scene value rather than by moving tool
+state out of the view. `WorkspaceToolCommands` publishes the selected tool
+and one `activate` closure through `FocusedValues`; MainView sets it on the
+focused scene and the App's `ApplicationToolCommands` reads it to build the
+menu. The menu owns no tool state, holds no default when no workspace is
+focused, and reaches activation through exactly the closure the palette
+button calls, so a tool cannot behave differently depending on which surface
+started it. The menu is disabled rather than absent while no workspace is
+focused, because the command list is part of the window's chrome whether or
+not a document is open.
+
+`WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
+and the conditions that suppress it, the digits that name each scope and the
+commands that withhold them, and the plane request now surviving a selection
+that cannot build one. `ModelingToolTests` owns that every case carries a
+title, a summary and a prompt, and that exactly the first ten carry a key in
+the rail's order. `WorkspaceTopBarPresentationTests` owns the scope name
+beside the selection count. The order in which MainView unwinds Escape is a
+view-local sequence over `@State`, and no package test reaches it; it is
+recorded here and in the UI test review rather than claimed as verified.
+
 ### Sidebar symbols
 
 `WorkspaceSidebarSymbol` is a stateless native SwiftUI platform adapter in this

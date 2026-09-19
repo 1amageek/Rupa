@@ -89,16 +89,18 @@ import Testing
 @Test func workspaceKeyboardRouterMapsConstructionPlaneSpaceVariants() {
     let router = WorkspaceKeyboardRouter()
 
+    // Whether the selection can build a plane is the workspace's answer to give.
+    // The request is delivered either way so the refusal can name the operands.
     #expect(
         router.action(
             for: WorkspaceKeyboardInput(isSpace: true),
-            context: keyboardContext(hasConstructionPlaneTargets: true)
+            context: keyboardContext()
         ) == .createConstructionPlane(alignsView: true)
     )
     #expect(
         router.action(
             for: WorkspaceKeyboardInput(modifiers: [.shift], isSpace: true),
-            context: keyboardContext(hasConstructionPlaneTargets: true)
+            context: keyboardContext()
         ) == .createConstructionPlane(alignsView: false)
     )
     #expect(
@@ -167,6 +169,115 @@ import Testing
     )
 }
 
+@Test func workspaceKeyboardRouterMapsEscapeToCancellation() {
+    let router = WorkspaceKeyboardRouter()
+
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(isEscape: true),
+            context: keyboardContext()
+        ) == .cancelActiveInteraction
+    )
+    // A tool that is not Select is itself a mode Escape has to leave, so the
+    // action is produced regardless of which tool is active.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(isEscape: true),
+            context: keyboardContext(isSelectToolActive: false, isPolygonToolActive: true)
+        ) == .cancelActiveInteraction
+    )
+    // Dimension keeps its own cancellation while it is taking typed input.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(isEscape: true),
+            context: keyboardContext(isDimensionCommandActive: true)
+        ) == .cancelDimensionCommand
+    )
+    // Key-up is not a press, and a modified Escape belongs to the menu bar.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(phases: [.up], isEscape: true),
+            context: keyboardContext()
+        ) == nil
+    )
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(modifiers: [.command], isEscape: true),
+            context: keyboardContext()
+        ) == nil
+    )
+}
+
+@Test func workspaceKeyboardRouterMapsDigitsToSelectionScopes() {
+    let router = WorkspaceKeyboardRouter()
+
+    for (index, scope) in WorkspaceSelectionScope.allCases.enumerated() {
+        let key = String(index + 1)
+        #expect(
+            router.action(
+                for: WorkspaceKeyboardInput(characters: key),
+                context: keyboardContext()
+            ) == .setSelectionScope(scope)
+        )
+    }
+    // The rail shows six scopes, so a seventh digit names none of them.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(
+                characters: String(WorkspaceSelectionScope.allCases.count + 1)
+            ),
+            context: keyboardContext()
+        ) == nil
+    )
+}
+
+@Test func workspaceKeyboardRouterWithholdsSelectionScopeDigitsFromTypedInput() {
+    let router = WorkspaceKeyboardRouter()
+
+    // A command taking typed input owns the keyboard; its numeric fields would
+    // otherwise lose the digits typed into them.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "2"),
+            context: keyboardContext(isDimensionCommandActive: true)
+        ) == nil
+    )
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "2"),
+            context: keyboardContext(isSlotProfileCommandActive: true)
+        ) == nil
+    )
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "2"),
+            context: keyboardContext(isEdgeOffsetCommandActive: true)
+        ) == nil
+    )
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "2"),
+            context: keyboardContext(isRegionOffsetCommandActive: true)
+        ) == nil
+    )
+    // Scope is what a Select click means, so another tool does not claim it.
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "2"),
+            context: keyboardContext(isSelectToolActive: false, isPolygonToolActive: true)
+        ) == nil
+    )
+}
+
+@Test func workspaceSelectionScopeDigitsFollowTheRailOrder() {
+    for (index, scope) in WorkspaceSelectionScope.allCases.enumerated() {
+        let key = Character(String(index + 1))
+        #expect(scope.keyEquivalent == key)
+        #expect(WorkspaceSelectionScope.scope(forKeyEquivalent: key) == scope)
+    }
+    #expect(WorkspaceSelectionScope.scope(forKeyEquivalent: "0") == nil)
+}
+
 private func keyboardContext(
     isSelectToolActive: Bool = true,
     isPolygonToolActive: Bool = false,
@@ -179,8 +290,7 @@ private func keyboardContext(
     isSurfaceControlVertexSlideActive: Bool = false,
     selectionScope: WorkspaceSelectionScope = .object,
     hasCurveControlVertexSlideInput: Bool = false,
-    hasSurfaceControlVertexSlideTargets: Bool = false,
-    hasConstructionPlaneTargets: Bool = false
+    hasSurfaceControlVertexSlideTargets: Bool = false
 ) -> WorkspaceKeyboardContext {
     WorkspaceKeyboardContext(
         isSelectToolActive: isSelectToolActive,
@@ -194,7 +304,6 @@ private func keyboardContext(
         isSurfaceControlVertexSlideActive: isSurfaceControlVertexSlideActive,
         selectionScope: selectionScope,
         hasCurveControlVertexSlideInput: hasCurveControlVertexSlideInput,
-        hasSurfaceControlVertexSlideTargets: hasSurfaceControlVertexSlideTargets,
-        hasConstructionPlaneTargets: hasConstructionPlaneTargets
+        hasSurfaceControlVertexSlideTargets: hasSurfaceControlVertexSlideTargets
     )
 }

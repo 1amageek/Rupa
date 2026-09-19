@@ -1,6 +1,16 @@
 import RupaCore
 
 struct WorkspaceConstructionPlaneTargetSelectionBuilder {
+    /// The selections `constructionPlaneTargets` accepts, in the words shown to
+    /// the user when it refuses one.
+    ///
+    /// The rule and its description belong together: a refusal naming a
+    /// different set of operands than the builder accepts would teach the wrong
+    /// thing, and the key would stay as opaque as it was when it did nothing.
+    static let acceptedSelectionDescription =
+        "one face, region or construction plane; a face with an edge; "
+        + "several faces, regions and construction planes; or two or more points"
+
     var document: DesignDocument
     var selection: SelectionModel
 

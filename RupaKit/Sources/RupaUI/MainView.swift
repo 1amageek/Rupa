@@ -1928,6 +1928,15 @@ private struct ProjectMainViewContent: View {
         .onKeyPress(phases: .all) { keyPress in
             handleWorkspaceKeyPress(keyPress)
         }
+        // The Tools menu is presented by the App; the active tool lives here.
+        // One focused scene value joins them without moving the tool state out.
+        .focusedSceneValue(
+            \.workspaceToolCommands,
+            WorkspaceToolCommands(
+                selectedTool: selectedTool,
+                activate: { activateTool($0) }
+            )
+        )
         .onChange(of: selectionScope) { _, newScope in
             clearSelectionDragPreview()
             if newScope != .region {
@@ -2915,7 +2924,10 @@ private struct ProjectMainViewContent: View {
 
     private var workspaceTopBar: some View {
         workspaceTopBarContent(
-            presentation: WorkspaceTopBarPresentation(selectedTargetCount: selectedTargetCount)
+            presentation: WorkspaceTopBarPresentation(
+                selectedTargetCount: selectedTargetCount,
+                selectionScope: selectionScope
+            )
         )
     }
 
@@ -2928,6 +2940,13 @@ private struct ProjectMainViewContent: View {
             workspaceViewportFitMenu
             workspaceViewportDisplayModeMenu
             workspaceViewportShadingButton
+
+            workspaceStatusChip(
+                presentation.selectionScopeTitle,
+                systemImage: presentation.selectionScopeSystemImage,
+                tint: .secondary
+            )
+            .accessibilityIdentifier("WorkspaceTopBar.SelectionScope")
 
             if let selectionTitle = presentation.selectionTitle {
                 workspaceStatusChip(
@@ -3222,7 +3241,6 @@ private struct ProjectMainViewContent: View {
         WorkspaceToolPalette(
             selectedTool: selectedTool,
             activate: { activateTool($0) },
-            help: { toolHelp(for: $0) },
             accessibilityIdentifier: { canvasToolIdentifier(for: $0) }
         )
     }
@@ -4514,6 +4532,7 @@ private struct ProjectMainViewContent: View {
             viewAlignedConstructionPlaneRequest = nil
         }
         setActiveTool(tool)
+        reportToolStatus(tool.activationPrompt)
     }
 
     private func beginSurfaceModelingOperation() {
@@ -4526,36 +4545,9 @@ private struct ProjectMainViewContent: View {
         draft.sheet = true
         modelingDraft = draft
         selectedTool = .select
-        reportToolStatus("Surface: select at least two ordered profiles, then Preview. Cancel discards the draft.")
-    }
-
-    private func toolHelp(for tool: ModelingTool) -> String {
-        switch tool {
-        case .select:
-            "Select Components"
-        case .sketch:
-            "Create Rectangle Sketch"
-        case .polygon:
-            "Create Regular Polygon"
-        case .arc:
-            "Create Arc Curve"
-        case .spline:
-            "Create Spline Curve"
-        case .solid:
-            "Create Box"
-        case .sweep:
-            "Create Sweep from selected profile, selected guides, and clicked path"
-        case .surface:
-            "Open sheet Loft draft"
-        case .circle:
-            "Create Circle Profile"
-        case .mesh:
-            "Edit Authored Mesh elements or make selected CAD editable"
-        case .measure:
-            "Measure two points in world space"
-        case .section:
-            "Create a section plane at the clicked point"
-        }
+        reportToolStatus(
+            "Surface: \(ModelingTool.surface.activationPrompt) Cancel discards the draft."
+        )
     }
 
     private func canvasToolIdentifier(for tool: ModelingTool) -> String {
@@ -4777,8 +4769,7 @@ private struct ProjectMainViewContent: View {
             selectionScope: selectionScope,
             hasCurveControlVertexSlideInput: selectedSplineControlPointSlideInput() != nil,
             hasSurfaceControlVertexSlideTargets: selectedPolySplineSurfaceVertexTargets.isEmpty == false
-                || selectedSurfaceControlPointReferences.isEmpty == false,
-            hasConstructionPlaneTargets: selectedConstructionPlaneTargets != nil
+                || selectedSurfaceControlPointReferences.isEmpty == false
         )
     }
 
@@ -4799,6 +4790,14 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             deleteSceneNodes(ids)
+            return .handled
+        case .cancelActiveInteraction:
+            return cancelActiveWorkspaceInteraction()
+        case .setSelectionScope(let scope):
+            guard scope.isEnabled else {
+                return .ignored
+            }
+            selectionScope = scope
             return .handled
         case .beginSnapCandidateKindBypass:
             return snapOverrideState.beginCandidateKindBypass() ? .handled : .ignored
@@ -4909,6 +4908,66 @@ private struct ProjectMainViewContent: View {
             _ = togglePolygonCutsFaces()
             return .handled
         }
+    }
+
+    /// Backs out of one layer of whatever the workspace is in the middle of.
+    ///
+    /// The layers are ordered by how recently the user chose them. A running
+    /// command is the most likely thing Escape means, and the selection it was
+    /// working on survives so the command can be started again. A draft is next,
+    /// because a tool that opened one and returned to Select leaves the draft
+    /// reachable only through the panel that opened it. With nothing running the
+    /// tool itself is the mode the user is stuck inside, and only then does
+    /// Escape mean the selection. Nothing left to leave is reported unhandled so
+    /// the key still travels outward to whatever is presented above the
+    /// workspace.
+    private func cancelActiveWorkspaceInteraction() -> KeyPress.Result {
+        // Dimension is absent here on purpose: while it is taking typed input it
+        // owns Escape as `.cancelDimensionCommand`, decided by the router before
+        // the general path is reached.
+        if slotProfileCommandState.isActive {
+            slotProfileCommandState.deactivate()
+            return .handled
+        }
+        if edgeOffsetCommandState.isActive {
+            edgeOffsetCommandState.deactivate()
+            return .handled
+        }
+        if regionOffsetCommandState.isActive {
+            regionOffsetCommandState.deactivate()
+            return .handled
+        }
+        if slideCommandState.isActive {
+            slideCommandState.deactivate()
+            return .handled
+        }
+        if patternArrayCurvePathPickState.isActive {
+            patternArrayCurvePathPickState = .inactive
+            return .handled
+        }
+        if viewAlignedConstructionPlaneRequest != nil {
+            viewAlignedConstructionPlaneRequest = nil
+            return .handled
+        }
+        if modelingDraft != nil
+            || meshDraft != nil
+            || historyPreviewTitle != nil
+            || modelingPreview.payload != nil {
+            cancelModelingOperation()
+            return .handled
+        }
+        if selectedTool != .select {
+            activateTool(.select)
+            return .handled
+        }
+        guard snapshot.selection.selectedTargets.isEmpty == false
+            || snapshot.selection.primarySceneNodeID != nil else {
+            return .ignored
+        }
+        updateSelection { selection, _ in
+            selection.clearSelection()
+        }
+        return .handled
     }
 
     private func activateDimensionCommand() {
@@ -5074,7 +5133,15 @@ private struct ProjectMainViewContent: View {
 
     private func createConstructionPlaneFromSelectedTargets(alignsView: Bool) -> KeyPress.Result {
         guard selectedConstructionPlaneTargets != nil else {
-            return .ignored
+            // A key that silently did nothing taught the user nothing about why.
+            // The refusal names the operands the plane can be built from instead.
+            reportToolStatus(
+                "Construction plane needs "
+                    + WorkspaceConstructionPlaneTargetSelectionBuilder.acceptedSelectionDescription
+                    + ".",
+                severity: .warning
+            )
+            return .handled
         }
         let viewNormal = viewportProjectionBasis.viewNormal
         submitSource(name: "createConstructionPlaneFromTargets") { current in
@@ -5084,7 +5151,10 @@ private struct ProjectMainViewContent: View {
             ).constructionPlaneTargets else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Construction plane creation requires a supported current selection."
+                    message: "Construction plane needs "
+                        + WorkspaceConstructionPlaneTargetSelectionBuilder
+                            .acceptedSelectionDescription
+                        + "."
                 )
             }
             return [

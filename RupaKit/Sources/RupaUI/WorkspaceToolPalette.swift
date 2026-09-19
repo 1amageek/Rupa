@@ -5,7 +5,6 @@ import SwiftUI
 struct WorkspaceToolPalette: View {
     var selectedTool: ModelingTool
     var activate: (ModelingTool) -> Void
-    var help: (ModelingTool) -> String
     var accessibilityIdentifier: (ModelingTool) -> String
 
     var body: some View {
@@ -35,11 +34,20 @@ struct WorkspaceToolPalette: View {
             toolPaletteIcon(tool, isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .modifier(WorkspaceToolNameHint(title: tool.title, edge: .trailing))
+        .modifier(WorkspaceToolNameHint(title: hintTitle(for: tool), edge: .trailing))
         .accessibilityLabel(tool.title)
-        .accessibilityHint(help(tool))
+        .accessibilityHint(tool.summary)
         .accessibilityValue(isSelected ? "Selected" : "Available")
         .accessibilityIdentifier(accessibilityIdentifier(tool))
+    }
+
+    /// The hovered name, carrying the menu key so the shortcut is discoverable
+    /// from the control it duplicates. A tool without a key shows none.
+    private func hintTitle(for tool: ModelingTool) -> String {
+        guard let key = tool.menuKeyEquivalent else {
+            return tool.title
+        }
+        return "\(tool.title)  \u{2318}\(key)"
     }
 
     private func toolPaletteIcon(_ tool: ModelingTool, isSelected: Bool) -> some View {

@@ -1,11 +1,7 @@
 # Progress
 
-- [x] S1 Product hierarchy lifecycle (group, ungroup, delete) reachable from the workspace `depends:none` `parallel:none`
-- [ ] S2 Editor commands reachable from the workspace menus and keys `depends:S1` `parallel:none`
-  - [ ] S2.1 Undo, redo, cancel, and suppression reach the editor's own commands `depends:none` `parallel:none`
-  - [ ] S2.2 Named modeling tools with keyboard shortcuts `depends:S2.1` `parallel:none`
-  - [ ] S2.3 Construction plane key answered instead of swallowed `depends:S2.1` `parallel:none`
-  - [ ] S2.4 A tool states what it requires when it is picked `depends:S2.2` `parallel:none`
+- [x] S1 Product hierarchy lifecycle (group, ungroup, delete) reachable from the workspace. Commit b700eade. `depends:none` `parallel:none`
+- [x] S2 Editor commands reachable from the workspace menus and keys: Escape unwinding, selection scope keys, the Tools menu with per-tool prompts, and the answered construction plane key. `depends:S1` `parallel:none`
 - [ ] S3 Diagnostics channels and command success determination `depends:S1` `parallel:none`
   - [ ] S3.1 `CommandExecutionResult` says whether the command itself succeeded `depends:none` `parallel:none`
   - [ ] S3.2 Diagnostic channels separated by code so writers stop overwriting each other `depends:S3.1` `parallel:none`

@@ -63,7 +63,6 @@ func workspaceCanvasToolbarPaletteKeepsNarrowScrollableHitRegion() async throws 
             WorkspaceToolPalette(
                 selectedTool: .select,
                 activate: { _ in },
-                help: { $0.title },
                 accessibilityIdentifier: { "CanvasTool.\($0.rawValue)" }
             )
         }

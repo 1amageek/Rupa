@@ -50,13 +50,19 @@ import Testing
 }
 
 @Test func workspaceTopBarPresentationStaysCanvasActionOnly() {
-    let emptyPresentation = WorkspaceTopBarPresentation(selectedTargetCount: 0)
-    let selectedPresentation = WorkspaceTopBarPresentation(selectedTargetCount: 2)
+    let emptyPresentation = WorkspaceTopBarPresentation(
+        selectedTargetCount: 0,
+        selectionScope: .object
+    )
+    let selectedPresentation = WorkspaceTopBarPresentation(
+        selectedTargetCount: 2,
+        selectionScope: .object
+    )
     let fieldNames = Mirror(reflecting: emptyPresentation).children.compactMap(\.label)
 
     #expect(emptyPresentation.selectionTitle == nil)
     #expect(selectedPresentation.selectionTitle == "2 selected")
-    #expect(fieldNames == ["selectedTargetCount"])
+    #expect(fieldNames == ["selectedTargetCount", "selectionScope"])
     #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("document") })
     #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("title") })
     #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("evaluation") })

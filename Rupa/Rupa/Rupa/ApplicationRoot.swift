@@ -134,6 +134,7 @@ struct ApplicationRoot: App {
         .windowResizability(.contentMinSize)
         .commands {
             ApplicationProjectCommands(coordinator: projectCoordinator)
+            ApplicationToolCommands()
         }
     }
 
