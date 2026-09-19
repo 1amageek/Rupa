@@ -119,7 +119,7 @@ final class ProjectWorkspaceRegistrationOperation: Sendable {
     }
 }
 
-struct ProjectWorkspaceRegistrationLease {
+struct ProjectWorkspaceRegistrationLease: Sendable {
     let id: UUID
     let workspace: ProjectWorkspace
     let path: URL?
@@ -155,8 +155,12 @@ struct ProjectWorkspaceRegistrationLease {
 }
 
 /// Retains shared project workspaces without copying their source state.
-@MainActor
-public final class ProjectWorkspaceRegistry {
+///
+/// Registration, path, and lease state are serialized on this actor rather than
+/// on `MainActor`, so an in-flight render plan cannot delay a control-plane
+/// request. Reaching the workspace is an explicit suspension into its existing
+/// `MainActor` owner, after which the registration identity is revalidated.
+public actor ProjectWorkspaceRegistry {
     private struct Entry {
         let workspace: ProjectWorkspace
         var path: URL?
@@ -177,7 +181,7 @@ public final class ProjectWorkspaceRegistry {
         for existingID in Array(entries.keys) {
             _ = try await reconciledEntry(id: existingID)
         }
-        guard let view = workspace.view else {
+        guard let view = await workspace.view else {
             throw EditorError(
                 code: .agentUnavailable,
                 message: "A project must publish its initial view before Agent registration."
@@ -186,18 +190,23 @@ public final class ProjectWorkspaceRegistry {
         let validatedProjectID = try await workspace.withValidatedAuthority(from: view) {
             view.projectID
         }
+
+        // Admission runs as one synchronous tail. Every workspace hop this call
+        // needs has already happened, so no other request can observe the actor
+        // between the last check and the insert and register the same session
+        // identity, project, or path twice. The duplicate-project check reads the
+        // registry-owned `registeredProjectID` that the reconciliation above just
+        // refreshed, rather than hopping to each workspace again.
         guard entries[id] == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Project session \(id.uuidString) is already registered."
             )
         }
-        if let existingID = entries.first(where: { _, entry in
-            entry.workspace.view?.projectID == validatedProjectID
-        })?.key {
+        if let existing = entries.first(where: { $0.value.registeredProjectID == validatedProjectID }) {
             throw EditorError(
                 code: .documentOpenInApp,
-                message: "Project \(validatedProjectID.rawValue) is already registered as session \(existingID.uuidString)."
+                message: "Project \(validatedProjectID.rawValue) is already registered as session \(existing.key.uuidString)."
             )
         }
         let normalizedPath = path?.standardizedFileURL
@@ -292,7 +301,7 @@ public final class ProjectWorkspaceRegistry {
 
     public func summary(id: UUID) async throws -> WorkspaceSessionSummary {
         let lease = try await lease(id: id)
-        guard let view = lease.workspace.view else {
+        guard let view = await lease.workspace.view else {
             throw EditorError(
                 code: .agentUnavailable,
                 message: "Registered project session \(id.uuidString) has no published view."
@@ -320,11 +329,16 @@ public final class ProjectWorkspaceRegistry {
         }
     }
 
-    func reconciledCount() async throws -> Int {
-        for id in Array(entries.keys) {
-            _ = try await reconciledEntry(id: id)
-        }
-        return entries.count
+    /// Reports how many project sessions are registered.
+    ///
+    /// The count is registration state this actor already owns, so the answer
+    /// needs no workspace hop and stays available while `MainActor` is busy.
+    /// Reconciling every session here would make the control-plane status of an
+    /// open project wait for the render path, and reconciliation cannot change
+    /// the count in any case: it either refreshes a registered project identity
+    /// or throws.
+    public func registeredCount() -> Int {
+        entries.count
     }
 
     public func registeredSessionID(for url: URL) -> UUID? {
@@ -341,7 +355,7 @@ public final class ProjectWorkspaceRegistry {
         guard currentProjectID != entry.registeredProjectID else {
             return entry
         }
-        for candidateID in entries.keys where candidateID != id {
+        for candidateID in Array(entries.keys) where candidateID != id {
             let candidate = try await validatedIdentity(id: candidateID)
             guard candidate.projectID != currentProjectID else {
                 throw EditorError(
@@ -350,11 +364,21 @@ public final class ProjectWorkspaceRegistry {
                 )
             }
         }
-        guard let currentView = entry.workspace.view,
+        guard let currentView = await entry.workspace.view,
               Self.hasSameCoordinates(currentView, validated.view) else {
             throw ProjectControllerError(
                 code: .publicationConflict,
                 message: "The project session view changed while its registration identity was being reconciled."
+            )
+        }
+        // The hops above are the last ones this call makes, so the registration
+        // identity is re-checked here rather than earlier. Without it an
+        // `unregister` that completed during a hop would be undone by writing
+        // back the entry this call captured before the suspension.
+        guard let retained = entries[id], retained.token === entry.token else {
+            throw EditorError(
+                code: .sessionNotFound,
+                message: "Project session \(id.uuidString) was unregistered while its registration identity was being reconciled."
             )
         }
         entry.registeredProjectID = currentProjectID
@@ -374,7 +398,7 @@ public final class ProjectWorkspaceRegistry {
             )
         }
         try entry.token.validate()
-        guard let view = entry.workspace.view else {
+        guard let view = await entry.workspace.view else {
             throw EditorError(
                 code: .agentUnavailable,
                 message: "Registered project session \(id.uuidString) has no published view."
@@ -394,7 +418,7 @@ public final class ProjectWorkspaceRegistry {
                 message: "Project session \(id.uuidString) was unregistered during identity validation."
             )
         }
-        guard let currentView = retained.workspace.view,
+        guard let currentView = await retained.workspace.view,
               Self.hasSameCoordinates(currentView, view) else {
             throw ProjectControllerError(
                 code: .publicationConflict,

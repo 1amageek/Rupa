@@ -8,6 +8,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case removeSavedView(id: SavedViewID)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
+    case renameSceneNode(id: SceneNodeID, name: String)
+    case renameComponentInstance(id: ComponentInstanceID, name: String)
+    case moveSceneNodes(
+        ids: [SceneNodeID],
+        parentID: SceneNodeID?,
+        beforeSiblingID: SceneNodeID?
+    )
     case resetDocument(name: String)
     case replaceProductMetadata(ProductMetadata)
     case applySemanticExtensionMutations([SemanticExtensionMutation])
@@ -86,6 +93,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         endAngle: CADExpression
     )
     case createSplineSketch(name: String, plane: SketchPlane, spline: SketchSpline)
+    case createSpatialPath(name: String, path: SpatialPathFeature)
+    case editSpatialPath(featureID: FeatureID, edit: SpatialPathEdit)
+    case convertSketchToSpatialPath(featureID: FeatureID)
     case createRectangleSketch(name: String, plane: SketchPlane, width: CADExpression, height: CADExpression)
     case createPolygonSketch(
         name: String,
@@ -434,6 +444,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "rebaseWorkspaceOrigin"
         case .renameDocument:
             "renameDocument"
+        case .renameSceneNode:
+            "renameSceneNode"
+        case .renameComponentInstance:
+            "renameComponentInstance"
+        case .moveSceneNodes:
+            "moveSceneNodes"
         case .resetDocument:
             "resetDocument"
         case .replaceProductMetadata:
@@ -508,6 +524,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createArcSketch"
         case .createSplineSketch:
             "createSplineSketch"
+        case .createSpatialPath:
+            "createSpatialPath"
+        case .editSpatialPath:
+            "editSpatialPath"
+        case .convertSketchToSpatialPath:
+            "convertSketchToSpatialPath"
         case .createRectangleSketch:
             "createRectangleSketch"
         case .createPolygonSketch:
@@ -682,6 +704,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .removeSavedView,
              .rebaseWorkspaceOrigin,
              .renameDocument,
+             .renameSceneNode,
+             .renameComponentInstance,
+             .moveSceneNodes,
              .resetDocument,
              .replaceProductMetadata,
              .applySemanticExtensionMutations,
@@ -719,6 +744,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createCircleSketch,
              .createArcSketch,
              .createSplineSketch,
+             .createSpatialPath,
+             .editSpatialPath,
+             .convertSketchToSpatialPath,
              .createRectangleSketch,
              .createPolygonSketch,
              .createFaceKnife,

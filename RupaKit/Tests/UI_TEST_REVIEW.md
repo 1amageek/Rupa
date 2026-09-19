@@ -193,3 +193,29 @@ local fixture fixes. Actual GPU evidence includes native axes texture readback,
 materials, spatial resources, camera calibration and frame/selection tests.
 Static isolation guard, exact-result verifier negative checks, scheme XML and
 project plist validation passed. Visible/OS acceptance remains unverified.
+
+## Direct App acceptance in progress (2026-09-17)
+
+The current worktree at HEAD `1ed8b016`, including pre-existing uncommitted
+changes, produced a Debug App using Xcode-beta and
+`.verification/RupaMCPDerived`. The first bounded build timed out during
+compilation; the incremental continuation exited 0 and strict deep signature
+verification passed. Xcode emitted an anomalous "command failed with exit code
+0" MainView diagnostic and compiler warnings, so this is not a warning-free
+build claim. The updated executable timestamp was September 17, 13:31:46 JST.
+
+- Executable SHA-256: `cdc6adc0e9cc10d43f10a3afd2d07db88376aef02d29f74f5a71f5d62fdf38e6`.
+- Debug implementation dylib SHA-256: `19e000d9a4244e27a8ebcb268ab7acbc7db077a6161b8b5a3167e2c84e3ecce9`.
+- The freshly launched Untitled workspace displayed the native canvas, grid,
+  Inspector, sidebar and tool palette without a startup error. No saved user
+  project was opened. Fit was correctly disabled with no geometry.
+- Direct opening of Model exposed Box, Cylinder, Sphere, Extrude, Revolve,
+  Sweep, Loft, Boolean, Fillet and Chamfer. This proves menu reachability only,
+  not operation execution.
+- A subsequent action was rejected because user interaction changed the app
+  state. The state was read again; no stale index was clicked. Further direct
+  manipulation is paused to avoid competing with the user's desktop activity.
+
+No creation, transform, property edit, Undo or save/reopen acceptance is closed
+by these observations. The older pre-build binary was opened briefly and quit;
+its screen is explicitly excluded from current-source acceptance.

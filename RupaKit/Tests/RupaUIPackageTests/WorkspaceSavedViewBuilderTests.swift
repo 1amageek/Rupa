@@ -1,3 +1,4 @@
+import Foundation
 import RupaCore
 import RupaRendering
 import SwiftCAD
@@ -55,7 +56,7 @@ import Testing
     #expect(abs(restored.orbitElevationRadians - 0.58) < 1.0e-9)
 }
 
-@Test func workspaceSavedViewBuilderBuildsCameraFrameRequestFromSavedViewCamera() {
+@Test func workspaceSavedViewBuilderBuildsCameraFrameRequestFromSavedViewCamera() throws {
     let target = Point3D(x: -4.0, y: 2.0, z: 8.0)
     let savedView = SavedView(
         name: "Restore",
@@ -68,12 +69,41 @@ import Testing
         projection: .orthographic(heightMeters: 40.0),
         displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
     )
-    let request = WorkspaceSavedViewBuilder().cameraFrameRequest(for: savedView)
+    let request = try WorkspaceSavedViewBuilder().cameraFrameRequest(for: savedView)
 
     #expect(request.target == target)
     #expect(request.visibleHeightMeters == 40.0)
+    #expect(request.projection == .parallel)
     #expect(abs(request.basis.orbitYawRadians - 0.31) < 1.0e-9)
     #expect(abs(request.basis.orbitElevationRadians - 0.58) < 1.0e-9)
+}
+
+@MainActor
+@Test func workspaceSavedViewBuilderRoundTripsPerspectiveAndRejectsInvalidLens() throws {
+    let builder = WorkspaceSavedViewBuilder()
+    let lens = ViewportCameraProjection.perspective(fieldOfViewRadians: 0.9)
+    let frame = ViewportCameraFrame(
+        target: Point3D(x: 12, y: 0, z: -8),
+        visibleHeightMeters: 42,
+        camera: ViewportCamera(zoom: 2, projection: lens)
+    )
+    var saved = builder.makeSavedView(
+        name: "Perspective",
+        workspaceState: EditorSession().workspaceState,
+        projectionBasis: .isometric,
+        cameraFrame: frame
+    )
+    #expect(saved.projection == .perspective(fieldOfViewRadians: 0.9))
+    #expect(abs(saved.camera.distanceMeters - 42 / (2 * tan(0.45))) < 1e-9)
+    let request = try builder.cameraFrameRequest(for: saved)
+    #expect(request.projection == lens)
+    #expect(request.target == frame.target)
+    #expect(abs(request.visibleHeightMeters - frame.visibleHeightMeters) < 1e-9)
+
+    saved.projection.fieldOfViewRadians = nil
+    #expect(throws: DocumentValidationError.self) {
+        _ = try builder.cameraFrameRequest(for: saved)
+    }
 }
 
 @MainActor

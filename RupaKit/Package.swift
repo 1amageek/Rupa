@@ -234,7 +234,8 @@ let package = Package(
                 "RupaCoreTypes",
                 "RupaGeometry",
                 "RupaProjectModel",
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaCADIntegration",
@@ -249,7 +250,8 @@ let package = Package(
                 .product(name: "CADModeling", package: "swift-CAD"),
                 .product(name: "CADTopology", package: "swift-CAD"),
                 .product(name: "HashTreeCollections", package: "swift-collections"),
-            ]
+            ],
+            exclude: ["DESIGN.md"]
         ),
         .target(
             name: "RupaProject",
@@ -307,7 +309,7 @@ let package = Package(
                 .product(name: "MacComponent", package: "mac-component"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
-            exclude: ["DESIGN.md", "Modeling/DESIGN.md"]
+            exclude: ["DESIGN.md", "Modeling/DESIGN.md", "Outliner/DESIGN.md", "ViewportShadingPanel/DESIGN.md"]
         ),
         .target(
             name: "RupaAgentUI",

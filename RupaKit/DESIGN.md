@@ -86,6 +86,9 @@ The package design owns:
 - the rule that Agent control-plane work remains independent of viewport
   preparation and enters the existing workspace/project owners only through
   explicit short suspensions.
+- the one-way viewport-control boundary: AgentProtocol and MCP carry bounded
+  Foundation-value intent, the App resolves an explicit mounted viewport, and
+  RupaRendering/RupaUI alone own transient parallel camera/display state.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
 archive encoding, HTTP framing, MCP framing, general CLI behavior, LLM reasoning, or a bicycle-specific or
@@ -172,10 +175,10 @@ flowchart LR
 | [RupaDomainFoundation design](Sources/RupaDomainFoundation/DESIGN.md) | child | Generic semantic operation, program graph, validation, and compilation contracts | Defines one operation/value/reference model shared by both public invocation forms. | It owns no concrete CAD vocabulary or project publication. |
 | [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) | child | Concrete versioned CAD descriptors, outputs, lowerers, and estimates | Registers the universal operations used by both public forms and all 100 benchmark realizations. | It depends downward only and never owns IDs, project coordinates, publication, transport, or benchmark semantics. |
 | [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit, Make Editable, and visibility-filtered exact project-view contracts | Owns application-facing exact-snapshot adaptation while retaining complete source/evaluation/navigation authority. | Presentation filtering must not create an alternate source or project authority; the benchmark CLI remains a separate upper sibling. |
-| [RupaUI design](Sources/RupaUI/DESIGN.md) | child | snapshot-owned project title and direct workspace UI route | Presents immutable workspace state without becoming project authority. | Visible project identity comes from `ProjectViewSnapshot`. |
+| [RupaUI design](Sources/RupaUI/DESIGN.md) | child | snapshot-owned project title, direct workspace UI route, and viewport controls | Presents immutable workspace state and forwards UI/API actions to the same mounted viewport controller. | Visible project identity comes from `ProjectViewSnapshot`; camera state is not project state. |
 | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) | child | process-lifetime host and injected handler contract | Owns Agent listener lifecycle and registration bridge for the App-owned workspace. | The App composes one controller/router; host never creates a shadow workspace or saves a package. |
-| [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh, Make Editable, and geometry-buffer-free viewport summary messages | Reuses RupaKit value contracts without duplicating geometry meaning. | It must not import runtime or transport or expose a second view/source authority. |
-| [RupaMCP design](Sources/RupaMCP/DESIGN.md) | child | fixed tool catalog, bounded schemas, dual-era stdio server | Adapts MCP calls to the existing project-access path without owning project state. | Mutation and explicit save remain separate calls. |
+| [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and bounded viewport-control DTOs | Carries Foundation-value viewport list/state/execute values without importing Rendering. | It must not expose a second view/source authority or claim draw completion. |
+| [RupaMCP design](Sources/RupaMCP/DESIGN.md) | child | fixed tool catalog, bounded schemas, dual-era stdio server | Adapts semantic and explicit viewport calls to the existing project-access path. | It never chooses a window or owns viewport/project state. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Control-plane registered-workspace request routing | Binds wire values to the exact current full project view without global MainActor isolation. | It never creates a session, calls CAD/Mesh/rendering directly, or saves a package. |
 | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 per-case and aggregate verification contract | Composes all reviewed registered-Agent routes and immutable source/B-Rep oracles into measured scheduling, baselines, and a canonical report. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
 | [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
@@ -234,6 +237,7 @@ records are owned by the four child designs:
 | `RupaGeometry` does not depend upward on Core, Project, UI, or transport. | [RupaGeometry design](Sources/RupaGeometry/DESIGN.md) |
 | `RupaEvaluation` owns provider-neutral aggregate admission and maps each purpose to its ceiling; fidelity stays with the document's modeling settings so both purposes share one evaluation, and Swift-CAD owns only exact evaluation plus generic tessellation limits. | [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md), [RupaCADIntegration](Sources/RupaCADIntegration/DESIGN.md), [swift-CAD](../swift-CAD/DESIGN.md) |
 | The target RealityKit scene preparation is a bounded postpublication derived read; only one matching scene/frame and native RealityView update enter MainActor after the RUPA-RK migration gates. Current production is the RealityKit-surface/Canvas-overlay/legacy-identity migration hybrid. The target never uses spatial SwiftUI Canvas or a second renderer. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RealityViewport design](Sources/RupaRendering/RealityViewport/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md) |
+| Camera/display operations target one explicit mounted viewport UUID. UI gestures and API calls use the same MainActor controller; list/state/execute transport remains Foundation-value-only, and applied state is not rendered-frame evidence. | [RupaRendering design](Sources/RupaRendering/DESIGN.md), [RupaUI design](Sources/RupaUI/DESIGN.md), [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md), [RupaMCP design](Sources/RupaMCP/DESIGN.md) |
 | `RupaCore` is the source-authority boundary; `RupaProject` is the publication boundary. | [RupaCore design](Sources/RupaCore/DESIGN.md), [RupaProject design](Sources/RupaProject/DESIGN.md) |
 | `RupaProjectPackage` owns schema-v3 archive I/O, staged validation, and atomic destination replacement, but not project or application lifecycle. | [RupaProjectPackage design](Sources/RupaProjectPackage/DESIGN.md) |
 | `RupaKit` is the application use-case boundary over existing Project authority. | [RupaKit integration design](Sources/RupaKit/DESIGN.md) |
@@ -365,6 +369,9 @@ package baseline, RealityKit native MeshResource/LowLevelMesh, camera, material,
 scene path. Spatial Canvas and legacy identity GPU readback remain explicit
 migration work; after RK-5 they cannot remain as production fallbacks or
 parallel renderers.
+Viewport commands are the narrow exception: only validated list/state/execute
+dispatch enters the explicitly selected mounted MainActor controller. Ordinary
+status/capability and encoding work remain independent of MainActor.
 The T12 benchmark used per-case fresh authorities and fixed serial concurrency
 one during activation. Its completed post-100 integration proved bounded-one
 and bounded-two evidence equivalence, observed MainActor serialization, and

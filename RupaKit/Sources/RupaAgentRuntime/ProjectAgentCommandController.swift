@@ -9,9 +9,14 @@ import RupaKit
 import RupaProject
 
 /// Routes Agent requests through the same project authority observed by the UI.
-@MainActor
+///
+/// The controller is an immutable control-plane service with no global actor.
+/// Capability discovery, lease orchestration, semantic compilation, result
+/// projection, error mapping, and encoding run off `MainActor`; only capturing
+/// the current view and submitting an exact read, mutation, or recovery are
+/// short explicit suspensions into the workspace's existing `MainActor` owner.
 public final class ProjectAgentCommandController: AgentRequestHandling {
-    public var name: String
+    public let name: String
 
     private let registry: ProjectWorkspaceRegistry
     private let domainRegistry: DomainRegistry
@@ -173,7 +178,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
             return "The committed request has no project session ID."
         }
         do {
-            let lease = try registry.recoveryLease(
+            let lease = try await registry.recoveryLease(
                 id: sessionID,
                 committedProjectID: error.commit.state.document.projectID
             )
@@ -237,7 +242,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         do {
             try Task.checkCancellation()
             let lease = try await registry.lease(id: invocation.sessionID)
-            let view = try currentView(lease.workspace)
+            let view = try await currentView(lease.workspace)
             let authority = try requireSemanticAuthority(
                 invocation.authority,
                 snapshot: view
@@ -404,10 +409,14 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 throw EditorError(code: .commandFailed, message: error.message)
             }
         case .status:
+            // Status answers from registration state alone, so it stays available
+            // while `MainActor` is busy publishing a render plan. Identity
+            // reconciliation belongs to the per-session operations that act on a
+            // workspace, not to the control-plane health answer.
             return .status(
                 AgentStatus(
                     running: true,
-                    sessionCount: try await registry.reconciledCount()
+                    sessionCount: await registry.registeredCount()
                 )
             )
         case .sessions:
@@ -423,13 +432,19 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
                 message: "Application-owned file and window lifecycle is outside the Agent project route."
             )
 
+        case .listViewports, .viewportState, .executeViewport:
+            throw EditorError(
+                code: .commandUnsupported,
+                message: "Viewport control is owned by the mounted application viewport route."
+            )
+
         case .describeDocument(
             let sessionID,
             let expectedGeneration
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireGeneration(expectedGeneration, snapshot: snapshot)
             return try await executeDedicatedAutomation(
                 .describeDocument,
@@ -445,7 +460,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireGeneration(expectedGeneration, snapshot: snapshot)
             return try await executeDedicatedAutomation(
                 .validateDocument,
@@ -499,7 +514,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         case .executeDomain(let sessionID, let request):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             let plan = try ProjectDomainCommandDispatcher(registry: domainRegistry)
                 .dispatch(request, from: snapshot)
             return .domainExecution(
@@ -531,7 +546,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Parameter expression",
@@ -562,7 +577,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Object dimension expression",
@@ -592,7 +607,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Sketch dimension expression",
@@ -621,7 +636,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Selection dimension expression",
@@ -658,7 +673,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Poly-spline surface vertex move",
@@ -685,7 +700,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Surface frame display",
@@ -719,7 +734,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         case .undo(let sessionID, let expectedGeneration):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Undo",
@@ -740,7 +755,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         case .redo(let sessionID, let expectedGeneration):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireMutationGeneration(
                 expectedGeneration,
                 operation: "Redo",
@@ -761,7 +776,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         case .evaluate(let sessionID, let expectedGeneration):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             try requireGeneration(expectedGeneration, snapshot: snapshot)
             let view = try await workspace.evaluate(
                 from: snapshot,
@@ -778,7 +793,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         ):
             let lease = try await registry.lease(id: sessionID)
             let workspace = lease.workspace
-            let snapshot = try currentView(workspace)
+            let snapshot = try await currentView(workspace)
             let executor = exportExecutor
             let prepared = try await Task.detached(priority: nil) {
                 try executor.prepare(
@@ -818,7 +833,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         try request.validate()
         let lease = try await registry.lease(id: request.sessionID)
-        let snapshot = try currentView(lease.workspace)
+        let snapshot = try await currentView(lease.workspace)
         try requireGeneration(
             request.expectedGeneration,
             snapshot: snapshot
@@ -842,7 +857,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         try request.validate()
         let lease = try await registry.lease(id: request.sessionID)
-        let snapshot = try currentView(lease.workspace)
+        let snapshot = try await currentView(lease.workspace)
         try requireGeneration(
             request.expectedGeneration,
             snapshot: snapshot
@@ -872,7 +887,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         try request.validate()
         let lease = try await registry.lease(id: request.sessionID)
-        let snapshot = try currentView(lease.workspace)
+        let snapshot = try await currentView(lease.workspace)
         try requireGeneration(
             request.expectedGeneration,
             snapshot: snapshot
@@ -902,7 +917,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         try request.validate()
         let lease = try await registry.lease(id: request.sessionID)
-        let snapshot = try currentView(lease.workspace)
+        let snapshot = try await currentView(lease.workspace)
         try requireGeneration(
             request.expectedGeneration,
             snapshot: snapshot
@@ -945,7 +960,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         try request.validate()
         let lease = try await registry.lease(id: request.sessionID)
-        let snapshot = try currentView(lease.workspace)
+        let snapshot = try await currentView(lease.workspace)
         try requireGeneration(
             request.expectedGeneration,
             snapshot: snapshot
@@ -979,7 +994,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         }
         let lease = try await registry.lease(id: sessionID)
         let workspace = lease.workspace
-        let snapshot = try currentView(workspace)
+        let snapshot = try await currentView(workspace)
         let executor = snapshotReadExecutor
         let operationGuard = lease.operationGuard
         let projectionTask = Task.detached(priority: nil) {
@@ -1041,7 +1056,7 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
     ) async throws -> AgentResponse {
         let lease = try await registry.lease(id: sessionID)
         let workspace = lease.workspace
-        let snapshot = try currentView(workspace)
+        let snapshot = try await currentView(workspace)
         try requireMutationGeneration(
             expectedGeneration,
             operation: "Selection mutation",
@@ -1086,8 +1101,10 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         )
     }
 
-    private func currentView(_ workspace: ProjectWorkspace) throws -> ProjectViewSnapshot {
-        guard let view = workspace.view else {
+    private func currentView(
+        _ workspace: ProjectWorkspace
+    ) async throws -> ProjectViewSnapshot {
+        guard let view = await workspace.view else {
             throw EditorError(
                 code: .agentUnavailable,
                 message: "The registered project has no published view."

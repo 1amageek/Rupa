@@ -9,6 +9,7 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
     case spline
     case solid
     case sweep
+    case surface
     case mesh
     case measure
     case section
@@ -35,6 +36,8 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
             "Solid"
         case .sweep:
             "Sweep"
+        case .surface:
+            "Surface"
         case .mesh:
             "Mesh"
         case .measure:
@@ -62,6 +65,8 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
             "cube"
         case .sweep:
             "arrow.triangle.2.circlepath"
+        case .surface:
+            "square.stack.3d.up"
         case .mesh:
             "point.3.connected.trianglepath.dotted"
         case .measure:

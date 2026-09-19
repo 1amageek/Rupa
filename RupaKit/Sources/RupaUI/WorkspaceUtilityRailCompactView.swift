@@ -1,5 +1,34 @@
 import SwiftUI
 
+enum WorkspaceUtilityRailDestination: String, CaseIterable, Hashable, Sendable {
+    case controls
+    case selection
+    case snap
+    case plane
+    case analysis
+    case views
+    case scene
+
+    var title: String {
+        switch self {
+        case .controls:
+            "Canvas Controls"
+        case .selection:
+            "Selection"
+        case .snap:
+            "Snap"
+        case .plane:
+            "Construction Plane"
+        case .analysis:
+            "Surface Analysis"
+        case .views:
+            "Saved Views"
+        case .scene:
+            "Scene Diagnostics"
+        }
+    }
+}
+
 struct WorkspaceUtilityRailCompactView: View {
     var selectionScope: WorkspaceSelectionScope
     var isGridSnapEnabled: Bool
@@ -11,66 +40,74 @@ struct WorkspaceUtilityRailCompactView: View {
     var savedViewCount: Int
     var diagnosticTitle: String
     var hasDiagnostics: Bool
-    var expand: () -> Void
+    var expand: (WorkspaceUtilityRailDestination) -> Void
 
     var body: some View {
         VStack(spacing: WorkspaceUtilityRailLayout.compactButtonSpacing) {
             WorkspaceUtilityRailCompactButton(
                 systemImage: "slider.horizontal.3",
+                title: WorkspaceUtilityRailDestination.controls.title,
                 help: "Show Canvas Controls",
                 accessibilityIdentifier: "WorkspaceUtilityRail.expand",
-                action: expand
+                action: { expand(.controls) }
             )
 
             WorkspaceUtilityRailCompactDivider()
 
             WorkspaceUtilityRailCompactButton(
                 systemImage: selectionScope.systemImage,
+                title: WorkspaceUtilityRailDestination.selection.title,
                 help: "Selection Scope: \(selectionScope.title)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.selection",
                 isActive: selectionScope != .object,
-                action: expand
+                action: { expand(.selection) }
             )
             WorkspaceUtilityRailCompactButton(
                 systemImage: "grid",
+                title: WorkspaceUtilityRailDestination.snap.title,
                 help: snapHelp,
                 accessibilityIdentifier: "WorkspaceUtilityRail.snap",
                 isActive: isGridSnapEnabled || isObjectTargetingEnabled,
-                action: expand
+                action: { expand(.snap) }
             )
             WorkspaceUtilityRailCompactButton(
                 systemImage: "square.grid.2x2",
+                title: WorkspaceUtilityRailDestination.plane.title,
                 help: "Construction Plane: \(constructionPlaneTitle)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.plane",
                 isActive: isConstructionPlaneActive,
-                action: expand
+                action: { expand(.plane) }
             )
             WorkspaceUtilityRailCompactButton(
                 systemImage: "waveform.path.ecg",
+                title: WorkspaceUtilityRailDestination.analysis.title,
                 help: "Surface Analysis: \(surfaceAnalysisTitle)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.analysis",
                 isActive: isSurfaceAnalysisActive,
-                action: expand
+                action: { expand(.analysis) }
             )
             WorkspaceUtilityRailCompactButton(
                 systemImage: "viewfinder",
+                title: WorkspaceUtilityRailDestination.views.title,
                 help: "Saved Views: \(savedViewCount)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.views",
                 isActive: savedViewCount > 0,
-                action: expand
+                action: { expand(.views) }
             )
             WorkspaceUtilityRailCompactButton(
                 systemImage: "exclamationmark.triangle",
+                title: WorkspaceUtilityRailDestination.scene.title,
                 help: "Scene Diagnostics: \(diagnosticTitle)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.scene",
                 isActive: hasDiagnostics,
                 hasWarning: hasDiagnostics,
-                action: expand
+                action: { expand(.scene) }
             )
         }
         .padding(WorkspaceUtilityRailLayout.collapsedContentPadding)
         .frame(width: WorkspaceUtilityRailLayout.collapsedWidth)
         .workspaceGlassContainer()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceUtilityRail.collapsed")
     }
 
@@ -90,6 +127,7 @@ private struct WorkspaceUtilityRailCompactDivider: View {
 
 private struct WorkspaceUtilityRailCompactButton: View {
     var systemImage: String
+    var title: String
     var help: String
     var accessibilityIdentifier: String
     var isActive: Bool = false
@@ -132,8 +170,9 @@ private struct WorkspaceUtilityRailCompactButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .help(help)
-        .accessibilityLabel(help)
+        .modifier(WorkspaceToolNameHint(title: title, edge: .leading))
+        .accessibilityLabel(title)
+        .accessibilityHint(help)
         .accessibilityIdentifier(accessibilityIdentifier)
     }
 }

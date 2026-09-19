@@ -4,6 +4,7 @@ import RupaAgentRuntime
 import RupaCADDomain
 import RupaCoreTypes
 import RupaDomainFoundation
+import Synchronization
 import Testing
 @testable import Rupa
 
@@ -143,6 +144,84 @@ func applicationAgentRouterKeepsSaveAsAnOrdinaryResponse() async {
         return
     }
     #expect(actual == result)
+}
+
+/// Proves an ordinary request reaches the injected project handler without
+/// waiting for `MainActor`.
+///
+/// The test is deliberately not `MainActor`-isolated: an isolated test could
+/// never observe the occupation it has to assert against, because it would be
+/// waiting behind it.
+@Test(.timeLimit(.minutes(1)))
+func applicationAgentRouterDelegatesOrdinaryRequestsWhileMainActorIsOccupied() async {
+    let projectHandler = ApplicationAgentEnvelopeHandlerProbe(
+        response: .ordinary(.status(AgentStatus(running: true, sessionCount: 1)))
+    )
+    let lifecycle = await ApplicationAgentLifecycleProbe()
+    let router = ApplicationAgentRequestRouter(
+        projectHandler: projectHandler,
+        lifecycle: lifecycle
+    )
+    let envelope = AgentRequestEnvelope(
+        id: "app-router-off-main-actor",
+        params: .status
+    )
+
+    let clock = ContinuousClock()
+    let occupation = await occupyMainActorForRouting(
+        for: .milliseconds(1500),
+        clock: clock
+    )
+
+    let handled = await router.handle(envelope)
+    let completionInstant = clock.now
+
+    // Nothing else can run on `MainActor` before the release instant, so a
+    // response observed earlier cannot have waited for it.
+    #expect(completionInstant < occupation.releaseInstant)
+
+    #expect(await projectHandler.handledEnvelopes() == [envelope])
+    let sawSave = await MainActor.run { lifecycle.saveRequests.isEmpty == false }
+    #expect(sawSave == false)
+    guard case .ordinary(.status(let status)) = handled else {
+        Issue.record("The project handler response did not remain ordinary.")
+        return
+    }
+    #expect(status == AgentStatus(running: true, sessionCount: 1))
+
+    await occupation.task.value
+}
+
+private struct ApplicationAgentMainActorOccupation {
+    let releaseInstant: ContinuousClock.Instant
+    let task: Task<Void, Never>
+}
+
+/// Occupies `MainActor` with one uninterrupted busy loop and returns only after
+/// that loop is running, together with the instant it releases.
+private func occupyMainActorForRouting(
+    for duration: Duration,
+    clock: ContinuousClock
+) async -> ApplicationAgentMainActorOccupation {
+    let releaseInstant = Mutex<ContinuousClock.Instant?>(nil)
+    let task = Task { @MainActor in
+        let deadline = clock.now.advanced(by: duration)
+        // Published before the loop begins, so observing it proves the task is
+        // already executing on MainActor.
+        releaseInstant.withLock { $0 = deadline }
+        while clock.now < deadline {
+            continue
+        }
+    }
+    while true {
+        if let instant = releaseInstant.withLock({ $0 }) {
+            return ApplicationAgentMainActorOccupation(
+                releaseInstant: instant,
+                task: task
+            )
+        }
+        await Task.yield()
+    }
 }
 
 private actor ApplicationAgentEnvelopeHandlerProbe: AgentRequestHandling {

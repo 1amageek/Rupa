@@ -16,6 +16,12 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
+### Spatial path editing
+
+[SpatialPathEditing](SpatialPathEditing/DESIGN.md) owns explicit planar-to-spatial
+conversion and transactional edits of spatial source knots. It uses Swift-CAD's
+source operations; no viewport coordinates are persisted as source geometry.
+
 ### Box Corner source
 
 `Corner` is an exact all-edge box fillet. Core retains the visible feature ID
@@ -66,6 +72,9 @@ external API and changes no persistence or mutation authority.
   without evaluating or copying CAD/Mesh geometry.
 - effective scene-node visibility resolved from the Product root hierarchy;
   a hidden ancestor suppresses every descendant without deleting its source.
+- object display-name mutation at the owning Product identity: ordinary scene
+  nodes own their names, while a component instance owns the name mirrored by
+  every scene node that references it;
 - atomic publication of an imported Authored Mesh through a geometry-source
   command. The command receives an already validated `MeshSource` and its
   sanitized content provenance; Core allocates the Product source,
@@ -154,6 +163,105 @@ unique copy to satisfy a single scene selection.
 
 ## Contracts and Invariants
 
+### Product object naming contract
+
+1. `renameSceneNode` changes only the normalized, nonempty name of an ordinary
+   `SceneNode`. It preserves the node ID, hierarchy, reference, object,
+   transform, visibility, lock, material, geometry, and every CAD feature name.
+2. A scene node that represents a component instance is renamed through
+   `renameComponentInstance`. The component instance is the naming authority;
+   Core updates its name and every scene node whose reference or object
+   descriptor names that instance in one validated mutation. Existing
+   component-instance uniqueness remains in force.
+3. A scene node with a retained `constructionPlaneID` is renamed through the
+   existing `renameConstructionPlane` contract, which updates the construction
+   source and its scene-node mirror together. A generic construction scene node
+   without a retained construction-plane source remains an ordinary scene node.
+4. A pattern-array root is renamed through the existing
+   `updatePatternArray(name:)` contract, which updates the source and group node
+   together. A generated pattern output cannot be renamed independently.
+   Core returns a typed command failure instead of changing generated output
+   metadata that its source will later regenerate.
+5. After normalization, renaming an ordinary scene node to its current name is
+   a no-op. Renaming a component instance is a no-op only when the authority and
+   every reference/object scene-node mirror already carry that normalized name.
+   A no-op does not advance generation, evaluate, dirty the document, or create
+   undo history. A same-name component-instance request repairs inconsistent
+   mirrors as one ordinary mutation rather than hiding the inconsistency.
+6. A list of existing visibility or lock commands submitted as one project
+   source transaction remains one isolated source-command group: all commands
+   are accepted and published with one undo entry, or the staged document and
+   history both roll back. Product naming does not introduce another batch or
+   publication owner.
+
+```mermaid
+flowchart LR
+    Intent["Object-name intent"] --> Classify{"Product owner"}
+    Classify -->|ordinary node| Node["SceneNode.name"]
+    Classify -->|component occurrence| Instance["ComponentInstance.name"]
+    Instance --> Mirrors["All referencing SceneNode names"]
+    Classify -->|saved construction plane| Plane["Existing ConstructionPlaneSource rename"]
+    Classify -->|pattern root| Pattern["Existing PatternArraySource update"]
+    Classify -->|generated output| Refuse["Typed refusal"]
+    Node --> Validate["Validate staged DesignDocument"]
+    Mirrors --> Validate
+    Plane --> Validate
+    Pattern --> Validate
+```
+
+### Product hierarchy move contract
+
+`EditorCommand.moveSceneNodes(ids:parentID:beforeSiblingID:)` is the Core
+source command for Product hierarchy changes. The command owns hierarchy
+validation and placement math; Outliner and drag/drop callers supply stable
+IDs and do not mutate `ProductMetadata` directly.
+
+1. `ids` must be non-empty, unique, and present in the current hierarchy.
+   Descendants of another selected ID are collapsed, and the remaining
+   top-level subtrees retain their current pre-order scene order. `parentID`
+   is either an existing scene node or `nil`, where `nil` means the document
+   root list. `beforeSiblingID` is either `nil` (append) or an actual direct
+   child of that destination parent (or an actual root ID for a root drop);
+   it is never a filtered-row index and cannot belong to a moved subtree.
+2. A move is rejected atomically for a missing/empty selection, stale
+   generation (enforced by `EditorSession`), duplicate ID, self/descendant
+   cycle, invalid anchor, locked selected subtree or destination, empty root
+   result, non-finite/non-affine/singular placement matrix, and any source
+   authority that cannot preserve its invariants. Pattern roots and generated
+   Pattern output subtrees, saved construction-plane nodes, and component
+   definition source subtrees are source-owned and cannot be moved. A normal
+   Product scene node that references a ComponentInstance is an occurrence
+   placement and is not rejected solely for being an instance; generated
+   Pattern occurrences remain source-owned through the Pattern resolver.
+3. A same-parent reorder changes only the parent child/root ID arrays. Every
+   selected node's `localTransform` remains bit-for-bit unchanged. A reparent
+   computes each moved root's old world transform before changing hierarchy
+   and assigns `newLocal = inverse(destinationWorld) * oldWorld` using the
+   row-major, column-vector convention above. Descendant IDs, geometry,
+   feature history, names, visibility, lock state, material, and all source
+   references remain unchanged.
+4. The operation stages one complete `ProductMetadata`, validates it with the
+   existing document validator, and publishes it through the existing
+   `CADDocumentStore`/`CommandStack` path. A successful move is one source
+   mutation and one undo entry. A no-op reorder does not advance generation,
+   evaluate, dirty the document, or create history. Failure leaves document,
+   generation, evaluation, and history unchanged. The consumed-profile
+   `ProductMetadata.nestSceneNode` helper is not a generic move implementation.
+
+```mermaid
+flowchart LR
+    Intent["stable IDs + destination"] --> Classify["Core selection/order + source ownership"]
+    Classify --> Placement["same-parent reorder or affine world-preserving reparent"]
+    Placement --> Validate["stage and validate ProductMetadata"]
+    Validate -->|success| Commit["one Core mutation + one undo"]
+    Validate -->|failure| Refuse["typed refusal; no publication"]
+```
+
+The focused Core tests own top-level selection collapse, stable source-order
+multi-move, root-list moves, same-parent bit preservation, world-preserving
+reparenting, cycle/anchor/lock/source-owned refusals, atomic rollback,
+no-op behavior, stale generation, and one-step undo/redo.
+
 ### Scene placement matrix convention
 
 Scene and component placement use row-major `Matrix4x4` storage with column
@@ -178,6 +286,12 @@ TRS interpretation and serialized matrix format unchanged.
 `ModelingOperationDraftTests`, `WorkspaceTransformMatrixTests` and viewport
 transform tests own UI intent and geometry agreement; signed-App verification
 must confirm CAD overlays and Mesh rendering coincide after XYZ edits.
+
+Product object-name tests own ordinary-node preservation, component-instance
+mirror consistency and uniqueness, pattern-root reuse, generated-output
+refusal, saved-construction-plane owner routing, true no-op behavior, mirror
+repair, stale transaction refusal, grouped rollback, and undo/redo. They do not
+infer successful Outliner interaction from command construction alone.
 
 For CAD command results, Core guarantees the staged-source phase of the
 [package identity-phase contract](../../DESIGN.md#cad-identity-phases). One

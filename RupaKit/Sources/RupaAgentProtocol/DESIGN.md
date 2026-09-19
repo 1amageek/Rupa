@@ -18,6 +18,13 @@ transport. It does not resolve discovery, parse HTTP, authenticate credentials,
 resolve sessions, read a workspace, mutate CAD/Mesh, save packages, or render
 previews.
 
+The module also owns the Foundation-only viewport-control wire contract. The
+viewport operation and state values carry intent and the applied camera/display
+receipt; they do not import Rendering, retain a view/controller, or claim that a
+draw completed. A viewport request carries a project session and state or
+execution carries an explicit mounted viewport UUID. Execution may carry one
+optional viewport revision as a stale-write guard.
+
 Protocol values describe intent and receipts only. Persistent identifiers,
 transaction validation, evaluation, and lowering remain App-owned.
 Capability discovery carries a typed, versioned projection of each registered
@@ -50,6 +57,12 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
+
+Viewport state includes finite `focusXMeters`, `focusYMeters`, and `focusZMeters`
+from the mounted camera. These required wire fields describe its world-space
+navigation center; pan point deltas are operations, not a substitute for focus.
+The App adapter copies this state from Rendering without deriving its own pivot.
+Viewport codec tests cover nonzero focus round trips and non-finite refusal.
 
 1. Every envelope has one protocol version, request ID, method, and matching
    typed payload. Unknown versions, methods, required fields, and structural
@@ -117,6 +130,31 @@ flowchart LR
     one-to-one with their retained routes. A legacy `command.apply` or
     `command.applyBatch` envelope is rejected by the protocol with typed
     `EditorError.commandInvalid` before it can reach Runtime.
+14. Viewport control has exactly three method-specific requests: `viewport.list`,
+    `viewport.state`, and `viewport.execute`. `viewport.list` returns at most
+    `AgentViewportState.maximumListCount` (64) states. This is a protocol admission
+    ceiling, not a measured latency claim; increasing it requires boundary/byte
+    tests and App route latency verification. Providers reject larger registries
+    before collection materialization. `viewport.list` returns bounded
+    states of mounted viewports for one session. The other two require the
+    explicit viewport UUID; execution returns the applied state and never claims
+    draw completion. Projection is the closed `parallel`/`perspective` lens mode,
+    and `setProjection` is a closed viewport operation. Selecting perspective
+    from parallel uses the Rendering-owned standard field of view; selecting an
+    already active perspective mode is a no-op that preserves its exact field of
+    view. State includes the exact effective `fieldOfViewRadians` for perspective
+    and `nil` for parallel, positive viewport dimensions, fit availability,
+    camera values, and three finite
+    screen-axis direction pairs so an aligned/custom camera is not reconstructed
+    from yaw/elevation. Camera numbers must be finite and zoom must be positive;
+    operation discriminators and action-specific fields are closed and unknown
+    fields are rejected. A missing/non-finite/out-of-range perspective field of
+    view in state, or a field of view attached to parallel state, is rejected;
+    the wire adapter never reports parallel for an active perspective session.
+15. `AgentMessageCodec` is an immutable `Sendable` value holding encoding
+    configuration and limits only. It owns no mutable state and never mutates
+    its encoder or decoder after initialization, so a control-plane service
+    that is not isolated to a global actor can hold one directly.
 
 ## Runtime Flows
 
@@ -160,3 +198,8 @@ response-loss classification remain Transport/ProjectAccess-owned.
 Response-plan tests prove exact boundary and boundary-plus-one behavior before
 staging, the fixed committed alternative is always below the ceiling, and each
 selected plan is encoded once without a postpublication fallback attempt.
+Viewport protocol tests additionally prove the closed operation/state schema,
+explicit UUID and revision fields, malformed/non-finite rejection, exact
+method/response compatibility, and bounded response planning for list/state/
+execution receipts. They cover both lens modes, strict field-of-view pairing,
+`setProjection` round trips, and exact non-default perspective state projection.

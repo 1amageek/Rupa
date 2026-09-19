@@ -18,12 +18,13 @@ an exhaustive eight-case adapter shared with capability registration and cannot
 represent feature-graph construction, an arbitrary command, or a batch.
 `RupaAutomation` remains an internal lowering substrate only.
 
-The current implementation marks `ProjectAgentCommandController` and
-`ProjectWorkspaceRegistry` globally `@MainActor`; application composition also
-marks `ApplicationAgentRequestRouter` globally `@MainActor`. That makes
-capability/status and request orchestration contend with viewport work. The
-target contract removes those global annotations while retaining explicit,
-short calls into the existing MainActor `ProjectWorkspace` owner.
+`ProjectAgentCommandController` is an immutable `Sendable` control-plane
+service, `ProjectWorkspaceRegistry` is an actor that serializes registration and
+lease state only, and application composition holds
+`ApplicationAgentRequestRouter` without a global actor. None of the three is
+globally `@MainActor`, so capability/status and request orchestration no longer
+contend with viewport work. Reaching a workspace stays an explicit, short
+suspension into its existing MainActor `ProjectWorkspace` owner.
 
 ## Responsibilities and Boundaries
 
@@ -41,7 +42,10 @@ mapping unchanged to RupaKit result projection. Immutable viewport inspection
 asks the existing `ProjectWorkspace` use-case boundary for a bounded projection
 of the already-published application viewport, then maps that
 transport-neutral value without reevaluation or geometry materialization in
-Runtime.
+Runtime. Transient viewport control is intentionally not implemented here: the
+App-owned viewport router handles `viewport.list`, `viewport.state`, and
+`viewport.execute` against mounted UI state. This runtime returns a typed
+unsupported result if those requests are sent to it directly.
 
 It does not define a second command switch, define CAD operation schemas or
 lowerers, allocate persistent source identifiers, create an EditorSession,
@@ -189,7 +193,12 @@ flowchart LR
 21. Capability/status handling, lease orchestration, semantic compilation,
     immutable result projection, error mapping, and response encoding run on
     control-plane isolation. They require no viewport, CAD, Mesh, package, or
-    persistence access.
+    persistence access. Status answers the registered session count from
+    registry state alone and performs no workspace hop, so an open project
+    cannot make the control-plane health answer wait for the render path.
+    Registration identity reconciliation belongs to the per-session operations
+    that act on a workspace; it either refreshes a registered project identity
+    or throws, and so can never change that count.
 22. Capturing or validating the current view and submitting an exact read,
     mutation, or save intent is a short explicit suspension into the existing
     owning workspace/application boundary. Runtime revalidates the registration
@@ -198,11 +207,20 @@ flowchart LR
     successful publication it validates and projects the exact committed
     coordinates instead; a projection or cancellation failure returns that
     committed coordinate with `mustNotRetry`. Runtime never caches a mutable
-    workspace view or constructs a duplicate one.
+    workspace view or constructs a duplicate one. Because the registry is
+    reentrant across those suspensions, no registry critical section spans one:
+    every registry write is preceded by a synchronous tail that re-checks the
+    condition it writes under, so admission checks and the insert they authorize
+    cannot be separated by a hop, and an entry whose registration was
+    invalidated during a hop is rejected rather than written back.
 23. `project.viewportSnapshot` calls the existing RupaKit workspace read, which
     owns bounded Geometry traversal. Runtime maps its immutable summary only;
     no CAD, Mesh, Geometry, renderer, package-writer, or persistence dependency
     is reachable from the controller implementation.
+24. `viewport.list`, `viewport.state`, and `viewport.execute` never acquire a
+    Runtime workspace lease or synthesize an active/first viewport. They are
+    delegated to the App-owned mounted-viewport registry; direct Runtime
+    dispatch is an explicit unsupported failure rather than a silent no-op.
 
 ## Runtime Flows
 
@@ -320,8 +338,12 @@ reject aggregate resource-limit excess, observe cooperative cancellation, and
 prove that only summary values cross the Agent boundary.
 
 Concurrency tests must additionally prove capability/status requests and an
-immutable read complete while a large admitted render plan is preparing,
-unregister waits only for its accepted leases, a workspace hop followed by
-invalidation is rejected, and explicit save alone reaches the MainActor
-application lifecycle. Dependency tests must prove Runtime no longer imports
+immutable read complete while `MainActor` is occupied, unregister waits only
+for its accepted leases, a workspace hop followed by invalidation is rejected
+without resurrecting the entry, and explicit save alone reaches the MainActor
+application lifecycle. The load those tests run under is `MainActor` occupied
+by frame-sized slices rather than by a preparing render plan: since plan
+construction moved into a detached task, a preparing plan charges `MainActor`
+only its publication slice, so continuous occupation is the harsher condition
+and bounds the one the product actually produces. Dependency tests must prove Runtime no longer imports
 or calls CAD, Mesh/Geometry, rendering, package-writing, or persistence APIs.

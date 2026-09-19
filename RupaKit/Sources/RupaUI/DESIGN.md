@@ -11,7 +11,9 @@ source storage, batch validation and Undo remain owned by ProjectWorkspace.
 `RupaUI` presents immutable `ProjectViewSnapshot` state and submits user intent
 to the App-owned `ProjectWorkspace`. It is a child of the
 [RupaKit package design](../../DESIGN.md). Its CAD operation draft component is
-[Modeling](Modeling/DESIGN.md).
+[Modeling](Modeling/DESIGN.md), and its scene hierarchy component is
+[Outliner](Outliner/DESIGN.md). Its presentation-only shading controls are
+[ViewportShadingPanel](ViewportShadingPanel/DESIGN.md).
 
 Production prepares snapshot-bound RealityKit frame values asynchronously and
 mounts surfaces and world-space overlays in one native `RealityView`. SwiftUI
@@ -61,6 +63,8 @@ document model.
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | `ProjectWorkspace` and `ProjectViewSnapshot` | Publishes the exact view consumed by `MainView`. | Snapshot coordinates remain immutable evidence. |
 | [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state and the native gesture refusal callback | Supplies a bounded ready frame or typed preparation failure, and reports each native gesture refusal it judges reportable. | UI never builds geometry, creates native resources, repairs a failed frame, or re-derives which refusals are reportable. |
 | [Modeling](Modeling/DESIGN.md) | child | Local CAD operation drafts and native parameter controls | Converts explicit selection and input into existing commands. | A draft is neither a source document nor an evaluated preview. |
+| [Outliner](Outliner/DESIGN.md) | child | Snapshot-derived scene hierarchy and explicit user intents | Presents dense tree navigation, local disclosure/filter state, rename and selection actions. | It never owns or mutates Product source. |
+| [ViewportShadingPanel](ViewportShadingPanel/DESIGN.md) | child | Native controls bound to `ViewportShading` | Updates the mounted rendering session through MainView. | No document or material mutation. |
 
 ## Architecture
 
@@ -71,7 +75,8 @@ flowchart LR
     Main --> Viewport["Viewport presentation"]
     Viewport --> Cache["RealityKit frame cache"]
     Cache --> State["idle / preparing / ready / failed"]
-    State --> Canvas["Native RealityView + nonspatial chrome"]
+    State --> Reality["RealityView\none matching scene root"]
+    Main --> Chrome["SwiftUI chrome\nnon-spatial controls/status"]
     Main --> Workspace["ProjectWorkspace intent APIs"]
     Workspace --> Controller["ProjectController"]
 ```
@@ -82,11 +87,27 @@ paths:
 ```mermaid
 flowchart LR
     Main["MainView document lifetime"] --> Sidebar["Scene / History sidebar"]
-    Main --> Detail["HSplitPane"]
-    Detail --> Canvas["Viewport + local mode bar"]
+    Main --> Detail["HSplitPane: viewport / inspector"]
+    Detail --> RealitySurface["RealityView + local mode bar"]
     Detail --> Inspector["Properties / Definitions inspector"]
     Inspector --> Props["Selection, object, document properties"]
     Inspector --> Definitions["Existing named parameters and definitions"]
+    Main --> Session["ViewportControlSession (document lifetime)"]
+    Session --> RealitySurface
+    Agent["App Agent adapter"] --> Session
+```
+
+The viewport-side controls reuse the existing intent and mutation owners:
+
+```mermaid
+flowchart LR
+    Palette["11 modeling tools"] --> Intent["MainView local intent"]
+    Intent --> Planner["Existing viewport planner or modeling draft"]
+    Planner --> Workspace["ProjectWorkspace"]
+    Intent --> Measure["Rendering-owned transient two-point Measure"]
+    Measure --> Status["Visible distance + projected ruler"]
+    Compact["7 compact rail actions"] --> Destination["Expanded-rail destination"]
+    Destination --> Rail["Native ScrollViewReader + existing sections"]
 ```
 
 ## Contracts and Invariants
@@ -96,6 +117,233 @@ Box Corner Inspector values are projected from the exact source through
 Its slider is bounded by the smallest source dimension and modeling tolerance.
 Corner Sides remains a product display property consumed by Core's shared
 evaluation-quality resolver; it does not change the CAD radius.
+
+### Viewport-side tool routing
+
+The left palette has eleven explicit routes. Activation may be a nonmutating
+mode change; completeness means that the next required input, the resulting
+state or command, and the applicable refusal and cancellation path are visible.
+The palette does not own source state, perform rendering preparation, or bypass
+`ProjectWorkspace`.
+
+| Tool | Input and settings | Observable result | Failure and cancellation |
+|---|---|---|---|
+| Select | Selection scope and a viewport hit, or a drag on an object-scope transform gizmo | A hit changes the existing interaction selection and does not mutate the source; an object-scope body or sketch transform drag commits one scene-node transform command through Workspace | Unresolved or stale hits report a reason; a refused transform commit is a typed editor error that leaves the document untouched; choosing another tool or leaving object scope withdraws the gizmo route |
+| Sketch | Click or drag, effective plane, snap, width and height | Rectangle sketch through the existing viewport planner and Workspace | Nonfinite or degenerate input is nonmutating; Select cancels before submission |
+| Polygon | Click or drag plus side, sizing, inclination and optional face-cut settings | Polygon sketch, or the existing face split when a valid face is targeted | Invalid side/face/input reports a reason without mutation; Select cancels before submission |
+| Arc | Click or drag plus radius/span and plane settings | Arc sketch through the existing planner | Invalid or degenerate input is nonmutating; Select cancels before submission |
+| Spline | Click or drag plus plane, snap and existing curve input | Spline sketch through the existing planner | Invalid or degenerate input is nonmutating; Select cancels before submission |
+| Solid | Empty-space click/drag for a box, or a valid sketch target for extrusion | Existing box or profile-extrusion command through Workspace | Unsupported target/input reports a reason; Select cancels before submission |
+| Sweep | Current ordered section/guide selection and the clicked path | Existing sweep command through Workspace | Missing or incompatible operands remain a typed visible refusal; Select cancels before submission |
+| Surface | Current ordered profiles open the Modeling-owned Loft draft with sheet output enabled | Preview then Apply creates the existing sheet loft; the Circle Sketch route is not presented as Surface | Invalid operands stay in the editable form with a visible error; its native Cancel discards draft and preview |
+| Mesh | Authored Mesh element selection, domain and existing Mesh operation fields | Existing Mesh preview/apply transaction and element overlay | Non-Mesh/CAD input explains Make Editable or required input; Cancel discards draft/preview and returns to Select; no Mesh-summary Logs detour substitutes for editing |
+| Measure | Two explicit viewport points resolved from current snap, visible geometry, or the effective plane | Rendering-owned hover preview, native spatial dimension line/text and 3D world distance remain visible; source does not mutate | Unresolved depth/nonfinite or degenerate input shows the reason; Escape or another tool clears the transient result |
+| Section | Clicked world position and effective construction-plane orientation | Existing construction-plane command preserves the clicked origin and plane normal, selects the created plane, and exposes existing section analysis/clipping | Unresolvable/nonfinite placement is nonmutating; Select cancels before submission |
+
+The prior viewport behavior that treated Measure as a clicked-object
+`MeasurementService` summary is superseded. Measure is two-point transient input
+owned by [ViewportMeasurement](../RupaRendering/ViewportMeasurement/DESIGN.md).
+MainView only selects the mode, forwards its active/status presentation, and
+clears it on tool exit or authority replacement. It does not resolve depth,
+calculate distance, retain endpoints, or invoke source measurement.
+
+Ordinary object selection separately enables noninteractive projected rulers
+for one unambiguous selected occurrence. Those rulers are explicitly labeled
+World bounds, avoid the object and existing viewport chrome when a bounded
+valid placement exists, and yield input to every tool. Ambiguous multiple
+occurrences or an active modeling/Measure/Mesh interaction suppress them
+rather than guessing a target or covering current work. This presentation
+never implies exact edge length, area, volume, or local dimensions.
+
+`WorkspaceCanvasOverlayHost` is retained only for screen-space SwiftUI chrome
+and exclusions. RealityKit owns spatial world geometry. Every published
+`ViewportCanvasOverlayExclusion.rect` is finite in the viewport content space
+and remains invariant under ancestor or window offsets before `RupaRendering`
+consumes it.
+
+Chrome rectangles are layout output, and the host owns both how it reads
+them and when they become workspace state. It reads each rectangle from a
+layout-completion geometry callback on the chrome that owns it, never from a
+preference bound into the host's own body. A bound preference would make the
+host both the producer and the reader of one value inside a single update,
+leaving the measurement with no owner outside the view that produced it. The
+context panel's reserved height is derived
+from that panel's measured rectangle rather than measured a second time,
+because a second measurement of the same view carries the same number while
+adding a second workspace value that changes in the same frame.
+
+The overlay's trailing side carries two chromes, and they share one vertical
+budget. The top bar holds the trailing corner, and the band it occupies is
+reserved at both ends of the canvas, so the utility rail is offered only the
+height between those two bands. A rail declares the height it opens to, and
+it reaches that height only while the canvas has room for it, giving height
+back as the canvas shrinks. Two consequences follow, and both are contracts.
+The rail never covers the top bar: a canvas too short for the declared rail
+-- which is what opening the bottom logs pane produces -- yields a shorter
+rail rather than a rail laid over the corner. And the rail stays centred on
+the canvas at every height, which is where the tool palette on the leading
+side is centred too; reserving the band at one end only would move the rail
+off that centre line by half the band. Chrome on opposite edges shares no
+budget, because nothing puts two of them in one band.
+
+The host holds the rectangles it has been handed in a reference its own body
+never reads, and publishes them to the workspace as one value on the
+MainActor tick after the layout that measured them, replacing a publication
+still pending when a newer value arrives. Held rectangles are layout output
+rather than view state: they describe a layout that has already run, and no
+view renders from them until they have been published. Keeping them out of
+the view graph is an ownership rule, and this design does not claim it
+removes any particular SwiftUI runtime issue. That
+one value carries every chrome rectangle and the derived height together, so
+the workspace state the viewport reads changes once per settled layout
+rather than once per chrome. The deferral follows from where the value goes:
+MainView stores what the host publishes and passes it straight back into the
+`Viewport` occupying the host's content slot, whose fitting insets and
+control-context identity derive from it, so the publication is an input to
+the same subtree that produced the measurement. Publishing on the next tick
+keeps the measuring pass and the write that depends on it in separate
+passes. Chrome
+that leaves the overlay withdraws its rectangle, because rectangles the host
+holds outlive the view that produced them. Neither the rectangles nor the
+derived height carries operation meaning and neither is a source input, so a
+publication superseded before it runs is dropped rather than recorded as a
+failure.
+
+Tool title, help, selected value, input prompt and result status describe these
+routes exactly. A one-shot or dialog route need not remain selected after it has
+handed off to its existing draft, but it may not imply a canvas mode that cannot
+produce its named result. Successful source changes retain the existing single
+Workspace transaction and Undo behavior. Cancellation before publication does
+not mutate source; an already published command is reversed only through Undo.
+
+The right compact rail has seven navigation actions. Each action expands and
+positions the existing rail at the corresponding destination rather than merely
+opening the rail at its first row.
+
+| Compact action | Destination | Truthful state |
+|---|---|---|
+| Canvas Controls | Rail header | Expanded/collapsed only |
+| Selection | Select | Current selection scope |
+| Snap | Snap | Effective Grid/Object snap state |
+| Construction Plane | Plane | Effective mode, active plane and pending origin request |
+| Surface Analysis | Analysis | Effective applicable overlay; if no supported target exists, the section states that precondition instead of claiming an active result |
+| Saved Views | Views | Current saved-view count and camera-capture availability |
+| Scene Diagnostics | Scene | Current issue count and warning state |
+
+The destination is transient MainView presentation state. The expanded rail
+uses native `ScrollViewReader` IDs on its existing sections; no navigation model,
+coordinator or second rail is introduced. Compact action accessibility
+identifiers remain individually addressable and are not replaced by an ancestor
+identifier. Expansion, section focus and collapse never change source,
+selection, camera, analysis settings or Undo history. Collapse is the cancel
+transition for rail navigation.
+
+### Sidebar symbols
+
+`WorkspaceSidebarSymbol` is a stateless native SwiftUI platform adapter in this
+module, shared by scene rows, history rows/actions, and definition/asset labels.
+It renders SF Symbols at 13 pt regular weight, medium image scale, monochrome,
+with an 11 pt glyph override for the Outliner's secondary state controls,
+centered in a 20 x 20 pt slot. The caller owns semantic primary/secondary or
+selected foreground styling and accessibility meaning. No asset lookup,
+custom-drawn substitute, image stretching, scene mutation, or symbol cache is
+introduced. Symbol identity belongs to each row's existing presentation owner;
+the adapter knows only the supplied SF Symbol name.
+
+The 13 pt glyph and 20 pt slot retain compact native macOS density. Disclosure
+chevrons and generated-state badges intentionally remain smaller auxiliary
+symbols. Existing row heights, indentation, drag zones, text truncation, and
+command availability stay unchanged. This follows the existing Workspace naming
+and native-platform adapter layout, not a separate design-system component tree.
+`WorkspaceSidebarSymbolTests` verifies native symbol resolution, fixed rendered
+dimensions, and nonempty unclipped glyphs in light/dark and selected appearances.
+Live App checks own row alignment, disclosure, selection, and action hit targets.
+
+### Workspace behavior
+
+Viewport tool names appear immediately while hovering a left palette or
+compact right-rail button. `WorkspaceToolNameHint` is a SwiftUI presentation
+adapter: each button owns its local hover flag and publishes its existing
+title and bounds anchor; `WorkspaceCanvasOverlayHost` draws one noninteractive
+screen-space name label outside the scroll containers, toward the RealityView.
+Leaving or removing a button removes its hint. Hover never activates a tool,
+changes source state, resizes the palette, or expands its hit region. Button
+accessibility labels retain the tool name and accessibility hints retain the
+longer operation description; a second delayed system tooltip is not layered
+over the visible label. The label reuses compact chrome spacing, caption
+typography, primary text and regular material in both appearances. App UI
+hover tests own enter/leave, title, placement and stable button bounds; the
+existing native palette test owns scroll and hit-region size.
+
+`HSplitPane` owns the viewport/inspector division and user resizing inside
+NavigationSplitView's detail column; the native inspector modifier is not
+used. The split is mounted for the document's lifetime and the inspector is
+added and removed as its trailing child, so the detail column presents one
+split rather than alternating between a split and a bare viewport. The split
+also owns how it divides its bounds between those columns. It applies the
+opening width its caller declares once, when the arranged column count
+changes, and on every later layout pass it only clamps the division it has
+redistributed into the declared minimum and maximum. A column that is laid out
+at a different size than the one its opening width was applied at is therefore
+rescaled with the split, and a declared minimum and maximum that differ are
+the allowance that rescaling drifts inside. A column whose width must not
+follow the window declares one width for all three, so that every layout pass
+re-pins it. The width is declared on the pane and never on the pane's content:
+a fixed width inside the column only centres the content in whatever column it
+was handed, so inspector content still fills its column and names no width of
+its own. Every native split must keep its arranged columns within its own
+bounds and the host window.
+
+The inspector column's width is declared in one place, `editorDetailPane`, as
+a single 320 pt for the opening width, the minimum and the maximum. 320 pt is
+the widest the sidebar column is allowed to be, so the inspector reads as a
+second column of the window's chrome rather than as a second half of it.
+Declaring one width rather than a range is what holds it there: the column
+keeps that width while the window is resized, and withdrawing the inspector
+and adding it back reopens it at the same width. The divider consequently does
+not resize the inspector; it only marks the boundary the canvas reaches. The
+declared width measures from the split's trailing edge to the leading edge of
+the divider, which is where the split puts the number it is given, so the
+column itself measures the declared width less the divider's thickness. This
+width and the canvas column's declared minimum may change only together, and
+only while their sum still fits inside the window's own minimum width.
+
+The detail column's size is owned by the proposal NavigationSplitView hands
+down. No view between that column and the canvas host may measure the size it
+has been given and feed that measurement back into its own subtree as a
+frame. A measured size is one pass behind the proposal that produced it, so a
+frame derived from it can hold a child at a size its parent has already left,
+and one subtree is then laid out at two different sizes inside a single pass.
+The split therefore takes the proposal directly, the viewport accepts the
+remaining width without imposing a competing minimum width, and inspector
+content consumes its pane's width with only its existing horizontal padding,
+without measuring, storing, or independently fixing the list width. The split fills the detail column regardless of the active
+inspector's intrinsic height or the Logs expansion state; individual forms do
+not own this guarantee. Logs visibility is user-owned transient presentation
+state. Its initial value is collapsed unless an explicit
+construction/restoration input selects otherwise; after construction, only the
+existing Logs header and toolbar controls may open or close it. Source
+commits, diagnostics, tool activation, status reporting, preview results, and
+errors append or replace their existing diagnostic values without changing
+visibility. Collapsing Logs never clears those values, changes operation
+behavior, or suppresses status, and opening it later presents the same stored
+diagnostics. This uses the existing binding and controls rather than a second
+visibility owner or automatic-reveal policy. NavigationSplitView may overlay
+its sidebar; containment checks use each column's frame, not the sum of
+potentially overlapping column widths. Content fills the column the split
+hands it at the width declared above, and imposes no separate maximum of its
+own inside that column. Properties and Definitions
+share an 8 pt horizontal inset; existing section and control padding remains
+unchanged. The inset follows the compact native spacing tier, while column
+widths follow the existing control fit requirements rather than the decorative
+spacing scale. Active modeling, history preview, and Mesh tools keep the
+inspector presented using the existing presentation condition; the toolbar
+changes only the user's visibility preference, never operation state. Native
+MainView layout tests cover initial width and vertical window resize without
+document mutation. They require the detail split to reach the host's bottom
+edge and its panes to occupy the full split height. Signed-App checks
+separately own Surface/Mesh tool transitions, Logs expansion, divider and tab
+use.
 
 The object inspector follows the [Core scene placement convention](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
 Each inspector visibility, lock or material choice submits all selected nodes
@@ -181,33 +429,80 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
    package authority.
 4. A failed application file activation leaves the prior snapshot and all
    visible UI derived from it unchanged.
-5. A new viewport snapshot starts preparation through the existing cache and
-   renders only a matching `ready` plan. `preparing` and typed `failed` states
-   remain explicit; neither displays stale geometry as current.
+5. A new viewport snapshot starts preparation through the RealityKit frame
+   cache and renders only a matching `ready` scene root. `preparing` and typed
+   `failed` states remain explicit; neither displays stale geometry as current.
 6. UI code performs no tessellation, Mesh validation, world transformation, or
-   triangle-plan construction. Canvas projects ready positions and draws a
-   bounded number of visual-state batches, not one path operation per triangle.
+   native resource construction. RealityKit projects and draws the prepared
+   spatial graph; SwiftUI draws only bounded non-spatial chrome and screen-only
+   selection marquee content.
 7. Viewport teardown releases the cache, cancels its build task, and discards
    every late completion; no render task or plan is retained by stale UI.
-8. The sidebar exposes Scene and Feature History as explicit navigation
-   segments. Both segments read the same immutable snapshot; selecting a
-   history row routes through the existing scene selection or history preview
-   callback and does not mutate source state directly.
+8. The sidebar exposes Outliner and Feature History as explicit navigation
+   segments. Both segments read the same immutable snapshot; selecting a row
+   routes through existing selection callbacks and does not mutate source state
+   directly. The Outliner owns only transient disclosure, search/filter, and
+   inline-edit draft state; accepted changes cross the existing Workspace
+   transaction boundary.
 9. The inspector is visible by default and always provides Properties and
    Definitions tabs, including when there is no selection. Properties reuses
    the existing selection/document inspectors; Definitions reuses the existing
    named-parameter editor. A tab change never changes selection, WorkspaceState,
    source commands, persistence, or undo history.
-10. `MainView` owns one document-lifetime `ViewportDisplayMode` state. The
-    identical value is passed to the published and preview `Viewport` values;
-    the mode is presentation-only and is not stored in a project snapshot.
-11. The compact viewport-local top bar is always present and displays the
-    active mode label plus a four-case menu (`Solid`, `Solid + Mesh Boundaries`,
-    `Wireframe`, `Normals`). It may also display existing selection and scale
-    status, but it does not become a source or evaluation command surface.
+10. `MainView` creates one document-lifetime `ViewportControlSession`. The
+    session owns camera, projection, display mode, mount identity, and a
+    monotonic revision. The identical session is passed to whichever published
+    or preview `Viewport` is active; presentation state is not stored in a
+    project snapshot. `onViewportMount(documentLifetimeID, session)` registers
+    that session with the App, while `onViewportUnmount(viewportInstanceID)`
+    invalidates the active viewport token.
+11. The compact viewport-local top bar is always present and displays fit
+    actions (`Fit Visible Objects`, `Fit Selected Objects`) and a four-case
+    display menu (`Solid`, `Solid + Mesh Edges`, `Wireframe`, `Normals`). It may
+    also display existing selection and scale status, but it does not become a
+    source or evaluation command surface.
     Wireframe and normals describe the source face presentation rather than
     exact B-rep geometry; normals use RGB direction encoding.
-12. A workspace source route carries only source-mutating commands, so
+12. The viewport measures the size actually allocated by the native split pane.
+    Divider drag limits belong to the split container; its child must not impose
+    a wider minimum frame that makes camera fitting target an obscured region.
+    The viewport root fills that complete allocated rectangle in every
+    preparation state, and native content, input, and chrome share its coordinate
+    space; padding belongs inside that rectangle rather than reducing its width
+    or height.
+13. Outliner moves carry captured document generation into `submitSource`.
+    MainView rejects a generation mismatch before planning the single Core move
+    command; Workspace independently checks transaction/publication coordinates.
+    A replacement document recreates the Outliner and its private drag lifetime.
+14. The viewport top bar opens native shading controls beside display mode.
+    MainView forwards edits to `.setShading` on the same session used by the
+    renderer. It never submits a source transaction for presentation settings.
+15. The Rendering-owned central camera strip (`ViewportAxisTriad`) remains at
+    the bottom of the RealityView. Its orientation menu (`Isometric`, `X Front`,
+    `Y Front`, `Z Front`), two-case lens picker (`Ortho`, `Persp`), and `Reset
+    Pan and Zoom` are real controls bound through MainView to the same
+    `ViewportControlSession`; no static label may imply an unavailable action.
+16. Orientation and lens are independent. Selecting an orientation preserves
+    lens; selecting Ortho/Persp preserves orientation, pan, zoom, display mode,
+    and shading. Ortho-to-Persp selects the Rendering-owned standard perspective
+    field of view, while an already restored perspective lens keeps its exact
+    field of view. Reset changes only pan and zoom.
+17. Saved views use the existing Core schema without a compatibility model.
+    Parallel capture stores orthographic target-plane height. Perspective
+    capture stores the exact field of view and camera distance; restore converts
+    distance and field of view back to target-plane height and restores the same
+    lens. Camera framing must carry projection when reconstructing a camera and
+    may not silently fall back to parallel. MainView stores the optional current
+    camera frame emitted by Viewport and disables Save Current View and saved-view
+    update while it is absent. A failed perspective capture never reuses an old
+    frame or persists a parallel default. A typed restore failure remains visible
+    and leaves the current session unchanged.
+    MainView sends one camera-frame request and treats
+    `onCameraFrameRequestResult` as the applied-state receipt; it does not send a
+    second lens request or report success before the Rendering session applies
+    camera, basis, and lens. The existing ruler update is a separate earlier
+    Workspace operation and is not part of camera-session rollback atomicity.
+18. A workspace source route carries only source-mutating commands, so
     `submitSource` is not the route for a command that mutates nothing.
     `EditorCommand.validateDocument` is the only such command, and in Core it
     evaluates the current document and republishes its diagnostics; the toolbar
@@ -224,125 +519,39 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
     own mutation-only rule stays with
     [RupaProject](../RupaProject/DESIGN.md).
 
-The viewport root fills its parent-allocated rectangle in every preparation
-state. Native content, input, and chrome share that coordinate space; padding
-is inside the allocation, never a competing child width or height.
-
-`HSplitPane` owns the viewport/inspector division and user resizing inside
-NavigationSplitView's detail column; the native inspector modifier is not
-used. The split is mounted for the document's lifetime and the inspector is
-added and removed as its trailing child, so the detail column presents one
-split rather than alternating between a split and a bare viewport. The split
-also owns how it divides its bounds between those columns. It applies the
-opening width its caller declares once, when the arranged column count
-changes, and on every later layout pass it only clamps the division it has
-redistributed into the declared minimum and maximum. A column laid out at a
-size other than the one its opening width was applied at is therefore rescaled
-with the split, and a declared minimum and maximum that differ are the
-allowance that rescaling drifts inside. A column whose width must not follow
-the window declares one width for all three, so that every layout pass re-pins
-it. The width is declared on the pane and never on the pane's content: a fixed
-width inside the column only centres the content in whatever column it was
-handed, so inspector content still fills its column and names no width of its
-own. Every native split must keep its arranged columns within its own bounds
-and the host window.
-
-The inspector column's width is declared in one place, `editorDetailPane`, as
-a single 320 pt for the opening width, the minimum and the maximum. 320 pt is
-the widest the sidebar column is allowed to be, so the inspector reads as a
-second column of the window's chrome rather than as a second half of it.
-Declaring one width rather than a range is what holds it there: the column
-keeps that width while the window is resized, and withdrawing the inspector
-and adding it back reopens it at the same width. The divider consequently does
-not resize the inspector; it only marks the boundary the canvas reaches. The
-declared width measures from the split's trailing edge to the leading edge of
-the divider, which is where the split puts the number it is given, so the
-column itself measures the declared width less the divider's thickness. This
-width and the canvas column's declared minimum may change only together, and
-only while their sum still fits inside the window's own minimum width.
-
-The detail column's size is owned by the proposal NavigationSplitView hands
-down. No view between that column and the canvas host may measure the size it
-has been given and feed that measurement back into its own subtree as a
-frame. A measured size is one pass behind the proposal that produced it, so a
-frame derived from it can hold a child at a size its parent has already left,
-and one subtree is then laid out at two different sizes inside a single pass.
-The split therefore takes the proposal directly, the viewport accepts the
-remaining width without imposing a competing minimum width, and inspector
-content consumes its pane's width with only its existing horizontal padding,
-without measuring, storing, or independently fixing that width.
-
 ## Runtime Flows
 
 The application coordinator publishes a new workspace view only after
 `ProjectController` accepts a load or transaction. `MainView` derives title and
-viewport from that view in the same publication lifetime, then lets the cache
-prepare derived render data outside `MainActor`. Only a completion matching the
-current snapshot replaces the UI cache state. Title projection uses the
-published project name and has no dependency on CAD metadata.
+viewport from that view in the same publication lifetime, then lets
+`RupaRendering` prepare a matching RealityKit frame outside `MainActor` where
+the native API permits. Only a completion matching the current snapshot,
+viewport revision, and overlay revision replaces the mounted root. Title
+projection uses the published project name and has no dependency on CAD
+metadata. The document-lifetime content mounts its session before a viewport
+supplies its geometry context. Viewport gestures and Agent commands call the
+same throwing session operation; an acknowledgement means the MainActor state
+was applied, not that a RealityKit frame has completed display. Replacing the
+document creates a new session and invalidates the old viewport instance ID.
 
 ## State, Ownership, and Lifecycle
 
-SwiftUI owns transient camera, interaction, and render-cache observation state.
-The existing cache owns one cancellable build task and matching result;
+SwiftUI owns transient interaction and render-cache observation state. The
+`ViewportControlSession` owns camera, projection, display mode, revision, and
+the currently mounted viewport context. The RealityKit frame cache owns one
+cancellable build task, newest pending request, and matching result;
 the injected workspace owns the observable view; `ProjectController` owns
 source state and publication. The UI does not retain source authority,
 security-scoped URLs, or transport resources.
 
-`WorkspaceCanvasOverlayHost` owns the screen-space chrome the canvas draws
-over the viewport, and the rectangles that chrome occupies are layout output
-rather than view state. The host owns both how it reads them and when they
-become workspace state. It reads each rectangle from a layout-completion
-geometry callback on the chrome that owns it, never from a preference bound
-into the host's own body. A bound preference would make the host both the
-producer and the reader of one value inside a single update, leaving the
-measurement with no owner outside the view that produced it. The context
-panel's reserved height is derived from that panel's measured rectangle
-rather than measured a second time, because a second measurement of the same
-view carries the same number while adding a second workspace value that
-changes in the same frame.
-
-The overlay's trailing side carries two chromes, and they share one vertical
-budget. The top bar holds the trailing corner, and the band it occupies is
-reserved at both ends of the canvas, so the utility rail is offered only the
-height between those two bands. A rail declares the height it opens to, and
-it reaches that height only while the canvas has room for it, giving height
-back as the canvas shrinks. Two consequences follow, and both are contracts.
-The rail never covers the top bar: a canvas too short for the declared rail
--- which is what opening the bottom logs pane produces -- yields a shorter
-rail rather than a rail laid over the corner. And the rail stays centred on
-the canvas at every height, which is where the tool palette on the leading
-side is centred too; reserving the band at one end only would move the rail
-off that centre line by half the band. Chrome on opposite edges shares no
-budget, because nothing puts two of them in one band.
-
-The host holds the rectangles it has been handed in a reference its own body
-never reads, and publishes them to the workspace as one value on the
-MainActor tick after the layout that measured them, replacing a publication
-still pending when a newer value arrives. No view renders from a held
-rectangle until it has been published. Keeping them out of the view graph is
-an ownership rule, and this design does not claim it removes any particular
-SwiftUI runtime issue. That one value carries every chrome rectangle and the
-derived height together, so the workspace state the viewport reads changes
-once per settled layout rather than once per chrome. The deferral follows
-from where the value goes: `MainView` stores what the host publishes and
-passes it straight back into the `Viewport` occupying the host's content
-slot, whose fitting insets and control-context identity derive from it, so
-the publication is an input to the same subtree that produced the
-measurement. Publishing on the next tick keeps the measuring pass and the
-write that depends on it in separate passes. Chrome that leaves the overlay
-withdraws its rectangle, because rectangles the host holds outlive the view
-that produced them. Neither the rectangles nor the derived height carries
-operation meaning and neither is a source input, so a publication superseded
-before it runs is dropped rather than recorded as a failure.
-
 ## Failure, Concurrency, and Constraints
 
-UI state and Canvas calls are MainActor-isolated; render-plan construction is
-not. Project and render failures remain typed at their owning boundaries and
-are not converted into empty successful views. MainActor work is bounded by
-admitted plan positions and batches. Title projection performs no CAD, file,
-or transport reads.
+UI state and RealityView composition are MainActor-isolated; frame descriptor
+and bounded resource preparation is not where the native API permits. Project
+and render failures remain typed at their owning boundaries and are not
+converted into empty successful views. MainActor work is bounded by admitted
+resources and spatial entities. Title projection performs no CAD, file, or
+transport reads.
 
 ### Failure surfacing
 
@@ -431,10 +640,11 @@ and never becomes an entry.
 No shipped control is left that refuses deterministically once it is pressed,
 because a control that can see its own refusal now disables itself, so there
 is no focused test that can read a record back out of the pane. The recorded
-half is evidenced instead by `WorkspaceFailureLogTests`, which owns the log's
-ordering, bound, reflected value, non-deduplication and clearing, and by
-`AppProjectRoundTripUITests`, which reads the pane at every stage of a create,
-select, edit, save and reload run and fails with whatever it found there.
+half is evidenced instead by the shipped-chrome failure sweep, which drives
+every published control against a document that has geometry and reads
+whatever the workspace recorded out of the pane, and by
+`WorkspaceFailureLogTests`, which owns the log's ordering, bound, reflected
+value and non-deduplication.
 
 Native gesture routing also has mounted-window fixtures in
 `ViewportNativeObjectAffordancePressTests`; these are included in routine
@@ -462,6 +672,37 @@ nothing, so reaching the funnel means provoking a refusal rather than
 performing a move. Both are conditions a later exercise would have to arrange,
 not work this design schedules.
 
+Focused tests must verify title projection, matching
+idle/preparing/ready/failed state, stale/teardown completion rejection, and
+bounded RealityKit frame publication alongside
+successful `.rupa` load and failed dirty/invalid activation preserving the same
+visible snapshot. Outliner component tests additionally verify ancestor-
+preserving filters, disclosure state, selection-aware context actions, rename
+commit/cancel, generated-output refusal presentation, and forwarding Frame to
+the mounted viewport session. A MainActor progress probe and the actual signed-App
+multi-body run must verify the window, viewport, interaction, and Agent response
+remain live. No change adds or changes save-as behavior.
+Live framing verification includes the initial narrow split with the inspector
+visible, proves ordinary source/tool/error/status routes leave Logs collapsed and
+the Canvas height unchanged while retaining their diagnostic values, then uses
+the existing header/toolbar control to open and close Logs and preserve a usable
+mounted camera.
+Central-control tests invoke each orientation and lens callback, verify the
+session snapshot and revision, prove reset preserves lens/orientation, and cover
+accessible labels and disabled state while no viewport is mounted. Saved-view
+tests round-trip both lens modes, including a non-default valid perspective field
+of view and distance. Signed-App acceptance observes a visible perspective size
+difference across depth and reads the same effective lens through the viewport
+API; static text and callback-only tests are insufficient.
+Saved-view UI tests also prove an absent current frame disables create/update,
+restore failure is visible and non-mutating, and no fallback frame reaches a
+workspace command.
+`WorkspaceUtilityRailDestinationTests` audits the shipped sources so every
+compact rail action has both a button and the matching expanded-section
+`ScrollViewReader` identifier. `ScrollViewProxy.scrollTo` is silent when no
+view carries the identifier, so a destination with a button and no anchor would
+expand the rail at its first row and still look like a working action.
+
 Chrome publication timing has no in-process fixture. `MainView` and
 `WorkspaceCanvasOverlayHost` hold the state privately, and a same-frame
 re-entry is not visible in any value either view exposes: the rectangles that
@@ -479,20 +720,154 @@ mounted in an `NSWindow` with a visible context panel, the host publishes four
 canvas-local rectangles and a reserved height equal to the context panel's own
 measured height. Neither check is sound without the other.
 
-The split's own behavior is proved by mounting it the way the detail column
-builds it and driving it through the transition that adds and removes the
-inspector and through a change of the size it lays out at. The assertions that
-discriminate are the declared width and the edges: the inspector arrives as a
-column of the declared width less the divider, flush with the split's trailing
-edge and separated from the canvas by no more than the divider, a change of
-the split's own size leaves that width alone, withdrawing the inspector
-returns the whole split to the canvas, and re-adding it reopens the same
-column.
+### UI operation ownership
 
-Focused tests must verify title projection, matching
-idle/preparing/ready/failed state, stale/teardown completion rejection, and
-bounded Canvas batch calls alongside
-successful `.rupa` load and failed dirty/invalid activation preserving the same
-visible snapshot. A MainActor progress probe and the actual signed-App
-multi-body run must verify the window, viewport, interaction, and Agent response
-remain live. No change adds or changes save-as behavior.
+The workspace exposes thirty-three operations: eleven canvas tools, seven
+utility rail destinations, ten Model drafts, and five Mesh drafts. Each row
+names the control a user clicks and the test that owns that control's
+contract, and records what the evidence for that operation actually covers. A
+package test owns the command a control produces; an App UI test owns the fact
+that the shipped control reaches it.
+
+| Family | Operations | Control identifier | Owning test | Evidence |
+|---|---|---|---|---|
+| Canvas tool | `select`, `solid` | `CanvasTool.select`, `CanvasTool.solid` | `AppProjectRoundTripUITests` | GUI-success verified |
+| Canvas tool | `sketch` | `CanvasTool.sketch` | `AppUITests.testActiveCustomConstructionPlaneLaunchFixtureSupportsCanvasCreation` | GUI-success verified |
+| Canvas tool | `surface`, `mesh` | `CanvasTool.surface`, `CanvasTool.mesh` | `AppUITests`, draft and refusal only, nothing committed | activation/refusal verified |
+| Canvas tool | `polygon`, `arc`, `spline`, `sweep`, `section` | `CanvasTool.<case>` | `WorkspaceCanvasCommandPlannerTests` | lower-layer verified on a GUI-verified bridge |
+| Canvas tool | `measure` | `CanvasTool.measure` | `AppOperationCoverageUITests.testMeasureToolReportsDistanceBetweenTwoPointsOnABody` | GUI-success verified |
+| Rail destination | `controls`, `selection` | `WorkspaceUtilityRail.expand`, `WorkspaceUtilityRail.selection` | `AppProjectRoundTripUITests` | GUI-success verified |
+| Rail destination | `snap`, `views`, `plane`, `analysis`, `scene` | `WorkspaceUtilityRail.<case>` | `WorkspaceUtilityRailDestinationTests` | source-audit verified, by contract |
+| Rail section body | Snap toggles, saved views, active plane name | `WorkspaceSnap.*`, `WorkspaceSavedView.*`, `WorkspacePlane.activeName` | `AppUITests` | GUI-success verified |
+| Rail section body | Surface analysis overlay and sample density | `WorkspaceSurfaceAnalysis.<option>`, `WorkspaceSurfaceAnalysis.density.<density>` | `AppOperationCoverageUITests.testAnalysisAndSceneRailSectionsPublishControlsAndReadouts` | GUI-success verified |
+| Rail section body | Analysis and Scene readouts | `WorkspaceAnalysis.<row>`, `WorkspaceScene.<row>` | `AppOperationCoverageUITests.testAnalysisAndSceneRailSectionsPublishControlsAndReadouts` | GUI-success verified, read-only |
+| Model draft | box, cylinder, sphere, extrude, revolve, sweep, loft, boolean, fillet, chamfer | `Modeling.begin.<title>` | `AppOperationCoverageUITests.testModelMenuPublishesEveryDraftAndCommitsABoxFromTheToolbar`, `ModelingOperationDraftTests` | GUI-success verified for box, lower-layer verified for the other nine |
+| Mesh draft | translate, position, extrude, delete, addFace | `Modeling.mesh` panel | `AppOperationCoverageUITests.testMeshEditingPanelCommitsAFaceDeletionFromTheCADRoute`, `MeshOperationDraftTests` | GUI-success verified for delete, lower-layer verified for the other four |
+
+Five statuses classify the rows. GUI-success verified means an App UI test
+drives the shipped control and observes the result. Lower-layer verified
+means a package test owns what the operation produces and no App UI test
+drives the control that reaches it. Activation/refusal verified means an App
+UI test opens the operation and observes its refusal, with nothing committed.
+Unverified means no test of either kind reaches the operation. No row is
+broken in the sense of an observed failure, and structure alone does not
+license the stronger claim that nothing is broken, so every row carries an
+evidence state rather than a verdict.
+
+The canvas tool rows rest on a compositional argument rather than on per-tool
+GUI evidence. `WorkspaceToolPalette` builds every button from one
+`ForEach(ModelingTool.allCases)` with a single `activate` closure.
+`activateTool` carries one per-tool branch, `.surface`, and sends every other
+tool to `setActiveTool`. `handleViewportPick` routes every tool other than
+`select` and `mesh` through one `submitSource` into
+`WorkspaceCanvasCommandPlanner.clickCommand(tool:)`, which branches on all
+eleven cases with no default. `solid` and `sketch` prove that bridge from the
+GUI and `WorkspaceCanvasCommandPlannerTests` owns each per-tool branch, so a
+tool whose branch is proven reaches the GUI over a route another tool has
+already exercised. `measure` is the exception, because `clickCommand` returns
+nil for it; its route runs through `measurementToolActive` into the viewport
+and back out as `WorkspaceMeasure.distance`. A measurement click needs a point
+the viewport can anchor, and clicking empty space with no construction plane is
+refused with "Choose a construction plane before measuring empty space.", so a
+test places both points at the midpoints of face markers on a body it just
+created. `ViewportMeasurementTests` owns the two-point session and the
+refusals, and `WorkspaceMeasurementPresentationGateTests` owns the
+presentation gate.
+
+The Model drafts rest on a compositional argument of the same shape. The
+toolbar `Menu` at `WorkspaceCommand.model` builds its ten items from one
+`ForEach(ModelingOperationDraft.Kind.allCases)` with a single
+`beginModelingOperation` closure, and that closure is uniform: it cancels an
+open draft, forces `selectedTool` to `.select`, and stores a
+`ModelingOperationDraft` whose only per-kind input is the kind. Every draft
+therefore opens the same `ModelingOperationView` at `Modeling.operation` and
+commits over the same `Modeling.preview` and `Modeling.apply` pair.
+`AppOperationCoverageUITests` reads all ten `Modeling.begin.*` items from the
+shipped menu and drives one of them to a committed feature, and
+`ModelingOperationDraftTests` owns each per-kind command, so a kind whose
+command is proven reaches the GUI over a route another kind has already
+exercised. `CanvasTool.surface` lands on the same bridge, because
+`beginSurfaceModelingOperation` stores a `modelingDraft` that the same view
+presents and the same `Modeling.apply` commits.
+
+The Mesh drafts reach the GUI without a launch fixture. Selecting one CAD body
+enables "Make Selected CAD Editable as Mesh..." in the same Model menu, macOS
+presents that `confirmationDialog` as a sheet whose confirming button is
+`action-button-1`, and confirming it replaces the selected body with an
+authored mesh source. "Edit Mesh Elements" in the same menu sets
+`selectedTool` to `.mesh`, which makes `meshElementPickHandler` non-nil, and a
+canvas click then resolves a mesh element through the presentation plan cache
+before any CAD selection runs. The resolved element opens `Modeling.mesh`.
+`MeshOperationView` publishes one identifier for the panel and none per
+`Picker` case, and it needs none: inside `Modeling.mesh` the operation
+`Picker` resolves as the panel's single `PopUpButton` and the domain `Picker`
+as its three `RadioButton`s, so a test names them by role and label. Adding
+per-case identifiers would name controls the accessibility tree already
+distinguishes.
+
+A rail section reached through `WorkspaceUtilityRail.expand` proves the section
+renders and its controls work; it does not prove the compact destination button
+scrolls to it. `WorkspaceUtilityRailDestinationTests` owns that second claim by
+auditing the shipped sources, because `ScrollViewProxy.scrollTo` fails silently.
+All seven anchors sit unconditionally in `expandedWorkspaceUtilityRail`, so the
+anchor exists whenever the rail is expanded. The compact rail's `.analysis`
+and `.scene` buttons are hittable without going through `.expand`, and
+expanding the rail from either one renders every section body into a single
+`ScrollView`, so one expansion publishes both the Analysis controls and the
+Scene readouts. `WorkspaceUtilityRail.collapse` is published but is not
+hittable, so a test reads both sections in one expansion rather than
+collapsing between them.
+
+The Analysis and Scene sections publish one control group and six read-only
+rows. `WorkspaceSurfaceAnalysis.<option>` and
+`WorkspaceSurfaceAnalysis.density.<density>` are `.plain` buttons with `Image`
+labels that already report as hittable, so they take no `.contentShape`. The
+six rows name their value `Text` through the `workspaceValueRow` identifier
+path as `WorkspaceAnalysis.target`, `.overlay`, `.samples` and
+`WorkspaceScene.bodies`, `.nodes`, `.issues`, which is what lets a test read
+the overlay summary and the sample density change when a control is clicked.
+
+Two limitations that once blocked App UI evidence are resolved, and the
+measurements that closed them define three contracts an App UI test depends
+on.
+
+The App `RupaUITests` runner previously connected with Automation Mode enabled.
+That runner is now retired. The App-test rows above are historical evidence,
+not current-source acceptance; their current verification owners and remaining
+manual checks are listed in the UI test review.
+
+`AppUITests` looks the canvas up one way. `CanvasViewport` resolves as a
+`Group`, so `otherElements["CanvasViewport"]` matches nothing and every call
+site uses `descendants(matching: .any)`.
+
+A body face or edge marker reports where that sub-shape projects and takes no
+pointer input, which `RupaRendering` owns as the marker contract. A test that
+selects a sub-shape therefore clicks the canvas at the midpoint of the
+marker's frame rather than clicking the marker, so the click runs the same
+`ViewportInputSurface` route a pointer over the sub-shape runs.
+
+macOS decides which accessibility attributes survive from the role it gives an
+element, and the role follows the view the modifiers land on. A `Text` keeps
+`StaticText` and publishes its string as the element's value, dropping the
+accessibility label. An `HStack` collapsed with
+`.accessibilityElement(children: .ignore)` becomes `Other`, which publishes
+the label and drops the accessibility value. A row whose value a test reads
+therefore names the value `Text` rather than the row, which is what
+`workspaceValueRow` does when a caller passes an identifier.
+`WorkspacePlane.activeName` is the one row that takes that path. A `CheckBox`
+publishes its value as a number, not as a string.
+
+A rail section body is reachable only after the rail is expanded, because the
+compact rail publishes the destination buttons and none of the section rows.
+The inspector is open when the workspace launches and
+`WorkspaceCommand.inspector` toggles it, so a test that needs the inspector
+checks for the content it wants before deciding to click.
+
+`AppOperationCoverageUITests` owns one invariant per route it covers. The
+Model menu publishes all ten drafts and one of them commits a feature. The
+Analysis controls change the overlay and density readouts in the same
+expansion that publishes the Scene readouts. The measure tool reports a
+distance between two points on a body. The CAD-to-mesh route opens
+`Modeling.mesh` with an element selected and commits one mesh operation. Each
+test builds what it needs from the shipped chrome, so none of them depends on
+a launch fixture.

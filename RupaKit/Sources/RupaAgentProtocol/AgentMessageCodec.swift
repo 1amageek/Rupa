@@ -3,7 +3,12 @@ import RupaCore
 import RupaDomainFoundation
 import RupaKit
 
-public struct AgentMessageCodec {
+/// Encodes and decodes protocol envelopes as an immutable configuration value.
+///
+/// The codec is `Sendable` so a control-plane service that is not isolated to
+/// a global actor can hold one. It owns encoding configuration and limits only,
+/// and never mutates its encoder or decoder after initialization.
+public struct AgentMessageCodec: Sendable {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     public let limits: AgentProtocolEncodingLimits

@@ -34,6 +34,9 @@ public extension AgentRequest {
              .surfaceBoundaryContinuityCompatibility(let id, _, _, _),
              .selectTargets(let id, _, _),
              .selectReferences(let id, _, _),
+             .listViewports(let id),
+             .viewportState(let id, _),
+             .executeViewport(let id, _, _, _),
              .export(let id, _, _, _, _):
             id
         case .invokeCapability(let request):

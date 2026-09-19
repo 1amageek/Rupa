@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import RupaCore
 import RupaRendering
 import SwiftCAD
@@ -14,15 +15,25 @@ struct WorkspaceSavedViewBuilder: Sendable {
         let visibleHeightMeters = ViewportCameraFrame.normalizedVisibleHeightMeters(
             cameraFrame?.visibleHeightMeters ?? ruler.visibleSpanMeters
         )
+        let projection: SavedViewProjection
+        let distanceMeters: Double
+        switch cameraFrame?.camera.projection ?? .parallel {
+        case .parallel:
+            projection = .orthographic(heightMeters: visibleHeightMeters)
+            distanceMeters = visibleHeightMeters
+        case .perspective(let fieldOfViewRadians):
+            projection = .perspective(fieldOfViewRadians: fieldOfViewRadians)
+            distanceMeters = visibleHeightMeters / (2 * tan(fieldOfViewRadians / 2))
+        }
         return SavedView(
             name: name,
             camera: SavedViewCamera(
                 target: cameraFrame?.target ?? .origin,
-                distanceMeters: visibleHeightMeters,
+                distanceMeters: distanceMeters,
                 yawRadians: Double(projectionBasis.orbitYawRadians),
                 pitchRadians: Double(projectionBasis.orbitElevationRadians)
             ),
-            projection: .orthographic(heightMeters: visibleHeightMeters),
+            projection: projection,
             clipping: SavedViewClipping(),
             visibility: SavedViewVisibility(),
             sectionState: SavedViewSectionState(
@@ -42,14 +53,31 @@ struct WorkspaceSavedViewBuilder: Sendable {
         )
     }
 
-    func cameraFrameRequest(for savedView: SavedView) -> ViewportCameraFrameRequest {
+    func cameraFrameRequest(for savedView: SavedView) throws -> ViewportCameraFrameRequest {
+        try savedView.camera.validate()
+        try savedView.projection.validate()
         let basis = projectionBasis(for: savedView)
-        let visibleHeightMeters = savedView.projection.orthographicHeightMeters
-            ?? savedView.camera.distanceMeters
+        let visibleHeightMeters: Double
+        let projection: ViewportCameraProjection
+        switch (savedView.projection.mode, savedView.projection.orthographicHeightMeters,
+                savedView.projection.fieldOfViewRadians) {
+        case (.orthographic, let height?, nil):
+            visibleHeightMeters = height
+            projection = .parallel
+        case (.perspective, nil, let fieldOfViewRadians?):
+            visibleHeightMeters = 2 * savedView.camera.distanceMeters * tan(fieldOfViewRadians / 2)
+            projection = .perspective(fieldOfViewRadians: fieldOfViewRadians)
+        default:
+            throw DocumentValidationError.invalidProductMetadata("Saved view projection is invalid.")
+        }
+        guard visibleHeightMeters.isFinite, visibleHeightMeters > 0 else {
+            throw DocumentValidationError.invalidProductMetadata("Saved view visible height is out of range.")
+        }
         return ViewportCameraFrameRequest(
             target: savedView.camera.target,
             visibleHeightMeters: visibleHeightMeters,
-            basis: basis
+            basis: basis,
+            projection: projection
         )
     }
 

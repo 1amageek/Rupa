@@ -8,10 +8,11 @@
 The host keeps an HTTP listener alive for the App process and injects one
 semantic request handler. It is not a project or package authority.
 
-The current host lifecycle object is `@MainActor`, which is acceptable only for
-its small observable start/stop state. Accepted HTTP requests already belong to
-the listener; the target contract makes explicit that their decode, handler
-dispatch, and response encoding never re-enter the host's MainActor isolation.
+The host lifecycle object is `@MainActor`, which is acceptable only for its
+small observable start/stop state. The injected handler is handed to the
+listener at construction and is never reached through the host again, so the
+decode, handler dispatch, and response encoding of an accepted HTTP request do
+not re-enter the host's MainActor isolation.
 
 ## Responsibilities and Boundaries
 

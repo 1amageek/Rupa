@@ -99,7 +99,8 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.options.twistAngle, path: "sweep.options.twistAngle")
             record(feature.options.endScale, path: "sweep.options.endScale")
             record(feature.options.distanceFraction, path: "sweep.options.distanceFraction")
-        case .importedBRep,
+        case .spatialPath,
+             .importedBRep,
              .loft,
              .boolean,
              .polySpline,
@@ -245,6 +246,8 @@ public struct ParameterSourceUsageService: Sendable {
 
     private func operationName(_ operation: FeatureOperation) -> String {
         switch operation {
+        case .spatialPath:
+            "spatialPath"
         case .importedBRep:
             "importedBRep"
         case .sketch:

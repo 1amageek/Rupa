@@ -124,6 +124,14 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case listViewports(sessionID: UUID)
+    case viewportState(sessionID: UUID, viewportID: UUID)
+    case executeViewport(
+        sessionID: UUID,
+        viewportID: UUID,
+        expectedViewportRevision: UInt64?,
+        operation: AgentViewportOperation
+    )
     case designDisplaySnapshot(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -264,6 +272,9 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case constructionPlaneSummary(ConstructionPlaneSummaryResult)
     case sceneGraphSnapshot(SceneGraphSnapshotResult)
     case viewportSnapshot(AgentProjectViewportSnapshot)
+    case viewportList([AgentViewportState])
+    case viewportState(AgentViewportState)
+    case viewportExecution(AgentViewportState)
     case designDisplaySnapshot(DesignDisplaySnapshotResult)
     case patternArraySummary(PatternArraySummaryResult)
     case meshSummary(MeshSummaryResult)
@@ -357,6 +368,12 @@ public extension AgentRequest {
             "document.sceneGraphSnapshot"
         case .viewportSnapshot:
             "project.viewportSnapshot"
+        case .listViewports:
+            "viewport.list"
+        case .viewportState:
+            "viewport.state"
+        case .executeViewport:
+            "viewport.execute"
         case .designDisplaySnapshot:
             "document.designDisplaySnapshot"
         case .patternArraySummary:

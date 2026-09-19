@@ -287,7 +287,9 @@ import Testing
 }
 
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
-    #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
+    #expect(WorkspaceInspectorLayout.panelHorizontalInset == 8)
+    #expect(WorkspaceInspectorLayout.minimumColumnWidth == 320)
+    #expect(WorkspaceInspectorLayout.idealColumnWidth == 320)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)
     #expect(WorkspaceInspectorLayout.rowMinimumHeight == 26)
     #expect(WorkspaceInspectorLayout.labelWidth < 124)

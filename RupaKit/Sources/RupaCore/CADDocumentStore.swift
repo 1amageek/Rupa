@@ -342,6 +342,77 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .renameSceneNode:
+            func run() throws {
+                guard case .renameSceneNode(let id, let name) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected renameSceneNode."
+                    )
+                }
+                var updatedDocument = document
+                let changed = try updatedDocument.renameSceneNode(
+                    id: id,
+                    name: name,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                didMutate = changed
+                if changed {
+                    try commitMutation()
+                    evaluateCurrentDocument()
+                }
+            }
+            try run()
+        case .renameComponentInstance:
+            func run() throws {
+                guard case .renameComponentInstance(let id, let name) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected renameComponentInstance."
+                    )
+                }
+                var updatedDocument = document
+                let changed = try updatedDocument.renameComponentInstance(
+                    id: id,
+                    name: name,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                didMutate = changed
+                if changed {
+                    try commitMutation()
+                    evaluateCurrentDocument()
+                }
+            }
+            try run()
+        case .moveSceneNodes:
+            func run() throws {
+                guard case .moveSceneNodes(
+                    let ids,
+                    let parentID,
+                    let beforeSiblingID
+                ) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected moveSceneNodes."
+                    )
+                }
+                var updatedDocument = document
+                let changed = try updatedDocument.moveSceneNodes(
+                    ids: ids,
+                    parentID: parentID,
+                    beforeSiblingID: beforeSiblingID,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                didMutate = changed
+                if changed {
+                    try commitMutation()
+                    evaluateCurrentDocument()
+                }
+            }
+            try run()
         case .resetDocument:
             func run() throws {
                 guard case .resetDocument(let name) = command else {
@@ -1047,6 +1118,24 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .createSpatialPath(name, path):
+            var updatedDocument = document
+            try updatedDocument.createSpatialPath(name: name, path: path, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .editSpatialPath(featureID, edit):
+            var updatedDocument = document
+            try updatedDocument.editSpatialPath(featureID: featureID, edit: edit, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .convertSketchToSpatialPath(featureID):
+            var updatedDocument = document
+            try updatedDocument.convertSketchToSpatialPath(featureID: featureID, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createRectangleSketch:
             func run() throws {
                 guard case .createRectangleSketch(let name, let plane, let width, let height) = command else {

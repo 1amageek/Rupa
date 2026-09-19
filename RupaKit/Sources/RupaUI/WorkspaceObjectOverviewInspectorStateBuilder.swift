@@ -275,6 +275,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: boolean.keepTools ? "Yes" : "No"
                 ),
             ]
+        case .spatialPath(let path):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "3D Path"),
+                WorkspaceInspectorTextRow(title: "Knots", value: "\(path.knots.count)"),
+                WorkspaceInspectorTextRow(title: "Closed", value: path.isClosed ? "Yes" : "No"),
+            ]
         case .polySpline(let polySpline):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "PolySpline"),

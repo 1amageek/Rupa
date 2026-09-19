@@ -49,17 +49,20 @@ struct ModelingOperationDraftTests {
         #expect(evaluated.brep.bodies.count == 1)
     }
 
-    @Test func loftPreservesExplicitSectionOrderAndEvaluates() throws {
+    @Test(arguments: [false, true])
+    func loftPreservesExplicitSectionOrderAndEvaluates(sheet: Bool) throws {
         var document = DesignDocument.empty()
         let first = try addProfile(to: &document, z: 0)
         let second = try addProfile(to: &document, z: 0.02)
         var draft = makeDraft(.loft, targets: [first.target, second.target])
+        draft.sheet = sheet
         draft.targets.swapAt(0, 1)
-        guard case .createLoft(_, let sections, _, _) = try draft.command(in: document) else {
+        guard case .createLoft(_, let sections, _, let options) = try draft.command(in: document) else {
             Issue.record("Expected loft source command.")
             return
         }
         #expect(sections.map(\.featureID) == [second.feature, first.feature])
+        #expect(options.resultKind == (sheet ? .sheet : .solid))
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let evaluated = try CADPipeline.modelingDefault(for: store.document).evaluate(store.document.cadDocument)

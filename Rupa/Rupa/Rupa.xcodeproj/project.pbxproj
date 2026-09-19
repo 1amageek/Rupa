@@ -52,14 +52,6 @@
 			);
 			target = 12459AD52FD133B100034B5E /* Rupa */;
 		};
-		B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				DESIGN.md,
-				RupaCLIProduct.entitlements,
-			);
-			target = B10000000000000000000001 /* RupaCLIProduct */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -78,9 +70,6 @@
 		};
 		B10000000000000000000003 /* RupaCLI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				B10000000000000000000004 /* Exceptions for "RupaCLI" folder in "RupaCLIProduct" target */,
-			);
 			path = RupaCLI;
 			sourceTree = "<group>";
 		};

@@ -12,7 +12,9 @@ The component owns one App process authority, one `ProjectWorkspace`, one
 `ProjectController` path, one HTTP listener, one discovery generation, the
 single composition of the twelve-operation CAD semantic registry/compiler,
 and the UI projection of the published workspace. It composes, but does not
-own, one bounded derived render-plan cache. It does not own semantic CAD or Mesh
+own, one bounded derived render-plan cache. It owns the process-local registry
+that binds each mounted window's viewport UUID and document lifetime to the
+registered project session. It does not own semantic CAD or Mesh
 definitions, tessellation, render data, HTTP parsing, CLI syntax, Keychain
 implementation, or a second project writer.
 
@@ -45,9 +47,12 @@ flowchart LR
     Lifecycle -->|start after coordinator launch| Host
     Coordinator --> Workspace["ProjectWorkspace"]
     Workspace --> Controller["ProjectController"]
-    Host --> Router["ApplicationAgentRequestRouter"]
+    Host --> ViewportRouter["ApplicationViewportRequestRouter"]
+    ViewportRouter --> Router["ApplicationAgentRequestRouter"]
     Router --> Runtime["ProjectAgentCommandController\ncontrol plane"]
     Runtime --> Workspace
+    ViewportRouter --> Viewports["mounted viewport registry"]
+    Viewports --> Mounted["explicit MainActor viewport controller"]
     Host --> Writer["Keychain discovery writer"]
     Writer --> Discovery["port + HMAC key + generation"]
     UI["Rupa UI"] --> Workspace
@@ -57,6 +62,50 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
+
+### Mounted viewport access
+
+The registry forwards the Rendering-owned finite world focus as the wire state's
+three focus coordinates. It never infers a pivot from scene bounds or pan.
+The orbit regression and live MCP verification check that forwarding preserves
+the same focus while camera state changes without project publication.
+
+The App composes `ApplicationViewportRequestRouter` above the existing project
+router. Only `viewport.list`, `viewport.state`, and `viewport.execute` enter the
+MainActor viewport registry; ordinary project requests bypass it unchanged.
+The registry associates each window's Rendering-owned control session with its
+`ProjectDocumentLifetimeID`. The coordinator validates the registered project
+session and current document lifetime before the registry reads or changes a
+viewport. A closed window, replaced document, missing viewport, or stale viewport
+revision is an explicit failure, never an implicit selection of another window.
+
+```text
+MCP / API -> viewport router -> registered project and lifetime check
+                            -> exact mounted viewport ID -> control session
+ordinary project requests -> existing project router -> ProjectController
+```
+
+The registry retains sessions only from mount until matching unmount. Viewport
+state, numeric validation, fit geometry, and operation semantics belong to
+[Rendering](../../../RupaKit/Sources/RupaRendering/DESIGN.md); the App only maps
+the [wire contract](../../../RupaKit/Sources/RupaAgentProtocol/DESIGN.md).
+Session validation and control-state application run in one MainActor turn with
+no intervening suspension. Camera controls never call workspace mutations,
+evaluation, save, or undo. Responses acknowledge applied state, not a completed
+Metal command buffer or displayed Canvas frame. All App registry storage and
+access are MainActor-isolated on the native macOS target; no unchecked, weak,
+or target-conditional synchronization is introduced.
+
+The App maps `parallel`/`perspective` and `setProjection` one-to-one with the
+Rendering session. Perspective state reports the session's exact effective
+field of view, including a non-default value restored from a saved view; parallel
+state reports no field of view. The adapter does not infer lens from orientation,
+substitute parallel, or maintain a second camera value.
+
+App tests own wrong-session, document-replacement, window-unmount, multiple-window
+targeting, stale revision, unchanged project state, and downstream forwarding.
+They also prove both projection modes and exact field-of-view forwarding.
+Signed-App integration separately checks MCP transport and visible camera change.
 
 1. The App-owned workspace/controller is the sole live mutation, evaluation,
    publication, and save authority.
@@ -132,6 +181,11 @@ sequenceDiagram
     L->>L: control-plane decode and dispatch
     L->>W: short exact workspace operation only
     W-->>A: immutable response
+    participant V as Viewport registry
+    L->>V: viewport list/state/execute only
+    V->>C: validate registered session and document lifetime
+    V->>V: resolve explicit mounted viewport and apply state
+    V-->>A: applied compact state or typed no-change failure
     OS->>L: drain and stop
     OS->>K: remove(ifGeneration: own)
 ```
@@ -150,7 +204,9 @@ Postcommit projection failure uses the existing recovery/no-retry contract.
 `ApplicationRoot` owns process composition. `ApplicationLifecycleDelegate`
 owns launch, pre-launch URL buffering, Agent-host startup, and process
 shutdown ordering. `ApplicationProjectCoordinator` owns current URL and
-project lifecycle. `ProjectWorkspace` and
+project lifecycle. `ApplicationViewportRegistry` owns the process-local mounted
+session lookup; each window owns its document-lifetime viewport controller.
+`ProjectWorkspace` and
 `ProjectController` own project state and publication. `AgentHost` owns the
 listener lifetime; accepted requests execute on transport/control-plane tasks.
 The viewport cache owns one derived build task and matching bounded CPU/GPU
@@ -178,6 +234,15 @@ complete request with a lost response is outcome-unknown and is not replayed.
 Render-plan work is independently cancellable and cannot occupy the MainActor
 control path for listener progress. Render failure remains visible UI state and
 does not select an empty/stale fallback or affect exact project state.
+Viewport control takes a short explicit MainActor route only after session and
+mounted-viewport validation. Unmounted/stale IDs, stale viewport revisions,
+invalid numeric input, unavailable fit bounds, and cancellation are typed
+no-change failures. State application is not promoted to GPU/Canvas completion.
+Discovery applies the protocol-owned viewport count ceiling before any registry
+filtering, sorting, or wire-state materialization. The registry retains only one
+document lifetime: a new lifetime's first mount clears the old entries, and list
+returns no entries between document replacement and that first mount. Departing
+views therefore cannot consume the new document's discovery budget.
 
 ### Integrated responsiveness acceptance
 

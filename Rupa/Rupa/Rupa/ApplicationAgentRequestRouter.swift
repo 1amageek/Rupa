@@ -3,7 +3,11 @@ import RupaAgentRuntime
 
 /// Routes application-owned lifecycle requests without duplicating semantic
 /// command dispatch or project authority.
-@MainActor
+///
+/// The router is an immutable control-plane adapter with no global actor, so an
+/// ordinary request is delegated to the project handler on the control plane and
+/// never waits for `MainActor`. Only an explicit save suspends into the
+/// application's existing `MainActor` lifecycle owner.
 final class ApplicationAgentRequestRouter: AgentRequestHandling {
     private let projectHandler: any AgentRequestHandling
     private let lifecycle: any ApplicationAgentProjectLifecycle

@@ -26,7 +26,7 @@ geometry buffers.
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | module boundary | Keeps parsing above project authority. | Do not import project internals. |
 | [RupaProjectAccess](../RupaProjectAccess/DESIGN.md) | depends on | observe/open/send/save/finish | Is the only production project port. | All requests reach the App. |
-| [RupaMCP](../RupaMCP/DESIGN.md) | depends on | stdio server and access adapter contract | Hosts the six bounded MCP tools. | CLI supplies access only. |
+| [RupaMCP](../RupaMCP/DESIGN.md) | depends on | stdio server and access adapter contract | Hosts the nine bounded MCP tools, including viewport control. | CLI supplies access only. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | depends on | typed intent/result values | Supplies semantic payloads. | Discovery is not protocol state. |
 | [RupaAgentRuntime](../RupaAgentRuntime/DESIGN.md) | reached through access | semantic dispatch | Executes requests in the App workspace. | CLI does not duplicate dispatch. |
 | [RupaDomainFoundation](../RupaDomainFoundation/DESIGN.md) | represented through protocol | bounded program semantics | Defines operation and program values. | CLI performs syntax validation only. |
@@ -77,6 +77,10 @@ flowchart LR
    their dedicated typed requests or the shared semantic operation/program
    vocabulary; removed syntax is rejected during parsing rather than lowered
    through a compatibility path.
+9. The MCP adapter forwards `viewport.list`, `viewport.state`, and
+   `viewport.execute` through the existing `CLIService.send` session boundary,
+   preserving the explicit session/viewport UUID and optional revision guard in
+   one request. Viewport operations never trigger save or local UI state.
 
 ## Runtime Flows
 

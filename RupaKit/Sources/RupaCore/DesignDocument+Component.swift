@@ -4,6 +4,64 @@ import RupaCoreTypes
 
 extension DesignDocument {
     @discardableResult
+    public mutating func renameComponentInstance(
+        id: ComponentInstanceID,
+        name: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> Bool {
+        let normalizedName = try normalizedMetadataName(name, owner: "Component instance")
+        guard productMetadata.componentInstances[id] != nil else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Component instance rename requires an existing component instance."
+            )
+        }
+        guard PatternArrayOwnershipResolver().sourceID(
+            owningOutputInstance: id,
+            in: productMetadata
+        ) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Generated pattern component instances must be renamed through the pattern source."
+            )
+        }
+        guard productMetadata.componentInstances.values.allSatisfy({ instance in
+            instance.id == id ||
+                instance.name.trimmingCharacters(in: .whitespacesAndNewlines) != normalizedName
+        }) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Component instance names must be unique."
+            )
+        }
+
+        let mirroredSceneNodeIDs: [SceneNodeID] = productMetadata.sceneNodes.compactMap {
+            (sceneNodeID, node) -> SceneNodeID? in
+            guard node.reference?.componentInstanceID == id ||
+                    node.object?.componentInstanceID == id else {
+                return nil
+            }
+            return sceneNodeID
+        }
+        let authorityNeedsMutation = productMetadata.componentInstances[id]?.name != normalizedName
+        let mirrorsNeedMutation = mirroredSceneNodeIDs.contains { sceneNodeID in
+            productMetadata.sceneNodes[sceneNodeID]?.name != normalizedName
+        }
+        guard authorityNeedsMutation || mirrorsNeedMutation else {
+            return false
+        }
+
+        var updatedMetadata = productMetadata
+        updatedMetadata.componentInstances[id]?.name = normalizedName
+        for sceneNodeID in mirroredSceneNodeIDs {
+            updatedMetadata.sceneNodes[sceneNodeID]?.name = normalizedName
+        }
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+        return true
+    }
+
+    @discardableResult
     public mutating func createComponentDefinition(
         name: String,
         rootSceneNodeIDs: [SceneNodeID] = [],

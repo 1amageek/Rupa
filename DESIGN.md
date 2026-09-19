@@ -82,6 +82,11 @@ purpose-selected bounded presentation evaluation, postpublication derived
 render data, one coherent RealityKit scene/frame publication, MainActor UI
 composition, and Agent control-plane orchestration.
 Crossing one boundary never transfers another boundary's authority.
+Mounted viewport camera and display-mode control is presentation state: the
+App may route a typed API/MCP request to one explicitly identified live
+viewport, but that route never enters source, ruler, history, undo, or package
+authority.
+
 The system also owns the RealityKit frame-consistency rule: world geometry,
 grid/axes, curves/sketches, selection, measurement/rulers, section/analysis,
 snap/reference guides, previews, and editing gizmos are spatial children of
@@ -140,6 +145,8 @@ flowchart LR
         LiveAdapter --> AppHost["Rupa App Agent host"]
         AppHost --> WorkspaceRegistry["ProjectWorkspaceRegistry"]
         WorkspaceRegistry --> WorkspaceAuthority
+        AppHost --> ViewportRegistry["mounted viewport registry"]
+        ViewportRegistry --> ViewportState["one explicit MainActor viewport"]
         WorkspaceAuthority --> ControllerAuthority["ProjectController"]
     end
     subgraph T10["T10 runtime integration"]
@@ -315,6 +322,14 @@ flowchart LR
     only the existing registered workspace/application ports for exact reads,
     mutation, and explicit save, preserving the five-part coordinate,
     cancellation, deadline, and no-retry contracts.
+24. Viewport list/state/execute requests bind the registered project session to
+    one mounted viewport UUID. Multiple windows are never resolved by an
+    implicit active/first-window rule. The short MainActor application hop may
+    update only parallel-projection camera and display-mode state. Success means
+    that state was applied and returned with its viewport revision; it does not
+    claim that a RealityKit frame was displayed. An unmounted viewport, stale
+    viewport revision, invalid numeric command, empty fit target, or unavailable
+    fitting range is a typed no-change failure.
 
 T10's bicycle workflow is a capability fixture for the Agent route, authority
 transition, application-owned save/load, and renderer traversal. Its
@@ -477,7 +492,7 @@ violation, not a performance fallback.
 | CADAPI-D complex form | Later compiler and production-route evidence must prove a repeated multi-part assembly uses typed local bindings and native patterns, stays proportional to distinct intent, and publishes as one transaction/evaluation/undo/publication. |
 | Shared vocabulary and cutover | Equivalent direct and one-node-program requests use the same descriptor/lowerer; catalog, protocol, codec, runtime, and CLI reject raw feature graphs and public Automation mutation payloads. |
 | CADAPI-D failure and bounds | Wrong type/unit/reference, duplicate/missing symbol, cycle, non-source effect, expansion/byte/work limits, stale/cancel/evaluation failure, rollback, committed no-retry, and dispatch uncertainty are exercised on the real workspace/controller route. |
-| T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, renderer triangle traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
+| T10 capability fixture | Agent CAD route, representation transition, application-owned save/load, RealityKit scene traversal, and deterministic presentation output are exercised through the existing path. The fixture is not evidence of T11 L2 dimensional coherence, semantic bicycle parts, interfaces, manufacturing readiness, structural safety, or certification. |
 | T12 benchmark contract | `RupaAgentCADBenchmark` preserves all 100 target identities and exact oracles. Its historical 95-realized/5-unsupported report remains provenance only; CADAPI-100 must produce a new 100-realized report through the semantic API and actual signed App/CLI route. A reference-plan result is control-path evidence, not LLM reasoning evidence. |
 | T12 external candidate adapter | Golden JSON, bounded decode, fingerprint mismatch, inactive-case, process exit, privacy scan, and actual line/rectangle process tests prove that an external response reaches the same activated executor and exact oracle without exposing private expectations. |
 | Professional V8 reference | Recomputed power/thermal/mechanical invariants, cited provenance, semantic CAD inventory, save/load validation, viewer evaluation, and explicit unresolved production gates prove only the bounded engineering-reference claim. |

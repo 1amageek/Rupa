@@ -43,6 +43,9 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
         .accessibilityIdentifier("WorkspaceCanvasArea")
         .accessibilityLabel("Workspace canvas area")
         .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
+        .overlayPreferenceValue(WorkspaceToolNameHint.Preference.self) { hint in
+            WorkspaceToolNameHint.overlay(hint)
+        }
     }
 
     /// The chrome the canvas carries on its trailing side.

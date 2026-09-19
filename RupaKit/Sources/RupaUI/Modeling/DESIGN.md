@@ -14,6 +14,10 @@ mutation entry point. Invalid text remains editable and produces a visible
 typed error, never a default successful command. MainView owns task sequencing
 and passes preview/apply/cancel callbacks; this component owns no task or cache.
 
+Feature history uses the parent's [sidebar symbol adapter](../DESIGN.md#sidebar-symbols)
+for its status and action icons. Active/suppressed meaning, selection, preview
+commands, and busy-state admission remain owned by the existing history view.
+
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
@@ -33,6 +37,9 @@ Cancel -> discard draft and preview, no source mutation
 ```
 
 The parent keeps a single cancellable task and a value-only preview state.
+Both operation panels fill their allocated inspector region; their intrinsic form
+height must not shrink the Canvas/inspector split. Each panel contains its child
+accessibility elements so Preview, Apply and field identifiers remain distinct.
 A new draft invalidates the previous token; late completions cannot restore it.
 Taking a ready request for Apply consumes it before awaiting publication, so
 repeated button events cannot commit twice. Source or selection publication
@@ -74,6 +81,11 @@ path; the row is not a second source graph or a dynamic definition editor.
 
 ## Contracts and Invariants
 
+- The parent [canvas tool route](../DESIGN.md#canvas-side-tool-routing) launches
+  Surface as the existing Loft draft with sheet output enabled. It consumes the
+  current ordered profile selection and retains the same preview, Apply, typed
+  validation and Cancel lifecycle as other modeling drafts. A Circle Sketch is
+  a sketch result and is not exposed under the Surface name.
 - Box, Cylinder, Sphere, Extrude, Revolve, Sweep, Loft, Boolean, Fillet and Chamfer use existing
   Core commands. Source IDs are allocated by Core, never by this UI component.
 - Length text accepts explicit units and otherwise uses the displayed unit;

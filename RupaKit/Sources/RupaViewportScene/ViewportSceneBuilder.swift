@@ -301,7 +301,7 @@ public struct ViewportSceneBuilder {
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
-            case .bridgeCurve, .curveEdit, .curveOffset, .curveTrim,
+            case .spatialPath, .bridgeCurve, .curveEdit, .curveOffset, .curveTrim,
                  .curveExtend, .curveMatch, .projectCurve:
                 return evaluatedCurveItem(
                     featureID: featureID,

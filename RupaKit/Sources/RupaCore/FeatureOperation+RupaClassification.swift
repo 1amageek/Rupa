@@ -6,7 +6,8 @@ extension FeatureOperation {
             return true
         }
         switch self {
-        case .bridgeCurve,
+        case .spatialPath,
+             .bridgeCurve,
              .curveEdit,
              .curveOffset,
              .projectCurve,
@@ -60,7 +61,7 @@ extension FeatureOperation {
         switch self {
         case .importedBRep:
             return true
-        case .sketch:
+        case .sketch, .spatialPath:
             return false
         case .extrude:
             return true
@@ -130,7 +131,7 @@ extension FeatureOperation {
         switch self {
         case .importedBRep:
             return []
-        case .sketch:
+        case .sketch, .spatialPath:
             return []
         case .extrude:
             return []

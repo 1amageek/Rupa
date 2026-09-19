@@ -75,7 +75,8 @@ struct ModelingOperationView: View {
             }
         }
         .padding(16)
-        .frame(minWidth: 320, idealWidth: 360)
+        .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("Modeling.operation")
     }
 

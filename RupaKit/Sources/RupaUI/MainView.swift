@@ -5,13 +5,14 @@ import RupaDomainFoundation
 import RupaKit
 import RupaGeometry
 import RupaPreview
+import RupaProject
 import RupaRendering
 import SwiftUI
 
 func viewportDisplayModeTitle(_ mode: ViewportDisplayMode) -> String {
     switch mode {
     case .solid: "Solid"
-    case .solidWithEdges: "Solid + Mesh Boundaries"
+    case .solidWithEdges: "Solid + Mesh Edges"
     case .wireframe: "Wireframe"
     case .normals: "Normals"
     }
@@ -55,17 +56,23 @@ public struct MainView: View {
     private let domainRegistry: DomainRegistry
     private let operationSequencer: ProjectWorkspaceOperationSequencer
     private let newProject: @MainActor () -> Void
+    private let onViewportMount: @MainActor (ProjectDocumentLifetimeID, ViewportControlSession) -> Void
+    private let onViewportUnmount: @MainActor (ViewportInstanceID) -> Void
 
     public init(
         workspace: ProjectWorkspace,
         domainRegistry: DomainRegistry = DomainRegistry(),
         operationSequencer: ProjectWorkspaceOperationSequencer,
-        newProject: @escaping @MainActor () -> Void = {}
+        newProject: @escaping @MainActor () -> Void = {},
+        onViewportMount: @escaping @MainActor (ProjectDocumentLifetimeID, ViewportControlSession) -> Void = { _, _ in },
+        onViewportUnmount: @escaping @MainActor (ViewportInstanceID) -> Void = { _ in }
     ) {
         self.workspace = workspace
         self.domainRegistry = domainRegistry
         self.operationSequencer = operationSequencer
         self.newProject = newProject
+        self.onViewportMount = onViewportMount
+        self.onViewportUnmount = onViewportUnmount
     }
 
     public var body: some View {
@@ -76,7 +83,9 @@ public struct MainView: View {
                     snapshot: snapshot,
                     domainRegistry: domainRegistry,
                     operationSequencer: operationSequencer,
-                    newProject: newProject
+                    newProject: newProject,
+                    onViewportMount: onViewportMount,
+                    onViewportUnmount: onViewportUnmount
                 )
                 .id(snapshot.documentLifetimeID)
             } else {
@@ -91,10 +100,17 @@ public struct MainView: View {
 private struct ProjectMainViewContent: View {
     private let workspace: ProjectWorkspace
     private let snapshot: ProjectViewSnapshot
+    private var viewportInstanceID: ViewportInstanceID { viewportControlSession.id }
+    private let onViewportMount: @MainActor (ProjectDocumentLifetimeID, ViewportControlSession) -> Void
+    private let onViewportUnmount: @MainActor (ViewportInstanceID) -> Void
+    @State private var viewportControlSession: ViewportControlSession
+    @State private var isViewportShadingPresented = false
     @State private var modelingDraft: ModelingOperationDraft?
     @State private var modelingPreview = ModelingPreviewState()
     @State private var modelingTask: Task<Void, Never>?
     @State private var meshDraft: MeshOperationDraft?
+    @State private var viewportMeasurementState = ViewportMeasurementState()
+    @State private var pendingOutlinerStateIDs: Set<SceneNodeID> = []
     @State private var meshSelectionDomain = GeometryAttributeDomain.face
     @State private var meshSelectionOverlay: ViewportMeshSelectionOverlay?
     @State private var meshOverlayError: String?
@@ -111,7 +127,6 @@ private struct ProjectMainViewContent: View {
     @State private var isInspectorPresented: Bool
     @State private var sidebarSection: WorkspaceSidebarSection
     @State private var inspectorTab: WorkspaceInspectorTab
-    @State private var viewportDisplayMode: ViewportDisplayMode
     @State private var sidebarSearchText: String
     @State private var workspacePlaneMode: WorkspacePlaneMode
     @State private var selectionScope: WorkspaceSelectionScope
@@ -172,6 +187,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportChromeGeometry: WorkspaceCanvasChromeGeometry
     @State private var viewportCameraResetSignal: Int
     @State private var isUtilityRailExpanded: Bool
+    @State private var utilityRailDestination: WorkspaceUtilityRailDestination?
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var viewportCameraFrame: ViewportCameraFrame?
@@ -200,11 +216,17 @@ private struct ProjectMainViewContent: View {
         isUtilityRailExpanded: Bool = false,
         domainRegistry: DomainRegistry = DomainRegistry(),
         operationSequencer: ProjectWorkspaceOperationSequencer,
-        newProject: @escaping @MainActor () -> Void = {}
+        newProject: @escaping @MainActor () -> Void = {},
+        onViewportMount: @escaping @MainActor (ProjectDocumentLifetimeID, ViewportControlSession) -> Void = { _, _ in },
+        onViewportUnmount: @escaping @MainActor (ViewportInstanceID) -> Void = { _ in }
     ) {
         let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
+        let viewportControlSession = ViewportControlSession()
         self.workspace = workspace
         self.snapshot = snapshot
+        self.onViewportMount = onViewportMount
+        self.onViewportUnmount = onViewportUnmount
+        self._viewportControlSession = State(initialValue: viewportControlSession)
         self.operationSequencer = operationSequencer
         self.newProject = newProject
         self._selectedTool = State(initialValue: .select)
@@ -218,7 +240,6 @@ private struct ProjectMainViewContent: View {
         self._isInspectorPresented = State(initialValue: isInspectorPresented)
         self._sidebarSection = State(initialValue: .scene)
         self._inspectorTab = State(initialValue: .properties)
-        self._viewportDisplayMode = State(initialValue: .solid)
         self._sidebarSearchText = State(initialValue: "")
         self._workspacePlaneMode = State(initialValue: .adaptive)
         self._selectionScope = State(initialValue: .object)
@@ -328,7 +349,13 @@ private struct ProjectMainViewContent: View {
                 meshDraft = nil
             }
         }
-        .onDisappear { modelingTask?.cancel() }
+        .onAppear {
+            onViewportMount(snapshot.documentLifetimeID, viewportControlSession)
+        }
+        .onDisappear {
+            modelingTask?.cancel()
+            onViewportUnmount(viewportInstanceID)
+        }
         .confirmationDialog("Make CAD Editable as Mesh?", isPresented: $showsMakeEditableConfirmation) {
             Button("Make Editable", action: makeSelectedCADEditable)
             Button("Cancel", role: .cancel) {}
@@ -620,6 +647,10 @@ private struct ProjectMainViewContent: View {
         return snapshot.selection.replacingHover(with: hover)
     }
 
+    private var viewportDisplayMode: ViewportDisplayMode {
+        viewportControlSession.displayMode
+    }
+
     /// The log the workspace chrome records refused operations in.
     /// See `RupaUI/DESIGN.md`, "Failure surfacing".
     private var failureLog: WorkspaceFailureLog { .shared }
@@ -700,7 +731,6 @@ private struct ProjectMainViewContent: View {
                 _ = try await task.value
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
-                isPreviewExpanded = true
             }
         }
     }
@@ -730,7 +760,6 @@ private struct ProjectMainViewContent: View {
                 _ = try await task.value
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
-                isPreviewExpanded = true
             }
         }
     }
@@ -911,7 +940,6 @@ private struct ProjectMainViewContent: View {
                 _ = try await task.value
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
-                isPreviewExpanded = true
             }
         }
     }
@@ -963,7 +991,6 @@ private struct ProjectMainViewContent: View {
             return try await task.value
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
-            isPreviewExpanded = true
             return []
         }
     }
@@ -993,9 +1020,6 @@ private struct ProjectMainViewContent: View {
                 code: .actionResultMismatch,
                 message: "The project returned an interaction result for a source command."
             )
-        }
-        if commit.diagnostics.isEmpty == false {
-            isPreviewExpanded = true
         }
         return commit.commandResults
     }
@@ -1119,7 +1143,7 @@ private struct ProjectMainViewContent: View {
         switch tool {
         case .sketch, .polygon, .circle, .arc, .spline, .solid:
             return true
-        case .select, .sweep, .mesh, .measure, .section:
+        case .select, .sweep, .mesh, .measure, .section, .surface:
             return false
         }
     }
@@ -1269,50 +1293,56 @@ private struct ProjectMainViewContent: View {
                 historySidebarList
             }
         }
-        .searchable(text: $sidebarSearchText, prompt: "Search Browser")
         .navigationTitle("Browser")
     }
 
     private var sceneSidebarList: some View {
-        List(selection: selectedSceneNodeIDsBinding) {
-            Section("Scenes") {
-                ForEach(filteredSceneBrowserRows) { row in
-                    componentBrowserRow(row.id, depth: row.depth)
-                        .tag(row.id)
-                }
-            }
+        VStack(spacing: 0) {
+            Outliner(
+                metadata: snapshot.document.document.productMetadata,
+                selectedIDs: Set(snapshot.selection.selectedSceneNodeIDs),
+                generation: snapshot.documentGeneration,
+                canFrameSelection: viewportControlSession.canFitSelected,
+                pendingStateIDs: pendingOutlinerStateIDs,
+                searchText: $sidebarSearchText,
+                onIntent: handleOutlinerIntent
+            )
+            .frame(maxHeight: .infinity)
 
-            if !filteredComponentDefinitionIDs.isEmpty {
-                Section("Component Definitions") {
-                    ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
-                        componentDefinitionRow(id)
+            if !filteredComponentDefinitionIDs.isEmpty || hasVisibleAssetRows {
+                Divider()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if !filteredComponentDefinitionIDs.isEmpty {
+                            DisclosureGroup("Component Definitions") {
+                                ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
+                                    componentDefinitionRow(id)
+                                        .padding(.leading, 8)
+                                }
+                            }
+                        }
+                        if hasVisibleAssetRows {
+                            DisclosureGroup("Assets") {
+                                ForEach(materialAssetRows) { row in
+                                    browserAssetRow(row)
+                                        .padding(.leading, 8)
+                                }
+                                ForEach(validationRuleAssetRows) { row in
+                                    browserAssetRow(row)
+                                        .padding(.leading, 8)
+                                }
+                                ForEach(exportPresetAssetRows) { row in
+                                    browserAssetRow(row)
+                                        .padding(.leading, 8)
+                                }
+                            }
+                        }
                     }
+                    .padding(8)
                 }
-            }
-
-            if !filteredComponentInstanceIDs.isEmpty {
-                Section("Component Instances") {
-                    ForEach(filteredComponentInstanceIDs, id: \.self) { id in
-                        componentInstanceRow(id)
-                    }
-                }
-            }
-
-            if hasVisibleAssetRows {
-                Section("Assets") {
-                    ForEach(materialAssetRows) { row in
-                        browserAssetRow(row)
-                    }
-                    ForEach(validationRuleAssetRows) { row in
-                        browserAssetRow(row)
-                    }
-                    ForEach(exportPresetAssetRows) { row in
-                        browserAssetRow(row)
-                    }
-                }
+                .frame(maxHeight: 180)
             }
         }
-        .listStyle(.sidebar)
         .accessibilityIdentifier("WorkspaceSidebar.sceneList")
     }
 
@@ -1338,6 +1368,7 @@ private struct ProjectMainViewContent: View {
             }
         }
         .listStyle(.sidebar)
+        .searchable(text: $sidebarSearchText, prompt: "Search History")
         .accessibilityIdentifier("WorkspaceSidebar.historyList")
     }
 
@@ -1606,6 +1637,107 @@ private struct ProjectMainViewContent: View {
             || !exportPresetAssetRows.isEmpty
     }
 
+    private func handleOutlinerIntent(_ intent: OutlinerIntent) {
+        switch intent {
+        case .select(let ids):
+            patternArrayCurvePathPickState.cancel()
+            _ = selectSceneNodes(ids)
+            dimensionCommandState.deactivate()
+
+        case .hover(let id, let isHovered):
+            if let id {
+                setHoveredSceneNode(id, isHovered: isHovered)
+            } else {
+                setHoveredSceneNode(nil)
+            }
+
+        case .rename(let id, let name):
+            submitSource(name: "renameOutlinerNode") { current in
+                try OutlinerSourceCommandPlanner.rename(
+                    id: id,
+                    name: name,
+                    in: current.document.document.productMetadata
+                )
+            }
+
+        case .move(let ids, let parentID, let beforeSiblingID, let expectedGeneration):
+            submitSource(name: "moveOutlinerNodes") { current in
+                guard current.documentGeneration == expectedGeneration else {
+                    throw EditorError(
+                        code: .documentGenerationMismatch,
+                        message: "The scene changed during the drag. Start the move again."
+                    )
+                }
+                return [.moveSceneNodes(ids: ids, parentID: parentID, beforeSiblingID: beforeSiblingID)]
+            }
+
+        case .setVisibility(let ids, let isVisible):
+            submitOutlinerStateCommands(ids: ids, isVisible: isVisible)
+
+        case .setLock(let ids, let isLocked):
+            submitOutlinerStateCommands(ids: ids, isLocked: isLocked)
+
+        case .isolate(let ids):
+            submitOutlinerIsolation(ids: ids)
+
+        case .showAll:
+            submitOutlinerShowAll()
+
+        case .frameCurrentSelection:
+            guard viewportControlSession.canFitSelected else {
+                reportToolStatus(
+                    "Frame requires visible selected geometry in the mounted viewport.",
+                    severity: .warning
+                )
+                return
+            }
+            performViewportControl(.fitSelected)
+        }
+    }
+
+    private func submitOutlinerStateCommands(
+        ids: [SceneNodeID],
+        isVisible: Bool? = nil,
+        isLocked: Bool? = nil
+    ) {
+        let targets = Set(ids)
+        guard pendingOutlinerStateIDs.isDisjoint(with: targets) else { return }
+        pendingOutlinerStateIDs.formUnion(targets)
+        let task = enqueueWorkspaceOperation {
+            try await executeSource(name: "outlinerStateChange") { current in
+                try OutlinerSourceCommandPlanner.stateChange(
+                    ids: ids,
+                    isVisible: isVisible,
+                    isLocked: isLocked,
+                    in: current.document.document.productMetadata
+                )
+            }
+        }
+        Task { @MainActor in
+            defer { pendingOutlinerStateIDs.subtract(targets) }
+            do {
+                _ = try await task.value
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
+    }
+
+    private func submitOutlinerIsolation(ids: [SceneNodeID]) {
+        submitSource(name: "isolateOutlinerSelection") { current in
+            try OutlinerSourceCommandPlanner.isolate(
+                ids: ids,
+                in: current.document.document.productMetadata
+            )
+        }
+    }
+
+    private func submitOutlinerShowAll() {
+        submitSource(name: "showAllOutlinerNodes") { current in
+            try OutlinerSourceCommandPlanner.showAll(in: current.document.document.productMetadata)
+        }
+    }
+
     private var normalizedSidebarSearchText: String {
         sidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -1634,11 +1766,7 @@ private struct ProjectMainViewContent: View {
             }
         }
         .leadingPaneWidth(minimum: 560)
-        .trailingPaneWidth(
-            WorkspaceInspectorLayout.idealColumnWidth,
-            minimum: WorkspaceInspectorLayout.minimumColumnWidth,
-            maximum: WorkspaceInspectorLayout.idealColumnWidth
-        )
+        .trailingPaneWidth(320, minimum: 320, maximum: 320)
         .dividerDragStrip(width: 10)
     }
 
@@ -1730,6 +1858,7 @@ private struct ProjectMainViewContent: View {
                         document: payload.document,
                         sourceIdentity: .presentation(payload.presentationScene.snapshotID),
                         displayMode: viewportDisplayMode,
+                        controlSession: viewportControlSession,
                         presentationScene: payload.presentationScene,
                         presentationSceneNodeIDByOccurrenceID: payload.presentationSceneNodeIDByOccurrenceID,
                         workspaceRenderState: ViewportWorkspaceRenderState(
@@ -1780,7 +1909,6 @@ private struct ProjectMainViewContent: View {
         .bottomPaneHeight(minimum: 140)
         .dividerDragStrip(height: 10)
         .collapsibleToggleHelp(expanded: "Hide Logs", collapsed: "Show Logs")
-        .frame(minWidth: 560)
         // Keyboard focus is an input scope; visible canvas affordances are drawn by the viewport.
         .focusable()
         .focusEffectDisabled()
@@ -1816,6 +1944,7 @@ private struct ProjectMainViewContent: View {
             document: snapshot.document.document,
             sourceIdentity: .document(id: snapshot.document.document.id, generation: snapshot.documentGeneration),
             displayMode: viewportDisplayMode,
+            controlSession: viewportControlSession,
             presentationScene: snapshot.viewport,
             presentationSceneNodeIDByOccurrenceID: snapshot.sceneNodeIDByOccurrenceID,
             workspaceRenderState: ViewportWorkspaceRenderState(
@@ -1860,6 +1989,10 @@ private struct ProjectMainViewContent: View {
             cameraResetSignal: viewportCameraResetSignal,
             hoverClearSignal: viewportHoverClearSignal,
             showsConstructionPlaneHover: showsConstructionPlaneHover,
+            measurementToolActive: selectedTool == .measure,
+            showsAutomaticMeasurement: showsAutomaticBoundsRulers,
+            showsBoundsReadout: showsBoundsReadout,
+            measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
             allowsSelectionRectangle: allowsSelectionRectangle,
             allowsObjectAffordances: allowsObjectAffordances,
             meshSelectionDomain: meshSelectionDomain,
@@ -1925,8 +2058,21 @@ private struct ProjectMainViewContent: View {
             onCameraFrameChange: { frame in
                 viewportCameraFrame = frame
             },
+            onCameraFrameRequestResult: { id, result in
+                guard viewportCameraFrameRequest?.id == id else { return }
+                viewportCameraFrameRequest = nil
+                switch result {
+                case .success:
+                    reportToolStatus("Saved view applied.")
+                case .failure(let error):
+                    reportToolStatus("Saved view camera could not be applied: \(error.localizedDescription)", severity: .warning)
+                }
+            },
             onProjectedGridStepChange: { stepMeters in
                 viewportProjectedGridStepMeters = stepMeters
+            },
+            onMeasurementStateChange: { state in
+                viewportMeasurementState = state
             },
             onNativeGestureRefusal: { error in
                 // The viewport decides which native gesture refusals are
@@ -1977,9 +2123,7 @@ private struct ProjectMainViewContent: View {
         }
             .environment(\.inspectorInputSequencer, operationSequencer)
             .frame(
-                minWidth: 320,
-                idealWidth: 420,
-                maxWidth: 440,
+                maxWidth: .infinity,
                 maxHeight: .infinity,
                 alignment: .top
             )
@@ -1994,9 +2138,9 @@ private struct ProjectMainViewContent: View {
                 onUpsert: upsertParameterExpression,
                 onDelete: deleteDocumentParameter
             )
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, WorkspaceInspectorLayout.panelHorizontalInset)
             .padding(.vertical, WorkspaceInspectorLayout.panelVerticalInset)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollIndicators(.visible)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -2442,6 +2586,33 @@ private struct ProjectMainViewContent: View {
             && selectedPresentationHasExactCADAffordanceContext
     }
 
+    private var showsAutomaticBoundsRulers: Bool {
+        WorkspaceMeasurementPresentationGate.showsBoundsRulers(
+            selectedTool: selectedTool,
+            hasOwningInteraction: hasBoundsPresentationOwningInteraction
+        )
+    }
+
+    private var showsBoundsReadout: Bool {
+        WorkspaceMeasurementPresentationGate.showsBoundsReadout(
+            selectedTool: selectedTool,
+            selectionScope: selectionScope,
+            hasOwningInteraction: hasBoundsPresentationOwningInteraction
+        )
+    }
+
+    /// Interactions that own the viewport while the bounds presentations would
+    /// otherwise describe a selection the user is no longer editing.
+    private var hasBoundsPresentationOwningInteraction: Bool {
+        dimensionCommandState.isActive
+            || modelingDraft != nil
+            || meshDraft != nil
+            || hasActiveWorkspaceCommand
+            || modelingPreview.phase != .idle
+            || historyPreviewTitle != nil
+            || viewAlignedConstructionPlaneRequest != nil
+    }
+
     private static func makeExactPresentationCADSceneNodeIDs(
         snapshot: ProjectViewSnapshot
     ) -> Set<SceneNodeID> {
@@ -2474,11 +2645,16 @@ private struct ProjectMainViewContent: View {
     private var presentationOccurrencePickHandler: (
         (SceneOccurrenceID, ViewportSelectionIntent) -> Void
     )? {
-        guard selectedTool == .select,
-              selectionScope == .object else {
+        switch selectedTool {
+        case .select where selectionScope == .object:
+            return handlePresentationOccurrencePick
+        case .mesh:
+            return { occurrenceID, _ in
+                routeCanvasMesh(snapshot.sceneNodeID(for: occurrenceID))
+            }
+        default:
             return nil
         }
-        return handlePresentationOccurrencePick
     }
 
     private var presentationOccurrenceHoverHandler: ((SceneOccurrenceID?) -> Void)? {
@@ -2498,7 +2674,6 @@ private struct ProjectMainViewContent: View {
                 "Presentation occurrence has no scene-node navigation target.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         applyViewportSelection(
@@ -2572,7 +2747,7 @@ private struct ProjectMainViewContent: View {
             .spline
         case .circle:
             .circle(radiusMeters: activeSketchLengthInputMeters)
-        case .select, .sweep, .mesh, .measure, .section:
+        case .select, .sweep, .mesh, .measure, .section, .surface:
             nil
         }
     }
@@ -2688,7 +2863,7 @@ private struct ProjectMainViewContent: View {
             [.length, .angle]
         case .spline:
             [.length, .angle]
-        case .select, .sweep, .mesh, .measure, .section:
+        case .select, .sweep, .mesh, .measure, .section, .surface:
             []
         }
     }
@@ -2715,7 +2890,7 @@ private struct ProjectMainViewContent: View {
         switch selectedTool {
         case .sketch, .polygon, .circle, .arc, .spline, .solid:
             true
-        case .select, .sweep, .mesh, .measure, .section:
+        case .select, .sweep, .mesh, .measure, .section, .surface:
             false
         }
     }
@@ -2724,7 +2899,7 @@ private struct ProjectMainViewContent: View {
         switch selectedTool {
         case .sketch, .polygon, .circle, .arc, .spline, .solid, .section:
             true
-        case .select, .sweep, .mesh, .measure:
+        case .select, .sweep, .mesh, .measure, .surface:
             false
         }
     }
@@ -2741,7 +2916,9 @@ private struct ProjectMainViewContent: View {
     ) -> some View {
         let scaleFitPromptState = workspaceScaleFitPromptState
         HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
+            workspaceViewportFitMenu
             workspaceViewportDisplayModeMenu
+            workspaceViewportShadingButton
 
             if let selectionTitle = presentation.selectionTitle {
                 workspaceStatusChip(
@@ -2758,6 +2935,68 @@ private struct ProjectMainViewContent: View {
         .workspaceCanvasTopChromeContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceTopBar")
+    }
+
+    private var workspaceViewportFitMenu: some View {
+        Menu {
+            Button {
+                performViewportControl(.fitVisible)
+            } label: {
+                Label("Fit Visible Objects", systemImage: "viewfinder")
+            }
+            .disabled(!viewportControlSession.canFitVisible)
+            .accessibilityIdentifier("WorkspaceViewport.fitVisible")
+
+            Button {
+                performViewportControl(.fitSelected)
+            } label: {
+                Label("Fit Selected Objects", systemImage: "scope")
+            }
+            .disabled(!viewportControlSession.canFitSelected)
+            .accessibilityIdentifier("WorkspaceViewport.fitSelected")
+        } label: {
+            Label("Fit", systemImage: "viewfinder")
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+        } primaryAction: {
+            performViewportControl(.fitVisible)
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(!viewportControlSession.canFitVisible)
+        .help("Fit Visible or Selected Objects")
+        .accessibilityLabel("Viewport Fit")
+        .accessibilityIdentifier("WorkspaceViewport.fit")
+    }
+
+    private func performViewportControl(_ action: ViewportControlAction) {
+        do {
+            _ = try viewportControlSession.perform(action)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    private var workspaceViewportShadingButton: some View {
+        Button {
+            isViewportShadingPresented.toggle()
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewportControlSession.isReady)
+        .help("Viewport Shading")
+        .accessibilityLabel("Viewport Shading")
+        .accessibilityIdentifier("WorkspaceViewport.shading")
+        .popover(isPresented: $isViewportShadingPresented, arrowEdge: .bottom) {
+            ViewportShadingPanel(
+                shading: Binding(
+                    get: { viewportControlSession.shading },
+                    set: { performViewportControl(.setShading($0)) }
+                ),
+                displayMode: viewportDisplayMode
+            )
+        }
     }
 
     private var workspaceViewportDisplayModeMenu: some View {
@@ -2784,7 +3023,11 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private func viewportDisplayModeButton(_ mode: ViewportDisplayMode) -> some View {
         Button {
-            viewportDisplayMode = mode
+            do {
+                try viewportControlSession.perform(.setDisplayMode(mode))
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         } label: {
             HStack {
                 Label(
@@ -2983,181 +3226,200 @@ private struct ProjectMainViewContent: View {
                 collapsedWorkspaceUtilityRail
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("WorkspaceUtilityRail")
     }
 
     private var expandedWorkspaceUtilityRail: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
-                workspaceUtilityRailHeader
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
+                    workspaceUtilityRailHeader
+                        .id(WorkspaceUtilityRailDestination.controls)
 
-                workspaceRailSection("Select") {
-                    WorkspaceSelectionScopeControl(selection: $selectionScope)
-                }
-
-                workspaceRailSection("Snap") {
-                    HStack(spacing: 6) {
-                        workspaceToggleButton(
-                            isOn: $isGridSnapEnabled,
-                            systemImage: "grid",
-                            title: "Grid",
-                            help: "Grid Snap",
-                            accessibilityIdentifier: "WorkspaceSnap.grid"
-                        )
-                        workspaceToggleButton(
-                            isOn: $isObjectTargetingEnabled,
-                            systemImage: "dot.scope",
-                            title: "Object",
-                            help: "Object Targeting",
-                            accessibilityIdentifier: "WorkspaceSnap.object"
-                        )
-                        workspaceToggleButton(
-                            isOn: fixedGridVisualSpacingBinding,
-                            systemImage: "lock",
-                            title: "Fixed",
-                            help: "Fixed Visual Grid",
-                            accessibilityIdentifier: "WorkspaceGrid.fixed"
-                        )
+                    workspaceRailSection("Select") {
+                        WorkspaceSelectionScopeControl(selection: $selectionScope)
                     }
-                    let scaleSummary = workspaceScaleSummary
-                    workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                    workspaceValueRow("Grid", snapshot.workspaceState.viewportGridSettings.visualSpacingMode.title)
-                    workspaceValueRow("Step", scaleSummary.minorStepTitle)
-                    workspaceValueRow("Major", scaleSummary.majorStepTitle)
-                    workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
-                }
+                    .id(WorkspaceUtilityRailDestination.selection)
 
-                workspaceRailSection("Views") {
-                    Button {
-                        createSavedViewFromCurrentViewport()
-                    } label: {
-                        Label("Save Current", systemImage: "plus.viewfinder")
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, minHeight: 26)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.primary.opacity(0.78))
-                    .background {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .fill(Color.primary.opacity(0.06))
-                    }
-                    .help("Save Current View")
-                    .accessibilityLabel("Save Current View")
-                    .accessibilityIdentifier("WorkspaceSavedView.createCurrent")
-
-                    if savedViews.isEmpty {
-                        workspaceValueRow("Saved", "None")
-                    } else {
-                        VStack(spacing: 5) {
-                            ForEach(savedViews) { savedView in
-                                workspaceSavedViewRow(savedView)
-                            }
+                    workspaceRailSection("Snap") {
+                        HStack(spacing: 6) {
+                            workspaceToggleButton(
+                                isOn: $isGridSnapEnabled,
+                                systemImage: "grid",
+                                title: "Grid",
+                                help: "Grid Snap",
+                                accessibilityIdentifier: "WorkspaceSnap.grid"
+                            )
+                            workspaceToggleButton(
+                                isOn: $isObjectTargetingEnabled,
+                                systemImage: "dot.scope",
+                                title: "Object",
+                                help: "Object Targeting",
+                                accessibilityIdentifier: "WorkspaceSnap.object"
+                            )
+                            workspaceToggleButton(
+                                isOn: fixedGridVisualSpacingBinding,
+                                systemImage: "lock",
+                                title: "Fixed",
+                                help: "Fixed Visual Grid",
+                                accessibilityIdentifier: "WorkspaceGrid.fixed"
+                            )
                         }
+                        let scaleSummary = workspaceScaleSummary
+                        workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
+                        workspaceValueRow("Grid", snapshot.workspaceState.viewportGridSettings.visualSpacingMode.title)
+                        workspaceValueRow("Step", scaleSummary.minorStepTitle)
+                        workspaceValueRow("Major", scaleSummary.majorStepTitle)
+                        workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
                     }
-                }
+                    .id(WorkspaceUtilityRailDestination.snap)
 
-                workspaceRailSection("Plane") {
-                    let planeSummary = savedConstructionPlaneSummary
-                    WorkspacePlaneModeControl(selection: $workspacePlaneMode)
-                    workspaceToggleButton(
-                        isOn: $isConstructionPlaneSnapEnabled,
-                        systemImage: "square.grid.2x2",
-                        title: "2D",
-                        help: "2D Construction Plane Snap",
-                        accessibilityIdentifier: "WorkspacePlane.twoDSnap"
-                    )
-                    if let activeConstructionPlane = activeConstructionPlane {
-                        workspaceValueRow(
-                            "Active",
-                            activeConstructionPlane.name,
-                            accessibilityIdentifier: "WorkspacePlane.activeName"
-                        )
-                    }
-                    workspaceValueRow("Snap", constructionPlaneSnapSummary)
-                    if planeSummary.planes.isEmpty {
-                        workspaceValueRow("Saved", "None")
-                    } else {
-                        VStack(spacing: 5) {
-                            ForEach(planeSummary.planes, id: \.id) { plane in
-                                workspaceConstructionPlaneRow(plane)
-                            }
+                    workspaceRailSection("Views") {
+                        Button {
+                            createSavedViewFromCurrentViewport()
+                        } label: {
+                            Label("Save Current", systemImage: "plus.viewfinder")
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity, minHeight: 26)
                         }
-                    }
-                    if viewAlignedConstructionPlaneRequest != nil {
-                        workspaceValueRow("Command", "Pick View Origin")
-                    }
-                }
+                        .disabled(viewportCameraFrame == nil)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.primary.opacity(0.78))
+                        .background {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.primary.opacity(0.06))
+                        }
+                        .help("Save Current View")
+                        .accessibilityLabel("Save Current View")
+                        .accessibilityIdentifier("WorkspaceSavedView.createCurrent")
 
-                workspaceRailSection("Analysis") {
-                    WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
-                    workspaceValueRow(
-                        "Overlay",
-                        surfaceAnalysisOverlaySummary,
-                        accessibilityIdentifier: "WorkspaceAnalysis.overlay"
-                    )
-                    workspaceValueRow(
-                        "Samples",
-                        surfaceAnalysisDensitySummary,
-                        accessibilityIdentifier: "WorkspaceAnalysis.samples"
-                    )
-                }
-
-                if commandCatalog.hasDomainCommands {
-                    workspaceRailSection("Domain") {
-                        VStack(spacing: 5) {
-                            ForEach(commandCatalog.domainCommands) { command in
-                                WorkspaceDomainCommandRow(
-                                    command: command,
-                                    displayUnit: snapshot.workspaceState.displayUnit,
-                                    generation: snapshot.documentGeneration
-                                ) { request in
-                                    try await runWorkspaceOperation {
-                                        guard let current = workspace.view else {
-                                            throw ProjectWorkspaceActionError(
-                                                code: .snapshotUnavailable,
-                                                message: "The project workspace has no published view snapshot."
-                                            )
-                                        }
-                                        let plan = try domainCommandDispatcher.dispatch(
-                                            request,
-                                            from: current
-                                        )
-                                        return try await workspace.execute(plan)
-                                    }
+                        if savedViews.isEmpty {
+                            workspaceValueRow("Saved", "None")
+                        } else {
+                            VStack(spacing: 5) {
+                                ForEach(savedViews) { savedView in
+                                    workspaceSavedViewRow(savedView)
                                 }
                             }
                         }
-                        .accessibilityIdentifier("WorkspaceDomainCommandList")
                     }
-                }
+                    .id(WorkspaceUtilityRailDestination.views)
 
-                workspaceRailSection("Scene") {
-                    workspaceValueRow(
-                        "Bodies",
-                        "\(snapshot.evaluationSnapshot.bodyCount)",
-                        accessibilityIdentifier: "WorkspaceScene.bodies"
-                    )
-                    workspaceValueRow(
-                        "Nodes",
-                        "\(snapshot.document.document.productMetadata.sceneNodes.count)",
-                        accessibilityIdentifier: "WorkspaceScene.nodes"
-                    )
-                    workspaceValueRow(
-                        "Issues",
-                        diagnosticSummary,
-                        accessibilityIdentifier: "WorkspaceScene.issues"
-                    )
+                    workspaceRailSection("Plane") {
+                        let planeSummary = savedConstructionPlaneSummary
+                        WorkspacePlaneModeControl(selection: $workspacePlaneMode)
+                        workspaceToggleButton(
+                            isOn: $isConstructionPlaneSnapEnabled,
+                            systemImage: "square.grid.2x2",
+                            title: "2D",
+                            help: "2D Construction Plane Snap",
+                            accessibilityIdentifier: "WorkspacePlane.twoDSnap"
+                        )
+                        if let activeConstructionPlane = activeConstructionPlane {
+                            workspaceValueRow(
+                                "Active",
+                                activeConstructionPlane.name,
+                                accessibilityIdentifier: "WorkspacePlane.activeName"
+                            )
+                        }
+                        workspaceValueRow("Snap", constructionPlaneSnapSummary)
+                        if planeSummary.planes.isEmpty {
+                            workspaceValueRow("Saved", "None")
+                        } else {
+                            VStack(spacing: 5) {
+                                ForEach(planeSummary.planes, id: \.id) { plane in
+                                    workspaceConstructionPlaneRow(plane)
+                                }
+                            }
+                        }
+                        if viewAlignedConstructionPlaneRequest != nil {
+                            workspaceValueRow("Command", "Pick View Origin")
+                        }
+                    }
+                    .id(WorkspaceUtilityRailDestination.plane)
+
+                    workspaceRailSection("Analysis") {
+                        WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
+                        workspaceValueRow(
+                            "Target",
+                            selectedSurfaceAnalysisSummary == nil ? "No supported target" : "Selected target",
+                            accessibilityIdentifier: "WorkspaceAnalysis.target"
+                        )
+                        workspaceValueRow(
+                            "Overlay",
+                            surfaceAnalysisOverlaySummary,
+                            accessibilityIdentifier: "WorkspaceAnalysis.overlay"
+                        )
+                        workspaceValueRow(
+                            "Samples",
+                            surfaceAnalysisDensitySummary,
+                            accessibilityIdentifier: "WorkspaceAnalysis.samples"
+                        )
+                    }
+                    .id(WorkspaceUtilityRailDestination.analysis)
+
+                    if commandCatalog.hasDomainCommands {
+                        workspaceRailSection("Domain") {
+                            VStack(spacing: 5) {
+                                ForEach(commandCatalog.domainCommands) { command in
+                                    WorkspaceDomainCommandRow(
+                                        command: command,
+                                        displayUnit: snapshot.workspaceState.displayUnit,
+                                        generation: snapshot.documentGeneration
+                                    ) { request in
+                                        try await runWorkspaceOperation {
+                                            guard let current = workspace.view else {
+                                                throw ProjectWorkspaceActionError(
+                                                    code: .snapshotUnavailable,
+                                                    message: "The project workspace has no published view snapshot."
+                                                )
+                                            }
+                                            let plan = try domainCommandDispatcher.dispatch(
+                                                request,
+                                                from: current
+                                            )
+                                            return try await workspace.execute(plan)
+                                        }
+                                    }
+                                }
+                            }
+                            .accessibilityIdentifier("WorkspaceDomainCommandList")
+                        }
+                    }
+
+                    workspaceRailSection("Scene") {
+                        workspaceValueRow(
+                            "Bodies",
+                            "\(snapshot.evaluationSnapshot.bodyCount)",
+                            accessibilityIdentifier: "WorkspaceScene.bodies"
+                        )
+                        workspaceValueRow(
+                            "Nodes",
+                            "\(snapshot.document.document.productMetadata.sceneNodes.count)",
+                            accessibilityIdentifier: "WorkspaceScene.nodes"
+                        )
+                        workspaceValueRow(
+                            "Issues",
+                            diagnosticSummary,
+                            accessibilityIdentifier: "WorkspaceScene.issues"
+                        )
+                    }
+                    .id(WorkspaceUtilityRailDestination.scene)
                 }
+                .padding(WorkspaceUtilityRailLayout.contentPadding)
             }
-            .padding(WorkspaceUtilityRailLayout.contentPadding)
+            .scrollIndicators(.hidden)
+            .frame(width: WorkspaceUtilityRailLayout.expandedWidth, alignment: .topLeading)
+            .frame(maxHeight: WorkspaceUtilityRailLayout.maximumExpandedHeight, alignment: .topLeading)
+            .workspaceGlassContainer()
+            .accessibilityIdentifier("WorkspaceUtilityRail.expanded")
+            .onAppear {
+                focusUtilityRail(using: proxy)
+            }
+            .onChange(of: utilityRailDestination) { _, _ in
+                focusUtilityRail(using: proxy)
+            }
         }
-        .scrollIndicators(.hidden)
-        .frame(width: WorkspaceUtilityRailLayout.expandedWidth, alignment: .topLeading)
-        .frame(maxHeight: WorkspaceUtilityRailLayout.maximumExpandedHeight, alignment: .topLeading)
-        .workspaceGlassContainer()
-        .accessibilityIdentifier("WorkspaceUtilityRail.expanded")
     }
 
     private var workspaceUtilityRailHeader: some View {
@@ -3189,19 +3451,43 @@ private struct ProjectMainViewContent: View {
             isConstructionPlaneActive: workspacePlaneMode != .adaptive
                 || activeConstructionPlane != nil
                 || viewAlignedConstructionPlaneRequest != nil,
-            surfaceAnalysisTitle: surfaceAnalysisOverlaySummary,
-            isSurfaceAnalysisActive: surfaceAnalysisOverlaySummary != "Off",
+            surfaceAnalysisTitle: selectedSurfaceAnalysisSummary == nil
+                ? "No supported target"
+                : surfaceAnalysisOverlaySummary,
+            isSurfaceAnalysisActive: selectedSurfaceAnalysisSummary != nil
+                && surfaceAnalysisOverlaySummary != "Off",
             savedViewCount: savedViews.count,
             diagnosticTitle: diagnosticSummary,
             hasDiagnostics: !diagnostics.isEmpty
-        ) {
-            setUtilityRailExpanded(true)
+        ) { destination in
+            setUtilityRailExpanded(true, destination: destination)
         }
     }
 
-    private func setUtilityRailExpanded(_ isExpanded: Bool) {
+    private func setUtilityRailExpanded(
+        _ isExpanded: Bool,
+        destination: WorkspaceUtilityRailDestination? = nil
+    ) {
+        utilityRailDestination = isExpanded ? destination : nil
         withAnimation(.easeInOut(duration: 0.16)) {
             isUtilityRailExpanded = isExpanded
+        }
+    }
+
+    private func focusUtilityRail(using proxy: ScrollViewProxy) {
+        guard let destination = utilityRailDestination else {
+            return
+        }
+        Task { @MainActor in
+            await Task.yield()
+            guard isUtilityRailExpanded,
+                  utilityRailDestination == destination else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.16)) {
+                proxy.scrollTo(destination, anchor: .top)
+            }
+            utilityRailDestination = nil
         }
     }
 
@@ -3246,7 +3532,9 @@ private struct ProjectMainViewContent: View {
 
     private var viewportContextPanelContent: some View {
         HStack(spacing: 8) {
-            if selectedTool == .sweep {
+            if selectedTool == .measure {
+                measurementContextPanelContent(viewportMeasurementState)
+            } else if selectedTool == .sweep {
                 let preview = SweepSelectionPlanningService(
                     document: snapshot.document.document,
                     selection: displaySelection
@@ -3296,6 +3584,36 @@ private struct ProjectMainViewContent: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
+    }
+
+    @ViewBuilder
+    private func measurementContextPanelContent(_ state: ViewportMeasurementState) -> some View {
+        workspaceStatusChip(
+            state.title,
+            systemImage: "ruler",
+            tint: state.distanceMeters == nil ? .secondary : .accentColor
+        )
+        if let distanceMeters = state.distanceMeters {
+            let unit = snapshot.workspaceState.ruler.displayUnit
+            workspaceValuePill(
+                "Distance",
+                "\(unit.value(fromMeters: distanceMeters).formatted(.number.precision(.fractionLength(0...3)))) \(unit.symbol)",
+                accessibilityIdentifier: "WorkspaceMeasure.distance"
+            )
+        }
+        if let boundsSummary = state.boundsSummary {
+            Text(boundsSummary)
+                .font(.caption2.monospacedDigit())
+                .lineLimit(2)
+                .help(boundsSummary)
+                .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
+        }
+        Text(state.status ?? "Click a first point, then click a second point.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .frame(maxWidth: 280, alignment: .leading)
+            .accessibilityIdentifier("WorkspaceMeasure.status")
     }
 
     @ViewBuilder
@@ -3368,6 +3686,13 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private func selectionContextPanelContent(_ nodes: [SceneNode]) -> some View {
         let primaryNode = nodes.last
+        if let boundsSummary = viewportMeasurementState.boundsSummary {
+            Text(boundsSummary)
+                .font(.caption2.monospacedDigit())
+                .lineLimit(2)
+                .help(boundsSummary)
+                .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
+        }
         workspaceValuePill("Targets", "\(selectedTargetCount)")
         workspaceValuePill(
             "Target",
@@ -3866,6 +4191,7 @@ private struct ProjectMainViewContent: View {
             .help("Update Saved View From Current View")
             .accessibilityLabel("Update \(savedView.name) From Current View")
             .accessibilityIdentifier("WorkspaceSavedView.update.\(identifierSuffix)")
+            .disabled(viewportCameraFrame == nil)
 
             Button {
                 removeSavedView(savedView)
@@ -4158,6 +4484,19 @@ private struct ProjectMainViewContent: View {
     }
 
     private func activateTool(_ tool: ModelingTool) {
+        let hasTransientModelingOperation = modelingDraft != nil
+            || meshDraft != nil
+            || historyPreviewTitle != nil
+            || modelingPreview.payload != nil
+        if hasTransientModelingOperation,
+           tool != .surface,
+           (tool != selectedTool || tool == .select) {
+            cancelModelingOperation()
+        }
+        if tool == .surface {
+            beginSurfaceModelingOperation()
+            return
+        }
         if tool != .select {
             setHoveredSceneNode(nil)
             regionOffsetCommandState.deactivate()
@@ -4165,10 +4504,20 @@ private struct ProjectMainViewContent: View {
             slotProfileCommandState.deactivate()
             viewAlignedConstructionPlaneRequest = nil
         }
-        let result = setActiveTool(tool)
-        if result.revealsDiagnostics {
-            isPreviewExpanded = true
-        }
+        setActiveTool(tool)
+    }
+
+    private func beginSurfaceModelingOperation() {
+        cancelModelingOperation()
+        var draft = ModelingOperationDraft(
+            kind: .loft,
+            selection: snapshot.selection,
+            ruler: snapshot.workspaceState.ruler
+        )
+        draft.sheet = true
+        modelingDraft = draft
+        selectedTool = .select
+        reportToolStatus("Surface: select at least two ordered profiles, then Preview. Cancel discards the draft.")
     }
 
     private func toolHelp(for tool: ModelingTool) -> String {
@@ -4187,14 +4536,16 @@ private struct ProjectMainViewContent: View {
             "Create Box"
         case .sweep:
             "Create Sweep from selected profile, selected guides, and clicked path"
+        case .surface:
+            "Open sheet Loft draft"
         case .circle:
             "Create Circle Profile"
         case .mesh:
-            "Inspect Evaluated Meshes"
+            "Edit Authored Mesh elements or make selected CAD editable"
         case .measure:
-            "Show Measurement Summary"
+            "Measure two points in world space"
         case .section:
-            "Create Section Plane"
+            "Create a section plane at the clicked point"
         }
     }
 
@@ -4213,7 +4564,9 @@ private struct ProjectMainViewContent: View {
             return
         }
 
-        let resolvesObjectTargets = isObjectTargetingEnabled || target.modifierFlags.containsControl
+        let resolvesObjectTargets = isObjectTargetingEnabled
+            || target.modifierFlags.containsControl
+            || selectedTool == .mesh
         let effectiveHit = resolvesObjectTargets ? target.hit : nil
         let targetSceneNodeID: SceneNodeID?
         if let hit = effectiveHit {
@@ -4222,12 +4575,16 @@ private struct ProjectMainViewContent: View {
                     "Viewport selection could not resolve a scene node.",
                     severity: .warning
                 )
-                isPreviewExpanded = true
                 return
             }
             targetSceneNodeID = sceneNodeID
         } else {
             targetSceneNodeID = nil
+        }
+
+        if selectedTool == .mesh {
+            routeCanvasMesh(targetSceneNodeID)
+            return
         }
 
         let sketchPlane = effectiveSketchPlane(fallback: target.sketchPlane)
@@ -4246,49 +4603,52 @@ private struct ProjectMainViewContent: View {
             fallbackWorldPoint: canvasInput.worldPoint,
             sketchPlane: sketchPlane
         )
-        switch selectedTool {
-        case .measure:
-            measureCanvasTarget(targetSceneNodeID)
-        case .mesh:
-            inspectCanvasMesh(targetSceneNodeID)
-        default:
-            let tool = selectedTool
-            let polygonState = polygonToolState
-            let currentSketchInputState = sketchInputState
-            let placementCellMeters = viewportProjectedGridStepMeters
-            submitSource(name: "canvasClick") { current in
-                let planner = WorkspaceCanvasCommandPlanner(
-                    context: WorkspaceCanvasCommandPlanner.Context(
-                        document: current.document.document,
-                        selection: current.selection,
-                        workspaceState: current.workspaceState,
-                        objectRegistry: current.objectRegistry,
-                        polygonState: polygonState,
-                        sketchInputState: currentSketchInputState
-                    )
+        let tool = selectedTool
+        let polygonState = polygonToolState
+        let currentSketchInputState = sketchInputState
+        let placementCellMeters = viewportProjectedGridStepMeters
+        submitSource(name: "canvasClick") { current in
+            let planner = WorkspaceCanvasCommandPlanner(
+                context: WorkspaceCanvasCommandPlanner.Context(
+                    document: current.document.document,
+                    selection: current.selection,
+                    workspaceState: current.workspaceState,
+                    objectRegistry: current.objectRegistry,
+                    polygonState: polygonState,
+                    sketchInputState: currentSketchInputState
                 )
-                do {
-                    guard let command = try planner.clickCommand(
-                        tool: tool,
-                        targetSceneNodeID: targetSceneNodeID,
-                        modelPoint: snappedInput.point,
-                        modelWorldPoint: worldPoint,
-                        sketchPlane: sketchPlane,
-                        placementCellMeters: placementCellMeters
-                    ) else {
-                        return []
-                    }
-                    return [command]
-                } catch let failure as CanvasSketchCurveDrafts.Failure {
-                    throw EditorError(code: .commandInvalid, message: failure.message)
+            )
+            do {
+                guard let command = try planner.clickCommand(
+                    tool: tool,
+                    targetSceneNodeID: targetSceneNodeID,
+                    modelPoint: snappedInput.point,
+                    modelWorldPoint: worldPoint,
+                    sketchPlane: sketchPlane,
+                    placementCellMeters: placementCellMeters
+                ) else {
+                    return []
                 }
-            } completion: { results in
-                try await finishCanvasSourceCommand(results.last)
+                return [command]
+            } catch let failure as CanvasSketchCurveDrafts.Failure {
+                throw EditorError(code: .commandInvalid, message: failure.message)
             }
+        } completion: { results in
+            try await finishCanvasSourceCommand(results.last)
         }
     }
 
-    private func measureCanvasTarget(_ targetSceneNodeID: SceneNodeID?) {
+    private func routeCanvasMesh(_ targetSceneNodeID: SceneNodeID?) {
+        guard let targetSceneNodeID,
+              snapshot.document.document.productMetadata.sceneNodes[targetSceneNodeID] != nil else {
+            reportToolStatus(
+                "Mesh editing requires an Authored Mesh target. Select a Mesh or use Make Selected CAD Editable.",
+                severity: .warning
+            )
+            return
+        }
+
+        let isAuthoredMesh = hasAuthoredMeshPresentation(for: targetSceneNodeID)
         let task = enqueueWorkspaceOperation {
             guard let current = workspace.view else {
                 throw ProjectWorkspaceActionError(
@@ -4298,45 +4658,38 @@ private struct ProjectMainViewContent: View {
             }
             var selection = current.selection
             try selection.selectSceneNode(targetSceneNodeID, in: current.document.document)
-            let selected = try await workspace.applySelection(.replace(selection))
-            let result = try MeasurementService().measure(
-                document: selected.document.document,
-                selection: selected.selection,
-                ruler: selected.workspaceState.ruler,
-                objectRegistry: selected.objectRegistry,
-                currentEvaluation: selected.cadInteraction,
-                currentGeneration: selected.documentGeneration
-            )
-            reportToolStatus(result.message)
-            isPreviewExpanded = true
+            _ = try await workspace.applySelection(.replace(selection))
+            return true
         }
-        observeWorkspaceOperation(task)
+
+        Task { @MainActor in
+            do {
+                _ = try await task.value
+                meshDraft = nil
+                if isAuthoredMesh {
+                    reportToolStatus("Mesh editing: select elements in the canvas, then Preview and Apply.")
+                } else {
+                    reportToolStatus(
+                        "The selected object is CAD geometry. Use Make Selected CAD Editable to create an editable Mesh.",
+                        severity: .warning
+                    )
+                }
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
     }
 
-    private func inspectCanvasMesh(_ targetSceneNodeID: SceneNodeID?) {
-        let task = enqueueWorkspaceOperation {
-            guard var current = workspace.view else {
-                throw ProjectWorkspaceActionError(
-                    code: .snapshotUnavailable,
-                    message: "The project workspace has no published view snapshot."
-                )
+    private func hasAuthoredMeshPresentation(for sceneNodeID: SceneNodeID) -> Bool {
+        snapshot.viewport.items.contains { item in
+            guard snapshot.sceneNodeID(for: item.occurrenceID) == sceneNodeID else {
+                return false
             }
-            if let targetSceneNodeID {
-                var selection = current.selection
-                try selection.selectSceneNode(targetSceneNodeID, in: current.document.document)
-                current = try await workspace.applySelection(.replace(selection))
+            if case .authoredMesh = item.sourceReference {
+                return true
             }
-            let summary = try MeshSummaryService().summarize(
-                document: current.document.document,
-                ruler: current.workspaceState.ruler,
-                objectRegistry: current.objectRegistry,
-                currentEvaluation: current.cadInteraction,
-                currentGeneration: current.documentGeneration
-            )
-            reportToolStatus(summary.message)
-            isPreviewExpanded = true
+            return false
         }
-        observeWorkspaceOperation(task)
     }
 
     private func observeWorkspaceOperation<Result: Sendable>(
@@ -4347,7 +4700,6 @@ private struct ProjectMainViewContent: View {
                 _ = try await task.value
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
-                isPreviewExpanded = true
             }
         }
     }
@@ -4491,7 +4843,6 @@ private struct ProjectMainViewContent: View {
                     "Combined Offset Region requires multiple selected regions.",
                     severity: .warning
                 )
-                isPreviewExpanded = true
             }
             return .handled
         case .activateSlideCommand:
@@ -4547,7 +4898,6 @@ private struct ProjectMainViewContent: View {
                 "Dimension requires a selected object, face, edge, or sketch curve target.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
 
@@ -4562,18 +4912,15 @@ private struct ProjectMainViewContent: View {
                     "Dimension found no editable values for the selected target.",
                     severity: .warning
                 )
-                isPreviewExpanded = true
                 return
             }
             dimensionCommandState.activate(entries: entries)
         } catch let error as EditorError {
             dimensionCommandState.deactivate()
             reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
         } catch {
             dimensionCommandState.deactivate()
             reportToolStatus(String(describing: error), severity: .warning)
-            isPreviewExpanded = true
         }
     }
 
@@ -4659,7 +5006,6 @@ private struct ProjectMainViewContent: View {
                 "Dimension value must be finite.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
 
@@ -4671,7 +5017,6 @@ private struct ProjectMainViewContent: View {
                     "Dimension value must be a positive length.",
                     severity: .warning
                 )
-                isPreviewExpanded = true
                 return
             }
             command = .setObjectDimension(
@@ -4688,7 +5033,6 @@ private struct ProjectMainViewContent: View {
                         "Dimension value must be a positive length.",
                         severity: .warning
                     )
-                    isPreviewExpanded = true
                     return
                 }
                 expression = .length(value, .meter)
@@ -4701,11 +5045,7 @@ private struct ProjectMainViewContent: View {
                 value: expression
             )
         }
-        submitSource(command) { result in
-            if result?.diagnostics.isEmpty == false || result == nil {
-                isPreviewExpanded = true
-            }
-        }
+        submitSource(command)
         dimensionCommandState.deactivate()
     }
 
@@ -4736,7 +5076,6 @@ private struct ProjectMainViewContent: View {
             ]
         } completion: { results in
             guard let id = results.last?.createdConstructionPlaneID else {
-                isPreviewExpanded = true
                 return
             }
             let published = try await workspace.applyWorkspace([.setActiveConstructionPlane(id)])
@@ -4769,7 +5108,6 @@ private struct ProjectMainViewContent: View {
                 "Slide Surface CV requires generated PolySpline surface CV selections.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         if case .success(let entity?) = selectedSketchEntityResult {
@@ -4782,7 +5120,6 @@ private struct ProjectMainViewContent: View {
                     : "Slide Curve CV requires a spline curve target.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         selectionScope = .sketchEntity
@@ -4790,7 +5127,6 @@ private struct ProjectMainViewContent: View {
             "Slide requires selected curve CVs or surface CVs.",
             severity: .warning
         )
-        isPreviewExpanded = true
     }
 
     private func activateSlideCurveControlVerticesCommand() {
@@ -4853,7 +5189,6 @@ private struct ProjectMainViewContent: View {
                 "Construction plane update requires a resolved viewport normal.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
 
@@ -4875,7 +5210,6 @@ private struct ProjectMainViewContent: View {
                 "Select one construction plane to activate it.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         activateConstructionPlane(entry.id)
@@ -4887,7 +5221,6 @@ private struct ProjectMainViewContent: View {
                 "Select one construction plane to update it from the current view.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         updateConstructionPlaneFromView(entry)
@@ -4902,7 +5235,6 @@ private struct ProjectMainViewContent: View {
                 "Select one construction plane before editing its origin.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         commitConstructionPlaneEdit(
@@ -4927,7 +5259,6 @@ private struct ProjectMainViewContent: View {
                 "Select one construction plane before editing its normal.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         commitConstructionPlaneEdit(
@@ -4966,11 +5297,10 @@ private struct ProjectMainViewContent: View {
                 ),
             ]
         } completion: { results in
-            if results.last == nil {
-                isPreviewExpanded = true
-            } else {
-                reportToolStatus(successMessage)
+            guard results.last != nil else {
+                return
             }
+            reportToolStatus(successMessage)
         }
     }
 
@@ -4982,7 +5312,6 @@ private struct ProjectMainViewContent: View {
                 "Construction plane selection target is unavailable.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         submitSelectionMutation { selection, document in
@@ -5006,7 +5335,6 @@ private struct ProjectMainViewContent: View {
                 "Construction plane view alignment failed.",
                 severity: .warning
             )
-            isPreviewExpanded = true
         }
     }
 
@@ -5027,8 +5355,6 @@ private struct ProjectMainViewContent: View {
         } completion: { results in
             if results.last != nil {
                 reportToolStatus("Saved view created.")
-            } else {
-                isPreviewExpanded = true
             }
         }
     }
@@ -5058,8 +5384,6 @@ private struct ProjectMainViewContent: View {
         } completion: { results in
             if results.last != nil {
                 reportToolStatus("Saved view \(savedView.name) updated.")
-            } else {
-                isPreviewExpanded = true
             }
         }
     }
@@ -5073,16 +5397,20 @@ private struct ProjectMainViewContent: View {
                     message: "Saved view \(savedViewID) no longer exists."
                 )
             }
+            _ = try savedViewBuilder.cameraFrameRequest(for: currentSavedView)
             return [.setRulerConfiguration(currentSavedView.displayScale.rulerConfiguration)]
         }) { published in
             guard let currentSavedView = published.document.document.productMetadata.savedViews[savedViewID] else {
                 return
             }
             resetWorkspaceInteractionScaleDefaults(ruler: published.workspaceState.ruler)
-            let cameraFrameRequest = savedViewBuilder.cameraFrameRequest(for: currentSavedView)
-            viewportProjectionRequest = ViewportProjectionRequest(basis: cameraFrameRequest.basis)
-            viewportCameraFrameRequest = cameraFrameRequest
-            reportToolStatus("Saved view \(currentSavedView.name) applied.")
+            do {
+                let cameraFrameRequest = try savedViewBuilder.cameraFrameRequest(for: currentSavedView)
+                viewportCameraFrameRequest = cameraFrameRequest
+                reportToolStatus("Applying saved view \(currentSavedView.name).")
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         }
     }
 
@@ -5090,8 +5418,6 @@ private struct ProjectMainViewContent: View {
         submitSource(.removeSavedView(id: savedView.id)) { result in
             if result != nil {
                 reportToolStatus("Saved view \(savedView.name) removed.")
-            } else {
-                isPreviewExpanded = true
             }
         }
     }
@@ -5118,14 +5444,11 @@ private struct ProjectMainViewContent: View {
                 "Construction plane names must not be empty.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
 
         submitSource(.renameConstructionPlane(id: id, name: trimmedName)) { result in
-            if result == nil {
-                isPreviewExpanded = true
-            } else {
+            if result != nil {
                 cancelConstructionPlaneRename()
                 reportToolStatus("Construction plane renamed to \(trimmedName).")
             }
@@ -5138,7 +5461,6 @@ private struct ProjectMainViewContent: View {
                 "View-aligned construction plane requires a resolved viewport normal.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return .handled
         }
 
@@ -5206,7 +5528,6 @@ private struct ProjectMainViewContent: View {
             ]
         } completion: { results in
             guard let id = results.last?.createdConstructionPlaneID else {
-                isPreviewExpanded = true
                 return
             }
             _ = try await workspace.applyWorkspace([.setActiveConstructionPlane(id)])
@@ -5224,7 +5545,6 @@ private struct ProjectMainViewContent: View {
                 "Offset Region requires a selected sketch region.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         selectionScope = .region
@@ -5243,7 +5563,6 @@ private struct ProjectMainViewContent: View {
                 "Offset Edge requires a selected edge.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         selectionScope = .edge
@@ -5255,7 +5574,6 @@ private struct ProjectMainViewContent: View {
         if supportResolution.isSupported == false,
            let message = supportResolution.diagnosticMessage {
             reportToolStatus(message, severity: .warning)
-            isPreviewExpanded = true
         }
     }
 
@@ -5268,7 +5586,6 @@ private struct ProjectMainViewContent: View {
                 "Slot requires a selected open source curve.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         selectionScope = .sketchEntity
@@ -5535,13 +5852,11 @@ private struct ProjectMainViewContent: View {
             }
         } catch let error as EditorError {
             reportToolStatus(error.message, severity: .warning)
-            isPreviewExpanded = true
         } catch {
             reportToolStatus(
                 "Construction plane viewport edit failed.",
                 severity: .warning
             )
-            isPreviewExpanded = true
         }
     }
 
@@ -5978,7 +6293,6 @@ private struct ProjectMainViewContent: View {
                 "Snapping failed and was skipped: \(failureDescription)",
                 severity: .warning
             )
-            isPreviewExpanded = true
         }
     }
 
@@ -6018,7 +6332,6 @@ private struct ProjectMainViewContent: View {
                 severity: .warning
             )
         }
-        isPreviewExpanded = true
         return nil
     }
 
@@ -6056,7 +6369,6 @@ private struct ProjectMainViewContent: View {
                 "Canvas input world point could not be resolved on the active construction plane.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return nil
         }
     }
@@ -6314,7 +6626,6 @@ private struct ProjectMainViewContent: View {
             ]
         } completion: { results in
             guard results.last != nil else {
-                isPreviewExpanded = true
                 return
             }
             patternArrayCurvePathPreviewCandidate = nil
@@ -6442,7 +6753,7 @@ private struct ProjectMainViewContent: View {
                         .foregroundStyle(.secondary)
                 }
             } icon: {
-                Image(systemName: "square.stack.3d.down.right")
+                WorkspaceSidebarSymbol(systemName: "square.stack.3d.down.right")
             }
         }
     }
@@ -6495,7 +6806,7 @@ private struct ProjectMainViewContent: View {
                     .lineLimit(1)
             }
         } icon: {
-            Image(systemName: row.systemImage)
+            WorkspaceSidebarSymbol(systemName: row.systemImage)
         }
     }
 
@@ -7011,9 +7322,9 @@ private struct ProjectMainViewContent: View {
                     sketchEntityInspectorErrorSections(error)
                 }
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
             .padding(.horizontal, WorkspaceInspectorLayout.panelHorizontalInset)
             .padding(.vertical, WorkspaceInspectorLayout.panelVerticalInset)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollIndicators(.visible)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -8094,7 +8405,6 @@ private struct ProjectMainViewContent: View {
     ) {
         guard angleDegrees.isFinite else {
             reportToolStatus("Draft Face requires a finite angle.", severity: .warning)
-            isPreviewExpanded = true
             return
         }
         submitSource(
@@ -8117,7 +8427,6 @@ private struct ProjectMainViewContent: View {
                 "Offset Edge currently supports one selected edge.",
                 severity: .warning
             )
-            isPreviewExpanded = true
             return
         }
         submitSource(
@@ -9587,7 +9896,6 @@ private struct ProjectMainViewContent: View {
                 _ = try await task.value
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
-                isPreviewExpanded = true
             }
         }
     }

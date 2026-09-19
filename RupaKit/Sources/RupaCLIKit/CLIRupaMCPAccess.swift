@@ -1,5 +1,6 @@
 import Foundation
 import RupaAgentProtocol
+import RupaCore
 import RupaCoreTypes
 import RupaMCP
 
@@ -15,6 +16,60 @@ struct CLIRupaMCPAccess: RupaMCPAccess {
 
     func capabilities() async throws -> [AgentCapabilityDescriptor] {
         try await CLIService().capabilityDescriptors()
+    }
+
+    func listViewports(
+        target: RupaMCPProjectTarget
+    ) async throws -> [AgentViewportState] {
+        let response = try await CLIService().send(target: cliTarget(target)) { sessionID in
+            .listViewports(sessionID: sessionID)
+        }
+        guard case .viewportList(let states) = response else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Viewport list request returned an unexpected response."
+            )
+        }
+        return states
+    }
+
+    func viewportState(
+        target: RupaMCPProjectTarget,
+        viewportID: UUID
+    ) async throws -> AgentViewportState {
+        let response = try await CLIService().send(target: cliTarget(target)) { sessionID in
+            .viewportState(sessionID: sessionID, viewportID: viewportID)
+        }
+        guard case .viewportState(let state) = response else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Viewport state request returned an unexpected response."
+            )
+        }
+        return state
+    }
+
+    func executeViewport(
+        target: RupaMCPProjectTarget,
+        viewportID: UUID,
+        expectedViewportRevision: UInt64?,
+        operation: AgentViewportOperation
+    ) async throws -> AgentViewportState {
+        let response = try await CLIService().send(target: cliTarget(target)) { sessionID in
+            .executeViewport(
+                sessionID: sessionID,
+                viewportID: viewportID,
+                expectedViewportRevision: expectedViewportRevision,
+                operation: operation
+            )
+        }
+        guard case .viewportExecution(let state) = response else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Viewport execution request returned an unexpected response."
+            )
+        }
+        return state
     }
 
     func invokeCapability(

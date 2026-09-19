@@ -99,10 +99,15 @@ struct FeatureHistoryView: View {
             HStack(spacing: 8) {
                 Button { onSelect(feature.id) } label: {
                     VStack(alignment: .leading, spacing: 3) {
-                        Label(
-                            presentation.title,
-                            systemImage: feature.isSuppressed ? "pause.circle" : "cube.transparent"
-                        )
+                        Label {
+                            Text(presentation.title)
+                        } icon: {
+                            WorkspaceSidebarSymbol(
+                                systemName: feature.isSuppressed
+                                    ? "pause.circle"
+                                    : "cube.transparent"
+                            )
+                        }
                         .foregroundStyle(feature.isSuppressed ? .secondary : .primary)
                         Text(presentation.inputSummary)
                             .font(.caption2)
@@ -131,7 +136,7 @@ struct FeatureHistoryView: View {
                         .disabled(orderedIndex == orderedFeatures.startIndex)
                     Button("Move Later…") { reorder(feature.id, offset: 1) }
                         .disabled(orderedIndex == orderedFeatures.index(before: orderedFeatures.endIndex))
-                } label: { Image(systemName: "ellipsis") }
+                } label: { WorkspaceSidebarSymbol(systemName: "ellipsis") }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .disabled(isBusy)

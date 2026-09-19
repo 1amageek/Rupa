@@ -1085,7 +1085,6 @@ extension DesignDocument {
             )
         }
 
-        let tolerance = modelingSettings.tolerance
         try updateBSplineSurfaceTrimParameterCurve(
             target: target,
             owner: "B-spline surface trim control point move",

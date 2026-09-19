@@ -28,7 +28,7 @@ public struct RupaMCPServer: Sendable {
         let server = Server(
             name: "rupa",
             version: "1.0.0",
-            instructions: "Discover capabilities before constructing semantic requests. Mutations remain in memory until rupa_save succeeds.",
+            instructions: "Discover capabilities before constructing semantic requests. Project mutations remain in memory until rupa_save succeeds. Viewport controls are transient and are never saved.",
             capabilities: .init(tools: .init(listChanged: false)),
             configuration: .strict
         )
@@ -58,6 +58,45 @@ public struct RupaMCPServer: Sendable {
             case "rupa_list_capabilities":
                 try validate(arguments, allowedKeys: ["cursor", "limit"])
                 return try result(try await capabilityPage(arguments))
+            case "rupa_list_viewports":
+                try validate(arguments, allowedKeys: ["projectPath", "sessionID"])
+                return try result(
+                    ViewportList(
+                        viewports: await access.listViewports(target: try target(arguments))
+                    )
+                )
+            case "rupa_get_viewport_state":
+                try validate(
+                    arguments,
+                    allowedKeys: ["projectPath", "sessionID", "viewportID"]
+                )
+                return try result(
+                    await access.viewportState(
+                        target: try target(arguments),
+                        viewportID: try viewportID(arguments)
+                    )
+                )
+            case "rupa_execute_viewport":
+                try validate(
+                    arguments,
+                    allowedKeys: [
+                        "projectPath",
+                        "sessionID",
+                        "viewportID",
+                        "expectedViewportRevision",
+                        "operation",
+                    ]
+                )
+                let operation: AgentViewportOperation = try decode(required("operation", in: arguments))
+                try operation.validate()
+                return try result(
+                    await access.executeViewport(
+                        target: try target(arguments),
+                        viewportID: try viewportID(arguments),
+                        expectedViewportRevision: try viewportRevision(arguments["expectedViewportRevision"]),
+                        operation: operation
+                    )
+                )
             case "rupa_invoke_capability":
                 try validate(
                     arguments,
@@ -150,6 +189,27 @@ public struct RupaMCPServer: Sendable {
             throw RupaMCPError.invalidArguments("sessionID must be a UUID string.")
         }
         return .session(id)
+    }
+
+    private func viewportID(_ arguments: [String: Value]) throws -> UUID {
+        guard let value = arguments["viewportID"],
+              let string = value.stringValue,
+              let id = UUID(uuidString: string) else {
+            throw RupaMCPError.invalidArguments("viewportID must be a UUID string.")
+        }
+        return id
+    }
+
+    private func viewportRevision(_ value: Value?) throws -> UInt64? {
+        guard let value else {
+            return nil
+        }
+        guard let integer = value.intValue, integer >= 0 else {
+            throw RupaMCPError.invalidArguments(
+                "expectedViewportRevision must be a nonnegative integer."
+            )
+        }
+        return UInt64(integer)
     }
 
     private func validate(_ arguments: [String: Value], allowedKeys: Set<String>) throws {
@@ -284,6 +344,15 @@ private struct CapabilityPage: Encodable {
     let nextCursor: String?
 }
 
+private struct ViewportList: Encodable {
+    let viewports: [AgentViewportState]
+
+    init(viewports: [AgentViewportState]) throws {
+        try AgentViewportState.validateListCount(viewports.count)
+        self.viewports = viewports
+    }
+}
+
 private extension RupaMCPServer {
     static let tools: [Tool] = [
         Tool(
@@ -315,6 +384,30 @@ private extension RupaMCPServer {
                 "additionalProperties": false,
             ]),
             annotations: readAnnotations,
+            outputSchema: objectOutputSchema
+        ),
+        Tool(
+            name: "rupa_list_viewports",
+            title: "List Rupa Viewports",
+            description: "List mounted Rupa viewports for one explicit project target.",
+            inputSchema: targetOnlyInputSchema(),
+            annotations: readAnnotations,
+            outputSchema: objectOutputSchema
+        ),
+        Tool(
+            name: "rupa_get_viewport_state",
+            title: "Get Rupa Viewport State",
+            description: "Read the applied camera and display state of one explicit mounted viewport.",
+            inputSchema: viewportStateInputSchema,
+            annotations: readAnnotations,
+            outputSchema: objectOutputSchema
+        ),
+        Tool(
+            name: "rupa_execute_viewport",
+            title: "Execute Rupa Viewport Operation",
+            description: "Apply one bounded camera or display operation to one explicit mounted viewport without saving the project.",
+            inputSchema: viewportExecuteInputSchema,
+            annotations: viewportMutationAnnotations,
             outputSchema: objectOutputSchema
         ),
         Tool(
@@ -379,14 +472,110 @@ private extension RupaMCPServer {
         openWorldHint: false
     )
 
-    static func targetInputSchema(
-        valueName: String,
-        valueDescription: String,
-        valueSchema: Value = .object(["type": "object"]),
-        valueRequired: Bool = true,
-        includesDryRun: Bool
-    ) -> Value {
-        var properties: [String: Value] = [
+    static let viewportMutationAnnotations = Tool.Annotations(
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+    )
+
+    static func targetOnlyInputSchema() -> Value {
+        .object([
+            "type": "object",
+            "properties": .object(targetProperties()),
+            "oneOf": .array([
+                .object(["required": .array(["projectPath"])]),
+                .object(["required": .array(["sessionID"])]),
+            ]),
+            "additionalProperties": false,
+        ])
+    }
+
+    static let viewportStateInputSchema: Value = viewportInputSchema(
+        includesOperation: false
+    )
+
+    static let viewportExecuteInputSchema: Value = viewportInputSchema(
+        includesOperation: true
+    )
+
+    static func viewportInputSchema(includesOperation: Bool) -> Value {
+        var properties = targetProperties()
+        properties["viewportID"] = .object([
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifier of the mounted viewport returned by rupa_list_viewports.",
+        ])
+        if includesOperation {
+            properties["expectedViewportRevision"] = .object([
+                "type": "integer",
+                "minimum": 0,
+                "description": "Optional revision guard for one viewport operation.",
+            ])
+            properties["operation"] = viewportOperationSchema
+        }
+        var required: [Value] = [.string("viewportID")]
+        if includesOperation {
+            required.append(.string("operation"))
+        }
+        return .object([
+            "type": "object",
+            "properties": .object(properties),
+            "required": .array(required),
+            "oneOf": .array([
+                .object(["required": .array(["projectPath"])]),
+                .object(["required": .array(["sessionID"])]),
+            ]),
+            "additionalProperties": false,
+        ])
+    }
+
+    static let viewportOperationSchema: Value = .object([
+        "oneOf": .array([
+            viewportOperationBranch("fitVisible"),
+            viewportOperationBranch("fitSelected"),
+            viewportOperationBranch("orbit", fields: [
+                "yawDeltaDegrees": .object(["type": "number"]),
+                "elevationDeltaDegrees": .object(["type": "number"]),
+            ]),
+            viewportOperationBranch("pan", fields: [
+                "deltaXPoints": .object(["type": "number"]),
+                "deltaYPoints": .object(["type": "number"]),
+            ]),
+            viewportOperationBranch("zoom", fields: [
+                "factor": .object(["type": "number", "exclusiveMinimum": 0]),
+            ]),
+            viewportOperationBranch("setOrientation", fields: [
+                "orientation": .object([
+                    "type": "string", "enum": .array(["isometric", "xFront", "yFront", "zFront"]),
+                ]),
+            ]),
+            viewportOperationBranch("resetCamera"),
+            viewportOperationBranch("setProjection", fields: [
+                "projection": .object([
+                    "type": "string", "enum": .array(["parallel", "perspective"]),
+                ]),
+            ]),
+            viewportOperationBranch("setDisplayMode", fields: [
+                "displayMode": .object([
+                    "type": "string", "enum": .array(["solid", "solidWithEdges", "wireframe", "normals"]),
+                ]),
+            ]),
+        ]),
+    ])
+
+    static func viewportOperationBranch(_ kind: String, fields: [String: Value] = [:]) -> Value {
+        var properties = fields
+        properties["kind"] = .object(["type": "string", "const": .string(kind)])
+        return .object([
+            "type": "object", "properties": .object(properties),
+            "required": .array(properties.keys.sorted().map(Value.string)),
+            "additionalProperties": false,
+        ])
+    }
+
+    static func targetProperties() -> [String: Value] {
+        [
             "projectPath": .object([
                 "type": "string",
                 "minLength": 1,
@@ -397,8 +586,18 @@ private extension RupaMCPServer {
                 "format": "uuid",
                 "description": "Identifier of an already open Rupa project session.",
             ]),
-            valueName: mergedSchema(valueSchema, description: valueDescription),
         ]
+    }
+
+    static func targetInputSchema(
+        valueName: String,
+        valueDescription: String,
+        valueSchema: Value = .object(["type": "object"]),
+        valueRequired: Bool = true,
+        includesDryRun: Bool
+    ) -> Value {
+        var properties = targetProperties()
+        properties[valueName] = mergedSchema(valueSchema, description: valueDescription)
         if includesDryRun {
             properties["dryRun"] = .object([
                 "type": "boolean",

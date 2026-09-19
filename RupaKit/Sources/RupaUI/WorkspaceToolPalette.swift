@@ -9,12 +9,17 @@ struct WorkspaceToolPalette: View {
     var accessibilityIdentifier: (ModelingTool) -> String
 
     var body: some View {
-        VStack(spacing: WorkspaceToolPaletteMetrics.itemSpacing) {
-            ForEach(ModelingTool.allCases) { tool in
-                toolPaletteButton(tool)
+        ScrollView(.vertical) {
+            VStack(spacing: WorkspaceToolPaletteMetrics.itemSpacing) {
+                ForEach(ModelingTool.allCases) { tool in
+                    toolPaletteButton(tool)
+                }
             }
+            .padding(WorkspaceToolPaletteMetrics.containerPadding)
         }
-        .padding(WorkspaceToolPaletteMetrics.containerPadding)
+        .scrollIndicators(.hidden)
+        .frame(width: WorkspaceToolPaletteMetrics.buttonSize + 2 * WorkspaceToolPaletteMetrics.containerPadding)
+        .frame(maxHeight: WorkspaceToolPaletteMetrics.defaultHeight)
         .viewportCanvasCapsuleGlassChrome()
         .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         .accessibilityElement(children: .contain)
@@ -30,8 +35,9 @@ struct WorkspaceToolPalette: View {
             toolPaletteIcon(tool, isSelected: isSelected)
         }
         .buttonStyle(.plain)
-        .help(help(tool))
+        .modifier(WorkspaceToolNameHint(title: tool.title, edge: .trailing))
         .accessibilityLabel(tool.title)
+        .accessibilityHint(help(tool))
         .accessibilityValue(isSelected ? "Selected" : "Available")
         .accessibilityIdentifier(accessibilityIdentifier(tool))
     }

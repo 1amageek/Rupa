@@ -3,6 +3,57 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    @discardableResult
+    public mutating func renameSceneNode(
+        id: SceneNodeID,
+        name: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> Bool {
+        let normalizedName = try normalizedMetadataName(name, owner: "Scene node")
+        guard let node = productMetadata.sceneNodes[id] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Scene node rename requires an existing scene node."
+            )
+        }
+
+        let ownershipResolver = PatternArrayOwnershipResolver()
+        if let sourceID = ownershipResolver.sourceID(
+            containingOutputSceneNode: id,
+            in: productMetadata
+        ), let source = productMetadata.patternArrays[sourceID] {
+            let message = source.rootSceneNodeID == id
+                ? "Pattern array root names are owned by updatePatternArray."
+                : "Generated pattern output scene node names are owned by the pattern source."
+            throw EditorError(code: .commandInvalid, message: message)
+        }
+
+        if node.reference?.constructionPlaneID != nil {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Saved construction plane scene nodes must be renamed through renameConstructionPlane."
+            )
+        }
+
+        if node.reference?.componentInstanceID != nil ||
+            node.object?.componentInstanceID != nil {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Component instance scene nodes must be renamed through renameComponentInstance."
+            )
+        }
+
+        guard node.name != normalizedName else {
+            return false
+        }
+
+        var updatedMetadata = productMetadata
+        updatedMetadata.sceneNodes[id]?.name = normalizedName
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+        return true
+    }
+
     public mutating func setSceneNodeVisibility(
         id: SceneNodeID,
         isVisible: Bool,

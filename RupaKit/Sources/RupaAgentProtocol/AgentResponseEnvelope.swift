@@ -172,6 +172,17 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
                     message: "Agent response result does not match method \(method)."
                 )
             }
+            switch result {
+            case .viewportList(let states):
+                try AgentViewportState.validateListCount(states.count)
+                for state in states {
+                    try state.validate()
+                }
+            case .viewportState(let state), .viewportExecution(let state):
+                try state.validate()
+            default:
+                break
+            }
         }
     }
 
@@ -222,6 +233,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
         case .sceneGraphSnapshot(let value):
             try container.encode(value, forKey: .result)
         case .viewportSnapshot(let value):
+            try container.encode(value, forKey: .result)
+        case .viewportList(let value):
+            try container.encode(value, forKey: .result)
+        case .viewportState(let value), .viewportExecution(let value):
             try container.encode(value, forKey: .result)
         case .designDisplaySnapshot(let value):
             try container.encode(value, forKey: .result)
@@ -393,6 +408,18 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .viewportSnapshot(
                 try container.decode(AgentProjectViewportSnapshot.self, forKey: .result)
             )
+        case "viewport.list":
+            return .viewportList(
+                try container.decode([AgentViewportState].self, forKey: .result)
+            )
+        case "viewport.state":
+            return .viewportState(
+                try container.decode(AgentViewportState.self, forKey: .result)
+            )
+        case "viewport.execute":
+            return .viewportExecution(
+                try container.decode(AgentViewportState.self, forKey: .result)
+            )
         case "document.designDisplaySnapshot":
             return .designDisplaySnapshot(
                 try container.decode(DesignDisplaySnapshotResult.self, forKey: .result)
@@ -542,6 +569,12 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.sceneGraphSnapshot"
         case .viewportSnapshot:
             "project.viewportSnapshot"
+        case .viewportList:
+            "viewport.list"
+        case .viewportState:
+            "viewport.state"
+        case .viewportExecution:
+            "viewport.execute"
         case .designDisplaySnapshot:
             "document.designDisplaySnapshot"
         case .patternArraySummary:
@@ -630,6 +663,9 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("document.constructionPlaneSummary", .constructionPlaneSummary),
              ("document.sceneGraphSnapshot", .sceneGraphSnapshot),
              ("project.viewportSnapshot", .viewportSnapshot),
+             ("viewport.list", .viewportList),
+             ("viewport.state", .viewportState),
+             ("viewport.execute", .viewportExecution),
              ("document.designDisplaySnapshot", .designDisplaySnapshot),
              ("document.patternArraySummary", .patternArraySummary),
              ("document.meshSummary", .meshSummary),

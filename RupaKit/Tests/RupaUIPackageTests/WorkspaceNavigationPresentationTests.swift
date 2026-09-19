@@ -12,7 +12,7 @@ import RupaRendering
     #expect(WorkspaceInspectorTab.properties.title == "Properties")
     #expect(WorkspaceInspectorTab.definitions.title == "Definitions")
     #expect(ViewportDisplayMode.allCases.map(viewportDisplayModeTitle) == [
-        "Solid", "Solid + Mesh Boundaries", "Wireframe", "Normals"
+        "Solid", "Solid + Mesh Edges", "Wireframe", "Normals"
     ])
 }
 

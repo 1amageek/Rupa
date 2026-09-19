@@ -138,6 +138,24 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         lifecycle == .ready && registeredSessionID != nil
     }
 
+    func requireViewportDocumentLifetime(
+        sessionID: UUID
+    ) throws -> ProjectDocumentLifetimeID {
+        guard registeredSessionID == sessionID else {
+            throw EditorError(
+                code: .sessionNotFound,
+                message: "No registered application project session exists for \(sessionID.uuidString)."
+            )
+        }
+        guard lifecycle == .ready, !isBusy, let snapshot else {
+            throw EditorError(
+                code: .agentUnavailable,
+                message: "The application project is not ready for viewport control."
+            )
+        }
+        return snapshot.documentLifetimeID
+    }
+
     var canCancelOperation: Bool {
         guard let operation = operation ?? scheduledOperation else {
             return false

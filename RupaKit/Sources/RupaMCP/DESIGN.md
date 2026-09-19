@@ -8,7 +8,7 @@ Children: none.
 
 ## Responsibilities and Boundaries
 
-The module owns a fixed six-tool MCP catalog, JSON-schema validation, bounded
+The module owns a fixed nine-tool MCP catalog, JSON-schema validation, bounded
 result projection, and legacy plus MCP 2026-07-28 handler registration. It does
 not own project state, credentials, HTTP, semantic CAD execution, persistence,
 or application lifecycle. Its access protocol is implemented by the CLI layer.
@@ -27,7 +27,7 @@ or application lifecycle. Its access protocol is implemented by the CLI layer.
 ```mermaid
 flowchart LR
     Client["MCP client"] -->|stdio| Server["RupaMCPServer"]
-    Server --> Tools["six fixed tools"]
+    Server --> Tools["nine fixed tools"]
     Tools --> Port["RupaMCPAccess"]
     Port --> CLI["CLIService adapter"]
     CLI --> Access["RupaProjectAccess"]
@@ -36,8 +36,10 @@ flowchart LR
 
 ## Contracts and Invariants
 
-1. The catalog contains only status, sessions, paged capabilities, one direct
-   semantic invocation, one bounded semantic program, and explicit save.
+1. The catalog contains status, sessions, paged capabilities, one direct
+   semantic invocation, one bounded semantic program, explicit save, and the
+   three viewport tools `rupa_list_viewports`, `rupa_get_viewport_state`, and
+   `rupa_execute_viewport`.
 2. A project target contains exactly one canonical project path or live session
    UUID. Authority coordinates come only from the opened access session.
 3. Mutation never implies save, request splitting, fallback, or retry.
@@ -47,6 +49,13 @@ flowchart LR
 5. Tool failures use MCP error results with structured details and never become
    empty success values.
 6. Both legacy MCP and MCP 2026-07-28 calls use the same catalog and dispatcher.
+7. Viewport list/state/execute arguments use the Foundation viewport DTOs and
+   require one explicit project target. State and execution require an explicit
+   viewport UUID; execution forwards an optional expected viewport revision and
+   never performs an implicit save. Numeric fields are finite and action-valid,
+   unknown keys are rejected, and the bounded result is the applied state only.
+   Each operation has an exact `oneOf` schema branch with the same required
+   fields as its protocol decoder.
 
 ## Runtime Flows
 
@@ -82,3 +91,6 @@ In-memory MCP tests prove legacy and modern negotiation, fixed catalog parity,
 bounded paging, exact target forwarding, no implicit save, explicit save, and
 structured failure. CLI tests prove `rupa mcp` selects this server while product
 integration continues through the signed CLI and App-owned access route.
+Viewport tests additionally prove strict operation decoding, explicit target
+and UUID forwarding, stale failure projection, and one-call/no-save behavior
+for both registered handler paths.

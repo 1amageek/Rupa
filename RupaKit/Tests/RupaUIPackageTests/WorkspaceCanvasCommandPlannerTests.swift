@@ -72,7 +72,7 @@ func workspaceCanvasCommandPlannerClickRoutesBuildExecutableCommands() throws {
         (.arc, "createArcSketch"),
         (.spline, "createSplineSketch"),
         (.circle, "createCircleSketch"),
-        (.section, "createSectionPlane"),
+        (.section, "createViewAlignedConstructionPlane"),
     ]
 
     for (tool, expectedCommandName) in executableCases {
@@ -138,6 +138,65 @@ func workspaceCanvasCommandPlannerDragRoutesBuildExecutableCommands() throws {
             endWorldPoint: nil
         ) == nil)
     }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func workspaceCanvasCommandPlannerRefusesSurfaceCanvasGesturesForLoftDraft() throws {
+    let session = EditorSession()
+    for operation in ["click", "drag"] {
+        #expect(throws: EditorError.self) {
+            if operation == "click" {
+                _ = try workspaceCanvasCommandPlanner(session: session).clickCommand(
+                    tool: .surface,
+                    targetSceneNodeID: nil,
+                    modelPoint: Point2D(x: 0.0, y: 0.0),
+                    modelWorldPoint: nil,
+                    sketchPlane: .xy,
+                    placementCellMeters: nil
+                )
+            } else {
+                _ = try workspaceCanvasCommandPlanner(session: session).dragCommand(
+                    tool: .surface,
+                    startModelPoint: Point2D(x: 0.0, y: 0.0),
+                    endModelPoint: Point2D(x: 0.01, y: 0.01),
+                    sketchPlane: .xy,
+                    startWorldPoint: nil,
+                    endWorldPoint: nil
+                )
+            }
+        }
+    }
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func workspaceCanvasCommandPlannerSectionPreservesClickedWorldPlacement() throws {
+    let session = EditorSession()
+    let worldPoint = Point3D(x: 0.2, y: -0.1, z: 0.35)
+    let command = try #require(
+        try workspaceCanvasCommandPlanner(session: session).clickCommand(
+            tool: .section,
+            targetSceneNodeID: nil,
+            modelPoint: Point2D(x: 0.01, y: -0.02),
+            modelWorldPoint: worldPoint,
+            sketchPlane: .yz,
+            placementCellMeters: nil
+        )
+    )
+    guard case let .createViewAlignedConstructionPlane(_, origin, viewNormal) = command else {
+        Issue.record("Section placement must use the view-aligned construction-plane command.")
+        return
+    }
+    #expect(origin == worldPoint)
+    #expect(viewNormal == Vector3D(x: 1.0, y: 0.0, z: 0.0))
+    let result = try session.execute(command)
+    let id = try #require(result.createdConstructionPlaneID)
+    let source = try #require(session.document.productMetadata.constructionPlanes[id])
+    let frame = try SketchPlaneCoordinateSystem(plane: source.plane)
+    #expect(frame.origin == worldPoint)
+    #expect(frame.normal == viewNormal)
+    #expect(session.workspaceState.activeConstructionPlaneID == nil)
 }
 
 @MainActor
@@ -287,7 +346,7 @@ func workspaceCanvasCommandPlannerReportsTypedFailuresForInvalidBranchInputs() t
     }
     #expect(throws: EditorError.self) {
         _ = try workspaceCanvasCommandPlanner(session: session).clickCommand(
-            tool: .circle,
+            tool: .section,
             targetSceneNodeID: nil,
             modelPoint: Point2D(x: .infinity, y: 0.0),
             modelWorldPoint: nil,

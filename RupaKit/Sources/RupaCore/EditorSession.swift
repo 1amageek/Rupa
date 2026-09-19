@@ -536,7 +536,7 @@ public final class EditorSession {
         switch tool {
         case .sketch, .polygon, .circle, .arc, .spline, .solid:
             return true
-        case .select, .sweep, .mesh, .measure, .section:
+        case .select, .sweep, .mesh, .measure, .section, .surface:
             return false
         }
     }

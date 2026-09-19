@@ -31,7 +31,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
 
     func remappedOperation(_ operation: FeatureOperation) throws -> FeatureOperation {
         switch operation {
-        case .sketch:
+        case .sketch, .spatialPath:
             return operation
         case .extrude:
             return try remappedExtrudeOperation(operation)

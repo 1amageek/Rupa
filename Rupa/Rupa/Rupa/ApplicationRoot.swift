@@ -19,6 +19,7 @@ struct ApplicationRoot: App {
     @NSApplicationDelegateAdaptor(ApplicationLifecycleDelegate.self)
     private var applicationDelegate
     @State private var projectCoordinator: ApplicationProjectCoordinator
+    @State private var viewportRegistry: ApplicationViewportRegistry?
 
     private let domainConfiguration: ApplicationDomainRegistryConfiguration
     private let projectOperationSequencer: ProjectWorkspaceOperationSequencer
@@ -69,8 +70,12 @@ struct ApplicationRoot: App {
                 projectHandler: agentController,
                 lifecycle: projectCoordinator
             )
+            let viewportRegistry = ApplicationViewportRegistry(coordinator: projectCoordinator)
+            let viewportRouter = ApplicationViewportRequestRouter(
+                downstream: requestRouter, viewports: viewportRegistry
+            )
             let agentLifecycle = try ApplicationAgentHostLifecycle(
-                handler: requestRouter,
+                handler: viewportRouter,
                 discoveryStore: ApplicationProductConfiguration
                     .makeDiscoveryStore(),
                 requestTimeout: ApplicationProductConfiguration
@@ -78,6 +83,7 @@ struct ApplicationRoot: App {
                 protocolEncodingLimits: semanticProtocolEncodingLimits
             )
             self._projectCoordinator = State(initialValue: projectCoordinator)
+            self._viewportRegistry = State(initialValue: viewportRegistry)
             applicationDelegate.configure(
                 projectCoordinator: projectCoordinator,
                 agentLifecycle: agentLifecycle
@@ -146,6 +152,12 @@ struct ApplicationRoot: App {
                     operationSequencer: projectOperationSequencer,
                     newProject: {
                         projectCoordinator.startNewProject()
+                    },
+                    onViewportMount: { lifetime, control in
+                        viewportRegistry?.mount(lifetime: lifetime, control: control)
+                    },
+                    onViewportUnmount: { id in
+                        viewportRegistry?.unmount(id)
                     }
                 )
                 .accessibilityIdentifier("ApplicationProject.ready")

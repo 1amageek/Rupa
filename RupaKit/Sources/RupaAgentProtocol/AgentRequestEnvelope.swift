@@ -80,6 +80,8 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
             _ = try request.request.semanticValue()
         case .executeProgram(let request):
             _ = try request.program.semanticValue()
+        case .executeViewport(_, _, _, let operation):
+            try operation.validate()
         default:
             break
         }
@@ -256,6 +258,26 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 SessionGenerationParams(
                     sessionID: sessionID,
                     expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
+        case let .listViewports(sessionID):
+            try container.encode(
+                ViewportListParams(sessionID: sessionID),
+                forKey: .params
+            )
+        case let .viewportState(sessionID, viewportID):
+            try container.encode(
+                ViewportStateParams(sessionID: sessionID, viewportID: viewportID),
+                forKey: .params
+            )
+        case let .executeViewport(sessionID, viewportID, expectedViewportRevision, operation):
+            try container.encode(
+                ViewportExecuteParams(
+                    sessionID: sessionID,
+                    viewportID: viewportID,
+                    expectedViewportRevision: expectedViewportRevision,
+                    operation: operation
                 ),
                 forKey: .params
             )
@@ -647,6 +669,21 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 sessionID: payload.sessionID,
                 expectedGeneration: payload.expectedGeneration
             )
+        case "viewport.list":
+            let payload = try decodeParams(ViewportListParams.self, from: container, method: method)
+            return .listViewports(sessionID: payload.sessionID)
+        case "viewport.state":
+            let payload = try decodeParams(ViewportStateParams.self, from: container, method: method)
+            return .viewportState(sessionID: payload.sessionID, viewportID: payload.viewportID)
+        case "viewport.execute":
+            let payload = try decodeParams(ViewportExecuteParams.self, from: container, method: method)
+            try payload.operation.validate()
+            return .executeViewport(
+                sessionID: payload.sessionID,
+                viewportID: payload.viewportID,
+                expectedViewportRevision: payload.expectedViewportRevision,
+                operation: payload.operation
+            )
         case "document.designDisplaySnapshot":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .designDisplaySnapshot(
@@ -929,6 +966,33 @@ private struct SessionGenerationParams: AgentRequestParameterPayload, Equatable 
 
     var sessionID: UUID
     var expectedGeneration: DocumentGeneration?
+}
+
+private struct ViewportListParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID"]
+
+    var sessionID: UUID
+}
+
+private struct ViewportStateParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "viewportID"]
+
+    var sessionID: UUID
+    var viewportID: UUID
+}
+
+private struct ViewportExecuteParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "viewportID",
+        "expectedViewportRevision",
+        "operation",
+    ]
+
+    var sessionID: UUID
+    var viewportID: UUID
+    var expectedViewportRevision: UInt64?
+    var operation: AgentViewportOperation
 }
 
 private struct CreateDocumentParams: AgentRequestParameterPayload, Equatable {

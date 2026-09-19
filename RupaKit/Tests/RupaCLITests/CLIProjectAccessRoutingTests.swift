@@ -42,6 +42,83 @@ func cliServiceSelectsExactLiveProjectAndSessionTargets() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliServiceForwardsViewportRequestsExactlyOnce() async throws {
+    let sessionID = UUID()
+    let viewportID = UUID(uuidString: "00000000-0000-0000-0000-000000000203")!
+    let state = AgentViewportState(
+        viewportID: viewportID,
+        revision: 4,
+        viewportWidthPoints: 640,
+        viewportHeightPoints: 480,
+        canFitVisible: true,
+        canFitSelected: true,
+        orientation: .isometric,
+        yawDegrees: 45,
+        elevationDegrees: 35,
+        panXPoints: 0,
+        panYPoints: 0,
+        zoomFactor: 1,
+        xDirection: .init(dx: 1, dy: 0),
+        yDirection: .init(dx: 0, dy: 1),
+        zDirection: .init(dx: -1, dy: -1),
+        displayMode: .solid
+    )
+    let session = StubProjectAccessSession(
+        sessionID: sessionID,
+        steps: [
+            .response(.viewportList([state])),
+            .response(.viewportState(state)),
+            .response(.viewportExecution(state)),
+        ]
+    )
+    let opener = StubProjectAccessOpener(session: session)
+    let observer = await makeStubProjectAccessObserver()
+    let projectURL = URL(fileURLWithPath: "/tmp/viewport-forwarding.rupa")
+
+    try await withStubProjectAccess(opener: opener, observer: observer) {
+        try await CLIProjectAccessRunner.withCommandScope {
+            let list = try await CLIService().send(
+                target: CLIDocumentTarget(fileURL: projectURL),
+                request: { .listViewports(sessionID: $0) }
+            )
+            let current = try await CLIService().send(
+                target: CLIDocumentTarget(fileURL: projectURL),
+                request: { .viewportState(sessionID: $0, viewportID: viewportID) }
+            )
+            let executed = try await CLIService().send(
+                target: CLIDocumentTarget(fileURL: projectURL),
+                request: {
+                    .executeViewport(
+                        sessionID: $0,
+                        viewportID: viewportID,
+                        expectedViewportRevision: 4,
+                        operation: .setDisplayMode(.wireframe)
+                    )
+                }
+            )
+            #expect(list == .viewportList([state]))
+            #expect(current == .viewportState(state))
+            #expect(executed == .viewportExecution(state))
+        }
+    }
+
+    #expect(await session.recordedRequests() == [
+        .listViewports(sessionID: sessionID),
+        .viewportState(sessionID: sessionID, viewportID: viewportID),
+        .executeViewport(
+            sessionID: sessionID,
+            viewportID: viewportID,
+            expectedViewportRevision: 4,
+            operation: .setDisplayMode(.wireframe)
+        ),
+    ])
+    #expect(await opener.recordedTargets() == [
+        .liveProject(projectURL),
+    ])
+    #expect(await session.recordedFinishCount() == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliRejectsUnsupportedProjectBeforeOpeningAccess() async {
     let session = StubProjectAccessSession(steps: [])
     let opener = StubProjectAccessOpener(session: session)

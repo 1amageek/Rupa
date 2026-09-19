@@ -56,8 +56,16 @@ struct WorkspaceCanvasCommandPlanner {
             return try splineClickCommand(modelPoint: modelPoint, sketchPlane: sketchPlane)
         case .circle:
             return try circleClickCommand(modelPoint: modelPoint, sketchPlane: sketchPlane)
+        case .surface:
+            throw commandError(
+                "Surface opens the sheet Loft draft. Select at least two ordered profiles in the inspector."
+            )
         case .section:
-            return .createSectionPlane(name: nextSceneNodeName(prefix: "Section Plane"))
+            return try sectionClickCommand(
+                modelPoint: modelPoint,
+                modelWorldPoint: modelWorldPoint,
+                sketchPlane: sketchPlane
+            )
         }
     }
 
@@ -89,6 +97,10 @@ struct WorkspaceCanvasCommandPlanner {
                 centerModelPoint: startModelPoint,
                 edgeModelPoint: endModelPoint,
                 sketchPlane: sketchPlane
+            )
+        case .surface:
+            throw commandError(
+                "Surface opens the sheet Loft draft. Select at least two ordered profiles in the inspector."
             )
         case .arc:
             return try arcDragCommand(
@@ -338,6 +350,33 @@ struct WorkspaceCanvasCommandPlanner {
         )
     }
 
+    private func sectionClickCommand(
+        modelPoint: Point2D,
+        modelWorldPoint: Point3D?,
+        sketchPlane: SketchPlane
+    ) throws -> EditorCommand {
+        try requireFinite(modelPoint, message: "Canvas section placement requires a finite model coordinate.")
+        let coordinateSystem: SketchPlaneCoordinateSystem
+        do {
+            coordinateSystem = try SketchPlaneCoordinateSystem(plane: sketchPlane)
+        } catch {
+            throw commandError("Canvas section placement requires a valid construction plane.")
+        }
+        let origin = modelWorldPoint ?? coordinateSystem.point(from: localPoint(modelPoint, on: sketchPlane))
+        try requireFinite(origin, message: "Canvas section placement requires a finite world coordinate.")
+        let viewNormal: Vector3D
+        do {
+            viewNormal = try coordinateSystem.normal.normalized(tolerance: 1.0e-12)
+        } catch {
+            throw commandError("Canvas section placement requires a non-zero construction-plane normal.")
+        }
+        return .createViewAlignedConstructionPlane(
+            name: nextSceneNodeName(prefix: "Section Plane"),
+            origin: origin,
+            viewNormal: viewNormal
+        )
+    }
+
     private func arcClickCommand(modelPoint: Point2D, sketchPlane: SketchPlane) throws -> EditorCommand {
         let draft = try CanvasSketchCurveDrafts.arc(
             centeredAt: localPoint(modelPoint, on: sketchPlane),
@@ -571,6 +610,12 @@ struct WorkspaceCanvasCommandPlanner {
 
     private func requireFinite(_ point: Point2D, message: String) throws {
         guard point.x.isFinite, point.y.isFinite else {
+            throw commandError(message)
+        }
+    }
+
+    private func requireFinite(_ point: Point3D, message: String) throws {
+        guard point.x.isFinite, point.y.isFinite, point.z.isFinite else {
             throw commandError(message)
         }
     }

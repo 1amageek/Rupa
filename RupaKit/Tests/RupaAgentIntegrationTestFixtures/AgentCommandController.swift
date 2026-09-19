@@ -106,6 +106,13 @@ public final class AgentCommandController: AgentClientProtocol {
                         message: "Application-owned file and window lifecycle is outside the Agent project route."
                     )
                 )
+            case .listViewports, .viewportState, .executeViewport:
+                return .failure(
+                    EditorError(
+                        code: .commandUnsupported,
+                        message: "Viewport control is owned by the mounted application viewport route."
+                    )
+                )
             case .undo:
                 func run() throws -> AgentResponse {
                     guard case let .undo(sessionID, expectedGeneration) = request else {
