@@ -2,6 +2,8 @@ import SwiftUI
 import RupaCore
 
 enum WorkspaceInspectorLayout {
+    static let minimumColumnWidth: CGFloat = 320
+    static let idealColumnWidth: CGFloat = 320
     static let panelHorizontalInset: CGFloat = 12
     static let panelVerticalInset: CGFloat = 12
     static let sectionSpacing: CGFloat = 12

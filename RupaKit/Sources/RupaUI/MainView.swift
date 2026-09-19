@@ -1634,7 +1634,11 @@ private struct ProjectMainViewContent: View {
             }
         }
         .leadingPaneWidth(minimum: 560)
-        .trailingPaneWidth(320, minimum: 320, maximum: 320)
+        .trailingPaneWidth(
+            WorkspaceInspectorLayout.idealColumnWidth,
+            minimum: WorkspaceInspectorLayout.minimumColumnWidth,
+            maximum: WorkspaceInspectorLayout.idealColumnWidth
+        )
         .dividerDragStrip(width: 10)
     }
 
