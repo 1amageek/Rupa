@@ -1910,7 +1910,6 @@ private struct ProjectMainViewContent: View {
             onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
             onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
             onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
-            onSketchTransformCommit: viewportSketchTransformCommitHandler,
             onCommandConfirm: viewportCommandConfirmHandler,
             onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
             onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
@@ -2543,21 +2542,6 @@ private struct ProjectMainViewContent: View {
             nil
         }
     }
-    /// Provider for the sketch transform gizmo route.
-    ///
-    /// The route commits a scene-node frame rather than CAD topology, so the
-    /// tool and selection-scope policy that decides whether object-scope
-    /// editing is offered lives here and the viewport reads the bound callback
-    /// as its only gate. It deliberately does not require an exact CAD
-    /// affordance context: that permission is resolved from mesh presentations,
-    /// and a sketch feature has none.
-    private var viewportSketchTransformCommitHandler: ((ViewportSketchTransformDragTarget) async throws -> ViewportSourceIdentity)? {
-        guard selectedTool == .select, selectionScope == .object else { return nil }
-        return { target in
-            try await handleViewportSketchTransformCommit(target)
-        }
-    }
-
 
     private var canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? {
         switch selectedTool {
@@ -5815,41 +5799,6 @@ private struct ProjectMainViewContent: View {
             point: target.point
         )
     }
-    private func handleViewportSketchTransformCommit(
-        _ target: ViewportSketchTransformDragTarget
-    ) async throws -> ViewportSourceIdentity {
-        guard selectedTool == .select, selectionScope == .object else {
-            throw ProjectWorkspaceActionError(code: .actionResultMismatch,
-                message: "Sketch transforms commit only with the Select tool in object scope.")
-        }
-        return try await runWorkspaceOperation {
-          _ = try await executeSource(name: "transformSketch") { current in
-            guard let node = current.document.document.productMetadata.sceneNodes[target.sceneNodeID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Sketch scene node \(target.sceneNodeID) no longer exists."
-                )
-            }
-            // The gesture measured its mutation against the frame read at press,
-            // so committing onto a frame that changed since then would move the
-            // sketch by a delta the pointer never described.
-            guard node.localTransform == target.baseLocalTransform else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "The sketch frame changed during the transform gesture."
-                )
-            }
-            return try WorkspaceTransformMatrix.command(setting: target.localTransform,
-                for: node.id, in: current.document.document).map { [$0] } ?? []
-          }
-          guard let published = workspace.view else {
-              throw ProjectWorkspaceActionError(code: .snapshotUnavailable,
-                  message: "The transformed sketch has no published view.")
-          }
-          return .document(id: published.document.document.id, generation: published.documentGeneration)
-        }
-    }
-
 
     private func handleViewportSketchCurveHandleDrag(_ target: ViewportSketchCurveHandleDragTarget) {
         guard selectedTool == .select,

@@ -135,7 +135,7 @@ extension ViewportSpatialPreparedInteractionTarget {
              .surfaceControlPoint, .surfaceControlPointSlide,
              .surfaceTrimEndpoint, .surfaceTrimControlPoint, .surfaceFrame,
              .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
-             .sketchTransform, .affordance, .objectTransform, .patternArrayLinearAxis,
+             .affordance, .objectTransform, .patternArrayLinearAxis,
              .independentCopyExtrudeDistance, .independentCopyBodyDimension,
              .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint:
             return .projectionFree(self)

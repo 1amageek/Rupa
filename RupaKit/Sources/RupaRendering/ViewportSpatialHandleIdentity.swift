@@ -44,7 +44,6 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleIdentity)
     case patternArrayOutputMode(ViewportPatternArrayOutputModeHandleIdentity)
     case constructionPlane(ViewportConstructionPlaneHandleIdentity)
-    case sketchTransform(ViewportSketchTransformHandleIdentity)
     case affordance(ViewportAffordanceTarget)
     case objectTransform(nodes: [SceneNodeID], action: ViewportAffordanceAction)
 
@@ -122,8 +121,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                  .splineControlPoint, .edgeOffset, .slotWidth, .sketchVertexOffset,
                  .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension,
                  .patternArrayRadialAngle, .patternArrayCopyCount, .patternArrayCurveExtent,
-                 .patternArrayCurvePathPoint, .patternArrayOutputMode, .constructionPlane,
-                 .sketchTransform: break
+                 .patternArrayCurvePathPoint, .patternArrayOutputMode,
+                 .constructionPlane: break
             }
         }
         return bytes

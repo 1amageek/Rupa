@@ -912,7 +912,7 @@ func rawSurfaceTransformInputEmitsPolySplineVertexSlidePreview() throws {
 }
 
 @Test
-func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform() throws {
+func rawSurfaceTransformInputDrawsNothingForASketchTheCommonRouteCannotAddress() throws {
     var document = DesignDocument.empty()
     let planeID = try document.createConstructionPlane(
         name: "Surface Transform Construction Plane",
@@ -938,8 +938,8 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
         scene: ViewportScene(items: [sketchItem]),
         selection: SelectionModel(selectedTargets: [planeTarget, sketchTarget]),
         ruler: .standard(for: .meter),
-        enabledRoutes: [.constructionPlane, .sketchTransform],
-        interactiveRoutes: [.constructionPlane, .sketchTransform]
+        enabledRoutes: [.constructionPlane, .bodyTransform],
+        interactiveRoutes: [.constructionPlane, .bodyTransform]
     )
 
     var interactionRecords: [ViewportSpatialInteractionRecord] = []
@@ -952,23 +952,15 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
     )
     #expect(source.worldLines.contains { $0.route == .constructionPlane && $0.closed })
     #expect(source.worldLines.contains { $0.route == .constructionPlane && $0.identity != nil })
-    // The sketch here names a scene node the document does not hold, so a
-    // commit has no address to send. That is the route's documented no-handle
-    // branch: it draws the bounds outline and registers nothing, rather than
-    // offering a handle whose drag could not be applied. The outline is
-    // camera-anchored so it keeps its screen width at any zoom, and it closes
-    // by repeating its first corner rather than by carrying a closed flag.
-    let sketchOutlines = source.cameraLines.filter { $0.route == .sketchTransform }
-    #expect(sketchOutlines.count == 1)
-    let sketchOutline = try #require(sketchOutlines.first)
-    #expect(sketchOutline.points.count == 5)
-    #expect(sketchOutline.points.first?.anchor == sketchOutline.points.last?.anchor)
-    #expect(sketchOutline.identity == nil)
-    #expect(sketchOutline.hitTolerancePoints == nil)
-    #expect(source.worldLines.filter { $0.route == .sketchTransform }.isEmpty)
-    #expect(source.markers.filter { $0.route == .sketchTransform }.isEmpty)
+    // The sketch here names a scene node the document does not hold, so the
+    // common placement command has no address to send. The gizmo then draws
+    // nothing at all for it, exactly as it does for a body occurrence with no
+    // scene-node address, rather than offering a picture no drag could apply.
+    #expect(source.cameraLines.isEmpty)
+    #expect(source.worldLines.allSatisfy { $0.route == .constructionPlane })
+    #expect(source.markers.allSatisfy { $0.route == .constructionPlane })
     #expect(!interactionRecords.contains { record in
-        if case .sketchTransform = record.target { return true }
+        if case .objectTransform = record.target { return true }
         return false
     })
     #expect(!interactionRecords.contains { record in
@@ -997,13 +989,12 @@ func rawSurfaceTransformInputEmitsConstructionPlaneAndOutlineOnlySketchTransform
         activeFamilies: &families
     )
     #expect(!meshes.isEmpty)
-    // The construction plane draws in world space, so the outline-only sketch
-    // is the single camera-anchored line here, and it carries no handle index
-    // because the route registered nothing to drag.
-    #expect(cameraLines.count == 1)
-    #expect(cameraLines[0].value.handleIndex == nil)
+    // The construction plane draws in world space and the unaddressable sketch
+    // draws nothing, so this pass anchors no line to the camera and reports no
+    // transform family for a gizmo it never drew.
+    #expect(cameraLines.isEmpty)
     #expect(families.contains(.construction))
-    #expect(families.contains(.transform))
+    #expect(!families.contains(.transform))
 }
 
 private func testSurfaceTransformBSplineSurface() -> BSplineSurface3D {

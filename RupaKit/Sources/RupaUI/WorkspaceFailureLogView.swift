@@ -87,8 +87,8 @@ struct WorkspaceFailureLogView: View {
                 detail: #"ProjectControllerError(code: .transactionInvalid, message: "…")"#
             ),
             WorkspaceFailureRecord(
-                operation: "handleViewportSketchTransformCommit(_:)",
-                message: "Sketch transforms need the Select tool in object scope."
+                operation: "handleViewportBodyPlacementCommit(_:)",
+                message: "Body transforms commit only with the Select tool in object scope."
             ),
         ],
         onClear: {}

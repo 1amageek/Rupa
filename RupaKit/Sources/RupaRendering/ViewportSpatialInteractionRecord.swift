@@ -154,17 +154,12 @@ struct ViewportSpatialInteractionRecord: Sendable {
                     }
                 }
                 if let placement {
-                    // Both frames own heap matrix storage the producer
-                    // allocated for this table, the way a sketch baseline's do.
+                    // Both frames own heap matrix storage the producer allocated
+                    // for this table, so they are charged rather than treated as
+                    // immutable source-owned geometry.
                     try array(placement.baseLocalTransform.matrix.values)
                     try array(placement.parentWorldTransform.matrix.values)
                 }
-            case .sketchTransform(let value):
-                // Both frames own heap matrix storage the producer allocated
-                // for this table, so they are charged rather than treated as
-                // immutable source-owned geometry.
-                try array(value.baseLocalTransform.matrix.values)
-                try array(value.parentWorldTransform.matrix.values)
             case .surfaceControlPoint, .surfaceTrimEndpoint, .surfaceTrimControlPoint: break
             }
         }

@@ -29,7 +29,6 @@ extension ViewportSpatialOverlayProducer {
         case constructionPlane
         case constructionFace
         case bodyTransform
-        case sketchTransform
         case profileCorner
         case profileFace
         case edgeFillet
@@ -55,11 +54,6 @@ extension ViewportSpatialOverlayProducer {
             case distance(Double)
             case plane(origin: Point3D, normal: Vector3D)
             case point(Point3D)
-            /// The world mutation an open sketch transform drag has produced so
-            /// far. It is a preview value only: the document is untouched until
-            /// the gesture finishes, and the producer redraws this route's
-            /// handles at the mutated geometry so they sit where they are drawn.
-            case transform(Transform3D)
         }
 
         let identity: ViewportSpatialHandleIdentity
@@ -128,18 +122,6 @@ extension ViewportSpatialOverlayProducer {
             self.init(
                 identity: identity,
                 kind: .point(point),
-                showsOriginalComparison: showsOriginalComparison
-            )
-        }
-
-        init(
-            identity: ViewportSpatialHandleIdentity,
-            transform: Transform3D,
-            showsOriginalComparison: Bool = false
-        ) {
-            self.init(
-                identity: identity,
-                kind: .transform(transform),
                 showsOriginalComparison: showsOriginalComparison
             )
         }
@@ -2566,8 +2548,7 @@ private extension ViewportSpatialOverlayProducer {
         markers: inout [SurfaceTransformAffordanceSource.Marker],
         meshes: inout [SurfaceTransformAffordanceSource.Mesh]
     ) throws {
-        guard input.enabledRoutes.contains(.bodyTransform)
-                || input.enabledRoutes.contains(.sketchTransform) else { return }
+        guard input.enabledRoutes.contains(.bodyTransform) else { return }
         if input.enabledRoutes.contains(.bodyTransform), input.presentationScene != nil,
            let members = try presentationTransformMembers(input: input), !members.isEmpty {
             let bounds = ViewportObjectEditState(
@@ -2595,13 +2576,12 @@ private extension ViewportSpatialOverlayProducer {
             return item
         }
         let drawsBodyGizmo = input.presentationScene == nil && input.enabledRoutes.contains(.bodyTransform) && !bodyItems.isEmpty
-        let drawsSketchGizmo = (input.enabledRoutes.contains(.sketchTransform)
-            || input.enabledRoutes.contains(.bodyTransform)) && !sketchItems.isEmpty
+        let drawsSketchGizmo = input.enabledRoutes.contains(.bodyTransform) && !sketchItems.isEmpty
         guard drawsBodyGizmo || drawsSketchGizmo else { return }
         // One walk of the scene tree answers every transform gizmo in this
-        // frame, and it is taken only when the frame draws at least one. Both
-        // gizmos commit a scene node's local frame within its parent's world
-        // frame, so a second walk would be a second chance to disagree about
+        // frame, and it is taken only when the frame draws at least one. Body
+        // and sketch items alike commit a scene node's local frame within its
+        // parent's world frame, so a second walk would be a chance to disagree about
         // the frame a released gesture measured from.
         let parentFrames = try ViewportSceneNodeParentFrames(document: input.document)
         if drawsBodyGizmo {
@@ -2661,46 +2641,32 @@ private extension ViewportSpatialOverlayProducer {
 
         guard drawsSketchGizmo else { return }
         for item in sketchItems {
-            if input.interactiveRoutes.contains(.bodyTransform) {
-                guard let frame = try sceneNodeCommitFrames(item: item, parentFrames: parentFrames, input: input),
-                      let reference = input.document.productMetadata.sceneNodes[frame.sceneNodeID]?.reference else { continue }
-                let rect = item.modelBounds
-                let points = [Point3D(x: rect.minX, y: 0, z: rect.minY),
-                              Point3D(x: rect.maxX, y: 0, z: rect.minY),
-                              Point3D(x: rect.minX, y: 0, z: rect.maxY),
-                              Point3D(x: rect.maxX, y: 0, z: rect.maxY)]
-                    .map { item.modelTransform.viewportTransformedPoint($0) }
-                guard points.allSatisfy(isFinitePoint) else {
-                    throw RealityViewportSpatialBatch.invalid("Object bounds are not finite.")
-                }
-                let bounds = ViewportObjectEditState(
-                    xMin: points.map(\.x).min()!, xMax: points.map(\.x).max()!,
-                    yMin: points.map(\.y).min()!, yMax: points.map(\.y).max()!,
-                    zMin: points.map(\.z).min()!, zMax: points.map(\.z).max()!, preservesZeroExtents: true)
-                let member = ViewportObjectTransformMember(occurrenceID: item.id, reference: reference,
-                    sceneNodeID: frame.sceneNodeID, baseLocalTransform: frame.baseLocalTransform,
-                    parentWorldTransform: frame.parentWorldTransform, bounds: bounds,
-                    placementResize: .placement(bounds: bounds, document: input.document))
-                try emitBodyTransform(featureID: nil, selectionTarget: nil, occurrenceID: item.id,
-                    modelTransform: item.modelTransform, edit: bounds, bodyMembers: [], groupEdit: nil,
-                    placement: nil, objectMembers: [member], input: input, interactionRecords: &interactionRecords,
-                    checkpoint: checkpoint, worldLines: &worldLines, cameraLines: &cameraLines,
-                    cameraPaths: &cameraPaths, markers: &markers)
-                continue
+            // A sketch the common placement command cannot address draws
+            // nothing, exactly as an unaddressable body item does.
+            guard let frame = try sceneNodeCommitFrames(item: item, parentFrames: parentFrames, input: input),
+                  let reference = input.document.productMetadata.sceneNodes[frame.sceneNodeID]?.reference else { continue }
+            let rect = item.modelBounds
+            let points = [Point3D(x: rect.minX, y: 0, z: rect.minY),
+                          Point3D(x: rect.maxX, y: 0, z: rect.minY),
+                          Point3D(x: rect.minX, y: 0, z: rect.maxY),
+                          Point3D(x: rect.maxX, y: 0, z: rect.maxY)]
+                .map { item.modelTransform.viewportTransformedPoint($0) }
+            guard points.allSatisfy(isFinitePoint) else {
+                throw RealityViewportSpatialBatch.invalid("Object bounds are not finite.")
             }
-            // Deprecated compatibility route for clients binding only the old sketch callback.
-            // The application binds the common placement callback above.
-            try emitSketchTransform(
-                item: item,
-                parentFrames: parentFrames,
-                input: input,
-                interactionRecords: &interactionRecords,
-                checkpoint: checkpoint,
-                worldLines: &worldLines,
-                cameraLines: &cameraLines,
-                cameraPaths: &cameraPaths,
-                markers: &markers
-            )
+            let bounds = ViewportObjectEditState(
+                xMin: points.map(\.x).min()!, xMax: points.map(\.x).max()!,
+                yMin: points.map(\.y).min()!, yMax: points.map(\.y).max()!,
+                zMin: points.map(\.z).min()!, zMax: points.map(\.z).max()!, preservesZeroExtents: true)
+            let member = ViewportObjectTransformMember(occurrenceID: item.id, reference: reference,
+                sceneNodeID: frame.sceneNodeID, baseLocalTransform: frame.baseLocalTransform,
+                parentWorldTransform: frame.parentWorldTransform, bounds: bounds,
+                placementResize: .placement(bounds: bounds, document: input.document))
+            try emitBodyTransform(featureID: nil, selectionTarget: nil, occurrenceID: item.id,
+                modelTransform: item.modelTransform, edit: bounds, bodyMembers: [], groupEdit: nil,
+                placement: nil, objectMembers: [member], input: input, interactionRecords: &interactionRecords,
+                checkpoint: checkpoint, worldLines: &worldLines, cameraLines: &cameraLines,
+                cameraPaths: &cameraPaths, markers: &markers)
         }
     }
     static func emitBodyTransform(
@@ -2966,181 +2932,6 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
-    static func emitSketchTransform(
-        item: ViewportSceneItem,
-        parentFrames: ViewportSceneNodeParentFrames,
-        input: SurfaceTransformAffordanceSource.RawInput,
-        interactionRecords: inout [ViewportSpatialInteractionRecord],
-        checkpoint: (Int, Int, Int) throws -> Void,
-        worldLines: inout [SurfaceTransformAffordanceSource.WorldLine],
-        cameraLines: inout [SurfaceTransformAffordanceSource.CameraLine],
-        cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
-        markers: inout [SurfaceTransformAffordanceSource.Marker]
-    ) throws {
-        let firstCameraLine = cameraLines.count
-        let firstMarker = markers.count
-        // Validate the gesture payload without baking the native preview twice.
-        _ = try activeSketchTransformMutation(for: item.sceneNodeID, input: input)
-        let bounds = item.modelBounds
-        guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0 else {
-            throw RealityViewportSpatialBatch.invalid("Sketch transform bounds are invalid.")
-        }
-        // The viewport draws every sketch flattened into the world XZ plane, so
-        // the rectangle's second axis is world z. The corners are listed in the
-        // order `ViewportSketchTransformHandleIdentity.Corner` names them, and
-        // the scale handles below rely on that pairing.
-        let drawnCorners = [
-            Point3D(x: bounds.minX, y: 0, z: bounds.minY),
-            Point3D(x: bounds.maxX, y: 0, z: bounds.minY),
-            Point3D(x: bounds.maxX, y: 0, z: bounds.maxY),
-            Point3D(x: bounds.minX, y: 0, z: bounds.maxY),
-        ].map { item.modelTransform.viewportTransformedPoint($0) }
-        guard drawnCorners.allSatisfy(isFinitePoint) else {
-            throw RealityViewportSpatialBatch.invalid("Sketch transform bounds contain a non-finite world point.")
-        }
-        let commit = try sceneNodeCommitFrames(
-            item: item, parentFrames: parentFrames, input: input
-        )
-        // Geometry and handles retain one baseline; the mounted native frame
-        // applies the same preview mutation to both without rebuilding resources.
-        let corners = drawnCorners
-        try appendCameraLine(
-            .init(
-                route: .sketchTransform,
-                points: (corners + [corners[0]]).map {
-                    .init(anchor: $0, toward: $0, usesFixedOffset: true)
-                },
-                color: SIMD4<Float>(0.6, 0.63, 0.66, 0.7),
-                family: .transform,
-                identity: nil,
-                state: .normal,
-                objectPreviewOccurrenceID: item.id
-            ),
-            to: &cameraLines,
-            checkpoint: checkpoint
-        )
-        // A sketch that names no scene node has nothing for a commit to
-        // address, so the outline above is all this route draws for it. That is
-        // the contract rather than a failure, and it is not reported as one.
-        guard let commit else { return }
-        let pivot = average(corners)
-        guard let abscissa = normalized(corners[1] - corners[0]),
-              let ordinate = normalized(corners[3] - corners[0]) else {
-            throw RealityViewportSpatialBatch.invalid("Sketch transform bounds name no drawable axis.")
-        }
-        func register(
-            _ role: ViewportSketchTransformHandleIdentity.Role,
-            _ geometry: ViewportSketchTransformBaseline.Geometry
-        ) throws -> ViewportSpatialHandleIdentity {
-            let identity = ViewportSketchTransformHandleIdentity(
-                featureID: item.featureID,
-                sceneNodeID: commit.sceneNodeID,
-                role: role
-            )
-            guard input.interactiveRoutes.contains(.sketchTransform) else {
-                return .sketchTransform(identity)
-            }
-            let baseline = ViewportSketchTransformBaseline(
-                identity: identity,
-                baseLocalTransform: commit.baseLocalTransform,
-                parentWorldTransform: commit.parentWorldTransform,
-                pivot: pivot,
-                geometry: geometry
-            )
-            try baseline.validate()
-            _ = try handleIndex(
-                for: .sketchTransform(baseline),
-                occurrenceID: item.id,
-                modelTransform: item.modelTransform,
-                in: &interactionRecords
-            )
-            return .sketchTransform(identity)
-        }
-        // A world length still names each axis to the camera, but no drawn
-        // extent comes from it: every one below is a point length owned by
-        // `BodyTransformMetrics`, so the gizmo keeps its size whatever the
-        // sketch measures and however far the camera is.
-        let span = max(Double(bounds.width), Double(bounds.height))
-        let axisLength = max(span * 0.32, input.ruler.majorTickMeters * 0.5)
-        let translateAxes: [(ViewportCoordinateAxis, Vector3D)] = [
-            (ViewportCoordinateAxis.x, abscissa),
-            (ViewportCoordinateAxis.z, ordinate),
-        ]
-        for (axis, direction) in translateAxes {
-            let identity = try register(.translate(axis), .translate(direction: direction))
-            try emitDirectedArrow(
-                route: .sketchTransform,
-                origin: pivot,
-                direction: direction,
-                length: axisLength,
-                identity: identity,
-                input: input,
-                fixedLengthPoints: BodyTransformMetrics.axisLengthPoints,
-                hitTolerancePoints: 7.0,
-                occurrenceID: item.id,
-                checkpoint: checkpoint,
-                cameraLines: &cameraLines
-            )
-        }
-        let rotateIdentity = try register(
-            .rotate(.y), .rotate(planeStart: abscissa, planeEnd: ordinate)
-        )
-        // Each sample is placed by its own world direction, so the ring keeps a
-        // fixed screen radius and still foreshortens into the plane it turns in.
-        let arc = rotationArcDirections(
-            planeStart: abscissa,
-            planeEnd: ordinate,
-            segmentCount: BodyTransformMetrics.rotationSegmentCount
-        ).map {
-            SurfaceTransformAffordanceSource.DirectedPoint(
-                anchor: pivot,
-                along: $0,
-                lengthPoints: BodyTransformMetrics.rotationRadiusPoints
-            )
-        }
-        try appendCameraLine(
-            .init(
-                route: .sketchTransform,
-                points: arc,
-                color: axisColor(.y),
-                family: .transform,
-                identity: rotateIdentity,
-                state: state(for: rotateIdentity, input: input),
-                hitTolerancePoints: 8.0,
-                occurrenceID: item.id
-            ),
-            to: &cameraLines,
-            checkpoint: checkpoint
-        )
-        for (corner, point) in zip(ViewportSketchTransformHandleIdentity.Corner.allCases, corners) {
-            let radius = point - pivot
-            guard let direction = normalized(radius) else {
-                throw RealityViewportSpatialBatch.invalid("A sketch scale handle coincides with its pivot.")
-            }
-            let identity = try register(
-                .scale(corner), .scale(direction: direction, baseDistance: radius.length)
-            )
-            try appendMarker(
-                .init(
-                    route: .sketchTransform,
-                    anchor: point,
-                    shape: .box,
-                    diameterPoints: 9,
-                    color: SIMD4<Float>(0.78, 0.80, 0.82, 1),
-                    family: .transform,
-                    identity: identity,
-                    state: state(for: identity, input: input),
-                    hitTolerancePoints: 10.0,
-                    occurrenceID: item.id
-                ),
-                to: &markers,
-                checkpoint: checkpoint
-            )
-        }
-        for index in firstCameraLine..<cameraLines.count { cameraLines[index].objectPreviewOccurrenceID = item.id }
-        for index in firstMarker..<markers.count { markers[index].objectPreviewOccurrenceID = item.id }
-    }
-
     /// World-aligned handle bounds follow this occurrence's preview mutation.
     static func bodyTransformPreviewBounds(
         item: ViewportSceneItem, input: SurfaceTransformAffordanceSource.RawInput
@@ -3154,7 +2945,7 @@ private extension ViewportSpatialOverlayProducer {
             zMin: CGFloat(points.map(\.z).min()!), zMax: CGFloat(points.map(\.z).max()!))
     }
 
-    /// Addressable, unlocked node frames shared by body and sketch gizmos.
+    /// Addressable, unlocked node frames shared by every transform gizmo.
     /// Instance-owned placements need their own command and expose no handles here.
     static func sceneNodeCommitFrames(
         item: ViewportSceneItem,
@@ -3171,36 +2962,6 @@ private extension ViewportSpatialOverlayProducer {
             return nil
         }
         return (sceneNodeID, node.localTransform, parentWorldTransform)
-    }
-
-    /// The world mutation an open sketch transform drag on `sceneNodeID` has
-    /// produced so far.
-    ///
-    /// A drag value of another kind on this identity family, or two mutations
-    /// for one node, are typed refusals rather than a chosen winner: either
-    /// would draw the handles somewhere the gesture is not.
-    static func activeSketchTransformMutation(
-        for sceneNodeID: SceneNodeID?,
-        input: SurfaceTransformAffordanceSource.RawInput
-    ) throws -> Transform3D? {
-        guard let sceneNodeID else { return nil }
-        var mutation: Transform3D?
-        for value in input.activeValues {
-            guard case .sketchTransform(let identity) = value.identity,
-                  identity.sceneNodeID == sceneNodeID else { continue }
-            guard case .transform(let candidate) = value.kind else {
-                throw RealityViewportSpatialBatch.invalid(
-                    "A sketch transform drag carries a value its preview cannot draw."
-                )
-            }
-            guard mutation == nil else {
-                throw RealityViewportSpatialBatch.invalid(
-                    "One sketch scene node carries more than one active transform mutation."
-                )
-            }
-            mutation = candidate
-        }
-        return mutation
     }
 
     static func emitProfileAffordances(
