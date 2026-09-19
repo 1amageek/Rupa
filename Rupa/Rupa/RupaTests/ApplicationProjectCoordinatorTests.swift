@@ -30,8 +30,7 @@ func applicationGeometryExchangeUsesTransientFileAccessWithoutReplacingProjectAs
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-            securityScopedAccessOpener: opener,
-            launchArguments: []
+            securityScopedAccessOpener: opener
         )
         await coordinator.launch()
         await coordinator.save(to: projectURL)
@@ -64,8 +63,7 @@ func applicationGeometryExchangeReportsTypedFailuresWithoutMutationOrFileLoss() 
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-            securityScopedAccessOpener: opener,
-            launchArguments: []
+            securityScopedAccessOpener: opener
         )
         await coordinator.launch()
         let initial = try #require(coordinator.snapshot)
@@ -91,8 +89,7 @@ func applicationLaunchPublishesBeforeRegisteringTheSharedWorkspace() async throw
     let registrar = ApplicationAgentSessionRegistrarProbe()
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
-        agentRegistrar: registrar,
-        launchArguments: []
+        agentRegistrar: registrar
     )
 
     await coordinator.launch()
@@ -110,8 +107,7 @@ func applicationLaunchIsOwnedByExactlyOneConcurrentCaller() async throws {
     let registrar = ApplicationAgentSessionRegistrarProbe(registrationGate: gate)
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-        agentRegistrar: registrar,
-        launchArguments: []
+        agentRegistrar: registrar
     )
 
     let first = Task { @MainActor in
@@ -140,8 +136,7 @@ func applicationLaunchFailurePublishesUnavailableWithoutAgentRegistration() asyn
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: registrar,
-        initialURL: missingURL,
-        launchArguments: []
+        initialURL: missingURL
     )
 
     await coordinator.launch()
@@ -171,8 +166,7 @@ func applicationInitialURLLoadsWithoutPublishingAnEmptyProjectFirst() async thro
         let coordinator = ApplicationProjectCoordinator(
             workspace: targetWorkspace,
             agentRegistrar: registrar,
-            initialURL: packageURL,
-            launchArguments: []
+            initialURL: packageURL
         )
 
         await coordinator.launch()
@@ -207,8 +201,7 @@ func applicationLifecycleBuffersColdOpenUntilLoadedRegistrationPrecedesDiscovery
         let targetWorkspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
         let coordinator = ApplicationProjectCoordinator(
             workspace: targetWorkspace,
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         let requestRouter = ApplicationAgentRequestRouter(
             projectHandler: agentController,
@@ -287,8 +280,7 @@ func applicationAgentRouterMutatesAndExplicitlySavesTheRegisteredWorkspace() asy
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
-            initialURL: packageURL,
-            launchArguments: []
+            initialURL: packageURL
         )
         let router = ApplicationAgentRequestRouter(
             projectHandler: controller,
@@ -404,8 +396,7 @@ func applicationAgentRouterRejectsUntitledSaveWithoutOpeningUI() async throws {
     let controller = try applicationProjectAgentCommandController()
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-        agentRegistrar: controller,
-        launchArguments: []
+        agentRegistrar: controller
     )
     let router = ApplicationAgentRequestRouter(
         projectHandler: controller,
@@ -461,8 +452,7 @@ func applicationAgentSaveReturnsCommittedNoRetryReceiptAfterViewFailure() async 
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: controller,
-            initialURL: packageURL,
-            launchArguments: []
+            initialURL: packageURL
         )
         let router = ApplicationAgentRequestRouter(
             projectHandler: controller,
@@ -522,8 +512,7 @@ func applicationCurrentProjectAccessSurvivesSamePathSaveAndReleasesOnNewProject(
             workspace: workspace,
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
             securityScopedAccessOpener: accessOpener,
-            initialURL: packageURL,
-            launchArguments: []
+            initialURL: packageURL
         )
         await coordinator.launch()
         let initial = try #require(coordinator.snapshot)
@@ -567,8 +556,7 @@ func applicationSuccessfulSaveAsTransfersSecurityScopedAccessOnlyAfterCommit() a
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
             securityScopedAccessOpener: accessOpener,
-            initialURL: inputURL,
-            launchArguments: []
+            initialURL: inputURL
         )
         await coordinator.launch()
         let outputURL = directory.appendingPathComponent("save-as-output.rupa")
@@ -608,8 +596,7 @@ func applicationSaveAsFailureReleasesCandidateAndRetainsCurrentFileAccess() asyn
             workspace: workspace,
             agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
             securityScopedAccessOpener: accessOpener,
-            initialURL: inputURL,
-            launchArguments: []
+            initialURL: inputURL
         )
         await coordinator.launch()
         let outputURL = directory.appendingPathComponent("failed-output.rupa")
@@ -642,8 +629,7 @@ func applicationLaunchConsumesAnOpenURLThatArrivesDuringAgentRegistration() asyn
         let registrar = ApplicationAgentSessionRegistrarProbe(registrationGate: gate)
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         let launch = Task { @MainActor in
             await coordinator.launch()
@@ -676,8 +662,7 @@ func applicationRouteRoundTripsCADMeshAndMixedProjects() async throws {
             let registrar = ApplicationAgentSessionRegistrarProbe()
             let coordinator = ApplicationProjectCoordinator(
                 workspace: workspace,
-                agentRegistrar: registrar,
-                launchArguments: []
+                agentRegistrar: registrar
             )
             await coordinator.launch()
             let initial = try #require(coordinator.snapshot)
@@ -750,8 +735,7 @@ func applicationRejectsOpenWhileDirtyWithoutChangingCurrentProject() async throw
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
-            securityScopedAccessOpener: accessOpener,
-            launchArguments: []
+            securityScopedAccessOpener: accessOpener
         )
         await coordinator.launch()
         let originalURL = directory.appendingPathComponent("retained.rupa")
@@ -795,8 +779,7 @@ func applicationReopeningCurrentCanonicalProjectWhileDirtyIsAnIdempotentNoOp() a
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
-            securityScopedAccessOpener: accessOpener,
-            launchArguments: []
+            securityScopedAccessOpener: accessOpener
         )
         await coordinator.launch()
         let originalURL = directory.appendingPathComponent("retained.rupa")
@@ -840,8 +823,7 @@ func applicationRejectsLegacyProjectFormatWithoutChangingPublishedProject() asyn
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
-            securityScopedAccessOpener: accessOpener,
-            launchArguments: []
+            securityScopedAccessOpener: accessOpener
         )
         await coordinator.launch()
         let originalURL = directory.appendingPathComponent("current.rupa")
@@ -876,8 +858,7 @@ func applicationRejectsLegacyInitialURLBeforeRegistration() async throws {
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
         agentRegistrar: registrar,
         securityScopedAccessOpener: accessOpener,
-        initialURL: legacyURL,
-        launchArguments: []
+        initialURL: legacyURL
     )
 
     await coordinator.launch()
@@ -906,8 +887,7 @@ func applicationLateUnsupportedURLPreservesThePublishedLaunchWorkspace() async t
             document: try applicationMeshOnlyDocument(named: "Visible Launch Project")
         ),
         agentRegistrar: registrar,
-        securityScopedAccessOpener: accessOpener,
-        launchArguments: []
+        securityScopedAccessOpener: accessOpener
     )
     let launch = Task { @MainActor in
         await coordinator.launch()
@@ -946,8 +926,7 @@ func applicationInvalidRupaPackagePreservesPublishedProject() async throws {
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
             agentRegistrar: registrar,
-            securityScopedAccessOpener: accessOpener,
-            launchArguments: []
+            securityScopedAccessOpener: accessOpener
         )
         await coordinator.launch()
         let originalURL = directory.appendingPathComponent("valid-current.rupa")
@@ -979,8 +958,7 @@ func applicationRejectsNewProjectWhileDirty() async throws {
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
-        agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-        launchArguments: []
+        agentRegistrar: ApplicationAgentSessionRegistrarProbe()
     )
     await coordinator.launch()
     let initial = try #require(coordinator.snapshot)
@@ -1024,8 +1002,7 @@ func applicationSameProjectIDReloadChangesPresentationLifetime() async throws {
 
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(document: original),
-            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-            launchArguments: []
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe()
         )
         await coordinator.launch()
         let visibleBeforeLoad = try #require(coordinator.snapshot)
@@ -1049,8 +1026,7 @@ func applicationPrecommitLoadFailureRetainsPublishedProjectAndAgentPath() async 
     let registrar = ApplicationAgentSessionRegistrarProbe()
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
-        agentRegistrar: registrar,
-        launchArguments: []
+        agentRegistrar: registrar
     )
     await coordinator.launch()
     let retained = try #require(coordinator.snapshot)
@@ -1078,8 +1054,7 @@ func applicationPrecommitSaveFailureRetainsDirtyProjectAndFileAccess() async thr
         let registrar = ApplicationAgentSessionRegistrarProbe()
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         await coordinator.launch()
         let initial = try #require(coordinator.snapshot)
@@ -1135,8 +1110,7 @@ func applicationCancelledLoadDoesNotPublishOrRebindAgentPath() async throws {
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: registrar,
-        securityScopedAccessOpener: accessOpener,
-        launchArguments: []
+        securityScopedAccessOpener: accessOpener
     )
     await coordinator.launch()
     let retained = try #require(coordinator.snapshot)
@@ -1184,8 +1158,7 @@ func applicationStaleLoadCannotReplaceANewerWorkspacePublication() async throws 
     let workspace = ProjectWorkspace(project: controller)
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
-        agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-        launchArguments: []
+        agentRegistrar: ApplicationAgentSessionRegistrarProbe()
     )
     await coordinator.launch()
     let initial = try #require(coordinator.snapshot)
@@ -1237,8 +1210,7 @@ func applicationRecoversACommittedLoadWithItsNewProjectIdentity() async throws {
         let registrar = ApplicationAgentSessionRegistrarProbe()
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         await coordinator.launch()
         let initial = try #require(coordinator.snapshot)
@@ -1275,8 +1247,7 @@ func applicationRecoversACommittedSaveViewWithoutReplayingTheSave() async throws
         let registrar = ApplicationAgentSessionRegistrarProbe()
         let coordinator = ApplicationProjectCoordinator(
             workspace: workspace,
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         await coordinator.launch()
         let initial = try #require(coordinator.snapshot)
@@ -1308,8 +1279,7 @@ func applicationRecoversACommittedUndoWithoutReplayingHistory() async throws {
     )
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
-        agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-        launchArguments: []
+        agentRegistrar: ApplicationAgentSessionRegistrarProbe()
     )
     await coordinator.launch()
     let initial = try #require(coordinator.snapshot)
@@ -1345,8 +1315,7 @@ func applicationReportsAgentPathRebindFailureAfterACommittedSave() async throws 
         )
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         await coordinator.launch()
         let packageURL = directory.appendingPathComponent("agent-rebind-failure.rupa")
@@ -1396,8 +1365,7 @@ func applicationLoadPathRebindFailureIsTerminalWithExactCommittedReceipt() async
         )
         let coordinator = ApplicationProjectCoordinator(
             workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-            agentRegistrar: registrar,
-            launchArguments: []
+            agentRegistrar: registrar
         )
         await coordinator.launch()
 
@@ -1437,8 +1405,7 @@ func applicationNewProjectPathClearFailureIsTerminalWithExactCommittedReceipt() 
     )
     let coordinator = ApplicationProjectCoordinator(
         workspace: try DefaultProjectWorkspaceFactory().makeWorkspace(),
-        agentRegistrar: registrar,
-        launchArguments: []
+        agentRegistrar: registrar
     )
     await coordinator.launch()
 
@@ -1477,8 +1444,7 @@ func applicationSaveDoesNotAdvertiseOrAcceptMidCommitCancellation() async throws
         )
         let coordinator = ApplicationProjectCoordinator(
             workspace: ProjectWorkspace(project: controller),
-            agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-            launchArguments: []
+            agentRegistrar: ApplicationAgentSessionRegistrarProbe()
         )
         await coordinator.launch()
         let packageURL = directory.appendingPathComponent("non-cancellable-save.rupa")
@@ -1509,8 +1475,7 @@ func applicationHistorySharesSubmissionOrderWithWorkspaceUIOperations() async th
     let coordinator = ApplicationProjectCoordinator(
         workspace: workspace,
         agentRegistrar: ApplicationAgentSessionRegistrarProbe(),
-        operationSequencer: sequencer,
-        launchArguments: []
+        operationSequencer: sequencer
     )
     await coordinator.launch()
 

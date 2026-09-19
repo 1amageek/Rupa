@@ -71,7 +71,6 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/PatternArrayEditingService.swift",
         "Sources/RupaUI/PatternArrayExpressionWritebackService.swift",
         "Sources/RupaUI/PatternArrayCurvePathPickService.swift",
-        "Sources/RupaUI/WorkspaceLaunchProjectFixture.swift",
         "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
         "Sources/RupaCore/SweepSelectionPlanningService.swift",
     ]

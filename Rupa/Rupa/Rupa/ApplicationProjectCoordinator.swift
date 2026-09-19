@@ -38,8 +38,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
     @ObservationIgnored
     private let securityScopedAccessOpener: any SecurityScopedProjectAccessOpening
     @ObservationIgnored
-    private let launchArguments: [String]
-    @ObservationIgnored
     private var pendingInitialURL: URL?
     @ObservationIgnored
     private var registeredSessionID: UUID?
@@ -58,14 +56,12 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
             ProjectWorkspaceOperationSequencer(),
         securityScopedAccessOpener: any SecurityScopedProjectAccessOpening =
             DefaultSecurityScopedProjectAccessOpener(),
-        initialURL: URL? = nil,
-        launchArguments: [String] = ProcessInfo.processInfo.arguments
+        initialURL: URL? = nil
     ) {
         self.workspace = workspace
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
         self.securityScopedAccessOpener = securityScopedAccessOpener
-        self.launchArguments = launchArguments
         self.pendingInitialURL = initialURL?.standardizedFileURL
         self.lifecycle = .preparing
         self.operation = nil
@@ -94,7 +90,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
         self.agentRegistrar = agentRegistrar
         self.operationSequencer = operationSequencer
         self.securityScopedAccessOpener = securityScopedAccessOpener
-        self.launchArguments = []
         self.pendingInitialURL = nil
         self.lifecycle = .unavailable(failure)
         self.operation = nil
@@ -175,10 +170,6 @@ final class ApplicationProjectCoordinator: ApplicationAgentProjectLifecycle {
                 }
             } else {
                 _ = try await workspace.evaluate()
-                _ = try await WorkspaceLaunchProjectFixture.applyIfRequested(
-                    arguments: launchArguments,
-                    to: workspace
-                )
             }
             let sessionID = try await agentRegistrar.register(
                 workspace: workspace,

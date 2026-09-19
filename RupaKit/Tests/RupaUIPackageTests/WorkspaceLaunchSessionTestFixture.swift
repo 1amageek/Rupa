@@ -3,8 +3,6 @@ import RupaCore
 import SwiftCAD
 
 enum WorkspaceLaunchSessionTestFixture {
-    static let selectedCustomConstructionPlaneArgument =
-        "--rupa-ui-fixture=selected-custom-cplane"
     static let customConstructionPlaneName = "Arbitrary CPlane"
 
     static func makeSelectedCustomConstructionPlaneSession() throws -> EditorSession {
