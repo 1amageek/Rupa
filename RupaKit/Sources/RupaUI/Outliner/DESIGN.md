@@ -8,7 +8,8 @@ scene hierarchy as a dense, Blender-inspired tree. It is a child of the
 
 The component covers scene navigation, disclosure, contextual filtering,
 inline object-name editing, selection-aware visibility/lock actions, isolate,
-show all, and forwarding Frame to the existing viewport control session.
+show all, the group/ungroup/delete lifecycle intents, and forwarding Frame to
+the existing viewport control session.
 
 ## Responsibilities and Boundaries
 
@@ -23,17 +24,20 @@ transaction staging, undo, viewport camera state, geometry, feature-history
 names, component-definition names, assets, or persistence.
 `OutlinerSourceCommandPlanner` is neither a command executor nor an authority or
 transaction engine: `MainView` still submits its result through the existing
-snapshot-bound Workspace path. The component does not add duplicate, delete,
-reparent, collection, or generic command-engine behavior. Native reparent
-drag/drop is the one explicit exception: it emits a Core-owned move intent but
-does not execute or stage that command locally.
+snapshot-bound Workspace path. The component does not add duplicate,
+collection, or generic command-engine behavior. Reparent, group, ungroup, and
+delete are the explicit exceptions: each emits a Core-owned lifecycle intent
+carrying stable scene-node IDs, and none of them plans, stages, or executes
+that command locally. What those commands do to the hierarchy is owned by the
+[Core lifecycle contract](../../RupaCore/DESIGN.md#product-hierarchy-lifecycle-contract);
+the component only gates a control so that an offered action can run.
 
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaUI](../DESIGN.md) | parent | Snapshot presentation and Workspace intent boundary | Hosts the Outliner in the existing sidebar. | MainView remains the composition and command-routing owner. |
-| [RupaCore](../../RupaCore/DESIGN.md) | depends on | Product hierarchy, object naming, visibility/lock and pattern ownership | Defines which source identity may accept each action. | UI availability is advisory; Core must revalidate every command. |
+| [RupaCore](../../RupaCore/DESIGN.md) | depends on | Product hierarchy, object naming, visibility/lock, pattern ownership, and the [lifecycle contract](../../RupaCore/DESIGN.md#product-hierarchy-lifecycle-contract) | Defines which source identity may accept each action and how far a group, ungroup, or delete reaches. | UI availability is advisory; Core must revalidate every command. |
 | [RupaKit integration](../../RupaKit/DESIGN.md) | used by | Immutable `ProjectViewSnapshot` and isolated source transaction | Publishes accepted source changes and one undo entry. | The component never creates a parallel document or transaction owner. |
 | [RupaRendering](../../RupaRendering/DESIGN.md) | coordinates with | `ViewportControlSession.fitSelected` | Frames the current visible scene selection. | An applied camera state is not proof of a completed Metal frame. |
 
@@ -51,6 +55,8 @@ flowchart LR
     Main --> Workspace["One ProjectSourceTransaction"]
     Intent -->|native drag/drop| Move["Mounted nonce + stable source anchor"]
     Move --> Main
+    Intent -->|group / ungroup / delete| Life["Core-owned lifecycle command"]
+    Life --> Main
     Intent -->|frame current selection| Viewport["ViewportControlSession.fitSelected"]
 ```
 
@@ -159,6 +165,23 @@ Outliner projection tests verify this mapping and unchanged row identity/state.
     transaction containing Core's `moveSceneNodes` command. Foreign, stale,
     cancelled, cyclic, locked, generated, read-only, or invalid drops clear
     the local drag and report a reason without publishing source state.
+13. Group, Ungroup, and Delete take the same context selection as the state
+    actions and emit the ID-carrying `.group`, `.ungroup`, and `.delete`
+    intents. Group and Ungroup re-parent, so they are offered only for rows
+    that are already independently movable; Ungroup is further limited to
+    selected nodes that carry neither a reference nor an object descriptor,
+    which are the only nodes Core will dissolve. Delete is offered only for
+    independently controllable, unlocked rows and never for a scene root,
+    matching the refusals Core states for the same command. Each intent
+    becomes one source transaction in `MainView`, so success is one undo entry
+    and a stale, locked, generated, or root target mutates nothing. The
+    component neither predicts nor duplicates how far a delete reaches or
+    where a group places its members; `MainView` reports the reach Core
+    returns.
+14. The Delete key acts on the tree's current selection through the same
+    intent and the same gate. It is ignored while a rename field holds focus
+    and while the selection is empty, so the key still reaches the enclosing
+    responder in those cases.
 
 ## Runtime Flows
 
@@ -216,7 +239,11 @@ Pure component tests in `OutlinerTests.swift` verify stable hierarchy/order,
 disclosure, ancestor-preserving search and each state filter, single/multi-
 selection context rules, rename Return/Escape/failure, generated-output
 availability, supplied Frame availability, selected-context admission, and the
-ID-free `frameCurrentSelection` intent. The same file verifies exact owner routing,
+ID-free `frameCurrentSelection` intent. Lifecycle availability — movable-only
+Group, grouping-node-only Ungroup, and unlocked non-root Delete — is verified
+against the same immutable metadata; the commands those intents become are
+owned by the focused Core tests named in the
+[Core lifecycle contract](../../RupaCore/DESIGN.md#product-hierarchy-lifecycle-contract). The same file verifies exact owner routing,
 complete target admission, deterministic deduplication/order, isolate/show-all
 command sets, and explicit missing/invalid/generated-output refusal from
 immutable metadata; it does not substitute for Workspace transaction tests.

@@ -750,6 +750,81 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .groupSceneNodes:
+            func run() throws {
+                guard case .groupSceneNodes(let name, let memberIDs, let origin) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected groupSceneNodes."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.groupSceneNodes(
+                    name: name,
+                    memberIDs: memberIDs,
+                    origin: origin,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .ungroupSceneNode:
+            func run() throws {
+                guard case .ungroupSceneNode(let id) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected ungroupSceneNode."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.ungroupSceneNode(
+                    id: id,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .deleteSceneNodes:
+            func run() throws {
+                guard case .deleteSceneNodes(let ids) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected deleteSceneNodes."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.deleteSceneNodes(
+                    ids: ids,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .transformSceneNodes:
+            func run() throws {
+                guard case .transformSceneNodes(let ids, let worldDelta) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected transformSceneNodes."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.transformSceneNodes(
+                    ids: ids,
+                    worldDelta: worldDelta,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .setSceneNodeMaterial:
             func run() throws {
                 guard case .setSceneNodeMaterial(let id, let materialID) = command else {

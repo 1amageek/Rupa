@@ -432,3 +432,171 @@ func outlinerProjectionRejectsUnsafeParentDropTargets() {
     #expect(!OutlinerProjection.canReceiveChildren(pattern))
     #expect(!projection.canMove(ids: [pattern.id]))
 }
+
+/// Group collects rows into a new parent, which is the same re-parenting a drag performs, so a row
+/// a drag would refuse cannot be swept into a group by the menu instead.
+@Test(.timeLimit(.minutes(1)))
+func outlinerLifecycleGroupCollectsOnlyRowsADragCouldMove() {
+    let scene = OutlinerLifecycleScene()
+
+    let pair = scene.lifecycle([scene.bracketID, scene.assemblyID])
+    #expect(pair.canGroup)
+    #expect(pair.groupableIDs == [scene.bracketID, scene.assemblyID])
+    #expect(pair.groupActionTitle == "Group 2 Objects")
+    #expect(scene.lifecycle([scene.bracketID]).groupActionTitle == "Group Object")
+
+    let refusals: [[SceneNodeID]] = [
+        [scene.bracketID, scene.sealedGroupID],
+        [scene.bracketID, scene.generatedID],
+        [scene.bracketID, scene.patternRootID],
+        [scene.bracketID, scene.rootID],
+        [scene.rootID],
+        []
+    ]
+    for ids in refusals {
+        let lifecycle = scene.lifecycle(ids)
+        #expect(!lifecycle.canGroup)
+        #expect(lifecycle.groupableIDs.isEmpty)
+        #expect(lifecycle.groupActionTitle == "Group")
+    }
+}
+
+/// Ungroup dissolves a node that holds nothing but its children, so a row that carries geometry is
+/// left where it is rather than refusing the groups selected next to it.
+@Test(.timeLimit(.minutes(1)))
+func outlinerLifecycleUngroupDissolvesOnlyUnlockedGroupingNodes() {
+    let scene = OutlinerLifecycleScene()
+
+    let one = scene.lifecycle([scene.assemblyID])
+    #expect(one.canUngroup)
+    #expect(one.dissolvableIDs == [scene.assemblyID])
+    #expect(one.ungroupActionTitle == "Ungroup")
+
+    let two = scene.lifecycle([scene.assemblyID, scene.fittingID])
+    #expect(two.dissolvableIDs == [scene.assemblyID, scene.fittingID])
+    #expect(two.ungroupActionTitle == "Ungroup 2 Groups")
+
+    #expect(scene.lifecycle([scene.assemblyID, scene.bracketID]).dissolvableIDs == [scene.assemblyID])
+
+    let refusals: [[SceneNodeID]] = [
+        [scene.bracketID],
+        [scene.rootID],
+        [scene.patternRootID],
+        [scene.sealedGroupID],
+        [scene.assemblyID, scene.sealedGroupID],
+        []
+    ]
+    for ids in refusals {
+        let lifecycle = scene.lifecycle(ids)
+        #expect(!lifecycle.canUngroup)
+        #expect(lifecycle.dissolvableIDs.isEmpty)
+        #expect(lifecycle.ungroupActionTitle == "Ungroup")
+    }
+}
+
+/// Core refuses a delete that reaches a root, a locked node, or generated pattern output rather than
+/// trimming it, so a partly deletable selection has to offer no delete at all. A delete that quietly
+/// skipped part of a selection would leave the user believing an object is gone.
+@Test(.timeLimit(.minutes(1)))
+func outlinerLifecycleDeleteRefusesASelectionItWouldOnlyPartlyRemove() {
+    let scene = OutlinerLifecycleScene()
+
+    let pair = scene.lifecycle([scene.bracketID, scene.assemblyID])
+    #expect(pair.canDelete)
+    #expect(pair.deletableIDs == [scene.bracketID, scene.assemblyID])
+    // The pattern root owns its output, so deleting the root is how that output goes away.
+    #expect(scene.lifecycle([scene.patternRootID]).deletableIDs == [scene.patternRootID])
+
+    let refusals: [[SceneNodeID]] = [
+        [scene.bracketID, scene.rootID],
+        [scene.bracketID, scene.sealedGroupID],
+        [scene.bracketID, scene.generatedID],
+        [scene.rootID],
+        [SceneNodeID()],
+        []
+    ]
+    for ids in refusals {
+        let lifecycle = scene.lifecycle(ids)
+        #expect(!lifecycle.canDelete)
+        #expect(lifecycle.deletableIDs.isEmpty)
+    }
+}
+
+/// A scene holding one row of every kind the lifecycle actions have to answer differently.
+private struct OutlinerLifecycleScene {
+    let metadata: ProductMetadata
+    let projection: OutlinerProjection
+    let rootID: SceneNodeID
+    let bracketID: SceneNodeID
+    let assemblyID: SceneNodeID
+    let fittingID: SceneNodeID
+    let sealedGroupID: SceneNodeID
+    let patternRootID: SceneNodeID
+    let generatedID: SceneNodeID
+
+    init() {
+        let bracket = SceneNode(name: "Bracket", reference: .body(FeatureID()))
+        let pin = SceneNode(name: "Pin", reference: .body(FeatureID()))
+        let assembly = SceneNode(name: "Assembly", childIDs: [pin.id])
+        let washer = SceneNode(name: "Washer", reference: .body(FeatureID()))
+        let fitting = SceneNode(name: "Fitting", childIDs: [washer.id])
+        let shim = SceneNode(name: "Shim", reference: .body(FeatureID()))
+        let sealedGroup = SceneNode(name: "Sealed", childIDs: [shim.id], isLocked: true)
+        let generated = SceneNode(name: "Copy", reference: .body(FeatureID()))
+        let patternRoot = SceneNode(name: "Array", childIDs: [generated.id])
+        let root = SceneNode(
+            name: "Scene",
+            childIDs: [bracket.id, assembly.id, fitting.id, sealedGroup.id, patternRoot.id]
+        )
+        let source = PatternArraySource(
+            name: "Array",
+            definitionID: ComponentDefinitionID(),
+            distribution: .rectangular(
+                RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: Vector3D(x: 1, y: 0, z: 0),
+                        distance: .scalar(1.0),
+                        copyCount: 1
+                    )
+                )
+            ),
+            outputMode: .independentCopy,
+            outputSceneNodeIDs: [generated.id],
+            outputFeatureIDs: [FeatureID()],
+            rootSceneNodeID: patternRoot.id
+        )
+        metadata = ProductMetadata(
+            sceneNodes: [
+                root.id: root,
+                bracket.id: bracket,
+                assembly.id: assembly,
+                pin.id: pin,
+                fitting.id: fitting,
+                washer.id: washer,
+                sealedGroup.id: sealedGroup,
+                shim.id: shim,
+                patternRoot.id: patternRoot,
+                generated.id: generated
+            ],
+            rootSceneNodeIDs: [root.id],
+            patternArrays: [source.id: source]
+        )
+        projection = OutlinerProjection.make(
+            metadata: metadata,
+            expandedIDs: [root.id],
+            searchText: "",
+            filter: .all
+        )
+        rootID = root.id
+        bracketID = bracket.id
+        assemblyID = assembly.id
+        fittingID = fitting.id
+        sealedGroupID = sealedGroup.id
+        patternRootID = patternRoot.id
+        generatedID = generated.id
+    }
+
+    func lifecycle(_ ids: [SceneNodeID]) -> OutlinerLifecycleAvailability {
+        OutlinerLifecycleAvailability(ids: ids, metadata: metadata, projection: projection)
+    }
+}

@@ -28,6 +28,7 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
     var isSpace: Bool
     var isUpArrow: Bool
     var isDownArrow: Bool
+    var isDelete: Bool
 
     init(
         characters: String = "",
@@ -38,7 +39,8 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
         isEscape: Bool = false,
         isSpace: Bool = false,
         isUpArrow: Bool = false,
-        isDownArrow: Bool = false
+        isDownArrow: Bool = false,
+        isDelete: Bool = false
     ) {
         self.characters = characters
         self.phases = phases
@@ -49,6 +51,7 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
         self.isSpace = isSpace
         self.isUpArrow = isUpArrow
         self.isDownArrow = isDownArrow
+        self.isDelete = isDelete
     }
 
     init(keyPress: KeyPress) {
@@ -86,12 +89,14 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
             isEscape: keyPress.key == .escape,
             isSpace: keyPress.key == .space,
             isUpArrow: keyPress.key == .upArrow,
-            isDownArrow: keyPress.key == .downArrow
+            isDownArrow: keyPress.key == .downArrow,
+            isDelete: keyPress.key == .delete || keyPress.key == .deleteForward
         )
     }
 }
 
 enum WorkspaceKeyboardAction: Equatable, Sendable {
+    case deleteSelection
     case beginSnapCandidateKindBypass
     case endSnapCandidateKindBypass
     case createConstructionPlane(alignsView: Bool)
@@ -134,6 +139,17 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasCurveControlVertexSlideInput: Bool
     var hasSurfaceControlVertexSlideTargets: Bool
     var hasConstructionPlaneTargets: Bool
+
+    /// Whether a command is currently taking typed input.
+    ///
+    /// Those commands own the editing keys while they are up, so the workspace must not read a
+    /// delete meant for a half-typed number as a delete of the selection.
+    var ownsTextEditingKeys: Bool {
+        isDimensionCommandActive
+            || isSlotProfileCommandActive
+            || isEdgeOffsetCommandActive
+            || isRegionOffsetCommandActive
+    }
 }
 
 struct WorkspaceKeyboardRouter: Sendable {
@@ -164,6 +180,12 @@ struct WorkspaceKeyboardRouter: Sendable {
               !input.modifiers.contains(.control),
               !input.modifiers.contains(.option) else {
             return nil
+        }
+        if input.isDelete {
+            guard context.isSelectToolActive, !context.ownsTextEditingKeys else {
+                return nil
+            }
+            return .deleteSelection
         }
         if let dimensionAction = dimensionAction(for: input, context: context) {
             return dimensionAction

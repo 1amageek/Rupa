@@ -87,11 +87,17 @@ struct Outliner: View {
         }
         .searchable(text: $searchText, prompt: "Search Scene")
         .onKeyPress(phases: .all) { keyPress in
-            guard keyPress.phase.contains(.down), isRenameKey(keyPress) else {
+            guard keyPress.phase.contains(.down) else {
                 return .ignored
             }
-            beginRenameForSelection(projection: currentProjection)
-            return .handled
+            if isRenameKey(keyPress) {
+                beginRenameForSelection(projection: currentProjection)
+                return .handled
+            }
+            if isDeleteKey(keyPress) {
+                return deleteSelection(projection: currentProjection)
+            }
+            return .ignored
         }
         .onDisappear {
             cancelDrag()
@@ -129,6 +135,31 @@ struct Outliner: View {
     private func isRenameKey(_ keyPress: KeyPress) -> Bool {
         keyPress.characters.caseInsensitiveCompare("F2") == .orderedSame
             || keyPress.characters == "\u{F705}"
+    }
+
+    private func isDeleteKey(_ keyPress: KeyPress) -> Bool {
+        keyPress.key == .delete || keyPress.key == .deleteForward
+    }
+
+    /// Deletes the tree's current selection.
+    ///
+    /// An empty selection and an active rename leave the key alone so it still reaches the
+    /// responder that owns it; a selection Core would refuse is reported rather than dropped.
+    private func deleteSelection(projection: OutlinerProjection) -> KeyPress.Result {
+        guard renamingID == nil else {
+            return .ignored
+        }
+        let ids = orderedSelectedIDs(projection: projection)
+        guard ids.isEmpty == false else {
+            return .ignored
+        }
+        let lifecycle = lifecycle(ids: ids, projection: projection)
+        guard lifecycle.canDelete else {
+            actionError = "Roots, locked scene nodes, and generated pattern outputs cannot be deleted."
+            return .handled
+        }
+        onIntent(.delete(ids: lifecycle.deletableIDs))
+        return .handled
     }
 
     private func controls(projection: OutlinerProjection) -> some View {
@@ -304,6 +335,21 @@ struct Outliner: View {
                 selectedIDs: selectedIDs,
                 canFrameSelection: canFrameSelection
             ))
+            Divider()
+            let lifecycle = contextLifecycle(for: row.id, projection: projection)
+            Button(lifecycle.groupActionTitle) {
+                sendContextGroup(for: row.id, projection: projection)
+            }
+            .disabled(!lifecycle.canGroup)
+            Button(lifecycle.ungroupActionTitle) {
+                sendContextUngroup(for: row.id, projection: projection)
+            }
+            .disabled(!lifecycle.canUngroup)
+            Divider()
+            Button("Delete", role: .destructive) {
+                sendContextDelete(for: row.id, projection: projection)
+            }
+            .disabled(!lifecycle.canDelete)
         }
     }
 
@@ -325,15 +371,33 @@ struct Outliner: View {
         for contextID: SceneNodeID,
         projection: OutlinerProjection
     ) -> [SceneNodeID] {
-        let ids = OutlinerProjection.contextSelection(
+        let ids = contextIDs(for: contextID, projection: projection)
+        settleSelection(for: contextID)
+        return ids
+    }
+
+    /// Folds an unselected context row into the selection, so that what the tree shows afterwards is
+    /// what the action was taken on.
+    private func settleSelection(for contextID: SceneNodeID) {
+        guard !selectedIDs.contains(contextID) else {
+            return
+        }
+        onIntent(.select([contextID]))
+    }
+
+    /// The rows a context action would act on, without settling the selection.
+    ///
+    /// Availability is read while the menu lays out, so it cannot be answered by the variant that
+    /// folds an unselected row into the selection first.
+    private func contextIDs(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) -> [SceneNodeID] {
+        OutlinerProjection.contextSelection(
             rowID: contextID,
             selectedIDs: selectedIDs,
             orderedIDs: projection.allRows.map(\.id)
         )
-        if !selectedIDs.contains(contextID) {
-            onIntent(.select([contextID]))
-        }
-        return ids
     }
 
     private func contextCanMutate(
@@ -344,6 +408,59 @@ struct Outliner: View {
             return projection.canMutate(ids: selectedIDs)
         }
         return projection.canMutate(ids: [contextID])
+    }
+
+    private func contextLifecycle(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) -> OutlinerLifecycleAvailability {
+        lifecycle(ids: contextIDs(for: contextID, projection: projection), projection: projection)
+    }
+
+    private func lifecycle(
+        ids: [SceneNodeID],
+        projection: OutlinerProjection
+    ) -> OutlinerLifecycleAvailability {
+        OutlinerLifecycleAvailability(ids: ids, metadata: metadata, projection: projection)
+    }
+
+    private func sendContextGroup(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) {
+        let lifecycle = contextLifecycle(for: contextID, projection: projection)
+        guard lifecycle.canGroup else {
+            actionError = "Locked, source-owned, or root scene nodes cannot be grouped."
+            return
+        }
+        settleSelection(for: contextID)
+        onIntent(.group(ids: lifecycle.groupableIDs))
+    }
+
+    private func sendContextUngroup(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) {
+        let lifecycle = contextLifecycle(for: contextID, projection: projection)
+        guard lifecycle.canUngroup else {
+            actionError = "Only an unlocked group that holds no geometry of its own can be dissolved."
+            return
+        }
+        settleSelection(for: contextID)
+        onIntent(.ungroup(ids: lifecycle.dissolvableIDs))
+    }
+
+    private func sendContextDelete(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) {
+        let lifecycle = contextLifecycle(for: contextID, projection: projection)
+        guard lifecycle.canDelete else {
+            actionError = "Roots, locked scene nodes, and generated pattern outputs cannot be deleted."
+            return
+        }
+        settleSelection(for: contextID)
+        onIntent(.delete(ids: lifecycle.deletableIDs))
     }
 
     private func makeDragProvider(

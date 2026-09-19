@@ -25,6 +25,19 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         Self.sceneNodeIDs(from: selectedTargets)
     }
 
+    /// The selected scene nodes that were picked as whole objects.
+    ///
+    /// A sub-object target carries the scene node it was picked on, so reading scene node IDs alone
+    /// would answer a face with the body it belongs to. That distinction matters wherever a command
+    /// acts on the node itself — deleting a face's node would remove the body the face was picked on.
+    public var wholeSceneNodeIDs: [SceneNodeID] {
+        Self.uniqueSceneNodeIDs(
+            selectedTargets
+                .filter { $0.component.isWholeSceneNode }
+                .map(\.sceneNodeID)
+        )
+    }
+
     public var hoveredSceneNodeID: SceneNodeID? {
         hoveredTarget?.sceneNodeID
     }

@@ -50,6 +50,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
+    /// Collects `memberIDs` under a new group node without moving any of them.
+    case groupSceneNodes(name: String, memberIDs: [SceneNodeID], origin: Point3D?)
+    /// Dissolves a group, handing its members back to the group's parent where they stand.
+    case ungroupSceneNode(id: SceneNodeID)
+    /// Removes `ids` and everything that cannot outlive them, or nothing at all.
+    case deleteSceneNodes(ids: [SceneNodeID])
+    /// Moves `ids` together as one rigid body, `worldDelta` being the motion in world space.
+    case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D)
     case setSceneNodeMaterial(id: SceneNodeID, materialID: MaterialID?)
     case setTopologyMaterialBinding(
         target: SelectionTarget,
@@ -476,6 +484,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setSceneNodeLock"
         case .setSceneNodeTransform:
             "setSceneNodeTransform"
+        case .groupSceneNodes:
+            "groupSceneNodes"
+        case .ungroupSceneNode:
+            "ungroupSceneNode"
+        case .deleteSceneNodes:
+            "deleteSceneNodes"
+        case .transformSceneNodes:
+            "transformSceneNodes"
         case .setSceneNodeMaterial:
             "setSceneNodeMaterial"
         case .setTopologyMaterialBinding:
@@ -714,6 +730,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,
+             .groupSceneNodes,
+             .ungroupSceneNode,
+             .deleteSceneNodes,
+             .transformSceneNodes,
              .setSceneNodeMaterial,
              .setTopologyMaterialBinding,
              .setSceneNodeObjectProperty,

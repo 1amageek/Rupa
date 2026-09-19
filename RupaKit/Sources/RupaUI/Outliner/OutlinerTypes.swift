@@ -37,6 +37,9 @@ enum OutlinerIntent: Equatable, Sendable {
         beforeSiblingID: SceneNodeID?,
         expectedGeneration: DocumentGeneration
     )
+    case group(ids: [SceneNodeID])
+    case ungroup(ids: [SceneNodeID])
+    case delete(ids: [SceneNodeID])
 }
 
 struct OutlinerMoveDragSession: Equatable, Sendable {

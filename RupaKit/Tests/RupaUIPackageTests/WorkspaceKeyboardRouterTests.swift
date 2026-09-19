@@ -132,6 +132,41 @@ import Testing
     )
 }
 
+/// Delete removes the selection only while the workspace is the one holding the keys.
+///
+/// The commands that take typed input own the editing keys while they are up, so a delete meant for
+/// a half-typed number must not reach the selection instead.
+@Test func workspaceKeyboardRouterGivesDeleteUpToWhoeverIsTakingTypedInput() {
+    let router = WorkspaceKeyboardRouter()
+    let delete = WorkspaceKeyboardInput(isDelete: true)
+
+    #expect(router.action(for: delete, context: keyboardContext()) == .deleteSelection)
+
+    let refusals: [WorkspaceKeyboardContext] = [
+        keyboardContext(isSelectToolActive: false),
+        keyboardContext(isDimensionCommandActive: true),
+        keyboardContext(isSlotProfileCommandActive: true),
+        keyboardContext(isEdgeOffsetCommandActive: true),
+        keyboardContext(isRegionOffsetCommandActive: true)
+    ]
+    for context in refusals {
+        #expect(router.action(for: delete, context: context) == nil)
+    }
+
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(modifiers: [.command], isDelete: true),
+            context: keyboardContext()
+        ) == nil
+    )
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(phases: [.up], isDelete: true),
+            context: keyboardContext()
+        ) == nil
+    )
+}
+
 private func keyboardContext(
     isSelectToolActive: Bool = true,
     isPolygonToolActive: Bool = false,

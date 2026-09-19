@@ -349,6 +349,136 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         sceneNodes[parentID]?.childIDs.append(nodeID)
     }
 
+    /// Adds a new scene node as a child of `parentID`, at `index` among the parent's children.
+    ///
+    /// The insertion point is what lets a node take the place of what it replaces in the outliner
+    /// instead of appearing at the end of the list.
+    public mutating func insertSceneNode(
+        _ sceneNode: SceneNode,
+        under parentID: SceneNodeID,
+        at index: Int
+    ) throws {
+        guard sceneNodes[sceneNode.id] == nil else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot insert a scene node that already exists."
+            )
+        }
+        guard let parent = sceneNodes[parentID] else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot insert a scene node under a missing parent."
+            )
+        }
+        guard index >= 0, index <= parent.childIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot insert a scene node outside the range of its parent's children."
+            )
+        }
+        sceneNodes[sceneNode.id] = sceneNode
+        sceneNodes[parentID]?.childIDs.insert(sceneNode.id, at: index)
+    }
+
+    /// Moves an existing scene node under `parentID`, at `index` among the parent's children.
+    ///
+    /// Passing `nil` for `index` appends. The node is detached from wherever it currently sits, so a
+    /// node never ends up with two parents.
+    public mutating func moveSceneNode(
+        _ nodeID: SceneNodeID,
+        under parentID: SceneNodeID,
+        at index: Int?
+    ) throws {
+        guard nodeID != parentID else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A scene node cannot be nested under itself."
+            )
+        }
+        guard sceneNodes[nodeID] != nil else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot move a missing scene node."
+            )
+        }
+        guard sceneNodes[parentID] != nil else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot move a scene node under a missing parent."
+            )
+        }
+        guard !sceneSubtree(nodeID, contains: parentID) else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A scene node cannot be nested under one of its own descendants."
+            )
+        }
+        guard !rootSceneNodeIDs.contains(nodeID) else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A root scene node cannot be moved under another node."
+            )
+        }
+        for (id, node) in sceneNodes where node.childIDs.contains(nodeID) {
+            var updated = node
+            updated.childIDs.removeAll { $0 == nodeID }
+            sceneNodes[id] = updated
+        }
+        guard var parent = sceneNodes[parentID] else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot move a scene node under a missing parent."
+            )
+        }
+        let insertionIndex = index ?? parent.childIDs.count
+        guard insertionIndex >= 0, insertionIndex <= parent.childIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot move a scene node outside the range of its parent's children."
+            )
+        }
+        parent.childIDs.insert(nodeID, at: insertionIndex)
+        sceneNodes[parentID] = parent
+    }
+
+    /// Removes a childless scene node from the scene.
+    ///
+    /// Requiring the node to be childless keeps this from quietly discarding a subtree: a caller that
+    /// means to keep the children has to say where they go first.
+    public mutating func removeSceneNode(_ nodeID: SceneNodeID) throws {
+        guard let node = sceneNodes[nodeID] else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot remove a missing scene node."
+            )
+        }
+        guard node.childIDs.isEmpty else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot remove a scene node that still has children."
+            )
+        }
+        guard !rootSceneNodeIDs.contains(nodeID) else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A root scene node cannot be removed."
+            )
+        }
+        for (id, parent) in sceneNodes where parent.childIDs.contains(nodeID) {
+            var updated = parent
+            updated.childIDs.removeAll { $0 == nodeID }
+            sceneNodes[id] = updated
+        }
+        sceneNodes[nodeID] = nil
+    }
+
+    private func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID
+    ) -> Bool {
+        var visitedIDs: Set<SceneNodeID> = []
+        var pendingIDs: [SceneNodeID] = [rootSceneNodeID]
+        while let id = pendingIDs.popLast() {
+            guard visitedIDs.insert(id).inserted else {
+                continue
+            }
+            if id == targetSceneNodeID {
+                return true
+            }
+            guard let node = sceneNodes[id] else {
+                continue
+            }
+            pendingIDs.append(contentsOf: node.childIDs)
+        }
+        return false
+    }
     private func validateSceneNodes(
         against cadDocument: CADDocument,
         objectRegistry: ObjectTypeRegistry

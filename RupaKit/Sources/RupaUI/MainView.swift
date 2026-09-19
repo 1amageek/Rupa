@@ -1683,6 +1683,15 @@ private struct ProjectMainViewContent: View {
         case .showAll:
             submitOutlinerShowAll()
 
+        case .group(let ids):
+            groupSceneNodes(ids)
+
+        case .ungroup(let ids):
+            ungroupSceneNodes(ids)
+
+        case .delete(let ids):
+            deleteSceneNodes(ids)
+
         case .frameCurrentSelection:
             guard viewportControlSession.canFitSelected else {
                 reportToolStatus(
@@ -4777,6 +4786,20 @@ private struct ProjectMainViewContent: View {
         _ action: WorkspaceKeyboardAction
     ) -> KeyPress.Result {
         switch action {
+        case .deleteSelection:
+            let ids = snapshot.selection.wholeSceneNodeIDs
+            guard ids.isEmpty == false else {
+                guard snapshot.selection.selectedTargets.isEmpty == false else {
+                    return .ignored
+                }
+                reportToolStatus(
+                    "Delete removes whole objects. The selection holds only sub-object targets.",
+                    severity: .warning
+                )
+                return .handled
+            }
+            deleteSceneNodes(ids)
+            return .handled
         case .beginSnapCandidateKindBypass:
             return snapOverrideState.beginCandidateKindBypass() ? .handled : .ignored
         case .endSnapCandidateKindBypass:
@@ -6861,6 +6884,93 @@ private struct ProjectMainViewContent: View {
                 )
             }
             return [.setSceneNodeLock(id: id, isLocked: !node.isLocked)]
+        }
+    }
+
+    // MARK: - Scene Node Lifecycle
+
+    /// Collects `ids` under a new group and leaves that group selected.
+    private func groupSceneNodes(_ ids: [SceneNodeID]) {
+        submitSource(name: "groupSceneNodes") { current in
+            let metadata = current.document.document.productMetadata
+            let state = WorkspaceSelectionPlacementActionState(
+                metadata: metadata,
+                selectedSceneNodeIDs: ids
+            )
+            guard state.canGroup else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The selection holds nothing that can be grouped."
+                )
+            }
+            let name = SceneNodeNameAllocator().uniqueName(base: "Group", in: metadata)
+            return [
+                .groupSceneNodes(name: name, memberIDs: state.placeableIDs, origin: nil),
+            ]
+        } completion: { results in
+            guard let groupID = results.last?.generatedIdentities.sceneNodeIDs.first else {
+                return
+            }
+            selectSceneNodes([groupID])
+        }
+    }
+
+    /// Dissolves the groups among `ids` and leaves the released members selected.
+    ///
+    /// The members are read before the command runs because afterwards the groups that named them
+    /// are gone.
+    private func ungroupSceneNodes(_ ids: [SceneNodeID]) {
+        let metadata = snapshot.document.document.productMetadata
+        let releasedIDs = WorkspaceSelectionPlacementActionState(
+            metadata: metadata,
+            selectedSceneNodeIDs: ids
+        )
+        .dissolvableGroupIDs
+        .flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] }
+
+        submitSource(name: "ungroupSceneNodes") { current in
+            let state = WorkspaceSelectionPlacementActionState(
+                metadata: current.document.document.productMetadata,
+                selectedSceneNodeIDs: ids
+            )
+            guard state.canUngroup else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The selection holds no group that can be dissolved."
+                )
+            }
+            return state.dissolvableGroupIDs.map { .ungroupSceneNode(id: $0) }
+        } completion: { _ in
+            guard releasedIDs.isEmpty == false else { return }
+            selectSceneNodes(releasedIDs)
+        }
+    }
+
+    /// Deletes `ids` together with everything that cannot outlive them.
+    ///
+    /// A delete reaches past the selection whenever a selected feature has dependents, and by the
+    /// time the user looks, the rows that would have shown it are gone. So the reach is reported.
+    private func deleteSceneNodes(_ ids: [SceneNodeID]) {
+        guard ids.isEmpty == false else { return }
+        let plan: SceneNodeDeletionPlan
+        do {
+            plan = try SceneNodeDeletionPlanner().plan(
+                metadata: snapshot.document.document.productMetadata,
+                designGraph: snapshot.document.document.cadDocument.designGraph,
+                ids: ids
+            )
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return
+        }
+        submitSource(.deleteSceneNodes(ids: ids)) { result in
+            guard result != nil, plan.dependentSceneNodeIDs.isEmpty == false else { return }
+            reportToolStatus(
+                """
+                Deleted \(plan.sceneNodeIDs.count) objects, \
+                including \(plan.dependentSceneNodeIDs.count) built from the selection.
+                """
+            )
         }
     }
 

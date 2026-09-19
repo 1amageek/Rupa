@@ -262,6 +262,98 @@ multi-move, root-list moves, same-parent bit preservation, world-preserving
 reparenting, cycle/anchor/lock/source-owned refusals, atomic rollback,
 no-op behavior, stale generation, and one-step undo/redo.
 
+### Product hierarchy lifecycle contract
+
+`EditorCommand.groupSceneNodes(name:memberIDs:origin:)`,
+`EditorCommand.ungroupSceneNode(id:)`,
+`EditorCommand.deleteSceneNodes(ids:)`, and
+`EditorCommand.transformSceneNodes(ids:worldDelta:)` are the Core source
+commands for adding, removing, and placing structure in the Product hierarchy.
+They complement the move contract above: a move changes which parent a node
+hangs from, these change which nodes exist and where they stand. The commands
+own the arithmetic and the refusals; Outliner, canvas, and menu callers supply
+stable IDs and never mutate `ProductMetadata` directly.
+
+1. `SceneNodeHierarchy` is the single read model these commands share. It is
+   built from one `ProductMetadata` and answers a node's parent, its
+   accumulated world transform, whether one node sits below another, and which
+   members of a selection are outermost. It refuses to build on a cycle or a
+   child claimed by two parents rather than skipping the offending node,
+   because a placement computed from a partial tree would put geometry where
+   the document does not describe it.
+2. Grouping inserts one new grouping node — a node carrying neither a
+   reference nor an object descriptor — under the nearest node that already
+   contains every member, at the position the first member held.
+   `SceneNodeGroupPlanner` rebases each member's local transform from its old
+   parent into the group, so nothing appears to move. A member that already
+   sits below another member is left out because it travels with its ancestor.
+   `origin` places the group's own origin in world space; `nil` places it
+   exactly where its parent is. `SceneNodeNameAllocator` numbers the base name
+   until it is free, because a repeated name makes the browser ambiguous.
+3. Ungrouping is permitted only for a grouping node. `SceneNodeUngroupPlanner`
+   bakes the group's placement into every member, hands them back to the
+   group's parent at the position the group held, and marks members that were
+   only out of sight because the group was hidden so they stay hidden in their
+   own right. Releasing the children of a body or a sketch would discard that
+   geometry, which is a deletion rather than an ungrouping, and is refused.
+4. A delete is never confined to what was picked. `SceneNodeDeletionPlanner`
+   closes over the selection — subtrees, the features those nodes stand for,
+   the features that consume them, and the rows standing for those dependents
+   — and names the whole set before anything is removed, ordering children
+   before parents and dependents before the features they consume so the
+   document stays valid at each step. The kernel rule that a feature with
+   dependents cannot be removed is kept as it stands; the plan removes the
+   dependents first. The plan also names the component instances, construction
+   planes, material bindings, measurements, and bridge, joined, and joined
+   group curve sources that cannot outlive the removal. Roots, locked nodes,
+   and Pattern array output refuse the whole delete rather than trimming it,
+   because a delete that quietly skipped part of a selection would leave the
+   user believing an object is gone.
+5. `ProductMetadata.insertSceneNode(_:under:at:)`,
+   `moveSceneNode(_:under:at:)`, and `removeSceneNode(_:)` are the tree edits
+   these plans apply. They refuse a duplicate ID, a missing node or parent, an
+   out-of-range insertion point, a node nested under itself or one of its own
+   descendants, a move or removal of a root, and the removal of a node that
+   still has children. Requiring a removal target to be childless keeps the
+   helper from quietly discarding a subtree: a caller that means to keep the
+   children has to say where they go first.
+6. Each command stages one complete `DesignDocument`, validates it with the
+   existing document validator, and publishes it through the existing
+   `CADDocumentStore`/`CommandStack` path. A success is one source mutation and
+   one undo entry. Failure leaves document, generation, evaluation, and history
+   unchanged, and surfaces as a typed refusal the caller can report. A delete
+   that reached past the selection reports how far it reached, because by the
+   time the user looks, the rows that would have shown it are gone.
+7. `EditorCommand.transformSceneNodes(ids:worldDelta:)` states one motion in
+   world space and moves the selection as a single rigid body, so members keep
+   their arrangement relative to one another however far apart they sit in the
+   tree. `SceneNodeRelativeTransformPlanner` carries the motion into each
+   node's own parent space before composing it with that node's local
+   transform, because a node whose parent is itself rotated would otherwise
+   travel along the wrong axis. A node that already sits below another node in
+   the selection is left out: its ancestor carries it, and transforming it as
+   well would apply the motion twice. An empty selection, a missing node, the
+   scene root, Pattern array output, a non-invertible parent placement, and a
+   non-finite delta are refused rather than approximated. The workspace routes
+   for this command are the placement inspector and the viewport gizmo; until
+   one of them submits it, the focused Core tests are its only callers.
+
+```mermaid
+flowchart LR
+    Intent["stable IDs + name, origin, or world delta"] --> Read["SceneNodeHierarchy read model"]
+    Read --> Plan["group / ungroup / deletion / transform plan"]
+    Plan --> Stage["stage and validate DesignDocument"]
+    Stage -->|success| Commit["one Core mutation + one undo + reach report"]
+    Stage -->|failure| Refuse["typed refusal; document untouched"]
+```
+
+The focused Core tests own grouping placement preservation, nested-member
+collapse, name allocation, ungrouping placement and visibility preservation,
+non-grouping-node refusal, deletion closure over feature dependents, removal
+ordering, root/locked/Pattern-output refusal, world-delta rebasing through a
+rotated parent, nested-member collapse under a transform, atomic rollback, and
+one-step undo/redo.
+
 ### Scene placement matrix convention
 
 Scene and component placement use row-major `Matrix4x4` storage with column

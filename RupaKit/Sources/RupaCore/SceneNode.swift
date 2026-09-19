@@ -34,6 +34,14 @@ public struct SceneNode: Codable, Hashable, Identifiable, Sendable {
         self.materialID = materialID
     }
 
+    /// Whether this node exists only to place and collect other nodes.
+    ///
+    /// A node that carries neither a reference nor an object descriptor contributes nothing to the
+    /// scene but its transform and its children, which is exactly what a group is.
+    public var isGroupingNode: Bool {
+        reference == nil && object == nil
+    }
+
     public func validate() throws {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw DocumentValidationError.invalidProductMetadata("Scene node names must not be empty.")
