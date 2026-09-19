@@ -94,53 +94,6 @@ struct ViewportNativeAffordanceClaim {
     var placement: ViewportBodyPlacementBaseline?
 }
 
-struct ViewportConstructionPlaneHandlePlane: Equatable {
-    var constructionPlaneID: ConstructionPlaneSourceID
-    var sceneNodeID: SceneNodeID
-    var origin: Point3D
-    var normal: Vector3D
-    var normalEnd: Point3D
-    var corners: [Point3D]
-    var projectedOrigin: CGPoint
-    var projectedNormalEnd: CGPoint
-
-    func target(
-        handle: ViewportConstructionPlaneHandleKind
-    ) -> ViewportConstructionPlaneHandleTarget {
-        ViewportConstructionPlaneHandleTarget(
-            constructionPlaneID: constructionPlaneID,
-            sceneNodeID: sceneNodeID,
-            handle: handle,
-            origin: origin,
-            normal: normal,
-            normalEnd: normalEnd,
-            corners: corners,
-            projectedOrigin: projectedOrigin,
-            projectedNormalEnd: projectedNormalEnd
-        )
-    }
-}
-
-struct ViewportConstructionPlaneHandleTarget: Equatable {
-    var constructionPlaneID: ConstructionPlaneSourceID
-    var sceneNodeID: SceneNodeID
-    var handle: ViewportConstructionPlaneHandleKind
-    var origin: Point3D
-    var normal: Vector3D
-    var normalEnd: Point3D
-    var corners: [Point3D]
-    var projectedOrigin: CGPoint
-    var projectedNormalEnd: CGPoint
-
-    var identity: ViewportConstructionPlaneHandleIdentity {
-        ViewportConstructionPlaneHandleIdentity(
-            constructionPlaneID: constructionPlaneID,
-            sceneNodeID: sceneNodeID,
-            handle: handle
-        )
-    }
-}
-
 struct ViewportConstructionPlaneHandleIdentity: Hashable, Sendable {
     var constructionPlaneID: ConstructionPlaneSourceID
     var sceneNodeID: SceneNodeID

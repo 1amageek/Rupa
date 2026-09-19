@@ -1,18 +1,15 @@
-import CoreGraphics
 import RupaCore
 import RupaViewportScene
 import Testing
 @testable import RupaRendering
 
 @Test func constructionPlaneOriginDragSnapsPlanarGridAndPreservesDepth() {
-    let sourceTarget = constructionPlaneSnapHandleTarget(handle: .origin)
+    let planeNormal = Vector3D.unitY
     let rawOrigin = Point3D(x: 0.0124, y: 0.0050, z: -0.0076)
-    let dragTarget = ViewportConstructionPlaneDragTarget(
-        constructionPlaneID: sourceTarget.constructionPlaneID,
-        sceneNodeID: sourceTarget.sceneNodeID,
+    let dragTarget = constructionPlaneSnapDragTarget(
         handle: .origin,
         origin: rawOrigin,
-        normal: sourceTarget.normal
+        normal: planeNormal
     )
 
     let snapped = ViewportConstructionPlaneDragSnapResolver().snappedTarget(
@@ -31,17 +28,14 @@ import Testing
     #expect(abs(snapped.origin.x - 0.012) <= 1.0e-12)
     #expect(abs(snapped.origin.y - rawOrigin.y) <= 1.0e-12)
     #expect(abs(snapped.origin.z + 0.008) <= 1.0e-12)
-    #expect(snapped.normal == sourceTarget.normal)
+    #expect(snapped.normal == planeNormal)
 }
 
 @Test func constructionPlaneNormalDragDoesNotUsePlanarGridFallback() {
-    let sourceTarget = constructionPlaneSnapHandleTarget(handle: .normal)
     let rawNormal = Vector3D(x: 0.0124, y: 0.0030, z: -0.0076)
-    let dragTarget = ViewportConstructionPlaneDragTarget(
-        constructionPlaneID: sourceTarget.constructionPlaneID,
-        sceneNodeID: sourceTarget.sceneNodeID,
+    let dragTarget = constructionPlaneSnapDragTarget(
         handle: .normal,
-        origin: sourceTarget.origin,
+        origin: .origin,
         normal: rawNormal
     )
 
@@ -62,7 +56,6 @@ import Testing
 }
 
 @Test func constructionPlaneNormalDragSnapsToWorldPointCandidate() throws {
-    let sourceTarget = constructionPlaneSnapHandleTarget(handle: .normal)
     var document = DesignDocument.empty()
     let targetWorldPoint = Point3D(x: 0.020, y: 0.030, z: 0.040)
     _ = try document.addMeasurementAnnotation(
@@ -76,11 +69,9 @@ import Testing
         )
     )
     let rawNormal = Vector3D(x: 0.0201, y: 0.0301, z: 0.0401)
-    let dragTarget = ViewportConstructionPlaneDragTarget(
-        constructionPlaneID: sourceTarget.constructionPlaneID,
-        sceneNodeID: sourceTarget.sceneNodeID,
+    let dragTarget = constructionPlaneSnapDragTarget(
         handle: .normal,
-        origin: sourceTarget.origin,
+        origin: .origin,
         normal: rawNormal
     )
 
@@ -103,23 +94,16 @@ import Testing
     #expect(abs(snapped.normal.z - targetWorldPoint.z) <= 1.0e-12)
 }
 
-private func constructionPlaneSnapHandleTarget(
-    handle: ViewportConstructionPlaneHandleKind
-) -> ViewportConstructionPlaneHandleTarget {
-    let constructionPlaneID = ConstructionPlaneSourceID()
-    let sceneNodeID = SceneNodeID()
-    let origin = Point3D.origin
-    let normal = Vector3D.unitY
-    let normalEnd = Point3D(x: 0.0, y: 0.020, z: 0.0)
-    return ViewportConstructionPlaneHandleTarget(
-        constructionPlaneID: constructionPlaneID,
-        sceneNodeID: sceneNodeID,
+private func constructionPlaneSnapDragTarget(
+    handle: ViewportConstructionPlaneHandleKind,
+    origin: Point3D,
+    normal: Vector3D
+) -> ViewportConstructionPlaneDragTarget {
+    ViewportConstructionPlaneDragTarget(
+        constructionPlaneID: ConstructionPlaneSourceID(),
+        sceneNodeID: SceneNodeID(),
         handle: handle,
         origin: origin,
-        normal: normal,
-        normalEnd: normalEnd,
-        corners: [],
-        projectedOrigin: CGPoint(x: 400.0, y: 300.0),
-        projectedNormalEnd: CGPoint(x: 400.0, y: 280.0)
+        normal: normal
     )
 }
