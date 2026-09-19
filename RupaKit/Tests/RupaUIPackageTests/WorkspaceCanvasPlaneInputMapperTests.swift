@@ -171,17 +171,19 @@ import Testing
     )
     let worldPoint = try #require(resolvedWorldPoint)
 
-    _ = session.activateTool(.sketch)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: canvasInput.point,
-        modelWorldPoint: worldPoint,
-        sketchPlane: activePlane
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).clickCommand(
+            tool: .sketch,
+            targetSceneNodeID: nil,
+            modelPoint: canvasInput.point,
+            modelWorldPoint: worldPoint,
+            sketchPlane: activePlane,
+            placementCellMeters: nil
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     #expect(result.didMutate)
-    #expect(result.tool == .sketch)
-    #expect(session.selectedTool == .select)
     #expect(try latestSketch(in: session).plane == activePlane)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(worldPoint).point, canvasInput.point))
 }
@@ -221,18 +223,19 @@ import Testing
     let startWorldPoint = try #require(resolvedStartWorldPoint)
     let endWorldPoint = try #require(resolvedEndWorldPoint)
 
-    _ = session.activateTool(.sketch)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: startCanvasInput.point,
-        endModelPoint: endCanvasInput.point,
-        sketchPlane: activePlane,
-        startWorldPoint: startWorldPoint,
-        endWorldPoint: endWorldPoint
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).dragCommand(
+            tool: .sketch,
+            startModelPoint: startCanvasInput.point,
+            endModelPoint: endCanvasInput.point,
+            sketchPlane: activePlane,
+            startWorldPoint: startWorldPoint,
+            endWorldPoint: endWorldPoint
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     #expect(result.didMutate)
-    #expect(result.tool == .sketch)
-    #expect(session.selectedTool == .select)
     #expect(try latestSketch(in: session).plane == activePlane)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
@@ -287,20 +290,22 @@ import Testing
     )
     let worldPoint = try #require(resolvedWorldPoint)
 
-    _ = session.activateTool(.solid)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: canvasInput.point,
-        modelWorldPoint: worldPoint,
-        sketchPlane: activePlane
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).clickCommand(
+            tool: .solid,
+            targetSceneNodeID: nil,
+            modelPoint: canvasInput.point,
+            modelWorldPoint: worldPoint,
+            sketchPlane: activePlane,
+            placementCellMeters: nil
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     let sourceSketch = try firstSketch(in: session)
     let extrude = try latestExtrude(in: session)
     #expect(result.commandName == "createExtrudedRectangleFromCorners")
     #expect(result.didMutate)
-    #expect(result.tool == .solid)
-    #expect(session.selectedTool == .select)
     #expect(sourceSketch.plane == activePlane)
     #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
 }
@@ -342,21 +347,22 @@ import Testing
         )
     )
 
-    _ = session.activateTool(.solid)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: startCanvasInput.point,
-        endModelPoint: endCanvasInput.point,
-        sketchPlane: activePlane,
-        startWorldPoint: startWorldPoint,
-        endWorldPoint: endWorldPoint
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).dragCommand(
+            tool: .solid,
+            startModelPoint: startCanvasInput.point,
+            endModelPoint: endCanvasInput.point,
+            sketchPlane: activePlane,
+            startWorldPoint: startWorldPoint,
+            endWorldPoint: endWorldPoint
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     let sourceSketch = try firstSketch(in: session)
     let extrude = try latestExtrude(in: session)
     #expect(result.commandName == "createExtrudedRectangleFromCorners")
     #expect(result.didMutate)
-    #expect(result.tool == .solid)
-    #expect(session.selectedTool == .select)
     #expect(sourceSketch.plane == activePlane)
     #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
@@ -418,18 +424,20 @@ private func assertCustomPlaneCanvasClickCreatesSketch(
     )
     let worldPoint = try #require(resolvedWorldPoint)
 
-    _ = session.activateTool(toolCase.tool)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: canvasInput.point,
-        modelWorldPoint: worldPoint,
-        sketchPlane: activePlane
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).clickCommand(
+            tool: toolCase.tool,
+            targetSceneNodeID: nil,
+            modelPoint: canvasInput.point,
+            modelWorldPoint: worldPoint,
+            sketchPlane: activePlane,
+            placementCellMeters: nil
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     #expect(result.commandName == toolCase.expectedCommandName)
     #expect(result.didMutate)
-    #expect(result.tool == toolCase.tool)
-    #expect(session.selectedTool == .select)
     #expect(try latestSketch(in: session).plane == activePlane)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(worldPoint).point, canvasInput.point))
 }
@@ -477,19 +485,20 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
         )
     )
 
-    _ = session.activateTool(toolCase.tool)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: startCanvasInput.point,
-        endModelPoint: endCanvasInput.point,
-        sketchPlane: activePlane,
-        startWorldPoint: startWorldPoint,
-        endWorldPoint: endWorldPoint
+    let plannedCommand = try #require(
+        try canvasCommandPlanner(session: session).dragCommand(
+            tool: toolCase.tool,
+            startModelPoint: startCanvasInput.point,
+            endModelPoint: endCanvasInput.point,
+            sketchPlane: activePlane,
+            startWorldPoint: startWorldPoint,
+            endWorldPoint: endWorldPoint
+        )
     )
+    let result = try session.execute(plannedCommand)
 
     #expect(result.commandName == toolCase.expectedCommandName)
     #expect(result.didMutate)
-    #expect(result.tool == toolCase.tool)
-    #expect(session.selectedTool == .select)
     #expect(try latestSketch(in: session).plane == activePlane)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))

@@ -1749,55 +1749,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 }
 
 @MainActor
-@Test func editorSessionActivatesSelectedCanvasToolFromCanvasTarget() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultRectangleSketch())
-    let sketchFeatureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let sketchNodeID = try #require(session.document.productMetadata.sceneNodes.first { entry in
-        entry.value.reference == .sketch(sketchFeatureID)
-    }?.key)
-
-    session.selectTool(.select)
-    let selectResult = session.activateSelectedToolFromCanvas(targetSceneNodeID: sketchNodeID)
-    #expect(selectResult.tool == .select)
-    #expect(!selectResult.didMutate)
-    #expect(session.selectedSceneNodeID == sketchNodeID)
-
-    let clearResult = session.activateSelectedToolFromCanvas(targetSceneNodeID: nil)
-    #expect(clearResult.tool == .select)
-    #expect(!clearResult.didMutate)
-    #expect(session.selectedSceneNodeID == nil)
-
-    session.selectTool(.solid)
-    let solidResult = session.activateSelectedToolFromCanvas(targetSceneNodeID: sketchNodeID)
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
-    let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first { entry in
-        entry.value.reference == .body(bodyFeatureID)
-    }?.key)
-    guard case let .extrude(extrude) = bodyFeature.operation else {
-        #expect(Bool(false))
-        return
-    }
-
-    #expect(solidResult.commandName == "extrudeProfile")
-    #expect(solidResult.didMutate)
-    #expect(solidResult.selectedSceneNodeID == bodyNodeID)
-    #expect(extrude.profile.featureID == sketchFeatureID)
-    #expect(session.evaluatedBodyCount == 1)
-    #expect(session.selectedTool == .select)
-
-    let generation = session.generation
-    session.selectTool(.solid)
-    let rejectedResult = session.activateSelectedToolFromCanvas(targetSceneNodeID: bodyNodeID)
-    #expect(!rejectedResult.didMutate)
-    #expect(rejectedResult.revealsDiagnostics)
-    #expect(session.generation == generation)
-    #expect(session.diagnostics.last?.message == "Solid tool requires a sketch profile canvas target.")
-}
-
-@MainActor
-@Test func editorSessionActivatesSweepToolFromSelectedProfileAndCanvasPathTarget() async throws {
+@Test func editorSessionCreatesSweepFromSelectedProfileAndPathTarget() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultRectangleSketch())
     let profileFeatureID = try #require(session.document.cadDocument.designGraph.order.first)
@@ -1824,8 +1776,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     }?.key)
 
     _ = session.selectSceneNode(profileNodeID)
-    session.selectTool(.sweep)
-    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let result = try #require(session.createSweepFromSelection(targetSceneNodeID: pathNodeID))
     let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
     guard case .sweep(let sweep) = sweepFeature.operation else {
@@ -1833,18 +1784,15 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         return
     }
 
-    #expect(result.tool == .sweep)
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
     #expect(sweep.sections == [.profile(ProfileReference(featureID: profileFeatureID))])
     #expect(sweep.path == SweepPathReference(featureID: pathFeatureID))
-    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
-    #expect(session.selectedTool == .select)
     #expect(session.evaluatedBodyCount == 1)
 }
 
 @MainActor
-@Test func editorSessionActivatesSweepToolFromSelectedCurveSectionAndCanvasPathTarget() async throws {
+@Test func editorSessionCreatesSweepFromSelectedCurveSectionAndPathTarget() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createLineSketch(
@@ -1893,9 +1841,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         targetSceneNodeID: pathNodeID,
         name: "Planned Curve Sweep"
     )
-    session.selectTool(.sweep)
     let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
-    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let result = try #require(session.createSweepFromSelection(targetSceneNodeID: pathNodeID))
     let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
     let bodySceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
@@ -1928,7 +1875,6 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(preview.status == .ready)
     #expect(preview.section == .curve(SweepCurveSectionReference(featureID: sectionFeatureID)))
     #expect(preview.pathFeatureID == pathFeatureID)
-    #expect(result.tool == .sweep)
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
     #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionFeatureID))])
@@ -1936,14 +1882,12 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(sweep.options.resultKind == .sheet)
     #expect(sweepFeature.outputs == [FeatureOutput(role: .sheet)])
     #expect(bodySceneNode.object?.sourceSection == .curve(sectionFeatureID))
-    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
-    #expect(session.selectedTool == .select)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
 }
 
 @MainActor
-@Test func editorSessionActivatesSweepToolFromSelectedGeneratedCurveFeatureAndCanvasPathTarget() async throws {
+@Test func editorSessionCreatesSweepFromSelectedGeneratedCurveFeatureAndPathTarget() async throws {
     var document = DesignDocument.empty()
     let sourceSectionID = try document.createLineSketch(
         name: "Generated Sweep Source Section",
@@ -1996,9 +1940,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     let session = EditorSession(document: document)
 
     _ = session.selectSceneNode(generatedNodeID)
-    session.selectTool(.sweep)
     let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
-    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let result = try #require(session.createSweepFromSelection(targetSceneNodeID: pathNodeID))
     let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
     let bodySceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
@@ -2019,14 +1962,12 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(sweep.path == SweepPathReference(featureID: pathID))
     #expect(sweep.options.resultKind == .sheet)
     #expect(bodySceneNode.object?.sourceSection == .curve(generatedSectionID))
-    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
-    #expect(session.selectedTool == .select)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
 }
 
 @MainActor
-@Test func editorSessionSweepToolCreatesGuideReferencesFromSelectedCurvesAndClickedPath() async throws {
+@Test func editorSessionCreatesSweepGuideReferencesFromSelectedCurvesAndPathTarget() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultRectangleSketch())
     let profileFeatureID = try #require(session.document.cadDocument.designGraph.order.first)
@@ -2074,9 +2015,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         SelectionTarget(sceneNodeID: profileNodeID),
         SelectionTarget(sceneNodeID: guideNodeID),
     ])
-    session.selectTool(.sweep)
     let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
-    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let result = try #require(session.createSweepFromSelection(targetSceneNodeID: pathNodeID))
     let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
     guard case .sweep(let sweep) = sweepFeature.operation else {
@@ -2098,14 +2038,12 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         FeatureInput(featureID: pathFeatureID, role: .path),
         FeatureInput(featureID: guideFeatureID, role: .guide),
     ])
-    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
-    #expect(session.selectedTool == .select)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
 }
 
 @MainActor
-@Test func editorSessionSweepToolRejectsMissingPathBeforeMutation() async throws {
+@Test func editorSessionSweepFromSelectionRejectsMissingPathBeforeMutation() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultRectangleSketch())
     let profileFeatureID = try #require(session.document.cadDocument.designGraph.order.first)
@@ -2113,143 +2051,30 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         entry.value.reference == .sketch(profileFeatureID)
     }?.key)
     _ = session.selectSceneNode(profileNodeID)
-    session.selectTool(.sweep)
     let generation = session.generation
     let preview = session.sweepSelectionPreview()
 
-    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: nil)
+    let result = session.createSweepFromSelection(targetSceneNodeID: nil)
 
     #expect(preview.status == .missingPath)
     #expect(preview.profileFeatureID == profileFeatureID)
     #expect(preview.pathFeatureID == nil)
-    #expect(result.tool == .sweep)
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
+    #expect(result == nil)
     #expect(session.generation == generation)
-    #expect(session.selectedTool == .sweep)
     #expect(session.document.cadDocument.designGraph.order == [profileFeatureID])
     #expect(session.diagnostics.last?.message == "Sweep tool requires one profile or curve section source, one separate path curve source, and optional guide curve selections.")
 }
 
 @MainActor
-@Test func editorSessionActivatesSketchToolFromCanvasBackground() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.sketch)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.0, y: 0.0)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create a sketch feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createRectangleSketchFromCorners")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(session.document.cadDocument.designGraph.order.count == 1)
-    #expect(points == Set([
-        Point2D(x: -0.02, y: -0.02),
-        Point2D(x: 0.02, y: -0.02),
-        Point2D(x: 0.02, y: 0.02),
-        Point2D(x: -0.02, y: 0.02),
-    ]))
-}
-
-@MainActor
-@Test func editorSessionActivatesCircleToolFromCanvasBackground() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.circle)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: -0.04, y: 0.025)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create a circle sketch feature.")
-        return
-    }
-    let circle = try #require(resolvedCircle(in: sketch))
-    let center = try resolvedPoint(
-        circle.center,
-        parameters: session.document.cadDocument.parameters
-    )
-    let radius = try resolvedLength(
-        circle.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createCircleSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(center == Point2D(x: -0.04, y: 0.025))
-    #expect(abs(radius - 0.012) < 0.000_000_000_001)
-}
-
-@MainActor
-@Test func editorSessionPolygonToolUsesConfiguredStateFromCanvasBackground() async throws {
+@Test func editorSessionPolygonToolStateAppliesConfiguredSettings() async throws {
     let session = EditorSession()
 
     #expect(session.setPolygonSideCount(8))
     #expect(session.setPolygonSizingMode(.inradius) == .inradius)
     #expect(session.setPolygonInclinationMode(.horizontal) == .horizontal)
-    session.selectTool(.polygon)
 
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: -0.04, y: 0.025)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create a polygon sketch feature.")
-        return
-    }
-
-    #expect(result.commandName == "createPolygonSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(sketch.entities.count == 8)
     #expect(session.polygonToolState.sideCount == 8)
     #expect(session.polygonToolState.sizingMode == .inradius)
-    #expect(session.polygonToolState.inclinationMode == .horizontal)
-    #expect(session.selectedSceneNode?.object?.properties["radius.is.inradius"] == .boolean(true))
-    #expect(session.selectedSceneNode?.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.horizontal.rawValue))
-    #expect(session.selectedSceneNode?.object?.properties["angle"] == .angle(22.5))
-
-    session.selectTool(.polygon)
-    let secondResult = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.04, y: -0.025)
-    )
-    let secondFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let secondFeature = try #require(session.document.cadDocument.designGraph.nodes[secondFeatureID])
-    guard case let .sketch(secondSketch) = secondFeature.operation else {
-        Issue.record("Second canvas click should create a polygon sketch feature.")
-        return
-    }
-
-    #expect(secondResult.didMutate)
-    #expect(secondSketch.entities.count == 8)
-    #expect(session.polygonToolState.sideCount == 8)
     #expect(session.polygonToolState.inclinationMode == .horizontal)
 }
 
@@ -2263,255 +2088,6 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(session.togglePolygonInclinationMode() == .horizontal)
     #expect(session.togglePolygonCutsFaces())
     #expect(session.togglePolygonCutsFaces() == false)
-
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.02, y: 0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let node = try #require(session.document.productMetadata.sceneNodes.values.first {
-        $0.reference?.featureID == featureID
-    })
-
-    #expect(result.didMutate)
-    #expect(node.object?.properties["sides.x"] == .integer(PolygonToolState.defaultSideCount + 1))
-    #expect(node.object?.properties["radius.is.inradius"] == .boolean(true))
-    #expect(node.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.horizontal.rawValue))
-}
-
-@MainActor
-@Test func editorSessionPolygonKnifeCutsSelectedGeneratedFaceFromCanvas() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let startFaceEntry = try #require(
-        topology.entries.first {
-            $0.kind == .face &&
-                $0.sceneNodeID == bodySceneNodeID.description &&
-                $0.generatedRole == "startFace"
-        }
-    )
-    let faceTarget = try #require(startFaceEntry.selectionTarget())
-
-    #expect(session.selectTarget(faceTarget))
-    #expect(session.setPolygonSideCount(4))
-    #expect(session.setPolygonCutsFaces(true))
-    session.selectTool(.polygon)
-
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.005, y: 0.0),
-        sketchPlane: .xy
-    )
-
-    let faceKnifeFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let faceKnifeSceneNodeID = try #require(
-        commandStackBodySceneNodeID(for: faceKnifeFeatureID, in: session.document)
-    )
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[faceKnifeFeatureID])
-    guard case .faceKnife = feature.operation else {
-        Issue.record("Polygon Knife should create a source-owned Face Knife feature.")
-        return
-    }
-    let afterTopology = try TopologySnapshotService().snapshot(document: session.document)
-    let faceKnifeFaces = afterTopology.entries.filter {
-        $0.kind == .face && $0.sceneNodeID == faceKnifeSceneNodeID.description
-    }
-
-    #expect(result.commandName == "createFaceKnife")
-    #expect(result.didMutate)
-    #expect(session.selectedTool == .select)
-    #expect(session.selectedSceneNode?.reference == .body(faceKnifeFeatureID))
-    #expect(session.polygonToolState.cutsFaces)
-    #expect(faceKnifeFaces.count == 2)
-    #expect(faceKnifeFaces.contains { $0.generatedRole == "faceKnife.centerFace" })
-    #expect(faceKnifeFaces.contains { $0.generatedRole == "faceKnife.ringFace" })
-    #expect(faceKnifeFaces.contains {
-        $0.generatedRole == "faceKnife.centerFace"
-    })
-    #expect(session.evaluationStatus == .valid)
-}
-
-@MainActor
-@Test func editorSessionPolygonKnifeUsesSelectedFacePlaneForSideFaces() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let sideFaceEntry = try #require(
-        topology.entries.first {
-            $0.kind == .face &&
-                $0.sceneNodeID == bodySceneNodeID.description &&
-                $0.generatedRole == "sideFace" &&
-                abs($0.normal?.z ?? 1.0) < 0.5 &&
-                $0.selectionTarget() != nil
-        }
-    )
-    let sideFaceCenter = try #require(sideFaceEntry.center)
-    let sideFaceNormal = try #require(sideFaceEntry.normal)
-    let sideFaceTarget = try #require(sideFaceEntry.selectionTarget())
-
-    #expect(session.selectTarget(sideFaceTarget))
-    #expect(session.setPolygonSideCount(4))
-    #expect(session.setPolygonCutsFaces(true))
-    session.selectTool(.polygon)
-
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.002, y: 0.0),
-        sketchPlane: .xy
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case .faceKnife(let faceKnife) = feature.operation else {
-        Issue.record("Polygon Knife side-face drag should create a Face Knife feature.")
-        return
-    }
-    let center = Point3D(x: sideFaceCenter.x, y: sideFaceCenter.y, z: sideFaceCenter.z)
-    let normal = Vector3D(x: sideFaceNormal.x, y: sideFaceNormal.y, z: sideFaceNormal.z)
-    let loopPlaneDistances = faceKnife.loop.map { point in
-        abs((point - center).dot(normal))
-    }
-
-    #expect(result.commandName == "createFaceKnife")
-    #expect(result.didMutate)
-    #expect(loopPlaneDistances.allSatisfy { $0 < 1.0e-10 })
-    #expect(faceKnife.loop.contains { abs($0.z - center.z) > 1.0e-4 })
-    #expect(session.evaluationStatus == .valid)
-}
-
-@MainActor
-@Test func editorSessionPolygonKnifeUsesSnappedTopologyWorldPointsOnSelectedFace() async throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let sideFaceEntry = try #require(
-        topology.entries.first {
-            $0.kind == .face &&
-                $0.sceneNodeID == bodySceneNodeID.description &&
-                $0.generatedRole == "sideFace" &&
-                abs($0.normal?.z ?? 1.0) < 0.5 &&
-                $0.selectionTarget() != nil
-        }
-    )
-    let sideFaceCenter = try #require(sideFaceEntry.center)
-    let sideFaceTarget = try #require(sideFaceEntry.selectionTarget())
-    let sideFacePlane = try ConstructionPlaneTargetResolver().plane(
-        alignedTo: sideFaceTarget,
-        in: session.document,
-        objectRegistry: .builtIn
-    )
-    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: sideFacePlane)
-    let centerWorldPoint = Point3D(
-        x: sideFaceCenter.x,
-        y: sideFaceCenter.y,
-        z: sideFaceCenter.z
-    )
-    let centerLocalPoint = coordinateSystem.project(centerWorldPoint).point
-    let edgeWorldPoint = coordinateSystem.point(
-        from: Point2D(
-            x: centerLocalPoint.x + 0.002,
-            y: centerLocalPoint.y
-        )
-    )
-
-    #expect(session.selectTarget(sideFaceTarget))
-    #expect(session.setPolygonSideCount(4))
-    #expect(session.setPolygonCutsFaces(true))
-    session.selectTool(.polygon)
-
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.1, y: 0.1),
-        endModelPoint: Point2D(x: 0.12, y: 0.1),
-        sketchPlane: .xy,
-        startWorldPoint: centerWorldPoint,
-        endWorldPoint: edgeWorldPoint
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case .faceKnife(let faceKnife) = feature.operation else {
-        Issue.record("Polygon Knife should use snapped topology world points to create a Face Knife feature.")
-        return
-    }
-    let average = faceKnife.loop.reduce(Point3D.origin) { partial, point in
-        Point3D(
-            x: partial.x + point.x / Double(faceKnife.loop.count),
-            y: partial.y + point.y / Double(faceKnife.loop.count),
-            z: partial.z + point.z / Double(faceKnife.loop.count)
-        )
-    }
-
-    #expect(result.commandName == "createFaceKnife")
-    #expect(result.didMutate)
-    #expect(abs(average.x - centerWorldPoint.x) < 1.0e-10)
-    #expect(abs(average.y - centerWorldPoint.y) < 1.0e-10)
-    #expect(abs(average.z - centerWorldPoint.z) < 1.0e-10)
-    #expect(faceKnife.loop.contains { abs($0.z - centerWorldPoint.z) > 1.0e-4 })
-    #expect(session.evaluationStatus == .valid)
-}
-
-@MainActor
-@Test func editorSessionAppliesLengthInputToPolygonRadius() async throws {
-    let session = EditorSession(selectedTool: .polygon)
-
-    #expect(session.setSketchDimensionInputLength(0.018))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.002, y: 0.0)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let node = try #require(session.document.productMetadata.sceneNodes.values.first {
-        $0.reference?.featureID == featureID
-    })
-
-    #expect(result.didMutate)
-    #expect(node.object?.properties["radius"] == .length(0.018))
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputLengthMeters == nil)
-}
-
-@MainActor
-@Test func editorSessionAppliesAngleInputToPolygonRotation() async throws {
-    let session = EditorSession(selectedTool: .polygon)
-    let angle = Double.pi / 6.0
-
-    #expect(session.setSketchDimensionInputAngle(angle))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.002, y: 0.0)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    let node = try #require(session.document.productMetadata.sceneNodes.values.first {
-        $0.reference?.featureID == featureID
-    })
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a polygon sketch feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.didMutate)
-    #expect(node.object?.properties["angle"] == .angle(30.0))
-    #expect(points.contains { point in
-        abs(point.x - cos(angle) * 0.002) < 1.0e-12
-            && abs(point.y - sin(angle) * 0.002) < 1.0e-12
-    })
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputAngleRadians == nil)
 }
 
 @MainActor
@@ -2521,613 +2097,6 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(!session.setPolygonSideCount(2))
     #expect(session.polygonToolState.sideCount == PolygonToolState.defaultSideCount)
     #expect(session.diagnostics.last?.message == "Polygon side count must be between 3 and 256.")
-}
-
-@MainActor
-@Test func editorSessionActivatesArcToolFromCanvasBackground() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.arc)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: -0.04, y: 0.025)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create an arc sketch feature.")
-        return
-    }
-    let arc = try #require(resolvedArc(in: sketch))
-    let center = try resolvedPoint(
-        arc.center,
-        parameters: session.document.cadDocument.parameters
-    )
-    let radius = try resolvedLength(
-        arc.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-    let startAngle = try resolvedAngle(
-        arc.startAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-    let endAngle = try resolvedAngle(
-        arc.endAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createArcSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    let draft = try CanvasSketchCurveDrafts.arc(
-        centeredAt: Point2D(x: -0.04, y: 0.025)
-    )
-    #expect(center == draft.center)
-    #expect(abs(radius - draft.radiusMeters) < 0.000_000_000_001)
-    #expect(abs(startAngle - draft.startAngleRadians) < 0.000_000_000_001)
-    #expect(abs(endAngle - draft.endAngleRadians) < 0.000_000_000_001)
-}
-
-@MainActor
-@Test func editorSessionActivatesSplineToolFromCanvasBackground() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.spline)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: -0.04, y: 0.025)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create a spline sketch feature.")
-        return
-    }
-    let spline = try #require(resolvedSpline(in: sketch))
-    let controlPoints = try spline.controlPoints.map { point in
-        try resolvedPoint(
-            point,
-            parameters: session.document.cadDocument.parameters
-        )
-    }
-
-    #expect(result.commandName == "createSplineSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    let draft = try CanvasSketchCurveDrafts.spline(
-        centeredAt: Point2D(x: -0.04, y: 0.025)
-    )
-    #expect(pointsMatch(controlPoints, draft.controlPoints))
-}
-
-@MainActor
-@Test func editorSessionActivatesSolidToolFromCanvasBackground() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.solid)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.0, y: 0.0)
-    )
-
-    let order = session.document.cadDocument.designGraph.order
-    let sketchFeatureID = try #require(order.first)
-    let bodyFeatureID = try #require(order.last)
-    let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
-    guard case let .sketch(sketch) = sketchFeature.operation else {
-        Issue.record("Canvas click should create a source sketch feature.")
-        return
-    }
-    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
-    guard case let .extrude(extrude) = bodyFeature.operation else {
-        Issue.record("Canvas click should create a body feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-    let distance = try resolvedLength(
-        extrude.distance,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createExtrudedRectangleFromCorners")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .body(bodyFeatureID))
-    #expect(session.selectedTool == .select)
-    #expect(order.count == 2)
-    #expect(points == Set([
-        Point2D(x: -0.02, y: -0.02),
-        Point2D(x: 0.02, y: -0.02),
-        Point2D(x: 0.02, y: 0.02),
-        Point2D(x: -0.02, y: 0.02),
-    ]))
-    #expect(abs(distance - 0.04) < 0.000_000_000_001)
-    #expect(session.evaluatedBodyCount == 1)
-}
-
-@MainActor
-@Test func editorSessionCreatesRectangleSketchFromCanvasDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.sketch)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.03, y: 0.04),
-        endModelPoint: Point2D(x: -0.01, y: 0.01)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a sketch feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createRectangleSketchFromCorners")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(sketch.entities.count == 4)
-    #expect(sketch.constraints.count == 8)
-    #expect(points == Set([
-        Point2D(x: -0.01, y: 0.01),
-        Point2D(x: 0.03, y: 0.01),
-        Point2D(x: 0.03, y: 0.04),
-        Point2D(x: -0.01, y: 0.04),
-    ]))
-}
-
-@MainActor
-@Test func editorSessionAppliesWidthAndHeightInputToRectangleDrag() async throws {
-    let session = EditorSession(selectedTool: .sketch)
-
-    #expect(session.setSketchDimensionInputWidth(0.05))
-    #expect(session.setSketchDimensionInputHeight(0.02))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.03, y: 0.04),
-        endModelPoint: Point2D(x: -0.01, y: 0.01)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a sketch feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createRectangleSketchFromCorners")
-    #expect(result.didMutate)
-    #expect(points == Set([
-        Point2D(x: -0.02, y: 0.02),
-        Point2D(x: 0.03, y: 0.02),
-        Point2D(x: 0.03, y: 0.04),
-        Point2D(x: -0.02, y: 0.04),
-    ]))
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputWidthMeters == nil)
-    #expect(session.sketchInputState.dimensionInputHeightMeters == nil)
-}
-
-@MainActor
-@Test func editorSessionAppliesWidthAndHeightInputToRectangleClick() async throws {
-    let session = EditorSession(selectedTool: .sketch)
-
-    #expect(session.setSketchDimensionInputWidth(0.06))
-    #expect(session.setSketchDimensionInputHeight(0.03))
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.01, y: -0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas click should create a sketch feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createRectangleSketchFromCorners")
-    #expect(result.didMutate)
-    #expect(points == Set([
-        Point2D(x: -0.02, y: -0.035),
-        Point2D(x: 0.04, y: -0.035),
-        Point2D(x: 0.04, y: -0.005),
-        Point2D(x: -0.02, y: -0.005),
-    ]))
-}
-
-@MainActor
-@Test func editorSessionRejectsDegenerateCanvasRectangleDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.sketch)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 1.0, y: 1.0),
-        endModelPoint: Point2D(x: 1.0, y: 2.0)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .sketch)
-    #expect(session.generation == DocumentGeneration(0))
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas rectangle drag requires a non-zero width and height.")
-}
-
-@MainActor
-@Test func editorSessionCreatesCircleSketchFromCanvasDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.circle)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.04, y: 0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a sketch feature.")
-        return
-    }
-    let circle = try #require(resolvedCircle(in: sketch))
-    let center = try resolvedPoint(
-        circle.center,
-        parameters: session.document.cadDocument.parameters
-    )
-    let radius = try resolvedLength(
-        circle.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createCircleSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(sketch.entities.count == 1)
-    #expect(center == Point2D(x: 0.01, y: -0.02))
-    #expect(abs(radius - 0.05) < 0.000_000_000_001)
-}
-
-@MainActor
-@Test func editorSessionAppliesLengthInputToCircleRadius() async throws {
-    let session = EditorSession(selectedTool: .circle)
-
-    #expect(session.setSketchDimensionInputLength(0.021))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.012, y: -0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a sketch feature.")
-        return
-    }
-    let circle = try #require(resolvedCircle(in: sketch))
-    let radius = try resolvedLength(
-        circle.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createCircleSketch")
-    #expect(result.didMutate)
-    #expect(abs(radius - 0.021) < 1.0e-12)
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputLengthMeters == nil)
-}
-
-@MainActor
-@Test func editorSessionRejectsDegenerateCanvasCircleDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.circle)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 1.0, y: 1.0),
-        endModelPoint: Point2D(x: 1.0, y: 1.0)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .circle)
-    #expect(session.generation == DocumentGeneration(0))
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas circle drag requires a non-zero radius.")
-}
-
-@MainActor
-@Test func editorSessionCreatesArcSketchFromCanvasDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.arc)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.04, y: 0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create an arc sketch feature.")
-        return
-    }
-    let arc = try #require(resolvedArc(in: sketch))
-    let center = try resolvedPoint(
-        arc.center,
-        parameters: session.document.cadDocument.parameters
-    )
-    let radius = try resolvedLength(
-        arc.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-    let startAngle = try resolvedAngle(
-        arc.startAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-    let endAngle = try resolvedAngle(
-        arc.endAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-    let draft = try CanvasSketchCurveDrafts.arc(
-        fromCenter: Point2D(x: 0.01, y: -0.02),
-        toRadiusPoint: Point2D(x: 0.04, y: 0.02)
-    )
-
-    #expect(result.commandName == "createArcSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(sketch.entities.count == 1)
-    #expect(center == draft.center)
-    #expect(abs(radius - draft.radiusMeters) < 0.000_000_000_001)
-    #expect(abs(startAngle - draft.startAngleRadians) < 0.000_000_000_001)
-    #expect(abs(endAngle - draft.endAngleRadians) < 0.000_000_000_001)
-}
-
-@MainActor
-@Test func editorSessionAppliesLengthInputToArcRadius() async throws {
-    let session = EditorSession(selectedTool: .arc)
-
-    #expect(session.setSketchDimensionInputLength(0.019))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.012, y: -0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create an arc sketch feature.")
-        return
-    }
-    let arc = try #require(resolvedArc(in: sketch))
-    let radius = try resolvedLength(
-        arc.radius,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createArcSketch")
-    #expect(result.didMutate)
-    #expect(abs(radius - 0.019) < 1.0e-12)
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputLengthMeters == nil)
-}
-
-@MainActor
-@Test func editorSessionAppliesAngleInputToArcSpan() async throws {
-    let session = EditorSession(selectedTool: .arc)
-    let angle = Double.pi / 3.0
-
-    #expect(session.setSketchDimensionInputAngle(angle))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.04, y: 0.02)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create an arc sketch feature.")
-        return
-    }
-    let arc = try #require(resolvedArc(in: sketch))
-    let startAngle = try resolvedAngle(
-        arc.startAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-    let endAngle = try resolvedAngle(
-        arc.endAngle,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createArcSketch")
-    #expect(result.didMutate)
-    #expect(abs((endAngle - startAngle) - angle) < 1.0e-12)
-    #expect(session.selectedTool == .select)
-    #expect(session.sketchInputState.dimensionInputAngleRadians == nil)
-}
-
-@MainActor
-@Test func editorSessionRejectsInvalidAngleInputForArcSpanBeforeMutation() async throws {
-    let session = EditorSession(selectedTool: .arc)
-
-    #expect(session.setSketchDimensionInputAngle(0.0))
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.01, y: -0.02),
-        endModelPoint: Point2D(x: 0.04, y: 0.02)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .arc)
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas arc angle input must be greater than zero and less than a full circle.")
-}
-
-@MainActor
-@Test func editorSessionRejectsDegenerateCanvasArcDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.arc)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 1.0, y: 1.0),
-        endModelPoint: Point2D(x: 1.0, y: 1.0)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .arc)
-    #expect(session.generation == DocumentGeneration(0))
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas arc drag requires a non-zero radius.")
-}
-
-@MainActor
-@Test func editorSessionCreatesSplineSketchFromCanvasDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.spline)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.0, y: 0.0),
-        endModelPoint: Point2D(x: 0.03, y: 0.04)
-    )
-
-    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
-    guard case let .sketch(sketch) = feature.operation else {
-        Issue.record("Canvas drag should create a spline sketch feature.")
-        return
-    }
-    let spline = try #require(resolvedSpline(in: sketch))
-    let controlPoints = try spline.controlPoints.map { point in
-        try resolvedPoint(
-            point,
-            parameters: session.document.cadDocument.parameters
-        )
-    }
-
-    #expect(result.commandName == "createSplineSketch")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .sketch(featureID))
-    #expect(session.selectedTool == .select)
-    #expect(sketch.entities.count == 1)
-    let draft = try CanvasSketchCurveDrafts.spline(
-        from: Point2D(x: 0.0, y: 0.0),
-        to: Point2D(x: 0.03, y: 0.04)
-    )
-    #expect(pointsMatch(controlPoints, draft.controlPoints))
-}
-
-@MainActor
-@Test func editorSessionRejectsDegenerateCanvasSplineDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.spline)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 1.0, y: 1.0),
-        endModelPoint: Point2D(x: 1.0, y: 1.0)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .spline)
-    #expect(session.generation == DocumentGeneration(0))
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas spline drag requires distinct start and end coordinates.")
-}
-
-@MainActor
-@Test func editorSessionCreatesExtrudedRectangleFromCanvasDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.solid)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 0.02, y: -0.01),
-        endModelPoint: Point2D(x: 0.05, y: 0.03)
-    )
-
-    let order = session.document.cadDocument.designGraph.order
-    let sketchFeatureID = try #require(order.first)
-    let bodyFeatureID = try #require(order.last)
-    let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
-    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
-    guard case let .sketch(sketch) = sketchFeature.operation else {
-        Issue.record("Canvas solid drag should create a source sketch feature.")
-        return
-    }
-    guard case let .extrude(extrude) = bodyFeature.operation else {
-        Issue.record("Canvas solid drag should create a body feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-    let distance = try resolvedLength(
-        extrude.distance,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.commandName == "createExtrudedRectangleFromCorners")
-    #expect(result.didMutate)
-    #expect(result.selectedSceneNodeID != nil)
-    #expect(session.selectedSceneNode?.reference == .body(bodyFeatureID))
-    #expect(session.selectedTool == .select)
-    #expect(order.count == 2)
-    #expect(sketch.entities.count == 4)
-    #expect(points == Set([
-        Point2D(x: 0.02, y: -0.01),
-        Point2D(x: 0.05, y: -0.01),
-        Point2D(x: 0.05, y: 0.03),
-        Point2D(x: 0.02, y: 0.03),
-    ]))
-    #expect(extrude.profile.featureID == sketchFeatureID)
-    #expect(abs(distance - 0.01) < 0.000_000_000_001)
-    #expect(session.evaluatedBodyCount == 1)
-    #expect(session.commandStack.canUndo)
-}
-
-@MainActor
-@Test func editorSessionRejectsDegenerateCanvasSolidDrag() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.solid)
-    let result = session.activateSelectedToolFromCanvasDrag(
-        startModelPoint: Point2D(x: 1.0, y: 1.0),
-        endModelPoint: Point2D(x: 1.0, y: 2.0)
-    )
-
-    #expect(!result.didMutate)
-    #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .solid)
-    #expect(session.generation == DocumentGeneration(0))
-    #expect(session.document.cadDocument.designGraph.order.isEmpty)
-    #expect(session.diagnostics.last?.message == "Canvas solid drag requires a non-zero width and height.")
 }
 
 @MainActor
@@ -5403,9 +4372,20 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     let firstBodySceneNodeID = try #require(
         commandStackBodySceneNodeID(for: firstBodyFeatureID, in: session.document)
     )
-    _ = try #require(
-        session.createExtrudedRectangleFromCanvasClick(
-            centerModelPoint: Point2D(x: 0.08, y: 0.0)
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Pattern Array Second Body",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.06, .meter),
+                y: .length(-0.02, .meter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(0.10, .meter),
+                y: .length(0.02, .meter)
+            ),
+            depth: .length(0.04, .meter),
+            direction: .normal
         )
     )
     let secondBodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -6890,104 +5870,6 @@ private func twoCircleConstraintCommandDocument(
     try session.document.validate()
 }
 
-@MainActor
-@Test func editorSessionCanvasSolidClickUsesSuppliedPlacementCellSide() async throws {
-    let session = EditorSession()
-
-    session.selectTool(.solid)
-    let result = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.0, y: 0.0),
-        placementCellMeters: 1.0
-    )
-
-    let order = session.document.cadDocument.designGraph.order
-    let sketchFeatureID = try #require(order.first)
-    let bodyFeatureID = try #require(order.last)
-    let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
-    guard case let .sketch(sketch) = sketchFeature.operation else {
-        Issue.record("Canvas click should create a source sketch feature.")
-        return
-    }
-    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
-    guard case let .extrude(extrude) = bodyFeature.operation else {
-        Issue.record("Canvas click should create a body feature.")
-        return
-    }
-    let points = try resolvedLinePoints(
-        in: sketch,
-        parameters: session.document.cadDocument.parameters
-    )
-    let distance = try resolvedLength(
-        extrude.distance,
-        parameters: session.document.cadDocument.parameters
-    )
-
-    #expect(result.didMutate)
-    #expect(session.selectedTool == .select)
-    #expect(order.count == 2)
-    // Supplied cell of 1 m must produce a 1 m cube centered on the click.
-    #expect(points == Set([
-        Point2D(x: -0.5, y: -0.5),
-        Point2D(x: 0.5, y: -0.5),
-        Point2D(x: 0.5, y: 0.5),
-        Point2D(x: -0.5, y: 0.5),
-    ]))
-    #expect(abs(distance - 1.0) < 0.000_000_000_001)
-}
-
-@MainActor
-@Test func editorSessionCanvasSolidClickFallsBackToWorkspaceScaleForInvalidCell() async throws {
-    // Default (millimeter) ruler places a 0.04 m cube; half-side is 0.02 m.
-    let session = EditorSession()
-    let fallbackSideMeters = WorkspaceScaleDefaults(
-        ruler: session.workspaceState.ruler
-    ).placedSolidSideMeters
-    let halfFallback = fallbackSideMeters / 2.0
-
-    // nil = not supplied; 0 / negative / non-finite = rejected. All must fall back.
-    let invalidCells: [Double?] = [nil, 0.0, -4.0, Double.nan]
-    for cellMeters in invalidCells {
-        let session = EditorSession()
-        _ = try #require(
-            session.createExtrudedRectangleFromCanvasClick(
-                centerModelPoint: Point2D(x: 0.0, y: 0.0),
-                cellMeters: cellMeters
-            )
-        )
-
-        let order = session.document.cadDocument.designGraph.order
-        let sketchFeatureID = try #require(order.first)
-        let bodyFeatureID = try #require(order.last)
-        let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
-        guard case let .sketch(sketch) = sketchFeature.operation else {
-            Issue.record("Canvas click should create a source sketch feature.")
-            return
-        }
-        let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
-        guard case let .extrude(extrude) = bodyFeature.operation else {
-            Issue.record("Canvas click should create a body feature.")
-            return
-        }
-        let points = try resolvedLinePoints(
-            in: sketch,
-            parameters: session.document.cadDocument.parameters
-        )
-        let distance = try resolvedLength(
-            extrude.distance,
-            parameters: session.document.cadDocument.parameters
-        )
-
-        #expect(points == Set([
-            Point2D(x: -halfFallback, y: -halfFallback),
-            Point2D(x: halfFallback, y: -halfFallback),
-            Point2D(x: halfFallback, y: halfFallback),
-            Point2D(x: -halfFallback, y: halfFallback),
-        ]))
-        #expect(abs(distance - fallbackSideMeters) < 0.000_000_000_001)
-    }
-}
-
 private func resolvedLinePoints(
     in sketch: Sketch,
     parameters: ParameterTable
@@ -7001,50 +5883,6 @@ private func resolvedLinePoints(
         points.insert(try resolvedPoint(line.end, parameters: parameters))
     }
     return points
-}
-
-private func resolvedCircle(in sketch: Sketch) -> SketchCircle? {
-    let circles = sketch.entities.values.compactMap { entity in
-        if case .circle(let circle) = entity {
-            return circle
-        }
-        return nil
-    }
-    return circles.count == 1 ? circles[0] : nil
-}
-
-private func resolvedArc(in sketch: Sketch) -> SketchArc? {
-    let arcs = sketch.entities.values.compactMap { entity in
-        if case .arc(let arc) = entity {
-            return arc
-        }
-        return nil
-    }
-    return arcs.count == 1 ? arcs[0] : nil
-}
-
-private func resolvedSpline(in sketch: Sketch) -> SketchSpline? {
-    let splines = sketch.entities.values.compactMap { entity in
-        if case .spline(let spline) = entity {
-            return spline
-        }
-        return nil
-    }
-    return splines.count == 1 ? splines[0] : nil
-}
-
-private func pointsMatch(
-    _ first: [Point2D],
-    _ second: [Point2D],
-    tolerance: Double = 1.0e-12
-) -> Bool {
-    guard first.count == second.count else {
-        return false
-    }
-    return zip(first, second).allSatisfy { lhs, rhs in
-        abs(lhs.x - rhs.x) <= tolerance
-            && abs(lhs.y - rhs.y) <= tolerance
-    }
 }
 
 private func closedBezierCircleSpline(
@@ -7095,15 +5933,6 @@ private func resolvedLength(
 ) throws -> Double {
     let quantity = try parameters.resolvedValue(for: expression)
     #expect(quantity.kind == .length)
-    return quantity.value
-}
-
-private func resolvedAngle(
-    _ expression: CADExpression,
-    parameters: ParameterTable
-) throws -> Double {
-    let quantity = try parameters.resolvedValue(for: expression)
-    #expect(quantity.kind == .angle)
     return quantity.value
 }
 

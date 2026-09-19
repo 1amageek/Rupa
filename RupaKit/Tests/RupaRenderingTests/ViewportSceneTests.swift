@@ -2471,12 +2471,12 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
 @MainActor
 @Test func viewportSceneProjectsZXCanvasSketchBackToCanvasCoordinates() async throws {
     let session = EditorSession()
-    session.selectTool(.sketch)
 
-    _ = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: Point2D(x: 0.03, y: 0.04),
-        sketchPlane: .zx
+    _ = try session.execute(
+        zxCanvasRectangleSketchCommand(
+            name: "ZX Canvas Rectangle",
+            canvasPoint: Point2D(x: 0.03, y: 0.04)
+        )
     )
 
     let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
@@ -2498,11 +2498,11 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     )
     let modelPoint = try #require(initialMapper.modelPoint(for: clickPoint))
 
-    session.selectTool(.sketch)
-    _ = session.activateSelectedToolFromCanvas(
-        targetSceneNodeID: nil,
-        modelPoint: modelPoint,
-        sketchPlane: .zx
+    _ = try session.execute(
+        zxCanvasRectangleSketchCommand(
+            name: "ZX Canvas Rectangle",
+            canvasPoint: modelPoint
+        )
     )
 
     let finalMapper = ViewportModelCoordinateMapper(
@@ -3790,5 +3790,27 @@ private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
         featureID: generatedTopologyTestFeatureID,
         role: role,
         ordinal: 0
+    )
+}
+
+/// Builds the rectangle sketch a canvas click places on the ZX construction
+/// plane, so viewport projection tests stay independent of the planning layer.
+private func zxCanvasRectangleSketchCommand(
+    name: String,
+    canvasPoint: Point2D,
+    halfSideMeters: Double = 0.02
+) -> EditorCommand {
+    let center = SketchPlaneCanvasMapper(sketchPlane: .zx).localPoint(fromCanvas: canvasPoint)
+    return .createRectangleSketchFromCorners(
+        name: name,
+        plane: .zx,
+        firstCorner: SketchPoint(
+            x: .length(center.x - halfSideMeters, .meter),
+            y: .length(center.y - halfSideMeters, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(center.x + halfSideMeters, .meter),
+            y: .length(center.y + halfSideMeters, .meter)
+        )
     )
 }

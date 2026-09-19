@@ -114,6 +114,35 @@ import Testing
     #expect(abs(dragDraft.rotationAngleRadians - rotation) < 1.0e-12)
 }
 
+@Test func canvasPolygonDraftDerivesRotationFromInclinationAndSizingModes() throws {
+    let center = Point2D(x: 0.01, y: -0.02)
+    let expectedRotations: [(PolygonInclinationMode, PolygonSizingMode, Int, Double)] = [
+        (.vertical, .circumradius, 6, -Double.pi / 2.0),
+        (.vertical, .inradius, 6, -Double.pi / 2.0 + Double.pi / 6.0),
+        (.horizontal, .circumradius, 8, 0.0),
+        (.horizontal, .inradius, 8, Double.pi / 8.0),
+    ]
+
+    for (inclinationMode, sizingMode, sides, expectedRadians) in expectedRotations {
+        let clickDraft = try CanvasSketchCurveDrafts.polygon(
+            centeredAt: center,
+            sides: sides,
+            sizingMode: sizingMode,
+            inclinationMode: inclinationMode
+        )
+        let dragDraft = try CanvasSketchCurveDrafts.polygon(
+            fromCenter: center,
+            toRadiusPoint: Point2D(x: center.x + 0.02, y: center.y),
+            sides: sides,
+            sizingMode: sizingMode,
+            inclinationMode: inclinationMode
+        )
+
+        #expect(abs(clickDraft.rotationAngleRadians - expectedRadians) < 1.0e-12)
+        #expect(abs(dragDraft.rotationAngleRadians - expectedRadians) < 1.0e-12)
+    }
+}
+
 @Test func canvasCurveDraftsRejectInvalidInput() {
     do {
         _ = try CanvasSketchCurveDrafts.arc(

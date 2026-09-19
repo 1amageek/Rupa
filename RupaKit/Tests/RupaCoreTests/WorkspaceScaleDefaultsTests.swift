@@ -223,58 +223,6 @@ import Testing
     #expect(approximatelyEqual(sketchNode.object?.properties["radius"]?.lengthValue, 12.0))
 }
 
-@MainActor
-@Test func editorSessionCanvasClickShapesUseWorkspaceScale() async throws {
-    let rectangleSession = EditorSession()
-    _ = try rectangleSession.execute(.setRulerConfiguration(.standard(for: .meter)))
-    _ = try #require(
-        rectangleSession.createRectangleSketchFromCanvasClick(
-            centerModelPoint: Point2D(x: 0.0, y: 0.0)
-        )
-    )
-    let rectangleNode = try #require(firstSceneNode(with: .sketch, in: rectangleSession.document))
-    #expect(approximatelyEqual(rectangleNode.object?.properties["size.x"]?.lengthValue, 40.0))
-    #expect(approximatelyEqual(rectangleNode.object?.properties["size.y"]?.lengthValue, 40.0))
-
-    let circleSession = EditorSession()
-    _ = try circleSession.execute(.setRulerConfiguration(.standard(for: .meter)))
-    _ = try #require(
-        circleSession.createCircleSketchFromCanvasClick(
-            centerModelPoint: Point2D(x: 0.0, y: 0.0)
-        )
-    )
-    let circleNode = try #require(firstSceneNode(with: .sketch, in: circleSession.document))
-    #expect(approximatelyEqual(circleNode.object?.properties["radius"]?.lengthValue, 12.0))
-}
-
-@MainActor
-@Test func editorSessionCanvasClickShapesUseRegionalPlanningWorkspaceScale() async throws {
-    let rectangleSession = EditorSession()
-    _ = try rectangleSession.execute(
-        .setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
-    )
-    _ = try #require(
-        rectangleSession.createRectangleSketchFromCanvasClick(
-            centerModelPoint: Point2D(x: 0.0, y: 0.0)
-        )
-    )
-    let rectangleNode = try #require(firstSceneNode(with: .sketch, in: rectangleSession.document))
-    #expect(approximatelyEqual(rectangleNode.object?.properties["size.x"]?.lengthValue, 40_000.0))
-    #expect(approximatelyEqual(rectangleNode.object?.properties["size.y"]?.lengthValue, 40_000.0))
-
-    let circleSession = EditorSession()
-    _ = try circleSession.execute(
-        .setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
-    )
-    _ = try #require(
-        circleSession.createCircleSketchFromCanvasClick(
-            centerModelPoint: Point2D(x: 0.0, y: 0.0)
-        )
-    )
-    let circleNode = try #require(firstSceneNode(with: .sketch, in: circleSession.document))
-    #expect(approximatelyEqual(circleNode.object?.properties["radius"]?.lengthValue, 12_000.0))
-}
-
 @Test func canvasCurveDraftsAcceptWorkspaceScaleDefaults() async throws {
     let defaults = WorkspaceScaleDefaults(ruler: .standard(for: .meter))
     let center = Point2D(x: 5.0, y: 7.0)
