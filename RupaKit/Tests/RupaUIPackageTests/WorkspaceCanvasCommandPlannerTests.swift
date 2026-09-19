@@ -71,7 +71,7 @@ func workspaceCanvasCommandPlannerClickRoutesBuildExecutableCommands() throws {
         (.polygon, "createPolygonSketch"),
         (.arc, "createArcSketch"),
         (.spline, "createSplineSketch"),
-        (.surface, "createCircleSketch"),
+        (.circle, "createCircleSketch"),
         (.section, "createSectionPlane"),
     ]
 
@@ -108,7 +108,7 @@ func workspaceCanvasCommandPlannerDragRoutesBuildExecutableCommands() throws {
     let executableCases: [(ModelingTool, String)] = [
         (.sketch, "createRectangleSketchFromCorners"),
         (.polygon, "createPolygonSketch"),
-        (.surface, "createCircleSketch"),
+        (.circle, "createCircleSketch"),
         (.arc, "createArcSketch"),
         (.spline, "createSplineSketch"),
         (.solid, "createExtrudedRectangleFromCorners"),
@@ -287,7 +287,7 @@ func workspaceCanvasCommandPlannerReportsTypedFailuresForInvalidBranchInputs() t
     }
     #expect(throws: EditorError.self) {
         _ = try workspaceCanvasCommandPlanner(session: session).clickCommand(
-            tool: .surface,
+            tool: .circle,
             targetSceneNodeID: nil,
             modelPoint: Point2D(x: .infinity, y: 0.0),
             modelWorldPoint: nil,

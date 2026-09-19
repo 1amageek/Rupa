@@ -2167,10 +2167,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 }
 
 @MainActor
-@Test func editorSessionActivatesSurfaceToolFromCanvasBackground() async throws {
+@Test func editorSessionActivatesCircleToolFromCanvasBackground() async throws {
     let session = EditorSession()
 
-    session.selectTool(.surface)
+    session.selectTool(.circle)
     let result = session.activateSelectedToolFromCanvas(
         targetSceneNodeID: nil,
         modelPoint: Point2D(x: -0.04, y: 0.025)
@@ -2779,7 +2779,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 @Test func editorSessionCreatesCircleSketchFromCanvasDrag() async throws {
     let session = EditorSession()
 
-    session.selectTool(.surface)
+    session.selectTool(.circle)
     let result = session.activateSelectedToolFromCanvasDrag(
         startModelPoint: Point2D(x: 0.01, y: -0.02),
         endModelPoint: Point2D(x: 0.04, y: 0.02)
@@ -2813,7 +2813,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
 @MainActor
 @Test func editorSessionAppliesLengthInputToCircleRadius() async throws {
-    let session = EditorSession(selectedTool: .surface)
+    let session = EditorSession(selectedTool: .circle)
 
     #expect(session.setSketchDimensionInputLength(0.021))
     let result = session.activateSelectedToolFromCanvasDrag(
@@ -2844,7 +2844,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 @Test func editorSessionRejectsDegenerateCanvasCircleDrag() async throws {
     let session = EditorSession()
 
-    session.selectTool(.surface)
+    session.selectTool(.circle)
     let result = session.activateSelectedToolFromCanvasDrag(
         startModelPoint: Point2D(x: 1.0, y: 1.0),
         endModelPoint: Point2D(x: 1.0, y: 1.0)
@@ -2852,7 +2852,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
     #expect(!result.didMutate)
     #expect(result.revealsDiagnostics)
-    #expect(session.selectedTool == .surface)
+    #expect(session.selectedTool == .circle)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.document.cadDocument.designGraph.order.isEmpty)
     #expect(session.diagnostics.last?.message == "Canvas circle drag requires a non-zero radius.")

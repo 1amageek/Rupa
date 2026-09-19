@@ -1117,7 +1117,7 @@ private struct ProjectMainViewContent: View {
 
     private func keepsSketchInputState(for tool: ModelingTool) -> Bool {
         switch tool {
-        case .sketch, .polygon, .arc, .spline, .solid, .surface:
+        case .sketch, .polygon, .circle, .arc, .spline, .solid:
             return true
         case .select, .sweep, .mesh, .measure, .section:
             return false
@@ -2537,7 +2537,7 @@ private struct ProjectMainViewContent: View {
             )
         case .spline:
             .spline
-        case .surface:
+        case .circle:
             .circle(radiusMeters: activeSketchLengthInputMeters)
         default:
             nil
@@ -2586,7 +2586,7 @@ private struct ProjectMainViewContent: View {
             )
         case .spline:
             .spline
-        case .surface:
+        case .circle:
             .circle(radiusMeters: activeSketchLengthInputMeters)
         case .select, .sweep, .mesh, .measure, .section:
             nil
@@ -2698,7 +2698,7 @@ private struct ProjectMainViewContent: View {
         switch selectedTool {
         case .sketch, .solid:
             [.width, .height]
-        case .surface:
+        case .circle:
             [.length]
         case .polygon, .arc:
             [.length, .angle]
@@ -2729,7 +2729,7 @@ private struct ProjectMainViewContent: View {
 
     private var usesSketchAxisConstraint: Bool {
         switch selectedTool {
-        case .sketch, .polygon, .arc, .spline, .solid, .surface:
+        case .sketch, .polygon, .circle, .arc, .spline, .solid:
             true
         case .select, .sweep, .mesh, .measure, .section:
             false
@@ -2738,7 +2738,7 @@ private struct ProjectMainViewContent: View {
 
     private var showsConstructionPlaneHover: Bool {
         switch selectedTool {
-        case .sketch, .polygon, .arc, .spline, .solid, .surface, .section:
+        case .sketch, .polygon, .circle, .arc, .spline, .solid, .section:
             true
         case .select, .sweep, .mesh, .measure:
             false
@@ -4203,7 +4203,7 @@ private struct ProjectMainViewContent: View {
             "Create Box"
         case .sweep:
             "Create Sweep from selected profile, selected guides, and clicked path"
-        case .surface:
+        case .circle:
             "Create Circle Profile"
         case .mesh:
             "Inspect Evaluated Meshes"

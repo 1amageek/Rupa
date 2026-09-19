@@ -727,10 +727,10 @@ public final class EditorSession {
                 selectedSceneNodeID: selectedSceneNodeID,
                 revealsDiagnostics: result == nil
             )
-        case .surface:
+        case .circle:
             guard let modelPoint else {
                 return ModelingToolActivationResult(
-                    tool: .surface,
+                    tool: .circle,
                     selectedSceneNodeID: selectedSceneNodeID
                 )
             }
@@ -743,7 +743,7 @@ public final class EditorSession {
                 returnToSelectToolAfterSingleUse(result)
             }
             return ModelingToolActivationResult(
-                tool: .surface,
+                tool: .circle,
                 commandName: result?.commandName,
                 didMutate: result?.didMutate ?? false,
                 selectedSceneNodeID: selectedSceneNodeID,
@@ -826,7 +826,7 @@ public final class EditorSession {
                 selectedSceneNodeID: selectedSceneNodeID,
                 revealsDiagnostics: result == nil
             )
-        case .surface:
+        case .circle:
             let result = createCircleSketchFromCanvasDrag(
                 centerModelPoint: startModelPoint,
                 edgeModelPoint: endModelPoint,
@@ -837,7 +837,7 @@ public final class EditorSession {
                 returnToSelectToolAfterSingleUse(result)
             }
             return ModelingToolActivationResult(
-                tool: .surface,
+                tool: .circle,
                 commandName: result?.commandName,
                 didMutate: result?.didMutate ?? false,
                 selectedSceneNodeID: selectedSceneNodeID,
@@ -929,7 +929,7 @@ public final class EditorSession {
 
     private func keepsSketchInputState(for tool: ModelingTool) -> Bool {
         switch tool {
-        case .sketch, .polygon, .arc, .spline, .solid, .surface:
+        case .sketch, .polygon, .circle, .arc, .spline, .solid:
             return true
         case .select, .sweep, .mesh, .measure, .section:
             return false

@@ -244,7 +244,7 @@ import Testing
         CustomPlaneToolCase(tool: .polygon, expectedCommandName: "createPolygonSketch"),
         CustomPlaneToolCase(tool: .arc, expectedCommandName: "createArcSketch"),
         CustomPlaneToolCase(tool: .spline, expectedCommandName: "createSplineSketch"),
-        CustomPlaneToolCase(tool: .surface, expectedCommandName: "createCircleSketch"),
+        CustomPlaneToolCase(tool: .circle, expectedCommandName: "createCircleSketch"),
     ]
 
     for toolCase in cases {
@@ -258,7 +258,7 @@ import Testing
         CustomPlaneToolCase(tool: .polygon, expectedCommandName: "createPolygonSketch"),
         CustomPlaneToolCase(tool: .arc, expectedCommandName: "createArcSketch"),
         CustomPlaneToolCase(tool: .spline, expectedCommandName: "createSplineSketch"),
-        CustomPlaneToolCase(tool: .surface, expectedCommandName: "createCircleSketch"),
+        CustomPlaneToolCase(tool: .circle, expectedCommandName: "createCircleSketch"),
     ]
 
     for toolCase in cases {

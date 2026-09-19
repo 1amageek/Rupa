@@ -54,7 +54,7 @@ struct WorkspaceCanvasCommandPlanner {
             return try arcClickCommand(modelPoint: modelPoint, sketchPlane: sketchPlane)
         case .spline:
             return try splineClickCommand(modelPoint: modelPoint, sketchPlane: sketchPlane)
-        case .surface:
+        case .circle:
             return try circleClickCommand(modelPoint: modelPoint, sketchPlane: sketchPlane)
         case .section:
             return .createSectionPlane(name: nextSceneNodeName(prefix: "Section Plane"))
@@ -84,7 +84,7 @@ struct WorkspaceCanvasCommandPlanner {
                 edgeWorldPoint: endWorldPoint,
                 sketchPlane: sketchPlane
             )
-        case .surface:
+        case .circle:
             return try circleDragCommand(
                 centerModelPoint: startModelPoint,
                 edgeModelPoint: endModelPoint,

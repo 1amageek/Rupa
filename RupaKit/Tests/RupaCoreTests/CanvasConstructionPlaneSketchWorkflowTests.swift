@@ -67,7 +67,7 @@ private let canvasSketchTools: [ModelingTool] = [
     .polygon,
     .arc,
     .spline,
-    .surface,
+    .circle,
 ]
 
 private func customCanvasConstructionPlane() throws -> SketchPlane {
