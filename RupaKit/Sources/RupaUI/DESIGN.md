@@ -217,8 +217,11 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
     progress even when the document it evaluated has errors, because the errors
     belong to the document and reach the Issues readout through the republished
     snapshot, while the [failure record](#failure-surfacing) means the operation
-    itself failed. `AppOperationCoverageUITests` owns that contract from the
-    shipped control. The transaction's own mutation-only rule stays with
+    itself failed. The retired `AppOperationCoverageUITests` owned that
+    contract from the shipped control; no test owns it from the control
+    now, and the scenario is recorded as history in
+    [the UI test review](../../Tests/UI_TEST_REVIEW.md). The transaction's
+    own mutation-only rule stays with
     [RupaProject](../RupaProject/DESIGN.md).
 
 The viewport root fills its parent-allocated rectangle in every preparation
