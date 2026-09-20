@@ -140,7 +140,11 @@ extension DesignDocument {
                       case .length(let radius) = definition.resolvedProperties(object.properties)[property.id] else {
                     throw EditorError(code: .commandInvalid, message: "Corner requires a length value.")
                 }
-                try setBoxCorner(featureID: featureID, radius: radius)
+                try setBoxCorner(
+                    featureID: featureID,
+                    radius: radius,
+                    objectRegistry: objectRegistry
+                )
                 return
             }
             guard binding == .sizeX || binding == .sizeY || binding == .sizeZ else {
@@ -330,6 +334,18 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.rectangle):
+            if property.id == "bevel" {
+                try setRectangleProfileBevel(
+                    featureID: featureID,
+                    bevelMeters: try requiredLengthMeters(
+                        "bevel",
+                        definition: definition,
+                        properties: properties
+                    ),
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
             guard property.id == "size.x"
                     || property.id == "size.y"
                     || property.id == "corner.radius" else {
@@ -477,12 +493,14 @@ extension DesignDocument {
     }
 
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
-    // have no router branch yet, so every edit to one fails here instead of reaching the canvas.
+    // reach no mutation, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unrouted today: the `bevel` property on every
-    // extruded profile, and cylinder `angle`, `caps`, `hollow`, `corner.radius`. Do not treat an
-    // edit to any of these as applied until its branch exists and a test drives the property
-    // through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unreachable today: `bevel` on a circle,
+    // polygon, or slot profile, and cylinder `angle`, `caps`, `hollow`, `corner.radius`. The
+    // rounding ones are blocked below Rupa: the kernel's all-edge fillet builds only an orthogonal
+    // box, so a wrapper on any other prism commits a document that stops evaluating rather than
+    // rounding it. Do not treat an edit to any of these as applied until the mutation exists and a
+    // test drives the property through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition
@@ -543,15 +561,26 @@ extension DesignDocument {
             sourceSectionFeatureID: sourceFeatureID,
             generatedName: generatedName
         ) {
+            // A bevelled box hides its extrusion behind the fillet wrapper, and the new depth has
+            // to admit the radius the wrapper already carries. Both are checked before the
+            // mutation so a depth the kernel would refuse leaves the document unchanged.
+            let cornerRadius = try boxCornerRadius(bodyFeatureID)
+            if cornerRadius != 0 {
+                let sizes = try resolvedExtrudedBodyDimensions(featureID: bodyFeatureID)
+                try validateBoxCorner(
+                    cornerRadius,
+                    sizes: [sizes.sizeX, abs(extrusionMeters), sizes.sizeZ]
+                )
+            }
             try setExtrudeDistance(
-                featureID: bodyFeatureID,
+                featureID: boxExtrusionFeatureID(bodyFeatureID),
                 distance: .length(extrusionMeters, .meter),
                 objectRegistry: objectRegistry
             )
             return
         }
 
-        _ = try extrudeProfile(
+        let bodyFeatureID = try extrudeProfile(
             name: generatedName,
             profile: ProfileReference(featureID: sourceFeatureID),
             distance: .length(extrusionMeters, .meter),
@@ -559,6 +588,21 @@ extension DesignDocument {
             typeID: generatedBodyTypeID(for: object),
             objectRegistry: objectRegistry
         )
+        // The profile's `bevel` was latent while it had no body. Applying it here makes the order
+        // the two properties were edited in stop mattering.
+        if object.typeID == .some(.rectangle),
+           let bevelProperty = definition.property(for: .bevel),
+           case let .length(bevelMeters) = properties.value(
+               for: bevelProperty.id,
+               default: bevelProperty.defaultValue
+           ),
+           bevelMeters != 0 {
+            try setBoxCorner(
+                featureID: bodyFeatureID,
+                radius: bevelMeters,
+                objectRegistry: objectRegistry
+            )
+        }
     }
 
     private func generatedExtrusionBodyName(for sceneNodeID: SceneNodeID) -> String {
@@ -604,8 +648,14 @@ extension DesignDocument {
             return
         }
         let generatedNodeIDSet = Set(generatedNodeIDs)
-        let generatedFeatureIDs = Set(generatedNodeIDs.compactMap {
+        // A bevelled box is a fillet wrapping a hidden extrusion. Dropping only the visible
+        // feature the scene node names would leave that extrusion in the graph with nothing
+        // referring to it.
+        let visibleFeatureIDs = generatedNodeIDs.compactMap {
             productMetadata.sceneNodes[$0]?.reference?.featureID
+        }
+        let generatedFeatureIDs = Set(visibleFeatureIDs + visibleFeatureIDs.map {
+            boxExtrusionFeatureID($0)
         })
 
         for nodeID in generatedNodeIDs {
@@ -663,9 +713,40 @@ extension DesignDocument {
                 continue
             }
             try synchronizeObjectPropertiesFromSource(
-                featureID: bodyFeatureID,
+                featureID: visibleBoxFeatureID(bodyFeatureID),
                 objectRegistry: objectRegistry
             )
+        }
+    }
+
+    /// Writes the fillet radius back to both properties that name it.
+    ///
+    /// The `.cube` body declares `corner.radius` and the `.rectangle` profile nested underneath it
+    /// declares `bevel`. Both route to `setBoxCorner`, so both are resynchronized from the feature
+    /// afterwards; otherwise the Inspector would show the new value on whichever one the edit came
+    /// from and a stale one on the other.
+    mutating func synchronizeBoxCornerObjectProperties(
+        featureID: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let radius = try boxCornerRadius(featureID)
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
+            Self.setLengthProperty(.cornerRadius, to: radius, object: &object, definition: definition)
+        }
+        guard case let .extrude(extrude) = cadDocument.designGraph
+            .nodes[boxExtrusionFeatureID(featureID)]?.operation else {
+            return
+        }
+        try updateTypedObjectProperties(
+            featureID: extrude.profile.featureID,
+            category: .sketch,
+            objectRegistry: objectRegistry
+        ) { object, definition in
+            Self.setLengthProperty(.bevel, to: radius, object: &object, definition: definition)
         }
     }
 
@@ -676,7 +757,11 @@ extension DesignDocument {
         sizeZ: Double,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        try updateBodyObjectProperties(featureID: featureID, objectRegistry: objectRegistry) { object, definition in
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
             Self.setLengthProperty(.sizeX, to: sizeX, object: &object, definition: definition)
             Self.setLengthProperty(.sizeY, to: sizeY, object: &object, definition: definition)
             Self.setLengthProperty(.sizeZ, to: sizeZ, object: &object, definition: definition)
@@ -689,7 +774,11 @@ extension DesignDocument {
         sizeY: Double,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        try updateBodyObjectProperties(featureID: featureID, objectRegistry: objectRegistry) { object, definition in
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
             Self.setLengthProperty(.radius, to: radius, object: &object, definition: definition)
             Self.setLengthProperty(.sizeX, to: radius * 2.0, object: &object, definition: definition)
             Self.setLengthProperty(.sizeY, to: sizeY, object: &object, definition: definition)
@@ -697,18 +786,20 @@ extension DesignDocument {
         }
     }
 
-    private mutating func updateBodyObjectProperties(
+    private mutating func updateTypedObjectProperties(
         featureID: FeatureID,
+        category: ObjectDescriptor.Category,
         objectRegistry: ObjectTypeRegistry,
         update: (inout ObjectDescriptor, ObjectTypeDefinition) -> Void
     ) throws {
         guard let nodeID = productMetadata.sceneNodes.first(where: { _, node in
-            node.object?.sourceFeatureID == featureID || node.reference?.featureID == featureID
+            guard let object = node.object, object.category == category, object.typeID != nil else {
+                return false
+            }
+            return object.sourceFeatureID == featureID || node.reference?.featureID == featureID
         })?.key,
             var node = productMetadata.sceneNodes[nodeID],
-            var object = node.object,
-            object.category == .body,
-            object.typeID != nil else {
+            var object = node.object else {
             return
         }
         let definition = try objectRegistry.requireDefinition(for: object.typeID)

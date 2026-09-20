@@ -50,12 +50,13 @@ struct ObjectPropertyEffectTests {
     @Test(.timeLimit(.minutes(1)))
     func sourcePropertyWithoutRoutingFailsVisibly() throws {
         var document = DesignDocument.empty()
-        let node = try rectangleSketchNode(in: &document)
+        let node = try circleSketchNode(in: &document)
         let before = document.productMetadata.sceneNodes[node.id]
 
         do {
-            // `bevel` declares the `source` effect on every extruded profile and has no router
-            // branch yet, so it is the property this contract is proven on.
+            // A circle profile declares `bevel` with the `source` effect, and the kernel's
+            // all-edge fillet builds only an orthogonal box, so no mutation can apply it. It is
+            // the property this contract is proven on.
             try document.setSceneNodeObjectProperty(
                 id: node.id,
                 propertyID: PropertyID(rawValue: "bevel"),
@@ -115,6 +116,18 @@ struct ObjectPropertyEffectTests {
         let properties = document.productMetadata.sceneNodes[node.id]?.object?.properties
         #expect(properties?[retired] == nil)
         #expect(properties?[declared] == .length(0.5))
+    }
+
+    private func circleSketchNode(in document: inout DesignDocument) throws -> SceneNode {
+        let featureID = try document.createCircleSketch(
+            name: "Profile",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+            radius: .length(0.5, .meter)
+        )
+        return try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == featureID
+        })
     }
 
     private func rectangleSketchNode(in document: inout DesignDocument) throws -> SceneNode {

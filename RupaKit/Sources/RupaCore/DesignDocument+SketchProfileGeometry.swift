@@ -216,6 +216,19 @@ extension DesignDocument {
         }
         try validateRectangleCornerRadius(
             cornerRadiusMeters, sizeX: sizeXMeters, sizeY: sizeYMeters)
+        // Rounding the profile and bevelling the box it extrudes are the same rounding, and the
+        // kernel's all-edge fillet needs the orthogonal box only a square-cornered profile makes.
+        // Refusing before the rebuild leaves the document as it was rather than committing one the
+        // evaluator will reject.
+        if cornerRadiusMeters > 0 {
+            for bodyFeatureID in extrudedBodyFeatureIDs(forProfile: featureID) {
+                guard try boxCornerRadius(bodyFeatureID) != 0 else { continue }
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The box this profile extrudes is bevelled, so its corners cannot also be rounded."
+                )
+            }
+        }
 
         let rebuilt = RectangleProfileBuilder.build(
             centerX: recognized.centerX,
