@@ -121,6 +121,26 @@ extension DesignDocument {
         }
     }
 
+    /// Applies the `corner.radius` a `.cube` or a `.cylinder` declares to the body's all-edge
+    /// fillet, which is the single truth of how rounded the body is.
+    private mutating func setAllEdgeCornerRadius(
+        object: ObjectDescriptor,
+        definition: ObjectTypeDefinition,
+        binding: ObjectPropertyDefinition.RenderBinding,
+        featureID: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+              case .length(let radius) = definition.resolvedProperties(object.properties)[property.id] else {
+            throw EditorError(code: .commandInvalid, message: "Corner requires a length value.")
+        }
+        try setBoxCorner(
+            featureID: featureID,
+            radius: radius,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private mutating func applyBodyObjectPropertyToSource(
         object: ObjectDescriptor,
         definition: ObjectTypeDefinition,
@@ -136,13 +156,11 @@ extension DesignDocument {
         switch object.typeID {
         case .some(.cube):
             if binding == .cornerRadius {
-                guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
-                      case .length(let radius) = definition.resolvedProperties(object.properties)[property.id] else {
-                    throw EditorError(code: .commandInvalid, message: "Corner requires a length value.")
-                }
-                try setBoxCorner(
+                try setAllEdgeCornerRadius(
+                    object: object,
+                    definition: definition,
+                    binding: binding,
                     featureID: featureID,
-                    radius: radius,
                     objectRegistry: objectRegistry
                 )
                 return
@@ -187,6 +205,16 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.cylinder):
+            if binding == .cornerRadius {
+                try setAllEdgeCornerRadius(
+                    object: object,
+                    definition: definition,
+                    binding: binding,
+                    featureID: featureID,
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
             guard binding == .sizeX ||
                     binding == .sizeY ||
                     binding == .sizeZ ||
@@ -321,6 +349,18 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.circle):
+            if property.id == "bevel" {
+                try setProfileBevel(
+                    featureID: featureID,
+                    bevelMeters: try requiredLengthMeters(
+                        "bevel",
+                        definition: definition,
+                        properties: properties
+                    ),
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
             guard property.id == "radius" else {
                 throw unsupportedObjectSourceProperty(property, definition: definition)
             }
@@ -335,7 +375,7 @@ extension DesignDocument {
             )
         case .some(.rectangle):
             if property.id == "bevel" {
-                try setRectangleProfileBevel(
+                try setProfileBevel(
                     featureID: featureID,
                     bevelMeters: try requiredLengthMeters(
                         "bevel",
@@ -495,12 +535,12 @@ extension DesignDocument {
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
     // reach no mutation, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unreachable today: `bevel` on a circle,
-    // polygon, or slot profile, and cylinder `angle`, `caps`, `hollow`, `corner.radius`. The
-    // rounding ones are blocked below Rupa: the kernel's all-edge fillet builds only an orthogonal
-    // box, so a wrapper on any other prism commits a document that stops evaluating rather than
-    // rounding it. Do not treat an edit to any of these as applied until the mutation exists and a
-    // test drives the property through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unreachable today: `bevel` on a polygon or
+    // slot profile, and cylinder `angle`, `caps`, `hollow`. The rounding ones are blocked below
+    // Rupa: the kernel's all-edge fillet builds a box or a circular cylinder, so a wrapper on a
+    // hexagonal or slot prism commits a document that stops evaluating rather than rounding it.
+    // Do not treat an edit to any of these as applied until the mutation exists and a test drives
+    // the property through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition
@@ -561,16 +601,16 @@ extension DesignDocument {
             sourceSectionFeatureID: sourceFeatureID,
             generatedName: generatedName
         ) {
-            // A bevelled box hides its extrusion behind the fillet wrapper, and the new depth has
-            // to admit the radius the wrapper already carries. Both are checked before the
+            // A rounded body hides its extrusion behind the fillet wrapper, and the new depth
+            // has to admit the radius the wrapper already carries. It is checked before the
             // mutation so a depth the kernel would refuse leaves the document unchanged.
             let cornerRadius = try boxCornerRadius(bodyFeatureID)
             if cornerRadius != 0 {
-                let sizes = try resolvedExtrudedBodyDimensions(featureID: bodyFeatureID)
-                try validateBoxCorner(
-                    cornerRadius,
-                    sizes: [sizes.sizeX, abs(extrusionMeters), sizes.sizeZ]
-                )
+                guard let target = try allEdgeFilletTarget(
+                    featureID: bodyFeatureID, height: abs(extrusionMeters)) else {
+                    throw unroundableAllEdgeTarget()
+                }
+                try validateAllEdgeCorner(cornerRadius, on: target)
             }
             try setExtrudeDistance(
                 featureID: boxExtrusionFeatureID(bodyFeatureID),
@@ -590,7 +630,7 @@ extension DesignDocument {
         )
         // The profile's `bevel` was latent while it had no body. Applying it here makes the order
         // the two properties were edited in stop mattering.
-        if object.typeID == .some(.rectangle),
+        if object.typeID == .some(.rectangle) || object.typeID == .some(.circle),
            let bevelProperty = definition.property(for: .bevel),
            case let .length(bevelMeters) = properties.value(
                for: bevelProperty.id,
@@ -721,10 +761,10 @@ extension DesignDocument {
 
     /// Writes the fillet radius back to both properties that name it.
     ///
-    /// The `.cube` body declares `corner.radius` and the `.rectangle` profile nested underneath it
-    /// declares `bevel`. Both route to `setBoxCorner`, so both are resynchronized from the feature
-    /// afterwards; otherwise the Inspector would show the new value on whichever one the edit came
-    /// from and a stale one on the other.
+    /// The `.cube` and `.cylinder` bodies declare `corner.radius`, and the `.rectangle` or
+    /// `.circle` profile nested underneath declares `bevel`. Both route to `setBoxCorner`, so both
+    /// are resynchronized from the feature afterwards; otherwise the Inspector would show the new
+    /// value on whichever one the edit came from and a stale one on the other.
     mutating func synchronizeBoxCornerObjectProperties(
         featureID: FeatureID,
         objectRegistry: ObjectTypeRegistry

@@ -114,7 +114,9 @@ flowchart LR
 
 Box Corner Inspector values are projected from the exact source through
 [Core's Corner contract](../RupaCore/DESIGN.md), not stale stored property defaults.
-Its slider is bounded by the smallest source dimension and modeling tolerance.
+Its slider is bounded by the maximum Core publishes for that body, because the
+bound depends on which prism the kernel rounds and only the source knows that.
+The Inspector never derives one from the dimensions it displays.
 Corner Sides remains a product display property consumed by Core's shared
 evaluation-quality resolver; it does not change the CAD radius.
 
@@ -590,8 +592,13 @@ is a single undo step.
 
 `WorkspaceObjectEditingSSOTTests` owns real Workspace publication/Undo and
 cross-adapter tests for parent frames, shear, shared features, invalid inputs and
-source-size invariance. Existing Rendering gesture tests own preview/cancel and
-world-axis measurement. No new authority, cache or preview lifetime is added.
+source-size invariance. It also proves that a cylinder publishes the corner
+radius bound Core resolves from its own prism rather than one the Inspector
+derives from the dimensions it displays: the bound is positive and below half
+the shortest displayed dimension, applying it changes the viewport without
+changing the dimensions, and half the shortest dimension is still refused.
+Existing Rendering gesture tests own preview/cancel and world-axis measurement.
+No new authority, cache or preview lifetime is added.
 
 Consecutive object-transform intents with the same document lifetime, ordered
 target IDs and component replace only the last unstarted intent in the existing

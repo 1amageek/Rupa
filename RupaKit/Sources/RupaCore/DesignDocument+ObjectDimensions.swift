@@ -76,7 +76,10 @@ extension DesignDocument {
         let sizeXMeters = try resolvedPositiveLengthValue(sizeX, owner: "Cube size X")
         let sizeZMeters = try resolvedPositiveLengthValue(sizeZ, owner: "Cube size Z")
         let sizeYMeters = try resolvedPositiveLengthValue(sizeY, owner: "Cube size Y")
-        try validateBoxCorner(boxCornerRadius(featureID), sizes: [sizeXMeters, sizeYMeters, sizeZMeters])
+        try validateAllEdgeCorner(
+            boxCornerRadius(featureID),
+            on: .box(sizes: [sizeXMeters, sizeYMeters, sizeZMeters])
+        )
         guard var feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -161,7 +164,13 @@ extension DesignDocument {
     ) throws {
         let radiusMeters = try resolvedPositiveLengthValue(radius, owner: "Cylinder radius")
         let sizeYMeters = try resolvedPositiveLengthValue(sizeY, owner: "Cylinder size Y")
-        guard var feature = cadDocument.designGraph.nodes[featureID] else {
+        // A rounded cylinder hides its extrusion behind the all-edge fillet wrapper, and the new
+        // cross-section and height both have to admit the radius the wrapper already carries.
+        try validateAllEdgeCorner(
+            boxCornerRadius(featureID),
+            on: .cylinder(radius: radiusMeters, height: sizeYMeters)
+        )
+        guard var feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Cylinder dimensions require an existing body feature."

@@ -174,6 +174,19 @@ extension DesignDocument {
             )
         }
 
+        // The cylinder this profile extrudes may already carry an all-edge fillet, and a smaller
+        // radius has to keep admitting it. Refusing before the rebuild leaves the document as it
+        // was rather than committing one the evaluator will reject.
+        for bodyFeatureID in extrudedBodyFeatureIDs(forProfile: featureID) {
+            let cornerRadius = try boxCornerRadius(bodyFeatureID)
+            guard cornerRadius != 0 else { continue }
+            let sizes = try resolvedExtrudedBodyDimensions(featureID: bodyFeatureID)
+            try validateAllEdgeCorner(
+                cornerRadius,
+                on: .cylinder(radius: radiusMeters, height: sizes.sizeY)
+            )
+        }
+
         var sketch = profile.sketch
         sketch.entities[entry.id] = .circle(
             SketchCircle(

@@ -29,12 +29,17 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 bounds = aggregate
             }
             let size: InspectorVector3D?
+            let cornerRadiusLimit: Double?
             let definition = snapshot.objectRegistry.definition(for: object.typeID)
             var properties = object.properties
             if object.typeID == .cube || object.typeID == .cylinder {
                 let source = try ObjectDimensionSourceResolver().resolve(
                     target: SelectionTarget(sceneNodeID: node.id), in: document)
                 size = .init(x: source.sizeX, y: source.sizeY, z: source.sizeZ)
+                // The bound belongs to the source: a box is bounded by each of its sides and a
+                // cylinder by half its own radius, and only the source knows which prism this is.
+                cornerRadiusLimit = try document.maximumAllEdgeCornerRadius(
+                    featureID: source.featureID)
                 for property in definition?.properties ?? [] {
                     switch property.renderBinding {
                     case .sizeX: properties[property.id] = .length(source.sizeX)
@@ -42,21 +47,20 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                     case .sizeZ: properties[property.id] = .length(source.sizeZ)
                     case .radius:
                         if let radius = source.radius { properties[property.id] = .length(radius) }
-                    case .cornerRadius where object.typeID == .cube:
+                    case .cornerRadius:
                         properties[property.id] = .length(try document.boxCornerRadius(source.featureID))
                     default: break
                     }
                 }
             } else {
                 size = nil
+                cornerRadiusLimit = nil
             }
             return InspectorObjectShape(id: node.id, featureID: featureID,
                 typeID: object.typeID, definition: definition, properties: properties,
                 center: bounds.map { .init(x: ($0.minimum.x + $0.maximum.x) / 2,
                     y: ($0.minimum.y + $0.maximum.y) / 2, z: ($0.minimum.z + $0.maximum.z) / 2) },
-                size: size, cornerRadiusLimit: object.typeID == .cube ? size.map {
-                    max(0, min($0.x, $0.y, $0.z) / 2 - document.modelingSettings.tolerance.distance)
-                } : nil)
+                size: size, cornerRadiusLimit: cornerRadiusLimit)
         }
     }
 

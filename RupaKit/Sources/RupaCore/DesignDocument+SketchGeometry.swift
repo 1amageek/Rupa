@@ -423,7 +423,7 @@ extension DesignDocument {
     ///
     /// At the upper equality two of the four lines have zero length and the profile is a stadium,
     /// which is the slot type's shape and not a rectangle's. This is the tolerance idiom
-    /// `validateBoxCorner` uses for the body fillet a cube's corner declares.
+    /// `validateAllEdgeCorner` uses for the body fillet a cube's corner declares.
     func validateRectangleCornerRadius(_ radius: Double, sizeX: Double, sizeY: Double) throws {
         let tolerance = modelingSettings.tolerance.distance
         guard radius.isFinite, radius == 0 ||

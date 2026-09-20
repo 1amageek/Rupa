@@ -45,29 +45,68 @@ extension DesignDocument {
         return try resolvedLengthValue(fillet.radius, owner: "Box corner")
     }
 
-    func validateBoxCorner(_ radius: Double, sizes: [Double]) throws {
+    func validateAllEdgeCorner(_ radius: Double, on target: AllEdgeFilletTarget) throws {
         let tolerance = modelingSettings.tolerance.distance
         guard radius.isFinite, radius == 0 ||
-                (radius > tolerance && sizes.allSatisfy({ $0 - 2 * radius > tolerance })) else {
+                (radius > tolerance && target.admits(radius, tolerance: tolerance)) else {
             throw EditorError(code: .commandInvalid,
-                message: "Corner must be zero or a positive radius below half the shortest box side.")
+                message: "Corner must be zero or a positive radius the body's own dimensions leave room for.")
         }
+    }
+
+    /// The prism the kernel would round for this body, or `nil` when the body is not one it
+    /// rounds and so publishes no corner bound at all.
+    ///
+    /// `height` proposes a depth the document does not carry yet, so an extrusion can check the
+    /// corner its own new depth has to admit before it commits to it.
+    func allEdgeFilletTarget(
+        featureID: FeatureID,
+        height: Double? = nil
+    ) throws -> AllEdgeFilletTarget? {
+        guard case let .extrude(extrude) = cadDocument.designGraph
+                .nodes[boxExtrusionFeatureID(featureID)]?.operation,
+              case let .sketch(sketch) = cadDocument.designGraph
+                .nodes[extrude.profile.featureID]?.operation else {
+            return nil
+        }
+        let isCylinder = singleCircleEntry(in: sketch) != nil
+        if !isCylinder, try recognizedRectangleProfile(in: sketch) == nil { return nil }
+        // The body's resolved dimensions are the one measurement both prisms come from, and a
+        // cylinder's span across the axis is its diameter.
+        let sizes = try resolvedExtrudedBodyDimensions(featureID: featureID)
+        return isCylinder
+            ? .cylinder(radius: sizes.sizeX / 2.0, height: height ?? sizes.sizeY)
+            : .box(sizes: [sizes.sizeX, height ?? sizes.sizeY, sizes.sizeZ])
+    }
+
+    /// The largest corner radius this body accepts, or `nil` when it accepts none.
+    ///
+    /// The kernel refuses its own bound, so the value sits one tolerance inside it and the end of
+    /// a control bound by it is always an edit that applies. The Inspector reads the bound from
+    /// here rather than deriving one from the dimensions it displays.
+    package func maximumAllEdgeCornerRadius(featureID: FeatureID) throws -> Double? {
+        guard let target = try allEdgeFilletTarget(featureID: featureID) else { return nil }
+        let tolerance = modelingSettings.tolerance.distance
+        return max(0, target.radiusBound(tolerance: tolerance) - tolerance)
     }
 
     /// Rejects a positive radius the kernel's all-edge fillet cannot build.
     ///
-    /// `RoundedBoxFilletBuilder` accepts only an orthogonal box, and `CADDocument.replaceFeature`
-    /// does not evaluate, so a corner accepted on any other prism would commit a document that no
-    /// longer evaluates and surface as a failure at the next render instead of at this edit.
-    /// Zero is always accepted: unwrapping is how such a document is repaired.
+    /// `AllEdgeFilletBuilder` accepts an orthogonal box or a circular cylinder, and
+    /// `CADDocument.replaceFeature` does not evaluate, so a corner accepted on any other prism
+    /// would commit a document that no longer evaluates and surface as a failure at the next
+    /// render instead of at this edit. Zero is always accepted: unwrapping is how such a document
+    /// is repaired.
     func validateBoxCornerTarget(_ featureID: FeatureID) throws {
         guard case let .extrude(extrude) = cadDocument.designGraph.nodes[featureID]?.operation,
-              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation,
-              let profile = try recognizedRectangleProfile(in: sketch) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Rounding every edge requires a box extruded from a rectangle profile."
-            )
+              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation else {
+            throw unroundableAllEdgeTarget()
+        }
+        // A circle extrudes the cylinder the kernel rounds; it carries no profile rounding of its
+        // own, so its only precondition is the one the dimensions already prove.
+        if singleCircleEntry(in: sketch) != nil { return }
+        guard let profile = try recognizedRectangleProfile(in: sketch) else {
+            throw unroundableAllEdgeTarget()
         }
         guard profile.cornerRadius == 0 else {
             throw EditorError(
@@ -77,13 +116,28 @@ extension DesignDocument {
         }
     }
 
+    func unroundableAllEdgeTarget() -> EditorError {
+        EditorError(
+            code: .commandInvalid,
+            message: "Rounding every edge requires a box or a cylinder extruded from a rectangle or circle profile."
+        )
+    }
+
     mutating func setBoxCorner(
         featureID: FeatureID,
         radius: Double,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        let sizes = try resolvedExtrudedBodyDimensions(featureID: featureID)
-        try validateBoxCorner(radius, sizes: [sizes.sizeX, sizes.sizeY, sizes.sizeZ])
+        guard radius.isFinite else {
+            throw EditorError(code: .commandInvalid,
+                message: "Corner must be zero or a positive radius the body's own dimensions leave room for.")
+        }
+        if radius != 0 {
+            guard let target = try allEdgeFilletTarget(featureID: featureID) else {
+                throw unroundableAllEdgeTarget()
+            }
+            try validateAllEdgeCorner(radius, on: target)
+        }
         guard var visible = cadDocument.designGraph.nodes[featureID],
               var base = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)],
               case .extrude = base.operation else {
@@ -114,7 +168,7 @@ extension DesignDocument {
         } else {
             if base.id == featureID {
                 base.id = FeatureID()
-                base.name = "Box source"
+                base.name = "Corner source"
                 guard let index = updated.designGraph.order.firstIndex(of: featureID) else {
                     throw EditorError(code: .referenceUnresolved, message: "Missing box feature order.")
                 }
@@ -135,12 +189,12 @@ extension DesignDocument {
 }
 
 extension DesignDocument {
-    /// Routes a rectangle profile's `bevel` to the all-edge fillet on the box it extrudes.
+    /// Routes a profile's `bevel` to the all-edge fillet on the body it extrudes.
     ///
     /// `bevel` and the body's `corner.radius` name one fillet feature, so the edit lands on the
     /// body rather than on the profile's entities. A profile nothing has extruded yet keeps the
     /// value as latent state; the extrusion that creates its body applies it.
-    mutating func setRectangleProfileBevel(
+    mutating func setProfileBevel(
         featureID: FeatureID,
         bevelMeters: Double,
         objectRegistry: ObjectTypeRegistry
@@ -149,11 +203,11 @@ extension DesignDocument {
         guard bodies.count <= 1 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "The profile builds more than one body, so a bevel names no single box."
+                message: "The profile builds more than one body, so a bevel names no single one."
             )
         }
         guard let bodyFeatureID = bodies.first else {
-            try validateLatentRectangleBevel(featureID: featureID, bevelMeters: bevelMeters)
+            try validateLatentProfileBevel(featureID: featureID, bevelMeters: bevelMeters)
             return
         }
         try setBoxCorner(
@@ -165,15 +219,23 @@ extension DesignDocument {
 
     /// Validates a bevel the profile carries while nothing has extruded it.
     ///
-    /// The stored value is the whole state until a body exists, so the profile's own sides are the
+    /// The stored value is the whole state until a body exists, so the profile's own extent is the
     /// only bound available. Checking here keeps a value the extrusion would later refuse from
     /// being stored as though it had been applied.
-    func validateLatentRectangleBevel(featureID: FeatureID, bevelMeters: Double) throws {
-        let profile = try sketchProfileFeature(featureID: featureID, owner: "Rectangle bevel")
+    func validateLatentProfileBevel(featureID: FeatureID, bevelMeters: Double) throws {
+        let profile = try sketchProfileFeature(featureID: featureID, owner: "Profile bevel")
+        if let circleEntry = singleCircleEntry(in: profile.sketch) {
+            // Nothing has extruded this circle, so the cylinder it will become has no height to
+            // bound the bevel and only its cross-section does.
+            let radius = try resolvedPositiveLengthValue(
+                circleEntry.circle.radius, owner: "Circle radius")
+            try validateAllEdgeCorner(bevelMeters, on: .cylinder(radius: radius, height: nil))
+            return
+        }
         guard let recognized = try recognizedRectangleProfile(in: profile.sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "A bevel requires an axis-aligned rectangle profile."
+                message: "A bevel requires an axis-aligned rectangle profile or a circle profile."
             )
         }
         guard bevelMeters == 0 || recognized.cornerRadius == 0 else {
@@ -182,6 +244,7 @@ extension DesignDocument {
                 message: "The profile is already rounded, so its box has no edges left to round."
             )
         }
-        try validateBoxCorner(bevelMeters, sizes: [recognized.sizeX, recognized.sizeY])
+        try validateAllEdgeCorner(
+            bevelMeters, on: .box(sizes: [recognized.sizeX, recognized.sizeY]))
     }
 }

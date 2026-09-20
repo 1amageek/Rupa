@@ -189,4 +189,35 @@ struct WorkspaceObjectEditingSSOTTests {
                 .centerCommands(.y, meters: 1, nodeIDs: [first])
         }
     }
+
+    /// A cylinder rounds every edge through the same all-edge fillet a cube does, so the shape
+    /// section offers `corner.radius` and bounds the control by what the source accepts.
+    @Test func aCylinderOffersACornerRadiusBoundedByItsAllEdgeFillet() async throws {
+        let (workspace, first, _) = try await fixture(cylinder: true)
+        let before = try #require(workspace.view)
+        let initial = try shape(first, in: before)
+        let size = try #require(initial.size)
+        let shortest = min(size.x, size.y, size.z)
+        let limit = try #require(initial.cornerRadiusLimit)
+        #expect(limit > 0 && limit < shortest / 2)
+        let property = try #require(initial.definition?.properties.first {
+            $0.renderBinding == .cornerRadius
+        })
+
+        let current = try await perform([.setSceneNodeObjectProperty(
+            id: first, propertyID: property.id, value: .length(limit))], in: workspace)
+        let rounded = try shape(first, in: current)
+        #expect(rounded.properties.value(for: property.id, default: property.defaultValue)
+            == .length(limit))
+        #expect(rounded.size == size)
+        #expect(rounded.cornerRadiusLimit == limit)
+        #expect(current.viewport.items != before.viewport.items)
+
+        // Half the shortest dimension leaves the body no edge to round, so the bound the control
+        // publishes is the one the source enforces.
+        await #expect(throws: Error.self) {
+            _ = try await perform([.setSceneNodeObjectProperty(
+                id: first, propertyID: property.id, value: .length(shortest / 2))], in: workspace)
+        }
+    }
 }
