@@ -659,10 +659,12 @@ extruded rectangle declares no subdivision count.
 The schema is the authority on which properties exist, so it can stop declaring
 one. A document written by an earlier schema keeps the stored value until it is
 loaded; `ProductMetadata.pruneUndeclaredObjectProperties` drops values no
-declared property claims, and `DocumentPackageStore` runs it before validation.
-Validation therefore still rejects an undeclared property as invalid input,
-while an older document opens with the stale value removed rather than being
-refused.
+declared property claims. Every boundary that decodes stored product metadata
+runs it, against the same registry it then validates with, before validation:
+`DocumentPackageStore` for a document package and
+`ProjectController.assembleDocument` for a project package. Validation
+therefore still rejects an undeclared property as invalid input, while an older
+document opens with the stale value removed rather than being refused.
 
 ### Display tessellation resolution
 

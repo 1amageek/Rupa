@@ -2072,10 +2072,15 @@ public actor ProjectController: ProjectOperating {
                 metadata: DocumentMetadata(name: product.name)
             )
         }
+        // A project saved by an earlier object schema can carry a property value the
+        // registry no longer declares. That value is stale metadata, not an invalid
+        // source, so it is dropped here rather than refused by validation below.
+        var productMetadata = product.productMetadata
+        productMetadata.pruneUndeclaredObjectProperties(objectRegistry: objectRegistry)
         let document = DesignDocument(
             cadDocument: runtimeCADDocument,
             modelingSettings: product.modelingSettings,
-            productMetadata: product.productMetadata,
+            productMetadata: productMetadata,
             authoredMeshAssets: package.authoredMeshAssets
         )
         do {

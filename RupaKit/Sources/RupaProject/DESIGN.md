@@ -249,6 +249,12 @@ source, plan, and handle failures are typed by RupaKit/Core before or during the
 source command stage; no failure is converted to a successful current-state
 fallback.
 
+A decoded project source that carries an object property the current object
+schema no longer declares is stale metadata, not a source failure. The
+[RupaCore design](../RupaCore/DESIGN.md) owns that migration, and
+`assembleDocument` runs it against the registry it validates with, so a project
+saved by an earlier schema opens instead of failing with `sourceInvalid`.
+
 A package/source staging failure before publication rolls back the staged edit
 and discards its evaluation cache.
 A save failure after a source edit has already committed does not roll back that
