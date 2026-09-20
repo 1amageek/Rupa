@@ -103,13 +103,11 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .sketch:
-            guard property.renderBinding == .extrusion else {
-                throw unsupportedObjectSourceProperty(property, definition: definition)
-            }
-            try applySketchExtrusionPropertyToSource(
+            try applySketchObjectPropertyToSource(
                 sceneNodeID: sceneNodeID,
                 object: object,
                 definition: definition,
+                property: property,
                 objectRegistry: objectRegistry
             )
         case .group, .componentInstance, .construction, .annotation, .camera, .light:
@@ -244,15 +242,253 @@ extension DesignDocument {
         }
     }
 
+    /// Routes a sketch object's `source` property to the mutator that owns its shape.
+    ///
+    /// Dispatch is on the object's declared type and property ID rather than the render binding,
+    /// because several types bind the same slot to different profile geometry. Every mutator
+    /// rebuilds the profile from the whole resolved property set, so an edit to one property keeps
+    /// the others the document already authored.
+    private mutating func applySketchObjectPropertyToSource(
+        sceneNodeID: SceneNodeID,
+        object: ObjectDescriptor,
+        definition: ObjectTypeDefinition,
+        property: ObjectPropertyDefinition,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        if property.renderBinding == .extrusion {
+            try applySketchExtrusionPropertyToSource(
+                sceneNodeID: sceneNodeID,
+                object: object,
+                definition: definition,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+        guard let featureID = object.sourceFeatureID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Shape changes require a sketch built by a feature."
+            )
+        }
+        let properties = definition.resolvedProperties(object.properties)
+
+        switch object.typeID {
+        case .some(.line):
+            guard property.id == "length" || property.id == "angle" else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
+            try setLineSketchGeometry(
+                featureID: featureID,
+                lengthMeters: try requiredLengthMeters(
+                    "length",
+                    definition: definition,
+                    properties: properties
+                ),
+                angleDegrees: try requiredAngleDegrees(
+                    "angle",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+        case .some(.arc):
+            guard property.id == "radius"
+                    || property.id == "start.angle"
+                    || property.id == "end.angle" else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
+            try setArcSketchGeometry(
+                featureID: featureID,
+                radiusMeters: try requiredLengthMeters(
+                    "radius",
+                    definition: definition,
+                    properties: properties
+                ),
+                startAngleDegrees: try requiredAngleDegrees(
+                    "start.angle",
+                    definition: definition,
+                    properties: properties
+                ),
+                endAngleDegrees: try requiredAngleDegrees(
+                    "end.angle",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+        case .some(.circle):
+            guard property.id == "radius" else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
+            try setCircleSketchGeometry(
+                featureID: featureID,
+                radiusMeters: try requiredLengthMeters(
+                    "radius",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+        case .some(.rectangle):
+            guard property.id == "size.x" || property.id == "size.y" else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
+            // A rounded rectangle is a different profile, not a resized one. Rebuilding it here
+            // would silently square off the corners the document authored.
+            let cornerRadius = try requiredLengthMeters(
+                "corner.radius",
+                definition: definition,
+                properties: properties
+            )
+            guard cornerRadius <= 1.0e-9 else {
+                throw unsupportedObjectSourceProperty(
+                    definition.property(for: PropertyID(rawValue: "corner.radius")) ?? property,
+                    definition: definition
+                )
+            }
+            try setRectangleSketchGeometry(
+                featureID: featureID,
+                sizeXMeters: try requiredLengthMeters(
+                    "size.x",
+                    definition: definition,
+                    properties: properties
+                ),
+                sizeYMeters: try requiredLengthMeters(
+                    "size.y",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+        case .some(.polygon):
+            guard property.id == "sizing.radius"
+                    || property.id == "radius.is.inradius"
+                    || property.id == "sides.x"
+                    || property.id == "angle" else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
+            try setPolygonSketchGeometry(
+                featureID: featureID,
+                sizingRadiusMeters: try requiredLengthMeters(
+                    "sizing.radius",
+                    definition: definition,
+                    properties: properties
+                ),
+                isInradius: try requiredBoolean(
+                    "radius.is.inradius",
+                    definition: definition,
+                    properties: properties
+                ),
+                sides: try requiredInteger(
+                    "sides.x",
+                    definition: definition,
+                    properties: properties
+                ),
+                rotationDegrees: try requiredAngleDegrees(
+                    "angle",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+        default:
+            throw unsupportedObjectSourceProperty(property, definition: definition)
+        }
+    }
+
+    private func requiredPropertyValue(
+        _ id: PropertyID,
+        definition: ObjectTypeDefinition,
+        properties: ObjectPropertySet
+    ) throws -> ObjectPropertyValue {
+        guard let property = definition.property(for: id) else {
+            throw EditorError(
+                code: .commandUnsupported,
+                message: "\(definition.title) does not declare a \(id.rawValue) property."
+            )
+        }
+        return properties.value(for: property.id, default: property.defaultValue)
+    }
+
+    private func requiredLengthMeters(
+        _ id: PropertyID,
+        definition: ObjectTypeDefinition,
+        properties: ObjectPropertySet
+    ) throws -> Double {
+        guard case let .length(meters) = try requiredPropertyValue(
+            id,
+            definition: definition,
+            properties: properties
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(definition.title) \(id.rawValue) requires a length value."
+            )
+        }
+        return meters
+    }
+
+    private func requiredAngleDegrees(
+        _ id: PropertyID,
+        definition: ObjectTypeDefinition,
+        properties: ObjectPropertySet
+    ) throws -> Double {
+        guard case let .angle(degrees) = try requiredPropertyValue(
+            id,
+            definition: definition,
+            properties: properties
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(definition.title) \(id.rawValue) requires an angle value."
+            )
+        }
+        return degrees
+    }
+
+    private func requiredInteger(
+        _ id: PropertyID,
+        definition: ObjectTypeDefinition,
+        properties: ObjectPropertySet
+    ) throws -> Int {
+        guard case let .integer(value) = try requiredPropertyValue(
+            id,
+            definition: definition,
+            properties: properties
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(definition.title) \(id.rawValue) requires an integer value."
+            )
+        }
+        return value
+    }
+
+    private func requiredBoolean(
+        _ id: PropertyID,
+        definition: ObjectTypeDefinition,
+        properties: ObjectPropertySet
+    ) throws -> Bool {
+        guard case let .boolean(value) = try requiredPropertyValue(
+            id,
+            definition: definition,
+            properties: properties
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(definition.title) \(id.rawValue) requires a boolean value."
+            )
+        }
+        return value
+    }
+
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
     // have no router branch yet, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unrouted today: rectangle `size.x`, `size.y`,
-    // `corner.radius`; circle `radius`; polygon `sizing.radius`, `radius.is.inradius`, `sides.x`,
-    // `angle`; line `length`, `angle`; arc `radius`, `start.angle`, `end.angle`; the `bevel`
-    // property on every extruded profile; and cylinder `angle`, `caps`, `hollow`, `corner.radius`.
-    // Do not treat an edit to any of these as applied until its branch exists and a test drives the
-    // property through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unrouted today: rectangle `corner.radius`; the
+    // `bevel` property on every extruded profile; and cylinder `angle`, `caps`, `hollow`,
+    // `corner.radius`. Do not treat an edit to any of these as applied until its branch exists and
+    // a test drives the property through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition

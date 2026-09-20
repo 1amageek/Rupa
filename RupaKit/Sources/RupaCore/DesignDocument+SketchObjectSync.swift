@@ -166,17 +166,20 @@ extension DesignDocument {
         productMetadata.sceneNodes[nodeID] = node
     }
 
-    private mutating func updateSketchObjectProperties(
+    mutating func updateSketchObjectProperties(
         featureID: FeatureID,
         objectRegistry: ObjectTypeRegistry,
         update: (inout ObjectDescriptor, ObjectTypeDefinition) -> Void
     ) throws {
         guard let nodeID = productMetadata.sceneNodes.first(where: { _, node in
-            node.object?.sourceFeatureID == featureID || node.reference?.featureID == featureID
+            guard let object = node.object,
+                  object.category == .sketch else {
+                return false
+            }
+            return object.sourceFeatureID == featureID || node.reference?.featureID == featureID
         })?.key,
             var node = productMetadata.sceneNodes[nodeID],
             var object = node.object,
-            object.category == .sketch,
             object.typeID != nil else {
             return
         }

@@ -569,6 +569,34 @@ extension DesignDocument {
         }
     }
 
+    func singleLineEntry(in sketch: Sketch) -> (id: SketchEntityID, line: SketchLine)? {
+        var lineEntry: (id: SketchEntityID, line: SketchLine)?
+        for (id, entity) in sketch.entities {
+            guard case .line(let line) = entity else {
+                return nil
+            }
+            guard lineEntry == nil else {
+                return nil
+            }
+            lineEntry = (id, line)
+        }
+        return lineEntry
+    }
+
+    func singleArcEntry(in sketch: Sketch) -> (id: SketchEntityID, arc: SketchArc)? {
+        var arcEntry: (id: SketchEntityID, arc: SketchArc)?
+        for (id, entity) in sketch.entities {
+            guard case .arc(let arc) = entity else {
+                return nil
+            }
+            guard arcEntry == nil else {
+                return nil
+            }
+            arcEntry = (id, arc)
+        }
+        return arcEntry
+    }
+
     func singleCircleEntry(in sketch: Sketch) -> (id: SketchEntityID, circle: SketchCircle)? {
         var circleEntry: (id: SketchEntityID, circle: SketchCircle)?
         for (id, entity) in sketch.entities {

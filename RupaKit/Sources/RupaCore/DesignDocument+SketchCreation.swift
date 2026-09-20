@@ -321,7 +321,7 @@ extension DesignDocument {
         )
     }
 
-    private func validatePolygonSides(_ sides: Int) throws {
+    func validatePolygonSides(_ sides: Int) throws {
         guard sides >= 3, sides <= 256 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -330,14 +330,22 @@ extension DesignDocument {
         }
     }
 
-    private func polygonSketch(
+    /// Builds the sides of a regular polygon as a closed chain of lines.
+    ///
+    /// `reusedEntityIDs` supplies the IDs of the leading sides in chain order, so a rebuild that
+    /// keeps the side count keeps every entity ID and a rebuild that adds sides mints IDs only for
+    /// the sides it adds. Creation passes none and every side gets a fresh ID.
+    func polygonSketch(
         plane: SketchPlane,
         center: SketchPoint,
         radius: CADExpression,
         sides: Int,
-        rotationAngle: CADExpression
+        rotationAngle: CADExpression,
+        reusedEntityIDs: [SketchEntityID] = []
     ) -> Sketch {
-        let entityIDs = (0..<sides).map { _ in SketchEntityID() }
+        let entityIDs = (0..<sides).map { index in
+            index < reusedEntityIDs.count ? reusedEntityIDs[index] : SketchEntityID()
+        }
         let vertices = (0..<sides).map { index in
             polygonVertex(
                 center: center,
@@ -380,7 +388,7 @@ extension DesignDocument {
         )
     }
 
-    private func polygonCircumradiusExpression(
+    func polygonCircumradiusExpression(
         _ radius: CADExpression,
         sides: Int,
         sizingMode: PolygonSizingMode

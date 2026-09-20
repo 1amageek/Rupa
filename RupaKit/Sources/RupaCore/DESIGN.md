@@ -682,6 +682,64 @@ caller that opened the document decides what to do with it. The
 [RupaUI design](../RupaUI/DESIGN.md) owns surfacing it to the person who opened
 the document.
 
+### Sketch profile source mutation
+
+A sketch-category object declares its shape as properties, and an edit to one of
+them rewrites the entities of the one sketch feature that built it. The router
+dispatches on the object's type and the property's ID, not on its render
+binding: arc `start.angle` and `end.angle` share `.angle`, and polygon
+`sizing.radius` and `radius.is.inradius` declare no binding at all.
+
+| Type | Source properties | Mutator | Anchor the edit keeps fixed |
+|---|---|---|---|
+| `line` | `length`, `angle` | `setLineSketchGeometry` | The start point |
+| `arc` | `radius`, `start.angle`, `end.angle` | `setArcSketchGeometry` | The center |
+| `circle` | `radius` | `setCircleSketchGeometry` | The center |
+| `rectangle` | `size.x`, `size.y` | `setRectangleSketchGeometry` | The center of the bounds |
+| `polygon` | `sizing.radius`, `radius.is.inradius`, `sides.x`, `angle` | `setPolygonSketchGeometry` | The center |
+
+Each mutator reads the whole resolved property set rather than the one property
+that changed, so one code path per type serves every property that type
+declares, and the rebuilt sketch is the sketch those values describe.
+
+Invariants:
+
+- A mutator replaces the sketch feature through a single
+  `CADDocument.replaceFeature`, keeping the feature's ID, inputs, and outputs.
+  A value edit adds and removes no feature, so the design graph structure is
+  unchanged and the evaluator rebuilds only the edited feature and what depends
+  on it. This is the same shape as `setCubeDimensions`, and it is what makes a
+  shape edit cost one feature rather than the document.
+- Entity IDs are preserved whenever the new entity count equals the old one.
+  Polygon `sides.x` is the one property that changes the count; it reuses the
+  existing IDs in chain order for the sides it keeps and mints IDs only for the
+  sides it adds. A dimension, bridge, or joined-curve source that referenced a
+  dropped entity makes `ProductMetadata.validate` reject the edit, which is the
+  visible failure the object property effect contract requires.
+- A mutator that cannot express the value throws `EditorError` and leaves the
+  document unchanged. `setSceneNodeObjectProperty` applies the whole edit to a
+  copy and assigns it only on success, so a rejected value persists neither the
+  property nor a partial rebuild.
+- After the rebuild, the derived properties the source owns are recomputed:
+  polygon `radius` and `side.length` follow from `sizing.radius`,
+  `radius.is.inradius`, and `sides.x`, and any body extruded from the sketch has
+  its size properties resynchronized through
+  `synchronizeObjectPropertiesAffectedBySketch`.
+
+Completion evidence for a shape edit is the evaluation metrics of the pass it
+causes: `rebuiltFeatureCount` equals the edited sketch feature plus the features
+downstream of it (1 for a bare sketch, 2 when the sketch is extruded),
+`reusedFeatureCount` equals `totalFeatureCount - rebuiltFeatureCount`, and
+`replayFallbackCount` is 0. The kernel mechanism that produces this is owned by
+the [swift-CAD design](../../../swift-CAD/DESIGN.md); this design owns only the
+in-place replacement that lets it apply.
+
+Rectangle `corner.radius` is not part of this contract. Rounding a rectangle
+profile replaces its four lines with four lines and four arcs, which changes the
+entity count for a property that is not `sides.x` and changes what
+`isRectangleProfile` recognizes, so it carries its own invariant and its own
+decision about the body a rounded profile extrudes to.
+
 ### Display tessellation resolution
 
 `DesignDocument.displayTessellationOptions` is the single owner of the mapping

@@ -21,6 +21,8 @@
   - [x] S7.3 Material authoring in Core and the Inspector appearance section `depends:S7.1` `parallel:none`
   - [x] S7.4 The native surface consumes the authored material, not color alone `depends:S7.3` `parallel:none`
   - [ ] S7.5 Sketch profile source routing for the declared shape properties `depends:S7.1` `parallel:none`
+    - [x] S7.5.1 Count-preserving sketch profile properties reach the canvas: line length and angle, arc radius and angles, circle radius, polygon sizing radius, inradius mode, sides, and rotation, and rectangle size `depends:none` `parallel:none`
+    - [ ] S7.5.2 Rectangle corner radius as a rounded profile `depends:S7.5.1` `parallel:none`
   - [ ] S7.6 Bevel and cylinder corner rounding through a body fillet feature `depends:S7.1` `parallel:none`
   - [ ] S7.7 Cylinder angle, caps, and hollow through the circle profile source `depends:S7.1,S7.5` `parallel:none`
   - [x] S7.8 A document saved against an earlier schema still opens, and a value its type no longer declares is reported rather than rejected `depends:S7.1` `parallel:none`

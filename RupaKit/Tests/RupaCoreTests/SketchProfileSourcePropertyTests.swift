@@ -1,0 +1,488 @@
+import Foundation
+import SwiftCAD
+import Testing
+import RupaCoreTypes
+@testable import RupaCore
+
+@MainActor
+@Suite("Sketch profile source properties")
+struct SketchProfileSourcePropertyTests {
+
+    // MARK: - Line
+
+    @Test(.timeLimit(.minutes(1)))
+    func lineLengthAndAngleReshapeTheProfile() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createLineSketch(
+                name: "Line",
+                plane: .xy,
+                start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                end: SketchPoint(x: .length(0.1, .meter), y: .length(0.0, .meter))
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "length"),
+            value: .length(0.2)
+        ))
+        var end = try lineEnd(in: store, featureID: featureID)
+        #expect(nearlyEqual(end.x, 0.2))
+        #expect(nearlyEqual(end.y, 0.0))
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "angle"),
+            value: .angle(90.0)
+        ))
+        end = try lineEnd(in: store, featureID: featureID)
+        #expect(nearlyEqual(end.x, 0.0))
+        #expect(nearlyEqual(end.y, 0.2))
+
+        // The edit reshapes the feature the document already owns rather than replacing it.
+        #expect(store.document.cadDocument.designGraph.nodes[featureID] != nil)
+        #expect(store.document.cadDocument.designGraph.nodes.count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func lineLengthOfZeroIsRejectedWithoutTouchingTheDocument() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createLineSketch(
+                name: "Line",
+                plane: .xy,
+                start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                end: SketchPoint(x: .length(0.1, .meter), y: .length(0.0, .meter))
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let graphBefore = store.document.cadDocument.designGraph
+        let nodeBefore = store.document.productMetadata.sceneNodes[nodeID]
+
+        #expect(throws: EditorError.self) {
+            _ = try store.apply(.setSceneNodeObjectProperty(
+                id: nodeID,
+                propertyID: PropertyID(rawValue: "length"),
+                value: .length(0.0)
+            ))
+        }
+        #expect(store.document.cadDocument.designGraph == graphBefore)
+        #expect(store.document.productMetadata.sceneNodes[nodeID] == nodeBefore)
+    }
+
+    // MARK: - Arc
+
+    @Test(.timeLimit(.minutes(1)))
+    func arcRadiusAndAnglesReshapeTheProfile() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createArcSketch(
+                name: "Arc",
+                plane: .xy,
+                center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                radius: .length(0.1, .meter),
+                startAngle: .angle(0.0, .degree),
+                endAngle: .angle(90.0, .degree)
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "radius"),
+            value: .length(0.25)
+        ))
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "end.angle"),
+            value: .angle(180.0)
+        ))
+
+        let arc = try #require(store.document.singleArcEntry(in: try sketch(in: store, featureID: featureID)))
+        let radius = try store.document.resolvedLengthValue(arc.arc.radius, owner: "Arc radius")
+        let startAngle = try store.document.resolvedAngleValue(arc.arc.startAngle, owner: "Arc start")
+        let endAngle = try store.document.resolvedAngleValue(arc.arc.endAngle, owner: "Arc end")
+        #expect(nearlyEqual(radius, 0.25))
+        #expect(nearlyEqual(startAngle, 0.0))
+        #expect(nearlyEqual(endAngle, Double.pi))
+
+        // The stored end angle is rewritten from the resolved span so it agrees with the geometry.
+        let stored = store.document.productMetadata.sceneNodes[nodeID]?
+            .object?.properties[PropertyID(rawValue: "end.angle")]
+        #expect(stored == .angle(180.0))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func arcSpanningNothingIsRejectedWithoutTouchingTheDocument() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createArcSketch(
+                name: "Arc",
+                plane: .xy,
+                center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                radius: .length(0.1, .meter),
+                startAngle: .angle(0.0, .degree),
+                endAngle: .angle(90.0, .degree)
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let graphBefore = store.document.cadDocument.designGraph
+        let nodeBefore = store.document.productMetadata.sceneNodes[nodeID]
+
+        #expect(throws: EditorError.self) {
+            _ = try store.apply(.setSceneNodeObjectProperty(
+                id: nodeID,
+                propertyID: PropertyID(rawValue: "end.angle"),
+                value: .angle(0.0)
+            ))
+        }
+        #expect(store.document.cadDocument.designGraph == graphBefore)
+        #expect(store.document.productMetadata.sceneNodes[nodeID] == nodeBefore)
+    }
+
+    // MARK: - Circle
+
+    @Test(.timeLimit(.minutes(1)))
+    func circleRadiusReshapesTheProfile() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createCircleSketch(
+                name: "Circle",
+                plane: .xy,
+                center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                radius: .length(0.1, .meter)
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "radius"),
+            value: .length(0.3)
+        ))
+
+        let circle = try #require(
+            store.document.singleCircleEntry(in: try sketch(in: store, featureID: featureID))
+        )
+        let radius = try store.document.resolvedLengthValue(circle.circle.radius, owner: "Circle radius")
+        #expect(nearlyEqual(radius, 0.3))
+    }
+
+    // MARK: - Rectangle
+
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleSizeKeepsTheProfileCenterAndItsEntityIdentities() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createRectangleSketch(
+                name: "Profile",
+                plane: .xy,
+                width: .length(0.2, .meter),
+                height: .length(0.1, .meter)
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let idsBefore = Set(try sketch(in: store, featureID: featureID).entities.keys)
+        let boundsBefore = try #require(
+            try store.document.resolvedSketchBounds2D(try sketch(in: store, featureID: featureID))
+        )
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "size.x"),
+            value: .length(0.5)
+        ))
+
+        let updated = try sketch(in: store, featureID: featureID)
+        #expect(Set(updated.entities.keys) == idsBefore)
+        let bounds = try #require(try store.document.resolvedSketchBounds2D(updated))
+        #expect(nearlyEqual(bounds.maxX - bounds.minX, 0.5))
+        #expect(nearlyEqual(bounds.maxY - bounds.minY, 0.1))
+        #expect(nearlyEqual(
+            (bounds.minX + bounds.maxX) / 2.0,
+            (boundsBefore.minX + boundsBefore.maxX) / 2.0
+        ))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleSizeEditRebuildsTheProfileAndItsBodyAndReusesTheRest() throws {
+        let store = CADDocumentStore()
+        let featureID = try #require(
+            try store.apply(.createRectangleSketch(
+                name: "Profile",
+                plane: .xy,
+                width: .length(0.2, .meter),
+                height: .length(0.1, .meter)
+            )).primaryFeatureID
+        )
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "extrusion"),
+            value: .length(0.05)
+        ))
+        _ = try store.apply(.createCircleSketch(
+            name: "Unrelated",
+            plane: .xy,
+            center: SketchPoint(x: .length(1.0, .meter), y: .length(1.0, .meter)),
+            radius: .length(0.1, .meter)
+        ))
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "size.x"),
+            value: .length(0.5)
+        ))
+
+        let metrics = try #require(store.currentModelingEvaluationMetrics)
+        #expect(metrics.totalFeatureCount == 3)
+        #expect(metrics.rebuiltFeatureCount == 2)
+        #expect(metrics.reusedFeatureCount == 1)
+        #expect(metrics.replayFallbackCount == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rectangleSizeIsRefusedWhileTheProfileDeclaresRoundedCorners() throws {
+        var document = DesignDocument.empty()
+        let featureID = try document.createRectangleSketch(
+            name: "Profile",
+            plane: .xy,
+            width: .length(0.2, .meter),
+            height: .length(0.1, .meter)
+        )
+        var node = try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == featureID
+        })
+        node.object?.properties[PropertyID(rawValue: "corner.radius")] = .length(0.01)
+        document.productMetadata.sceneNodes[node.id] = node
+        let before = document.cadDocument.designGraph
+
+        do {
+            try document.setSceneNodeObjectProperty(
+                id: node.id,
+                propertyID: PropertyID(rawValue: "size.x"),
+                value: .length(0.5)
+            )
+            Issue.record("A rounded rectangle must not be resized as a sharp one.")
+        } catch let error as EditorError {
+            #expect(error.code == .commandUnsupported)
+        }
+        #expect(document.cadDocument.designGraph == before)
+    }
+
+    // MARK: - Polygon
+
+    @Test(.timeLimit(.minutes(1)))
+    func polygonRadiusAndRotationKeepTheSideIdentities() throws {
+        let store = CADDocumentStore()
+        let featureID = try polygonFeatureID(in: store, sides: 6, radius: 0.1)
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let idsBefore = Set(try sketch(in: store, featureID: featureID).entities.keys)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "sizing.radius"),
+            value: .length(0.25)
+        ))
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "angle"),
+            value: .angle(30.0)
+        ))
+
+        let updated = try sketch(in: store, featureID: featureID)
+        #expect(Set(updated.entities.keys) == idsBefore)
+        let vertices = try polygonVertices(in: store, sketch: updated)
+        #expect(vertices.count == 6)
+        for vertex in vertices {
+            #expect(nearlyEqual(hypot(vertex.x, vertex.y), 0.25, tolerance: 1.0e-7))
+        }
+        // The rotation the schema stores is the absolute angle of the first vertex.
+        #expect(vertices.contains { nearlyEqual(atan2($0.y, $0.x), 30.0 * Double.pi / 180.0, tolerance: 1.0e-7) })
+
+        let properties = try #require(store.document.productMetadata.sceneNodes[nodeID]?.object?.properties)
+        #expect(properties[PropertyID(rawValue: "radius")] == .length(0.25))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func polygonInradiusModeRecomputesTheDerivedCircumradius() throws {
+        let store = CADDocumentStore()
+        let featureID = try polygonFeatureID(in: store, sides: 6, radius: 0.1)
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "radius.is.inradius"),
+            value: .boolean(true)
+        ))
+
+        let expected = PolygonSizingMode.inradius.circumradius(from: 0.1, sides: 6)
+        let vertices = try polygonVertices(in: store, sketch: try sketch(in: store, featureID: featureID))
+        for vertex in vertices {
+            #expect(nearlyEqual(hypot(vertex.x, vertex.y), expected, tolerance: 1.0e-7))
+        }
+        let properties = try #require(store.document.productMetadata.sceneNodes[nodeID]?.object?.properties)
+        guard case let .length(storedRadius)? = properties[PropertyID(rawValue: "radius")] else {
+            Issue.record("Polygon must keep a derived circumradius.")
+            return
+        }
+        #expect(nearlyEqual(storedRadius, expected))
+        guard case let .length(storedSide)? = properties[PropertyID(rawValue: "side.length")] else {
+            Issue.record("Polygon must keep a derived side length.")
+            return
+        }
+        #expect(nearlyEqual(storedSide, PolygonSizingMode.inradius.sideLength(from: 0.1, sides: 6)))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func polygonSideCountChangeReusesTheSidesItKeeps() throws {
+        let store = CADDocumentStore()
+        let featureID = try polygonFeatureID(in: store, sides: 5, radius: 0.1)
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let idsBefore = Set(try sketch(in: store, featureID: featureID).entities.keys)
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "sides.x"),
+            value: .integer(8)
+        ))
+        let grown = try sketch(in: store, featureID: featureID)
+        #expect(grown.entities.count == 8)
+        #expect(idsBefore.isSubset(of: Set(grown.entities.keys)))
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "sides.x"),
+            value: .integer(3)
+        ))
+        let shrunk = try sketch(in: store, featureID: featureID)
+        #expect(shrunk.entities.count == 3)
+        #expect(Set(shrunk.entities.keys).isSubset(of: Set(grown.entities.keys)))
+        #expect(try polygonVertices(in: store, sketch: shrunk).count == 3)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func polygonRadiusEditRebuildsTheProfileAndItsBodyAndReusesTheRest() throws {
+        let store = CADDocumentStore()
+        let featureID = try polygonFeatureID(in: store, sides: 6, radius: 0.1)
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "extrusion"),
+            value: .length(0.05)
+        ))
+        _ = try store.apply(.createCircleSketch(
+            name: "Unrelated",
+            plane: .xy,
+            center: SketchPoint(x: .length(1.0, .meter), y: .length(1.0, .meter)),
+            radius: .length(0.1, .meter)
+        ))
+
+        _ = try store.apply(.setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID(rawValue: "sizing.radius"),
+            value: .length(0.25)
+        ))
+
+        // The polygon mutator rebuilds every side entity, so reuse depends on it keeping the
+        // entity identities the extrusion refers to.
+        let metrics = try #require(store.currentModelingEvaluationMetrics)
+        #expect(metrics.totalFeatureCount == 3)
+        #expect(metrics.rebuiltFeatureCount == 2)
+        #expect(metrics.reusedFeatureCount == 1)
+        #expect(metrics.replayFallbackCount == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func polygonWithFewerThanThreeSidesIsRejectedWithoutTouchingTheDocument() throws {
+        let store = CADDocumentStore()
+        let featureID = try polygonFeatureID(in: store, sides: 6, radius: 0.1)
+        let nodeID = try sketchNodeID(in: store, featureID: featureID)
+        let graphBefore = store.document.cadDocument.designGraph
+        let nodeBefore = store.document.productMetadata.sceneNodes[nodeID]
+
+        #expect(throws: EditorError.self) {
+            _ = try store.apply(.setSceneNodeObjectProperty(
+                id: nodeID,
+                propertyID: PropertyID(rawValue: "sides.x"),
+                value: .integer(2)
+            ))
+        }
+        #expect(store.document.cadDocument.designGraph == graphBefore)
+        #expect(store.document.productMetadata.sceneNodes[nodeID] == nodeBefore)
+    }
+
+    // MARK: - Helpers
+
+    private func polygonFeatureID(
+        in store: CADDocumentStore,
+        sides: Int,
+        radius: Double
+    ) throws -> FeatureID {
+        try #require(
+            try store.apply(.createPolygonSketch(
+                name: "Polygon",
+                plane: .xy,
+                center: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                radius: .length(radius, .meter),
+                sides: sides,
+                sizingMode: .circumradius,
+                inclinationMode: .vertical,
+                rotationAngle: .angle(0.0, .radian)
+            )).primaryFeatureID
+        )
+    }
+
+    private func sketchNodeID(
+        in store: CADDocumentStore,
+        featureID: FeatureID
+    ) throws -> SceneNodeID {
+        try #require(store.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == featureID
+        }).id
+    }
+
+    private func sketch(in store: CADDocumentStore, featureID: FeatureID) throws -> Sketch {
+        let feature = try #require(store.document.cadDocument.designGraph.nodes[featureID])
+        guard case let .sketch(sketch) = feature.operation else {
+            Issue.record("Feature \(featureID) is not a sketch.")
+            throw EditorError(code: .referenceUnresolved, message: "Not a sketch.")
+        }
+        return sketch
+    }
+
+    private func lineEnd(
+        in store: CADDocumentStore,
+        featureID: FeatureID
+    ) throws -> (x: Double, y: Double) {
+        let entry = try #require(store.document.singleLineEntry(in: try sketch(in: store, featureID: featureID)))
+        return (
+            x: try store.document.resolvedLengthValue(entry.line.end.x, owner: "Line end x"),
+            y: try store.document.resolvedLengthValue(entry.line.end.y, owner: "Line end y")
+        )
+    }
+
+    private func polygonVertices(
+        in store: CADDocumentStore,
+        sketch: Sketch
+    ) throws -> [(x: Double, y: Double)] {
+        var vertices: [(x: Double, y: Double)] = []
+        for entity in sketch.entities.values {
+            guard case let .line(line) = entity else {
+                Issue.record("A polygon profile must be made of lines.")
+                continue
+            }
+            vertices.append((
+                x: try store.document.resolvedLengthValue(line.start.x, owner: "Polygon vertex x"),
+                y: try store.document.resolvedLengthValue(line.start.y, owner: "Polygon vertex y")
+            ))
+        }
+        return vertices
+    }
+
+    private func nearlyEqual(_ lhs: Double, _ rhs: Double, tolerance: Double = 1.0e-9) -> Bool {
+        abs(lhs - rhs) <= tolerance
+    }
+}
