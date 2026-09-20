@@ -614,6 +614,64 @@ rather than answered with a neighbouring face. A run always carries the prepared
 `SelectionComponentID`: Core never substitutes a mesh identifier for a CAD
 identifier.
 
+### Object property effect contract
+
+Every object property declares the one effect its edit has, so a control the
+Inspector offers is a control that reaches the canvas.
+
+| Effect | Meaning | Path an edit takes |
+|---|---|---|
+| `source` | Rewrites the CAD feature graph, so re-evaluation changes the exact geometry | `applyObjectPropertyToSource` to a `DesignDocument` source mutation |
+| `tessellation` | Changes only the display resolution the evaluator uses for that feature | `displayTessellationOptions` to `TessellationOptions.featureOverrides` |
+| `appearance` | Changes only how a resolved body is presented | Presentation scene and material resolution |
+| `derived` | Reports a value the source owns and cannot be authored | `synchronizeObjectPropertiesFromSource` writes it |
+
+Invariants:
+
+- A property whose effect is `derived` is not editable and uses the read-only
+  inspector control. A property that is editable declares `source`,
+  `tessellation`, or `appearance`. `ObjectPropertyDefinition.validate` rejects
+  any other combination, so a schema that offers an unreachable control fails
+  document validation rather than reaching a user.
+- A `source` property that the router has no mutation for throws
+  `EditorError(code: .commandUnsupported)`. The router never returns without
+  applying the edit it accepted, because a silent return leaves the declared
+  value and the evaluated geometry disagreeing with no report to the caller.
+- A `tessellation` property resolves to an angular tolerance through the
+  property's own subdivision meaning. Its edit changes no feature operation and
+  no exact geometry, so undo of a tessellation edit restores only the property.
+- Kernel concepts Rupa has no source mutation for are absent from the schema.
+  They are not declared as editable properties that do nothing.
+
+Segment counts are display resolution, not exact geometry. The kernel keeps
+circles and arcs as rational arcs and derives a segment count from tolerance, so
+`Sides`, `Subdivisions`, `Corner Sides`, and `Bevel Sides` set the per-feature
+angular tolerance to `span / count`, which is the count the tessellation sampler
+then produces.
+
+### Material library authoring contract
+
+`ProductMetadata.materialLibrary` is the only owner of authored appearance.
+A scene node names a material; it does not carry color.
+
+Core owns creating and editing materials:
+
+- `createMaterial` inserts a validated material with a document-unique name and
+  returns its identifier. The first material a document creates also becomes the
+  default, so an authored document is never a library whose entries no node can
+  reach.
+- `setMaterialColor`, `setMaterialOpacity`, `setMaterialMetallic`, and
+  `setMaterialRoughness` edit one component of one existing material. Each
+  rejects a value outside its validated domain before mutating, so a rejected
+  edit publishes no library change.
+- `removeMaterial` clears the references nodes hold to it and clears the default
+  when the default is what it removed, so validation cannot observe a dangling
+  identifier.
+
+An Inspector color edit on a node with no material is an authoring intent, not a
+failure: the workspace creates a material for that node and assigns it in the
+same command, so the edit is a single undo step.
+
 ### Executor substitution boundary
 
 The public `DefaultGeometrySourceCommandApplier` initializer selects

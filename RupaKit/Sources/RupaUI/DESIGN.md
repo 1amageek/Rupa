@@ -569,6 +569,25 @@ that could overwrite source. Center reads the published universal viewport's
 world bounds and occurrence-to-node mapping; it never rebuilds or evaluates a
 legacy scene inside an Inspector update.
 
+Schema-declared object properties reach the canvas through the effect the Core
+schema declares for each one. The Inspector offers a control for a property
+whose effect is `source`, `tessellation`, or `appearance`, and shows a value row
+for a `derived` property. It infers nothing about reachability from the property
+identifier, so a schema change is the only thing that changes which controls
+exist.
+
+Continuous edits stay live without racing the document. A slider drag enqueues
+through the workspace operation sequencer, which replaces a pending, not yet
+started absolute-value edit for the same control and never cancels work already
+running. A text field commit and a material edit enqueue as ordinary operations.
+The control is released to the next value when the workspace acknowledges the
+revision it submitted, so the canvas follows the pointer without the field
+fighting the published document.
+
+An appearance edit on a node that names no material creates one and assigns it
+in the same submission, so the color well is operable on any body and the edit
+is a single undo step.
+
 `WorkspaceObjectEditingSSOTTests` owns real Workspace publication/Undo and
 cross-adapter tests for parent frames, shear, shared features, invalid inputs and
 source-size invariance. Existing Rendering gesture tests own preview/cancel and

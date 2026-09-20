@@ -2109,6 +2109,12 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     fail visibly before partial native mutation. Wire color, background,
     culling, specular, and section state remain ephemeral session settings.
     They never edit source, evaluation, history, persistence, or provenance.
+    The resolved value is the authored surface, not a color alone: base color,
+    opacity, metallic, and roughness all come from the document material the
+    node names. The native material builder consumes every one of them, so a
+    document that authors a metal reads as metal on the canvas and a shading
+    preset changes only what the preset owns. Specular remains the session
+    shading setting; it biases nothing the document authored.
 11. World geometry, grid/axes, curve/sketch paths, selection highlights,
     measurement/ruler lines and labels, section/analysis, snap/reference
     guides, pattern/drag previews, construction planes, and edit/feature
