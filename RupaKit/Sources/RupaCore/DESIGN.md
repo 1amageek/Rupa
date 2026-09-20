@@ -695,7 +695,7 @@ binding: arc `start.angle` and `end.angle` share `.angle`, and polygon
 | `line` | `length`, `angle` | `setLineSketchGeometry` | The start point |
 | `arc` | `radius`, `start.angle`, `end.angle` | `setArcSketchGeometry` | The center |
 | `circle` | `radius` | `setCircleSketchGeometry` | The center |
-| `rectangle` | `size.x`, `size.y` | `setRectangleSketchGeometry` | The center of the bounds |
+| `rectangle` | `size.x`, `size.y`, `corner.radius` | `setRectangleSketchGeometry` | The center of the bounds |
 | `polygon` | `sizing.radius`, `radius.is.inradius`, `sides.x`, `angle` | `setPolygonSketchGeometry` | The center |
 
 Each mutator reads the whole resolved property set rather than the one property
@@ -734,11 +734,71 @@ downstream of it (1 for a bare sketch, 2 when the sketch is extruded),
 the [swift-CAD design](../../../swift-CAD/DESIGN.md); this design owns only the
 in-place replacement that lets it apply.
 
-Rectangle `corner.radius` is not part of this contract. Rounding a rectangle
-profile replaces its four lines with four lines and four arcs, which changes the
-entity count for a property that is not `sides.x` and changes what
-`isRectangleProfile` recognizes, so it carries its own invariant and its own
-decision about the body a rounded profile extrudes to.
+#### The rounded rectangle profile
+
+`corner.radius` is the second property that changes a profile's entity count.
+A rectangle profile is one family, not two shapes: four axis-aligned lines named
+`bottom`, `right`, `top`, and `left`, plus four corner arcs that exist only
+while the radius is positive. `RectangleProfileBuilder` is the single owner of
+what that family is, and every path that rebuilds a rectangle profile goes
+through it, so a square profile and a rounded one are described by one piece of
+code rather than two that can disagree.
+
+Invariants the family carries:
+
+- The four line IDs survive every edit, including the two that change the entity
+  count. Arc IDs are minted when the radius goes from zero to positive, kept
+  while it stays positive, and dropped when it returns to zero. This is the same
+  identity rule polygon `sides.x` follows.
+- The radius is either exactly zero or bounded by `r > tolerance` and
+  `min(sizeX, sizeY) - 2r > tolerance`. At the upper equality two of the four
+  lines have zero length and the profile is a stadium, which is the slot type's
+  shape and not a rectangle's. A value outside the bound is refused with
+  `EditorError(code: .commandInvalid)` and the document is unchanged, the same
+  tolerance idiom `validateBoxCorner` uses for the body fillet a cube declares.
+- A rounded profile carries `horizontal` on the two horizontal lines, `vertical`
+  on the two vertical ones, a counter-clockwise coincident chain alternating
+  `lineEnd -> arcStart` and `arcEnd -> lineStart`, and `equalRadius` chaining
+  the four arcs. `SketchProfileExtractor` runs the constraint solver whenever a
+  sketch declares any constraint, so a square profile's `lineEnd -> lineStart`
+  coincidences left in place would bind points an arc apart and the solver would
+  collapse the shape. At `r == 0` the builder emits exactly the constraint set
+  `createRectangleSketchFromCorners` emits, so a profile that was rounded and is
+  no longer is indistinguishable from one that never was.
+- The constraint set is replaced only where the entity set changes, which is the
+  edit the radius itself is part of. A reposition leaves the entity set alone,
+  so it leaves the constraints alone too, and a `.fixed` reference a dimension
+  placed on a side survives a resize.
+- No tangency constraint is declared. The builder places the arcs tangent by
+  construction, which leaves the solver a zero-residual configuration to hold;
+  the polygon profile is under-constrained in the same way.
+
+`updateRectangleSketch` preserves the radius while it repositions the corners,
+so resizing a rounded rectangle keeps it rounded and a size that no longer
+admits the radius is refused rather than silently squared off. Its callers that
+still require a square profile are the direct-manipulation and dimension-handle
+paths: solid vertex move, solid edge move, solid edge treatment, solid face
+offset, sketch side dimension, and `ObjectDimensionSourceResolver`. Those map a
+3D vertex or edge onto a rectangle corner, and a corner a rounded profile
+replaced with an arc is not a point they can name. They refuse a rounded profile
+with a typed error, which is the boundary this design draws rather than a gap.
+
+Two paths accept the whole family: `setRectangleSketchGeometry`, which the
+Inspector's rectangle shape section submits to, and `setCubeDimensions`, which
+the Inspector's cube size fields submit to. The second is needed because
+`createExtrudedRectangle` nests the `.rectangle` sketch node under the `.cube`
+body node and only hides it, leaving it selectable and editable, so a rounded
+profile is reachable underneath a cube and that cube's own size edit has to keep
+working.
+
+A rounded profile's arcs are drawn at the count `rectangle`'s own
+`corner.sides` declares. Its binding is `.cornerSideSegments`, which
+`DisplayTessellationArc` reads as the quarter turn one corner covers, so
+`SketchArcDisplayResolution` divides each corner arc into exactly that many
+segments. Until the profile could carry arcs that property named an arc the
+rectangle did not have and reached nothing. How a body extruded from the profile
+resolves its own mesh is owned by `Display tessellation resolution` below and is
+unchanged here.
 
 ### Display tessellation resolution
 

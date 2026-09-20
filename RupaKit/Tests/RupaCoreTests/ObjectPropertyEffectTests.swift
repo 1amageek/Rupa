@@ -54,9 +54,11 @@ struct ObjectPropertyEffectTests {
         let before = document.productMetadata.sceneNodes[node.id]
 
         do {
+            // `bevel` declares the `source` effect on every extruded profile and has no router
+            // branch yet, so it is the property this contract is proven on.
             try document.setSceneNodeObjectProperty(
                 id: node.id,
-                propertyID: PropertyID(rawValue: "corner.radius"),
+                propertyID: PropertyID(rawValue: "bevel"),
                 value: .length(0.01)
             )
             Issue.record("A source property the router cannot apply must fail.")

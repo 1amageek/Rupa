@@ -371,25 +371,68 @@ extension DesignDocument {
         }
     }
 
+    /// Repositions a rectangle profile between two opposite corners, keeping the corners it carries.
+    ///
+    /// A square profile stores the corner expressions the caller supplies, so a side driven by a
+    /// named dimension stays driven by it. A rounded profile is placed from resolved lengths, and a
+    /// size that no longer admits its radius is refused rather than silently squared off. Neither
+    /// branch changes the entity set, so the constraints the sketch already declares stay valid.
     func updateRectangleSketch(
         _ sketch: inout Sketch,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint
     ) throws {
-        guard let lineIDs = try rectangleLineIDs(in: sketch) else {
+        guard let profile = try recognizedRectangleProfile(in: sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Cube dimensions require an axis-aligned rectangle profile."
             )
         }
-        let bottomLeft = firstCorner
-        let bottomRight = SketchPoint(x: oppositeCorner.x, y: firstCorner.y)
-        let topRight = oppositeCorner
-        let topLeft = SketchPoint(x: firstCorner.x, y: oppositeCorner.y)
-        sketch.entities[lineIDs.bottom] = .line(SketchLine(start: bottomLeft, end: bottomRight))
-        sketch.entities[lineIDs.right] = .line(SketchLine(start: bottomRight, end: topRight))
-        sketch.entities[lineIDs.top] = .line(SketchLine(start: topRight, end: topLeft))
-        sketch.entities[lineIDs.left] = .line(SketchLine(start: topLeft, end: bottomLeft))
+        let rebuilt: RectangleProfileBuilder.Result
+        if profile.cornerRadius > 0 {
+            let firstX = try resolvedLengthValue(firstCorner.x, owner: "Rectangle corner x")
+            let firstY = try resolvedLengthValue(firstCorner.y, owner: "Rectangle corner y")
+            let oppositeX = try resolvedLengthValue(oppositeCorner.x, owner: "Rectangle corner x")
+            let oppositeY = try resolvedLengthValue(oppositeCorner.y, owner: "Rectangle corner y")
+            let sizeX = abs(oppositeX - firstX)
+            let sizeY = abs(oppositeY - firstY)
+            try validateRectangleCornerRadius(profile.cornerRadius, sizeX: sizeX, sizeY: sizeY)
+            rebuilt = RectangleProfileBuilder.build(
+                centerX: (firstX + oppositeX) / 2.0,
+                centerY: (firstY + oppositeY) / 2.0,
+                sizeX: sizeX,
+                sizeY: sizeY,
+                cornerRadius: profile.cornerRadius,
+                reusing: profile.ids
+            )
+        } else {
+            rebuilt = RectangleProfileBuilder.build(
+                bottomLeft: firstCorner,
+                bottomRight: SketchPoint(x: oppositeCorner.x, y: firstCorner.y),
+                topRight: oppositeCorner,
+                topLeft: SketchPoint(x: firstCorner.x, y: oppositeCorner.y),
+                reusing: profile.ids
+            )
+        }
+        for (id, entity) in rebuilt.entities {
+            sketch.entities[id] = entity
+        }
+    }
+
+    /// Refuses a corner radius the rectangle cannot hold.
+    ///
+    /// At the upper equality two of the four lines have zero length and the profile is a stadium,
+    /// which is the slot type's shape and not a rectangle's. This is the tolerance idiom
+    /// `validateBoxCorner` uses for the body fillet a cube's corner declares.
+    func validateRectangleCornerRadius(_ radius: Double, sizeX: Double, sizeY: Double) throws {
+        let tolerance = modelingSettings.tolerance.distance
+        guard radius.isFinite, radius == 0 ||
+                (radius > tolerance && min(sizeX, sizeY) - 2 * radius > tolerance) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Rectangle corner must be zero or a positive radius below half the shorter side."
+            )
+        }
     }
 
     func resolvedPoint(
@@ -476,51 +519,131 @@ extension DesignDocument {
         )
     }
 
+    /// Names the four sides of a square rectangle profile.
+    ///
+    /// A rounded profile is deliberately not recognized here. The callers are the direct
+    /// manipulation and dimension-handle paths, which map a 3D vertex or edge onto a rectangle
+    /// corner, and a corner a rounded profile replaced with an arc is not a point they can name.
     func rectangleLineIDs(
         in sketch: Sketch
     ) throws -> (bottom: SketchEntityID, right: SketchEntityID, top: SketchEntityID, left: SketchEntityID)? {
-        guard let bounds = try resolvedSketchBounds2D(sketch),
-              sketch.entities.count == 4 else {
+        guard let profile = try recognizedRectangleProfile(in: sketch),
+              profile.cornerRadius == 0 else {
             return nil
         }
+        return (profile.ids.bottom, profile.ids.right, profile.ids.top, profile.ids.left)
+    }
+
+    /// Reads a rectangle profile back out of a sketch, square or rounded.
+    ///
+    /// The family is four axis-aligned lines, optionally followed by four equal corner arcs whose
+    /// centers sit at the inset corners the radius describes. Anything else is not a rectangle
+    /// profile and the caller decides what to do about that.
+    func recognizedRectangleProfile(
+        in sketch: Sketch
+    ) throws -> RectangleProfileBuilder.Recognized? {
+        guard let bounds = try resolvedSketchBounds2D(sketch) else {
+            return nil
+        }
+        let tolerance = 1.0e-9
         var bottom: SketchEntityID?
         var right: SketchEntityID?
         var top: SketchEntityID?
         var left: SketchEntityID?
-        let tolerance = 1.0e-9
+        var arcs: [(id: SketchEntityID, centerX: Double, centerY: Double, radius: Double)] = []
 
         for (id, entity) in sketch.entities {
-            guard case .line(let line) = entity else {
-                return nil
-            }
-            let startX = try resolvedLengthValue(line.start.x, owner: "Rectangle line start x")
-            let startY = try resolvedLengthValue(line.start.y, owner: "Rectangle line start y")
-            let endX = try resolvedLengthValue(line.end.x, owner: "Rectangle line end x")
-            let endY = try resolvedLengthValue(line.end.y, owner: "Rectangle line end y")
-            if nearlyEqual(startY, bounds.minY, tolerance: tolerance),
-               nearlyEqual(endY, bounds.minY, tolerance: tolerance) {
-                bottom = id
-            } else if nearlyEqual(startY, bounds.maxY, tolerance: tolerance),
-                      nearlyEqual(endY, bounds.maxY, tolerance: tolerance) {
-                top = id
-            } else if nearlyEqual(startX, bounds.minX, tolerance: tolerance),
-                      nearlyEqual(endX, bounds.minX, tolerance: tolerance) {
-                left = id
-            } else if nearlyEqual(startX, bounds.maxX, tolerance: tolerance),
-                      nearlyEqual(endX, bounds.maxX, tolerance: tolerance) {
-                right = id
-            } else {
+            switch entity {
+            case .line(let line):
+                let startX = try resolvedLengthValue(line.start.x, owner: "Rectangle line start x")
+                let startY = try resolvedLengthValue(line.start.y, owner: "Rectangle line start y")
+                let endX = try resolvedLengthValue(line.end.x, owner: "Rectangle line end x")
+                let endY = try resolvedLengthValue(line.end.y, owner: "Rectangle line end y")
+                if nearlyEqual(startY, bounds.minY, tolerance: tolerance),
+                   nearlyEqual(endY, bounds.minY, tolerance: tolerance) {
+                    guard bottom == nil else { return nil }
+                    bottom = id
+                } else if nearlyEqual(startY, bounds.maxY, tolerance: tolerance),
+                          nearlyEqual(endY, bounds.maxY, tolerance: tolerance) {
+                    guard top == nil else { return nil }
+                    top = id
+                } else if nearlyEqual(startX, bounds.minX, tolerance: tolerance),
+                          nearlyEqual(endX, bounds.minX, tolerance: tolerance) {
+                    guard left == nil else { return nil }
+                    left = id
+                } else if nearlyEqual(startX, bounds.maxX, tolerance: tolerance),
+                          nearlyEqual(endX, bounds.maxX, tolerance: tolerance) {
+                    guard right == nil else { return nil }
+                    right = id
+                } else {
+                    return nil
+                }
+            case .arc(let arc):
+                let center = try resolvedSketchPoint(arc.center, owner: "Rectangle corner arc center")
+                let radius = try resolvedLengthValue(arc.radius, owner: "Rectangle corner arc radius")
+                arcs.append((id, center.x, center.y, radius))
+            default:
                 return nil
             }
         }
 
-        guard let bottom,
-              let right,
-              let top,
-              let left else {
+        guard let bottom, let right, let top, let left else {
             return nil
         }
-        return (bottom, right, top, left)
+        var ids = RectangleProfileBuilder.EntityIDs(
+            bottom: bottom, right: right, top: top, left: left)
+
+        guard arcs.isEmpty == false else {
+            return RectangleProfileBuilder.Recognized(
+                ids: ids,
+                cornerRadius: 0,
+                minX: bounds.minX,
+                minY: bounds.minY,
+                maxX: bounds.maxX,
+                maxY: bounds.maxY
+            )
+        }
+        guard arcs.count == 4 else {
+            return nil
+        }
+        let radius = arcs[0].radius
+        guard radius > tolerance,
+              arcs.allSatisfy({ nearlyEqual($0.radius, radius, tolerance: tolerance) }) else {
+            return nil
+        }
+        for arc in arcs {
+            let isRight = nearlyEqual(arc.centerX, bounds.maxX - radius, tolerance: tolerance)
+            let isLeft = nearlyEqual(arc.centerX, bounds.minX + radius, tolerance: tolerance)
+            let isTop = nearlyEqual(arc.centerY, bounds.maxY - radius, tolerance: tolerance)
+            let isBottom = nearlyEqual(arc.centerY, bounds.minY + radius, tolerance: tolerance)
+            switch (isRight, isLeft, isTop, isBottom) {
+            case (true, false, false, true):
+                guard ids.bottomRight == nil else { return nil }
+                ids.bottomRight = arc.id
+            case (true, false, true, false):
+                guard ids.topRight == nil else { return nil }
+                ids.topRight = arc.id
+            case (false, true, true, false):
+                guard ids.topLeft == nil else { return nil }
+                ids.topLeft = arc.id
+            case (false, true, false, true):
+                guard ids.bottomLeft == nil else { return nil }
+                ids.bottomLeft = arc.id
+            default:
+                return nil
+            }
+        }
+        guard ids.isRounded else {
+            return nil
+        }
+        return RectangleProfileBuilder.Recognized(
+            ids: ids,
+            cornerRadius: radius,
+            minX: bounds.minX,
+            minY: bounds.minY,
+            maxX: bounds.maxX,
+            maxY: bounds.maxY
+        )
     }
 
     func nearlyEqual(_ lhs: Double, _ rhs: Double, tolerance: Double) -> Bool {

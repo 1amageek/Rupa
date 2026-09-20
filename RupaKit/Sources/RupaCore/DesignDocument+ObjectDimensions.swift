@@ -96,7 +96,9 @@ extension DesignDocument {
                 message: "Cube dimensions require an editable rectangle profile."
             )
         }
-        guard isRectangleProfile(sketch) else {
+        // A cube nests its own rectangle profile and only hides it, so the profile underneath can
+        // be a rounded rectangle the Inspector authored. Resizing the cube keeps that radius.
+        guard try recognizedRectangleProfile(in: sketch) != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Cube dimensions require a rectangle profile."

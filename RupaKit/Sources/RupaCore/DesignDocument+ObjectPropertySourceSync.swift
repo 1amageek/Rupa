@@ -330,21 +330,10 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.rectangle):
-            guard property.id == "size.x" || property.id == "size.y" else {
+            guard property.id == "size.x"
+                    || property.id == "size.y"
+                    || property.id == "corner.radius" else {
                 throw unsupportedObjectSourceProperty(property, definition: definition)
-            }
-            // A rounded rectangle is a different profile, not a resized one. Rebuilding it here
-            // would silently square off the corners the document authored.
-            let cornerRadius = try requiredLengthMeters(
-                "corner.radius",
-                definition: definition,
-                properties: properties
-            )
-            guard cornerRadius <= 1.0e-9 else {
-                throw unsupportedObjectSourceProperty(
-                    definition.property(for: PropertyID(rawValue: "corner.radius")) ?? property,
-                    definition: definition
-                )
             }
             try setRectangleSketchGeometry(
                 featureID: featureID,
@@ -355,6 +344,11 @@ extension DesignDocument {
                 ),
                 sizeYMeters: try requiredLengthMeters(
                     "size.y",
+                    definition: definition,
+                    properties: properties
+                ),
+                cornerRadiusMeters: try requiredLengthMeters(
+                    "corner.radius",
                     definition: definition,
                     properties: properties
                 ),
@@ -485,10 +479,10 @@ extension DesignDocument {
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
     // have no router branch yet, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unrouted today: rectangle `corner.radius`; the
-    // `bevel` property on every extruded profile; and cylinder `angle`, `caps`, `hollow`,
-    // `corner.radius`. Do not treat an edit to any of these as applied until its branch exists and
-    // a test drives the property through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unrouted today: the `bevel` property on every
+    // extruded profile, and cylinder `angle`, `caps`, `hollow`, `corner.radius`. Do not treat an
+    // edit to any of these as applied until its branch exists and a test drives the property
+    // through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition

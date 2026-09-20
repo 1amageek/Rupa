@@ -190,10 +190,17 @@ extension DesignDocument {
 
     // MARK: - Rectangle
 
+    /// Rebuilds a rectangle profile from the size and corner radius its schema declares.
+    ///
+    /// The corner radius is the second property that changes the profile's entity count, so the
+    /// whole family is rebuilt through `RectangleProfileBuilder`: the four line IDs survive, the
+    /// arc IDs are minted when the radius becomes positive and dropped when it returns to zero,
+    /// and the constraint set is replaced rather than patched.
     mutating func setRectangleSketchGeometry(
         featureID: FeatureID,
         sizeXMeters: Double,
         sizeYMeters: Double,
+        cornerRadiusMeters: Double,
         objectRegistry: ObjectTypeRegistry
     ) throws {
         let owner = "Rectangle size"
@@ -201,29 +208,29 @@ extension DesignDocument {
         try validatePositiveLength(sizeYMeters, owner: "Rectangle height")
 
         let profile = try sketchProfileFeature(featureID: featureID, owner: owner)
-        guard isRectangleProfile(profile.sketch),
-              try rectangleLineIDs(in: profile.sketch) != nil,
-              let bounds = try resolvedSketchBounds2D(profile.sketch) else {
+        guard let recognized = try recognizedRectangleProfile(in: profile.sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Rectangle geometry requires an axis-aligned rectangle profile."
             )
         }
-        let centerX = (bounds.minX + bounds.maxX) / 2.0
-        let centerY = (bounds.minY + bounds.maxY) / 2.0
+        try validateRectangleCornerRadius(
+            cornerRadiusMeters, sizeX: sizeXMeters, sizeY: sizeYMeters)
 
-        var sketch = profile.sketch
-        try updateRectangleSketch(
-            &sketch,
-            firstCorner: SketchPoint(
-                x: .length(centerX - sizeXMeters / 2.0, .meter),
-                y: .length(centerY - sizeYMeters / 2.0, .meter)
-            ),
-            oppositeCorner: SketchPoint(
-                x: .length(centerX + sizeXMeters / 2.0, .meter),
-                y: .length(centerY + sizeYMeters / 2.0, .meter)
-            )
+        let rebuilt = RectangleProfileBuilder.build(
+            centerX: recognized.centerX,
+            centerY: recognized.centerY,
+            sizeX: sizeXMeters,
+            sizeY: sizeYMeters,
+            cornerRadius: cornerRadiusMeters,
+            reusing: recognized.ids
         )
+        var sketch = profile.sketch
+        sketch.entities = rebuilt.entities
+        sketch.constraints = rebuilt.constraints
+        if sketch.entityOrder.isEmpty == false {
+            sketch.entityOrder = rebuilt.entityOrder
+        }
         try commitSketchProfile(profile.feature, sketch: sketch, owner: owner)
         try synchronizeObjectPropertiesAffectedBySketch(
             featureID: featureID,
