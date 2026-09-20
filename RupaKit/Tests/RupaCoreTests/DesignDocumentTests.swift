@@ -2151,6 +2151,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
                         valueKind: .length,
                         defaultValue: .length(0.02),
                         inspectorControl: .textFieldAndSlider,
+                        effect: .source,
                         renderBinding: "panel.thickness",
                         numericRange: ObjectPropertyDefinition.NumericRange(
                             lowerBound: 0.0,
@@ -2211,6 +2212,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
                         valueKind: .length,
                         defaultValue: .length(0.02),
                         inspectorControl: .textFieldAndSlider,
+                        effect: .source,
                         renderBinding: "panel.thickness"
                     ),
                 ]

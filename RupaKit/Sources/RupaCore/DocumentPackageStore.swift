@@ -99,10 +99,12 @@ public struct DocumentPackageStore: Sendable {
             )
         }
 
+        var productMetadata = payload.productMetadata
+        productMetadata.pruneUndeclaredObjectProperties(objectRegistry: .builtIn)
         let document = DesignDocument(
             cadDocument: cadDocument,
             modelingSettings: payload.modelingSettings,
-            productMetadata: payload.productMetadata
+            productMetadata: productMetadata
         )
         try document.validate()
         return document

@@ -14,9 +14,11 @@
   - [ ] S5.4 Hover resolution while the pointer moves, and honest axis triad targets `depends:S5.1` `parallel:none`
   - [ ] S5.5 Middle mouse orbit and keyboard focus release during edits `depends:S5.1` `parallel:none`
 - [ ] S7 Object parameters the Inspector offers reach the canvas `depends:S1` `parallel:none`
-  - [ ] S7.1 Each schema property declares the effect its edit has, and an edit the router cannot apply fails visibly `depends:none` `parallel:none`
+  - [x] S7.1 Each schema property declares the effect its edit has, and an edit the router cannot apply fails visibly `depends:none` `parallel:none`
   - [ ] S7.2 Subdivision properties resolve per-feature display tessellation for every type that declares one `depends:S7.1` `parallel:none`
   - [ ] S7.3 Material authoring in Core and the Inspector appearance section `depends:S7.1` `parallel:none`
   - [ ] S7.4 The native surface consumes the authored material, not color alone `depends:S7.3` `parallel:none`
   - [ ] S7.5 Sketch profile source routing for the declared shape properties `depends:S7.1` `parallel:none`
+  - [ ] S7.6 Bevel and cylinder corner rounding through a body fillet feature `depends:S7.1` `parallel:none`
+  - [ ] S7.7 Cylinder angle, caps, and hollow through the circle profile source `depends:S7.1,S7.5` `parallel:none`
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`

@@ -9778,9 +9778,6 @@ private struct ProjectMainViewContent: View {
         value: ObjectPropertyValue,
         for shapes: [InspectorObjectShape]
     ) {
-        guard value.valueKind == property.valueKind else {
-            return
-        }
         let dimension: ObjectDimensionKind? = switch property.renderBinding {
         case .sizeX: .sizeX
         case .sizeY: .sizeY
@@ -9797,16 +9794,22 @@ private struct ProjectMainViewContent: View {
             }
             return
         }
-        submitSource(
-            shapes.map { shape in
+        let ids = shapes.map(\.id)
+        submitSource(name: "setObjectProperty") { _ in
+            guard value.valueKind == property.valueKind else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(property.title) expects a \(property.valueKind.rawValue) value."
+                )
+            }
+            return ids.map { id in
                 .setSceneNodeObjectProperty(
-                    id: shape.id,
+                    id: id,
                     propertyID: property.id,
                     value: value
                 )
-            },
-            name: "setObjectProperty"
-        )
+            }
+        }
     }
 
     private func lengthSliderMetersRange(for meters: Double) -> ClosedRange<Double> {

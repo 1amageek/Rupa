@@ -168,11 +168,11 @@ public enum ObjectTypeCatalog {
             id: "length",
             title: "Length",
             binding: .sizeX,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .sketchWidth
         ),
-        .angle(id: "angle", title: "Angle", binding: .angle, defaultValue: 0.0),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .angle(id: "angle", title: "Angle", binding: .angle, effect: .source, defaultValue: 0.0),
     ]
 
     private static let arcProperties: [ObjectPropertyDefinition] = [
@@ -180,17 +180,16 @@ public enum ObjectTypeCatalog {
             id: "radius",
             title: "Radius",
             binding: .radius,
+            effect: .source,
             defaultValue: 0.5,
             workspaceScaleDefault: .curveRadius
         ),
-        .angle(id: "start.angle", title: "Start", binding: .angle, defaultValue: 0.0),
-        .angle(id: "end.angle", title: "End", binding: .angle, defaultValue: 90.0),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .angle(id: "start.angle", title: "Start", binding: .angle, effect: .source, defaultValue: 0.0),
+        .angle(id: "end.angle", title: "End", binding: .angle, effect: .source, defaultValue: 90.0),
     ]
 
     private static let splineProperties: [ObjectPropertyDefinition] = [
-        .integer(id: "control.point.count", title: "Control Points", binding: nil, defaultValue: 4),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .derivedInteger(id: "control.point.count", title: "Control Points", defaultValue: 4),
     ]
 
     private static let rectangleProperties: [ObjectPropertyDefinition] = [
@@ -198,6 +197,7 @@ public enum ObjectTypeCatalog {
             id: "size.x",
             title: "Size X",
             binding: .sizeX,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .sketchWidth
         ),
@@ -205,20 +205,26 @@ public enum ObjectTypeCatalog {
             id: "size.y",
             title: "Size Y",
             binding: .sizeY,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .sketchHeight
         ),
-        .integer(id: "subdivisions", title: "Subdivisions", binding: .subdivisionSegments, defaultValue: 40),
-        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
+        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "corner.sides",
+            title: "Corner Sides",
+            binding: .cornerSideSegments,
+            effect: .tessellation,
+            defaultValue: 8
+        ),
         .length(
             id: "extrusion",
             title: "Extrusion",
             binding: .extrusion,
+            effect: .source,
             defaultValue: 0.0
         ),
-        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
-        .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .length(id: "bevel", title: "Bevel", binding: .bevel, effect: .source, defaultValue: 0.0),
     ]
 
     private static let circleProperties: [ObjectPropertyDefinition] = [
@@ -226,91 +232,123 @@ public enum ObjectTypeCatalog {
             id: "radius",
             title: "Radius",
             binding: .radius,
+            effect: .source,
             defaultValue: 0.5,
             workspaceScaleDefault: .curveRadius
         ),
-        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 64),
+        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, effect: .tessellation, defaultValue: 64),
         .length(
             id: "extrusion",
             title: "Extrusion",
             binding: .extrusion,
+            effect: .source,
             defaultValue: 0.0
         ),
-        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
-        .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .length(id: "bevel", title: "Bevel", binding: .bevel, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "bevel.sides",
+            title: "Bevel Sides",
+            binding: .bevelSideSegments,
+            effect: .tessellation,
+            defaultValue: 3
+        ),
     ]
 
     private static let polygonProperties: [ObjectPropertyDefinition] = [
         .length(
+            id: "sizing.radius",
+            title: "Sizing Radius",
+            binding: nil,
+            effect: .source,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
+        .boolean(
+            id: "radius.is.inradius",
+            title: "Use Inradius",
+            binding: nil,
+            effect: .source,
+            defaultValue: false
+        ),
+        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, effect: .source, defaultValue: 6),
+        .angle(id: "angle", title: "Rotation", binding: .angle, effect: .source, defaultValue: 0.0),
+        .length(
+            id: "extrusion",
+            title: "Extrusion",
+            binding: .extrusion,
+            effect: .source,
+            defaultValue: 0.0
+        ),
+        .length(id: "bevel", title: "Bevel", binding: .bevel, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "bevel.sides",
+            title: "Bevel Sides",
+            binding: .bevelSideSegments,
+            effect: .tessellation,
+            defaultValue: 3
+        ),
+        .derivedLength(
             id: "radius",
             title: "Radius",
             binding: .radius,
             defaultValue: 0.5,
             workspaceScaleDefault: .curveRadius
         ),
-        .length(
-            id: "sizing.radius",
-            title: "Sizing Radius",
-            binding: nil,
-            defaultValue: 0.5,
-            workspaceScaleDefault: .curveRadius
-        ),
-        .boolean(id: "radius.is.inradius", title: "Use Inradius", binding: nil, defaultValue: false),
-        .text(id: "inclination.mode", title: "Inclination", defaultValue: PolygonInclinationMode.vertical.rawValue),
-        .length(
+        .derivedLength(
             id: "side.length",
             title: "Side Length",
             binding: nil,
             defaultValue: 0.5,
             workspaceScaleDefault: .curveRadius
         ),
-        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 6),
-        .angle(id: "angle", title: "Rotation", binding: .angle, defaultValue: 0.0),
+        .text(id: "inclination.mode", title: "Inclination", defaultValue: PolygonInclinationMode.vertical.rawValue),
+    ]
+
+    private static let slotProperties: [ObjectPropertyDefinition] = [
+        .integer(
+            id: ProfileTessellationPolicy.arcSegmentsPropertyID,
+            title: "Arc Segments",
+            binding: .sideSegments,
+            effect: .tessellation,
+            defaultValue: 32
+        ),
         .length(
             id: "extrusion",
             title: "Extrusion",
             binding: .extrusion,
+            effect: .source,
             defaultValue: 0.0
         ),
-        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
-        .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
-    ]
-
-    private static let slotProperties: [ObjectPropertyDefinition] = [
-        .text(id: "source.kind", title: "Source", defaultValue: "curve"),
-        .length(
+        .length(id: "bevel", title: "Bevel", binding: .bevel, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "bevel.sides",
+            title: "Bevel Sides",
+            binding: .bevelSideSegments,
+            effect: .tessellation,
+            defaultValue: 3
+        ),
+        .derivedLength(
             id: "width",
             title: "Width",
             binding: nil,
             defaultValue: 0.1,
             workspaceScaleDefault: .narrowProfileWidth
         ),
-        .length(
+        .derivedLength(
             id: "path.length",
             title: "Path",
             binding: nil,
             defaultValue: 1.0,
             workspaceScaleDefault: .sketchWidth
         ),
-        .length(
+        .derivedLength(
             id: "radius",
             title: "Cap Radius",
             binding: .radius,
             defaultValue: 0.05,
             workspaceScaleDefault: .narrowProfileRadius
         ),
-        .integer(id: ProfileTessellationPolicy.arcSegmentsPropertyID, title: "Arc Segments", binding: .sideSegments, defaultValue: 32),
-        .length(
-            id: "extrusion",
-            title: "Extrusion",
-            binding: .extrusion,
-            defaultValue: 0.0
-        ),
-        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
-        .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
-        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+        .text(id: "source.kind", title: "Source", defaultValue: "curve"),
     ]
 
     private static let cubeProperties: [ObjectPropertyDefinition] = [
@@ -318,6 +356,7 @@ public enum ObjectTypeCatalog {
             id: "size.x",
             title: "Size X",
             binding: .sizeX,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .placedSolidSide
         ),
@@ -325,6 +364,7 @@ public enum ObjectTypeCatalog {
             id: "size.y",
             title: "Size Y",
             binding: .sizeY,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .placedSolidSide
         ),
@@ -332,11 +372,18 @@ public enum ObjectTypeCatalog {
             id: "size.z",
             title: "Size Z",
             binding: .sizeZ,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .placedSolidSide
         ),
-        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
-        .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
+        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "corner.sides",
+            title: "Corner Sides",
+            binding: .cornerSideSegments,
+            effect: .tessellation,
+            defaultValue: 8
+        ),
     ]
 
     private static let cylinderProperties: [ObjectPropertyDefinition] = [
@@ -344,6 +391,7 @@ public enum ObjectTypeCatalog {
             id: "size.x",
             title: "Size X",
             binding: .sizeX,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .curveDiameter
         ),
@@ -351,6 +399,7 @@ public enum ObjectTypeCatalog {
             id: "size.y",
             title: "Size Y",
             binding: .sizeY,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .cylinderDepth
         ),
@@ -358,6 +407,7 @@ public enum ObjectTypeCatalog {
             id: "size.z",
             title: "Size Z",
             binding: .sizeZ,
+            effect: .source,
             defaultValue: 1.0,
             workspaceScaleDefault: .curveDiameter
         ),
@@ -365,44 +415,42 @@ public enum ObjectTypeCatalog {
             id: "radius",
             title: "Radius",
             binding: .radius,
+            effect: .source,
             defaultValue: 0.5,
             workspaceScaleDefault: .curveRadius
         ),
-        .integer(id: "sides.x", title: "Sides X", binding: .sideSegments, defaultValue: 64),
-        .integer(id: "sides.y", title: "Sides Y", binding: .verticalSegments, defaultValue: 1),
-        .angle(id: "angle", title: "Angle", binding: .angle, defaultValue: 360.0),
-        .boolean(id: "caps", title: "Caps", binding: .capVisibility, defaultValue: true),
-        .length(id: "hollow", title: "Hollow", binding: .hollow, defaultValue: 0.0),
-        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
-        .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
-    ]
-
-    private static let sphereProperties: [ObjectPropertyDefinition] = [
-        ObjectPropertyDefinition(
-            id: "radius",
-            title: "Radius",
-            group: "Shape",
-            valueKind: .length,
-            defaultValue: .length(0.5),
-            inspectorControl: .readOnly,
-            isEditable: false
+        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, effect: .tessellation, defaultValue: 64),
+        .angle(id: "angle", title: "Angle", binding: .angle, effect: .source, defaultValue: 360.0),
+        .boolean(id: "caps", title: "Caps", binding: .capVisibility, effect: .source, defaultValue: true),
+        .length(id: "hollow", title: "Hollow", binding: .hollow, effect: .source, defaultValue: 0.0),
+        .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, effect: .source, defaultValue: 0.0),
+        .integer(
+            id: "corner.sides",
+            title: "Corner Sides",
+            binding: .cornerSideSegments,
+            effect: .tessellation,
+            defaultValue: 8
         ),
     ]
 
+    private static let sphereProperties: [ObjectPropertyDefinition] = [
+        .derivedLength(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+    ]
+
     private static let polySplineProperties: [ObjectPropertyDefinition] = [
-        .integer(id: "patch.count", title: "Patches", binding: nil, defaultValue: 1),
-        .integer(id: "control.point.u", title: "U Control Points", binding: nil, defaultValue: 4),
-        .integer(id: "control.point.v", title: "V Control Points", binding: nil, defaultValue: 4),
-        .boolean(id: "merge.patches", title: "Merge Patches", binding: nil, defaultValue: true),
-        .boolean(id: "interpolate.boundary", title: "Boundary Exact", binding: nil, defaultValue: true),
+        .derivedInteger(id: "patch.count", title: "Patches", defaultValue: 1),
+        .derivedInteger(id: "control.point.u", title: "U Control Points", defaultValue: 4),
+        .derivedInteger(id: "control.point.v", title: "V Control Points", defaultValue: 4),
+        .derivedBoolean(id: "merge.patches", title: "Merge Patches", defaultValue: true),
+        .derivedBoolean(id: "interpolate.boundary", title: "Boundary Exact", defaultValue: true),
     ]
 
     private static let bSplineSurfaceProperties: [ObjectPropertyDefinition] = [
-        .integer(id: "surface.degree.u", title: "U Degree", binding: nil, defaultValue: 3),
-        .integer(id: "surface.degree.v", title: "V Degree", binding: nil, defaultValue: 3),
-        .integer(id: "control.point.u", title: "U Control Points", binding: nil, defaultValue: 4),
-        .integer(id: "control.point.v", title: "V Control Points", binding: nil, defaultValue: 4),
-        .boolean(id: "surface.rational", title: "Rational", binding: nil, defaultValue: false),
+        .derivedInteger(id: "surface.degree.u", title: "U Degree", defaultValue: 3),
+        .derivedInteger(id: "surface.degree.v", title: "V Degree", defaultValue: 3),
+        .derivedInteger(id: "control.point.u", title: "U Control Points", defaultValue: 4),
+        .derivedInteger(id: "control.point.v", title: "V Control Points", defaultValue: 4),
+        .derivedBoolean(id: "surface.rational", title: "Rational", defaultValue: false),
     ]
 }
 
@@ -413,6 +461,7 @@ private extension ObjectPropertyDefinition {
         id: PropertyID,
         title: String,
         binding: RenderBinding?,
+        effect: Effect,
         defaultValue: Double,
         workspaceScaleDefault: WorkspaceScaleDefault? = nil
     ) -> ObjectPropertyDefinition {
@@ -423,6 +472,7 @@ private extension ObjectPropertyDefinition {
             valueKind: .length,
             defaultValue: .length(defaultValue),
             inspectorControl: .textFieldAndSlider,
+            effect: effect,
             renderBinding: binding,
             workspaceScaleDefault: workspaceScaleDefault,
             numericRange: NumericRange(
@@ -436,6 +486,7 @@ private extension ObjectPropertyDefinition {
         id: PropertyID,
         title: String,
         binding: RenderBinding?,
+        effect: Effect,
         defaultValue: Int
     ) -> ObjectPropertyDefinition {
         ObjectPropertyDefinition(
@@ -445,6 +496,7 @@ private extension ObjectPropertyDefinition {
             valueKind: .integer,
             defaultValue: .integer(defaultValue),
             inspectorControl: .textFieldAndSlider,
+            effect: effect,
             renderBinding: binding,
             numericRange: NumericRange(lowerBound: 1.0, upperBound: 256.0)
         )
@@ -454,6 +506,7 @@ private extension ObjectPropertyDefinition {
         id: PropertyID,
         title: String,
         binding: RenderBinding?,
+        effect: Effect,
         defaultValue: Double
     ) -> ObjectPropertyDefinition {
         ObjectPropertyDefinition(
@@ -463,6 +516,7 @@ private extension ObjectPropertyDefinition {
             valueKind: .angle,
             defaultValue: .angle(defaultValue),
             inspectorControl: .textFieldAndSlider,
+            effect: effect,
             renderBinding: binding,
             numericRange: NumericRange(lowerBound: 0.0, upperBound: 360.0)
         )
@@ -472,6 +526,7 @@ private extension ObjectPropertyDefinition {
         id: PropertyID,
         title: String,
         binding: RenderBinding?,
+        effect: Effect,
         defaultValue: Bool
     ) -> ObjectPropertyDefinition {
         ObjectPropertyDefinition(
@@ -481,7 +536,63 @@ private extension ObjectPropertyDefinition {
             valueKind: .boolean,
             defaultValue: .boolean(defaultValue),
             inspectorControl: .segmented,
+            effect: effect,
             renderBinding: binding
+        )
+    }
+
+    static func derivedLength(
+        id: PropertyID,
+        title: String,
+        binding: RenderBinding?,
+        defaultValue: Double,
+        workspaceScaleDefault: WorkspaceScaleDefault? = nil
+    ) -> ObjectPropertyDefinition {
+        ObjectPropertyDefinition(
+            id: id,
+            title: title,
+            group: "Shape",
+            valueKind: .length,
+            defaultValue: .length(defaultValue),
+            inspectorControl: .readOnly,
+            effect: .derived,
+            renderBinding: binding,
+            workspaceScaleDefault: workspaceScaleDefault,
+            isEditable: false
+        )
+    }
+
+    static func derivedInteger(
+        id: PropertyID,
+        title: String,
+        defaultValue: Int
+    ) -> ObjectPropertyDefinition {
+        ObjectPropertyDefinition(
+            id: id,
+            title: title,
+            group: "Shape",
+            valueKind: .integer,
+            defaultValue: .integer(defaultValue),
+            inspectorControl: .readOnly,
+            effect: .derived,
+            isEditable: false
+        )
+    }
+
+    static func derivedBoolean(
+        id: PropertyID,
+        title: String,
+        defaultValue: Bool
+    ) -> ObjectPropertyDefinition {
+        ObjectPropertyDefinition(
+            id: id,
+            title: title,
+            group: "Shape",
+            valueKind: .boolean,
+            defaultValue: .boolean(defaultValue),
+            inspectorControl: .readOnly,
+            effect: .derived,
+            isEditable: false
         )
     }
 
@@ -497,8 +608,8 @@ private extension ObjectPropertyDefinition {
             valueKind: .text,
             defaultValue: .text(defaultValue),
             inspectorControl: .readOnly,
+            effect: .derived,
             isEditable: false
         )
     }
-
 }

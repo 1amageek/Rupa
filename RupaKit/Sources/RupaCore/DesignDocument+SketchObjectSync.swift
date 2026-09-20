@@ -135,11 +135,9 @@ extension DesignDocument {
         }
 
         let definition = try objectRegistry.requireDefinition(for: typeID)
-        var nextProperties = objectRegistry.defaultProperties(for: typeID)
-        if let strokeWidth = object.properties[PropertyID(rawValue: "stroke.width")] {
-            nextProperties[PropertyID(rawValue: "stroke.width")] = strokeWidth
-        }
-        nextProperties = definition.resolvedProperties(nextProperties)
+        let nextProperties = definition.resolvedProperties(
+            objectRegistry.defaultProperties(for: typeID)
+        )
         try nextProperties.validate(
             against: definition,
             materialLibrary: productMetadata.materialLibrary

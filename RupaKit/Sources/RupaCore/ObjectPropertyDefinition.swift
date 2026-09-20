@@ -37,6 +37,22 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
         }
     }
 
+    /// The one path an edit to this property takes to reach the canvas.
+    ///
+    /// A control the Inspector offers is a control that reaches the canvas, so the schema declares
+    /// where an edit lands instead of letting a router infer reachability from the binding
+    /// identifier. `ObjectTypeCatalog` is the only place that assigns an effect.
+    public enum Effect: String, Codable, Hashable, Sendable {
+        /// Rewrites the CAD feature graph, so re-evaluation changes the exact geometry.
+        case source
+        /// Changes only the display resolution the evaluator uses for that feature.
+        case tessellation
+        /// Changes only how a resolved body is presented.
+        case appearance
+        /// Reports a value the source owns and cannot be authored.
+        case derived
+    }
+
     public enum InspectorControl: String, Codable, Hashable, Sendable {
         case textField
         case textFieldAndSlider
@@ -65,18 +81,15 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
         public static let topRadius: RenderBinding = "top.radius"
         public static let bottomRadius: RenderBinding = "bottom.radius"
         public static let sideSegments: RenderBinding = "segments.side"
-        public static let verticalSegments: RenderBinding = "segments.vertical"
         public static let angle: RenderBinding = "angle"
         public static let capVisibility: RenderBinding = "caps.visible"
         public static let hollow: RenderBinding = "hollow"
         public static let cornerRadius: RenderBinding = "corner.radius"
         public static let cornerSideSegments: RenderBinding = "corner.segments"
-        public static let subdivisionSegments: RenderBinding = "subdivision.segments"
         public static let extrusion: RenderBinding = "extrusion"
         public static let bevel: RenderBinding = "bevel"
         public static let bevelSideSegments: RenderBinding = "bevel.segments"
         public static let material: RenderBinding = "material"
-        public static let strokeWidth: RenderBinding = "stroke.width"
         public static let textContent: RenderBinding = "text.content"
         public static let textSize: RenderBinding = "text.size"
         public static let fontFamily: RenderBinding = "font.family"
@@ -98,6 +111,7 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
     public var valueKind: ObjectPropertyValue.ValueKind
     public var defaultValue: ObjectPropertyValue
     public var inspectorControl: InspectorControl
+    public var effect: Effect
     public var renderBinding: RenderBinding?
     public var workspaceScaleDefault: WorkspaceScaleDefault?
     public var numericRange: NumericRange?
@@ -110,6 +124,7 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
         valueKind: ObjectPropertyValue.ValueKind,
         defaultValue: ObjectPropertyValue,
         inspectorControl: InspectorControl,
+        effect: Effect,
         renderBinding: RenderBinding? = nil,
         workspaceScaleDefault: WorkspaceScaleDefault? = nil,
         numericRange: NumericRange? = nil,
@@ -121,6 +136,7 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
         self.valueKind = valueKind
         self.defaultValue = defaultValue
         self.inspectorControl = inspectorControl
+        self.effect = effect
         self.renderBinding = renderBinding
         self.workspaceScaleDefault = workspaceScaleDefault
         self.numericRange = numericRange
@@ -152,6 +168,30 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
             throw DocumentValidationError.invalidProductMetadata(
                 "Object property \(id.rawValue) workspace scale defaults can only be applied to length values."
             )
+        }
+        switch effect {
+        case .derived:
+            guard isEditable == false else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Object property \(id.rawValue) reports a value the source owns and must not be editable."
+                )
+            }
+            guard inspectorControl == .readOnly else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Object property \(id.rawValue) reports a value the source owns and must use the read-only control."
+                )
+            }
+        case .source, .tessellation, .appearance:
+            guard isEditable else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Object property \(id.rawValue) declares an effect an edit produces and must be editable."
+                )
+            }
+            guard inspectorControl != .readOnly else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Object property \(id.rawValue) declares an effect an edit produces and must offer an editable control."
+                )
+            }
         }
         try defaultValue.validate(id: id)
     }

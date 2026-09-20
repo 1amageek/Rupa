@@ -645,9 +645,24 @@ Invariants:
 
 Segment counts are display resolution, not exact geometry. The kernel keeps
 circles and arcs as rational arcs and derives a segment count from tolerance, so
-`Sides`, `Subdivisions`, `Corner Sides`, and `Bevel Sides` set the per-feature
+`Sides`, `Corner Sides`, `Bevel Sides`, and `Arc Segments` set the per-feature
 angular tolerance to `span / count`, which is the count the tessellation sampler
 then produces.
+
+A count that would subdivide a planar face or a straight generatrix declares no
+property. The document is an exact B-rep, so splitting a plane into more
+triangles produces the same surface and the same silhouette: the control would
+move a number and change nothing on screen. This is why a cylinder declares
+`Sides` for its circular section but no count along its axis, and why an
+extruded rectangle declares no subdivision count.
+
+The schema is the authority on which properties exist, so it can stop declaring
+one. A document written by an earlier schema keeps the stored value until it is
+loaded; `ProductMetadata.pruneUndeclaredObjectProperties` drops values no
+declared property claims, and `DocumentPackageStore` runs it before validation.
+Validation therefore still rejects an undeclared property as invalid input,
+while an older document opens with the stale value removed rather than being
+refused.
 
 ### Material library authoring contract
 

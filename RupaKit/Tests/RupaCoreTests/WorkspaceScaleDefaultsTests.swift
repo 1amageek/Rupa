@@ -101,6 +101,7 @@ import Testing
                         valueKind: .length,
                         defaultValue: .length(1.0),
                         inspectorControl: .textFieldAndSlider,
+                        effect: .source,
                         renderBinding: "panel.width",
                         workspaceScaleDefault: .sketchWidth
                     ),
@@ -111,6 +112,7 @@ import Testing
                         valueKind: .length,
                         defaultValue: .length(0.1),
                         inspectorControl: .textFieldAndSlider,
+                        effect: .source,
                         renderBinding: "panel.depth",
                         workspaceScaleDefault: .sketchDepth
                     ),

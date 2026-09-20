@@ -83,12 +83,19 @@ extension DesignDocument {
         property: ObjectPropertyDefinition,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        guard let binding = property.renderBinding else {
+        switch property.effect {
+        case .tessellation, .appearance, .derived:
+            // These effects change display resolution or presentation, not the feature graph.
             return
+        case .source:
+            break
         }
 
         switch object.category {
         case .body:
+            guard let binding = property.renderBinding else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
+            }
             try applyBodyObjectPropertyToSource(
                 object: object,
                 definition: definition,
@@ -96,8 +103,8 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .sketch:
-            guard binding == .extrusion else {
-                return
+            guard property.renderBinding == .extrusion else {
+                throw unsupportedObjectSourceProperty(property, definition: definition)
             }
             try applySketchExtrusionPropertyToSource(
                 sceneNodeID: sceneNodeID,
@@ -106,7 +113,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .group, .componentInstance, .construction, .annotation, .camera, .light:
-            return
+            throw unsupportedObjectSourceProperty(property, definition: definition)
         }
         guard productMetadata.sceneNodes[sceneNodeID] != nil else {
             throw EditorError(
@@ -123,7 +130,10 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws {
         guard let featureID = object.sourceFeatureID else {
-            return
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Object property source updates require a body built by a feature."
+            )
         }
         switch object.typeID {
         case .some(.cube):
@@ -135,16 +145,11 @@ extension DesignDocument {
                 try setBoxCorner(featureID: featureID, radius: radius)
                 return
             }
-            if binding == .cornerSideSegments {
-                guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
-                      case .integer(let count) = definition.resolvedProperties(object.properties)[property.id],
-                      count > 0 else {
-                    throw EditorError(code: .commandInvalid, message: "Corner Sides must be positive.")
-                }
-                return
-            }
             guard binding == .sizeX || binding == .sizeY || binding == .sizeZ else {
-                return
+                throw unsupportedObjectSourceProperty(
+                    binding: binding,
+                    definition: definition
+                )
             }
             let dimensions = try resolvedExtrudedBodyDimensions(featureID: featureID)
             let properties = definition.resolvedProperties(object.properties)
@@ -184,7 +189,10 @@ extension DesignDocument {
                     binding == .sizeY ||
                     binding == .sizeZ ||
                     binding == .radius else {
-                return
+                throw unsupportedObjectSourceProperty(
+                    binding: binding,
+                    definition: definition
+                )
             }
             let dimensions = try resolvedExtrudedBodyDimensions(featureID: featureID)
             let properties = definition.resolvedProperties(object.properties)
@@ -229,8 +237,43 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         default:
-            return
+            throw unsupportedObjectSourceProperty(
+                binding: binding,
+                definition: definition
+            )
         }
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
+    // have no router branch yet, so every edit to one fails here instead of reaching the canvas.
+    // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
+    // routes through `applyObjectPropertyToSource`. Unrouted today: rectangle `size.x`, `size.y`,
+    // `corner.radius`; circle `radius`; polygon `sizing.radius`, `radius.is.inradius`, `sides.x`,
+    // `angle`; line `length`, `angle`; arc `radius`, `start.angle`, `end.angle`; the `bevel`
+    // property on every extruded profile; and cylinder `angle`, `caps`, `hollow`, `corner.radius`.
+    // Do not treat an edit to any of these as applied until its branch exists and a test drives the
+    // property through to the evaluated geometry.
+    private func unsupportedObjectSourceProperty(
+        binding: ObjectPropertyDefinition.RenderBinding,
+        definition: ObjectTypeDefinition
+    ) -> EditorError {
+        guard let property = definition.properties.first(where: { $0.renderBinding == binding }) else {
+            return EditorError(
+                code: .commandUnsupported,
+                message: "\(definition.title) does not apply \(binding.rawValue) to its source geometry."
+            )
+        }
+        return unsupportedObjectSourceProperty(property, definition: definition)
+    }
+
+    private func unsupportedObjectSourceProperty(
+        _ property: ObjectPropertyDefinition,
+        definition: ObjectTypeDefinition
+    ) -> EditorError {
+        EditorError(
+            code: .commandUnsupported,
+            message: "\(definition.title) does not apply \(property.title) to its source geometry."
+        )
     }
 
     private mutating func applySketchExtrusionPropertyToSource(
@@ -239,14 +282,22 @@ extension DesignDocument {
         definition: ObjectTypeDefinition,
         objectRegistry: ObjectTypeRegistry
     ) throws {
-        guard let sourceFeatureID = object.sourceFeatureID,
-              let extrusionProperty = definition.property(for: .extrusion) else {
-            return
+        guard let sourceFeatureID = object.sourceFeatureID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Extrusion changes require a sketch built by a feature."
+            )
+        }
+        guard let extrusionProperty = definition.property(for: .extrusion) else {
+            throw EditorError(
+                code: .commandUnsupported,
+                message: "\(definition.title) does not declare an extrusion property."
+            )
         }
         let properties = definition.resolvedProperties(object.properties)
         let value = properties.value(for: extrusionProperty.id, default: extrusionProperty.defaultValue)
         guard case .length(let extrusionMeters) = value else {
-            return
+            throw EditorError(code: .commandInvalid, message: "Extrusion requires a length value.")
         }
 
         let generatedName = generatedExtrusionBodyName(for: sceneNodeID)

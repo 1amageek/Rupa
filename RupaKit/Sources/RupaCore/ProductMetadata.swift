@@ -253,6 +253,25 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
+    /// Drops stored object property values the object type no longer declares.
+    ///
+    /// The object type schema is the authority on which properties exist. A document written by an
+    /// earlier schema can carry a value for a property the type has since stopped declaring. That
+    /// value is stale metadata, not invalid input, so loading drops it and keeps the document
+    /// openable instead of rejecting it during validation.
+    public mutating func pruneUndeclaredObjectProperties(objectRegistry: ObjectTypeRegistry) {
+        for (nodeID, node) in sceneNodes {
+            guard var object = node.object,
+                  let definition = objectRegistry.definition(for: object.typeID) else { continue }
+            let declared = object.properties.values.filter { definition.property(for: $0.key) != nil }
+            guard declared.count != object.properties.values.count else { continue }
+            object.properties = ObjectPropertySet(values: declared)
+            var prunedNode = node
+            prunedNode.object = object
+            sceneNodes[nodeID] = prunedNode
+        }
+    }
+
     public func validate(
         against cadDocument: CADDocument,
         objectRegistry: ObjectTypeRegistry

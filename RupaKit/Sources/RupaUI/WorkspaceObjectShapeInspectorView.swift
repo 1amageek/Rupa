@@ -284,11 +284,19 @@ struct WorkspaceObjectShapeInspectorView: View {
               let definition = shapes.first?.definition else {
             return []
         }
-        var existingPropertyIDs: Set<PropertyID> = []
-        if shapes.allSatisfy({ $0.typeID == .cube || $0.typeID == .cylinder }) {
-            existingPropertyIDs.formUnion(["size.x", "size.y", "size.z"])
+        // The Size row above already edits the three size bindings, so the schema rows drop them
+        // instead of offering a second control for the same value.
+        guard shapes.allSatisfy({ $0.size != nil }) else {
+            return definition.properties
         }
-        return definition.properties.filter { !existingPropertyIDs.contains($0.id) }
+        return definition.properties.filter { property in
+            switch property.renderBinding {
+            case .sizeX, .sizeY, .sizeZ:
+                return false
+            default:
+                return true
+            }
+        }
     }
 
     private func formattedObjectProperty(_ value: ObjectPropertyValue) -> String {
