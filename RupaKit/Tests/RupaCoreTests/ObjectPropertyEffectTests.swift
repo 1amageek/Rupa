@@ -104,7 +104,7 @@ struct ObjectPropertyEffectTests {
             )
         }
 
-        document.productMetadata.pruneUndeclaredObjectProperties(objectRegistry: .builtIn)
+        _ = document.productMetadata.pruneUndeclaredObjectProperties(objectRegistry: .builtIn)
 
         try document.productMetadata.validate(
             against: document.cadDocument,

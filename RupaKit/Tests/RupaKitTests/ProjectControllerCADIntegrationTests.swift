@@ -836,7 +836,8 @@ func projectWorkspaceMakeEditableRejectsForgedSnapshotAndDuplicateWithoutPublica
         evaluationSnapshot: initial.evaluationSnapshot,
         viewport: initial.viewport,
         cadInteraction: initial.cadInteraction,
-        sceneNodeIDByOccurrenceID: initial.sceneNodeIDByOccurrenceID
+        sceneNodeIDByOccurrenceID: initial.sceneNodeIDByOccurrenceID,
+        retiredObjectProperties: initial.retiredObjectProperties
     )
 
     var forgedError: ProjectMakeEditableError?

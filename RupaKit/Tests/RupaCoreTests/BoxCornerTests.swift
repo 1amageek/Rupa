@@ -34,7 +34,7 @@ struct BoxCornerTests {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".rupa")
         defer { do { try FileManager.default.removeItem(at: url) } catch { Issue.record(error) } }
         try DocumentFileService().save(document, to: url)
-        document = try DocumentFileService().load(from: url)
+        document = try DocumentFileService().load(from: url).document
         #expect(try document.boxCornerRadius(id) == 0.01)
         try document.setSceneNodeObjectProperty(id: node.id, propertyID: .init(rawValue: "corner.radius"), value: .length(0))
         #expect(document.cadDocument.designGraph.nodes[id]?.operation == original?.operation)

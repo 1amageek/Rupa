@@ -4,6 +4,7 @@ import Testing
 import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
+import RupaGeometry
 import RupaProjectModel
 @testable import RupaProjectPackage
 @testable import RupaProject
@@ -47,6 +48,34 @@ func aProjectSavedByAnEarlierObjectSchemaOpensWithoutTheValueItRetired() async t
 }
 
 @Test(.timeLimit(.minutes(1)))
+func aRetiredValueIsReportedOnEveryStateOfTheOpenedDocument() async throws {
+    var document = DesignDocument.empty(named: "Earlier schema")
+    let nodeID = try appendMeshBody(named: "Plate", to: &document)
+    // Write the value the way the earlier schema persisted it.
+    document.productMetadata.sceneNodes[nodeID]?.object?.properties[retiredPropertyID] =
+        .length(0.001)
+
+    let controller = try ProjectController(
+        package: try projectPackage(of: document),
+        evaluatorPreparer: SchemaMigrationEvaluatorPreparer(),
+        projector: FixtureProjector(),
+        objectRegistry: try meshBodyObjectRegistry()
+    )
+
+    // A publication landing after the open must not lose the list.
+    _ = try await controller.evaluateCurrent()
+    let reported = try await controller.currentState().retiredObjectProperties
+
+    #expect(reported.count == 1)
+    let retired = try #require(reported.first)
+    #expect(retired.sceneNodeID == nodeID)
+    #expect(retired.sceneNodeName == "Plate")
+    #expect(retired.typeID == meshBodyTypeID)
+    #expect(retired.propertyID == retiredPropertyID)
+    #expect(retired.value == .length(0.001))
+}
+
+@Test(.timeLimit(.minutes(1)))
 func aValueTheObjectSchemaDoesNotDeclareIsStillRefusedOnALiveDocument() async throws {
     var document = DesignDocument.empty(named: "Live")
     _ = try document.createExtrudedRectangle(
@@ -82,6 +111,60 @@ private func projectPackage(of document: DesignDocument) throws -> ProjectPackag
         productSource: try JSONProjectProductSourceCodec().encode(document),
         cadSource: cadSource,
         authoredMeshAssets: document.authoredMeshAssets
+    )
+}
+
+/// An object type an authored mesh body can carry, so the fixture reaches the
+/// controller's state without a CAD geometry evaluation provider.
+private let meshBodyTypeID = ObjectTypeID("fixture.mesh.body")
+
+private func meshBodyObjectRegistry() throws -> ObjectTypeRegistry {
+    try ObjectTypeRegistry(
+        definitions: [
+            ObjectTypeDefinition(
+                id: meshBodyTypeID,
+                title: "Fixture Mesh Body",
+                systemImage: "cube",
+                representation: .threeDimensional,
+                category: .body,
+                geometryRole: .mesh
+            ),
+        ]
+    )
+}
+
+private func appendMeshBody(
+    named name: String,
+    to document: inout DesignDocument
+) throws -> SceneNodeID {
+    var builder = MeshSourceBuilder(identity: "mesh.schema-migration")
+    let first = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))
+    let second = try builder.addVertex(GeometryPoint3D(x: 1, y: 0, z: 0))
+    let third = try builder.addVertex(GeometryPoint3D(x: 0, y: 1, z: 0))
+    _ = try builder.addFace(vertexIDs: [first, second, third])
+    let asset = try AuthoredMeshAsset(source: try builder.build(), provenance: .created)
+    document.authoredMeshAssets[asset.id] = asset
+    let representationID: GeometryRepresentationID = "representation.schema-migration"
+    return try document.productMetadata.appendSceneNodeToFirstRoot(
+        name: name,
+        reference: .authoredMesh(asset.id),
+        object: ObjectDescriptor(
+            category: .body,
+            geometryRole: .mesh,
+            typeID: meshBodyTypeID,
+            geometryRepresentations: GeometryRepresentationSet(
+                representations: [
+                    representationID: GeometryRepresentation(
+                        id: representationID,
+                        source: .authoredMesh(asset.id)
+                    ),
+                ],
+                selection: GeometryRepresentationSelection(
+                    modeling: representationID,
+                    presentation: representationID
+                )
+            )
+        )
     )
 }
 

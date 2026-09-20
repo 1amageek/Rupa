@@ -79,7 +79,8 @@ public struct ProjectViewSnapshotBuilder:
             evaluationSnapshot: state.evaluationSnapshot,
             viewport: previewProjection.scene,
             cadInteraction: state.cadInteraction,
-            sceneNodeIDByOccurrenceID: previewProjection.sceneNodeIDByOccurrenceID
+            sceneNodeIDByOccurrenceID: previewProjection.sceneNodeIDByOccurrenceID,
+            retiredObjectProperties: state.retiredObjectProperties
         )
     }
 

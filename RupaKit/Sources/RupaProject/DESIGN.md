@@ -255,6 +255,21 @@ schema no longer declares is stale metadata, not a source failure. The
 `assembleDocument` runs it against the registry it validates with, so a project
 saved by an earlier schema opens instead of failing with `sourceInvalid`.
 
+The migration returns what it dropped, and this design carries that list to the
+project state snapshot so the caller that opened the project can report it.
+`ProjectController` retains the list the open produced and every
+`ProjectStateSnapshot` of that document carries it, rather than only the state
+the open returned. A caller that reports it once per `documentLifetimeID` then
+reports it whichever state it reads, and a publication that lands between the
+open and the report cannot lose it. A new open replaces the list, so it never
+outlives the document it describes.
+
+Decoding a package the controller itself encoded is a round trip, so a value
+retired there would mean the encoder and the registry disagree rather than that
+the document is older than the schema. `init(document:)`, `replace(with:)`, and
+the staged decodes behind commit and history therefore refuse a non-empty
+result with `sourceMismatch` instead of reporting it as a migration.
+
 A package/source staging failure before publication rolls back the staged edit
 and discards its evaluation cache.
 A save failure after a source edit has already committed does not roll back that

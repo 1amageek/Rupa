@@ -11,7 +11,12 @@ public struct DocumentPackageStore: Sendable {
         try data.write(to: url, options: .atomic)
     }
 
-    public func load(from url: URL) throws -> DesignDocument {
+    /// Opens a document package, reporting the stored values its object schema has retired.
+    ///
+    /// See `RetiredObjectProperty` for why a retired value is returned rather than dropped.
+    public func load(
+        from url: URL
+    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
         let source = try MappedFileByteSource(url: url)
         return try load(from: source)
     }
@@ -39,19 +44,21 @@ public struct DocumentPackageStore: Sendable {
         ])
     }
 
-    private func load(from source: any ByteSource) throws -> DesignDocument {
+    private func load(
+        from source: any ByteSource
+    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
         do {
             let entries = try ProductPackageArchive.entries(from: source)
             if entries["rupa.json"] != nil {
                 return try loadProductPackage(from: entries)
             }
-            return try loadLegacyCADPackage(from: source)
+            return (try loadLegacyCADPackage(from: source), [])
         } catch let error as DocumentValidationError {
             throw error
         } catch let error as DecodingError {
             throw error
         } catch {
-            return try loadLegacyCADPackage(from: source)
+            return (try loadLegacyCADPackage(from: source), [])
         }
     }
 
@@ -66,7 +73,9 @@ public struct DocumentPackageStore: Sendable {
         )
     }
 
-    private func loadProductPackage(from entries: [String: Data]) throws -> DesignDocument {
+    private func loadProductPackage(
+        from entries: [String: Data]
+    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
         let unsupportedEntries = Set(entries.keys).subtracting(["manifest.json", "document.json", "rupa.json"])
         guard unsupportedEntries.isEmpty else {
             throw DocumentValidationError.invalidProductMetadata(
@@ -100,14 +109,14 @@ public struct DocumentPackageStore: Sendable {
         }
 
         var productMetadata = payload.productMetadata
-        productMetadata.pruneUndeclaredObjectProperties(objectRegistry: .builtIn)
+        let retired = productMetadata.pruneUndeclaredObjectProperties(objectRegistry: .builtIn)
         let document = DesignDocument(
             cadDocument: cadDocument,
             modelingSettings: payload.modelingSettings,
             productMetadata: productMetadata
         )
         try document.validate()
-        return document
+        return (document, retired)
     }
 
     private static func encoder() -> JSONEncoder {

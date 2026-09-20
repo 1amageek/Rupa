@@ -107,7 +107,8 @@ func projectViewportProjectionRejectsMissingNavigation() async throws {
         evaluationSnapshot: published.evaluationSnapshot,
         viewport: published.viewport,
         cadInteraction: published.cadInteraction,
-        sceneNodeIDByOccurrenceID: [:]
+        sceneNodeIDByOccurrenceID: [:],
+        retiredObjectProperties: published.retiredObjectProperties
     )
 
     do {

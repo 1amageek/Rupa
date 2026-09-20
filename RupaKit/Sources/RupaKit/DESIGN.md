@@ -371,6 +371,11 @@ MainActor, and revalidates the exact view before returning.
 ## State, Ownership, and Lifecycle
 
 - `ProjectViewSnapshot` is the caller's immutable observation anchor.
+- `ProjectViewSnapshot.retiredObjectProperties` carries, unchanged, the values
+  the load's object schema migration retired. The
+  [RupaProject design](../RupaProject/DESIGN.md) owns what that list means;
+  this module only makes it reachable from the published view, because a view
+  snapshot is the only thing the UI observes.
 - A source handle and cursor are immutable values; they do not retain mutable
   workspace/session state beyond the documented source identity coordinate.
   The full snapshot remains a separate required value for every read and edit.

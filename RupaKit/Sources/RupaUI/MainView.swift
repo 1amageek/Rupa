@@ -122,7 +122,16 @@ private struct ProjectMainViewContent: View {
     /// How many of the workspace's own sentences the transcript keeps. The newest is what the
     /// status item shows; the rest are the recent history the Logs pane lists.
     private static let transientDiagnosticLimit = 200
+    /// How many retired object property values the migration report names before it
+    /// counts the rest. A status line is one sentence, and the failure log keeps the
+    /// record.
+    private static let namedRetiredObjectPropertyLimit = 3
     @State private var transientDiagnostics: [EditorDiagnostic]
+    /// The document whose retired object property values have already been reported.
+    ///
+    /// See `RupaUI/DESIGN.md`, "Failure surfacing": the report is once per open, so a
+    /// reappearance within the same open must not repeat it.
+    @State private var reportedRetiredObjectPropertiesOf: ProjectDocumentLifetimeID?
     @State private var hoveredTarget: SelectionTarget?
     @State private var hoveredReference: SelectionReference?
     @State private var isPreviewExpanded: Bool
@@ -354,6 +363,7 @@ private struct ProjectMainViewContent: View {
         }
         .onAppear {
             onViewportMount(snapshot.documentLifetimeID, viewportControlSession)
+            reportRetiredObjectProperties()
         }
         .onDisappear {
             modelingTask?.cancel()
@@ -365,6 +375,30 @@ private struct ProjectMainViewContent: View {
         } message: {
             Text("Create an independent Mesh from modeling-quality CAD geometry and switch its presentation. The CAD source is retained. This operation is undoable.")
         }
+    }
+
+    /// Tells the person who opened this document which stored values its object types
+    /// no longer declare, once per open.
+    ///
+    /// The values are already gone from the open document and the next save writes it
+    /// without them, so this is the only point at which the loss is visible.
+    /// See `RupaUI/DESIGN.md`, "Failure surfacing".
+    private func reportRetiredObjectProperties() {
+        guard reportedRetiredObjectPropertiesOf != snapshot.documentLifetimeID else { return }
+        reportedRetiredObjectPropertiesOf = snapshot.documentLifetimeID
+        let retired = snapshot.retiredObjectProperties
+        guard !retired.isEmpty else { return }
+        let named = retired.prefix(Self.namedRetiredObjectPropertyLimit)
+            .map { "\($0.sceneNodeName) · \($0.propertyID.rawValue)" }
+            .joined(separator: ", ")
+        let suffix = retired.count > Self.namedRetiredObjectPropertyLimit
+            ? ", and \(retired.count - Self.namedRetiredObjectPropertyLimit) more"
+            : ""
+        reportToolStatus(
+            "Opened without \(retired.count) stored value(s) these object types no longer declare: \(named)\(suffix). Saving this document discards them.",
+            severity: .warning,
+            operation: "Document.objectSchemaMigration"
+        )
     }
 
     private func invalidateModelingPreview() {

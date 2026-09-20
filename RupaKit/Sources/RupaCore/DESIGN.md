@@ -666,6 +666,22 @@ runs it, against the same registry it then validates with, before validation:
 therefore still rejects an undeclared property as invalid input, while an older
 document opens with the stale value removed rather than being refused.
 
+Dropping a value is a loss the person who opened the document cannot undo: the
+next save writes the document without it. So the migration reports what it
+dropped instead of discarding it. `pruneUndeclaredObjectProperties` returns the
+dropped values as `[RetiredObjectProperty]`, one per scene node and property,
+ordered by scene node and then property ID so the same document always reports
+the same list. The result is not `@discardableResult`, which makes a boundary
+that ignores it a compile error rather than a silent drop.
+
+This design owns what was retired, and nothing about how it is shown. Each
+decode boundary returns the list to its caller alongside the document, and the
+caller that opened the document decides what to do with it. The
+[RupaProject design](../RupaProject/DESIGN.md) carries the list from
+`assembleDocument` to the project state snapshot, and the
+[RupaUI design](../RupaUI/DESIGN.md) owns surfacing it to the person who opened
+the document.
+
 ### Display tessellation resolution
 
 `DesignDocument.displayTessellationOptions` is the single owner of the mapping

@@ -24,6 +24,11 @@ public struct ProjectViewSnapshot: Sendable {
     public let viewport: UniversalViewportScene
     public let cadInteraction: DocumentEvaluationContext?
     public let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
+    /// The stored object property values opening this document retired.
+    ///
+    /// Carried unchanged from `ProjectStateSnapshot` so the only state the UI
+    /// observes can report them. See `RupaKit/DESIGN.md`.
+    public let retiredObjectProperties: [RetiredObjectProperty]
 
     public var authorityCoordinate: ProjectAuthorityCoordinate {
         ProjectAuthorityCoordinate(

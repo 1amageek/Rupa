@@ -309,7 +309,8 @@ func projectViewBuilderRejectsAnEvaluationFromAnotherTransactionRevision() async
         evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: state.evaluationSource,
         cadInteraction: state.cadInteraction,
-        evaluation: state.evaluation
+        evaluation: state.evaluation,
+        retiredObjectProperties: state.retiredObjectProperties
     )
     var error: ProjectViewSnapshotError?
 
@@ -363,7 +364,8 @@ func projectViewBuilderRejectsCADInteractionFromAnotherDocumentGeneration() asyn
         evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: state.evaluationSource,
         cadInteraction: state.cadInteraction,
-        evaluation: state.evaluation
+        evaluation: state.evaluation,
+        retiredObjectProperties: state.retiredObjectProperties
     )
     var error: ProjectViewSnapshotError?
 
@@ -1259,7 +1261,8 @@ private func projectViewState(
         evaluationSnapshot: state.evaluationSnapshot,
         evaluationSource: evaluationSource ?? state.evaluationSource,
         cadInteraction: state.cadInteraction,
-        evaluation: evaluation ?? state.evaluation
+        evaluation: evaluation ?? state.evaluation,
+        retiredObjectProperties: state.retiredObjectProperties
     )
 }
 

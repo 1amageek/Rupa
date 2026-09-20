@@ -23,5 +23,5 @@
   - [ ] S7.5 Sketch profile source routing for the declared shape properties `depends:S7.1` `parallel:none`
   - [ ] S7.6 Bevel and cylinder corner rounding through a body fillet feature `depends:S7.1` `parallel:none`
   - [ ] S7.7 Cylinder angle, caps, and hollow through the circle profile source `depends:S7.1,S7.5` `parallel:none`
-  - [ ] S7.8 A document saved against an earlier schema still opens, and a value its type no longer declares is reported rather than rejected `depends:S7.1` `parallel:none`
+  - [x] S7.8 A document saved against an earlier schema still opens, and a value its type no longer declares is reported rather than rejected `depends:S7.1` `parallel:none`
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`

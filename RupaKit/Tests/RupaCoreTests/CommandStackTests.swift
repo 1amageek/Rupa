@@ -6037,7 +6037,7 @@ private func commandStackApproximatelyEqual(
     document.rename("After")
 
     try service.save(document, to: url)
-    let loaded = try service.load(from: url)
+    let loaded = try service.load(from: url).document
 
     #expect(loaded.cadDocument.metadata.name == "After")
 }

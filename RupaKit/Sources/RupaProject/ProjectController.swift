@@ -14,6 +14,11 @@ public actor ProjectController: ProjectOperating {
     private var evaluationSource: ProjectSourceModel
     private var evaluation: EvaluatedProjectSnapshot?
     private var publicationSequence: UInt64
+    /// The stored object property values opening the current document retired.
+    ///
+    /// Retained for the lifetime of the opened document so every state carries the
+    /// same list. See `RupaProject/DESIGN.md`.
+    private var retiredObjectProperties: [RetiredObjectProperty]
     private let objectRegistry: ObjectTypeRegistry
     private let commandContextResolver: any EditorCommandContextResolving
     private let automationExecutor: any AutomationStagedBatchExecuting
@@ -64,6 +69,9 @@ public actor ProjectController: ProjectOperating {
         evaluationSource = initial.evaluationSource
         evaluation = nil
         publicationSequence = 0
+        // The document was supplied, not decoded, and `makeInitialState` already
+        // refused a round trip that retired a value.
+        retiredObjectProperties = []
         self.objectRegistry = objectRegistry
         self.commandContextResolver = commandContextResolver
         self.automationExecutor = automationExecutor
@@ -122,6 +130,7 @@ public actor ProjectController: ProjectOperating {
         evaluationSource = initial.evaluationSource
         evaluation = nil
         publicationSequence = 0
+        retiredObjectProperties = initial.retiredObjectProperties
         self.objectRegistry = objectRegistry
         self.commandContextResolver = commandContextResolver
         self.automationExecutor = automationExecutor
@@ -189,7 +198,8 @@ public actor ProjectController: ProjectOperating {
             evaluationSnapshot: session.evaluationSnapshot,
             evaluationSource: evaluationSource,
             cadInteraction: session.currentEvaluation,
-            evaluation: try currentEvaluation()
+            evaluation: try currentEvaluation(),
+            retiredObjectProperties: retiredObjectProperties
         )
     }
 
@@ -670,6 +680,10 @@ public actor ProjectController: ProjectOperating {
         try await validatePackageForSave(stagedPackage)
         try Task.checkCancellation()
         let reconstructed = try await reconstructState(from: stagedPackage)
+        try Self.requireNothingRetired(
+            reconstructed.retiredObjectProperties,
+            context: "Staged project sources"
+        )
         try Task.checkCancellation()
         let reconstructedAuthority = try await sourceAuthoritySnapshot(
             for: reconstructed.document,
@@ -901,6 +915,7 @@ public actor ProjectController: ProjectOperating {
         evaluationSource = reconstructed.evaluationSource
         evaluation = loadedEvaluation
         publicationSequence = nextPublicationSequence
+        retiredObjectProperties = reconstructed.retiredObjectProperties
         return ProjectStateSnapshot(
             documentLifetimeID: documentLifetimeID,
             document: reconstructed.document,
@@ -917,7 +932,8 @@ public actor ProjectController: ProjectOperating {
             evaluationSnapshot: session.evaluationSnapshot,
             evaluationSource: reconstructed.evaluationSource,
             cadInteraction: session.currentEvaluation,
-            evaluation: loadedEvaluation
+            evaluation: loadedEvaluation,
+            retiredObjectProperties: retiredObjectProperties
         )
     }
 
@@ -974,6 +990,7 @@ public actor ProjectController: ProjectOperating {
         evaluationSource = initial.evaluationSource
         evaluation = replacementEvaluation
         publicationSequence = nextPublicationSequence
+        retiredObjectProperties = []
         return try currentState()
     }
 
@@ -1111,6 +1128,10 @@ public actor ProjectController: ProjectOperating {
         }
         try await validatePackageForSave(stagedPackage)
         let reconstructed = try await reconstructState(from: stagedPackage)
+        try Self.requireNothingRetired(
+            reconstructed.retiredObjectProperties,
+            context: "Staged project history sources"
+        )
         let reconstructedAuthority = try await sourceAuthoritySnapshot(
             for: reconstructed.document,
             includesCADSource: stagedPackage.cadSource != nil
@@ -1674,15 +1695,20 @@ public actor ProjectController: ProjectOperating {
 
     private func reconstructState(
         from package: ProjectPackageDocument
-    ) async throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
+    ) async throws -> (
+        document: DesignDocument,
+        evaluationSource: ProjectSourceModel,
+        retiredObjectProperties: [RetiredObjectProperty]
+    ) {
         let product = try await decodeProductSource(package.productSource)
         let cadDocument = try await decodeOptionalCADSource(package.cadSource)
-        let document = try Self.assembleDocument(
+        let assembled = try Self.assembleDocument(
             package: package,
             product: product,
             cadDocument: cadDocument,
             objectRegistry: objectRegistry
         )
+        let document = assembled.document
         let source = try await projectSource(document)
         guard source.id == package.documentID else {
             throw ProjectControllerError(
@@ -1690,7 +1716,7 @@ public actor ProjectController: ProjectOperating {
                 message: "Product identity and evaluation projection differ."
             )
         }
-        return (document, source)
+        return (document, source, assembled.retiredObjectProperties)
     }
 
     private func validatePackageForSave(
@@ -1940,6 +1966,10 @@ public actor ProjectController: ProjectOperating {
             cadSourceCodec: cadSourceCodec,
             objectRegistry: objectRegistry
         )
+        try requireNothingRetired(
+            reconstructed.retiredObjectProperties,
+            context: "Initial project sources"
+        )
         let reconstructedAuthority: ProjectSourceAuthoritySnapshot
         do {
             reconstructedAuthority = try ProjectSourceAuthoritySnapshot(
@@ -1997,7 +2027,11 @@ public actor ProjectController: ProjectOperating {
         productSourceCodec: any ProjectProductSourceCoding,
         cadSourceCodec: any ProjectCADSourceCoding,
         objectRegistry: ObjectTypeRegistry
-    ) throws -> (document: DesignDocument, evaluationSource: ProjectSourceModel) {
+    ) throws -> (
+        document: DesignDocument,
+        evaluationSource: ProjectSourceModel,
+        retiredObjectProperties: [RetiredObjectProperty]
+    ) {
         let product: ProjectProductSourceModel
         do {
             product = try productSourceCodec.decode(package.productSource)
@@ -2016,12 +2050,13 @@ public actor ProjectController: ProjectOperating {
                 message: "Initial CAD source decoding failed: \(error)."
             )
         }
-        let document = try assembleDocument(
+        let assembled = try assembleDocument(
             package: package,
             product: product,
             cadDocument: cadDocument,
             objectRegistry: objectRegistry
         )
+        let document = assembled.document
         let source: ProjectSourceModel
         do {
             source = try projector.project(document)
@@ -2038,7 +2073,7 @@ public actor ProjectController: ProjectOperating {
                 message: "Initial Product identity and evaluation projection differ."
             )
         }
-        return (document, source)
+        return (document, source, assembled.retiredObjectProperties)
     }
 
     private static func assembleDocument(
@@ -2046,7 +2081,7 @@ public actor ProjectController: ProjectOperating {
         product: ProjectProductSourceModel,
         cadDocument: CADDocument?,
         objectRegistry: ObjectTypeRegistry
-    ) throws -> DesignDocument {
+    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
         guard product.projectID == package.documentID else {
             throw ProjectControllerError(
                 code: .sourceMismatch,
@@ -2074,9 +2109,13 @@ public actor ProjectController: ProjectOperating {
         }
         // A project saved by an earlier object schema can carry a property value the
         // registry no longer declares. That value is stale metadata, not an invalid
-        // source, so it is dropped here rather than refused by validation below.
+        // source, so it is dropped here rather than refused by validation below. The
+        // next save writes the document without it, so what was dropped is returned
+        // for the caller that opened the project to report.
         var productMetadata = product.productMetadata
-        productMetadata.pruneUndeclaredObjectProperties(objectRegistry: objectRegistry)
+        let retired = productMetadata.pruneUndeclaredObjectProperties(
+            objectRegistry: objectRegistry
+        )
         let document = DesignDocument(
             cadDocument: runtimeCADDocument,
             modelingSettings: product.modelingSettings,
@@ -2091,7 +2130,24 @@ public actor ProjectController: ProjectOperating {
                 message: "Decoded project sources are semantically invalid: \(error)."
             )
         }
-        return document
+        return (document, retired)
+    }
+
+    /// Refuses a retired property value produced by decoding a package this controller
+    /// itself encoded.
+    ///
+    /// Such a round trip carries no document older than the schema, so a retired value
+    /// means the encoder and the registry disagree. See `RupaProject/DESIGN.md`.
+    private static func requireNothingRetired(
+        _ retired: [RetiredObjectProperty],
+        context: String
+    ) throws {
+        guard retired.isEmpty else {
+            throw ProjectControllerError(
+                code: .sourceMismatch,
+                message: "\(context) retired \(retired.count) stored object property value(s) the object schema no longer declares."
+            )
+        }
     }
 }
 

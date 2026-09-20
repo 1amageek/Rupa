@@ -253,23 +253,43 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
-    /// Drops stored object property values the object type no longer declares.
+    /// Drops stored object property values the object type no longer declares, and returns them.
     ///
     /// The object type schema is the authority on which properties exist. A document written by an
     /// earlier schema can carry a value for a property the type has since stopped declaring. That
     /// value is stale metadata, not invalid input, so loading drops it and keeps the document
-    /// openable instead of rejecting it during validation.
-    public mutating func pruneUndeclaredObjectProperties(objectRegistry: ObjectTypeRegistry) {
+    /// openable instead of rejecting it during validation. A dropped value cannot be recovered once
+    /// the document is saved again, so it is returned rather than discarded, in a stable order, for
+    /// the boundary that opened the document to report.
+    public mutating func pruneUndeclaredObjectProperties(
+        objectRegistry: ObjectTypeRegistry
+    ) -> [RetiredObjectProperty] {
+        var retired: [RetiredObjectProperty] = []
         for (nodeID, node) in sceneNodes {
             guard var object = node.object,
                   let definition = objectRegistry.definition(for: object.typeID) else { continue }
             let declared = object.properties.values.filter { definition.property(for: $0.key) != nil }
             guard declared.count != object.properties.values.count else { continue }
+            for (propertyID, value) in object.properties.values where declared[propertyID] == nil {
+                retired.append(
+                    RetiredObjectProperty(
+                        sceneNodeID: nodeID,
+                        sceneNodeName: node.name,
+                        typeID: definition.id,
+                        propertyID: propertyID,
+                        value: value
+                    )
+                )
+            }
             object.properties = ObjectPropertySet(values: declared)
             var prunedNode = node
             prunedNode.object = object
             sceneNodes[nodeID] = prunedNode
         }
+        retired.sort {
+            ($0.sceneNodeID, $0.propertyID.rawValue) < ($1.sceneNodeID, $1.propertyID.rawValue)
+        }
+        return retired
     }
 
     public func validate(

@@ -40,7 +40,7 @@ func semanticExtensionsRoundTripThroughProductPackage() throws {
     let url = temporaryDirectory.appendingPathComponent("semantic-house.swcad")
     let service = DocumentFileService()
     try service.save(document, to: url)
-    let loaded = try service.load(from: url)
+    let loaded = try service.load(from: url).document
 
     #expect(loaded.productMetadata.semanticExtensions == [extensionID: envelope])
 }

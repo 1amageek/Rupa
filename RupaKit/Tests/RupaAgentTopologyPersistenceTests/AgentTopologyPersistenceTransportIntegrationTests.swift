@@ -154,7 +154,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     try DocumentFileService().save(.empty(named: "Before"), to: url)
     let server = AgentCommandController()
     let sessionID = UUID()
-    let session = EditorSession(document: try DocumentFileService().load(from: url))
+    let session = EditorSession(document: try DocumentFileService().load(from: url).document)
     _ = try session.execute(.renameDocument(name: "Saved Live"))
     server.register(session: session, path: url, id: sessionID)
 
@@ -165,7 +165,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         #expect(Bool(false))
         return
     }
-    let loaded = try DocumentFileService().load(from: url)
+    let loaded = try DocumentFileService().load(from: url).document
     #expect(result.path == url.path)
     #expect(result.generation == session.generation)
     #expect(!result.dirty)

@@ -9,7 +9,12 @@ public struct DocumentFileService: Sendable {
         self.packageStore = packageStore
     }
 
-    public func load(from url: URL) throws -> DesignDocument {
+    /// Opens a document package, reporting the stored values its object schema has retired.
+    ///
+    /// See `RetiredObjectProperty` for why a retired value is returned rather than dropped.
+    public func load(
+        from url: URL
+    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
         do {
             return try packageStore.load(from: url)
         } catch {

@@ -769,6 +769,18 @@ evaluate that way is disabled with the reason beside it, so the refusal is
 read before the press instead of recorded after it, and the record keeps its
 meaning: something ran and failed.
 
+Opening a document whose object schema has retired a stored property value is
+reported on the same channel. It is not a refused operation: the document
+opened. It is an irreversible loss, because the next save writes the document
+without the value, so the person who opened it is told once, as a warning,
+naming each object and property. The [RupaProject design](../RupaProject/DESIGN.md)
+owns what was retired and carries it on every state of the opened document;
+this module owns only the sentence and its timing. The report is keyed to
+`documentLifetimeID`, which changes on every open, so reopening the same file
+reports again and an edit within one open does not. It is recorded to
+`WorkspaceFailureLog` for the same reason every other entry is: the sentence is
+transient and the loss is not.
+
 `EditorDiagnostic` keeps its existing meaning, a fact about the document or
 its evaluation, and is not extended to carry UI failures. It crosses the
 Agent wire through `AgentSemanticDiagnostic` and

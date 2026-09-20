@@ -21,6 +21,12 @@ public struct ProjectStateSnapshot: Sendable {
     public let evaluationSource: ProjectSourceModel
     public let cadInteraction: DocumentEvaluationContext?
     public let evaluation: EvaluatedProjectSnapshot
+    /// The stored object property values opening this document retired.
+    ///
+    /// Every state of a document the controller opened from a package carries the
+    /// same list, so a caller that reports it once per document reports it whether
+    /// it reads the load's own state or a later one. See `RupaProject/DESIGN.md`.
+    public let retiredObjectProperties: [RetiredObjectProperty]
 
     public var authorityCoordinate: ProjectAuthorityCoordinate {
         ProjectAuthorityCoordinate(
@@ -48,7 +54,8 @@ public struct ProjectStateSnapshot: Sendable {
         evaluationSnapshot: EvaluationSnapshot,
         evaluationSource: ProjectSourceModel,
         cadInteraction: DocumentEvaluationContext?,
-        evaluation: EvaluatedProjectSnapshot
+        evaluation: EvaluatedProjectSnapshot,
+        retiredObjectProperties: [RetiredObjectProperty]
     ) {
         self.documentLifetimeID = documentLifetimeID
         self.document = document
@@ -66,5 +73,6 @@ public struct ProjectStateSnapshot: Sendable {
         self.evaluationSource = evaluationSource
         self.cadInteraction = cadInteraction
         self.evaluation = evaluation
+        self.retiredObjectProperties = retiredObjectProperties
     }
 }

@@ -2843,7 +2843,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     let url = temporaryDirectory.appendingPathComponent("product-metadata.swcad")
     let service = DocumentFileService()
     try service.save(document, to: url)
-    let loaded = try service.load(from: url)
+    let loaded = try service.load(from: url).document
 
     #expect(loaded.productMetadata == metadata)
 }
@@ -2868,7 +2868,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     try CADPipeline(tolerance: DocumentModelingSettings.standard.tolerance)
         .save(sourceDocument.cadDocument, to: url)
 
-    let loaded = try DocumentFileService().load(from: url)
+    let loaded = try DocumentFileService().load(from: url).document
 
     #expect(loaded.cadDocument.metadata.name == "Legacy")
     #expect(!loaded.productMetadata.rootSceneNodeIDs.isEmpty)
