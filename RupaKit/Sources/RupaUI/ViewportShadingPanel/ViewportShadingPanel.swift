@@ -1,3 +1,4 @@
+import RupaCore
 import RupaRendering
 import SwiftCAD
 import SwiftUI
@@ -179,7 +180,9 @@ struct ViewportShadingPanel: View {
             set: { source in
                 guard source != colorSource else { return }
                 switch source {
-                case .single: shading.solidColor = ViewportShading.standard.solidColor
+                // The single-color segment names its own color, because the
+                // standard shading draws the material each node carries.
+                case .single: shading.solidColor = .single(RupaCore.Material.neutralBaseColor)
                 case .material: shading.solidColor = .material
                 case .random: shading.solidColor = .random
                 }

@@ -616,11 +616,15 @@ func realityViewportSharesTranslatedResourcesWithoutSharingOccurrenceIdentity() 
     try viewport.applyCamera(layout: layout, displayScale: 2, revision: 1)
     let colors = [ColorRGBA(r: 1, g: 0, b: 0, a: 1), ColorRGBA(r: 0, g: 0, b: 1, a: 1),
                   ColorRGBA(r: 0, g: 1, b: 0, a: 1), ColorRGBA(r: 1, g: 0, b: 0, a: 1)]
-    var materialColors: [SceneOccurrenceID: ColorRGBA] = [:]
-    for index in scene.items.indices { materialColors[scene.items[index].id] = colors[index] }
+    var occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material] = [:]
+    for index in scene.items.indices {
+        var material = SwiftCAD.Material.neutral(named: "Occurrence \(index)")
+        material.baseColor = colors[index]
+        occurrenceMaterials[scene.items[index].id] = material
+    }
     try viewport.applyAppearance(
         displayMode: .solidWithEdges, shading: .init(style: .flat, solidColor: .material),
-        materialColors: materialColors,
+        occurrenceMaterials: occurrenceMaterials,
         interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
                            previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
         sectionPlane: nil, retainedSide: .front, sectionTolerance: 0

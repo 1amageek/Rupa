@@ -62,7 +62,7 @@ final class RealityViewport {
     private struct Appearance: Equatable {
         let mode: ViewportDisplayMode
         let shading: ViewportShading
-        let materialColors: [SceneOccurrenceID: ColorRGBA]
+        let occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material]
         let selected: Set<SceneNodeID>
         let preview: Set<SceneNodeID>
         let hovered: SceneNodeID?
@@ -670,29 +670,34 @@ final class RealityViewport {
 
     func applyAppearance(
         displayMode: ViewportDisplayMode, shading: ViewportShading,
-        materialColors: [SceneOccurrenceID: ColorRGBA],
+        occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material],
         interaction: MeshSourcePresentationInteractionStateResolver,
         sectionPlane: SectionAnalysisResult.Plane?, retainedSide: SectionAnalysisRetainedSide, sectionTolerance: Double
     ) throws {
-        let key = Appearance(mode: displayMode, shading: shading, materialColors: materialColors, selected: interaction.selectedSceneNodeIDs,
+        let key = Appearance(mode: displayMode, shading: shading, occurrenceMaterials: occurrenceMaterials, selected: interaction.selectedSceneNodeIDs,
                              preview: interaction.previewSceneNodeIDs, hovered: interaction.hoveredSceneNodeID,
                              plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)
         guard appearance != key else { return }
         try shading.validate()
-        for color in materialColors.values {
-            try RealityViewportMaterial.validate(color: color, field: "occurrence material color")
+        for material in occurrenceMaterials.values {
+            try RealityViewportMaterial.validate(material, field: "occurrence material")
         }
         var prepared: [(any RealityKit.Material, UnlitMaterial)] = []
         if let surfaceResources {
           for occurrence in surfaceResources.plan.occurrences {
-            var color = shading.resolvedColor(for: occurrence.occurrenceID, materialColor: materialColors[occurrence.occurrenceID])
+            let material = occurrenceMaterials[occurrence.occurrenceID]
+            var color = shading.resolvedColor(for: occurrence.occurrenceID, materialColor: material?.baseColor)
             switch interaction.state(for: occurrence.occurrenceID) {
             case .normal: break
             case .selected: color = SIMD4<Float>(0.14, 0.66, 0.95, 1)
             case .hovered: color = SIMD4<Float>(0.36, 0.77, 0.98, 1)
             }
+            // The highlight replaces the color and leaves what the document
+            // authored, so a selection says which body it is, not what it is
+            // made of.
+            let surface = ViewportSurface(color: Self.color(color), authoring: material)
             let wire = shading.resolvedWireColor(for: occurrence.occurrenceID, objectColor: color)
-            prepared.append((try surfaceResources.materials.surface(displayMode: displayMode, shading: shading, color: Self.color(color)),
+            prepared.append((try surfaceResources.materials.surface(displayMode: displayMode, shading: shading, surface: surface),
                              surfaceResources.materials.line(color: Self.color(wire))))
           }
         }

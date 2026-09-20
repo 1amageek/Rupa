@@ -28,7 +28,7 @@ struct RealityViewportMountTests {
         var size = CGSize(width: 512, height: 384)
         func view(_ basis: ViewportProjectionBasis, zoom: CGFloat, revision: UInt64) -> some View {
             RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:],
+                shading: .init(style: .flat), occurrenceMaterials: [:],
                 layout: .init(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
                     camera: .init(zoom: zoom, pan: revision == 2 ? CGSize(width: 35, height: -20) : .zero,
                         projection: perspective ? .standardPerspective : .parallel),
@@ -229,7 +229,7 @@ struct RealityViewportMountTests {
         var reportedError: MeshSourcePresentationRenderError?
         func view(zoom: CGFloat, revision: UInt64) -> some View {
             RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:],
+                shading: .init(style: .flat), occurrenceMaterials: [:],
                 layout: .init(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
                     camera: .init(zoom: zoom, projection: perspective ? .standardPerspective : .parallel),
                     basis: .axisFront(.z), verticalBounds: -0.01...0.01),
@@ -320,7 +320,7 @@ struct RealityViewportMountTests {
                 size: size, camera: .init(zoom: zoom, projection: perspective ? .standardPerspective : .parallel),
                 basis: .axisFront(.z), verticalBounds: -0.01...0.01)
             return RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:], layout: layout, interaction: interaction,
+                shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout, interaction: interaction,
                 sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
                 onUpdateResult: { reportedError = $0 }).frame(width: size.width, height: size.height)
         }
@@ -432,7 +432,7 @@ struct RealityViewportMountTests {
             basis: .axisFront(.z), verticalBounds: 0...1)
         var reportedError: MeshSourcePresentationRenderError?
         let view = RealityViewportView(viewport: viewport, viewportRevision: 1, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
             interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
             sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }).frame(width: size.width, height: size.height)
@@ -530,7 +530,7 @@ struct RealityViewportMountTests {
                 viewportRevision: revision,
                 displayMode: .solid,
                 shading: .init(style: .flat),
-                materialColors: [:],
+                occurrenceMaterials: [:],
                 layout: value,
                 interaction: interaction,
                 sectionPlane: nil,
@@ -807,7 +807,7 @@ struct RealityViewportMountTests {
                 viewportRevision: 1,
                 displayMode: .solid,
                 shading: .init(style: .flat),
-                materialColors: [:],
+                occurrenceMaterials: [:],
                 layout: value,
                 interaction: interaction,
                 sectionPlane: nil,
@@ -948,7 +948,7 @@ struct RealityViewportMountTests {
                 viewportRevision: revision,
                 displayMode: .solid,
                 shading: .init(style: .flat),
-                materialColors: [:],
+                occurrenceMaterials: [:],
                 layout: .init(
                     modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02),
                     size: size,

@@ -55,7 +55,7 @@ struct RealityViewportNativeFrameProjectionAndSectionTests {
                 viewportRevision: 1,
                 displayMode: .solid,
                 shading: .init(style: .flat),
-                materialColors: [:],
+                occurrenceMaterials: [:],
                 layout: layout,
                 interaction: .init(
                     sceneNodeIDByOccurrenceID: [:],

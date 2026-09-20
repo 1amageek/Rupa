@@ -824,6 +824,19 @@ owned by the
 `ProductMetadata.materialLibrary` is the only owner of authored appearance.
 A scene node names a material; it does not carry color.
 
+The appearance a node carries is one resolution and Core owns it: the material
+the node names, or the document default when the node names none, or
+`Material.neutral` when the document names none either. `sceneNodeAppearance(id:)`
+answers with that resolution for every node the document holds, and with nothing
+only when the identifier names no node at all, so the canvas, the Inspector, and
+the seed of a first edit read one value rather than three copies of a chain that
+could drift apart.
+
+`authorableSceneNodeAppearance(id:)` is that same read narrowed to what a person
+may edit. It answers with nothing for a node whose appearance
+`setSceneNodeAppearance` refuses and otherwise with what the node carries, so a
+caller offering a control only where this answers offers no control that fails.
+
 Core owns authoring appearance through exactly one command,
 `setSceneNodeAppearance`. It edits one component of the appearance one node
 carries, and it rejects a value outside that component's validated domain
@@ -857,17 +870,20 @@ A generated pattern-array output refuses an appearance edit exactly as it
 refuses `setSceneNodeMaterial`, because the pattern source owns the appearance
 of everything it generates.
 
-The material that command creates starts from `Material.neutral`, the appearance
-a body carries before a document authors one for it. Authoring one component
-then moves that component and leaves the other three where the canvas already
-had them, rather than repainting a body because its opacity was dragged.
+The material that command creates starts from the appearance the node already
+carries, copied under a new identifier and a name of its own. Authoring one
+component then moves that component and leaves the other three where the canvas
+already had them, rather than repainting a body because its opacity was dragged.
+`Material.neutral` is the end of that chain rather than a fixed seed: the copy
+begins there only when neither the node nor the document names a material.
 
 A material created for a node does not become the document default, even when it
 is the first material the document holds. The default is what a node naming no
 material of its own is drawn with, so promoting this one would restyle every
 body the person never touched on account of an edit aimed at one of them. What
 the default exists to guarantee already holds here, because the node the same
-command assigns it to reaches it.
+command assigns it to reaches it, and because the created material begins as a
+copy of that default whenever the document holds one.
 
 The Inspector appearance section authors the four components `Material`
 declares and no fifth: base color, opacity, metallic, and roughness. Each is a
@@ -876,12 +892,11 @@ the library changes rather than clamped into range. Which of the four the native
 surface consumes is owned by the
 [RupaRendering design](../RupaRendering/DESIGN.md).
 
-The section shows those four for a node holding no material as well, because
-`authorableSceneNodeAppearance(id:)` answers with the neutral appearance there.
-The values a person sees are the values the canvas already draws, so the first
-edit moves a control that was never blank and never lying. The same read answers
-with nothing for a node whose appearance the command refuses, so the section a
-person can reach is exactly the section whose edits Core accepts.
+The section shows those four for a node naming no material of its own as well,
+because `authorableSceneNodeAppearance(id:)` answers there with what that node
+carries. The values a person sees are the values the canvas already draws,
+because the canvas resolves the same read, so the first edit moves a control
+that was never blank and never lying.
 
 ### Executor substitution boundary
 
@@ -977,7 +992,7 @@ T09-B owns the following behavioral proof:
 | Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green; a matching caller evaluation context resolves object candidates on a CAD document without consulting the exact evaluator, and the same resolve without that context still consults it. |
 | Body display face runs | `Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift` proves an evaluated box snapshot records one run per prepared face, that the runs carry the same prepared identities as `Topology.faces`, and that they partition every drawn triangle contiguously from zero to the snapshot's triangle count. |
 | Display tessellation resolution | `Tests/RupaCoreTests/DisplayTessellationTests.swift` proves a declared side count is the number of turns the evaluated mesh samples the profile at, that a cylinder is drawn at its declared count instead of the document tolerance, that every count the schema offers from the lowest one up is the count the mesh draws, that a count between them is refused rather than redrawn, that a declared corner count is the number of segments the rounded corner carries, that a count naming an arc the body does not hold claims nothing, and that a rounded box resolves its corner count against the fillet radius. |
-| Node appearance authoring | `Tests/RupaCoreTests/SceneNodeAppearanceTests.swift` proves that an appearance edit on a node holding no material creates one, assigns it, and leaves the document default alone; that the created material keeps the neutral values of the three components the edit does not name; that a second node's edit does not reuse the first node's material name; that a value outside the unit interval is refused with the library and the node unchanged; and that a generated pattern-array output refuses the edit. |
+| Node appearance authoring | `Tests/RupaCoreTests/SceneNodeAppearanceTests.swift` proves that an appearance edit on a node holding no material creates one, assigns it, and leaves the document default alone; that the created material keeps the values of the three components the edit does not name, taken from the document default when the document holds one and from the neutral appearance when it does not; that `sceneNodeAppearance(id:)` resolves the node's material, then the document default, then the neutral appearance; that a second node's edit does not reuse the first node's material name; that a value outside the unit interval is refused with the library and the node unchanged; and that a generated pattern-array output refuses the edit while `sceneNodeAppearance(id:)` still answers for it. |
 
 CADAPI-C must additionally prove:
 

@@ -63,7 +63,7 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
         let controller = NSHostingController(
             rootView: RealityViewportView(
                 viewport: viewport, viewportRevision: 1, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:], layout: layout,
+                shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
                 interaction: interaction, sectionPlane: nil,
                 retainedSide: .front, sectionTolerance: 0,
                 onUpdateResult: { reportedError = $0 }
@@ -239,7 +239,7 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
                 viewportSize: size, bottomReservedHeight: 96).fittingInsets)
         controller.rootView = RealityViewportView(
             viewport: viewport, viewportRevision: 2, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: changedLayout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: changedLayout,
             interaction: interaction, sectionPlane: nil,
             retainedSide: .front, sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }
@@ -311,7 +311,7 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
     let controller = NSHostingController(
         rootView: RealityViewportView(
             viewport: viewport, viewportRevision: 1, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
             interaction: interaction, sectionPlane: nil,
             retainedSide: .front, sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }

@@ -606,7 +606,7 @@ struct RealityViewportRegionDifferentialTests {
                 viewportRevision: Self.revision,
                 displayMode: .solid,
                 shading: .init(style: .flat, isBackfaceCullingEnabled: culls),
-                materialColors: [:],
+                occurrenceMaterials: [:],
                 layout: layout,
                 interaction: .init(
                     sceneNodeIDByOccurrenceID: [:],

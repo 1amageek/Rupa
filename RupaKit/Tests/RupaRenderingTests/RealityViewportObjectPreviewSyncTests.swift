@@ -44,7 +44,7 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
     let size = CGSize(width: 512, height: 384)
     var reported: MeshSourcePresentationRenderError?
     let view = RealityViewportView(viewport: viewport, viewportRevision: 1, displayMode: .solid,
-        shading: .init(style: .flat), materialColors: [:],
+        shading: .init(style: .flat), occurrenceMaterials: [:],
         layout: .init(modelBounds: CGRect(x: -2, y: -2, width: 4, height: 4), size: size,
                       camera: .init(projection: perspective ? .standardPerspective : .parallel),
                       basis: .axisFront(.z), verticalBounds: -2...2),

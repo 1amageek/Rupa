@@ -26,7 +26,7 @@ The component owns:
 - native `Entity` hierarchy, camera components, material assignment, and root
   replacement;
 - consumption, validation, and atomic application of one immutable
-  occurrence-material-color map supplied by the Rendering owner;
+  occurrence-appearance map supplied by the Rendering owner;
 - RealityKit `project` sampling, camera-local ray composition, and native scene
   raycasts from the mounted camera content;
 - lookup from native entity/triangle results to the immutable frame's stable
@@ -57,7 +57,7 @@ owners.
 ```mermaid
 flowchart LR
     Frame["Preparation identity + checked-Sendable inputs"] --> Build["One bounded resource/entity worker"]
-    Colors["Immutable occurrence material colors"] --> Appearance["Validated appearance value"]
+    Colors["Immutable occurrence appearances"] --> Appearance["Validated appearance value"]
     Build --> Root["One Entity scene root"]
     Camera["Native ortho/perspective component"] --> Root
     Root --> Clip["ClippingComponent root"]
@@ -196,12 +196,13 @@ absent frame: the visible failure for that identity is owned by the parent
 cache, not by the mount.
 
 The parent Rendering owner supplies one immutable
-`[SceneOccurrenceID: ColorRGBA]` value containing material values resolved from
-exactly the provided visible `presentationScene.items`. The
-native host receives this value directly; no escaping closure crosses the
-SwiftUI/native boundary. It retains the value using Swift copy-on-write and
-includes it in appearance identity, so changing a material color with unchanged
-shading, selection, and section state cannot hit the old appearance cache.
+`[SceneOccurrenceID: Material]` value containing the appearance each visible
+occurrence carries, resolved by Core from exactly the provided visible
+`presentationScene.items`. The native host receives this value directly; no
+escaping closure crosses the SwiftUI/native boundary. It retains the value using Swift copy-on-write and
+includes it in appearance identity, so changing any component a material
+authors with unchanged shading, selection, and section state cannot hit the old
+appearance cache.
 
 `RealityViewportFrameDescriptor` is design notation, not a required public API,
 protocol, or factory. Atomic production preparation uses two internal values:
@@ -865,13 +866,32 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
    face-order/range regression is rerun when the supported OS or RealityKit SDK
    changes. No direct Metal pipeline, drawable, encoder, or readback is
    permitted.
-   Before an appearance cache hit can return, the immutable material-color value
-   participates in appearance equality. A changed value is validated in full
-   before any Entity material, line material, lighting, or section state is
-   mutated; a non-finite or out-of-range supplied color is a visible typed
+   Before an appearance cache hit can return, the immutable occurrence-appearance
+   value participates in appearance equality. A changed value is validated in
+   full before any Entity material, line material, lighting, or section state is
+   mutated; a non-finite or out-of-range supplied component is a visible typed
    failure and preserves the previous complete appearance even when selection
    or another shading choice would override that occurrence's displayed color.
-   Valid missing entries use the existing native material policy's default.
+   Each entry is then combined with the shading policy and that occurrence's
+   interaction state into one `ViewportSurface`, which is what the native
+   material builder consumes: the base color the policy and any highlight
+   decide, plus the opacity, metallic, and roughness the document authored. An
+   opacity below one selects native transparent blending. The built-in lit
+   material takes all four. The built-in unlit material and the two custom
+   programs expose no metallic or roughness parameter and own their own shading
+   response, so they take base color and opacity alone. A custom material is
+   blended by the blend mode its program was compiled with, not by what is
+   assigned to the material value, so each custom surface shader is compiled
+   twice, once opaque and once alpha-blended, and the resolved opacity selects
+   which of the two the material is built from. Compiling both is what lets a
+   body the document left opaque keep the native opaque pass while a body the
+   document made translucent still blends. A custom material does not read back
+   the opacity it was assigned, so the evidence that a translucent body blends
+   is the program the material was built from together with a rendered pixel,
+   never a material value read back.
+   A missing entry is valid and is not a failure; what such an occurrence is
+   drawn with is the parent Rendering design's judgment, not a second policy
+   restated here.
    Camera-only updates reuse the retained copy-on-write input and do not resolve
    CAD metadata, traverse the render plan or scene items, or rebuild native
    geometry.
@@ -1203,7 +1223,7 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
     | geometry root enabled | `geometryRoot.isEnabled` |
 
     The `Appearance` value itself is not a key member, and neither are its
-    selection, preview, hover or material-colour fields. A selection drag
+    selection, preview, hover or occurrence-appearance fields. A selection drag
     republishes a new preview set on every pointer move, and none of those
     fields change a pixel this raster reads, because `retains` reads only the
     shading and display mode out of `Appearance`. `clipper.isEnabled` is not a
@@ -1336,7 +1356,10 @@ The host owns the native scene for the canvas lifetime and the candidate and
 current root for one mount; withdrawing a frame detaches its root and leaves
 the scene mounted. The preparation
 request owns immutable source/overlay values until completion; the host owns
-native resources. The camera
+native resources. The material owner generates its four custom programs once,
+asynchronously, before a mount publishes, and owns them for the lifetime of
+that mounted viewport; no program is compiled while resolving a surface,
+because resolving a surface cannot suspend. The camera
 session remains owned by `ViewportControlSession`, not by RealityKit entities.
 The current root is display- and pick-eligible only while it matches the
 authoritative mounted frame tuple; a retained mismatched root is detached,

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCore
 import RupaCoreTypes
 import SwiftCAD
 
@@ -49,7 +50,7 @@ public struct ViewportShading: Equatable, Hashable, Sendable {
         style: .studio,
         studioRotationDegrees: 0,
         isSpecularEnabled: true,
-        solidColor: .single(ColorRGBA(r: 0.64, g: 0.69, b: 0.73, a: 1)),
+        solidColor: .material,
         background: .theme,
         wireColor: .theme,
         isBackfaceCullingEnabled: false
@@ -59,7 +60,7 @@ public struct ViewportShading: Equatable, Hashable, Sendable {
         style: Style = .studio,
         studioRotationDegrees: Double = 0,
         isSpecularEnabled: Bool = true,
-        solidColor: SolidColor = .single(ColorRGBA(r: 0.64, g: 0.69, b: 0.73, a: 1)),
+        solidColor: SolidColor = .material,
         background: Background = .theme,
         wireColor: WireColor = .theme,
         isBackfaceCullingEnabled: Bool = false
@@ -107,7 +108,7 @@ public struct ViewportShading: Equatable, Hashable, Sendable {
         case .single(let color):
             return color.simdFloat
         case .material:
-            return (materialColor ?? ColorRGBA(r: 0.64, g: 0.69, b: 0.73, a: 1)).simdFloat
+            return (materialColor ?? Material.neutralBaseColor).simdFloat
         case .random:
             return Self.stableRandomColor(seed: occurrenceID.rawValue)
         }

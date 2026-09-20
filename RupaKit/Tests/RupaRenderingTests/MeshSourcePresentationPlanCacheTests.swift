@@ -260,7 +260,7 @@ func nativeMeshElementsAcceptOutsideSilhouetteTolerance(perspective: Bool) async
     var failure: MeshSourcePresentationRenderError?
     let controller = NSHostingController(rootView: RealityViewportView(
         viewport: viewport, viewportRevision: 1, displayMode: .solid,
-        shading: .init(style: .flat), materialColors: [:], layout: layout,
+        shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
         interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
         sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
         onUpdateResult: { failure = $0 }
@@ -377,7 +377,7 @@ func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
     let controller = NSHostingController(
         rootView: RealityViewportView(
             viewport: viewport, viewportRevision: 1, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
             interaction: interaction, sectionPlane: nil, retainedSide: .front,
             sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }
@@ -545,7 +545,7 @@ func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async thr
     let emptyController = NSHostingController(
         rootView: RealityViewportView(
             viewport: empty, viewportRevision: 5, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: emptyLayout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: emptyLayout,
             interaction: emptyInteraction, sectionPlane: nil, retainedSide: .front,
             sectionTolerance: 0,
             onUpdateResult: { emptyMountError = $0 }
@@ -701,8 +701,14 @@ func nativeMaterialColorChangesWithoutGeometryReplacement() async throws {
         sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil
     )
     func apply(_ color: ColorRGBA?) throws {
+        var occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material] = [:]
+        if let color {
+            var material = SwiftCAD.Material.neutral(named: "Occurrence")
+            material.baseColor = color
+            occurrenceMaterials[scene.items[0].id] = material
+        }
         try viewport.applyAppearance(displayMode: .solid, shading: .init(style: .flat, solidColor: .material),
-                                     materialColors: color.map { [scene.items[0].id: $0] } ?? [:], interaction: interaction,
+                                     occurrenceMaterials: occurrenceMaterials, interaction: interaction,
                                      sectionPlane: nil, retainedSide: .front, sectionTolerance: 0)
     }
     func renderedPixel() async throws -> [UInt8] {
@@ -781,7 +787,7 @@ func nativeMountedViewportProjectsAndPicksAcrossCameraChanges() async throws {
     func view(_ layout: ViewportLayout, revision: UInt64) -> some View {
         RealityViewportView(
             viewport: viewport, viewportRevision: revision, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:],
+            shading: .init(style: .flat), occurrenceMaterials: [:],
             layout: layout, interaction: interaction, sectionPlane: nil,
             retainedSide: .front, sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }
@@ -1036,7 +1042,7 @@ func nativeSurfaceHitChoosesNearestOverlappingSurfaceAndRestoresWorldOrigin(
     let controller = NSHostingController(
         rootView: RealityViewportView(
             viewport: viewport, viewportRevision: 1, displayMode: .solid,
-            shading: .init(style: .flat), materialColors: [:], layout: layout,
+            shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
             interaction: interaction, sectionPlane: nil, retainedSide: .front,
             sectionTolerance: 0,
             onUpdateResult: { reportedError = $0 }
@@ -1590,7 +1596,7 @@ func nativePresentationBackfaceVisibilityMatchesCollision() async throws {
         try viewport.applyAppearance(
             displayMode: .solid,
             shading: ViewportShading(style: .flat, isBackfaceCullingEnabled: culling),
-            materialColors: [:],
+            occurrenceMaterials: [:],
             interaction: interaction,
             sectionPlane: nil,
             retainedSide: .front,

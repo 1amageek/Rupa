@@ -12,8 +12,10 @@ extension DesignDocument {
     /// Creating and assigning cannot be two commands sharing one transaction,
     /// because a transaction fixes its commands before the first one runs and
     /// nothing outside Core can name an identifier Core has yet to mint. The
-    /// material this creates starts from `Material.neutral` and does not become
-    /// the document default. See `RupaCore/DESIGN.md`.
+    /// material this creates is a copy of the appearance the node already
+    /// carries, so authoring one component leaves the other three where the
+    /// canvas already had them, and it does not become the document default.
+    /// See `RupaCore/DESIGN.md`.
     @discardableResult
     public mutating func setSceneNodeAppearance(
         id: SceneNodeID,
@@ -50,7 +52,10 @@ extension DesignDocument {
         }
 
         let material = try Self.material(
-            existing ?? Material.neutral(named: uniqueMaterialName(basedOn: node.name)),
+            existing ?? Self.copy(
+                appearance(of: node),
+                named: uniqueMaterialName(basedOn: node.name)
+            ),
             applying: edit
         )
         productMetadata.materialLibrary.materials[material.id] = material
@@ -61,31 +66,63 @@ extension DesignDocument {
         return material.id
     }
 
+    /// The appearance the node `id` names carries, or `nil` when the document
+    /// holds no such node.
+    ///
+    /// One resolution answers for the canvas, the Inspector, and the seed of a
+    /// first edit: the material the node names, the document default when the
+    /// node names none, and the neutral appearance when the document names none
+    /// either. A node the document holds always carries one of those, so
+    /// nothing about the chain can make this answer with nothing.
+    /// See `RupaCore/DESIGN.md`.
+    public func sceneNodeAppearance(id: SceneNodeID) -> Material? {
+        guard let node = productMetadata.sceneNodes[id] else { return nil }
+        return appearance(of: node)
+    }
+
     /// The appearance a person can author for `id`, or `nil` when none can be.
     ///
-    /// A node naming a material answers with that material. A node naming none
-    /// answers with the neutral appearance, which is what the canvas already
-    /// draws and what a first edit starts from, so the surface a person edits is
-    /// the surface they already see. A generated pattern-array output answers
-    /// with nothing, because the pattern source owns its appearance and
-    /// `setSceneNodeAppearance` refuses the edit: a caller offering a control
-    /// only where this answers can offer no control that fails.
-    /// See `RupaCore/DESIGN.md`.
+    /// This is `sceneNodeAppearance(id:)` narrowed to what an edit may reach, so
+    /// the values a person sees are the values the canvas already draws. A
+    /// generated pattern-array output answers with nothing, because the pattern
+    /// source owns its appearance and `setSceneNodeAppearance` refuses the edit:
+    /// a caller offering a control only where this answers can offer no control
+    /// that fails. See `RupaCore/DESIGN.md`.
     public func authorableSceneNodeAppearance(id: SceneNodeID) -> Material? {
-        guard let node = productMetadata.sceneNodes[id] else { return nil }
         guard PatternArrayOwnershipResolver().sourceID(
             containingGeneratedOutputSceneNode: id,
             in: productMetadata
         ) == nil else {
             return nil
         }
-        guard let materialID = node.materialID else {
-            return Material.neutral(named: node.name)
-        }
-        return productMetadata.materialLibrary.materials[materialID]
+        return sceneNodeAppearance(id: id)
     }
 
     // MARK: - Support
+
+    /// The appearance `node` carries, resolved once for every reader.
+    private func appearance(of node: SceneNode) -> Material {
+        let library = productMetadata.materialLibrary
+        if let assignedID = node.materialID, let assigned = library.materials[assignedID] {
+            return assigned
+        }
+        if let defaultID = library.defaultMaterialID, let fallback = library.materials[defaultID] {
+            return fallback
+        }
+        return Material.neutral(named: node.name)
+    }
+
+    /// `material` under a new identity and `name`, carrying the same four
+    /// components.
+    private static func copy(_ material: Material, named name: String) -> Material {
+        Material(
+            name: name,
+            baseColor: material.baseColor,
+            metallic: material.metallic,
+            roughness: material.roughness,
+            opacity: material.opacity
+        )
+    }
 
     /// The material `edit` produces, validated before any document holds it.
     private static func material(

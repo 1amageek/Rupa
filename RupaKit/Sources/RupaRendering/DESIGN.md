@@ -115,7 +115,7 @@ build geometry, create a second camera, or retain a second presentation scene.
 |---|---|---|---|---|
 | [RupaKit package](../../DESIGN.md) | parent | Package dependency and authority direction | Places derived RealityKit presentation above source/evaluation. | RealityKit IDs never become Product/CAD IDs. |
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | `UniversalViewportScene`, `snapshotID`, world transforms, bounds, and provenance | Supplies immutable engine-neutral scene values. | Rendering cannot re-evaluate or retessellate source. |
-| [RupaCore](../RupaCore/DESIGN.md) | depends on | Validated source/evaluation and stable identity contracts | Supplies source-derived material and navigation metadata. | Presentation material resolution never mutates the document. |
+| [RupaCore](../RupaCore/DESIGN.md) | depends on | Validated source/evaluation, stable identity contracts, and `DesignDocument.sceneNodeAppearance(id:)` | Supplies the appearance each node carries, plus source-derived navigation metadata. | Presentation resolves no document default of its own and never mutates the document. |
 | [RealityViewport](RealityViewport/DESIGN.md) | child | Native scene/resource/camera/material/input adapter | Owns RealityKit objects and the matching scene-root lifecycle. | No custom render pipeline or spatial Canvas fallback. |
 | [ViewportMeasurement](ViewportMeasurement/DESIGN.md) | child | Transient world endpoints, distance, ruler descriptors | Produces non-authoritative spatial measurement values. | It does not own RealityKit entity lifetime. |
 | [RupaResponsivenessBaseline](../RupaResponsivenessBaseline/DESIGN.md) | coordinates with | Versioned fixture and pinned MainActor/memory acceptance policy | Owns the threshold and environment against which native preparation is measured. | A new native interval must be measured in the signed App; an offscreen duration does not satisfy this contract. |
@@ -2102,25 +2102,47 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    root; custom material discard and pre-clipped replacement Mesh are not
    alternatives. The reason and failure mode for each remaining custom path are
    recorded by the component design and tests.
-10. `Viewport` resolves one immutable `[SceneOccurrenceID: ColorRGBA]` in its
-    initializer from the supplied document material library,
-    `presentationSceneNodeIDByOccurrenceID`, and exactly the provided
-    evaluation-owned visible
-    `presentationScene.items`. The `RealityViewport` child consumes and
+10. `Viewport` resolves one immutable `[SceneOccurrenceID: Material]` in its
+    initializer from the supplied document, `presentationSceneNodeIDByOccurrenceID`,
+    and exactly the provided evaluation-owned visible `presentationScene.items`.
+    Every entry is `DesignDocument.sceneNodeAppearance(id:)`, so the chain from a
+    node to the material it names, to the document default, to the neutral
+    appearance is resolved once by Core and never re-derived here. An occurrence
+    naming no scene node carries no entry, and the shading policy alone decides
+    what it is drawn with. The `RealityViewport` child consumes and
     validates this value; no opaque material callback, document lookup, or scene
     traversal runs from `RealityView` body/update or a camera-only revision. A
     material-map change is part of appearance identity even when shading,
-    selection, and section state are unchanged. Missing entries use the existing
-    default or deterministic stable-occurrence color policy; invalid entries
-    fail visibly before partial native mutation. Wire color, background,
+    selection, and section state are unchanged. Invalid entries fail visibly
+    before partial native mutation. Wire color, background,
     culling, specular, and section state remain ephemeral session settings.
     They never edit source, evaluation, history, persistence, or provenance.
     The resolved value is the authored surface, not a color alone: base color,
     opacity, metallic, and roughness all come from the document material the
-    node names. The native material builder consumes every one of them, so a
+    node carries. `RealityViewport` combines each entry with the shading policy
+    and the interaction state into one `ViewportSurface`, which is what the
+    native material builder consumes. Selection and hover replace the color that
+    value carries and leave the three components the document authored, because
+    a highlight says which body is selected and not what the body is made of.
+    The lit studio preset consumes every one of them, so a
     document that authors a metal reads as metal on the canvas and a shading
-    preset changes only what the preset owns. Specular remains the session
-    shading setting; it biases nothing the document authored.
+    preset changes only what the preset owns. An opacity below one selects
+    native transparent blending rather than a discard shader, on the built-in
+    and custom materials alike; what a custom material has to be compiled with
+    to honor that is `RealityViewport/DESIGN.md`'s judgment, not restated
+    here. The flat, MatCap, and signed-normal presets own
+    their own shading response, and the native unlit and custom materials
+    backing them expose no metallic or roughness parameter, so those three take
+    base color and opacity alone. Specular remains the session
+    shading setting; it biases nothing the document authored, so roughness reads
+    as the document authored it under every preset that reads roughness at all.
+    `ViewportShading.SolidColor` decides whether the authored base color reaches
+    the surface at all: `.material` draws it, `.single` overrides every
+    occurrence with one session color, and `.random` draws the deterministic
+    stable-occurrence color. `.material` is the default, because a document that
+    authors an appearance must read as authored before a person changes a
+    session setting. A `.material` occurrence carrying no entry falls back to
+    `Material.neutralBaseColor`, read from Core rather than restated here.
 11. World geometry, grid/axes, curve/sketch paths, selection highlights,
     measurement/ruler lines and labels, section/analysis, snap/reference
     guides, pattern/drag previews, construction planes, and edit/feature
@@ -2439,7 +2461,7 @@ and visible compositing remain manual acceptance, not a hidden-host guarantee.
 |---|---|
 | Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible and continuously authoritative for CAD hit and handle lookup at the requested identity, and that a changed source or snapshot and a typed failure recorded for that identity each withdraw display and authority together. A press issued with no gap after a native axis commit, which lands inside the overlay-only rebuild that commit starts, is proved to reach the native route and commit again rather than being refused. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |
 | Native camera | macOS 27-or-later mounted tests retain the raw native inverse-query counterexamples, then exercise documented native orthographic/symmetric-perspective lens forms, centered and off-center fit/pan framing, native render/project parity, child-owned composed-ray/project round trips, fit, orbit, pan, zoom, saved views, invalid/stale explicit-miss paths, and no geometry rebuild on camera changes. Lens skew or an unsupported projective component is rejected. |
-| Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
+| Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, the document-authored metallic, roughness, and opacity reaching the native surface under every shading preset, transparent blending selected by an opacity below one and proven on the GPU by a translucent render landing below an opaque one, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. The selected CAD face's `exactWorldPoint` is proved behaviorally on the press and drag routes: in a mounted CAD presentation a pixel where the selected face is occluded by the same body's nearer face yields no `modelWorldPoint`, and a pixel that face itself draws yields the surface point the frame drew. Hover consumes the same private admission helper as its only exact-point supplier, so source review covers hover rather than a separate mounted case. |
 | Spatial overlays | Native line/text/path entities cover grid, axes, curves, sketch, selection, measurement, rulers, preview, snap, construction plane, and gizmos under the same camera/frame identity; empty/sketch-only fixtures mount the native camera and required overlays without a synthetic project/evaluation identity. Body transform affordance fixtures vary the body span across orders of magnitude and prove the emitted ring radius, centre-scale marker, translation cone, and arrow shaft each carry the same point length, that the ordering and separation rule over those lengths holds, that a ring still samples a foreshortened arc rather than a camera-plane circle, and that the value-encoding affordances keep their measured length. A sketch occurrence the common placement route can address draws and commits through that same body transform gizmo; one it cannot address draws nothing, exactly as a body occurrence with no scene-node address does. |

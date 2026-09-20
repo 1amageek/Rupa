@@ -159,7 +159,7 @@ struct RealityViewportSpatialCollisionTests {
             var reportedError: MeshSourcePresentationRenderError?
             func view(_ revision: UInt64) -> some View {
                 RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
-                    shading: .init(style: .flat), materialColors: [:],
+                    shading: .init(style: .flat), occurrenceMaterials: [:],
                     layout: .init(modelBounds: CGRect(x: -0.006, y: -0.006, width: 0.012, height: 0.012),
                         size: size, camera: .init(zoom: revision == 1 ? 0.6 : 1,
                             pan: revision == 3 ? CGSize(width: 19, height: -11) : .zero,
@@ -287,7 +287,7 @@ struct RealityViewportSpatialCollisionTests {
         var reportedError: MeshSourcePresentationRenderError?
         func view(zoom: CGFloat, revision: UInt64) -> some View {
             RealityViewportView(viewport: viewport, viewportRevision: revision, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:],
+                shading: .init(style: .flat), occurrenceMaterials: [:],
                 layout: .init(modelBounds: CGRect(x: -0.01, y: -0.01, width: 0.02, height: 0.02), size: size,
                     camera: .init(zoom: zoom, pan: revision == 2 ? CGSize(width: 23, height: -17) : .zero,
                         projection: perspective ? .standardPerspective : .parallel),

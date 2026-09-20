@@ -152,7 +152,7 @@ public struct Viewport: View {
     private let sourceIdentity: ViewportSourceIdentity
     private let presentationScene: UniversalViewportScene?
     private let presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
-    private let materialColors: [SceneOccurrenceID: ColorRGBA]
+    private let occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material]
     private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
     private let evaluationCache: EvaluatedDocumentCache?
@@ -464,20 +464,17 @@ public struct Viewport: View {
         self.sourceIdentity = sourceIdentity
         self.presentationScene = presentationScene
         self.presentationSceneNodeIDByOccurrenceID = presentationSceneNodeIDByOccurrenceID
-        // Resolve document-owned colors once per supplied View value, not from
-        // the camera-driven body or the native scene's update callback.
-        var materialColors: [SceneOccurrenceID: ColorRGBA] = [:]
+        // Resolve the document-owned appearance once per supplied View value,
+        // not from the camera-driven body or the native scene's update callback.
+        var occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material] = [:]
         if let presentationScene {
-            let library = document.productMetadata.materialLibrary
             for item in presentationScene.items {
                 guard let nodeID = presentationSceneNodeIDByOccurrenceID[item.id],
-                      let node = document.productMetadata.sceneNodes[nodeID],
-                      let materialID = node.materialID ?? library.defaultMaterialID,
-                      let color = library.materials[materialID]?.baseColor else { continue }
-                materialColors[item.id] = color
+                      let material = document.sceneNodeAppearance(id: nodeID) else { continue }
+                occurrenceMaterials[item.id] = material
             }
         }
-        self.materialColors = materialColors
+        self.occurrenceMaterials = occurrenceMaterials
         self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
         self.evaluationCache = evaluationCache
@@ -659,7 +656,7 @@ public struct Viewport: View {
                         viewportRevision: activeControlSession.revision,
                         displayMode: displayMode,
                         shading: shading,
-                        materialColors: materialColors,
+                        occurrenceMaterials: occurrenceMaterials,
                         layout: sceneContext.layout,
                         interaction: presentationInteractionStateResolver,
                         sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,

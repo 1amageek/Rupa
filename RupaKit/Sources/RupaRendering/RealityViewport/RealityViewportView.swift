@@ -16,7 +16,7 @@ struct RealityViewportView: View {
     let viewportRevision: UInt64
     let displayMode: ViewportDisplayMode
     let shading: ViewportShading
-    let materialColors: [SceneOccurrenceID: ColorRGBA]
+    let occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material]
     let layout: ViewportLayout
     let interaction: MeshSourcePresentationInteractionStateResolver
     let sectionPlane: SectionAnalysisResult.Plane?
@@ -82,7 +82,7 @@ struct RealityViewportView: View {
             }
             try viewport.applyCamera(layout: layout, displayScale: displayScale, revision: viewportRevision)
             try viewport.applyAppearance(displayMode: displayMode, shading: shading,
-                                         materialColors: materialColors, interaction: interaction,
+                                         occurrenceMaterials: occurrenceMaterials, interaction: interaction,
                                          sectionPlane: sectionPlane, retainedSide: retainedSide, sectionTolerance: sectionTolerance)
             mount.schedule(in: content, viewport: viewport,
                            objectPreviews: objectPreviewTransforms, previewSnapshotID: objectPreviewSnapshotID,

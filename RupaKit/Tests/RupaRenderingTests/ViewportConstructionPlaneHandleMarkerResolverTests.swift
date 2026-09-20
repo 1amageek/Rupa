@@ -141,7 +141,7 @@ struct ViewportConstructionPlaneHandleMarkerResolverTests {
         let controller = NSHostingController(
             rootView: RealityViewportView(
                 viewport: viewport, viewportRevision: 1, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:], layout: layout,
+                shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
                 interaction: .init(
                     sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [],
                     previewSceneNodeIDs: [], hoveredSceneNodeID: nil

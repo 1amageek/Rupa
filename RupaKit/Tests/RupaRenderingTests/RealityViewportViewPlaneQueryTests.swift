@@ -59,7 +59,7 @@ func nativeViewPlaneQueryAnswersTheFacingPlaneThroughItsAnchor() async throws {
         let controller = NSHostingController(
             rootView: RealityViewportView(
                 viewport: viewport, viewportRevision: 1, displayMode: .solid,
-                shading: .init(style: .flat), materialColors: [:], layout: layout,
+                shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
                 interaction: interaction, sectionPlane: nil,
                 retainedSide: .front, sectionTolerance: 0,
                 onUpdateResult: { reportedError = $0 }
