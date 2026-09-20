@@ -108,5 +108,12 @@ public struct ObjectPropertySet: Codable, Hashable, Sendable {
                 "Object property \(id.rawValue) is outside its allowed range."
             )
         }
+        guard let step = range.step, step > 0 else { return }
+        let stepsFromLowerBound = (numericValue - range.lowerBound) / step
+        guard abs(stepsFromLowerBound - stepsFromLowerBound.rounded()) <= 1.0e-9 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Object property \(id.rawValue) is not one of the values its range offers."
+            )
+        }
     }
 }

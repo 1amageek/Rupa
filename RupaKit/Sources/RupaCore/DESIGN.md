@@ -645,9 +645,9 @@ Invariants:
 
 Segment counts are display resolution, not exact geometry. The kernel keeps
 circles and arcs as rational arcs and derives a segment count from tolerance, so
-`Sides`, `Corner Sides`, `Bevel Sides`, and `Arc Segments` set the per-feature
-angular tolerance to `span / count`, which is the count the tessellation sampler
-then produces.
+`Sides`, `Corner Sides`, `Bevel Sides`, and `Arc Segments` reach the canvas as
+the per-feature tolerances `Display tessellation resolution` below resolves,
+which is the only place that mapping is defined.
 
 A count that would subdivide a planar face or a straight generatrix declares no
 property. The document is an exact B-rep, so splitting a plane into more
@@ -663,6 +663,85 @@ declared property claims, and `DocumentPackageStore` runs it before validation.
 Validation therefore still rejects an undeclared property as invalid input,
 while an older document opens with the stale value removed rather than being
 refused.
+
+### Display tessellation resolution
+
+`DesignDocument.displayTessellationOptions` is the single owner of the mapping
+from declared subdivision counts to the `TessellationOptions` the evaluator
+receives. It keys `featureOverrides` by the body object's `sourceFeatureID`,
+because the kernel resolves one override per body: a body evaluates against one
+`TessellationOptions`, so a count keyed to anything that is not a body reaches
+no mesh.
+
+Each object's counts govern that object's own display. A body object reads the
+counts its own type schema declares. A body the source router rewrote into a
+schema-less solid keeps the `profile.arc.segments` value that rewrite preserved,
+and reads that instead, because the rewrite dropped the schema but not the
+resolution the profile was drawn at.
+
+A count claims the arc its binding divides, and the feature graph is the
+authority on whether that arc exists:
+
+| Binding | Arc it divides | Span | Radius |
+|---|---|---|---|
+| `segments.side` | The circular profile the body is swept from | `2 * .pi` | The profile circle radius, when the profile is a single circle |
+| `corner.segments` | One rounded corner of the all-edge round | `.pi / 2` | The all-edge fillet radius |
+| `bevel.segments` | One rounded corner of the all-edge round | `.pi / 2` | The all-edge fillet radius |
+
+When the graph holds no such arc — a rounding radius of zero, or a body that is
+not swept from a profile — the count claims nothing and the body keeps the
+document's own tolerances. That is truthful absence rather than a fallback:
+there is no arc for the count to divide, so no resolution it could name would
+move a triangle.
+
+A claim resolves to the tolerances the kernel's samplers read:
+
+```
+angularTolerance = span / (Double(count) - 0.5)
+linearTolerance  = radius * (1 - cos(span / (2 * Double(count))))
+```
+
+The angular tolerance is what the arc sampler divides the span by, and the half
+step keeps its `ceil` from returning `count + 1` for a span that lands a
+floating-point step above an exact multiple. The linear tolerance is the chord
+height of one segment. Cylindrical and conical sampling read only the angular
+tolerance, but spherical radial sampling takes the finer of the angular
+tolerance and the chord angle the linear tolerance implies, so a claim that left
+the linear tolerance at the document value would subdivide the spherical patch
+of a rounded corner past the count that named it. A claim whose radius the graph
+does not resolve names only an angular tolerance, which is radius independent.
+
+When more than one claim lands on one body, the finest tolerance wins. The
+counts divide different arcs of the same body, and a coarse claim on one arc
+does not take resolution away from a finer claim on another. An override
+inherits the document's `maxEdgeLength` unchanged, because a count names an
+angular resolution and says nothing about edge length. A body no claim reaches
+inherits the document's tessellation options whole.
+
+The kernel charts circular geometry one quadrant at a time and samples every
+chart on its own from the body's single angular tolerance, so an arc is drawn at
+a multiple of the quadrants it covers: a full turn is four lateral charts, and
+one rounded corner is one. A chart sampled at a single segment is a chord that
+leaves it open, so the sampler never returns fewer than two segments for a chart.
+`DisplayTessellationArc` owns both facts, and the schema declares the counts they
+leave:
+
+| Arc | Quadrant charts | Lowest count | Step |
+|---|---|---|---|
+| Swept profile | 4 | 8 | 4 |
+| All-edge round | 1 | 2 | 1 |
+
+The Inspector therefore offers the counts the canvas draws and nothing between
+them, rather than offering a count the sampler would quietly round up. A document
+carrying a count the canvas cannot resolve is refused by
+`ObjectPropertySet.validate(against:)`, which checks a stored value against both
+the bounds and the step of its declared range, instead of being redrawn at a
+count it does not name.
+
+Sketch curve resolution is not part of this contract. The kernel samples sketch
+curves through `SketchCurveExtractor`, which takes no `TessellationOptions`, so
+a count a sketch object declares reaches the canvas once the sketch is swept
+into a body and that body's own count governs it.
 
 ### Material library authoring contract
 
@@ -780,6 +859,7 @@ T09-B owns the following behavioral proof:
 | Evaluated primitives | Box, cylinder, cone, sphere, and torus all produce evaluated-body solids with exact B-rep volume and Mesh-only area/bounds through one cached evaluation path; unavailable outputs remain diagnostics. |
 | Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green; a matching caller evaluation context resolves object candidates on a CAD document without consulting the exact evaluator, and the same resolve without that context still consults it. |
 | Body display face runs | `Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift` proves an evaluated box snapshot records one run per prepared face, that the runs carry the same prepared identities as `Topology.faces`, and that they partition every drawn triangle contiguously from zero to the snapshot's triangle count. |
+| Display tessellation resolution | `Tests/RupaCoreTests/DisplayTessellationTests.swift` proves a declared side count is the number of turns the evaluated mesh samples the profile at, that a cylinder is drawn at its declared count instead of the document tolerance, that every count the schema offers from the lowest one up is the count the mesh draws, that a count between them is refused rather than redrawn, that a declared corner count is the number of segments the rounded corner carries, that a count naming an arc the body does not hold claims nothing, and that a rounded box resolves its corner count against the fillet radius. |
 
 CADAPI-C must additionally prove:
 

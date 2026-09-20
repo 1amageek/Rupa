@@ -3,26 +3,6 @@ import Foundation
 import RupaCoreTypes
 
 extension DesignDocument {
-    package func displayTessellationOptions() throws -> TessellationOptions {
-        var options = modelingSettings.tessellationOptions
-        for node in productMetadata.sceneNodes.values {
-            guard let object = node.object, object.typeID == .cube,
-                  let id = object.sourceFeatureID else { continue }
-            let radius = try boxCornerRadius(id)
-            guard radius > 0 else { continue }
-            guard let property = ObjectTypeCatalog.definition(for: .cube)?.property(for: .cornerSideSegments),
-                  case .integer(let sides) = object.properties.value(for: property.id, default: property.defaultValue),
-                  sides > 0 else {
-                throw EditorError(code: .commandInvalid, message: "Corner Sides must be positive.")
-            }
-            let angle = Double.pi / (2 * Double(sides))
-            let chord = radius * (1 - cos(angle / 2))
-            options.featureOverrides[id] = .init(linearTolerance: chord, angularTolerance: angle)
-        }
-        try options.validate()
-        return options
-    }
-
     /// Resolves only the all-edge primitive wrapper, never an arbitrary fillet.
     package func boxExtrusionFeatureID(_ featureID: FeatureID) -> FeatureID {
         if case .fillet(let fillet) = cadDocument.designGraph.nodes[featureID]?.operation,

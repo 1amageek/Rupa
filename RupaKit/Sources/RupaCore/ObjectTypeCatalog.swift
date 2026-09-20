@@ -498,7 +498,27 @@ private extension ObjectPropertyDefinition {
             inspectorControl: .textFieldAndSlider,
             effect: effect,
             renderBinding: binding,
-            numericRange: NumericRange(lowerBound: 1.0, upperBound: 256.0)
+            numericRange: Self.subdivisionRange(binding: binding, effect: effect)
+        )
+    }
+
+    /// The counts an integer property offers.
+    ///
+    /// A tessellation count divides an arc, and `DisplayTessellationArc` owns which counts the
+    /// canvas resolves that arc at, so the schema offers those and nothing between them. A count
+    /// that changes the source names whole geometry instead, and every whole number is one.
+    static func subdivisionRange(
+        binding: RenderBinding?,
+        effect: Effect
+    ) -> NumericRange {
+        guard effect == .tessellation,
+              let arc = DisplayTessellationArc(dividedBy: binding) else {
+            return NumericRange(lowerBound: 1.0, upperBound: 256.0, step: 1.0)
+        }
+        return NumericRange(
+            lowerBound: Double(arc.lowestDrawableCount),
+            upperBound: 256.0,
+            step: Double(arc.drawableCountStep)
         )
     }
 
@@ -558,6 +578,10 @@ private extension ObjectPropertyDefinition {
             effect: .derived,
             renderBinding: binding,
             workspaceScaleDefault: workspaceScaleDefault,
+            numericRange: NumericRange(
+                lowerBound: 0.0,
+                upperBound: maximumAuthoringLengthMeters
+            ),
             isEditable: false
         )
     }

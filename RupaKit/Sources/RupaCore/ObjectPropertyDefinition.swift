@@ -98,10 +98,17 @@ public struct ObjectPropertyDefinition: Codable, Hashable, Identifiable, Sendabl
     public struct NumericRange: Codable, Hashable, Sendable {
         public var lowerBound: Double
         public var upperBound: Double
+        /// The distance between the values the range offers, measured from `lowerBound`.
+        ///
+        /// `nil` offers every value between the bounds. A step is declared by a property whose
+        /// consumer resolves only some of them, so that the value the Inspector offers is the value
+        /// the consumer acts on.
+        public var step: Double?
 
-        public init(lowerBound: Double, upperBound: Double) {
+        public init(lowerBound: Double, upperBound: Double, step: Double? = nil) {
             self.lowerBound = lowerBound
             self.upperBound = upperBound
+            self.step = step
         }
     }
 

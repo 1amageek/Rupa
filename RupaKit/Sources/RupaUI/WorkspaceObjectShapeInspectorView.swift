@@ -196,7 +196,9 @@ struct WorkspaceObjectShapeInspectorView: View {
             InspectorNumericInput(
                 title: property.title,
                 value: commonWorkspaceInspectorValue(numbers),
-                mapping: property.valueKind == .integer ? .integer(range: range) : .number(range: range)
+                mapping: property.valueKind == .integer
+                    ? .integer(range: range, step: property.numericRange?.step ?? 1)
+                    : .number(range: range)
             ) { value in
                 if let propertyValue = makeValue(value) {
                     onSetProperty(property, propertyValue, shapes)
