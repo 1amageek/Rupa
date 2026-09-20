@@ -7773,12 +7773,25 @@ private struct ProjectMainViewContent: View {
 
     }
 
+    /// The appearance each node in `nodes` can author.
+    ///
+    /// A node answering with nothing carries no appearance the Inspector can
+    /// edit, so it is absent here and the section shows it no control. Core owns
+    /// that answer. See `RupaCore/DESIGN.md`.
+    private func objectAppearances(_ nodes: [SceneNode]) -> [SceneNodeID: RupaCore.Material] {
+        let document = snapshot.document.document
+        return nodes.reduce(into: [:]) { result, node in
+            result[node.id] = document.authorableSceneNodeAppearance(id: node.id)
+        }
+    }
+
     private func objectTransformInspectorSection(_ nodes: [SceneNode]) -> some View {
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,
             displayUnit: snapshot.workspaceState.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
+            appearances: objectAppearances(nodes),
             onCommitProperties: { commands, name in
                 submitSource(name: name) { current in
                     try commands.compactMap { command in

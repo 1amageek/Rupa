@@ -38,6 +38,7 @@ enum PreparedAutomationSourceCommandValidation {
              .setSceneNodeMaterial,
              .moveSceneNodes,
              .setTopologyMaterialBinding,
+             .setSceneNodeAppearance,
              .setSceneNodeObjectProperty,
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,

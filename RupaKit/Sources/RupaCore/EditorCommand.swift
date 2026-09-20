@@ -64,6 +64,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         materialID: MaterialID?,
         process: TopologyMaterialBinding.Process?
     )
+    /// Applies one appearance component to the material `id` names, creating and
+    /// assigning a material when the node names none.
+    case setSceneNodeAppearance(id: SceneNodeID, edit: MaterialComponentEdit)
     case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: PropertyID, value: ObjectPropertyValue?)
     case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
@@ -496,6 +499,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setSceneNodeMaterial"
         case .setTopologyMaterialBinding:
             "setTopologyMaterialBinding"
+        case .setSceneNodeAppearance:
+            "setSceneNodeAppearance"
         case .setSceneNodeObjectProperty:
             "setSceneNodeObjectProperty"
         case .setComponentInstanceVisibility:
@@ -736,6 +741,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .transformSceneNodes,
              .setSceneNodeMaterial,
              .setTopologyMaterialBinding,
+             .setSceneNodeAppearance,
              .setSceneNodeObjectProperty,
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,

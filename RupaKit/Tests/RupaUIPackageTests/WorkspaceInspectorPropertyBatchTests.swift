@@ -22,7 +22,7 @@ struct WorkspaceInspectorPropertyBatchTests {
         _ = try await workspace.evaluate()
         var intents: [(InspectorTransformComponent, Double)] = []
         var view = WorkspaceObjectTransformInspectorView(nodes: nodes, displayUnit: .meter,
-            positionSliderMetersRange: -10...10, materialOptions: [],
+            positionSliderMetersRange: -10...10, materialOptions: [], appearances: [:],
             onCommitProperties: { _, _ in }, isBusy: false,
             onEditTransform: { intents.append(($0, $1)) })
         let edits: [(InspectorTransformComponent, Double)] = [
@@ -92,9 +92,12 @@ struct WorkspaceInspectorPropertyBatchTests {
         var view = WorkspaceObjectTransformInspectorView(nodes: nodes, displayUnit: .meter,
             positionSliderMetersRange: -10...10,
             materialOptions: [.init(id: material.id, name: material.name)],
+            appearances: nodes.reduce(into: [:]) {
+                $0[$1.id] = document.authorableSceneNodeAppearance(id: $1.id)
+            },
             onCommitProperties: { submissions.append(($0, $1)) }, isBusy: false,
             onEditTransform: { _, _ in })
-        for identifier in ["Visible", "Locked", "material"] {
+        for identifier in ["Visible", "Locked", "material", "appearance"] {
             func choose() {
                 switch identifier {
                 case "Visible":
@@ -105,7 +108,8 @@ struct WorkspaceInspectorPropertyBatchTests {
                     view.boolBinding("Locked", keyPath: \.isLocked, command: {
                         .setSceneNodeLock(id: $0, isLocked: $1)
                     }).wrappedValue = .on
-                default: view.materialBinding.wrappedValue = .material(material.id)
+                case "material": view.materialBinding.wrappedValue = .material(material.id)
+                default: view.commitAppearance(.metallic(0.5))
                 }
             }
             view.isBusy = true
@@ -125,7 +129,12 @@ struct WorkspaceInspectorPropertyBatchTests {
                 switch identifier {
                 case "Visible": #expect(!result.isVisible)
                 case "Locked": #expect(result.isLocked)
-                default: #expect(result.materialID == material.id)
+                case "material": #expect(result.materialID == material.id)
+                default:
+                    let assigned = try #require(result.materialID)
+                    let library = applied.document.document.productMetadata.materialLibrary
+                    #expect(library.materials[assigned]?.metallic == 0.5)
+                    #expect(library.defaultMaterialID == nil)
                 }
             }
             let undone = try await workspace.undo()

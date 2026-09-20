@@ -65,6 +65,7 @@ enum ProductionMainViewActionManifest {
     static let sourceMutationFiles = [
         "Sources/RupaUI/MainView.swift",
         "Sources/RupaUI/Modeling/ModelingOperationDraft.swift",
+        "Sources/RupaUI/WorkspaceObjectTransformInspectorView.swift",
         "Sources/RupaUI/Modeling/FeatureHistoryView.swift",
         "Sources/RupaUI/Outliner/OutlinerSourceCommands.swift",
         "Sources/RupaKit/GeometryExchange/ProjectGeometryImport.swift",
@@ -155,6 +156,7 @@ enum ProductionMainViewActionManifest {
         "setCylinderDimensions",
         "setExtrudeDistance",
         "setObjectDimension",
+        "setSceneNodeAppearance",
         "setSceneNodeLock",
         "setSceneNodeMaterial",
         "setSceneNodeObjectProperty",

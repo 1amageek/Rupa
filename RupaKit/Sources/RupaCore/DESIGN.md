@@ -824,23 +824,64 @@ owned by the
 `ProductMetadata.materialLibrary` is the only owner of authored appearance.
 A scene node names a material; it does not carry color.
 
-Core owns creating and editing materials:
+Core owns authoring appearance through exactly one command,
+`setSceneNodeAppearance`. It edits one component of the appearance one node
+carries, and it rejects a value outside that component's validated domain
+before mutating, so a rejected edit publishes no library change.
 
-- `createMaterial` inserts a validated material with a document-unique name and
-  returns its identifier. The first material a document creates also becomes the
-  default, so an authored document is never a library whose entries no node can
-  reach.
-- `setMaterialColor`, `setMaterialOpacity`, `setMaterialMetallic`, and
-  `setMaterialRoughness` edit one component of one existing material. Each
-  rejects a value outside its validated domain before mutating, so a rejected
-  edit publishes no library change.
-- `removeMaterial` clears the references nodes hold to it and clears the default
-  when the default is what it removed, so validation cannot observe a dangling
-  identifier.
+Creating, renaming, and removing a library entry by naming the material rather
+than a node are not part of this contract. A library entry no node reaches has
+no appearance to show, so the Inspector edits appearance where a person sees
+it, and Core publishes no command whose only caller would be a library editor
+that does not exist. A library editor, if one is ever authored, brings its own
+commands and its own section in this design.
 
 An Inspector color edit on a node with no material is an authoring intent, not a
 failure: the workspace creates a material for that node and assigns it in the
 same command, so the edit is a single undo step.
+
+`setSceneNodeAppearance` is that command. It applies one component, base color
+or opacity or metallic or roughness, to the material the node names, and when
+the node names none it inserts one named after the node, assigns it, and applies
+the component to it. Creating and assigning cannot be two commands sharing one
+transaction, because a transaction fixes its commands before the first one runs
+and nothing outside Core can name an identifier Core has yet to mint.
+
+The name that command gives a material it creates is the node's own name, and
+when the library already holds that name it appends the smallest integer that
+makes the name unique. Two nodes may carry the same name, a library name may
+not, and a library name is how a person tells two materials apart. A node
+holding no name of its own names its material `Material`, suffixed the same way.
+
+A generated pattern-array output refuses an appearance edit exactly as it
+refuses `setSceneNodeMaterial`, because the pattern source owns the appearance
+of everything it generates.
+
+The material that command creates starts from `Material.neutral`, the appearance
+a body carries before a document authors one for it. Authoring one component
+then moves that component and leaves the other three where the canvas already
+had them, rather than repainting a body because its opacity was dragged.
+
+A material created for a node does not become the document default, even when it
+is the first material the document holds. The default is what a node naming no
+material of its own is drawn with, so promoting this one would restyle every
+body the person never touched on account of an edit aimed at one of them. What
+the default exists to guarantee already holds here, because the node the same
+command assigns it to reaches it.
+
+The Inspector appearance section authors the four components `Material`
+declares and no fifth: base color, opacity, metallic, and roughness. Each is a
+unit interval `Material.validate` owns, and a value outside it is refused before
+the library changes rather than clamped into range. Which of the four the native
+surface consumes is owned by the
+[RupaRendering design](../RupaRendering/DESIGN.md).
+
+The section shows those four for a node holding no material as well, because
+`authorableSceneNodeAppearance(id:)` answers with the neutral appearance there.
+The values a person sees are the values the canvas already draws, so the first
+edit moves a control that was never blank and never lying. The same read answers
+with nothing for a node whose appearance the command refuses, so the section a
+person can reach is exactly the section whose edits Core accepts.
 
 ### Executor substitution boundary
 
@@ -936,6 +977,7 @@ T09-B owns the following behavioral proof:
 | Snap topology demand | Positive-radius authored-mesh-only object resolution skips whole-document topology validation and still returns grid/non-topology candidates; topology measurement anchors force the existing validation failure during object resolution; existing CAD snap and measurement cases remain green; a matching caller evaluation context resolves object candidates on a CAD document without consulting the exact evaluator, and the same resolve without that context still consults it. |
 | Body display face runs | `Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift` proves an evaluated box snapshot records one run per prepared face, that the runs carry the same prepared identities as `Topology.faces`, and that they partition every drawn triangle contiguously from zero to the snapshot's triangle count. |
 | Display tessellation resolution | `Tests/RupaCoreTests/DisplayTessellationTests.swift` proves a declared side count is the number of turns the evaluated mesh samples the profile at, that a cylinder is drawn at its declared count instead of the document tolerance, that every count the schema offers from the lowest one up is the count the mesh draws, that a count between them is refused rather than redrawn, that a declared corner count is the number of segments the rounded corner carries, that a count naming an arc the body does not hold claims nothing, and that a rounded box resolves its corner count against the fillet radius. |
+| Node appearance authoring | `Tests/RupaCoreTests/SceneNodeAppearanceTests.swift` proves that an appearance edit on a node holding no material creates one, assigns it, and leaves the document default alone; that the created material keeps the neutral values of the three components the edit does not name; that a second node's edit does not reuse the first node's material name; that a value outside the unit interval is refused with the library and the node unchanged; and that a generated pattern-array output refuses the edit. |
 
 CADAPI-C must additionally prove:
 

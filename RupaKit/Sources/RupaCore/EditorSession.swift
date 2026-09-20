@@ -1102,6 +1102,10 @@ public final class EditorSession {
         )
     }
 
+    public func setSceneNodeAppearance(_ id: SceneNodeID, edit: MaterialComponentEdit) {
+        perform(.setSceneNodeAppearance(id: id, edit: edit))
+    }
+
     public func setTopologyMaterialBinding(
         target: SelectionTarget,
         materialID: MaterialID?,

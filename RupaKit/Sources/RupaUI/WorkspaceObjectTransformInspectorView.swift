@@ -2,10 +2,16 @@ import SwiftUI
 import RupaCore
 
 struct WorkspaceObjectTransformInspectorView: View {
+    @Environment(\.self) private var environment
     var nodes: [SceneNode]
     var displayUnit: LengthDisplayUnit
     var positionSliderMetersRange: ClosedRange<Double>
     var materialOptions: [WorkspaceObjectMaterialOption]
+    /// The appearance each selected node authors, keyed by node.
+    ///
+    /// A node missing from this map has no appearance a person can author, so
+    /// the section offers no control for it. See `RupaCore/DESIGN.md`.
+    var appearances: [SceneNodeID: RupaCore.Material]
     var onCommitProperties: ([EditorCommand], String) -> Void
     var isBusy: Bool
     var onEditTransform: (InspectorTransformComponent, Double) -> Void
@@ -125,7 +131,95 @@ struct WorkspaceObjectTransformInspectorView: View {
             } else {
                 materialPicker
             }
+            appearanceControls
         }
+    }
+
+    /// The four components `Material` declares, for a selection whose every node
+    /// answers with an appearance the command accepts.
+    @ViewBuilder
+    private var appearanceControls: some View {
+        let materials = nodes.compactMap { appearances[$0.id] }
+        if materials.count == nodes.count, !materials.isEmpty {
+            baseColorRow(materials)
+            numericControl("Opacity", values: materials.map(\.opacity), sliderRange: 0...1) { value in
+                commitAppearance(.opacity(value))
+            }
+            numericControl("Metallic", values: materials.map(\.metallic), sliderRange: 0...1) { value in
+                commitAppearance(.metallic(value))
+            }
+            numericControl("Roughness", values: materials.map(\.roughness), sliderRange: 0...1) { value in
+                commitAppearance(.roughness(value))
+            }
+        }
+    }
+
+    private func baseColorRow(_ materials: [RupaCore.Material]) -> some View {
+        inspectorControlRow("Color") {
+            HStack(spacing: 6) {
+                ColorPicker("", selection: baseColorBinding(materials), supportsOpacity: false)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .disabled(isBusy)
+                    .accessibilityIdentifier("WorkspaceObjectTransform.baseColor")
+                if commonBaseColor(materials) == nil {
+                    Text("Mixed").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(minWidth: inspectorControlWidth, alignment: .leading)
+        }
+    }
+
+    private func commonBaseColor(_ materials: [RupaCore.Material]) -> ColorRGBA? {
+        guard let first = materials.first else { return nil }
+        return materials.allSatisfy { $0.baseColor == first.baseColor } ? first.baseColor : nil
+    }
+
+    /// The color the swatch shows and the color an edit writes.
+    ///
+    /// A selection whose nodes disagree shows the first node's color beside a
+    /// `Mixed` label rather than a color none of them carries, and an edit there
+    /// gives every selected node the color a person picked.
+    private func baseColorBinding(_ materials: [RupaCore.Material]) -> Binding<Color> {
+        Binding(
+            get: {
+                guard let color = commonBaseColor(materials) ?? materials.first?.baseColor else {
+                    return .clear
+                }
+                return Color(red: color.r, green: color.g, blue: color.b)
+            },
+            set: { picked in
+                guard !isBusy else { return }
+                let resolved = picked.resolve(in: environment)
+                let commands: [EditorCommand] = nodes.compactMap { node in
+                    guard let material = appearances[node.id] else { return nil }
+                    return .setSceneNodeAppearance(
+                        id: node.id,
+                        edit: .baseColor(
+                            ColorRGBA(
+                                r: Double(resolved.red),
+                                g: Double(resolved.green),
+                                b: Double(resolved.blue),
+                                a: material.baseColor.a
+                            )
+                        )
+                    )
+                }
+                guard !commands.isEmpty else { return }
+                onCommitProperties(commands, "Change Object Appearance")
+            }
+        )
+    }
+
+    /// Applies one component to every selected node as a single undoable edit.
+    func commitAppearance(_ edit: MaterialComponentEdit) {
+        guard !isBusy else { return }
+        let commands: [EditorCommand] = nodes
+            .filter { appearances[$0.id] != nil }
+            .map { .setSceneNodeAppearance(id: $0.id, edit: edit) }
+        guard !commands.isEmpty else { return }
+        onCommitProperties(commands, "Change Object Appearance")
     }
 
     private var materialPicker: some View {

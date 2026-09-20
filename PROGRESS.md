@@ -18,7 +18,7 @@
   - [x] S7.2 Subdivision properties resolve per-feature display tessellation for every type that declares one `depends:S7.1` `parallel:none`
     - [x] S7.2.1 A body is drawn at the subdivision counts its own schema declares `depends:none` `parallel:none`
     - [x] S7.2.2 A sketch curve is drawn at the subdivision count its own schema declares `depends:S7.2.1` `parallel:none`
-  - [ ] S7.3 Material authoring in Core and the Inspector appearance section `depends:S7.1` `parallel:none`
+  - [x] S7.3 Material authoring in Core and the Inspector appearance section `depends:S7.1` `parallel:none`
   - [ ] S7.4 The native surface consumes the authored material, not color alone `depends:S7.3` `parallel:none`
   - [ ] S7.5 Sketch profile source routing for the declared shape properties `depends:S7.1` `parallel:none`
   - [ ] S7.6 Bevel and cylinder corner rounding through a body fillet feature `depends:S7.1` `parallel:none`

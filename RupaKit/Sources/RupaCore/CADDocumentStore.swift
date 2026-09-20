@@ -840,6 +840,25 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .setSceneNodeAppearance:
+            func run() throws {
+                guard case .setSceneNodeAppearance(let id, let edit) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected setSceneNodeAppearance."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.setSceneNodeAppearance(
+                    id: id,
+                    edit: edit,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .setTopologyMaterialBinding:
             func run() throws {
                 guard case .setTopologyMaterialBinding(let target, let materialID, let process) = command else {
