@@ -1908,7 +1908,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     }
 
     #expect(primitives.contains { primitive in
-        if case .arc(_, _, let radiusMeters, let startAngle, let endAngle) = primitive {
+        if case .arc(_, _, let radiusMeters, let startAngle, let endAngle, _) = primitive {
             return abs(radiusMeters - 0.001) <= 1.0e-9
                 && abs(startAngle) <= 1.0e-9
                 && abs(endAngle - Double.pi / 2.0) <= 1.0e-9
@@ -1947,7 +1947,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     }
 
     #expect(primitives.contains { primitive in
-        if case .arc(_, let center, let radiusMeters, let startAngle, let endAngle) = primitive {
+        if case .arc(_, let center, let radiusMeters, let startAngle, let endAngle, _) = primitive {
             return abs(center.x - 0.002) <= 1.0e-9
                 && abs(center.y - 0.003) <= 1.0e-9
                 && abs(radiusMeters - 0.004) <= 1.0e-9
@@ -3813,4 +3813,97 @@ private func zxCanvasRectangleSketchCommand(
             y: .length(center.y + halfSideMeters, .meter)
         )
     )
+}
+
+// MARK: - Declared sketch display resolution
+
+/// The segments a built sketch primitive is divided into, resolved from the sketch
+/// object's declared subdivisions. `RupaViewportScene/DESIGN.md` owns the placement.
+@MainActor
+private func builtCircleSegmentCount(in session: EditorSession) throws -> Int {
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler
+    )
+    for item in scene.items {
+        guard case .sketch(let primitives) = item.kind else { continue }
+        for primitive in primitives {
+            if case .circle(_, _, _, let segmentCount) = primitive {
+                return segmentCount
+            }
+        }
+    }
+    throw EditorError(code: .commandInvalid, message: "No circle primitive was built.")
+}
+
+@MainActor
+@Test func aCircleSketchIsDrawnAtTheSubdivisionCountItsOwnSchemaDeclares() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createCircleSketch(
+            name: "Declared Circle",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            radius: .length(10.0, .millimeter)
+        )
+    )
+
+    #expect(try builtCircleSegmentCount(in: session) == 64)
+}
+
+@MainActor
+@Test func editingACircleSketchSubdivisionCountChangesWhatTheFrameDraws() async throws {
+    let session = EditorSession()
+    let result = try session.execute(
+        .createCircleSketch(
+            name: "Edited Circle",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            radius: .length(10.0, .millimeter)
+        )
+    )
+    let featureID = try #require(result.primaryFeatureID)
+    let nodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .sketch(featureID)
+    }?.key)
+    _ = try session.execute(
+        .setSceneNodeObjectProperty(
+            id: nodeID,
+            propertyID: PropertyID("sides.x"),
+            value: .integer(16)
+        )
+    )
+
+    #expect(try builtCircleSegmentCount(in: session) == 16)
+}
+
+@MainActor
+@Test func anArcSketchDeclaringNoCountIsDrawnAtTheFramesOwnResolution() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createArcSketch(
+            name: "Undeclared Arc",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            radius: .length(4.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(90.0, .degree)
+        )
+    )
+
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: session.workspaceState.ruler
+    )
+    let counts: [Int] = scene.items.flatMap { item -> [Int] in
+        guard case .sketch(let primitives) = item.kind else { return [] }
+        return primitives.compactMap { primitive in
+            if case .arc(_, _, _, _, _, let segmentCount) = primitive {
+                return segmentCount
+            }
+            return nil
+        }
+    }
+
+    #expect(counts == [24])
 }

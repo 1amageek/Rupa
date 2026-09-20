@@ -1392,11 +1392,17 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    production frame ever did. This path does not invent one either.
    Each sketch family takes its world points from the producer that drew it. A
    polyline is the overlay producer's own evaluation — two endpoints for a
-   line, forty-nine samples around a circle, twenty-five along an arc, and a
-   spline's evaluated points — so a pointer between two samples is measured
-   against the segment the frame drew and not against an ideal curve the frame
-   never drew. Spline control points are the affordance producer's, which maps
-   them through the scene item's model transform. The two mappings differ only
+   line, one sample per segment plus a close around a circle or along an arc,
+   and a spline's evaluated points — so a pointer between two samples is
+   measured against the segment the frame drew and not against an ideal curve
+   the frame never drew. A circle's and an arc's segment count is not this
+   module's to choose: it is the count the scene primitive carries, resolved
+   from the sketch object's declared subdivisions by
+   [RupaViewportScene](../RupaViewportScene/DESIGN.md#sketch-curve-display-resolution).
+   Reading it off the primitive is what keeps the drawing and this query at one
+   curve when a document changes that count, rather than at two that agreed
+   only while both were fixed. Spline control points are the affordance
+   producer's, which maps them through the scene item's model transform. The two mappings differ only
    in that transform, which a sketch item carries as the identity, and each
    stays with the producer that owns what is on screen rather than being
    re-derived here.
@@ -2390,7 +2396,11 @@ Non-finite input, invalid camera projection, malformed provenance, resource
 overflow, collision-generation failure, unsupported native feature, stale
 revision, cancellation, and RealityKit frame failure are explicit typed
 outcomes. They never fall back to parallel camera, empty geometry, old identity
-rendering, Canvas world drawing, or a guessed source ID.
+rendering, Canvas world drawing, or a guessed source ID. A sketch primitive
+carrying a segment count below the floors its resolution guarantees is invalid
+input of that same kind: the frame refuses it rather than substituting a count
+of its own, because a count this module chose would be a second curve the query
+is not measured against.
 
 An unmounted or unprepared frame is a typed outcome distinct from all of those.
 `frameNotReady` names the states in which no frame has judged the query yet: the
@@ -2440,6 +2450,7 @@ and visible compositing remain manual acceptance, not a hidden-host guarantee.
 | View-ray anchor on the creation and pick routes | `Tests/RupaRenderingTests/ViewportCanvasViewRayAnchorTests.swift` mounts a plan-cache frame under an orthographic and a perspective camera and proves the anchor a canvas drag and a pick carry is the frame's own answer for that pixel: the anchor lies on the displayed canvas plane the current projection basis names, the mounted probe projects it back to the pixel that produced it, and two different pixels yield two different anchors. The same fixture proves the refusals -- a canvas plane that names no normal, a revision the frame never applied, and an unmounted viewport each yield no anchor rather than an anchor derived from a different ray origin, so the gesture that would have carried it is refused whole. |
 | Body preview geometry under an edit state | A spatial overlay fixture whose body item carries a snapshot mesh draws that mesh with no edit state and the edit state's world box corners while one exists, proving a prepared identity never decides what a drag previews. |
 | Snap evaluation reuse on the drag routes | `Tests/RupaRenderingTests/ViewportDragSnapEvaluationReuseTests.swift` hands each drag resolver a collaborator whose exact evaluator refuses to run, on a document with active renderable CAD topology, and reads the forwarding as the difference between that refusal and an answer. The canvas drag resolver reports a failure description for both the start and the end resolution with no context and with a context carrying no generation, and with the matching published pair reports none and returns the drag a default resolver returns, which is what proves both of its resolutions forward rather than one. The construction-plane resolver returns its target unsnapped in those same two cases and returns the snapped target a default resolver returns with the matching pair. The two `Viewport` call sites that supply the pair are covered by source review, because the state they read is private SwiftUI `@State`. |
+| Sketch curve segment count | `ViewportSketchCurveDisplayResolutionTests` prove the producer's world points divide a circle and an arc at the count their primitive carries rather than at a constant of this module's, and that a count below the floors its resolution guarantees is refused rather than redrawn at one of ours. The drawn-chord hit test derives its sample spacing from the same count, so the polyline the frame draws and the points a pointer is measured against stay one curve. |
 | Cancellation and bounds | Replacement/teardown tests prove cooperative cancellation, one active worker, bounded pending work, owned-buffer preallocation admission, native resource-count bounds, typed opaque-allocation failure, release, measured peak memory, and no stale native root. |
 | Responsiveness | A focused maximum-admitted-geometry signpost measures the SDK-required MainActor `LowLevelMesh` construction/copy interval against the baseline-owned half-frame row; signed-App `RealityView` interaction verifies MainActor progress during preparation and live camera/input use. Offscreen `RealityRenderer` evidence is not promoted to live proof. |
 

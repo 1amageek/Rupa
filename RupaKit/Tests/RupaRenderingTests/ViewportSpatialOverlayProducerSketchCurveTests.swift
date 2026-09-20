@@ -108,7 +108,8 @@ func rawSketchDimensionPairsSplitNativeLabelsAndHitRects() throws {
                     center: CGPoint(x: 3, y: 0),
                     radiusMeters: 1,
                     startAngleRadians: 0,
-                    endAngleRadians: .pi / 2.0
+                    endAngleRadians: .pi / 2.0,
+                    segmentCount: 24
                 ),
             ])
         ),
@@ -708,13 +709,19 @@ func rawWorkerCoversCircleArcSplineAndOffsetRoutes() throws {
             sceneNodeID: nodeID,
             modelBounds: CGRect(x: -1, y: -1, width: 3, height: 3),
             kind: .sketch(primitives: [
-                .circle(entityID: circleID, center: CGPoint(x: 0, y: 0), radiusMeters: 0.5),
+                .circle(
+                    entityID: circleID,
+                    center: CGPoint(x: 0, y: 0),
+                    radiusMeters: 0.5,
+                    segmentCount: 48
+                ),
                 .arc(
                     entityID: arcID,
                     center: CGPoint(x: 1, y: 0),
                     radiusMeters: 0.5,
                     startAngleRadians: 0,
-                    endAngleRadians: .pi * 0.75
+                    endAngleRadians: .pi * 0.75,
+                    segmentCount: 24
                 ),
                 .spline(
                     entityID: splineID,

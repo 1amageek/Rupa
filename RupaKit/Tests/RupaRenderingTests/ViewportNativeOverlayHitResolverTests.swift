@@ -776,11 +776,15 @@ func nativeOverlaySketchEntityRefusesASegmentTheDepthIntervalRejects() throws {
 func nativeOverlaySketchEntityMeasuresACircleAgainstTheDrawnChord() throws {
     let entityID = SketchEntityID()
     let radius = 40.0
+    let segmentCount = 48
     let circle = ViewportSketchPrimitive.circle(
-        entityID: entityID, center: CGPoint(x: 0, y: 0), radiusMeters: radius
+        entityID: entityID,
+        center: CGPoint(x: 0, y: 0),
+        radiusMeters: radius,
+        segmentCount: segmentCount
     )
-    // The producer's own sample spacing: forty-eight steps around the circle.
-    let step = Double.pi / 24.0
+    // The sample spacing the primitive's own count gives the producer.
+    let step = 2.0 * Double.pi / Double(segmentCount)
     let first = CGPoint(x: radius, y: 0)
     let second = CGPoint(x: radius * cos(step), y: radius * sin(step))
     let chordMidpoint = CGPoint(

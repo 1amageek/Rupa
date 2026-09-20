@@ -17,12 +17,19 @@ public struct ViewportCurveCurvatureComb: Equatable {
         switch primitive {
         case .point, .line:
             samples = []
-        case .circle(_, let center, let radiusMeters):
+        case .circle(_, let center, let radiusMeters, _):
             samples = sampler.circleSamples(
                 center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters
             )
-        case .arc(_, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
+        case .arc(
+            _,
+            let center,
+            let radiusMeters,
+            let startAngleRadians,
+            let endAngleRadians,
+            _
+        ):
             samples = sampler.arcSamples(
                 center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters,

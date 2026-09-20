@@ -1623,7 +1623,7 @@ extension ViewportSpatialOverlayProducer {
                 end: Point2D(x: Double(end.x), y: Double(end.y)),
                 parameter: parameter
             )
-        case .arc(_, let center, let radius, let start, let end):
+        case .arc(_, let center, let radius, let start, let end, _):
             sample = sampler.arcSample(
                 center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radius,
@@ -1750,7 +1750,7 @@ extension ViewportSpatialOverlayProducer {
             }
             return .line(entityID: entityID, start: resolvedStart, end: resolvedEnd)
 
-        case .circle(let entityID, let center, let radiusMeters):
+        case .circle(let entityID, let center, let radiusMeters, let segmentCount):
             let curveIdentity = ViewportSpatialHandleIdentity.sketchCurveHandle(.init(
                 featureID: featureID,
                 entityID: entityID,
@@ -1763,13 +1763,22 @@ extension ViewportSpatialOverlayProducer {
             ))
             let value = activeOverride(curveIdentity, in: overrides)?.radiusMeters
                 ?? activeOverride(dimensionIdentity, in: overrides)?.value
+            // A drag replaces the geometry, never the resolution the scene resolved for it.
             return .circle(
                 entityID: entityID,
                 center: center,
-                radiusMeters: value.flatMap { $0.isFinite && $0 > 0.0 ? $0 : nil } ?? radiusMeters
+                radiusMeters: value.flatMap { $0.isFinite && $0 > 0.0 ? $0 : nil } ?? radiusMeters,
+                segmentCount: segmentCount
             )
 
-        case .arc(let entityID, let center, let radiusMeters, let startAngle, let endAngle):
+        case .arc(
+            let entityID,
+            let center,
+            let radiusMeters,
+            let startAngle,
+            let endAngle,
+            let segmentCount
+        ):
             let curveBase = { (handle: ViewportSketchCurveHandleKind) in
                 ViewportSpatialHandleIdentity.sketchCurveHandle(.init(
                     featureID: featureID,
@@ -1795,7 +1804,8 @@ extension ViewportSpatialOverlayProducer {
                 center: center,
                 radiusMeters: radius.flatMap { $0.isFinite && $0 > 0.0 ? $0 : nil } ?? radiusMeters,
                 startAngleRadians: start.isFinite ? start : startAngle,
-                endAngleRadians: end.isFinite ? end : endAngle
+                endAngleRadians: end.isFinite ? end : endAngle,
+                segmentCount: segmentCount
             )
 
         case .spline(let entityID, let points, let controlPoints, let sketchPlane):
@@ -1858,7 +1868,7 @@ extension ViewportSpatialOverlayProducer {
                 in: overrides
             )?.value
             return .init(length: length(lengthOverride ?? distance), angle: angle(angleOverride ?? currentAngle))
-        case .circle(let entityID, _, let radius):
+        case .circle(let entityID, _, let radius, _):
             let value = activeOverride(
                 .sketchCurveHandle(.init(featureID: featureID, entityID: entityID, handle: .circleRadius)),
                 in: overrides
@@ -1869,7 +1879,7 @@ extension ViewportSpatialOverlayProducer {
                 )?.value
                 ?? radius
             return .init(radius: length(value))
-        case .arc(let entityID, _, let radius, let start, let end):
+        case .arc(let entityID, _, let radius, let start, let end, _):
             let resolvedRadius = activeOverride(
                 .sketchCurveHandle(.init(featureID: featureID, entityID: entityID, handle: .arcRadius)),
                 in: overrides
@@ -1939,7 +1949,7 @@ extension ViewportSpatialOverlayProducer {
                 ))
                 .normalized(tolerance: 1.0e-12)
             return (world(midpoint, by: modelTransform), direction)
-        case .arc(_, let center, let radius, let start, let end):
+        case .arc(_, let center, let radius, let start, let end, _):
             let span = normalizedArcSpan(startAngle: start, endAngle: end)
             guard radius.isFinite, radius > 0.0, span > 1.0e-12 else { return nil }
             let angle = start + span * 0.5
@@ -1998,7 +2008,7 @@ extension ViewportSpatialOverlayProducer {
             case .point, .circleCenter, .arcCenter, .arcStart, .arcEnd:
                 return nil
             }
-        case .arc(_, let center, let radius, let startAngle, let endAngle):
+        case .arc(_, let center, let radius, let startAngle, let endAngle, _):
             guard radius.isFinite, radius > 0.0 else { return nil }
             switch handle {
             case .arcStart:
@@ -2158,7 +2168,7 @@ extension ViewportSpatialOverlayProducer {
                 try appendVertex(handle: .lineStart, point: start, direction: direction)
                 try appendVertex(handle: .lineEnd, point: end, direction: -direction)
             }
-        case .arc(_, let center, let radius, let startAngle, let endAngle):
+        case .arc(_, let center, let radius, let startAngle, let endAngle, _):
             guard radius.isFinite, radius > 0.0 else { return [] }
             let start = CGPoint(x: center.x + CGFloat(cos(startAngle) * radius), y: center.y + CGFloat(sin(startAngle) * radius))
             let end = CGPoint(x: center.x + CGFloat(cos(endAngle) * radius), y: center.y + CGFloat(sin(endAngle) * radius))
@@ -2330,7 +2340,7 @@ extension ViewportSpatialOverlayProducer {
         ) -> ViewportSpatialPreparedInteractionTarget? {
             guard let target = primitive.selectionTarget else { return nil }
             switch sourcePrimitive {
-            case .circle(_, let center, let radiusMeters):
+            case .circle(_, let center, let radiusMeters, _):
                 return .sketchCurveHandle(.init(
                     featureID: featureID,
                     entityID: entityID,
@@ -2343,7 +2353,7 @@ extension ViewportSpatialOverlayProducer {
                     startAngleRadians: nil,
                     endAngleRadians: nil
                 ))
-            case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
+            case .arc(_, let center, let radiusMeters, let startAngle, let endAngle, _):
                 return .sketchCurveHandle(.init(
                     featureID: featureID,
                     entityID: entityID,
@@ -2552,11 +2562,11 @@ extension ViewportSpatialOverlayProducer {
                 }
             }
 
-        case .circle(_, let center, let radiusMeters):
+        case .circle(_, let center, let radiusMeters, _):
             let worldCenter = world(center)
             let sourceCenter: CGPoint
             let sourceRadius: Double
-            if case .circle(_, let originalCenter, let originalRadius) = sourcePrimitive {
+            if case .circle(_, let originalCenter, let originalRadius, _) = sourcePrimitive {
                 sourceCenter = originalCenter
                 sourceRadius = originalRadius
             } else {
@@ -2626,13 +2636,20 @@ extension ViewportSpatialOverlayProducer {
                 ))
             }
 
-        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
+        case .arc(_, let center, let radiusMeters, let startAngle, let endAngle, _):
             let worldCenter = world(center)
             let sourceCenter: CGPoint
             let sourceRadius: Double
             let sourceStartAngle: Double
             let sourceEndAngle: Double
-            if case .arc(_, let originalCenter, let originalRadius, let originalStart, let originalEnd) = sourcePrimitive {
+            if case .arc(
+                _,
+                let originalCenter,
+                let originalRadius,
+                let originalStart,
+                let originalEnd,
+                _
+            ) = sourcePrimitive {
                 sourceCenter = originalCenter
                 sourceRadius = originalRadius
                 sourceStartAngle = originalStart

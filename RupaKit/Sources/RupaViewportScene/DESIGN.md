@@ -52,7 +52,7 @@ overlay face. Measurement and inspection APIs own metric requests.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [package design](../../DESIGN.md) | parent | Package dependency direction | Places scene projection between project evaluation and rendering. | This module is not a source or project authority. |
-| [RupaCore design](../RupaCore/DESIGN.md) | depends on | Validated `DesignDocument`, Product metadata, and source identity | Supplies CAD source and retained scene navigation. | Scene references remain navigation/presentation values. |
+| [RupaCore design](../RupaCore/DESIGN.md) | depends on | Validated `DesignDocument`, Product metadata, source identity, and display tessellation resolution | Supplies CAD source, retained scene navigation, and the resolution a declared subdivision count draws a sketch curve at. | Scene references remain navigation/presentation values. Sketch display resolution is resolved here but owned there. |
 | [RupaEvaluation design](../RupaEvaluation/DESIGN.md) | depends on | Complete purpose-selected bounded evaluation | Supplies immutable admitted presentation results. | Scene projection cannot widen limits or select a different fidelity. |
 | [RupaRendering design](../RupaRendering/DESIGN.md) | used by | Immutable scene, `snapshotID`, camera semantics, and overlay values | Converts scene values into one matching RealityKit resource/entity frame. | Rendering must not make overlay lookup a metric path or turn RealityKit IDs into CAD authority. |
 | [RupaGeometry design](../RupaGeometry/DESIGN.md) | coordinates with | Bounded source-order Mesh traversal | Owns render-time geometry triangulation. | Do not duplicate its topology or buffer-index logic here. |
@@ -284,6 +284,35 @@ A face that evaluation gave no stable sub-shape identity contributes no run,
 and its triangles resolve to no component. That is a truthful absence of a CAD
 name, not a body without prepared topology.
 
+### Sketch curve display resolution
+
+A sketch scene item's circle and arc primitives carry the number of segments the
+frame divides them into. Which count a sketch declares, which of its counts
+apply, and what is drawn where it declares none are owned by the
+[display tessellation resolution contract](../RupaCore/DESIGN.md#display-tessellation-resolution).
+This module resolves that contract for a sketch feature and writes the resulting
+count onto each primitive it builds.
+
+The count travels on the primitive rather than beside it. The frame draws a
+sketch primitive and the native pointer query measures against the points that
+same drawing produced, so a resolution handed to one of them separately could be
+handed to the other differently and leave a pointer measured against a curve
+nobody drew. A count the primitive carries cannot diverge that way, because both
+read the value out of the primitive they were already given.
+
+Every rebuild of a primitive carries the count through unchanged: a scene-tree
+transform and a drag override both replace the geometry a primitive describes,
+not the resolution it is drawn at. A drag that widens an arc's span therefore
+keeps the count the last built scene resolved, and the next build resolves the
+count the wider span earns. Recomputing it mid-drag is not available here in any
+case, since an override is applied without the document or the object registry
+the declaration is read from.
+
+A sketch feature with no scene-node object, or whose object declares no count for
+an arc the sketch holds, is built at the frame's own undeclared resolution. That
+is a sketch whose schema names nothing to draw it by, not a resolution this
+module failed to find.
+
 ## Runtime Flows
 
 ```mermaid
@@ -353,6 +382,7 @@ parallel projection, or a fabricated canvas point.
 | Grid projection | Parallel and perspective grid fixtures use the RealityViewport native-project-derived ray contract when mounted and the layout ray/plane contract off-scene, rejecting a parallel intersection without a second live camera. |
 | Frame identity | Rendering tests prove `snapshotID`, viewport revision, and overlay revision cannot be mixed in one displayed or hit-testable scene. |
 | CAD sub-shape identity on every evaluated body | A scene built from a document whose body is an extrude carries the evaluated snapshot's mesh and a non-empty `meshFaceRuns` whose component IDs are generated-topology names, and a triangle index inside a run resolves to that face; a feature with no evaluated snapshot carries neither mesh nor topology, proving the two are written together. |
+| Declared sketch display resolution | A scene built from a circle sketch whose object declares a side-segment count carries that count on the built primitive, a slot declaring a full-turn count carries the half-turn share of it on each cap arc, and a sketch declaring no count for an arc it holds carries the undeclared resolution's counts. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
 
 Changes to source/evaluation identity or overlay reference contracts require

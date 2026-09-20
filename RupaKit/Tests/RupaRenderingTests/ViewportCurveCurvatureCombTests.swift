@@ -22,7 +22,8 @@ import Testing
             primitive: .circle(
                 entityID: SketchEntityID(),
                 center: CGPoint(x: 0.0, y: 0.0),
-                radiusMeters: 0.004
+                radiusMeters: 0.004,
+                segmentCount: 48
             )
         )
     )
@@ -43,7 +44,8 @@ import Testing
                 center: CGPoint(x: 0.0, y: 0.0),
                 radiusMeters: 0.006,
                 startAngleRadians: 0.0,
-                endAngleRadians: Double.pi / 2.0
+                endAngleRadians: Double.pi / 2.0,
+                segmentCount: 24
             )
         )
     )

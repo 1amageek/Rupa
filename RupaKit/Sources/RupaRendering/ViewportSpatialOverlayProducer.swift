@@ -2197,6 +2197,9 @@ enum ViewportSpatialOverlayProducer {
 
     /// The world points the frame draws a sketch primitive's polyline through.
     ///
+    /// A curved primitive is divided at the segment count it carries, which the scene resolved from
+    /// the sketch object's declared subdivisions.
+    ///
     /// It is internal because the native sketch entity query measures a pointer
     /// against these same points. A curve the frame samples and a curve a query
     /// idealises are different curves, and between two samples the difference
@@ -2210,25 +2213,35 @@ enum ViewportSpatialOverlayProducer {
             return [Self.point(point)]
         case .line(_, let start, let end):
             return [Self.point(start), Self.point(end)]
-        case .circle(_, let center, let radius):
+        case .circle(_, let center, let radius, let segmentCount):
             guard radius.isFinite, radius > 0 else {
                 throw RealityViewportSpatialBatch.invalid("Sketch circle radius is invalid.")
             }
-            return (0 ... 48).map { index in
-                let angle = Double(index) / 48.0 * Double.pi * 2.0
+            guard segmentCount >= 3 else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "Sketch circle segment count encloses no area."
+                )
+            }
+            return (0 ... segmentCount).map { index in
+                let angle = Double(index) / Double(segmentCount) * Double.pi * 2.0
                 return Self.point(CGPoint(
                     x: center.x + CGFloat(cos(angle) * radius),
                     y: center.y + CGFloat(sin(angle) * radius)
                 ))
             }
-        case .arc(_, let center, let radius, let start, let end):
+        case .arc(_, let center, let radius, let start, let end, let segmentCount):
             guard radius.isFinite, radius > 0,
                   start.isFinite, end.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("Sketch arc parameters are invalid.")
             }
+            guard segmentCount >= 2 else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "Sketch arc segment count draws a chord."
+                )
+            }
             let span = end - start
-            return (0 ... 24).map { index in
-                let angle = start + span * Double(index) / 24.0
+            return (0 ... segmentCount).map { index in
+                let angle = start + span * Double(index) / Double(segmentCount)
                 return Self.point(CGPoint(
                     x: center.x + CGFloat(cos(angle) * radius),
                     y: center.y + CGFloat(sin(angle) * radius)

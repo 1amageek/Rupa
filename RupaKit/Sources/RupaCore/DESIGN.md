@@ -756,10 +756,68 @@ carrying a count the canvas cannot resolve is refused by
 the bounds and the step of its declared range, instead of being redrawn at a
 count it does not name.
 
-Sketch curve resolution is not part of this contract. The kernel samples sketch
-curves through `SketchCurveExtractor`, which takes no `TessellationOptions`, so
-a count a sketch object declares reaches the canvas once the sketch is swept
-into a body and that body's own count governs it.
+Sketch curve display is the second half of this contract, and it is resolved
+without `TessellationOptions`. The kernel samples sketch curves through
+`SketchCurveExtractor`, whose points are consumed as geometry by sweep paths,
+guides, bridges and curve queries, so the resolution a sketch declares cannot be
+spent by resampling the evaluated curve. The canvas draws a sketch from
+`SketchDisplaySnapshot` instead, and the declared resolution reaches the canvas
+as the number of segments the drawn polyline is sampled with.
+
+A sketch object declares counts the way a body object does, and the table above
+says which arc each count divides. What differs is which of those arcs the
+sketch itself holds:
+
+| Binding | An arc the sketch draws |
+|---|---|
+| `segments.side` | Yes: the profile a body would be swept from is the sketch |
+| `corner.segments` | Yes: a rounded profile corner is drawn in the sketch plane |
+| `bevel.segments` | No: the extrusion creates the bevel, and no sketch curve draws it |
+
+A count on a binding the sketch does not hold claims nothing here, so a sketch is
+never drawn at a resolution named for an arc that exists only once it is
+extruded. `DisplayTessellationArc` still owns each binding's span; which of those
+arcs a sketch holds is a separate judgement, because that type maps a rounded
+profile corner and an extrusion bevel onto the same quadrant arc.
+
+What separates this from the body contract is which counts are eligible, not how
+eligible ones combine. A body is one mesh under one `TessellationOptions`, so
+every count the object declares claims on it and the finest wins. A sketch
+considers only the counts naming arcs it holds. Among those the finest governs
+too, because the arcs one sketch draws are parts of a single outline and an
+outline drawn at two resolutions breaks where the parts meet. A claim names an
+angular resolution, and every arc the sketch draws is divided at it:
+
+```
+radiansPerSegment = arc.span / Double(count)
+segmentCount      = ceil(abs(span) / radiansPerSegment)
+```
+
+An arc whose span exceeds a full turn wraps onto the circle it already drew, so
+the count is bounded by the segments a full turn earns at the same resolution.
+That bound is the resolution's own statement about this circle rather than a
+budget imposed on it, and below a full turn it changes nothing.
+
+A count whose arc is the whole primitive reproduces itself, so a circle
+declaring sixty-four segments of a full turn is drawn with sixty-four. The same
+resolution also divides a span no declaration named, which is how one count
+governs a slot whose profile is a full turn while the caps it draws are half
+turns. It is the resolution `displayTessellationOptions` gives the kernel for
+the body swept from that sketch, so a curve and the solid it becomes are
+subdivided the same way instead of at two counts that merely share a name.
+
+A drawn arc is never divided below two segments and a closed circle never below
+three, because one segment is a chord and two enclose nothing.
+`SketchArcDisplayResolution` owns the resolution, those floors, and the counts
+drawn where no declaration reaches a sketch, which remain the counts the frame
+already draws an undeclared sketch at. An absent declaration is truthful absence
+rather than a count this contract failed to deliver, and a stored count outside
+its declared range never reaches the canvas at all, because
+`ObjectPropertySet.validate(against:)` refuses it first.
+
+The resolved count travels on the scene primitive itself. That placement is
+owned by the
+[RupaViewportScene design](../RupaViewportScene/DESIGN.md#sketch-curve-display-resolution).
 
 ### Material library authoring contract
 

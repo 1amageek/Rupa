@@ -29,7 +29,8 @@ extension Array where Element == ViewportSketchPrimitive {
                 let center,
                 let radiusMeters,
                 let startAngleRadians,
-                let endAngleRadians
+                let endAngleRadians,
+                _
             ) = primitive,
                   primitiveEntityID == entityID else {
                 continue

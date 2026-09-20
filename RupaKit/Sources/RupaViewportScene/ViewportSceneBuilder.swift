@@ -87,7 +87,17 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     modelBounds: bounds,
                     kind: .sketch(
-                        primitives: viewportSketchPrimitives(sketchSnapshot.primitives)
+                        primitives: viewportSketchPrimitives(
+                            sketchSnapshot.primitives,
+                            resolution: SketchArcDisplayResolution(
+                                object: objectDescriptor(
+                                    featureID: featureID,
+                                    kind: .sketch,
+                                    document: document
+                                ),
+                                objectRegistry: objectRegistry
+                            )
+                        )
                     ),
                     sketchRegions: viewportSketchRegions(sketchSnapshot.regions)
                 )
@@ -676,7 +686,7 @@ public struct ViewportSceneBuilder {
                 start: transformedSketchPoint(start, transform: transform),
                 end: transformedSketchPoint(end, transform: transform)
             )
-        case .circle(let entityID, let center, let radiusMeters):
+        case .circle(let entityID, let center, let radiusMeters, let segmentCount):
             return .circle(
                 entityID: entityID,
                 center: transformedSketchPoint(center, transform: transform),
@@ -684,9 +694,17 @@ public struct ViewportSceneBuilder {
                     center: center,
                     radiusMeters: radiusMeters,
                     transform: transform
-                )
+                ),
+                segmentCount: segmentCount
             )
-        case .arc(let entityID, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
+        case .arc(
+            let entityID,
+            let center,
+            let radiusMeters,
+            let startAngleRadians,
+            let endAngleRadians,
+            let segmentCount
+        ):
             let transformedArc = transformedSketchArc(
                 center: center,
                 radiusMeters: radiusMeters,
@@ -699,7 +717,8 @@ public struct ViewportSceneBuilder {
                 center: transformedArc.center,
                 radiusMeters: transformedArc.radiusMeters,
                 startAngleRadians: transformedArc.startAngleRadians,
-                endAngleRadians: transformedArc.endAngleRadians
+                endAngleRadians: transformedArc.endAngleRadians,
+                segmentCount: segmentCount
             )
         case .spline(let entityID, let points, let controlPoints, let sketchPlane):
             return .spline(
@@ -1888,7 +1907,8 @@ public struct ViewportSceneBuilder {
     }
 
     private func viewportSketchPrimitives(
-        _ primitives: [SketchDisplaySnapshot.Primitive]
+        _ primitives: [SketchDisplaySnapshot.Primitive],
+        resolution: SketchArcDisplayResolution
     ) -> [ViewportSketchPrimitive] {
         primitives.map { primitive in
             switch primitive {
@@ -1904,7 +1924,8 @@ public struct ViewportSceneBuilder {
                 return .circle(
                     entityID: entityID,
                     center: viewportPoint(center),
-                    radiusMeters: radiusMeters
+                    radiusMeters: radiusMeters,
+                    segmentCount: resolution.fullTurnSegmentCount
                 )
             case .arc(let entityID, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
                 return .arc(
@@ -1912,7 +1933,10 @@ public struct ViewportSceneBuilder {
                     center: viewportPoint(center),
                     radiusMeters: radiusMeters,
                     startAngleRadians: startAngleRadians,
-                    endAngleRadians: endAngleRadians
+                    endAngleRadians: endAngleRadians,
+                    segmentCount: resolution.arcSegmentCount(
+                        spanning: endAngleRadians - startAngleRadians
+                    )
                 )
             case .spline(let entityID, let points, let controlPoints, let sketchPlane):
                 return .spline(

@@ -71,16 +71,28 @@ public extension ViewportBodyVertex {
     }
 }
 
+/// A sketch curve as the frame draws it.
+///
+/// A curved primitive carries the number of segments it is drawn with, resolved from the sketch
+/// object's declared subdivisions when the scene is built. The count rides on the primitive so the
+/// polyline a frame draws and the points a pointer is measured against cannot be given different
+/// resolutions. See `RupaViewportScene/DESIGN.md`.
 public enum ViewportSketchPrimitive: Equatable, Sendable {
     case point(entityID: SketchEntityID, point: CGPoint)
     case line(entityID: SketchEntityID, start: CGPoint, end: CGPoint)
-    case circle(entityID: SketchEntityID, center: CGPoint, radiusMeters: Double)
+    case circle(
+        entityID: SketchEntityID,
+        center: CGPoint,
+        radiusMeters: Double,
+        segmentCount: Int
+    )
     case arc(
         entityID: SketchEntityID,
         center: CGPoint,
         radiusMeters: Double,
         startAngleRadians: Double,
-        endAngleRadians: Double
+        endAngleRadians: Double,
+        segmentCount: Int
     )
     case spline(
         entityID: SketchEntityID,
@@ -93,8 +105,8 @@ public enum ViewportSketchPrimitive: Equatable, Sendable {
         switch self {
         case .point(let entityID, _),
              .line(let entityID, _, _),
-             .circle(let entityID, _, _),
-             .arc(let entityID, _, _, _, _),
+             .circle(let entityID, _, _, _),
+             .arc(let entityID, _, _, _, _, _),
              .spline(let entityID, _, _, _):
             entityID
         }

@@ -32,7 +32,7 @@ func sampledSketchCurvesShareNativeMeshesWithinTheGridBudget() async throws {
         ViewportSceneItem(id: "curve-\(index)", featureID: FeatureID(),
             modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
             kind: .sketch(primitives: [.circle(entityID: SketchEntityID(),
-                center: .zero, radiusMeters: 1)]))
+                center: .zero, radiusMeters: 1, segmentCount: 48)]))
     })
     let snapshot = ViewportSpatialOverlaySemanticSnapshot(scene: scene,
         interaction: .init(selectedFeatureIDs: [], selectedSceneNodeIDs: [],
