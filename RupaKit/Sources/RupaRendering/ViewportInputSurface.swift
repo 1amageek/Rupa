@@ -35,6 +35,7 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onShiftScroll: (ViewportScrollDirection) -> Bool
     var onShiftTap: (CGPoint, CGSize) -> Bool
     var onCancel: () -> Bool = { false }
+    var onDelete: () -> Bool = { false }
     var inputExclusionRects: [CGRect] = []
 
     func makeNSView(context: Context) -> InputView {
@@ -58,6 +59,7 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onShiftScroll = onShiftScroll
         nsView.onShiftTap = onShiftTap
         nsView.onCancel = onCancel
+        nsView.onDelete = onDelete
         nsView.inputExclusionRects = inputExclusionRects
     }
 }
@@ -77,6 +79,7 @@ extension ViewportInputSurface {
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
         var onCancel: (() -> Bool)?
+        var onDelete: (() -> Bool)?
         var inputExclusionRects: [CGRect] = [] {
             didSet {
                 guard oldValue != inputExclusionRects else {
@@ -103,6 +106,15 @@ extension ViewportInputSurface {
 
         override var acceptsFirstResponder: Bool {
             true
+        }
+
+        override func keyDown(with event: NSEvent) {
+            if (event.keyCode == 51 || event.keyCode == 117),
+               event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+               onDelete?() == true {
+                return
+            }
+            super.keyDown(with: event)
         }
 
         override func cancelOperation(_ sender: Any?) {

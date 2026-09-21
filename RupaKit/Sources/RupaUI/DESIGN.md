@@ -24,6 +24,14 @@ live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
+Workspace deletion is a native responder-chain command on the editor root;
+the native Canvas also forwards both Delete key variants through its explicit
+input callback. Both enter the same UI policy. Text editors consume their own Delete
+keys. The command uses the existing keyboard policy and `deleteSceneNodes`
+transaction; selection scope, locked/root refusal, source dependencies and Undo
+remain owned by the existing UI/Core path. Native key-event tests and signed-App
+Canvas/sidebar deletion followed by Undo verify delivery, not just router enums.
+
 Inspector size fields map principal sketch-plane dimensions to model X/Y/Z in
 both reading and writing. Core's source dimensions remain U/depth/V. Arbitrary
 planes display U/Depth/V explicitly, not misleading Cartesian axis labels.

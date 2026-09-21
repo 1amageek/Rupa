@@ -36,6 +36,12 @@ predicate now belongs to [ViewportMeasurement](ViewportMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
+The native Canvas input view forwards unmodified Delete and Forward Delete to
+the UI-owned deletion callback when it is first responder. It consumes the key
+only when the callback handles it; other keys continue along the responder chain.
+Rendering never chooses objects or mutates source for this command. Text-field
+focus remains with the field editor, including while the pointer hovers Canvas.
+
 Face editing retains the extrusion's sketch frame, transformed into the selected
 occurrence, in the prepared handle. Its outward axis and source-to-world scale
 own both drag measurement and release. Cylinder walls use radial displacement;

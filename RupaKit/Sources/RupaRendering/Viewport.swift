@@ -235,6 +235,7 @@ public struct Viewport: View {
     private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
     private let onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
+    private let onDeleteSelection: (() -> Bool)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
@@ -422,6 +423,7 @@ public struct Viewport: View {
         onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
         onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
+        onDeleteSelection: (() -> Bool)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
@@ -546,6 +548,7 @@ public struct Viewport: View {
         self.onSurfaceFrameDrag = onSurfaceFrameDrag
         self.onConstructionPlaneHandleDrag = onConstructionPlaneHandleDrag
         self.onCommandConfirm = onCommandConfirm
+        self.onDeleteSelection = onDeleteSelection
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
@@ -779,6 +782,7 @@ public struct Viewport: View {
                             resetMeasurement()
                             return true
                         },
+                        onDelete: { onDeleteSelection?() ?? false },
                         inputExclusionRects: chromeLayout.inputExclusionRects
                     )
                     .accessibilityHidden(true)

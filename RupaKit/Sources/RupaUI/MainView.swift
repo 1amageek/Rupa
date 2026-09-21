@@ -352,6 +352,9 @@ private struct ProjectMainViewContent: View {
                 }
         }
         .navigationSplitViewStyle(.balanced)
+        .onDeleteCommand {
+            _ = handleDeleteSelection()
+        }
         .frame(minWidth: WorkspaceEditorSplitLayout.minimumWindowWidth, minHeight: 720)
         .onChange(of: modelingDraft) { _, _ in invalidateModelingPreview() }
         .onChange(of: meshDraft) { _, _ in invalidateModelingPreview() }
@@ -2114,6 +2117,7 @@ private struct ProjectMainViewContent: View {
             onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
             onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
             onCommandConfirm: viewportCommandConfirmHandler,
+            onDeleteSelection: handleDeleteSelection,
             onHover: viewportHoverHandler,
             onSnapCandidateKindChange: { kind in
                 snapOverrideState.updateHoveredCandidateKind(kind)
@@ -4916,6 +4920,13 @@ private struct ProjectMainViewContent: View {
             visit(rootID)
         }
         return newestID
+    }
+
+    private func handleDeleteSelection() -> Bool {
+        guard let action = WorkspaceKeyboardRouter().action(
+            for: WorkspaceKeyboardInput(isDelete: true), context: workspaceKeyboardContext
+        ) else { return false }
+        return applyWorkspaceKeyboardAction(action) == .handled
     }
 
     private func handleWorkspaceKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {

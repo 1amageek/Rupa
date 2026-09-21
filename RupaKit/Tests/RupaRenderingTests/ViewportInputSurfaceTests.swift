@@ -1,10 +1,53 @@
 import AppKit
+import SwiftUI
 import Testing
 @testable import RupaRendering
 
 @MainActor
 @Suite
 struct ViewportInputSurfaceTests {
+    @Test(.timeLimit(.minutes(1)))
+    func nativeDeleteReachesHostingCommandWithoutStealingTextEditing() async throws {
+        let input = ViewportInputSurface.InputView()
+        struct Host: NSViewRepresentable {
+            let input: ViewportInputSurface.InputView
+            func makeNSView(context: Context) -> NSView { input }
+            func updateNSView(_ nsView: NSView, context: Context) {}
+        }
+        var deletes = 0
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 240, height: 160),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        input.onDelete = { deletes += 1; return true }
+        window.contentView = NSHostingView(rootView: Host(input: input).onDeleteCommand { deletes += 1 })
+        window.makeKeyAndOrderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.makeFirstResponder(input))
+        for (characters, code) in [("\u{7f}", UInt16(51)), ("\u{f728}", UInt16(117))] {
+            let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: code))
+            window.sendEvent(event)
+            await Task.yield()
+        }
+        #expect(deletes == 2)
+        let field = NSTextField(frame: CGRect(x: 0, y: 0, width: 100, height: 24))
+        field.stringValue = "Box"
+        input.addSubview(field)
+        #expect(window.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor())
+        editor.selectedRange = NSRange(location: 3, length: 0)
+        let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
+            context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}",
+            isARepeat: false, keyCode: 51))
+        window.sendEvent(event)
+        #expect(editor.string == "Bo")
+        #expect(deletes == 2)
+    }
+
     @Test
     func mouseMovementPublishesCurrentMeasurementPreviewPoint() throws {
         let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
