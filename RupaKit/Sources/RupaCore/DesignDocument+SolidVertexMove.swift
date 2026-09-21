@@ -39,43 +39,13 @@ extension DesignDocument {
                 for: resolvedTarget.target,
                 objectRegistry: objectRegistry
             )
-            guard var bounds = try resolvedSketchBounds2D(sketch) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Vertex move requires a finite rectangle profile."
-                )
-            }
-
-            switch vertex {
-            case .bottomLeft:
-                bounds.minX += deltaXMeters
-                bounds.minY += deltaYMeters
-            case .bottomRight:
-                bounds.maxX += deltaXMeters
-                bounds.minY += deltaYMeters
-            case .topRight:
-                bounds.maxX += deltaXMeters
-                bounds.maxY += deltaYMeters
-            case .topLeft:
-                bounds.minX += deltaXMeters
-                bounds.maxY += deltaYMeters
-            }
-
-            guard bounds.maxX - bounds.minX > 1.0e-9,
-                  bounds.maxY - bounds.minY > 1.0e-9 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Vertex move would collapse the rectangle profile."
-                )
-            }
-
-            var rectangleSketch = sketch
-            try updateRectangleSketch(
-                &rectangleSketch,
-                firstCorner: sketchPoint(x: bounds.minX, y: bounds.minY),
-                oppositeCorner: sketchPoint(x: bounds.maxX, y: bounds.maxY)
+            nextSketch = try movedRectangleProfileSketch(
+                sketch,
+                corner: vertex,
+                deltaXMeters: deltaXMeters,
+                deltaYMeters: deltaYMeters,
+                operationName: "Vertex move"
             )
-            nextSketch = rectangleSketch
             preservesObjectProperties = true
         } else {
             let profileLoop = try EditableExtrudeProfileLoop.editableLoop(

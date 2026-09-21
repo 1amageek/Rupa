@@ -37,8 +37,8 @@ extension DesignDocument {
 
         try moveBodyCornerEdge(
             resolvedTarget: resolvedTarget,
-            deltaX: deltaX,
-            deltaY: deltaY,
+            deltaXMeters: deltaXMeters,
+            deltaYMeters: deltaYMeters,
             objectRegistry: objectRegistry
         )
     }
@@ -172,8 +172,8 @@ extension DesignDocument {
 
     private mutating func moveBodyCornerEdge(
         resolvedTarget: EditableBodyTargetResolution,
-        deltaX: CADExpression,
-        deltaY: CADExpression,
+        deltaXMeters: Double,
+        deltaYMeters: Double,
         objectRegistry: ObjectTypeRegistry
     ) throws {
         let featureID = resolvedTarget.featureID
@@ -187,8 +187,6 @@ extension DesignDocument {
             )
         }
 
-        let deltaXMeters = try resolvedLengthValue(deltaX, owner: "Body edge move delta X")
-        let deltaYMeters = try resolvedLengthValue(deltaY, owner: "Body edge move delta Y")
         let nextSketch: Sketch
         let preservesObjectProperties: Bool
         if isRectangleProfile(sketch) {
@@ -197,43 +195,13 @@ extension DesignDocument {
                 operationName: "Body edge move",
                 objectRegistry: objectRegistry
             )
-            guard var bounds = try resolvedSketchBounds2D(sketch) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Body edge move requires a finite rectangle profile."
-                )
-            }
-
-            switch edge {
-            case .leftBottom:
-                bounds.minX += deltaXMeters
-                bounds.minY += deltaYMeters
-            case .rightBottom:
-                bounds.maxX += deltaXMeters
-                bounds.minY += deltaYMeters
-            case .rightTop:
-                bounds.maxX += deltaXMeters
-                bounds.maxY += deltaYMeters
-            case .leftTop:
-                bounds.minX += deltaXMeters
-                bounds.maxY += deltaYMeters
-            }
-
-            guard bounds.maxX - bounds.minX > 1.0e-9,
-                  bounds.maxY - bounds.minY > 1.0e-9 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Body edge move would collapse the rectangle profile."
-                )
-            }
-
-            var rectangleSketch = sketch
-            try updateRectangleSketch(
-                &rectangleSketch,
-                firstCorner: sketchPoint(x: bounds.minX, y: bounds.minY),
-                oppositeCorner: sketchPoint(x: bounds.maxX, y: bounds.maxY)
+            nextSketch = try movedRectangleProfileSketch(
+                sketch,
+                corner: edge.rectangleCorner,
+                deltaXMeters: deltaXMeters,
+                deltaYMeters: deltaYMeters,
+                operationName: "Body edge move"
             )
-            nextSketch = rectangleSketch
             preservesObjectProperties = true
         } else {
             let profileLoop = try EditableExtrudeProfileLoop.editableLoop(
