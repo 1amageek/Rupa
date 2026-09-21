@@ -1660,7 +1660,7 @@ final class RealityViewportSpatialResources {
                                indexCount: vertices.count - start, topology: .line, materialIndex: style,
                                bounds: vertices.count == start ? .init(min: .zero, max: .zero) : bounds))
         }
-        let font = NSFont.monospacedSystemFont(ofSize: ViewportProjectedGrid.labelFontSize, weight: .medium)
+        let font = NSFont.monospacedSystemFont(ofSize: ViewportProjectedGrid.labelFontSize, weight: .semibold)
         var text: [(Entity, String, Transform)] = []
         text.reserveCapacity(frame.screenLabels.count)
         var used = Set<Int>()
@@ -1673,7 +1673,7 @@ final class RealityViewportSpatialResources {
                 entity = gridLabels[index].entity
             } else {
                 let attributed = NSAttributedString(string: label.text, attributes: [
-                    .font: font, .foregroundColor: NSColor(white: 0.55, alpha: 1)
+                    .font: font, .foregroundColor: NSColor(white: 0.75, alpha: 1)
                 ])
                 let size = attributed.size()
                 guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {

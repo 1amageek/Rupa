@@ -1,6 +1,6 @@
 # Progress
 
-- [x] GL1 Retain the mounted camera across hover frame replacement, skip unchanged lens/text transforms and place readable opaque 14pt labels on the grid plane. Native production GPU pixel, repeated handoff, projection, resource reuse and failure checks pass in six cases; camera/remount regressions pass separately. Implementation commit accompanies this record. `depends:none` `parallel:none`
+- [x] GL1 Retain mounted camera and grid labels across hover updates (da10f92c). User-requested readability correction uses 24pt semibold and opaque 75% gray; eight native GPU/projection/reuse/failure cases pass and the restarted App visibly displays complete labels. Readability commit accompanies this record. `depends:none` `parallel:none`
 
 - [x] TX1 Remove label line limits and ellipsis policies across Inspector, lists, panels and viewport chrome; wrap long text, grow rows and move header hints outside the fixed-height control row. Nine focused functions (ten cases), signed App build and review pass. Commit c55112b4. `depends:none` `parallel:none`
 
