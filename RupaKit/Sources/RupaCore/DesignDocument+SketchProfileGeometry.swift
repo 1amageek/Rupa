@@ -279,6 +279,22 @@ extension DesignDocument {
         try validateFiniteAngle(rotationDegrees, owner: "Polygon angle")
         try validatePolygonSides(sides)
         let sizingMode: PolygonSizingMode = isInradius ? .inradius : .circumradius
+        let sideLength = sizingMode.sideLength(from: sizingRadiusMeters, sides: sides)
+
+        // The prism this profile extrudes may already carry an all-edge fillet, and every one of
+        // these properties moves the cross-section that bounds it: a smaller radius shortens each
+        // side, and more sides both shorten them and sharpen the turn each corner charges.
+        // Refusing before the rebuild leaves the document as it was rather than committing one the
+        // evaluator will reject.
+        for bodyFeatureID in extrudedBodyFeatureIDs(forProfile: featureID) {
+            let cornerRadius = try boxCornerRadius(bodyFeatureID)
+            guard cornerRadius != 0 else { continue }
+            let sizes = try resolvedExtrudedBodyDimensions(featureID: bodyFeatureID)
+            try validateAllEdgeCorner(
+                cornerRadius,
+                on: .regularPolygon(sideLength: sideLength, sideCount: sides, height: sizes.sizeY)
+            )
+        }
 
         let profile = try sketchProfileFeature(featureID: featureID, owner: owner)
         let center = try polygonProfileCenter(in: profile.sketch)
@@ -321,7 +337,6 @@ extension DesignDocument {
         try commitSketchProfile(profile.feature, sketch: sketch, owner: owner)
 
         let circumradius = sizingMode.circumradius(from: sizingRadiusMeters, sides: sides)
-        let sideLength = sizingMode.sideLength(from: sizingRadiusMeters, sides: sides)
         try updateSketchObjectProperties(
             featureID: featureID,
             objectRegistry: objectRegistry

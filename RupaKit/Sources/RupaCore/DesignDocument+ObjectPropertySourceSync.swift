@@ -303,6 +303,21 @@ extension DesignDocument {
             )
         }
         let properties = definition.resolvedProperties(object.properties)
+        // `bevel` names the body's all-edge fillet, not this profile's entities, so every family
+        // that declares it routes to the same mutator and the switch below carries only the
+        // geometry each family owns.
+        if property.renderBinding == .bevel {
+            try setProfileBevel(
+                featureID: featureID,
+                bevelMeters: try requiredLengthMeters(
+                    "bevel",
+                    definition: definition,
+                    properties: properties
+                ),
+                objectRegistry: objectRegistry
+            )
+            return
+        }
 
         switch object.typeID {
         case .some(.line):
@@ -349,18 +364,6 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.circle):
-            if property.id == "bevel" {
-                try setProfileBevel(
-                    featureID: featureID,
-                    bevelMeters: try requiredLengthMeters(
-                        "bevel",
-                        definition: definition,
-                        properties: properties
-                    ),
-                    objectRegistry: objectRegistry
-                )
-                return
-            }
             guard property.id == "radius" else {
                 throw unsupportedObjectSourceProperty(property, definition: definition)
             }
@@ -374,18 +377,6 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         case .some(.rectangle):
-            if property.id == "bevel" {
-                try setProfileBevel(
-                    featureID: featureID,
-                    bevelMeters: try requiredLengthMeters(
-                        "bevel",
-                        definition: definition,
-                        properties: properties
-                    ),
-                    objectRegistry: objectRegistry
-                )
-                return
-            }
             guard property.id == "size.x"
                     || property.id == "size.y"
                     || property.id == "corner.radius" else {
@@ -535,12 +526,9 @@ extension DesignDocument {
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
     // reach no mutation, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unreachable today: `bevel` on a polygon or
-    // slot profile, and cylinder `angle`, `caps`, `hollow`. The rounding ones are blocked below
-    // Rupa: the kernel's all-edge fillet builds a box or a circular cylinder, so a wrapper on a
-    // hexagonal or slot prism commits a document that stops evaluating rather than rounding it.
-    // Do not treat an edit to any of these as applied until the mutation exists and a test drives
-    // the property through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `angle`, `caps`,
+    // and `hollow`. Do not treat an edit to any of these as applied until the mutation exists and
+    // a test drives the property through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition
@@ -629,9 +617,10 @@ extension DesignDocument {
             objectRegistry: objectRegistry
         )
         // The profile's `bevel` was latent while it had no body. Applying it here makes the order
-        // the two properties were edited in stop mattering.
-        if object.typeID == .some(.rectangle) || object.typeID == .some(.circle),
-           let bevelProperty = definition.property(for: .bevel),
+        // the two properties were edited in stop mattering. Declaring the property is the whole
+        // condition: a polygon and a slot carry no generated body type, so naming the types would
+        // have skipped exactly the two families this asks about.
+        if let bevelProperty = definition.property(for: .bevel),
            case let .length(bevelMeters) = properties.value(
                for: bevelProperty.id,
                default: bevelProperty.defaultValue

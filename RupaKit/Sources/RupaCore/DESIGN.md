@@ -30,13 +30,26 @@ extrusion into an intermediate input and using the visible feature for the
 fillet. Setting zero restores that extrusion and removes only its unshared
 intermediate input. Dimension editing resolves through this all-edge wrapper;
 other fillets are not editable primitives. The radius must be zero or greater
-than the modeling tolerance, and the prism must have room for it: a box admits
-it when every side leaves `side - 2r > tolerance`, a cylinder when its
-cross-section leaves `radius - 2r > tolerance` and its height leaves
-`height - 2r > tolerance`. A cylinder is bounded by half its own radius rather
-than by half its diameter, because its rim rides a torus whose center circle
-`radius - r` must clear its own tube `r`. No single formula states both bounds,
-so every caller resolves which prism it holds before it validates. Core owns the maximum the
+than the modeling tolerance, and the prism must have room for it. Each prism
+family states its own bound, in the terms the profile is authored in:
+
+| Prism | Profile Core recognizes | Bound |
+|---|---|---|
+| Box | Axis-aligned rectangle, square corners | every side leaves `side - 2r > tolerance` |
+| Cylinder | One circle | `radius - 2r > tolerance` |
+| Regular N-gon prism | Closed chain of N equal sides turning `2pi / N` one way | every side leaves `side - 2r * tan(pi / N) > tolerance` |
+| Stadium prism | Two parallel equal lines closed by two half-turn arcs of one radius | `capRadius - 2r > tolerance` |
+
+Every family with a body also leaves `height - 2r > tolerance`. A cylinder is
+bounded by half its own radius rather than by half its diameter, because its rim
+rides a torus whose center circle `radius - r` must clear its own tube `r`; a
+stadium's caps ride the same torus, which is why their bound has the same shape.
+A polygon's straight sides are bounded instead by the corner turn they pay for,
+and at `N = 4` that expression is the box bound, which is the same solid the
+kernel builds for a square. The general statements these four specialize are
+owned by the [CADModeling design](../../../swift-CAD/Sources/CADModeling/DESIGN.md);
+no single formula states them all, so every caller resolves which prism it holds
+before it validates. Core owns the maximum the
 Inspector offers: `maximumAllEdgeCornerRadius` reports one tolerance inside the
 bound the kernel refuses, so the end of a control bound by it is always an edit
 that applies. Rejected edits publish no source or property change. `Corner
@@ -68,15 +81,28 @@ its axis, `r > tolerance`, `radius - 2r > tolerance`, and `height - 2r >
 tolerance`. Its rim is a torus of major radius `radius - r` and minor radius
 `r`, which the kernel represents only while the center circle clears the tube,
 so half the cylinder radius is the ceiling and a capsule is outside the domain.
-Anything else it refuses, and it refuses at evaluation.
+`RoundedPrismFilletBuilder` takes every other body: a convex prism whose cap
+profile is one closed loop of straight segments and tangent circular arcs, each
+lateral face a plane containing its segment or a cylinder coaxial with its arc.
+It refuses a reflex corner, a corner either of whose sides is an arc, and an arc
+sweeping more than half a turn.
+Anything outside all three domains it refuses, and it refuses at evaluation.
 `CADDocument.replaceFeature` does not evaluate, so a corner accepted on another
 prism commits a document that no longer evaluates and surfaces later at the
 topology snapshot, with no report at the edit that caused it. Core therefore
 owns the precondition: `setBoxCorner` refuses a positive radius unless the
-feature it wraps extrudes a square-cornered rectangle profile or a single-circle
-profile, and it refuses with `EditorError(code: .commandInvalid)` before it
-mutates anything. Setting zero is always accepted, because unwrapping is what
-repairs such a document.
+feature it wraps extrudes one of the four profiles the prism table above names,
+and it refuses with `EditorError(code: .commandInvalid)` before it mutates
+anything.
+Core recognizes those four from the sketch entities rather than from the object
+properties beside them, in the order circle, rectangle, regular polygon,
+stadium; a square polygon drawn on the axes is therefore recognized as a
+rectangle, which is harmless because the two bounds agree and the kernel routes
+that body to its box builder anyway. Recognizing a narrower family than the
+kernel admits is deliberate: Core would otherwise have to re-derive the kernel's
+profile walk to know what it may commit. Setting zero is always accepted before
+any recognition runs, because unwrapping is what repairs such a document and a
+profile outside the four still has to be able to clear its own bevel.
 
 Measured against every profile family the schema declares a rounding property
 for:
@@ -86,33 +112,48 @@ for:
 | Rectangle prism, square corners | Built | 6 -> 26 |
 | Rectangle prism, rounded profile | Refused: `The profile is already rounded, so its box has no edges left to round.` | — |
 | Cylinder | Built | 6 -> 14 |
-| Hexagonal prism | Refused: `Rounding every edge requires a box or a cylinder extruded from a rectangle or circle profile.` | — |
-| Slot prism | Refused, by the same precondition | — |
+| Regular N-gon prism | Built | N + 2 -> 6N + 2 |
+| Slot prism along one straight segment | Built | 8 -> 20 |
+| Slot prism along an arc, a polyline, a mixed chain, or a spline | Refused: `Rounding every edge requires a box, a cylinder, a regular polygon prism, or a slot along one straight segment.` | — |
 
-Widening this further is a change to the
-[swift-CAD design](../../../swift-CAD/DESIGN.md), not to Core. Until it happens,
-`bevel` on a polygon or slot profile has no source mutation and fails with
-`EditorError(code: .commandUnsupported)`.
+A slot is the offset of whatever path it was built from, so only the slot along
+a single straight segment is a stadium. The offset of a polyline turns one way
+on one side and the other way on the other, and the offset of an arc has a
+concave inner boundary, so neither is convex and neither is admitted.
 
 #### One fillet, two views
 
 The fillet feature is the single truth of how rounded a body is. Two properties
 name it: the body object's `corner.radius`, which `.cube` and `.cylinder`
-declare, and the profile object's `bevel`, which `.rectangle` and `.circle`
-declare. Both route to `setBoxCorner`, and both are resynchronized from
-`boxCornerRadius` after it returns, so the Inspector cannot show one value on
-the body and a different one on the profile nested underneath it.
+declare, and the profile object's `bevel`, which every profile type declares.
+Both route to `setBoxCorner`, and both are resynchronized from `boxCornerRadius`
+after it returns, so the Inspector cannot show one value on the body and a
+different one on the profile nested underneath it.
 
 | View | Declared on | Path |
 |---|---|---|
 | `corner.radius` | `.cube` and `.cylinder` body objects | `applyBodyObjectPropertyToSource` -> `setBoxCorner` |
-| `bevel` | `.rectangle` and `.circle` sketch objects | `setProfileBevel` -> `setBoxCorner` |
+| `bevel` | `.rectangle`, `.circle`, `.polygon`, and `.slot` sketch objects | `setProfileBevel` -> `setBoxCorner` |
+
+Only a rectangle and a circle have both views. The extrusion of a polygon or a
+slot is given no object type, so its body carries no schema and no
+`corner.radius`, and the profile's `bevel` is the whole of that fillet's
+presentation. The resynchronization needs no case for this: it writes
+`corner.radius` only where a typed body object declares it and finds none.
 
 A profile with no extruded body yet keeps its `bevel` as latent state: the value
-is validated against the profile's own sides and applied by the extrusion that
-creates the body, which is the order independence `extrusion` itself has. A
-profile that builds more than one body refuses the edit rather than guessing
-which box the bevel means.
+is validated against the profile's own cross-section and applied by the
+extrusion that creates the body, which is the order independence `extrusion`
+itself has. A profile that builds more than one body refuses the edit rather
+than guessing which box the bevel means. Zero is accepted on any profile,
+recognized or not, before the family is resolved, so a slot along a spline can
+always be returned to unbevelled.
+
+The bound the Inspector offers a `bevel` control is the body's
+`maximumAllEdgeCornerRadius`, the same value `corner.radius` is bound by, and it
+is published for every profile whose one extruded body has a bound. A latent
+`bevel` is offered no bound, because the height half of it does not exist yet;
+it is still validated on submission against the cross-section alone.
 
 Because the wrapper keeps the visible feature ID and moves the extrusion into a
 hidden input, every path that reads or replaces that extrusion resolves through
@@ -731,13 +772,13 @@ Invariants:
 
   | Property | Declared on | Why no mutation reaches it |
   |---|---|---|
-  | `bevel` | `polygon`, `slot` profiles | Blocked below Rupa: the kernel's all-edge fillet builds a box or a circular cylinder, and neither prism is one |
   | `angle`, `caps`, `hollow` | `cylinder` | Not yet routed in Core; the kernel builds all three |
 
-  The rounding row clears only when the
-  [swift-CAD design](../../../swift-CAD/DESIGN.md) widens the fillet again,
-  which is why it is recorded here rather than treated as work Core can finish.
-  The cylinder shape row clears inside Core.
+  The remaining row clears inside Core. A polygon or slot `bevel` stood here
+  while the kernel's all-edge fillet built only a box or a circular cylinder;
+  the [swift-CAD design](../../../swift-CAD/DESIGN.md) now builds the convex
+  prism both profiles extrude, and `Polygon and slot bevel` below is the proof
+  that the property reaches it.
 
 Segment counts are display resolution, not exact geometry. The kernel keeps
 circles and arcs as rational arcs and derives a segment count from tolerance, so
@@ -1226,6 +1267,7 @@ T09-B owns the following behavioral proof:
 | Node appearance authoring | `Tests/RupaCoreTests/SceneNodeAppearanceTests.swift` proves that an appearance edit on a node holding no material creates one, assigns it, and leaves the document default alone; that the created material keeps the values of the three components the edit does not name, taken from the document default when the document holds one and from the neutral appearance when it does not; that `sceneNodeAppearance(id:)` resolves the node's material, then the document default, then the neutral appearance; that a second node's edit does not reuse the first node's material name; that a value outside the unit interval is refused with the library and the node unchanged; and that a generated pattern-array output refuses the edit while `sceneNodeAppearance(id:)` still answers for it. |
 | Box bevel and corner radius | `Tests/RupaCoreTests/RectangleProfileBevelTests.swift` proves that a profile's `bevel` and its box's `corner.radius` are two views of one fillet, the evaluated face count rising from 6 to 26 and both properties reading back the same value; that resizing the profile under the wrapper still resynchronizes the body and keeps the fillet; that a rounded profile and a bevelled box each refuse the other with `.commandInvalid` and no metadata change; that a bevel on a profile with no body yet is bounded by the profile's own sides and applied by the extrusion that creates the body; that a depth edit resolves through the wrapper to the hidden extrusion and is refused when the new depth no longer admits the radius; and that changing an existing bevel rebuilds only the fillet, reusing the profile and the extrusion. |
 | Cylinder corner radius and circle bevel | `Tests/RupaCoreTests/CylinderCornerTests.swift` proves that a cylinder's `corner.radius` and its circle profile's `bevel` are two views of one fillet, the evaluated face count rising from 6 to 14 and an edit to either reading back on both while the body keeps its reference; that the dimensions of a rounded cylinder resolve through the wrapper to the hidden extrusion, survive a `.rupa` round trip, and on zero restore that extrusion into the visible feature while its hidden node is removed; that a radius the cross-section or the height cannot admit is refused before the mutation, leaving the source fingerprint and the metadata unchanged, including one just inside half the cylinder radius, where the rim torus would self-intersect; that the maximum Core publishes is instead an edit that applies; that shrinking either the circle or the cylinder below the radius it already carries is refused the same way; and that a bevel on a circle profile with no body yet is bounded by half its own radius and applied by the extrusion that creates the cylinder. |
+| Polygon and slot bevel | `Tests/RupaCoreTests/PolygonSlotBevelTests.swift` proves that a polygon or slot profile's `bevel` is the all-edge fillet on the prism it extrudes, and, since neither body is a typed object and so carries no `corner.radius` of its own, the whole Inspector surface for that fillet: the evaluated face count rises from 8 to 38 for a hexagonal prism and from 8 to 20 for a slot's stadium prism, and returns on zero. It further proves that a four-sided polygon rounds through the polygon family the rectangle recognizer refuses; that the maximum each of the three families publishes is an edit that applies and evaluates while one tolerance past its bound is refused with the source fingerprint and the metadata unchanged; that a shallow prism is bounded by its depth rather than by its sides; that reshaping a polygon under a bevel its new cross-section no longer admits is refused before the rebuild, leaving the fillet and the document as they were; that a bevel on a slot with no body yet is bounded by half its own width and applied by the extrusion that creates the prism; and that a slot along an arc refuses a positive bevel and accepts zero. |
 
 CADAPI-C must additionally prove:
 

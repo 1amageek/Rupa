@@ -52,6 +52,16 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                     default: break
                     }
                 }
+            } else if definition?.property(for: .bevel) != nil {
+                size = nil
+                // A profile's `bevel` names the all-edge fillet on the body it extrudes, so the
+                // bound is that body's rather than the profile's own extent. A profile nothing has
+                // extruded, or one feeding more than one body, names no single body and publishes
+                // no bound, which leaves the control on its declared range.
+                let bodies = document.extrudedBodyFeatureIDs(forProfile: featureID)
+                cornerRadiusLimit = bodies.count == 1
+                    ? try document.maximumAllEdgeCornerRadius(featureID: bodies[0])
+                    : nil
             } else {
                 size = nil
                 cornerRadiusLimit = nil

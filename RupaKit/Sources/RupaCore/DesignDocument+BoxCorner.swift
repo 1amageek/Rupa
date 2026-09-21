@@ -69,14 +69,25 @@ extension DesignDocument {
                 .nodes[extrude.profile.featureID]?.operation else {
             return nil
         }
-        let isCylinder = singleCircleEntry(in: sketch) != nil
-        if !isCylinder, try recognizedRectangleProfile(in: sketch) == nil { return nil }
-        // The body's resolved dimensions are the one measurement both prisms come from, and a
-        // cylinder's span across the axis is its diameter.
+        guard let profile = try recognizedAllEdgeFilletProfile(in: sketch) else {
+            return nil
+        }
+        // The body's resolved dimensions carry the depth every prism is bounded along, and for the
+        // two the kernel measures from their outer extent they are the cross-section as well: a
+        // cylinder's span across the axis is its diameter. The other two profiles measure a side
+        // and a cap arc, neither of which the extent names.
         let sizes = try resolvedExtrudedBodyDimensions(featureID: featureID)
-        return isCylinder
-            ? .cylinder(radius: sizes.sizeX / 2.0, height: height ?? sizes.sizeY)
-            : .box(sizes: [sizes.sizeX, height ?? sizes.sizeY, sizes.sizeZ])
+        let depth = height ?? sizes.sizeY
+        switch profile {
+        case .circle:
+            return .cylinder(radius: sizes.sizeX / 2.0, height: depth)
+        case .rectangle:
+            return .box(sizes: [sizes.sizeX, depth, sizes.sizeZ])
+        case let .regularPolygon(sideLength, sideCount):
+            return .regularPolygon(sideLength: sideLength, sideCount: sideCount, height: depth)
+        case let .stadium(capRadius):
+            return .stadium(capRadius: capRadius, height: depth)
+        }
     }
 
     /// The largest corner radius this body accepts, or `nil` when it accepts none.
@@ -92,23 +103,20 @@ extension DesignDocument {
 
     /// Rejects a positive radius the kernel's all-edge fillet cannot build.
     ///
-    /// `AllEdgeFilletBuilder` accepts an orthogonal box or a circular cylinder, and
+    /// `AllEdgeFilletBuilder` accepts the four profiles `AllEdgeFilletProfile` names, and
     /// `CADDocument.replaceFeature` does not evaluate, so a corner accepted on any other prism
     /// would commit a document that no longer evaluates and surface as a failure at the next
     /// render instead of at this edit. Zero is always accepted: unwrapping is how such a document
     /// is repaired.
     func validateBoxCornerTarget(_ featureID: FeatureID) throws {
         guard case let .extrude(extrude) = cadDocument.designGraph.nodes[featureID]?.operation,
-              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation else {
+              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation,
+              let profile = try recognizedAllEdgeFilletProfile(in: sketch) else {
             throw unroundableAllEdgeTarget()
         }
-        // A circle extrudes the cylinder the kernel rounds; it carries no profile rounding of its
-        // own, so its only precondition is the one the dimensions already prove.
-        if singleCircleEntry(in: sketch) != nil { return }
-        guard let profile = try recognizedRectangleProfile(in: sketch) else {
-            throw unroundableAllEdgeTarget()
-        }
-        guard profile.cornerRadius == 0 else {
+        // Only the rectangle can already carry rounding of its own; the other three profiles have
+        // no corner property to have spent, so the dimensions are their whole precondition.
+        if case let .rectangle(_, _, cornerRadius) = profile, cornerRadius != 0 {
             throw EditorError(
                 code: .commandInvalid,
                 message: "The profile is already rounded, so its box has no edges left to round."
@@ -119,7 +127,7 @@ extension DesignDocument {
     func unroundableAllEdgeTarget() -> EditorError {
         EditorError(
             code: .commandInvalid,
-            message: "Rounding every edge requires a box or a cylinder extruded from a rectangle or circle profile."
+            message: "Rounding every edge requires a box, a cylinder, a regular polygon prism, or a slot along one straight segment."
         )
     }
 
@@ -224,27 +232,33 @@ extension DesignDocument {
     /// being stored as though it had been applied.
     func validateLatentProfileBevel(featureID: FeatureID, bevelMeters: Double) throws {
         let profile = try sketchProfileFeature(featureID: featureID, owner: "Profile bevel")
-        if let circleEntry = singleCircleEntry(in: profile.sketch) {
-            // Nothing has extruded this circle, so the cylinder it will become has no height to
-            // bound the bevel and only its cross-section does.
-            let radius = try resolvedPositiveLengthValue(
-                circleEntry.circle.radius, owner: "Circle radius")
+        // Zero is what a profile outside every family is allowed to hold, and clearing the value is
+        // how one that was edited out of its family is repaired, so it is accepted before the
+        // family is resolved rather than after.
+        guard bevelMeters != 0 else { return }
+        guard let recognized = try recognizedAllEdgeFilletProfile(in: profile.sketch) else {
+            throw unroundableAllEdgeTarget()
+        }
+        // Nothing has extruded this profile, so the prism it will become has no height to bound the
+        // bevel and only its cross-section does.
+        switch recognized {
+        case let .circle(radius):
             try validateAllEdgeCorner(bevelMeters, on: .cylinder(radius: radius, height: nil))
-            return
-        }
-        guard let recognized = try recognizedRectangleProfile(in: profile.sketch) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "A bevel requires an axis-aligned rectangle profile or a circle profile."
+        case let .rectangle(sizeX, sizeY, cornerRadius):
+            guard cornerRadius == 0 else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "The profile is already rounded, so its box has no edges left to round."
+                )
+            }
+            try validateAllEdgeCorner(bevelMeters, on: .box(sizes: [sizeX, sizeY]))
+        case let .regularPolygon(sideLength, sideCount):
+            try validateAllEdgeCorner(
+                bevelMeters,
+                on: .regularPolygon(sideLength: sideLength, sideCount: sideCount, height: nil)
             )
+        case let .stadium(capRadius):
+            try validateAllEdgeCorner(bevelMeters, on: .stadium(capRadius: capRadius, height: nil))
         }
-        guard bevelMeters == 0 || recognized.cornerRadius == 0 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "The profile is already rounded, so its box has no edges left to round."
-            )
-        }
-        try validateAllEdgeCorner(
-            bevelMeters, on: .box(sizes: [recognized.sizeX, recognized.sizeY]))
     }
 }

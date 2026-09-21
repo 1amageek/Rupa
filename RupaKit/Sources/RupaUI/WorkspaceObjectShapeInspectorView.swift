@@ -158,7 +158,11 @@ struct WorkspaceObjectShapeInspectorView: View {
             return nil
         }
         if meters.count == values.count {
-            let cornerLimit = property.renderBinding == .cornerRadius
+            // A body's `corner.radius` and a profile's `bevel` are the same all-edge fillet seen
+            // from the two ends, so they take the same bound.
+            let roundsEveryEdge = property.renderBinding == .cornerRadius
+                || property.renderBinding == .bevel
+            let cornerLimit = roundsEveryEdge
                 ? shapes.compactMap(\.cornerRadiusLimit).min() : nil
             let range = cornerLimit.map { 0...$0 } ?? lengthSliderRange(for: property, values: meters)
             workspaceLengthControl(

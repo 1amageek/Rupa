@@ -646,6 +646,243 @@ extension DesignDocument {
         )
     }
 
+    /// Names the cap profile family the kernel's all-edge fillet rounds, or `nil` for a sketch
+    /// outside every one of them.
+    ///
+    /// The order is the contract: a circle, then a rectangle, then a regular polygon, then a
+    /// stadium. `AllEdgeFilletProfile` owns why an axis-aligned square stops at the rectangle.
+    func recognizedAllEdgeFilletProfile(in sketch: Sketch) throws -> AllEdgeFilletProfile? {
+        if let circleEntry = singleCircleEntry(in: sketch) {
+            let radius = try resolvedLengthValue(circleEntry.circle.radius, owner: "Circle radius")
+            guard radius > 0 else {
+                return nil
+            }
+            return .circle(radius: radius)
+        }
+        if let rectangle = try recognizedRectangleProfile(in: sketch) {
+            return .rectangle(
+                sizeX: rectangle.sizeX,
+                sizeY: rectangle.sizeY,
+                cornerRadius: rectangle.cornerRadius
+            )
+        }
+        if let polygon = try recognizedRegularPolygonProfile(in: sketch) {
+            return .regularPolygon(
+                sideLength: polygon.sideLength,
+                sideCount: polygon.sideCount
+            )
+        }
+        if let capRadius = try recognizedStadiumProfile(in: sketch) {
+            return .stadium(capRadius: capRadius)
+        }
+        return nil
+    }
+
+    /// Reads a regular polygon profile back out of a sketch.
+    ///
+    /// The family is a closed chain of three or more equal straight sides whose vertices all turn
+    /// by the same signed exterior angle. A closed chain of equal sides alone would also admit a
+    /// star polygon, which winds more than once and corners reflexly, so the turn is measured at
+    /// every vertex rather than inferred from the side count.
+    func recognizedRegularPolygonProfile(
+        in sketch: Sketch
+    ) throws -> (sideCount: Int, sideLength: Double)? {
+        let tolerance = 1.0e-9
+        var sides: [(start: (x: Double, y: Double), end: (x: Double, y: Double))] = []
+        for entity in sketch.entities.values {
+            guard case .line(let line) = entity else {
+                return nil
+            }
+            sides.append(
+                (
+                    start: try resolvedSketchPoint(line.start, owner: "Polygon side start"),
+                    end: try resolvedSketchPoint(line.end, owner: "Polygon side end")
+                )
+            )
+        }
+        guard sides.count >= 3 else {
+            return nil
+        }
+
+        var directions: [(x: Double, y: Double)] = []
+        var lengths: [Double] = []
+        for side in sides {
+            let deltaX = side.end.x - side.start.x
+            let deltaY = side.end.y - side.start.y
+            let length = (deltaX * deltaX + deltaY * deltaY).squareRoot()
+            guard length > tolerance else {
+                return nil
+            }
+            directions.append((x: deltaX / length, y: deltaY / length))
+            lengths.append(length)
+        }
+        guard let shortestSide = lengths.min(),
+              let longestSide = lengths.max(),
+              longestSide - shortestSide <= tolerance else {
+            return nil
+        }
+
+        var successors: [Int] = []
+        for side in sides {
+            var successor: Int?
+            for (candidateIndex, candidate) in sides.enumerated() {
+                guard nearlyEqual(candidate.start.x, side.end.x, tolerance: tolerance),
+                      nearlyEqual(candidate.start.y, side.end.y, tolerance: tolerance) else {
+                    continue
+                }
+                guard successor == nil else {
+                    return nil
+                }
+                successor = candidateIndex
+            }
+            guard let successor else {
+                return nil
+            }
+            successors.append(successor)
+        }
+
+        // One cycle through every side and back to its start. Two sides sharing a successor, or a
+        // chain that closes early, leaves the loop somewhere other than where it began.
+        var visited: Set<Int> = []
+        var sideIndex = 0
+        for _ in sides.indices {
+            guard visited.insert(sideIndex).inserted else {
+                return nil
+            }
+            sideIndex = successors[sideIndex]
+        }
+        guard sideIndex == 0 else {
+            return nil
+        }
+
+        let expectedTurn = 2.0 * Double.pi / Double(sides.count)
+        var firstTurn: Double?
+        for index in sides.indices {
+            let incoming = directions[index]
+            let outgoing = directions[successors[index]]
+            let turn = atan2(
+                incoming.x * outgoing.y - incoming.y * outgoing.x,
+                incoming.x * outgoing.x + incoming.y * outgoing.y
+            )
+            guard nearlyEqual(abs(turn), expectedTurn, tolerance: tolerance) else {
+                return nil
+            }
+            if let firstTurn {
+                guard turn.sign == firstTurn.sign else {
+                    return nil
+                }
+            } else {
+                firstTurn = turn
+            }
+        }
+        return (sideCount: sides.count, sideLength: shortestSide)
+    }
+
+    /// Reads a stadium profile back out of a sketch and names the radius of its caps.
+    ///
+    /// The family is two parallel straight sides of one length closed by two half-turn arcs of one
+    /// radius, which is the outline a slot takes when its path is a single straight segment. The
+    /// outline is rebuilt from the two cap centers and compared against the sketch rather than
+    /// checked feature by feature, so a figure whose caps join the wrong ends is refused.
+    func recognizedStadiumProfile(in sketch: Sketch) throws -> Double? {
+        let tolerance = 1.0e-9
+        var sides: [(start: (x: Double, y: Double), end: (x: Double, y: Double))] = []
+        var caps: [(center: (x: Double, y: Double), radius: Double, start: Double, end: Double)] = []
+        for entity in sketch.entities.values {
+            switch entity {
+            case .line(let line):
+                sides.append(
+                    (
+                        start: try resolvedSketchPoint(line.start, owner: "Slot side start"),
+                        end: try resolvedSketchPoint(line.end, owner: "Slot side end")
+                    )
+                )
+            case .arc(let arc):
+                caps.append(
+                    (
+                        center: try resolvedSketchPoint(arc.center, owner: "Slot cap center"),
+                        radius: try resolvedLengthValue(arc.radius, owner: "Slot cap radius"),
+                        start: try resolvedAngleValue(arc.startAngle, owner: "Slot cap start angle"),
+                        end: try resolvedAngleValue(arc.endAngle, owner: "Slot cap end angle")
+                    )
+                )
+            default:
+                return nil
+            }
+        }
+        guard sides.count == 2, caps.count == 2 else {
+            return nil
+        }
+
+        let capRadius = caps[0].radius
+        guard capRadius > tolerance,
+              nearlyEqual(caps[1].radius, capRadius, tolerance: tolerance) else {
+            return nil
+        }
+        for cap in caps {
+            guard nearlyEqual(abs(cap.end - cap.start), .pi, tolerance: tolerance) else {
+                return nil
+            }
+        }
+
+        let axisX = caps[1].center.x - caps[0].center.x
+        let axisY = caps[1].center.y - caps[0].center.y
+        let straightLength = (axisX * axisX + axisY * axisY).squareRoot()
+        guard straightLength > tolerance else {
+            return nil
+        }
+        let offsetX = -axisY / straightLength * capRadius
+        let offsetY = axisX / straightLength * capRadius
+
+        for cap in caps {
+            let capStart = (
+                x: cap.center.x + cos(cap.start) * capRadius,
+                y: cap.center.y + sin(cap.start) * capRadius
+            )
+            guard coincides(capStart, with: (x: cap.center.x + offsetX, y: cap.center.y + offsetY), tolerance: tolerance)
+                || coincides(capStart, with: (x: cap.center.x - offsetX, y: cap.center.y - offsetY), tolerance: tolerance) else {
+                return nil
+            }
+        }
+
+        let nearSide = (
+            (x: caps[0].center.x + offsetX, y: caps[0].center.y + offsetY),
+            (x: caps[1].center.x + offsetX, y: caps[1].center.y + offsetY)
+        )
+        let farSide = (
+            (x: caps[0].center.x - offsetX, y: caps[0].center.y - offsetY),
+            (x: caps[1].center.x - offsetX, y: caps[1].center.y - offsetY)
+        )
+        let firstSpansNear = spans(sides[0], nearSide, tolerance: tolerance)
+        let firstSpansFar = spans(sides[0], farSide, tolerance: tolerance)
+        let secondSpansNear = spans(sides[1], nearSide, tolerance: tolerance)
+        let secondSpansFar = spans(sides[1], farSide, tolerance: tolerance)
+        guard (firstSpansNear && secondSpansFar) || (firstSpansFar && secondSpansNear) else {
+            return nil
+        }
+        return capRadius
+    }
+
+    private func coincides(
+        _ point: (x: Double, y: Double),
+        with other: (x: Double, y: Double),
+        tolerance: Double
+    ) -> Bool {
+        nearlyEqual(point.x, other.x, tolerance: tolerance)
+            && nearlyEqual(point.y, other.y, tolerance: tolerance)
+    }
+
+    private func spans(
+        _ side: (start: (x: Double, y: Double), end: (x: Double, y: Double)),
+        _ endpoints: ((x: Double, y: Double), (x: Double, y: Double)),
+        tolerance: Double
+    ) -> Bool {
+        (coincides(side.start, with: endpoints.0, tolerance: tolerance)
+            && coincides(side.end, with: endpoints.1, tolerance: tolerance))
+            || (coincides(side.start, with: endpoints.1, tolerance: tolerance)
+                && coincides(side.end, with: endpoints.0, tolerance: tolerance))
+    }
+
     func nearlyEqual(_ lhs: Double, _ rhs: Double, tolerance: Double) -> Bool {
         abs(lhs - rhs) <= tolerance
     }
