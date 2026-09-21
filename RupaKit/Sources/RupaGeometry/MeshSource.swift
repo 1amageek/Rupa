@@ -64,10 +64,10 @@ public struct MeshSource: Codable, Equatable, Sendable {
             throw invalid("Corner buffers must have equal counts.")
         }
 
-        try validateUnique(vertexIDs, label: "vertex")
-        try validateUnique(edgeIDs, label: "edge")
-        try validateUnique(faceIDs, label: "face")
-        try validateUnique(cornerIDs, label: "corner")
+        let vertexSet = try validateUnique(vertexIDs, label: "vertex")
+        let edgeSet = try validateUnique(edgeIDs, label: "edge")
+        _ = try validateUnique(faceIDs, label: "face")
+        _ = try validateUnique(cornerIDs, label: "corner")
         try allocationState.validate(
             vertexIDs: vertexIDs,
             edgeIDs: edgeIDs,
@@ -78,10 +78,10 @@ public struct MeshSource: Codable, Equatable, Sendable {
             try position.validate()
         }
 
-        let vertexSet = Set(vertexIDs)
-        let edgeSet = Set(edgeIDs)
         var endpointsByEdgeID: [MeshEdgeID: MeshEdgeEndpoints] = [:]
         var edgeIDsByEndpoints: [MeshUndirectedEdgeKey: MeshEdgeID] = [:]
+        endpointsByEdgeID.reserveCapacity(edgeIDs.count)
+        edgeIDsByEndpoints.reserveCapacity(edgeIDs.count)
         for endpoints in edgeEndpoints {
             guard endpoints.start != endpoints.end,
                   vertexSet.contains(endpoints.start),
@@ -89,9 +89,7 @@ public struct MeshSource: Codable, Equatable, Sendable {
                 throw invalid("Edges must reference two distinct existing vertices.")
             }
         }
-        for index in edgeIDs.indices {
-            let edgeID = edgeIDs[index]
-            let endpoints = edgeEndpoints[index]
+        for (edgeID, endpoints) in zip(edgeIDs, edgeEndpoints) {
             let key = MeshUndirectedEdgeKey(
                 first: endpoints.start,
                 second: endpoints.end
@@ -233,13 +231,15 @@ public struct MeshSource: Codable, Equatable, Sendable {
     private func validateUnique<Element: Hashable>(
         _ values: GeometryBuffer<Element>,
         label: String
-    ) throws {
-        guard Set(values).count == values.count else {
+    ) throws -> Set<Element> {
+        let unique = Set(values)
+        guard unique.count == values.count else {
             throw MeshSourceError(
                 code: .duplicateID,
                 message: "Mesh \(label) IDs must be unique."
             )
         }
+        return unique
     }
 
     private func invalid(_ message: String) -> MeshSourceError {

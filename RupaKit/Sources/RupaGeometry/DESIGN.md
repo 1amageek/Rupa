@@ -167,6 +167,24 @@ full-source traversal.
 
 ### Immutable buffer equality
 
+Sequential `GeometryBuffer` traversal retains its immutable chunk directory and
+uses the standard `ContiguousArray` iterator within each chunk. Directory lookup
+occurs once per chunk, not once per element; traversal allocates no replacement
+element buffer. Iterator copies have independent cursors and retain storage after
+the originating value is released. Indexed access, Codable layout, validation,
+copy-on-write builders and element order are unchanged. GeometryBuffer tests
+cover empty, partial/final chunks, directory-page boundaries, optional elements,
+cursor copies and source lifetime. Canvas primitive-add measurements verify the
+effect through CAD conversion, validation and presentation consumers.
+`MeshSource.validate()` reuses its checked vertex/edge ID sets for reference
+validation and traverses paired edge buffers together. Every existing validation
+check remains active, including for decoded sources; no trust flag or validation
+cache bypasses malformed-input detection.
+Already-triangular faces validate all three corner/vertex references but return
+their existing winding directly, without allocating polygon scratch positions.
+Polygon planarity and ear-clipping behavior remain unchanged. Triangulation
+telemetry counts actual position reads and scratch values (zero for triangles).
+
 `GeometryBuffer` equality first compares the immutable storage identity. Two
 buffers that share that identity represent the same immutable snapshot and are
 equal without reading any elements. Buffers backed by different storage retain

@@ -5,6 +5,33 @@ import Testing
 @testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
+func meshSourceTriangleTraversalAvoidsPolygonScratchAndRejectsMissingPositions() throws {
+    var builder = MeshSourceBuilder(identity: "fixture.triangle-fast-path")
+    let a = try builder.addVertex(.init(x: 0, y: 0, z: 0))
+    let b = try builder.addVertex(.init(x: 1, y: 0, z: 0))
+    let c = try builder.addVertex(.init(x: 0, y: 1, z: 0))
+    let face = try builder.addTriangle(c, b, a)
+    let source = try builder.build()
+    var telemetry = MeshTriangulationTelemetry()
+    let triangles = try source.triangulate(faceIndex: 0, using: source.makeTriangulationIndex(),
+                                          telemetry: &telemetry)
+    #expect(triangles == [MeshTriangle(faceID: face, vertexIDs: (c, b, a))])
+    #expect(telemetry.cornerVisits == 3)
+    #expect(telemetry.indexedVertexLookups == 3)
+    #expect(telemetry.positionReads == 0)
+    #expect(telemetry.scratchPositionValues == 0)
+    var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
+    payload["vertexPositions"] = []
+    let malformed = try JSONDecoder().decode(MeshSource.self,
+        from: JSONSerialization.data(withJSONObject: payload))
+    let error = #expect(throws: MeshTriangulationError.self) {
+        _ = try malformed.triangulate(faceIndex: 0, using: malformed.makeTriangulationIndex(),
+                                      telemetry: &telemetry)
+    }
+    #expect(error?.code == .invalidReference)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func meshSourceBuilderCreatesCompactPolygonTopology() throws {
     var builder = MeshSourceBuilder(identity: "fixture.mesh")
     let v0 = try builder.addVertex(GeometryPoint3D(x: 0, y: 0, z: 0))

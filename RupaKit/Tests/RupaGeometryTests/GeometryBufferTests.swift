@@ -4,6 +4,28 @@ import Testing
 @testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
+func geometryBufferIterationRetainsChunksAndIndependentCursors() throws {
+    for count in [0, 1, 3, 4, 5, 255, 256, 257] {
+        let expected = (0..<count).map { $0.isMultiple(of: 3) ? nil : Optional(Int32($0)) }
+        var iterator = GeometryBuffer(expected,
+            preferredChunkByteCount: 4 * MemoryLayout<Int32?>.stride).makeIterator()
+        var values: [Int32?] = []
+        while let value = iterator.next() { values.append(value) }
+        #expect(values == expected)
+        #expect(iterator.next() == nil)
+        #expect(iterator.next() == nil)
+    }
+    var original = GeometryBuffer([Int32(0), 1, 2, 3, 4],
+        preferredChunkByteCount: 2 * MemoryLayout<Int32>.stride).makeIterator()
+    #expect(original.next() == 0)
+    var copied = original
+    #expect(original.next() == 1)
+    #expect(original.next() == 2)
+    #expect(copied.next() == 1)
+    #expect(copied.next() == 2)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func geometryBufferEqualityUsesStorageIdentityBeforeElementComparison() throws {
     GeometryBufferComparisonElement.resetComparisonCount()
     let original = GeometryBuffer([

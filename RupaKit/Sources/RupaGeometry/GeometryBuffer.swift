@@ -99,6 +99,16 @@ public struct GeometryBuffer<Element: Codable & Sendable>: Codable, Sendable,
         storage.count
     }
 
+    public var count: Int { storage.count }
+
+    public func index(after i: Int) -> Int { i + 1 }
+
+    public func index(before i: Int) -> Int { i - 1 }
+
+    public func index(_ i: Int, offsetBy distance: Int) -> Int { i + distance }
+
+    public func distance(from start: Int, to end: Int) -> Int { end - start }
+
     /// Identifies the immutable backing storage without materializing elements.
     package var storageIdentityToken: GeometryBufferStorageIdentity {
         storage.identity
@@ -106,6 +116,30 @@ public struct GeometryBuffer<Element: Codable & Sendable>: Codable, Sendable,
 
     public subscript(position: Int) -> Element {
         storage[position]
+    }
+
+    public struct Iterator: IteratorProtocol {
+        private let directory: GeometryBufferChunkDirectory<Element>
+        private var chunkIndex = 0
+        private var elements = ContiguousArray<Element>().makeIterator()
+
+        fileprivate init(storage: GeometryBufferStorage<Element>) {
+            directory = storage.directory
+        }
+
+        public mutating func next() -> Element? {
+            if let element = elements.next() { return element }
+            guard chunkIndex < directory.chunkCount else { return nil }
+            // The array iterator retains this immutable chunk without copying
+            // its payload. Directory lookup happens only at chunk boundaries.
+            elements = directory[chunkIndex].elements.makeIterator()
+            chunkIndex += 1
+            return elements.next()
+        }
+    }
+
+    public func makeIterator() -> Iterator {
+        Iterator(storage: storage)
     }
 
     public func lease() -> GeometryBufferLease<Element> {

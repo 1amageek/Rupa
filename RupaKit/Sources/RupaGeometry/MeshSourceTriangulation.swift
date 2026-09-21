@@ -143,12 +143,7 @@ public extension MeshSource {
             )
         }
 
-        var vertexIDs: [MeshVertexID] = []
-        var points: [GeometryPoint3D] = []
-        vertexIDs.reserveCapacity(range.count)
-        points.reserveCapacity(range.count)
-
-        for offset in 0..<range.count {
+        func checkedVertex(at offset: Int) throws -> (id: MeshVertexID, position: Int) {
             let cornerIndex = range.start.addingReportingOverflow(offset)
             guard !cornerIndex.overflow,
                   cornerIndex.partialValue >= cornerIDs.startIndex,
@@ -183,19 +178,27 @@ public extension MeshSource {
                 )
             }
             try telemetry.recordIndexedVertexLookup()
-            try telemetry.recordPositionRead()
-            try telemetry.recordScratchPositionValue()
-            vertexIDs.append(vertexID)
-            points.append(vertexPositions[positionIndex])
+            return (vertexID, positionIndex)
         }
 
-        if vertexIDs.count == 3 {
-            return [
-                MeshTriangle(
-                    faceID: faceID,
-                    vertexIDs: (vertexIDs[0], vertexIDs[1], vertexIDs[2])
-                )
-            ]
+        if range.count == 3 {
+            return [MeshTriangle(faceID: faceID, vertexIDs: (
+                try checkedVertex(at: 0).id,
+                try checkedVertex(at: 1).id,
+                try checkedVertex(at: 2).id
+            ))]
+        }
+
+        var vertexIDs: [MeshVertexID] = []
+        var points: [GeometryPoint3D] = []
+        vertexIDs.reserveCapacity(range.count)
+        points.reserveCapacity(range.count)
+        for offset in 0..<range.count {
+            let vertex = try checkedVertex(at: offset)
+            try telemetry.recordPositionRead()
+            try telemetry.recordScratchPositionValue()
+            vertexIDs.append(vertex.id)
+            points.append(vertexPositions[vertex.position])
         }
 
         let normal = try polygonNormal(points: points, tolerance: tolerance)
