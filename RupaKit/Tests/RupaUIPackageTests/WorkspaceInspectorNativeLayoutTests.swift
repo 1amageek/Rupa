@@ -5,6 +5,33 @@ import Testing
 @testable import RupaUI
 
 @MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [280.0, 320.0])
+func workspaceInspectorDisplaysFullLabelsAndValues(width: Double) throws {
+    let labels = ["Document ID", "Source Features", "Generated Bodies", "Render Generation",
+                  "A deliberately long property label that must remain entirely readable",
+                  "生成されたオブジェクトの詳細なプロパティ名"]
+    let value = "A long diagnostic value with details that must wrap instead of disappearing behind an ellipsis."
+    for label in labels {
+        let row = ImageRenderer(content: workspaceInspectorValueRow(label, value).frame(width: width))
+        let rendered = try #require(row.nsImage)
+        let available = width - 2 * WorkspaceInspectorLayout.rowHorizontalPadding
+            - inspectorLabelWidth - inspectorRowSpacing
+        let expectedValue = ImageRenderer(content: Text(value)
+            .font(.system(size: 11).weight(.medium))
+            .fixedSize(horizontal: false, vertical: true).frame(width: available))
+        let expectedLabel = ImageRenderer(content: Text(label)
+            .font(.system(size: 11))
+            .fixedSize(horizontal: false, vertical: true).frame(width: inspectorLabelWidth))
+        let labelHeight = try #require(expectedLabel.nsImage).size.height
+        let valueHeight = try #require(expectedValue.nsImage).size.height
+        #expect(abs(rendered.size.width - width) < 0.5)
+        #expect(rendered.size.height >= max(labelHeight, valueHeight)
+            + 2 * WorkspaceInspectorLayout.rowVerticalPadding)
+        #expect(rendered.size.height > WorkspaceInspectorLayout.rowMinimumHeight)
+    }
+}
+
+@MainActor
 @Test(.timeLimit(.minutes(1)))
 func workspaceInspectorUsesCompactNativeColumnAndPreservesDeclaredWidth() async throws {
     _ = NSApplication.shared

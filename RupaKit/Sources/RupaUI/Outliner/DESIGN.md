@@ -13,6 +13,9 @@ the existing viewport control session.
 
 ## Responsibilities and Boundaries
 
+Row names follow the parent UI's full-text contract: they wrap without line
+limits, and row height grows with the complete name.
+
 The component owns row projection and transient UI state: expanded scene-node
 IDs, search text, state filter, rename draft, focus, hover, and context-menu
 presentation. `OutlinerSourceCommandPlanner` is a pure, stateless projection from

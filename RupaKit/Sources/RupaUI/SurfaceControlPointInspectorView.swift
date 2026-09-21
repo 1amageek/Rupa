@@ -300,10 +300,12 @@ struct SurfaceControlPointInspectorView: View {
         HStack(alignment: .firstTextBaseline, spacing: inspectorRowSpacing) {
             Text(title)
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: inspectorLabelWidth, alignment: .leading)
             Text(value)
-                .lineLimit(1)
-                .truncationMode(.middle)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .monospacedDigit()
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -319,6 +321,8 @@ struct SurfaceControlPointInspectorView: View {
         HStack(alignment: .center, spacing: inspectorRowSpacing) {
             Text(title)
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: inspectorLabelWidth, alignment: .leading)
             content()
                 .frame(maxWidth: .infinity, alignment: .trailing)

@@ -49,12 +49,13 @@ func workspaceValueRow(
     accessibilityIdentifier: String? = nil
 ) -> some View {
     let valueText = Text(value)
-        .lineLimit(1)
-        .truncationMode(.middle)
+        .lineLimit(nil)
+        .fixedSize(horizontal: false, vertical: true)
         .monospacedDigit()
     HStack(spacing: 8) {
         Text(title)
             .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         Spacer(minLength: 6)
         if let accessibilityIdentifier {
             valueText
@@ -90,9 +91,10 @@ func workspaceValuePill(
         }
     }
     .font(.caption)
-    .lineLimit(1)
+    .lineLimit(nil)
+    .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
-    .frame(height: WorkspaceChromeControlMetrics.controlHeight)
+    .frame(minHeight: WorkspaceChromeControlMetrics.controlHeight)
     .background {
         RoundedRectangle(
             cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
@@ -112,7 +114,8 @@ func workspaceStatusChip(
 ) -> some View {
     Label {
         Text(title)
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .monospacedDigit()
     } icon: {
         Image(systemName: systemImage)
@@ -121,7 +124,7 @@ func workspaceStatusChip(
     .font(.caption.weight(.medium))
     .foregroundStyle(tint)
     .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
-    .frame(height: WorkspaceChromeControlMetrics.controlHeight)
+    .frame(minHeight: WorkspaceChromeControlMetrics.controlHeight)
     .background {
         RoundedRectangle(
             cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,

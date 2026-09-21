@@ -177,8 +177,8 @@ struct WorkspaceDocumentInspectorView: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(selectedTitle)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
@@ -223,8 +223,8 @@ struct WorkspaceDocumentInspectorView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text("Fit to \(recommendation.presetTitle)")
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 4)
                             Image(systemName: "arrow.right.circle")
                                 .font(.caption2)
@@ -238,8 +238,8 @@ struct WorkspaceDocumentInspectorView: View {
                 } else {
                     Text(recommendation.presetTitle)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(
                             width: inspectorControlWidth + inspectorUnitWidth + 6,
                             alignment: .leading
@@ -266,8 +266,8 @@ struct WorkspaceDocumentInspectorView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Text("Rebase Origin")
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 4)
                         Image(systemName: "scope")
                             .font(.caption2)

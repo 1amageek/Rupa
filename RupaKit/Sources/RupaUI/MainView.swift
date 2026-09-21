@@ -3022,17 +3022,12 @@ private struct ProjectMainViewContent: View {
             workspaceViewportShadingButton
             workspaceCanvasHeaderPanelButton(.analysis)
 
-            if let hintText = headerHoverHint.text {
-                workspaceCanvasHeaderHint(hintText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                workspaceCanvasHeaderReadouts(
-                    presentation: presentation,
-                    scaleReadout: scaleReadout,
-                    scaleFitPromptState: scaleFitPromptState
-                )
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            workspaceCanvasHeaderReadouts(
+                presentation: presentation,
+                scaleReadout: scaleReadout,
+                scaleFitPromptState: scaleFitPromptState
+            )
+            .frame(maxWidth: .infinity, alignment: .trailing)
 
             workspaceCanvasHeaderPanelButton(.more)
         }
@@ -3047,22 +3042,26 @@ private struct ProjectMainViewContent: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceCanvasHeader")
+        .overlay(alignment: .topLeading) {
+            if let hintText = headerHoverHint.text {
+                workspaceCanvasHeaderHint(hintText)
+                    .padding(8)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.horizontal, 8)
+                    .offset(y: WorkspaceCanvasHeaderLayout.height + 4)
+                    .allowsHitTesting(false)
+            }
+        }
+        .zIndex(1)
     }
 
-    /// What the seat under the pointer is, in the room the readouts were using.
-    ///
-    /// The readouts stand down while it is shown: that region is the header's
-    /// only flexible one, so the fixed seats do not move under the pointer and
-    /// the overflow button stays where it was. It is plain text rather than a
-    /// chip so that it can be offered any width and take it, and it is cut to
-    /// one line because the bar's height is declared and a wrapped sentence
-    /// would not fit a seat.
+    /// A full description outside the header's fixed-height control row.
     private func workspaceCanvasHeaderHint(_ text: String) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("WorkspaceCanvasHeader.hint")
     }
 
@@ -3247,7 +3246,8 @@ private struct ProjectMainViewContent: View {
             } label: {
                 Label("Save Current", systemImage: "plus.viewfinder")
                     .font(.caption.weight(.medium))
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, minHeight: 26)
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
@@ -3692,7 +3692,8 @@ private struct ProjectMainViewContent: View {
             } label: {
                 Label {
                     Text(state.title)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .monospacedDigit()
                 } icon: {
                     Image(systemName: "scope")
@@ -3701,7 +3702,7 @@ private struct ProjectMainViewContent: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
-                .frame(height: WorkspaceChromeControlMetrics.controlHeight)
+                .frame(minHeight: WorkspaceChromeControlMetrics.controlHeight)
                 .background {
                     RoundedRectangle(
                         cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
@@ -3853,14 +3854,16 @@ private struct ProjectMainViewContent: View {
         if let boundsSummary = state.boundsSummary {
             Text(boundsSummary)
                 .font(.caption2.monospacedDigit())
-                .lineLimit(2)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .help(boundsSummary)
                 .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
         }
         Text(state.status ?? "Click a first point, then click a second point.")
             .font(.caption2)
             .foregroundStyle(.secondary)
-            .lineLimit(2)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: 280, alignment: .leading)
             .accessibilityIdentifier("WorkspaceMeasure.status")
     }
@@ -3938,7 +3941,8 @@ private struct ProjectMainViewContent: View {
         if let boundsSummary = viewportMeasurementState.boundsSummary {
             Text(boundsSummary)
                 .font(.caption2.monospacedDigit())
-                .lineLimit(2)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .help(boundsSummary)
                 .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
         }
@@ -4279,7 +4283,8 @@ private struct ProjectMainViewContent: View {
                 )
                 .textFieldStyle(.plain)
                 .font(.caption)
-                .lineLimit(1)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .onSubmit {
                     commitConstructionPlaneRename()
                 }
@@ -4292,8 +4297,8 @@ private struct ProjectMainViewContent: View {
                 } label: {
                     Text(entry.name)
                         .font(.caption)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                 }
@@ -4390,11 +4395,12 @@ private struct ProjectMainViewContent: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(savedView.name)
                         .font(.caption)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text("\(savedViewBuilder.projectionTitle(for: savedView)) · \(savedViewBuilder.scaleTitle(for: savedView))")
                         .font(.caption2)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -4492,7 +4498,8 @@ private struct ProjectMainViewContent: View {
                 }
             }
             .font(.caption)
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background {
@@ -4577,7 +4584,8 @@ private struct ProjectMainViewContent: View {
                     .foregroundStyle(.secondary)
             }
             .font(.caption)
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background {
@@ -7009,12 +7017,14 @@ private struct ProjectMainViewContent: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(node.name)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(sceneNodeKindTitle(for: node.reference))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 8)
@@ -7045,7 +7055,8 @@ private struct ProjectMainViewContent: View {
             Label {
                 HStack {
                     Text(definition.name)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Text("\(definition.rootSceneNodeIDs.count) roots")
                         .font(.caption)
@@ -7067,12 +7078,14 @@ private struct ProjectMainViewContent: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(instance.name)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(componentDefinitionName(for: instance.definitionID))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 8)
@@ -7098,11 +7111,13 @@ private struct ProjectMainViewContent: View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.title)
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(row.subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         } icon: {
             WorkspaceSidebarSymbol(systemName: row.systemImage)

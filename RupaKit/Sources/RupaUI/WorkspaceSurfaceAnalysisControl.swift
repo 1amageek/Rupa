@@ -31,8 +31,8 @@ struct WorkspaceSurfaceAnalysisControl: View {
                     .font(.system(size: 14, weight: .semibold))
                 Text(option.shortTitle)
                     .font(.caption2.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary.opacity(0.72))
             .frame(maxWidth: .infinity, minHeight: 42)
@@ -65,8 +65,8 @@ struct WorkspaceSurfaceAnalysisControl: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text(density.shortTitle)
                     .font(.caption2.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary.opacity(0.72))
             .frame(maxWidth: .infinity, minHeight: 38)

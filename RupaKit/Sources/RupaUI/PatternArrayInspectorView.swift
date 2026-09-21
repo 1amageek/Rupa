@@ -586,8 +586,12 @@ struct PatternArrayInspectorView: View {
         HStack(alignment: .firstTextBaseline, spacing: inspectorRowSpacing) {
             Text(title)
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: inspectorLabelWidth, alignment: .leading)
             Text(value)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.callout)
@@ -601,6 +605,8 @@ struct PatternArrayInspectorView: View {
         HStack(alignment: .center, spacing: inspectorRowSpacing) {
             Text(title)
                 .foregroundStyle(.secondary)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(width: inspectorLabelWidth, alignment: .leading)
             content()
                 .frame(maxWidth: .infinity, alignment: .trailing)

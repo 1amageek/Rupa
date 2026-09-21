@@ -97,8 +97,7 @@ struct ViewportAxisTriad: View {
         } label: {
             Text(projectionTitle)
                 .font(.system(size: 10.0, weight: .medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
+                .fixedSize(horizontal: true, vertical: true)
         }
         .menuStyle(.button)
         .buttonStyle(.borderless)

@@ -15,7 +15,7 @@ enum WorkspaceInspectorLayout {
     static let rowVerticalPadding: CGFloat = 2
     static let rowMinimumHeight: CGFloat = 26
     static let rowSpacing: CGFloat = 4
-    static let labelWidth: CGFloat = 64
+    static let labelWidth: CGFloat = 112
     static let controlWidth: CGFloat = 104
     static let unitWidth: CGFloat = 36
 }
@@ -340,7 +340,8 @@ func inspectorSection<Content: View>(
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, WorkspaceInspectorLayout.sectionHeaderHorizontalPadding)
@@ -367,7 +368,8 @@ func inspectorControlRow<Content: View>(
         Text(title)
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
-            .lineLimit(1)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .help(title)
             .frame(width: inspectorLabelWidth, alignment: .leading)
         content()
@@ -402,8 +404,8 @@ func workspaceInspectorValueRow(_ title: String, _ value: String) -> some View {
         Text(value)
             .foregroundStyle(.primary.opacity(0.88))
             .fontWeight(.medium)
-            .lineLimit(1)
-            .truncationMode(.middle)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             .monospacedDigit()
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .trailing)

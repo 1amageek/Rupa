@@ -274,23 +274,15 @@ Header controls are therefore icon-first:
 a control that would have to carry a word to be recognised carries an icon
 and says its name on hover instead.
 
-The name it says on hover stands in the yielding region itself. A pointer
-arriving on an icon-first seat replaces the readouts with that seat's
-description, aligned to the leading edge so it begins where the icons end,
-and leaving the seat puts the readouts back. That region is the header's only
-flexible one and a hint is the most transient thing the header shows, so the
-two belong in the same place: no fixed seat moves under the pointer and the
-overflow button stays where it was. The hint is plain text rather than a chip,
-so it can be offered any width and take it, and it is cut to one line because
-the bar's height is declared and a wrapped sentence would not fit a seat.
+The hovered header description appears below the header in a width-constrained,
+multiline overlay. It consumes no control width, never truncates, and does not
+move the control under the pointer. The existing hover owner supplies the text.
 
 The window toolbar's status line is not the hint seat. It carries the newest
 transient diagnostic, which is the instruction the user is being asked to act
-on, and a pointer crossing the header would erase it. A label floating under
-the pointer is not the hint seat either: the header stands above the canvas,
-so such a label would have to be drawn in the canvas column's overlay, where
-the tool palette's own hint preference already travels and would be drawn a
-second time. The readouts and the scale-fit prompt report no hint of their
+on, and a pointer crossing the header would erase it. The header owns its hint
+overlay independently of the tool palette's anchor preference. The readouts
+and the scale-fit prompt report no hint of their
 own -- they already carry their word, and the prompt is the one readout that
 is an action, so a hint that replaced it would take away what the pointer was
 reaching for.
@@ -576,6 +568,15 @@ the divider, which is where the split puts the number it is given, so the
 column itself measures the declared width less the divider's thickness. This
 width and the canvas column's declared minimum may change only together, and
 only while their sum still fits inside the window's own minimum width.
+
+Visible labels and displayed values never use ellipsis truncation. Inspector
+labels reserve 112 pt and wrap vertically; values wrap within the remaining
+column. Lists and panel rows grow with their text rather than imposing a fixed
+height. Compact controls retain their intrinsic text width or wrap, while
+editable fields keep native scrolling/editing behavior. Tooltips and accessibility
+strings supplement visible text and are not substitutes for it. Native layout
+tests cover long Latin and Japanese labels at the minimum column width, and
+the signed App verifies the shared Document/Scene/Evaluation rows visually.
 
 The detail column's size is owned by the proposal NavigationSplitView hands
 down. No view between that column and the canvas host may measure the size it

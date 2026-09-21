@@ -37,11 +37,13 @@ struct WorkspaceDomainCommandRow: View {
                     Text(command.title)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(Color.primary.opacity(0.82))
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(command.subtitle)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 4)

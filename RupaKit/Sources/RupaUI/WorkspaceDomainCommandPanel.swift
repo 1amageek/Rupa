@@ -129,7 +129,8 @@ struct WorkspaceDomainCommandPanel: View {
                 Text(parameter.label)
                     .font(.caption)
                     .foregroundStyle(Color.primary.opacity(0.82))
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Spacer(minLength: 4)
 
@@ -263,7 +264,8 @@ struct WorkspaceDomainCommandPanel: View {
                     Text("\(region.kind.rawValue): \(region.id)")
                         .font(.caption2.monospaced())
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

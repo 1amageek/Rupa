@@ -112,7 +112,8 @@ struct FeatureHistoryView: View {
                         Text(presentation.inputSummary)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .buttonStyle(.plain)

@@ -235,8 +235,8 @@ struct Outliner: View {
                         .accessibilityLabel(row.kindTitle)
                         .help(row.kindTitle)
                     Text(row.name)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                         .help(row.disabledReason ?? "")
                     if row.isGeneratedOutput {
                         Image(systemName: "lock.fill")
@@ -297,7 +297,7 @@ struct Outliner: View {
             }
         }
         .padding(.leading, CGFloat(row.depth) * 14)
-        .frame(height: 22)
+        .frame(minHeight: 22)
         .contentShape(Rectangle())
         .onHover { isHovered in
             onIntent(.hover(row.id, isHovered: isHovered))

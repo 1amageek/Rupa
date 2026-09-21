@@ -78,13 +78,15 @@ struct WorkspaceSurfaceInspectorView: View {
                 Text(entry.valueTitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 6)
             Text(entry.editabilityTitle)
                 .font(.caption2)
                 .foregroundStyle(entry.isEditable ? Color.accentColor : Color.secondary)
-                .lineLimit(1)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
                 onSelectBasisReference(entry.selectionReference)
             } label: {
