@@ -22,12 +22,26 @@ for target in "${targets[@]}"; do
     done < scripts/ui-contract-tests.txt
     (( ${#selection[@]} > 0 )) || { echo "Empty test selection: $target" >&2; exit 1; }
     # Bound each batch separately; the allowlist may grow without an unbounded run.
-    for (( offset=0; offset<${#selection[@]}; offset+=12 )); do
-        batch=("${selection[@]:offset:12}")
+    for (( offset=0; offset<${#selection[@]}; )); do
         result="$result_dir/$target-$offset.xcresult"
+        batch=()
+        while (( offset<${#selection[@]} && ${#batch[@]}<12 )); do
+            identifier="${selection[offset]}"
+            # Each serialized gesture family already exercises multiple mounted
+            # windows and release/cancel paths; give it its own bounded run.
+            if [[ "$identifier" == */ViewportNativeObjectAffordancePressTests/*HandleGestureFollowsItsCommitContract* ]]; then
+                (( ${#batch[@]} == 0 )) || break
+                batch+=("$identifier")
+                offset=$((offset + 1))
+                break
+            fi
+            batch+=("$identifier")
+            offset=$((offset + 1))
+        done
         env -u TOOLCHAINS bash scripts/swift-test-timeout.sh 120 -- \
             xcodebuild test -scheme "$target" \
             -destination 'platform=macOS,arch=arm64' \
+            -parallel-testing-enabled NO \
             "${batch[@]}" -resultBundlePath "$result" -quiet
         xcrun xcresulttool get test-results tests --path "$result" | \
             ruby scripts/check-ui-test-results.rb "$target" "${batch[@]}"

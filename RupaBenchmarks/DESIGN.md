@@ -91,13 +91,12 @@ it does not start the signed App or exercise authenticated HTTP.
 - The restored fixed catalog, frozen public/internal digests, and physical
   candidate/oracle separation tests pass. No target, tolerance, or oracle is
   changed to accommodate a failure.
-- The in-process hundred-case replay realizes 95 cases. SPH-001 through SPH-005
-  are rejected before publication with `executionRejected`. The same failures
-  occur through the JSON adapter and actual CLI process tests. This is not
-  CADAPI-100 acceptance and must not be described as all tests passing.
-- Of 121 tests in this tools package, 111 pass and 10 sphere-route tests fail:
-  fixture persistence 4/4, responsiveness contracts 14/14, JSON adapter 62/67,
-  CLI contracts/processes 31/36. These responsiveness tests prove offscreen
+- After source-derived sphere display fidelity was connected to the common
+  resolver, the unchanged in-process hundred-case replay realizes all 100 cases.
+  This does not substitute for signed-App CADAPI-100 acceptance.
+- All 121 tests in this tools package pass: fixture persistence 4/4,
+  responsiveness contracts 14/14, JSON adapter 67/67,
+  CLI contracts/processes 36/36. These responsiveness tests prove offscreen
   contracts, not signed-App/GPU performance.
 - Three RupaKit architecture-boundary tests pass. Geometry-buffer measurement
   executes four chunk sizes with zero copied view bytes; performance measurement

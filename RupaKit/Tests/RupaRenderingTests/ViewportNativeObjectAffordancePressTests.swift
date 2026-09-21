@@ -987,8 +987,29 @@ struct ViewportNativeObjectAffordancePressTests {
     }
 
     /// Every drawn transform station commits through real AppKit input.
-    @Test(.timeLimit(.minutes(3)), arguments: ViewportObjectHandlePressCase.allCases)
-    func objectHandleGestureFollowsItsCommitContract(
+    @Test(.timeLimit(.minutes(2)), arguments: [
+        ViewportObjectHandlePressCase.translateX, .translateY, .translateZ,
+        .translateTipX, .translateTipY, .translateTipZ,
+    ])
+    func translationHandleGestureFollowsItsCommitContract(pressCase: ViewportObjectHandlePressCase) async throws {
+        try await verifyObjectHandleGestureCommitContract(pressCase: pressCase)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [
+        ViewportObjectHandlePressCase.centerScaleX, .centerScaleY, .centerScaleZ,
+    ])
+    func scaleHandleGestureFollowsItsCommitContract(pressCase: ViewportObjectHandlePressCase) async throws {
+        try await verifyObjectHandleGestureCommitContract(pressCase: pressCase)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [
+        ViewportObjectHandlePressCase.rotateX, .rotateY, .rotateZ,
+    ])
+    func rotationHandleGestureFollowsItsCommitContract(pressCase: ViewportObjectHandlePressCase) async throws {
+        try await verifyObjectHandleGestureCommitContract(pressCase: pressCase)
+    }
+
+    private func verifyObjectHandleGestureCommitContract(
         pressCase: ViewportObjectHandlePressCase
     ) async throws {
         let fixture = try ObjectHandlePressFixture(pressCase: pressCase)

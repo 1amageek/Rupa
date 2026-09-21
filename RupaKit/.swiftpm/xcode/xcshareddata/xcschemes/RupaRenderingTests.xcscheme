@@ -21,20 +21,6 @@
                ReferencedContainer = "container:">
             </BuildableReference>
          </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "NO"
-            buildForProfiling = "NO"
-            buildForArchiving = "NO"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "RupaResponsivenessBaselineTests"
-               BuildableName = "RupaResponsivenessBaselineTests"
-               BlueprintName = "RupaResponsivenessBaselineTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -50,16 +36,6 @@
                BlueprintIdentifier = "RupaRenderingTests"
                BuildableName = "RupaRenderingTests"
                BlueprintName = "RupaRenderingTests"
-               ReferencedContainer = "container:">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "RupaResponsivenessBaselineTests"
-               BuildableName = "RupaResponsivenessBaselineTests"
-               BlueprintName = "RupaResponsivenessBaselineTests"
                ReferencedContainer = "container:">
             </BuildableReference>
          </TestableReference>

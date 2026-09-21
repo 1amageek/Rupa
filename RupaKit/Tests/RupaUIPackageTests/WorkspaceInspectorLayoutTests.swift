@@ -20,6 +20,14 @@ import Testing
     #expect(WorkspaceInspectorNumberText.value(from: "not-a-number") == nil)
 }
 
+@Test func sharedInspectorFormattingPreservesIdentityAndAngleMeaning() {
+    #expect(WorkspaceInspectorNumberText.shortID("123456789ABC") == "12345678")
+    #expect(WorkspaceInspectorNumberText.shortID("ABC") == "ABC")
+    #expect(WorkspaceInspectorNumberText.degrees(fromRadians: .pi) == 180)
+    #expect(WorkspaceInspectorNumberText.degrees(fromRadians: -.pi / 2) == -90)
+    #expect(WorkspaceInspectorNumberText.formattedDegrees(45) == "45 deg")
+}
+
 @Test func workspaceInspectorLengthTextGroupsArchitecturalScaleValues() {
     #expect(
         WorkspaceInspectorNumberText.lengthString(
