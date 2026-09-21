@@ -3081,28 +3081,19 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     #expect(meterPixels >= ViewportCameraZoomPolicy.targetMinorTickPixels - 0.001)
 }
 
+/// The canvas draws the axis triad and nothing else, so the top edge is the
+/// grid's: no rectangle is withheld from the pointer there and no fitting
+/// inset is taken from it. The scale readout the badge used to carry now has
+/// a seat in the canvas header, above the canvas rather than over it.
 @MainActor
-@Test func viewportTopChromeUsesCompactCanvasOverlayMetrics() {
+@Test func viewportCanvasChromeLeavesTheTopEdgeToTheGrid() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
-    let rect = layout.viewportBadgeRect
 
-    #expect(
-        ViewportCanvasChromeLayout.viewportBadgeHeight
-            == ViewportCanvasChromeMetrics.topControlHeight
-    )
-    #expect(
-        ViewportCanvasChromeLayout.maximumViewportBadgeWidth
-            == ViewportCanvasChromeMetrics.topControlMaximumWidth
-    )
-    #expect(
-        ViewportCanvasChromeLayout.defaultViewportBadgeWidth
-            < ViewportCanvasChromeMetrics.topControlMaximumWidth
-    )
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == 112.0)
-    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 168.0)
-    #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
+    #expect(layout.inputExclusionRects == [layout.axisControlExclusionRect])
+    #expect(layout.fittingInsets.top == 0.0)
+    #expect(!layout.containsCanvasChrome(CGPoint(x: 12.0, y: 12.0)))
+    #expect(!layout.intersectsCanvasChrome(CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: 30.0)))
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight < ViewportCanvasChromeMetrics.topControlHeight)
     #expect(
         ViewportCanvasChromeMetrics.topControlDividerHeight
@@ -3112,62 +3103,6 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing <= ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.borderWidth == 0.0)
     #expect(ViewportCanvasChromeMetrics.borderOpacity == 0.0)
-    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
-    #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
-    #expect(rect.width == ViewportCanvasChromeLayout.defaultViewportBadgeWidth)
-    #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeHeight)
-    #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: 12.0)))
-}
-
-@MainActor
-@Test func viewportTopChromeBadgeWidthCanTrackCompactContent() {
-    let viewportSize = CGSize(width: 800.0, height: 600.0)
-    let compactWidth = CGFloat(156.0)
-    let layout = ViewportCanvasChromeLayout(
-        viewportSize: viewportSize,
-        viewportBadgeWidth: compactWidth
-    )
-    let rect = layout.viewportBadgeRect
-
-    #expect(rect.width == compactWidth)
-    #expect(rect.width < ViewportCanvasChromeMetrics.topControlMaximumWidth)
-}
-
-@MainActor
-@Test func viewportTopChromeBadgeAvoidsExternalOverlayExclusions() {
-    let viewportSize = CGSize(width: 800.0, height: 600.0)
-    let topOverlayRect = CGRect(x: 0.0, y: 0.0, width: 420.0, height: 46.0)
-    let layout = ViewportCanvasChromeLayout(
-        viewportSize: viewportSize,
-        additionalExclusions: [
-            ViewportCanvasOverlayExclusion(rect: topOverlayRect, fittingEdges: .top),
-        ]
-    )
-    let rect = layout.viewportBadgeRect
-
-    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
-    #expect(rect.minY > topOverlayRect.maxY)
-    #expect(!rect.intersects(topOverlayRect))
-    #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: topOverlayRect.maxY + 16.0)))
-    #expect(!rect.contains(CGPoint(x: 12.0, y: 12.0)))
-}
-
-@MainActor
-@Test func viewportTopChromeBadgeStaysVisibleBesideTrailingCommandChrome() {
-    let viewportSize = CGSize(width: 800.0, height: 600.0)
-    let trailingOverlayRect = CGRect(x: 620.0, y: 0.0, width: 174.0, height: 42.0)
-    let layout = ViewportCanvasChromeLayout(
-        viewportSize: viewportSize,
-        additionalExclusions: [
-            ViewportCanvasOverlayExclusion(rect: trailingOverlayRect, fittingEdges: .top),
-        ]
-    )
-    let rect = layout.viewportBadgeRect
-
-    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
-    #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
-    #expect(!rect.intersects(trailingOverlayRect))
-    #expect(layout.containsCanvasChrome(CGPoint(x: trailingOverlayRect.midX, y: trailingOverlayRect.midY)))
 }
 
 @MainActor
@@ -3182,8 +3117,8 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     #expect(rect.width > ViewportCanvasChromeLayout.axisControlSize.width)
     #expect(rect.height > ViewportCanvasChromeLayout.axisControlSize.height)
     #expect(rect.contains(CGPoint(x: viewportSize.width / 2.0, y: viewportSize.height - 24.0)))
-    #expect(layout.inputExclusionRects.count == 2)
-    #expect(layout.containsCanvasChrome(CGPoint(x: 20.0, y: 20.0)))
+    #expect(layout.inputExclusionRects.count == 1)
+    #expect(!layout.containsCanvasChrome(CGPoint(x: 20.0, y: 20.0)))
     #expect(!layout.containsCanvasChrome(CGPoint(x: viewportSize.width / 2.0, y: viewportSize.height / 2.0)))
 }
 
@@ -3194,7 +3129,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     let topLabelRect = CGRect(x: 12.0, y: 12.0, width: 80.0, height: 16.0)
     let centerLabelRect = CGRect(x: 360.0, y: 292.0, width: 80.0, height: 16.0)
 
-    #expect(layout.intersectsCanvasChrome(topLabelRect))
+    #expect(!layout.intersectsCanvasChrome(topLabelRect))
     #expect(layout.intersectsCanvasChrome(layout.axisControlRect))
     #expect(!layout.intersectsCanvasChrome(centerLabelRect))
 }
@@ -3243,8 +3178,8 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     )
     let insets = layout.fittingInsets
 
-    #expect(layout.inputExclusionRects.count == 2)
-    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(layout.inputExclusionRects.count == 1)
+    #expect(insets.top == 0.0)
     #expect(insets.leading == 0.0)
     #expect(insets.trailing == 0.0)
     #expect(insets.bottom == viewportSize.height - layout.axisControlExclusionRect.minY)
@@ -3302,7 +3237,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
     let insets = layout.fittingInsets
 
-    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(insets.top == 0.0)
     #expect(insets.bottom == viewportSize.height - layout.axisControlExclusionRect.minY)
     #expect(insets.leading == 0.0)
     #expect(insets.trailing == 0.0)
@@ -3324,7 +3259,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     )
     let insets = layout.fittingInsets
 
-    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(insets.top == 0.0)
     #expect(insets.leading == leadingPanel.width + ViewportCanvasChromeLayout.inputExclusionPadding)
     #expect(insets.trailing == trailingPanel.width + ViewportCanvasChromeLayout.inputExclusionPadding)
     #expect(insets.bottom == bottomPanel.height + ViewportCanvasChromeLayout.inputExclusionPadding)

@@ -271,8 +271,7 @@ func vertexScopeScreenGeometry(
         basis: .axisFront(.z),
         geometryBoundsSource: .geometry(fixture.presentationScene.worldBounds),
         fittingInsets: ViewportCanvasChromeLayout(
-            viewportSize: size,
-            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+            viewportSize: size
         ).fittingInsets
     ).layout
 

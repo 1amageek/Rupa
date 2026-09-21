@@ -242,8 +242,7 @@ func sketchScopeLayout(
         basis: .axisFront(.y),
         geometryBoundsSource: .geometry(presentationScene.worldBounds),
         fittingInsets: ViewportCanvasChromeLayout(
-            viewportSize: size,
-            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+            viewportSize: size
         ).fittingInsets
     ).layout
 }

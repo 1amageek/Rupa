@@ -616,7 +616,7 @@ when grid rendering is enabled. It must not enter `Viewport.surfaceFailure`,
 which controls surface readiness and picking. The existing mount owns one
 coalesced notification task for both statuses and the successfully resolved
 scale readout, and cancels it on detach. Readout changes participate in equality
-so zoom and pan update HUD and snap-step consumers without rebuilding a second
+so zoom and pan update readout and snap-step consumers without rebuilding a second
 grid in SwiftUI. Recoverable grid failure retains the readout with the previous
 complete grid and reports the failure separately; hiding the grid clears it. A valid
 view with no forward grid-plane intersection explicitly disables only the grid;

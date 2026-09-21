@@ -2257,7 +2257,14 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     frame only from the current ruler, native-parity layout, viewport size, and
     chrome rectangles; it does not capture that frame in the immutable
     world-source batch or traverse scene/CAD state when pan, orbit, zoom, or
-    size changes. Updating the finite coordinate strings is grid presentation
+    size changes. The resolved readout leaves this module rather than being
+    drawn inside it. `Viewport` publishes the grid's minor step alongside the
+    camera frame and presents no scale readout or scale control of its own, so
+    the canvas chrome is the axis triad alone: one input-exclusion rectangle,
+    no top fitting inset, and a top edge the grid's border labels may run in
+    full. Workspace scale preset titles, their availability and their actions
+    are correspondingly not `Viewport` inputs; the host owns where that control
+    lives. Updating the finite coordinate strings is grid presentation
     formatting, not source formatting, and occurs only when that grid frame
     changes. All other camera updates retain the no-formatting guarantee.
     A body item's overlay geometry is chosen by the interaction state, not by

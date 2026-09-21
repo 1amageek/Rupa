@@ -61,7 +61,7 @@ document model.
 | [RupaKit package](../../DESIGN.md) | parent | module dependency and authority direction | Places UI above the workspace snapshot. | UI must not bypass the workspace. |
 | [Rupa App](../../../Rupa/Rupa/Rupa/DESIGN.md) | used by | application file lifecycle and composition | Supplies the App-owned workspace and file activation. | File names are not project-title authority. |
 | [RupaKit integration](../RupaKit/DESIGN.md) | depends on | `ProjectWorkspace` and `ProjectViewSnapshot` | Publishes the exact view consumed by `MainView`. | Snapshot coordinates remain immutable evidence. |
-| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state and the native gesture refusal callback | Supplies a bounded ready frame or typed preparation failure, and reports each native gesture refusal it judges reportable. | UI never builds geometry, creates native resources, repairs a failed frame, or re-derives which refusals are reportable. |
+| [RupaRendering](../RupaRendering/DESIGN.md) | depends on | Snapshot-matched RealityKit frame state, the native gesture refusal callback, and the published grid scale readout | Supplies a bounded ready frame or typed preparation failure, reports each native gesture refusal it judges reportable, and publishes the grid's resolved minor step and camera frame for the header to read. | UI never builds geometry, creates native resources, repairs a failed frame, re-derives which refusals are reportable, or restates the ruler's unit where the grid published its own. |
 | [Modeling](Modeling/DESIGN.md) | child | Local CAD operation drafts and native parameter controls | Converts explicit selection and input into existing commands. | A draft is neither a source document nor an evaluated preview. |
 | [Outliner](Outliner/DESIGN.md) | child | Snapshot-derived scene hierarchy and explicit user intents | Presents dense tree navigation, local disclosure/filter state, rename and selection actions. | It never owns or mutates Product source. |
 | [ViewportShadingPanel](ViewportShadingPanel/DESIGN.md) | child | Native controls bound to `ViewportShading` | Updates the mounted rendering session through MainView. | No document or material mutation. |
@@ -229,8 +229,8 @@ not mutate source; an already published command is reversed only through Undo.
 One home per concern. The selection scope, the snaps, the working plane, the
 viewport's own fit, display mode and shading, and the surface-analysis panel
 stand once in a header bar above the canvas, always visible and always one
-click. The selection readout, the active plane's name, the scale-fit prompt
-and the overflow button close the row. What is touched rarely -- saved-view
+click. The selection readout, the active plane's name, the canvas scale
+readout, the scale-fit prompt and the overflow button close the row. What is touched rarely -- saved-view
 management, construction-plane rows, domain commands and scene counts --
 waits behind the overflow button. Nothing is duplicated: a concern that has a
 seat in the header has no second copy anywhere else in the workspace.
@@ -244,8 +244,9 @@ seat in the header has no second copy anywhere else in the workspace.
 | Analysis | the surface-analysis panel's button | `WorkspaceCanvasHeader.analysis` | fixed |
 | Plane name | the active construction plane | `WorkspacePlane.activeName` | yielding |
 | Selection | scope name and selection count | `WorkspaceTopBar.SelectionScope` | yielding |
+| Scale | the grid's step and the camera's zoom | `WorkspaceScale.readout` | yielding |
 | Scale fit | the fit prompt, while one is offered | `WorkspaceScaleFitPrompt` | yielding |
-| Overflow | views, planes, domain commands, scene counts | `WorkspaceCanvasHeader.more` | fixed |
+| Overflow | the canvas scale, views, planes, domain commands, scene counts | `WorkspaceCanvasHeader.more` | fixed |
 
 The bar's height is declared and never measured from its content. The
 selection readout, the plane name and the scale-fit prompt come and go with
@@ -259,8 +260,10 @@ declared minimum, which is the narrowest the canvas is ever laid out at.
 Yielding seats are offered what is left and leave the row when it is not
 enough, rather than push a fixed seat out: a chip compressed to an ellipsis
 still carries its icon, its padding and its background, so a readout that only
-truncated would keep a floor under the row. What leaves stays reachable, since
-the plane name and the scene counts have their own rows in the overflow panel.
+truncated would keep a floor under the row. What leaves stays reachable: the
+plane name, the scene counts and the canvas scale each have a row in the
+overflow panel, so a reading that yields the row is still a reading the
+narrowest window can get to.
 Header controls are therefore icon-first:
 a control that would have to carry a word to be recognised carries an icon
 and says its name on hover instead.
@@ -296,6 +299,28 @@ way cannot clear each other and no second naming scheme is introduced. The
 words are the string the control's own tooltip carries, keys included where
 the control has one, so a seat cannot be named one way on hover and another
 way in its tooltip.
+
+The canvas scale readout says what the canvas is drawn at and only that: the
+grid's resolved minor step, in the unit the grid resolved it in, followed by
+the camera's zoom. What a document is set to is a different concern with its
+own home -- the Document inspector's Units and Ruler sections own the preset
+list, the fit-to-model action and the three tick lengths -- so a preset menu
+behind this readout would be the second copy the header does not keep. The
+badge that used to float over the canvas did keep one; that is why its menu
+did not come to the header with its text, and why the smaller and larger
+preset steps did not come either, being a walk along a ladder the inspector
+lists whole. The snap step stays out for the same reason: it is the ruler's
+minor tick, which the Ruler section already shows and edits.
+
+The unit is the grid's, not the ruler's. `ViewportProjectedGrid` resolves
+which unit a step reads best in, so a header that paired the ruler's symbol
+with the grid's number could name one unit while showing another. Nothing is
+reported until a step and a camera frame have both arrived, and no placeholder
+stands in for either: a zero step or a flat 100% would be a reading, and there
+is nothing yet to read. Once a step has arrived the last one stands, including
+while a surface remounts and publishes none -- a readout that blanked on every
+remount would report the remount rather than the scale, and the click that
+places geometry already depends on that same step surviving one.
 
 Both panels are popovers anchored to their own header button, not `Menu`s. A
 SwiftUI `Menu` on macOS is an `NSMenu`: it keeps leaf buttons as menu items

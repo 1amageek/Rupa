@@ -214,8 +214,7 @@ private struct ProfileHandlePressFixture {
             camera: control.camera,
             basis: basis,
             fittingInsets: ViewportCanvasChromeLayout(
-                viewportSize: size,
-                viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+                viewportSize: size
             ).fittingInsets
         ).layout
         let edit = ViewportObjectEditState(item: bodyItem)

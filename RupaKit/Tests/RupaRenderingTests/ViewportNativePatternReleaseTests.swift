@@ -64,7 +64,7 @@ struct ViewportNativePatternReleaseTests {
         let layout = ViewportSceneContext(
             ruler: ruler, scene: scene, size: size, camera: control.camera, basis: .axisFront(.z),
             fittingInsets: ViewportCanvasChromeLayout(
-                viewportSize: size, viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+                viewportSize: size
             ).fittingInsets
         ).layout
 

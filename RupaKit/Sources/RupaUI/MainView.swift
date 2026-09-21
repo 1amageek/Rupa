@@ -204,7 +204,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var viewportCameraFrame: ViewportCameraFrame?
     @State private var viewportCameraFrameRequest: ViewportCameraFrameRequest?
-    @State private var viewportProjectedGridStepMeters: Double?
+    @State private var viewportProjectedGridMinorStep: ViewportProjectedGrid.ScaleReadout.Length?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
     @State private var viewportHoverClearSignal: Int
@@ -315,7 +315,7 @@ private struct ProjectMainViewContent: View {
         self._viewportProjectionRequest = State(initialValue: nil)
         self._viewportCameraFrame = State(initialValue: nil)
         self._viewportCameraFrameRequest = State(initialValue: nil)
-        self._viewportProjectedGridStepMeters = State(initialValue: nil)
+        self._viewportProjectedGridMinorStep = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
@@ -2010,8 +2010,6 @@ private struct ProjectMainViewContent: View {
 
     private var viewportCanvas: some View {
         let sectionAnalysis = selectedSectionAnalysisSummary
-        let scaleSummary = workspaceScaleSummary
-        let scaleFitPromptState = workspaceScaleFitPromptState
         return Viewport(
             document: snapshot.document.document,
             sourceIdentity: .document(id: snapshot.document.document.id, generation: snapshot.documentGeneration),
@@ -2053,11 +2051,6 @@ private struct ProjectMainViewContent: View {
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
             canvasOverlayExclusions: viewportChromeGeometry.exclusions,
             gridVisualSpacingMode: snapshot.workspaceState.viewportGridSettings.visualSpacingMode,
-            workspaceScalePresetTitle: scaleSummary.presetTitle,
-            workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
-            canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
-            canSelectSmallerWorkspaceScale: scaleSummary.smallerPreset != nil,
-            canSelectLargerWorkspaceScale: scaleSummary.largerPreset != nil,
             cameraResetSignal: viewportCameraResetSignal,
             hoverClearSignal: viewportHoverClearSignal,
             showsConstructionPlaneHover: showsConstructionPlaneHover,
@@ -2116,10 +2109,6 @@ private struct ProjectMainViewContent: View {
             onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
             onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
             onCommandConfirm: viewportCommandConfirmHandler,
-            onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
-            onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
-            onSelectLargerWorkspaceScale: selectLargerWorkspaceScalePreset,
-            onSelectWorkspaceScalePreset: applyWorkspaceScalePreset,
             onHover: viewportHoverHandler,
             onSnapCandidateKindChange: { kind in
                 snapOverrideState.updateHoveredCandidateKind(kind)
@@ -2140,8 +2129,8 @@ private struct ProjectMainViewContent: View {
                     reportToolStatus("Saved view camera could not be applied: \(error.localizedDescription)", severity: .warning)
                 }
             },
-            onProjectedGridStepChange: { stepMeters in
-                viewportProjectedGridStepMeters = stepMeters
+            onProjectedGridStepChange: { minorStep in
+                viewportProjectedGridMinorStep = minorStep
             },
             onMeasurementStateChange: { state in
                 viewportMeasurementState = state
@@ -2998,6 +2987,7 @@ private struct ProjectMainViewContent: View {
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
         let scaleFitPromptState = workspaceScaleFitPromptState
+        let scaleReadout = workspaceCanvasScaleReadout
         HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
             WorkspaceSelectionScopeControl(
                 selection: $selectionScope,
@@ -3028,6 +3018,7 @@ private struct ProjectMainViewContent: View {
             } else {
                 workspaceCanvasHeaderReadouts(
                     presentation: presentation,
+                    scaleReadout: scaleReadout,
                     scaleFitPromptState: scaleFitPromptState
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -3074,14 +3065,16 @@ private struct ProjectMainViewContent: View {
     /// column. They stand together while they fit, fall back to the scale-fit
     /// prompt alone, which is the only one of them that is an action, and
     /// leave the row when even that does not fit. What leaves stays reachable:
-    /// the plane name and the scene counts have their rows in the overflow
-    /// panel.
+    /// the plane name, the scene counts and the canvas scale each have a row
+    /// in the overflow panel, so a reading that yields the row is still a
+    /// reading the narrowest window can get to.
     ///
     /// The cluster is the header's only flexible child, so it is also what
     /// holds the overflow button against the trailing edge.
     @ViewBuilder
     private func workspaceCanvasHeaderReadouts(
         presentation: WorkspaceTopBarPresentation,
+        scaleReadout: WorkspaceCanvasScaleReadout?,
         scaleFitPromptState: WorkspaceScaleFitPromptState?
     ) -> some View {
         ViewThatFits(in: .horizontal) {
@@ -3107,6 +3100,10 @@ private struct ProjectMainViewContent: View {
                         systemImage: "scope",
                         tint: .secondary
                     )
+                }
+
+                if let scaleReadout {
+                    workspaceCanvasScaleReadoutSeat(scaleReadout)
                 }
 
                 if let scaleFitPromptState {
@@ -3230,6 +3227,11 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private var workspaceOverflowPanelSections: some View {
         workspacePanelSection("Views") {
+            workspaceValueRow(
+                "Scale",
+                workspaceCanvasScaleReadout?.text ?? "Not measured",
+                accessibilityIdentifier: "WorkspaceScale.overflowReadout"
+            )
             Button {
                 createSavedViewFromCurrentViewport()
             } label: {
@@ -3637,6 +3639,37 @@ private struct ProjectMainViewContent: View {
                 applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
             }
         )
+    }
+
+    /// What the canvas is currently drawn at: the grid's resolved minor step
+    /// and the camera's zoom.
+    ///
+    /// Both have to have arrived. A zero step or a flat 100% would be a
+    /// reading, and there is nothing yet to read.
+    private var workspaceCanvasScaleReadout: WorkspaceCanvasScaleReadout? {
+        WorkspaceCanvasScaleReadout(
+            minorStep: viewportProjectedGridMinorStep,
+            zoom: viewportCameraFrame?.camera.zoom
+        )
+    }
+
+    /// The scale readout as a header seat.
+    ///
+    /// It reports and does not act, so it carries no menu: which scale the
+    /// document is set to is chosen in the Document inspector, which owns the
+    /// preset list whole. It names itself through its accessibility label
+    /// rather than through the hover hint, because the hint stands in the room
+    /// the readouts occupy and a seat that replaced itself on hover would
+    /// leave the pointer over nothing.
+    private func workspaceCanvasScaleReadoutSeat(
+        _ readout: WorkspaceCanvasScaleReadout
+    ) -> some View {
+        workspaceValuePill("Scale", readout.text)
+            .help("Canvas Scale")
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("WorkspaceScale.readout")
+            .accessibilityLabel("Canvas Scale")
+            .accessibilityValue(readout.accessibilityValue)
     }
 
     @ViewBuilder
@@ -4756,7 +4789,7 @@ private struct ProjectMainViewContent: View {
         let tool = selectedTool
         let polygonState = polygonToolState
         let currentSketchInputState = sketchInputState
-        let placementCellMeters = viewportProjectedGridStepMeters
+        let placementCellMeters = viewportProjectedGridMinorStep?.meters
         submitSource(name: "canvasClick") { current in
             let planner = WorkspaceCanvasCommandPlanner(
                 context: WorkspaceCanvasCommandPlanner.Context(
@@ -10178,20 +10211,6 @@ private struct ProjectMainViewContent: View {
         setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()) { _ in
             requestViewportCameraReset()
         }
-    }
-
-    private func selectSmallerWorkspaceScalePreset() {
-        guard let preset = workspaceScaleSummary.smallerPreset else {
-            return
-        }
-        applyWorkspaceScalePreset(preset)
-    }
-
-    private func selectLargerWorkspaceScalePreset() {
-        guard let preset = workspaceScaleSummary.largerPreset else {
-            return
-        }
-        applyWorkspaceScalePreset(preset)
     }
 
     private func fitWorkspaceScaleToModel() {

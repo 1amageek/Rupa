@@ -122,96 +122,10 @@ import RupaViewportScene
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "100km")
-    #expect(grid.scaleReadout.compactText.contains("Grid"))
-    #expect(grid.scaleReadout.compactText.contains("Snap"))
-    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
-    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
-    #expect(!grid.scaleReadout.canvasHUDText.contains("Grid"))
+    #expect(grid.scaleReadout.minorStep.meters > grid.scaleReadout.snapStep.meters)
     #expect(grid.scaleReadout.accessibilityText.contains("major"))
     #expect(grid.scaleReadout.accessibilityText.contains("snap"))
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
-}
-
-@Test func viewportCanvasScaleMenuStateReportsReadoutAndAvailableActions() throws {
-    let document = DesignDocument.empty()
-    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
-
-    let grid = ViewportProjectedGrid(
-        document: document,
-        ruler: ruler,
-        size: CGSize(width: 1_200.0, height: 800.0),
-        camera: ViewportCamera(zoom: ViewportCamera.minimumZoom),
-        visualSpacingMode: .fixed
-    )
-    let state = ViewportCanvasScaleMenuState(
-        scaleReadout: grid.scaleReadout,
-        presetTitle: WorkspaceScalePreset.sitePlanning.title,
-        selectedPreset: .sitePlanning,
-        presetProfiles: WorkspaceScalePreset.profiles,
-        canFitWorkspaceScaleToModel: true,
-        canSelectSmallerWorkspaceScale: true,
-        canSelectLargerWorkspaceScale: false
-    )
-
-    #expect(state.rows.contains {
-        $0.id == "preset" && $0.value == WorkspaceScalePreset.sitePlanning.title
-    })
-    #expect(state.rows.contains {
-        $0.id == "unit" && $0.value == grid.scaleReadout.minorStep.displayUnit.symbol
-    })
-    #expect(state.rows.contains {
-        $0.id == "grid" && $0.value == grid.scaleReadout.minorStep.text
-    })
-    #expect(state.rows.contains {
-        $0.id == "snap" && $0.value == grid.scaleReadout.snapStep.text
-    })
-    #expect(state.rows.contains {
-        $0.id == "visibleSpan" && $0.value == grid.scaleReadout.visibleSpan.text
-    })
-    #expect(state.isVisualStepCapped)
-    #expect(state.presetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
-    #expect(state.presetOptions.contains {
-        $0.preset == .regionalPlanning
-            && $0.visibleSpanTitle == "1,000 km"
-            && !$0.isSelected
-            && $0.accessibilityIdentifier == "CanvasScaleMenu.preset.regionalPlanning"
-    })
-    #expect(state.presetOptions.contains {
-        $0.preset == .sitePlanning
-            && $0.isSelected
-            && $0.menuTitle.contains("100 km")
-    })
-    #expect(state.availableActions == [.fitToModel, .smallerPreset])
-    #expect(!state.availableActions.contains(.largerPreset))
-    #expect(state.accessibilityText.contains("visual grid capped by line budget"))
-    #expect(state.accessibilityText.contains("Fit Scale to Model"))
-    #expect(state.accessibilityText.contains("Regional Planning"))
-}
-
-@Test func viewportCanvasScaleHUDEstimatedWidthStaysWithinChromeBounds() throws {
-    let document = DesignDocument.empty()
-    let ruler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
-    let grid = ViewportProjectedGrid(
-        document: document,
-        ruler: ruler,
-        size: CGSize(width: 1_200.0, height: 800.0),
-        camera: ViewportCamera(zoom: ViewportCamera.maximumZoom),
-        visualSpacingMode: .adaptive
-    )
-
-    let baseWidth = ViewportCanvasScaleHUD.estimatedWidth(
-        scaleReadout: grid.scaleReadout,
-        zoomPercentageText: "100%"
-    )
-    let zoomedWidth = ViewportCanvasScaleHUD.estimatedWidth(
-        scaleReadout: grid.scaleReadout,
-        zoomPercentageText: "400%"
-    )
-
-    #expect(baseWidth >= ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
-    #expect(baseWidth <= ViewportCanvasChromeMetrics.topControlMaximumWidth)
-    #expect(zoomedWidth >= baseWidth)
-    #expect(zoomedWidth <= ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 
 @Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {
@@ -233,12 +147,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "25km")
-    #expect(grid.scaleReadout.compactText.contains("Grid"))
-    if grid.scaleReadout.showsSeparateSnapStep {
-        #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
-    } else {
-        #expect(grid.scaleReadout.canvasHUDText == grid.scaleReadout.minorStep.text)
-    }
+    #expect(grid.scaleReadout.minorStep.meters >= grid.scaleReadout.snapStep.meters)
     #expect(grid.scaleReadout.accessibilityText.contains("workspace span 25km"))
 }
 
@@ -265,9 +174,6 @@ import RupaViewportScene
     #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.workspaceSpan.meters == ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "1,000km")
-    #expect(grid.scaleReadout.compactText.contains("Grid"))
-    #expect(grid.scaleReadout.compactText.contains("km"))
-    #expect(grid.scaleReadout.canvasHUDText.hasSuffix("km"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.scaleReadout.minorStep.text.hasSuffix("km"))
     #expect(grid.scaleReadout.majorStep.text.hasSuffix("km"))
@@ -308,9 +214,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.displayUnit == .foot)
     #expect(grid.scaleReadout.snapStep.displayUnit == .foot)
-    #expect(!grid.scaleReadout.showsSeparateSnapStep)
-    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
-    #expect(grid.scaleReadout.canvasHUDText == grid.scaleReadout.minorStep.text)
+    #expect(grid.scaleReadout.minorStep.meters == grid.scaleReadout.snapStep.meters)
     #expect(grid.scaleReadout.accessibilityText.contains("mode fixed"))
 }
 
@@ -334,9 +238,6 @@ import RupaViewportScene
     #expect(grid.scaleReadout.snapStep.meters == 100.0)
     #expect(grid.scaleReadout.snapStep.text == "0.1km")
     #expect(grid.scaleReadout.minorStep.meters > grid.scaleReadout.snapStep.meters)
-    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
-    #expect(grid.scaleReadout.compactText.contains("capped"))
-    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped"))
     #expect(grid.scaleReadout.accessibilityText.contains("workspace span 100km"))
 }
@@ -359,10 +260,7 @@ import RupaViewportScene
     #expect(grid.minorStepMeters > ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.snapStep.meters == ruler.minorTickMeters)
-    #expect(grid.scaleReadout.showsSeparateSnapStep)
-    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
-    #expect(grid.scaleReadout.compactText.contains("capped"))
-    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
+    #expect(grid.scaleReadout.minorStep.meters > grid.scaleReadout.snapStep.meters)
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped by line budget"))
     #expect(grid.scaleReadout.accessibilityText.contains("workspace span 1,000km"))
 }

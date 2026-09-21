@@ -60,7 +60,7 @@ for every OS-level assertion of the retired tests.
 
 | Key | Automated owner selected by the runner | Remaining manual proof |
 |---|---|---|
-| LAYOUT | WorkspaceCanvasToolbarNativeTests, WorkspaceCanvasHeaderLayoutTests, WorkspaceCanvasHeaderSeatNativeTests, WorkspaceHoverHintTests, WorkspaceEditorSplitNativeTests, WorkspaceInspectorNativeLayoutTests | Visible clipping, a pointer over a header seat reaching the hint it names, focus and screen composition |
+| LAYOUT | WorkspaceCanvasToolbarNativeTests, WorkspaceCanvasHeaderLayoutTests, WorkspaceCanvasHeaderSeatNativeTests, WorkspaceCanvasScaleReadoutTests, WorkspaceHoverHintTests, WorkspaceEditorSplitNativeTests, WorkspaceInspectorNativeLayoutTests | Visible clipping, a pointer over a header seat reaching the hint it names, the scale seat repeating the step and unit the grid resolved rather than re-deriving them, focus and screen composition |
 | CAD | ModelingOperationDraftTests, ModelingAndMeshOperationCoverageTests, ModelingOperationViewContractTests, ModelingPreviewStateTests | Menu -> panel -> Preview/Apply reachability and visible refusal |
 | MESH | MeshOperationDraftTests, ModelingAndMeshOperationCoverageTests | Make Editable confirmation, visible element/domain/operation selection |
 | TRANSFORM | ViewportNativeObjectAffordancePressTests and CAD/Mesh native placement functions, ViewportBodyTransformInputTests, WorkspaceTransformMatrixTests | Visible XYZ colors/labels and cursor feedback agree with the named axis |

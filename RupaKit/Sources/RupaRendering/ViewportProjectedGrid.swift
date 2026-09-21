@@ -107,23 +107,9 @@ public struct ViewportProjectedGrid: Equatable {
             self.isVisualStepCapped = isVisualStepCapped
         }
 
-        public var compactText: String {
-            if isVisualStepCapped {
-                return "Grid \(minorStep.text) capped · Snap \(snapStep.text)"
-            }
-            if showsSeparateSnapStep {
-                return "Grid \(minorStep.text) · Snap \(snapStep.text)"
-            }
-            return "Grid \(minorStep.text) · \(visibleSpan.text)"
-        }
-
-        public var canvasHUDText: String {
-            if showsSeparateSnapStep {
-                return "\(minorStep.text)/\(snapStep.text)"
-            }
-            return minorStep.text
-        }
-
+        /// The one sentence this module composes: what a reader of the grid
+        /// hears. Sighted presentation of the scale belongs to the host, which
+        /// reads the steps and spans above and writes its own text.
         public var accessibilityText: String {
             var components = [
                 "Grid \(minorStep.text)",
@@ -137,10 +123,6 @@ public struct ViewportProjectedGrid: Equatable {
                 components.append("visual grid capped by line budget")
             }
             return components.joined(separator: ", ")
-        }
-
-        public var showsSeparateSnapStep: Bool {
-            abs(minorStep.meters - snapStep.meters) > max(abs(snapStep.meters) * 1.0e-9, 1.0e-12)
         }
     }
 

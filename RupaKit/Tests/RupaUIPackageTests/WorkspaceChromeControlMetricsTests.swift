@@ -15,19 +15,23 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 18.0)
     #expect(ViewportCanvasChromeMetrics.edgePadding == 4.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
-    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 168.0)
-    #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeHeight)
     #expect(WorkspaceChromeControlMetrics.containerHeight == 26.0)
 }
 
 /// A status sentence sits in the window toolbar beside the document title and the commands, so the
 /// width it may take is declared rather than left to the sentence. It has to be wide enough to read
-/// as a sentence and narrow enough to leave the toolbar its own controls.
+/// as a sentence rather than as one more chip, and narrow enough to leave the toolbar its own
+/// controls: at the narrowest the window is laid out at, the sentence takes no more than a third
+/// of the bar.
 @Test func workspaceStatusMessageDeclaresTheWidthASentenceMayTake() {
     #expect(WorkspaceChromeControlMetrics.statusMessageMaximumWidth == 360.0)
     #expect(
         WorkspaceChromeControlMetrics.statusMessageMaximumWidth
-            > ViewportCanvasChromeMetrics.topControlMaximumWidth
+            > WorkspaceSelectionScopeControlLayout.contentWidth
+    )
+    #expect(
+        WorkspaceChromeControlMetrics.statusMessageMaximumWidth * 3.0
+            <= WorkspaceEditorSplitLayout.minimumWindowWidth
     )
 }
 
@@ -46,18 +50,6 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.surfaceTintOpacity <= 0.03)
     #expect(ViewportCanvasChromeMetrics.borderWidth == 0.0)
     #expect(ViewportCanvasChromeMetrics.borderOpacity == 0.0)
-}
-
-@Test func workspaceChromeControlsStayContentSizedOnCanvas() {
-    let viewportBadgeWidth = ViewportCanvasChromeLayout.defaultViewportBadgeWidth
-    let topBarMinimumContentWidth = WorkspaceChromeControlMetrics.iconButtonSize.width * 3.0
-        + WorkspaceChromeControlMetrics.itemSpacing * 2.0
-        + WorkspaceChromeControlMetrics.containerHorizontalPadding * 2.0
-
-    #expect(topBarMinimumContentWidth < viewportBadgeWidth)
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == 112.0)
-    #expect(ViewportCanvasChromeLayout.maximumViewportBadgeWidth == ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 
 @Test func workspaceTopBarPresentationStaysCanvasActionOnly() {

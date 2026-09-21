@@ -42,8 +42,7 @@ func viewportSelectedCADFaceExactPointComesFromMountedFrame(
         basis: .axisFront(.z),
         geometryBoundsSource: .geometry(fixture.presentationScene.worldBounds),
         fittingInsets: ViewportCanvasChromeLayout(
-            viewportSize: size,
-            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+            viewportSize: size
         ).fittingInsets
     ).layout
     var projected: [CGPoint] = []
@@ -235,8 +234,7 @@ func viewportRoundedBoxActuallyRemovesTheRenderedCorner() async throws {
         let layout = ViewportSceneContext(ruler: fixture.ruler, scene: fixture.cpuScene, size: size,
             camera: control.camera, basis: .axisFront(.z),
             geometryBoundsSource: .geometry(fixture.presentationScene.worldBounds),
-            fittingInsets: ViewportCanvasChromeLayout(viewportSize: size,
-                viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth).fittingInsets).layout
+            fittingInsets: ViewportCanvasChromeLayout(viewportSize: size).fittingInsets).layout
         let points = fixture.topology.faces.flatMap { face in
             nativeCADFaceWorldPolygon(face, transform: fixture.modelTransform).compactMap { layout.projectedPoint($0)?.point }
         }

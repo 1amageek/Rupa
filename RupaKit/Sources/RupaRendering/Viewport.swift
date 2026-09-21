@@ -178,11 +178,6 @@ public struct Viewport: View {
     private let bottomChromeReservedHeight: CGFloat
     private let canvasOverlayExclusions: [ViewportCanvasOverlayExclusion]
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
-    private let workspaceScalePresetTitle: String?
-    private let workspaceScalePresetOptions: [WorkspaceScalePresetProfile]
-    private let canFitWorkspaceScaleToModel: Bool
-    private let canSelectSmallerWorkspaceScale: Bool
-    private let canSelectLargerWorkspaceScale: Bool
     private let cameraResetSignal: Int
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
@@ -240,16 +235,12 @@ public struct Viewport: View {
     private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
     private let onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
-    private let onFitWorkspaceScaleToModel: (() -> Void)?
-    private let onSelectSmallerWorkspaceScale: (() -> Void)?
-    private let onSelectLargerWorkspaceScale: (() -> Void)?
-    private let onSelectWorkspaceScalePreset: ((WorkspaceScalePreset) -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
     private let onCameraFrameChange: ((ViewportCameraFrame?) -> Void)?
     private let onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)?
-    private let onProjectedGridStepChange: ((Double) -> Void)?
+    private let onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)?
     private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
     private let onNativeGestureRefusal: ((any Error) -> Void)?
     private let onPresentationFailure: ((any Error) -> Void)?
@@ -373,11 +364,6 @@ public struct Viewport: View {
         bottomChromeReservedHeight: CGFloat = 0.0,
         canvasOverlayExclusions: [ViewportCanvasOverlayExclusion] = [],
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
-        workspaceScalePresetTitle: String? = nil,
-        workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = [],
-        canFitWorkspaceScaleToModel: Bool = false,
-        canSelectSmallerWorkspaceScale: Bool = false,
-        canSelectLargerWorkspaceScale: Bool = false,
         cameraResetSignal: Int = 0,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
@@ -436,16 +422,12 @@ public struct Viewport: View {
         onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
         onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
-        onFitWorkspaceScaleToModel: (() -> Void)? = nil,
-        onSelectSmallerWorkspaceScale: (() -> Void)? = nil,
-        onSelectLargerWorkspaceScale: (() -> Void)? = nil,
-        onSelectWorkspaceScalePreset: ((WorkspaceScalePreset) -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
         onCameraFrameChange: ((ViewportCameraFrame?) -> Void)? = nil,
         onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
-        onProjectedGridStepChange: ((Double) -> Void)? = nil,
+        onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)? = nil,
         onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
         onNativeGestureRefusal: ((any Error) -> Void)? = nil,
         onPresentationFailure: ((any Error) -> Void)? = nil
@@ -504,11 +486,6 @@ public struct Viewport: View {
                 && exclusion.rect.isEmpty == false
         }
         self.gridVisualSpacingMode = gridVisualSpacingMode
-        self.workspaceScalePresetTitle = workspaceScalePresetTitle
-        self.workspaceScalePresetOptions = workspaceScalePresetOptions
-        self.canFitWorkspaceScaleToModel = canFitWorkspaceScaleToModel
-        self.canSelectSmallerWorkspaceScale = canSelectSmallerWorkspaceScale
-        self.canSelectLargerWorkspaceScale = canSelectLargerWorkspaceScale
         self.cameraResetSignal = cameraResetSignal
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
@@ -569,10 +546,6 @@ public struct Viewport: View {
         self.onSurfaceFrameDrag = onSurfaceFrameDrag
         self.onConstructionPlaneHandleDrag = onConstructionPlaneHandleDrag
         self.onCommandConfirm = onCommandConfirm
-        self.onFitWorkspaceScaleToModel = onFitWorkspaceScaleToModel
-        self.onSelectSmallerWorkspaceScale = onSelectSmallerWorkspaceScale
-        self.onSelectLargerWorkspaceScale = onSelectLargerWorkspaceScale
-        self.onSelectWorkspaceScalePreset = onSelectWorkspaceScalePreset
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
@@ -634,8 +607,7 @@ public struct Viewport: View {
                 let chromeLayout = ViewportCanvasChromeLayout(
                     viewportSize: proxy.size,
                     bottomReservedHeight: bottomChromeReservedHeight,
-                    additionalExclusions: canvasOverlayExclusions,
-                    viewportBadgeWidth: gridReadout.map { estimatedViewportBadgeWidth(scaleReadout: $0) } ?? 0
+                    additionalExclusions: canvasOverlayExclusions
                 )
                 // The body only reads the published state. Preparation is
                 // started from the scene-identity task below, because starting
@@ -722,11 +694,6 @@ public struct Viewport: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(viewportBackground)
                 .contentShape(Rectangle())
-                .overlay(alignment: .topLeading) {
-                    if let gridReadout {
-                        viewportBadgeOverlay(scaleReadout: gridReadout, chromeLayout: chromeLayout)
-                    }
-                }
                 .background {
                     presentationFailureReporter(
                         error: presentationFailure,
@@ -874,10 +841,13 @@ public struct Viewport: View {
                         )
                     }
                 }
-                .onChange(of: gridReadout?.minorStep.meters, initial: true) { _, newValue in
-                    // Report the resolved visible grid cell (meters). `.onChange` fires only
-                    // on an actual value change and runs after the view update, so this never
+                .onChange(of: gridReadout?.minorStep, initial: true) { _, newValue in
+                    // Report the resolved visible grid cell: its metres for placement and
+                    // its resolved text and unit for the header. `.onChange` fires only on
+                    // an actual value change and runs after the view update, so this never
                     // mutates SwiftUI state mid-update and cannot form a feedback loop.
+                    // A surface that publishes no readout while it remounts leaves the last
+                    // step standing rather than withdrawing it.
                     if let newValue { onProjectedGridStepChange?(newValue) }
                 }
                 .onChange(of: activeControlSession.revision) { _, _ in
@@ -1192,79 +1162,6 @@ public struct Viewport: View {
 
     private var hasSelectedAffordance: Bool {
         allowsObjectAffordances && !selectedObjectFeatureIDs().isEmpty
-    }
-
-    private func viewportBadge(
-        scaleReadout: ViewportProjectedGrid.ScaleReadout
-    ) -> some View {
-        let menuState = ViewportCanvasScaleMenuState(
-            scaleReadout: scaleReadout,
-            presetTitle: workspaceScalePresetTitle,
-            selectedPreset: WorkspaceScalePreset.matching(
-                workspaceRuler
-            ),
-            presetProfiles: workspaceScalePresetOptions,
-            canFitWorkspaceScaleToModel: canFitWorkspaceScaleToModel
-                && onFitWorkspaceScaleToModel != nil,
-            canSelectSmallerWorkspaceScale: canSelectSmallerWorkspaceScale
-                && onSelectSmallerWorkspaceScale != nil,
-            canSelectLargerWorkspaceScale: canSelectLargerWorkspaceScale
-                && onSelectLargerWorkspaceScale != nil
-        )
-
-        return ViewportCanvasScaleHUD(
-            scaleReadout: scaleReadout,
-            zoomPercentageText: viewportZoomPercentageText,
-            menuState: menuState,
-            onSelectPreset: onSelectWorkspaceScalePreset,
-            onAction: performViewportBadgeAction
-        )
-    }
-
-    private func viewportBadgeOverlay(
-        scaleReadout: ViewportProjectedGrid.ScaleReadout,
-        chromeLayout: ViewportCanvasChromeLayout
-    ) -> some View {
-        let rect = chromeLayout.viewportBadgeRect
-        return viewportBadge(scaleReadout: scaleReadout)
-            .frame(
-                width: rect.width,
-                height: rect.height,
-                alignment: .leading
-            )
-            .offset(x: rect.minX, y: rect.minY)
-            .zIndex(2.0)
-            .onHover { isHovered in
-                if isHovered {
-                    clearCanvasHover()
-                }
-            }
-    }
-
-    private func estimatedViewportBadgeWidth(
-        scaleReadout: ViewportProjectedGrid.ScaleReadout
-    ) -> CGFloat {
-        ViewportCanvasScaleHUD.estimatedWidth(
-            scaleReadout: scaleReadout,
-            zoomPercentageText: viewportZoomPercentageText
-        )
-    }
-
-    private var viewportZoomPercentageText: String {
-        "\(Int((camera.zoom * 100.0).rounded()))%"
-    }
-
-    private func performViewportBadgeAction(
-        _ action: ViewportCanvasScaleMenuState.Action
-    ) {
-        switch action {
-        case .fitToModel:
-            onFitWorkspaceScaleToModel?()
-        case .smallerPreset:
-            onSelectSmallerWorkspaceScale?()
-        case .largerPreset:
-            onSelectLargerWorkspaceScale?()
-        }
     }
 
     private var currentProjectionBasis: ViewportProjectionBasis {
@@ -1747,8 +1644,7 @@ public struct Viewport: View {
         ViewportCanvasChromeLayout(
             viewportSize: size,
             bottomReservedHeight: bottomChromeReservedHeight,
-            additionalExclusions: canvasOverlayExclusions,
-            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+            additionalExclusions: canvasOverlayExclusions
         )
     }
 
