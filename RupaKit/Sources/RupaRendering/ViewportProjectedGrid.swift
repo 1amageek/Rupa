@@ -6,6 +6,7 @@ import RupaViewportScene
 public enum ViewportProjectedGrid {
     public typealias Axis = ViewportCoordinateAxis
     static let maximumGridLineCount = 360
+    static let labelFontSize: CGFloat = 14
     private static let minimumScaleLabelSpacingPixels: CGFloat = 72.0
     private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 
@@ -725,12 +726,12 @@ public enum ViewportProjectedGrid {
     }
 
     static func defaultNativeLabelRect(position: CGPoint, text: String) -> CGRect {
-        let width = max(CGFloat(text.count) * 6.2 + 10.0, 28.0)
+        let width = max(CGFloat(text.count) * labelFontSize * 0.62 + 10.0, 28.0)
         return CGRect(
             x: position.x - width / 2.0,
-            y: position.y - 8.0,
+            y: position.y - (labelFontSize + 6) / 2,
             width: width,
-            height: 16.0
+            height: labelFontSize + 6
         )
     }
 

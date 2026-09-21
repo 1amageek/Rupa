@@ -87,6 +87,19 @@ detached preparation tasks.
 
 ### Mounted camera readiness
 
+The host retains a camera root independently of replaceable spatial frames.
+On frame handoff the successor adopts the mounted camera, replacing only its
+lighting owner. Matching render origin and grid capability allow transfer of
+the applied camera state; unchanged layout and display scale do not reinstall
+native lens components. Hover-only replacement must retain camera identity,
+projection and published grid labels without a visibility transition.
+
+Tick labels lie on the displayed grid plane, aligned with their coordinate
+axis, rather than on a camera-facing plane next to the near clip. Their local
+point scale is derived at the tick depth; perspective foreshortening follows
+the grid. Production tick entities must generate visible GPU pixels in both
+lens modes and front/isometric views, in addition to retaining entity identity.
+
 Grid tick text Entities are keyed by their displayed text, with distinct slots
 for repeated strings. Placement changes never replace an unchanged text
 component. A frame keeps only its current label set; disappearing labels are
@@ -96,7 +109,7 @@ set from the retiring frame before detaching it, not during asynchronous
 preparation. The host owns a persistent label root beside the replaceable
 geometry root: unchanged text never leaves and re-enters its native scene on
 model replacement. The root is removed on host detach; native-camera readiness
-still gates its visibility. The next admitted update matches surviving strings and replaces
+does not hide published labels. The next admitted update matches surviving strings and replaces
 only new text; cancellation before mounting cannot mutate the visible owner.
 Native tests verify unchanged text/Entity identity on pan, hide/show and frame
 handoff in both lens modes, and preserve the complete prior grid on failure.

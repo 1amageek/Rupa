@@ -1631,7 +1631,7 @@ final class RealityViewportSpatialResources {
         try charge(slotCount, MemoryLayout<(Entity, String)>.stride + MemoryLayout<TextComponent>.stride)
         try charge(frame.worldLines.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.WorldLine>.stride + 2 * MemoryLayout<SIMD3<Float>>.stride)
         try charge(frame.screenLabels.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.ScreenLabel>.stride)
-        try charge(frame.screenLabels.count, MemoryLayout<(Entity, String, SIMD3<Float>)>.stride + MemoryLayout<Int>.stride)
+        try charge(frame.screenLabels.count, MemoryLayout<(Entity, String, Transform)>.stride + MemoryLayout<Int>.stride)
         for label in frame.screenLabels {
             guard !label.text.isEmpty, label.position.x.isFinite, label.position.y.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("Grid label has invalid text or placement.")
@@ -1660,13 +1660,8 @@ final class RealityViewportSpatialResources {
                                indexCount: vertices.count - start, topology: .line, materialIndex: style,
                                bounds: vertices.count == start ? .init(min: .zero, max: .zero) : bounds))
         }
-        let unitsPerPoint = projection.depthScale([0, 0, -projection.annotationDepth])
-            / Float(hypot(projection.forward.c, projection.forward.d))
-        guard unitsPerPoint.isFinite, unitsPerPoint > 0 else {
-            throw RealityViewportSpatialBatch.invalid("Grid text has no finite native point scale.")
-        }
-        let font = NSFont.monospacedSystemFont(ofSize: 10, weight: .medium)
-        var text: [(Entity, String, SIMD3<Float>)] = []
+        let font = NSFont.monospacedSystemFont(ofSize: ViewportProjectedGrid.labelFontSize, weight: .medium)
+        var text: [(Entity, String, Transform)] = []
         text.reserveCapacity(frame.screenLabels.count)
         var used = Set<Int>()
         for label in frame.screenLabels {
@@ -1678,23 +1673,45 @@ final class RealityViewportSpatialResources {
                 entity = gridLabels[index].entity
             } else {
                 let attributed = NSAttributedString(string: label.text, attributes: [
-                    .font: font, .foregroundColor: NSColor.white.withAlphaComponent(0.42)
+                    .font: font, .foregroundColor: NSColor(white: 0.55, alpha: 1)
                 ])
                 let size = attributed.size()
                 guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {
                     throw RealityViewportSpatialBatch.invalid("Native grid text has invalid measured bounds.")
                 }
                 var component = TextComponent()
+                component.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
                 component.size = CGSize(width: ceil(size.width) + 2, height: ceil(size.height) + 2)
                 component.text = AttributedString(attributed)
                 entity = Entity()
                 entity.components.set(component)
             }
-            let point = projection.point(at: label.position, depth: projection.annotationDepth)
-            guard point.x.isFinite, point.y.isFinite, point.z.isFinite else {
-                throw RealityViewportSpatialBatch.invalid("Native grid label position exceeds precision.")
+            guard let worldPoint = projection.unproject(label.position, onto: frame.plane, origin: batch.renderOrigin) else {
+                throw RealityViewportSpatialBatch.invalid("Grid text cannot be placed on its coordinate plane.")
             }
-            text.append((entity, label.text, point))
+            let point = try RealityViewportSpatialBatch.nativePoint(worldPoint, relativeTo: batch.renderOrigin)
+            let unitsPerPoint = projection.depthScale(projection.local(point))
+                / Float(hypot(projection.forward.c, projection.forward.d))
+            guard unitsPerPoint.isFinite, unitsPerPoint > 0 else {
+                throw RealityViewportSpatialBatch.invalid("Grid text has no finite native point scale.")
+            }
+            let direction = frame.plane.direction(for: label.axis)
+            let crossDirection = frame.plane.direction(for: label.axis == frame.plane.firstAxis
+                ? frame.plane.secondAxis : frame.plane.firstAxis)
+            var x = SIMD3<Float>(Float(direction.x), Float(direction.y), Float(direction.z))
+            var y = SIMD3<Float>(Float(crossDirection.x), Float(crossDirection.y), Float(crossDirection.z))
+            let eye = SIMD3<Float>(projection.worldFromCamera.columns.3.x,
+                                  projection.worldFromCamera.columns.3.y, projection.worldFromCamera.columns.3.z)
+            if simd_dot(simd_cross(x, y), eye - point) < 0 { y = -y }
+            if let a = projection.project(point), let b = projection.project(point + x * unitsPerPoint), b.x < a.x {
+                x = -x; y = -y
+            }
+            let normal = simd_cross(x, y)
+            text.append((entity, label.text, Transform(
+                scale: .init(repeating: unitsPerPoint * 72 / 0.0254),
+                rotation: simd_quatf(simd_float3x3(x, y, normal)),
+                translation: point + normal * unitsPerPoint
+            )))
         }
         // Every fallible conversion and aggregate admission finished above. The
         // following synchronous publication changes the complete grid together.
@@ -1709,15 +1726,13 @@ final class RealityViewportSpatialResources {
             gridPlacement?.isEnabled = true
         }
         gridLabels.removeAll(keepingCapacity: true)
-        for (label, value, position) in text {
+        for (label, value, transform) in text {
             let parent = gridLabelRoot ?? root
             if label.parent !== parent { parent.addChild(label) }
             gridLabels.append((label, value))
-            label.position = position
-            label.orientation = simd_quatf(projection.worldFromCamera)
             // TextComponent's native plane uses typographic points (1/72 inch).
-            label.scale = .init(repeating: unitsPerPoint * 72 / 0.0254)
-            label.isEnabled = true
+            if label.transform != transform { label.transform = transform }
+            if !label.isEnabled { label.isEnabled = true }
         }
         scaleReadout = frame.scaleReadout
     }

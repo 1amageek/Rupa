@@ -99,9 +99,8 @@ struct RealityViewportMountTests {
         let renderer = try RealityRenderer()
         let renderedRoot = viewport.root.clone(recursive: true)
         renderer.entities.append(renderedRoot)
-        let camera = try #require(renderedRoot.children.first {
-            $0.components[OrthographicCameraComponent.self] != nil || $0.components[PerspectiveCameraComponent.self] != nil
-        })
+        let camera = viewport.camera.clone(recursive: true)
+        renderer.entities.append(camera)
         renderer.activeCamera = camera
         let device = try #require(MTLCreateSystemDefaultDevice())
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: 512, height: 384, mipmapped: false)
@@ -616,6 +615,34 @@ struct RealityViewportMountTests {
         }
         let publishedTicks = Array(mountedScene.performQuery(tickQuery)).filter { $0.isEnabledInHierarchy }
         try #require(!publishedTicks.isEmpty)
+        let renderer = try RealityRenderer()
+        renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
+        renderer.cameraSettings.isToneMappingEnabled = false
+        let renderedCamera = viewport.camera.clone(recursive: false)
+        renderer.entities.append(renderedCamera)
+        renderer.activeCamera = renderedCamera
+        for label in publishedTicks { renderer.entities.append(label.clone(recursive: true)) }
+        let device = try #require(MTLCreateSystemDefaultDevice())
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
+            width: Int(size.width), height: Int(size.height), mipmapped: false)
+        descriptor.storageMode = .shared
+        descriptor.usage = [.renderTarget, .shaderRead, .shaderWrite]
+        let texture = try #require(device.makeTexture(descriptor: descriptor))
+        let output = try RealityRenderer.CameraOutput(.singleProjection(colorTexture: texture))
+        for _ in 0..<8 {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                do {
+                    try renderer.updateAndRender(deltaTime: 1 / 60, cameraOutput: output,
+                        onComplete: { _ in continuation.resume() })
+                } catch { continuation.resume(throwing: error) }
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        var pixels = [UInt8](repeating: 0, count: texture.width * texture.height * 4)
+        texture.getBytes(&pixels, bytesPerRow: texture.width * 4,
+            from: MTLRegionMake2D(0, 0, texture.width, texture.height), mipmapLevel: 0)
+        let visiblePixels = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0] > 10 }.count
+        #expect(visiblePixels > 100, "Production grid labels must produce visible GPU pixels, not just entity bounds.")
         // The mount withholds spatial picking while waiting for the next native
         // camera frame. That must not withdraw already published annotations.
         viewport.setPresentationEnabled(false)
@@ -761,6 +788,9 @@ struct RealityViewportMountTests {
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(observedFrames >= 3)
+        #expect(replacement.camera === viewport.camera,
+                "Hover-only frame replacement must not replace the mounted camera.")
+        #expect(replacement.camera.parent !== replacement.root)
         #expect(blankFrames == 0, "An unchanged-camera overlay replacement blanked a native engine frame.")
         #expect(blankTextFrames == 0, "A model replacement withdrew already drawn tick labels.")
         for (label, parent) in zip(originalLabels, originalParents) {
@@ -771,7 +801,24 @@ struct RealityViewportMountTests {
         let replacementProjection = try #require(replacement.project(.origin))
         #expect(hypot(replacementProjection.x - expectedUpdatedProjection.x,
                       replacementProjection.y - expectedUpdatedProjection.y) <= 1)
-        replacement.invalidateCamera()
+        var current = replacement
+        let mountedCamera = current.camera
+        for revision in UInt64(3)...10 {
+            let next = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: current)
+            controller.rootView = view(changedLayout, revision: revision, renderer: next)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while next.appliedViewportRevision != revision || next.gridScaleReadout == nil {
+                try #require(ContinuousClock.now < deadline)
+                #expect(originalLabels.allSatisfy { $0.isEnabledInHierarchy })
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(next.camera === mountedCamera)
+            let point = try #require(next.project(.origin))
+            #expect(hypot(point.x - replacementProjection.x, point.y - replacementProjection.y) < 0.5)
+            #expect(originalLabels.allSatisfy { $0.isEnabledInHierarchy })
+            current = next
+        }
+        current.invalidateCamera()
         #expect(originalLabels.allSatisfy { !$0.isEnabledInHierarchy })
     }
 

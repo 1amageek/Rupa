@@ -2464,8 +2464,10 @@ context. A later valid layout supplies both; no synthetic size is persisted.
 The derived presentation cache owns the active task, newest value-only pending
 request, engine-neutral descriptors, and matching failure. It retains at most
 one current native owner and one candidate being prepared. `RealityViewport`
-owns the native scene root, permanent camera entity, optional surface record,
-spatial resources, and their release. It does not retain the project snapshot
+owns the native scene root, optional surface record, spatial resources and their
+release. The host retains the mounted camera across frame handoffs through the
+[native camera continuity contract](RealityViewport/DESIGN.md#mounted-camera-readiness).
+It does not retain the project snapshot
 beyond the immutable frame values needed for current hit-test provenance.
 
 `RupaUI` mounts exactly one host for the document lifetime and destroys it on

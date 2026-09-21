@@ -64,10 +64,12 @@ struct RealityViewportView: View {
             renderOrigin: viewport.renderOrigin
         ) == true
         if mount.current !== viewport {
+            viewport.adoptCamera(from: mount.current, parent: mount.cameraRoot)
             viewport.attachGridLabels(to: mount.gridLabelRoot)
             if let previous = mount.current { viewport.takeGridLabels(from: previous) }
             mount.detach(preservingGridLabels: true)
-            for entity in content.entities where entity !== mount.gridLabelRoot { content.remove(entity) }
+            for entity in content.entities where entity !== mount.gridLabelRoot && entity !== mount.cameraRoot { content.remove(entity) }
+            if !content.entities.contains(where: { $0 === mount.cameraRoot }) { content.add(mount.cameraRoot) }
             if !content.entities.contains(where: { $0 === mount.gridLabelRoot }) { content.add(mount.gridLabelRoot) }
             mount.gridLabelContent = content
             content.add(viewport.root)
@@ -113,6 +115,7 @@ struct RealityViewportView: View {
     @MainActor
     private final class Mount {
         var current: RealityViewport?
+        let cameraRoot = Entity()
         let gridLabelRoot = Entity()
         var gridLabelContent: RealityViewCameraContent?
         private var lastError: MeshSourcePresentationRenderError?
@@ -242,6 +245,7 @@ struct RealityViewportView: View {
             reportTask?.cancel()
             reportTask = nil
             if !preservingGridLabels {
+                gridLabelContent?.remove(cameraRoot)
                 gridLabelContent?.remove(gridLabelRoot)
                 gridLabelContent = nil
             }

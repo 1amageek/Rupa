@@ -14,7 +14,7 @@ final class RealityViewport {
     static let surfaceCollisionGroup = CollisionGroup(rawValue: 1 << 0)
     static let spatialCollisionGroup = CollisionGroup(rawValue: 1 << 1)
     let root = Entity()
-    let camera = Entity()
+    private(set) var camera = Entity()
     let snapshotID: EvaluationSnapshotID?
     let renderOrigin: Point3D
     private(set) var appliedViewportRevision: UInt64?
@@ -46,11 +46,9 @@ final class RealityViewport {
     private var derivedCameraCalibration: CameraCalibration?
     /// Counts the times a derived calibration differed from the one before it.
     ///
-    /// Every applied frame clears the calibration and derives it again,
-    /// including the appearance-only frames a selection drag republishes on
-    /// every pointer move, so counting derivations would discard the region
-    /// raster on every move. Counting differences is what makes this a
-    /// projection identity the raster can be keyed on.
+    /// Unchanged camera inputs retain calibration. For changed inputs, count
+    /// differences rather than derivations so equivalent projections preserve
+    /// the region raster identity.
     private var calibrationGeneration: UInt64 = 0
     private var cameraCalibrationDepth: Double?
     private var regionRasterKey: RealityViewportRegionFrameKey?
@@ -537,6 +535,10 @@ final class RealityViewport {
         guard displayScale.isFinite, displayScale > 0 else {
             throw Self.failure("The native camera requires a positive finite display scale.")
         }
+        if appliedLayout == layout, appliedDisplayScale == displayScale {
+            appliedViewportRevision = revision
+            return
+        }
         cameraCalibration = nil
         cameraCalibrationDepth = nil
         let viewportCenter = CGPoint(x: layout.viewportSize.width / 2, y: layout.viewportSize.height / 2)
@@ -938,6 +940,25 @@ final class RealityViewport {
             calibrationGeneration &+= 1
         }
         cameraCalibration = calibration
+    }
+
+    /// Adopt only at mount handoff, after preparation has finished.
+    func adoptCamera(from previous: RealityViewport?, parent: Entity) {
+        if let previous {
+            camera.removeFromParent()
+            previous.lighting.removeFromParent()
+            camera = previous.camera
+            camera.addChild(lighting)
+            if renderOrigin == previous.renderOrigin,
+               spatialResources?.hasGrid == previous.spatialResources?.hasGrid {
+                appliedLayout = previous.appliedLayout
+                appliedDisplayScale = previous.appliedDisplayScale
+                appliedViewportRevision = previous.appliedViewportRevision
+                cameraCalibration = previous.cameraCalibration
+                cameraCalibrationDepth = previous.cameraCalibrationDepth
+            }
+        }
+        if camera.parent !== parent { parent.addChild(camera) }
     }
 
     func takeGridLabels(from previous: RealityViewport) {
