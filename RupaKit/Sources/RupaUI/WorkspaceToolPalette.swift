@@ -25,10 +25,12 @@ struct WorkspaceToolPalette: View {
                                             isSolidPickerPresented = false
                                             activateSolid(shape)
                                         }
+                                        .fixedSize(horizontal: true, vertical: true)
                                     }
                                 }
                                 .buttonStyle(.plain)
                                 .padding(12)
+                                .fixedSize(horizontal: true, vertical: true)
                             }
                     } else {
                         toolPaletteButton(tool)

@@ -20,6 +20,8 @@ struct Outliner: View {
     @State private var actionError: String?
     @State private var dragSession: OutlinerMoveDragSession?
     @State private var dropDestination: OutlinerDropDestination?
+    @State private var hoveredRowID: SceneNodeID?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @FocusState private var focusedRenameID: SceneNodeID?
 
     private static let dragType = UTType(exportedAs: "team.stamp.rupa.outliner.scene-move")
@@ -100,6 +102,7 @@ struct Outliner: View {
             return .ignored
         }
         .onDisappear {
+            hoveredRowID = nil
             cancelDrag()
             onIntent(.hover(nil, isHovered: false))
         }
@@ -198,7 +201,8 @@ struct Outliner: View {
     }
 
     private func rowView(_ row: OutlinerRow, projection: OutlinerProjection) -> some View {
-        HStack(spacing: 4) {
+        let showsActions = hoveredRowID == row.id || pendingStateIDs.contains(row.id) || voiceOverEnabled
+        return HStack(spacing: 4) {
             Button {
                 toggleExpansion(for: row.id)
             } label: {
@@ -235,6 +239,8 @@ struct Outliner: View {
                         .accessibilityLabel(row.kindTitle)
                         .help(row.kindTitle)
                     Text(row.name)
+                        .font(.system(size: 12, weight: row.depth == 0 ? .medium : .regular))
+                        .foregroundStyle(row.isVisible ? .primary : .secondary)
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: true)
                         .help(row.disabledReason ?? "")
@@ -268,7 +274,9 @@ struct Outliner: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(row.isVisible ? .primary : .secondary)
-                .disabled(!row.canMutateState || pendingStateIDs.contains(row.id))
+                .opacity(showsActions ? 1 : 0)
+                .allowsHitTesting(showsActions)
+                .disabled(!showsActions || !row.canMutateState || pendingStateIDs.contains(row.id))
                 .accessibilityLabel(row.isVisible ? "Hide \(row.name)" : "Show \(row.name)")
                 .accessibilityValue(pendingStateIDs.contains(row.id) ? "Updating" : (row.isVisible ? "Visible" : "Hidden"))
                 .accessibilityIdentifier("WorkspaceSidebar.visibility.\(row.id)")
@@ -289,17 +297,41 @@ struct Outliner: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(row.isLocked ? .primary : .secondary)
-                .disabled(!row.canMutateState || pendingStateIDs.contains(row.id))
+                .opacity(showsActions ? 1 : 0)
+                .allowsHitTesting(showsActions)
+                .disabled(!showsActions || !row.canMutateState || pendingStateIDs.contains(row.id))
                 .accessibilityLabel(row.isLocked ? "Unlock \(row.name)" : "Lock \(row.name)")
                 .accessibilityValue(pendingStateIDs.contains(row.id) ? "Updating" : (row.isLocked ? "Locked" : "Unlocked"))
                 .accessibilityIdentifier("WorkspaceSidebar.lock.\(row.id)")
                 .help(pendingStateIDs.contains(row.id) ? "Updating \(row.name)…" : (row.isLocked ? "Unlock \(row.name)" : "Lock \(row.name)"))
             }
         }
-        .padding(.leading, CGFloat(row.depth) * 14)
+        .padding(.leading, CGFloat(row.depth) * 18)
         .frame(minHeight: 22)
+        .background(alignment: .leading) {
+            if row.depth > 0 {
+                Path { path in
+                    for level in 0..<row.depth {
+                        let x = CGFloat(level) * 18 + 6
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: 22))
+                    }
+                    let branchX = CGFloat(row.depth - 1) * 18 + 6
+                    path.move(to: CGPoint(x: branchX, y: 11))
+                    path.addLine(to: CGPoint(x: branchX + 9, y: 11))
+                }
+                .stroke(.tertiary, lineWidth: 0.5)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
         .contentShape(Rectangle())
         .onHover { isHovered in
+            if isHovered {
+                hoveredRowID = row.id
+            } else if hoveredRowID == row.id {
+                hoveredRowID = nil
+            }
             onIntent(.hover(row.id, isHovered: isHovered))
         }
         .accessibilityIdentifier("WorkspaceSidebar.outliner.row.\(row.id)")

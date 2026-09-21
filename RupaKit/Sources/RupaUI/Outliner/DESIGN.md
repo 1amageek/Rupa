@@ -74,6 +74,15 @@ owner.
 
 ### Icon presentation
 
+Rows use 18 pt hierarchy indentation and noninteractive branch guides. Row height
+is at least 22 pt and grows for wrapped names; drop zones use the actual row bounds. Root labels use medium
+weight; child labels retain regular weight. Visibility and lock slots retain
+their width when hidden so hover never shifts names or drag targets. The mounted
+Outliner owns the hovered row ID; leaving a row hides its actions. Pending
+transactions and VoiceOver keep actions visible. Context menus remain available
+without pointer hover. Verify native enter/exit, disclosure, selection, and state
+actions in the App; projection and command contracts remain unchanged.
+
 Visibility and lock controls use 11 pt glyphs inside the existing 20 pt hit
 slots. MainView owns the set of rows with pending state transactions; Outliner
 shows an hourglass and disables both state buttons until success or failure.

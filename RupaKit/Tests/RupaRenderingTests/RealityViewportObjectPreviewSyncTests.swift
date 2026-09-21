@@ -138,3 +138,113 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
     #expect(abs(Double(marker.position(relativeTo: viewport.root).x) - anchor.x) < 1e-5)
     #expect(descendants(viewport.root).count == entities.count)
 }
+
+/// A sketch draws its strokes and its single points from the same item and the
+/// same points, so one placement drag has to carry both. A descriptor that
+/// omits the object-preview identity stands still at the committed position
+/// while the rest of the sketch moves.
+@Test
+func sketchPlacementPreviewTagsEveryDescriptorTheDraggedItemDraws() async throws {
+    let item = ViewportSceneItem(
+        id: "dragged-sketch",
+        featureID: FeatureID(),
+        modelBounds: CGRect(x: 0, y: 0, width: 3, height: 2),
+        kind: .sketch(primitives: [
+            .line(entityID: SketchEntityID(), start: CGPoint(x: 0, y: 0), end: CGPoint(x: 3, y: 0)),
+            .point(entityID: SketchEntityID(), point: CGPoint(x: 1, y: 2)),
+        ])
+    )
+    let snapshot = ViewportSpatialOverlaySemanticSnapshot(
+        scene: .init(items: [item]),
+        interaction: .init(
+            selectedFeatureIDs: [], selectedSceneNodeIDs: [],
+            hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [],
+            selectedSketchEntities: [], previewSketchEntities: [], hoveredSketchEntity: nil,
+            selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
+        editedBodies: [:], world: .init(modelBounds: item.modelBounds),
+        includesGrid: false, measurement: nil, drawsLegacyBodies: true, drawsDragPreviewBodies: false)
+    let builder = ViewportSpatialOverlayProducer.makeBuilder(from: snapshot, topologyRevision: 1)
+    let batch = try await Task.detached { try builder(.origin, 0) }.value.spatialBatch
+
+    let strokes = batch.cameraLines.filter { $0.points.count == 2 }
+    #expect(strokes.count == 1)
+    #expect(strokes.allSatisfy { $0.objectPreviewOccurrenceID == item.id })
+    let pointMarkers = batch.markers.filter { $0.anchor == Point3D(x: 1, y: 0, z: 2) }
+    #expect(pointMarkers.count == 1)
+    #expect(pointMarkers.allSatisfy { $0.objectPreviewOccurrenceID == item.id })
+}
+
+/// A sketch a builder has not extruded yet draws no surface at all. The drag
+/// that moves it publishes the same object-preview map, so the map reaches the
+/// camera descriptors whether or not the scene owns a surface plan.
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func sketchPlacementPreviewMovesWhenTheSceneDrawsNoSurface() async throws {
+    _ = NSApplication.shared
+    let id = "sketch-only"
+    let anchor = Point3D(x: 0.2, y: 0, z: 0.2)
+    let strokeEnd = Point3D(x: 0.8, y: 0, z: 0.2)
+    let stroke = RealityViewportSpatialBatch.CameraLine(points: [
+        .init(anchor: anchor, offset: .zero),
+        .init(anchor: strokeEnd, offset: .zero)
+    ], color: [1, 1, 1, 1], handleIndex: 0, objectPreviewOccurrenceID: id)
+    let batch = try RealityViewportSpatialBatch(markers: [
+        .init(shape: .sphere, anchor: anchor, diameterPoints: 6, color: [1, 1, 1, 1],
+              handleIndex: 1, hitTolerancePoints: 8, objectPreviewOccurrenceID: id)
+    ], cameraLines: [stroke], handleCount: 2, renderOrigin: .origin, retainedSurfaceByteCount: 0)
+    let viewport = try await RealityViewport.prepare(plan: nil, spatialBatch: batch, reusing: nil)
+    let size = CGSize(width: 512, height: 384)
+    var reported: MeshSourcePresentationRenderError?
+    let view = RealityViewportView(viewport: viewport, viewportRevision: 1, displayMode: .solid,
+        shading: .init(style: .flat), occurrenceMaterials: [:],
+        layout: .init(modelBounds: CGRect(x: -2, y: -2, width: 4, height: 4), size: size,
+                      camera: .init(projection: .parallel),
+                      basis: .axisFront(.z), verticalBounds: -2...2),
+        interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [], hoveredSceneNodeID: nil),
+        sectionPlane: nil, retainedSide: .front, sectionTolerance: 0, onUpdateResult: { reported = $0 })
+        .frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: view)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    window.contentView?.layoutSubtreeIfNeeded()
+    defer { viewport.unbind(); window.contentViewController = nil; window.close() }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+    while viewport.appliedViewportRevision != 1 || viewport.project(anchor) == nil {
+        try #require(ContinuousClock.now < deadline)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    _ = try viewport.updateSpatialCamera()
+    #expect(reported == nil)
+    func descendants(_ root: Entity) -> [Entity] { [root] + root.children.flatMap(descendants) }
+    let entities = descendants(viewport.root)
+    let marker = try #require(entities.first {
+        viewport.spatialHandleIndex(for: $0) == 1 && $0 is ModelEntity
+    })
+    let strokeEntity = try #require(entities.compactMap { $0 as? ModelEntity }.first {
+        viewport.spatialHandleIndex(for: $0) == 0 && $0.model?.mesh.lowLevelMesh != nil
+    })
+    let strokeResource = try #require(strokeEntity.model?.mesh)
+    let mutation = Transform3D(matrix: try Matrix4x4(values: [
+        1, 0, 0, 0.4, 0, 1, 0, 0, 0, 0, 1, 0.3, 0, 0, 0, 1
+    ]))
+    try viewport.applyObjectPreviews([id: mutation], displayMode: .solid)
+    _ = try viewport.updateSpatialCamera()
+    let movedAnchor = try ViewportWorldTransformAlgebra.transformedPoint(anchor, by: mutation)
+    let movedEnd = try ViewportWorldTransformAlgebra.transformedPoint(strokeEnd, by: mutation)
+    let position = marker.position(relativeTo: viewport.root)
+    #expect(abs(Double(position.x) - movedAnchor.x) < 1e-5)
+    #expect(abs(Double(position.z) - movedAnchor.z) < 1e-5)
+    let mesh = try #require(strokeResource.lowLevelMesh)
+    mesh.withUnsafeBytes(bufferIndex: 0) {
+        let points = $0.bindMemory(to: SIMD3<Float>.self)
+        #expect(abs(Double(points[0].x) - movedAnchor.x) < 1e-5)
+        #expect(abs(Double(points[0].z) - movedAnchor.z) < 1e-5)
+        #expect(abs(Double(points[1].x) - movedEnd.x) < 1e-5)
+        #expect(abs(Double(points[1].z) - movedEnd.z) < 1e-5)
+    }
+    try viewport.applyObjectPreviews([:], displayMode: .solid)
+    _ = try viewport.updateSpatialCamera()
+    #expect(abs(Double(marker.position(relativeTo: viewport.root).x) - anchor.x) < 1e-5)
+    #expect(descendants(viewport.root).count == entities.count)
+}

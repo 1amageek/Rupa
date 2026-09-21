@@ -2222,7 +2222,25 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     when it contains only an object outline, a generic topology marker, or a
     sampled curve but omits that route's dimension, guide, handle, hover/active
     state, or active world preview.
-15. The prepared graph distinguishes static world resources from bounded
+15. One drag moves one object, and every descriptor that object draws moves
+    with it. `ViewportObjectTransformMember.occurrenceID` is the only key: the
+    placement affordance mints it from the presentation occurrence for a body
+    and from `ViewportSceneItem.id` for a sketch, and every descriptor the same
+    item draws carries that identity in `objectPreviewOccurrenceID`. Three
+    consumers read the one map a live drag publishes: the occurrence surface
+    mesh through [`RealityViewport`](RealityViewport/DESIGN.md)'s applied
+    object previews, the camera-placed lines, markers and paths through their
+    `objectPreviewOccurrenceID`, and the gizmo through the first object member
+    of the affordance that drew it. A sketch stroke and a single-point sketch
+    primitive are drawn by the same item from the same points, so they carry
+    the same identity; a descriptor that omits it stands still at the committed
+    position while the rest of the object moves, which is a defect rather than
+    an opt-out. The published map is recorded whether or not a surface plan
+    exists, so a scene that draws only sketches follows a drag under the same
+    contract as one that draws solids. `Label` and world `Mesh` descriptors
+    carry no preview channel and are not object-follow surfaces; a route that
+    needs one states it here before it claims to follow.
+16. The prepared graph distinguishes static world resources from bounded
     view-dependent annotation placement. Camera changes update native camera
     transforms immediately and may update bounded label/annotation transforms;
     they never rebuild the world MeshResource graph, retessellate CAD, or rerun
@@ -2339,7 +2357,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
 
 ### Lifecycle, cancellation, and bounds
 
-16. Preparation owns at most one active worker and one newest pending request.
+17. Preparation owns at most one active worker and one newest pending request.
     Replacement and teardown cancel the actual worker, wait for its cooperative
     exit, and reject every stale completion by the complete preparation
     identity. The same worker prepares the optional surface and required
@@ -2360,7 +2378,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     rendered frame; exact-ready identity and handle authority advance only with
     that complete replacement. Typed failure keeps display continuity but grants
     no authority to the old overlay.
-17. Count admission precedes every mesh, collision, line, text, material, and
+18. Count admission precedes every mesh, collision, line, text, material, and
    Entity request. Byte admission covers every application-owned retained and
    scratch buffer before allocation or growth, including six owned UInt32
    collision indices per source triangle for the original/reversed pair.
@@ -2392,7 +2410,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     the candidate's native ShapeResource. Native resources are released with
     their scene root; no unsafe pointer or borrowed source buffer crosses a task
     boundary.
-18. Engine-neutral source traversal, transform/material resolution,
+19. Engine-neutral source traversal, transform/material resolution,
     provenance-map construction, and descriptor creation remain off-main when
     their APIs permit. Native RealityKit APIs follow their declared isolation.
     In the macOS 27 SDK, `LowLevelMesh` construction and its scoped mutable-byte
@@ -2406,7 +2424,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     an Entity. Every post-await completion rechecks the frame tuple before
     publication, and the host never blocks MainActor on GPU completion,
     readback, or a semaphore.
-19. Failure is typed and visible. A resource, camera, material, collision,
+20. Failure is typed and visible. A resource, camera, material, collision,
     projection, hit-test, or frame-swap failure preserves the previous complete
     frame only while it still matches the authoritative mounted tuple. A stale
     previous root is detached and non-pickable rather than exposed as current,
