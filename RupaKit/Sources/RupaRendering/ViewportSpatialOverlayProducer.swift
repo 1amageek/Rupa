@@ -269,15 +269,10 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     }
 
     struct SnapReference: Sendable {
-        enum Context: Sendable {
-            case passiveHover
-            case creationDrag
-        }
-
         let result: SnapResolutionResult?
         let referenceLineAnchors: [SketchReferenceLineAnchor]
         let modelBounds: CGRect
-        let context: Context
+        let context: ViewportSnapOverlayContext
     }
 
     struct Placement: Sendable {
@@ -1542,14 +1537,10 @@ enum ViewportSpatialOverlayProducer {
     ) throws {
         guard let overlay = snapshot.snapReference else { return }
         var emitted = false
-        let context: ViewportSnapOverlayContext = switch overlay.context {
-        case .passiveHover: .passiveHover
-        case .creationDrag: .creationDrag
-        }
+        let context = overlay.context
 
-        if let result = overlay.result,
-           let candidate = result.selectedCandidate,
-           ViewportSnapOverlayPolicy.drawsOverlay(kind: candidate.kind, context: context) {
+        if let result = ViewportSnapOverlayPolicy.displayedResult(overlay.result, context: context),
+           let candidate = result.selectedCandidate {
             let anchor = result.selectedWorldPoint
                 ?? Point3D(x: result.resolvedPoint.x, y: 0.0, z: result.resolvedPoint.y)
             guard isFinitePoint(anchor) else {

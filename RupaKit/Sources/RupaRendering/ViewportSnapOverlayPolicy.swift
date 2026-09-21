@@ -1,6 +1,6 @@
 import RupaCore
 
-enum ViewportSnapOverlayContext: Equatable {
+enum ViewportSnapOverlayContext: Equatable, Sendable {
     case passiveHover
     case creationDrag
 

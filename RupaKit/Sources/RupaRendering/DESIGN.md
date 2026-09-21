@@ -174,6 +174,8 @@ newer source snapshot.
 The overlay preparation identity and its producer use the same displayed-snap
 policy: passive grid candidates remain available to interaction but are absent
 from the rendered snapshot, so pointer motion cannot replace an unchanged frame.
+`ViewportSnapOverlayContext` is the single Sendable context shared by the
+interaction adapter and semantic snapshot; the producer consumes it directly.
 `viewportSnapResolutionServiceResolvesInputOutsideDrawing` verifies hidden grid
 motion and preserved creation/object snaps. The native update boundary is owned
 by [RealityViewport](RealityViewport/DESIGN.md#mounted-camera-readiness).

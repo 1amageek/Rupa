@@ -5556,10 +5556,7 @@ extension Viewport {
                 result: result,
                 referenceLineAnchors: anchors,
                 modelBounds: modelBounds,
-                context: activeCanvasDrag.map {
-                    if case .creation = $0.kind { return .creationDrag }
-                    return .passiveHover
-                } ?? .passiveHover
+                context: snapOverlayContext
             )
         }()
         let placement = placementHighlightState.map {

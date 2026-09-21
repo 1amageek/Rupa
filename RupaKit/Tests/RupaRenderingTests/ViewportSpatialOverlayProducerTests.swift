@@ -8,6 +8,32 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
+@Test(.timeLimit(.minutes(1)))
+func snapProducerUsesSharedDisplayContext() async throws {
+    let bounds = CGRect(x: -1, y: -1, width: 2, height: 2)
+    let origin = Point2D(x: 0, y: 0)
+    for context in [ViewportSnapOverlayContext.passiveHover, .creationDrag] {
+        for kind in [SnapCandidateKind.grid, .lineStart] {
+            let candidate = SnapCandidate(kind: kind, point: origin, distanceMeters: 0, label: "Snap")
+            let snapshot = ViewportSpatialOverlaySemanticSnapshot(scene: .init(items: []),
+                interaction: .init(selectedFeatureIDs: [], selectedSceneNodeIDs: [],
+                    hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [],
+                    selectedSketchEntities: [], previewSketchEntities: [], hoveredSketchEntity: nil,
+                    selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
+                editedBodies: [:], world: .init(modelBounds: bounds),
+                snapReference: .init(result: .init(originalPoint: origin, resolvedPoint: origin,
+                    selectedCandidate: candidate, candidates: [candidate]), referenceLineAnchors: [],
+                    modelBounds: bounds, context: context),
+                measurement: nil, drawsLegacyBodies: false, drawsDragPreviewBodies: false)
+            let builder = ViewportSpatialOverlayProducer.makeBuilder(from: snapshot, topologyRevision: 1)
+            let output = try await Task.detached { try builder(.origin, 0) }.value
+            let expectedMarkers = kind == .grid && context == .passiveHover ? 0 : 1
+            #expect(output.spatialBatch.markers.count == expectedMarkers)
+            #expect(output.spatialBatch.labels.count == (kind == .grid ? 0 : 1))
+        }
+    }
+}
+
 @Test
 func nativePolygonFillPreservesConcavityAndRejectsDegenerateInput() throws {
     let polygon = [
