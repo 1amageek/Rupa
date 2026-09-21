@@ -6,7 +6,7 @@
 - [ ] S4 Workspace chrome: one canvas header above the canvas, and the inspector spends its width on the inspector `depends:S1` `parallel:none`
   - [x] S4.1 Inspector content fills the pane it is given `depends:none` `parallel:none`
   - [x] S4.2 One canvas header bar above the canvas; the floating rail and the chip row are gone `depends:S4.1` `parallel:none`
-  - [ ] S4.3 Header controls say what they are the moment they are pointed at `depends:S4.2` `parallel:none`
+  - [x] S4.3 Header controls say what they are the moment they are pointed at `depends:S4.2` `parallel:none`
   - [ ] S4.4 The scale readout moves into the header and the canvas keeps only the axis triad `depends:S4.2` `parallel:none`
 - [ ] S5 Viewport interaction contract on RealityViewport `depends:S1,S3` `parallel:none`
   - [ ] S5.1 One affordance-to-command commit path replacing per-builder rederivation `depends:none` `parallel:none`

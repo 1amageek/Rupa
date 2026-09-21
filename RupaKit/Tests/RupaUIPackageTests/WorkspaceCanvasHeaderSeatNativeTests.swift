@@ -13,7 +13,10 @@ import Testing
 func workspaceCanvasHeaderSeatsMountAtTheWidthsTheyDeclare() async throws {
     _ = NSApplication.shared
     let scope = try await mountedFittingSize(
-        WorkspaceSelectionScopeControl(selection: .constant(.object))
+        WorkspaceSelectionScopeControl(
+            selection: .constant(.object),
+            hoverHint: .constant(WorkspaceHoverHint())
+        )
     )
     #expect(scope.width == WorkspaceSelectionScopeControlLayout.contentWidth)
     #expect(scope.height == WorkspaceSelectionScopeControlLayout.buttonSize.height)
@@ -23,14 +26,18 @@ func workspaceCanvasHeaderSeatsMountAtTheWidthsTheyDeclare() async throws {
             isGridSnapEnabled: .constant(true),
             isObjectTargetingEnabled: .constant(false),
             isFixedGridVisualSpacing: .constant(false),
-            isConstructionPlaneSnapEnabled: .constant(true)
+            isConstructionPlaneSnapEnabled: .constant(true),
+            hoverHint: .constant(WorkspaceHoverHint())
         )
     )
     #expect(snaps.width == WorkspaceSnapControlLayout.contentWidth)
     #expect(snaps.height == WorkspaceSnapControlLayout.buttonSize.height)
 
     let planes = try await mountedFittingSize(
-        WorkspacePlaneModeControl(selection: .constant(.adaptive))
+        WorkspacePlaneModeControl(
+            selection: .constant(.adaptive),
+            hoverHint: .constant(WorkspaceHoverHint())
+        )
     )
     #expect(planes.width == WorkspacePlaneModeControlLayout.contentWidth)
     #expect(planes.height == WorkspacePlaneModeControlLayout.buttonSize.height)

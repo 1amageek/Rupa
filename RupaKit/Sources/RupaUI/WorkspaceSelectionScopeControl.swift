@@ -22,6 +22,7 @@ struct WorkspaceSelectionScopeControlLayout: Equatable {
 
 struct WorkspaceSelectionScopeControl: View {
     @Binding var selection: WorkspaceSelectionScope
+    @Binding var hoverHint: WorkspaceHoverHint
 
     var body: some View {
         HStack(spacing: WorkspaceSelectionScopeControlLayout.spacing) {
@@ -40,6 +41,7 @@ struct WorkspaceSelectionScopeControl: View {
     private func scopeButton(_ scope: WorkspaceSelectionScope) -> some View {
         let isSelected = selection == scope
         let isEnabled = scope.isEnabled
+        let identifier = "WorkspaceSelectionScope.\(scope.rawValue)"
         return Button {
             selection = scope
         } label: {
@@ -65,10 +67,13 @@ struct WorkspaceSelectionScopeControl: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
-        .help(helpText(for: scope))
         .accessibilityLabel(scope.title)
         .accessibilityValue(accessibilityValue(scope, isSelected: isSelected))
-        .accessibilityIdentifier("WorkspaceSelectionScope.\(scope.rawValue)")
+        .workspaceHeaderControlName(
+            helpText(for: scope),
+            identifier: identifier,
+            hint: $hoverHint
+        )
     }
 
     /// The tooltip carries the digit so the key is discoverable from the control

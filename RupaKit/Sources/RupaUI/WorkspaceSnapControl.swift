@@ -23,6 +23,7 @@ struct WorkspaceSnapControl: View {
     @Binding var isObjectTargetingEnabled: Bool
     @Binding var isFixedGridVisualSpacing: Bool
     @Binding var isConstructionPlaneSnapEnabled: Bool
+    @Binding var hoverHint: WorkspaceHoverHint
 
     var body: some View {
         HStack(spacing: WorkspaceSnapControlLayout.spacing) {
@@ -107,9 +108,12 @@ struct WorkspaceSnapControl: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(help)
         .accessibilityLabel(title)
         .accessibilityValue(isSelected ? "On" : "Off")
-        .accessibilityIdentifier(accessibilityIdentifier)
+        .workspaceHeaderControlName(
+            help,
+            identifier: accessibilityIdentifier,
+            hint: $hoverHint
+        )
     }
 }

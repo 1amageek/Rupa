@@ -199,6 +199,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportChromeGeometry: WorkspaceCanvasChromeGeometry
     @State private var viewportCameraResetSignal: Int
     @State private var presentedHeaderPanel: WorkspaceCanvasHeaderPanel?
+    @State private var headerHoverHint = WorkspaceHoverHint()
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var viewportCameraFrame: ViewportCameraFrame?
@@ -2998,27 +2999,39 @@ private struct ProjectMainViewContent: View {
     ) -> some View {
         let scaleFitPromptState = workspaceScaleFitPromptState
         HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
-            WorkspaceSelectionScopeControl(selection: $selectionScope)
+            WorkspaceSelectionScopeControl(
+                selection: $selectionScope,
+                hoverHint: $headerHoverHint
+            )
             workspaceCanvasHeaderDivider
             WorkspaceSnapControl(
                 isGridSnapEnabled: $isGridSnapEnabled,
                 isObjectTargetingEnabled: $isObjectTargetingEnabled,
                 isFixedGridVisualSpacing: fixedGridVisualSpacingBinding,
-                isConstructionPlaneSnapEnabled: $isConstructionPlaneSnapEnabled
+                isConstructionPlaneSnapEnabled: $isConstructionPlaneSnapEnabled,
+                hoverHint: $headerHoverHint
             )
             workspaceCanvasHeaderDivider
-            WorkspacePlaneModeControl(selection: $workspacePlaneMode)
+            WorkspacePlaneModeControl(
+                selection: $workspacePlaneMode,
+                hoverHint: $headerHoverHint
+            )
             workspaceCanvasHeaderDivider
             workspaceViewportFitMenu
             workspaceViewportDisplayModeMenu
             workspaceViewportShadingButton
             workspaceCanvasHeaderPanelButton(.analysis)
 
-            workspaceCanvasHeaderReadouts(
-                presentation: presentation,
-                scaleFitPromptState: scaleFitPromptState
-            )
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            if let hintText = headerHoverHint.text {
+                workspaceCanvasHeaderHint(hintText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                workspaceCanvasHeaderReadouts(
+                    presentation: presentation,
+                    scaleFitPromptState: scaleFitPromptState
+                )
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
 
             workspaceCanvasHeaderPanelButton(.more)
         }
@@ -3033,6 +3046,23 @@ private struct ProjectMainViewContent: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceCanvasHeader")
+    }
+
+    /// What the seat under the pointer is, in the room the readouts were using.
+    ///
+    /// The readouts stand down while it is shown: that region is the header's
+    /// only flexible one, so the fixed seats do not move under the pointer and
+    /// the overflow button stays where it was. It is plain text rather than a
+    /// chip so that it can be offered any width and take it, and it is cut to
+    /// one line because the bar's height is declared and a wrapped sentence
+    /// would not fit a seat.
+    private func workspaceCanvasHeaderHint(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .accessibilityIdentifier("WorkspaceCanvasHeader.hint")
     }
 
     /// The header's readouts, which leave the row rather than truncate inside
@@ -3151,9 +3181,12 @@ private struct ProjectMainViewContent: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(panel.title)
         .accessibilityLabel(panel.title)
-        .accessibilityIdentifier(panel.accessibilityIdentifier)
+        .workspaceHeaderControlName(
+            panel.title,
+            identifier: panel.accessibilityIdentifier,
+            hint: $headerHoverHint
+        )
         .popover(isPresented: isPresented, arrowEdge: .bottom) {
             workspaceCanvasHeaderPanelContent(panel)
         }
@@ -3319,9 +3352,12 @@ private struct ProjectMainViewContent: View {
             height: WorkspaceCanvasHeaderLayout.controlSize.height
         )
         .disabled(!viewportControlSession.canFitVisible)
-        .help("Fit Visible or Selected Objects")
         .accessibilityLabel("Viewport Fit")
-        .accessibilityIdentifier("WorkspaceViewport.fit")
+        .workspaceHeaderControlName(
+            "Fit Visible or Selected Objects",
+            identifier: "WorkspaceViewport.fit",
+            hint: $headerHoverHint
+        )
     }
 
     private func performViewportControl(_ action: ViewportControlAction) {
@@ -3352,9 +3388,12 @@ private struct ProjectMainViewContent: View {
         }
         .buttonStyle(.plain)
         .disabled(!viewportControlSession.isReady)
-        .help("Viewport Shading")
         .accessibilityLabel("Viewport Shading")
-        .accessibilityIdentifier("WorkspaceViewport.shading")
+        .workspaceHeaderControlName(
+            "Viewport Shading",
+            identifier: "WorkspaceViewport.shading",
+            hint: $headerHoverHint
+        )
         .popover(isPresented: $isViewportShadingPresented, arrowEdge: .bottom) {
             ViewportShadingPanel(
                 shading: Binding(
@@ -3383,10 +3422,13 @@ private struct ProjectMainViewContent: View {
             width: WorkspaceCanvasHeaderLayout.controlSize.width,
             height: WorkspaceCanvasHeaderLayout.controlSize.height
         )
-        .help("Viewport Display Mode")
         .accessibilityLabel("Viewport Display Mode")
         .accessibilityValue(viewportDisplayModeTitle(viewportDisplayMode))
-        .accessibilityIdentifier("WorkspaceViewport.displayMode")
+        .workspaceHeaderControlName(
+            "Viewport Display Mode",
+            identifier: "WorkspaceViewport.displayMode",
+            hint: $headerHoverHint
+        )
     }
 
     @ViewBuilder

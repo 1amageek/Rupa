@@ -265,6 +265,38 @@ Header controls are therefore icon-first:
 a control that would have to carry a word to be recognised carries an icon
 and says its name on hover instead.
 
+The name it says on hover stands in the yielding region itself. A pointer
+arriving on an icon-first seat replaces the readouts with that seat's
+description, aligned to the leading edge so it begins where the icons end,
+and leaving the seat puts the readouts back. That region is the header's only
+flexible one and a hint is the most transient thing the header shows, so the
+two belong in the same place: no fixed seat moves under the pointer and the
+overflow button stays where it was. The hint is plain text rather than a chip,
+so it can be offered any width and take it, and it is cut to one line because
+the bar's height is declared and a wrapped sentence would not fit a seat.
+
+The window toolbar's status line is not the hint seat. It carries the newest
+transient diagnostic, which is the instruction the user is being asked to act
+on, and a pointer crossing the header would erase it. A label floating under
+the pointer is not the hint seat either: the header stands above the canvas,
+so such a label would have to be drawn in the canvas column's overlay, where
+the tool palette's own hint preference already travels and would be drawn a
+second time. The readouts and the scale-fit prompt report no hint of their
+own -- they already carry their word, and the prompt is the one readout that
+is an action, so a hint that replaced it would take away what the pointer was
+reaching for.
+
+Hover events between neighbouring seats arrive in no promised order -- the
+next seat's entry can precede the last one's exit -- so `WorkspaceHoverHint`
+is a guarded value: an exit clears only the hint the same control wrote, and a
+stale exit cannot erase a newer neighbour's. The guard keys on the
+accessibility identifier the control already publishes rather than on the
+words it shows, so two controls that happened to describe themselves the same
+way cannot clear each other and no second naming scheme is introduced. The
+words are the string the control's own tooltip carries, keys included where
+the control has one, so a seat cannot be named one way on hover and another
+way in its tooltip.
+
 Both panels are popovers anchored to their own header button, not `Menu`s. A
 SwiftUI `Menu` on macOS is an `NSMenu`: it keeps leaf buttons as menu items
 and drops the stacks, frames and backgrounds around them, which is every
@@ -995,6 +1027,7 @@ the App UI runner is retired, so that half of every row is currently unowned.
 | Header panel | Saved views | `WorkspaceCanvasHeader.more` presents `WorkspaceSavedView.*` | the `workspaceSavedViewBuilder*` tests in `RupaUIPackageTests` | lower-layer verified |
 | Header panel | Construction-plane rows, domain commands and scene counts | `WorkspaceCanvasHeader.more` presents `WorkspacePlane.*`, `WorkspaceDomainCommandList`, `WorkspaceScene.bodies` and `.issues` | none | unverified |
 | Header readout | Active plane name and selection | `WorkspacePlane.activeName`, `WorkspaceTopBar.SelectionScope` | none | unverified, read-only |
+| Header hint | The description of the seat the pointer is on | `WorkspaceCanvasHeader.hint` | `WorkspaceHoverHintTests` for the guarded value | the value is verified, the hover that drives it is not |
 | Model draft | box, cylinder, sphere, extrude, revolve, sweep, loft, boolean, fillet, chamfer | `Modeling.begin.<title>` | `ModelingOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
 | Mesh draft | translate, position, extrude, delete, addFace | `Modeling.mesh` panel | `MeshOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
 
@@ -1081,6 +1114,13 @@ arithmetic is only worth anything if the declared widths are the real ones, so
 `WorkspaceCanvasHeaderSeatNativeTests` mounts each multi-button seat in a
 window the width of the narrowest canvas column and asserts it asks for
 exactly the width the sum counted.
+The hover hint is verified as the value it is:
+`WorkspaceHoverHintTests` owns arrival, departure, the out-of-order exit and
+the two controls that describe themselves alike. What no package test owns is
+that a pointer over a seat reaches that value, because a hover is delivered by
+a tracking area in a window that is on screen and the package's mounted tests
+keep their windows off it. That half is a live check until an integration
+runner owns it.
 `WorkspaceSurfaceAnalysis.<option>` and `WorkspaceSurfaceAnalysis.density.<density>`
 are `.plain` buttons with `Image` labels that already report as hittable, so
 they take no `.contentShape`; the header's own icon buttons carry

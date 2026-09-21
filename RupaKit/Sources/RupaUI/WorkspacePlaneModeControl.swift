@@ -16,6 +16,7 @@ enum WorkspacePlaneModeControlLayout: Equatable {
 
 struct WorkspacePlaneModeControl: View {
     @Binding var selection: WorkspacePlaneMode
+    @Binding var hoverHint: WorkspaceHoverHint
 
     var body: some View {
         HStack(spacing: WorkspacePlaneModeControlLayout.spacing) {
@@ -33,6 +34,7 @@ struct WorkspacePlaneModeControl: View {
 
     private func modeButton(_ mode: WorkspacePlaneMode) -> some View {
         let isSelected = selection == mode
+        let identifier = "WorkspacePlane.\(mode.rawValue)"
         return Button {
             selection = mode
         } label: {
@@ -63,9 +65,12 @@ struct WorkspacePlaneModeControl: View {
                 }
         }
         .buttonStyle(.plain)
-        .help(mode.help)
         .accessibilityLabel(mode.title)
         .accessibilityValue(isSelected ? "Selected" : "Available")
-        .accessibilityIdentifier("WorkspacePlane.\(mode.rawValue)")
+        .workspaceHeaderControlName(
+            mode.help,
+            identifier: identifier,
+            hint: $hoverHint
+        )
     }
 }
