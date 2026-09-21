@@ -73,6 +73,13 @@ struct RealityViewportMountTests {
             }
             #expect(reportedError == nil)
             #expect(viewport.gridScaleReadout == nil)
+            let spatialUpdates = viewport.spatialCameraUpdateCount
+            let fittingRect = try #require(viewport.appliedLayout).fittingInsets.fittingRect(in: size)
+            for _ in 0..<30 {
+                try viewport.updateSpatialCamera(safeRect: fittingRect)
+            }
+            #expect(viewport.spatialCameraUpdateCount == spatialUpdates,
+                    "Pointer-only updates must not rewrite native affordance buffers or visibility.")
             if frame == 0 { #expect(!axes[2].isEnabled) }
             if frame == 1 && !perspective { #expect(!axes[0].isEnabled) }
             let origin = try #require(viewport.project(.origin))

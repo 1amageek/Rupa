@@ -171,6 +171,13 @@ no `Entity`, `MeshResource`, `RealityViewCameraContent`, `MTLBuffer`, or
 request that produced its resources; displaying it does not relabel it as a
 newer source snapshot.
 
+The overlay preparation identity and its producer use the same displayed-snap
+policy: passive grid candidates remain available to interaction but are absent
+from the rendered snapshot, so pointer motion cannot replace an unchanged frame.
+`viewportSnapResolutionServiceResolvesInputOutsideDrawing` verifies hidden grid
+motion and preserved creation/object snaps. The native update boundary is owned
+by [RealityViewport](RealityViewport/DESIGN.md#mounted-camera-readiness).
+
 ### Continuous source updates
 
 Object transform release transfers the final measured mutation from pointer

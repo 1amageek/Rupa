@@ -107,6 +107,13 @@ the applied camera state; unchanged layout and display scale do not reinstall
 native lens components. Hover-only replacement must retain camera identity,
 projection and published grid labels without a visibility transition.
 
+Within one mounted frame, spatial geometry is updated only when its camera,
+display scale, preview transforms, fitting/exclusion rectangles or grid settings
+change. Pointer coordinates and hover appearance are not geometry inputs.
+Successful spatial updates retain their input identity; failures and unbinding
+invalidate it, and a replacement frame starts without it. Native regression
+tests must exercise repeated unchanged updates and subsequent camera changes.
+
 Tick labels lie on the displayed grid plane, aligned with their coordinate
 axis, rather than on a camera-facing plane next to the near clip. Their local
 point scale is derived at the tick depth; perspective foreshortening follows

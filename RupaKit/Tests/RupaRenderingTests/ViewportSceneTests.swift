@@ -3424,6 +3424,20 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     ))
     #expect(resolution.publishedKind(context: .passiveHover) == nil)
     #expect(resolution.publishedKind(context: .creationDrag) == .grid)
+    #expect(ViewportSnapOverlayPolicy.displayedResult(resolution.result, context: .passiveHover) == nil)
+    #expect(ViewportSnapOverlayPolicy.displayedResult(resolution.result, context: .creationDrag) == resolution.result)
+    for index in 0..<30 {
+        let moved = ViewportSnapResolutionService().resolution(
+            for: .init(point: .init(x: Double(index) * 0.01, y: 0.018)),
+            document: .empty(), ruler: .standard(for: .millimeter), options: options,
+            modifierFlags: .init())
+        #expect(moved.result?.selectedCandidate?.kind == .grid)
+        #expect(ViewportSnapOverlayPolicy.displayedResult(moved.result, context: .passiveHover) == nil,
+                "Invisible grid motion must not change the overlay preparation identity.")
+    }
+    var objectResult = resolution.result
+    objectResult?.selectedCandidate?.kind = .lineStart
+    #expect(ViewportSnapOverlayPolicy.displayedResult(objectResult, context: .passiveHover) == objectResult)
 }
 
 @Test func viewportSnapResolutionServiceClearsWhenQueryIsUnavailable() {

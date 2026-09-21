@@ -27,6 +27,18 @@ final class RealityViewport {
     private(set) var maximumNativeUploadDuration: Duration = .zero
     private var surfaceResources: SurfaceResources?
     private var spatialResources: RealityViewportSpatialResources?
+    private var spatialCameraState: SpatialCameraState?
+    private(set) var spatialCameraUpdateCount = 0
+
+    private struct SpatialCameraState: Equatable {
+        let layout: ViewportLayout
+        let displayScale: CGFloat?
+        let previews: [String: Transform3D]
+        let safeRect: CGRect
+        let excludedRects: [CGRect]
+        let ruler: RulerConfiguration?
+        let spacing: ViewportGridVisualSpacingMode
+    }
     private let lighting = Entity()
     private let clipper = Entity()
     private let geometryRoot = Entity()
@@ -567,6 +579,7 @@ final class RealityViewport {
             appliedViewportRevision = revision
             return
         }
+        spatialCameraState = nil
         cameraCalibration = nil
         cameraCalibrationDepth = nil
         let viewportCenter = CGPoint(x: layout.viewportSize.width / 2, y: layout.viewportSize.height / 2)
@@ -886,6 +899,14 @@ final class RealityViewport {
                              gridRuler: RulerConfiguration? = nil,
                              gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
         guard let content, let appliedLayout, appliedViewportRevision != nil else { return nil }
+        let state = SpatialCameraState(layout: appliedLayout, displayScale: appliedDisplayScale,
+            previews: appliedObjectPreviews, safeRect: safeRect, excludedRects: excludedRects,
+            ruler: gridRuler, spacing: gridSpacing)
+        // Hover does not move geometry. Rewriting native mesh buffers and toggling
+        // entities on every SwiftUI update needlessly resubmits unchanged handles.
+        guard spatialCameraState != state else { return nil }
+        spatialCameraState = nil
+        spatialCameraUpdateCount += 1
         let gridError = try spatialResources?.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: excludedRects,
                                            gridRuler: gridRuler, gridBasis: appliedLayout.basis,
                                            gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing,
@@ -898,6 +919,7 @@ final class RealityViewport {
                 try updateSection(plane: requestedSection.plane, side: requestedSection.side, tolerance: requestedSection.tolerance)
             }
         }
+        if gridError == nil { spatialCameraState = state }
         return gridError
     }
 
@@ -1006,6 +1028,7 @@ final class RealityViewport {
 
     func unbind(owner: ObjectIdentifier? = nil) {
         guard bindingOwner == owner else { return }
+        spatialCameraState = nil
         // A RealityView root has no Entity parent. Withdraw it from its actual
         // scene owner before releasing the content and camera query lifetime.
         content?.remove(root)
@@ -1022,6 +1045,7 @@ final class RealityViewport {
     }
 
     func invalidateCamera() {
+        spatialCameraState = nil
         appliedLayout = nil
         appliedDisplayScale = nil
         appliedViewportRevision = nil

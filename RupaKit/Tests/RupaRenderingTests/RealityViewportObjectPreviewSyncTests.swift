@@ -123,6 +123,14 @@ func objectPreviewMovesSolidAndHandlesWithoutFrameReplacement(perspective: Bool)
         let screen = try #require(viewport.project(moved))
         #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(0))
         #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(3))
+        let updateCount = viewport.spatialCameraUpdateCount
+        for _ in 0..<30 {
+            try viewport.updateSpatialCamera()
+            #expect(marker.isEnabled && editHandle.isEnabled && line.isEnabled)
+            #expect(try viewport.spatialHandleHits(at: screen, revision: 1).contains(0))
+        }
+        #expect(viewport.spatialCameraUpdateCount == updateCount,
+                "Unchanged hover updates must preserve native handle buffers and visibility.")
         for step in 0..<8 {
             let angle = Double(step) * .pi / 4
             for radius: Double in [7.99, 8.01] {

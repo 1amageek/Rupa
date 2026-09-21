@@ -15,6 +15,13 @@ enum ViewportSnapOverlayContext: Equatable {
 }
 
 enum ViewportSnapOverlayPolicy {
+    static func displayedResult(_ result: SnapResolutionResult?, context: ViewportSnapOverlayContext) -> SnapResolutionResult? {
+        guard let kind = result?.selectedCandidate?.kind, drawsOverlay(kind: kind, context: context) else {
+            return nil
+        }
+        return result
+    }
+
     static func drawsOverlay(
         kind: SnapCandidateKind,
         context: ViewportSnapOverlayContext

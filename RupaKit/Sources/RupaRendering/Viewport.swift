@@ -1546,7 +1546,7 @@ public struct Viewport: View {
         key.surfaceAnalysisOptions = surfaceAnalysisOptions
         key.surfaceContinuity = surfaceContinuity
         key.sectionAnalysis = sectionAnalysis
-        key.snap = snapOverlayResult
+        key.snap = displayedSnapOverlayResult
         key.snapOptions = snapResolutionOptions
         key.placement = placementHighlightState
         key.measurement = measurementSession.state
@@ -2364,6 +2364,10 @@ public struct Viewport: View {
 
     private var snapOverlayContext: ViewportSnapOverlayContext {
         ViewportSnapOverlayContext(activeCanvasDrag: activeCanvasDrag)
+    }
+
+    private var displayedSnapOverlayResult: SnapResolutionResult? {
+        ViewportSnapOverlayPolicy.displayedResult(snapOverlayResult, context: snapOverlayContext)
     }
 
     private func snapOverlayQuery() -> ViewportSnapQuery? {
@@ -5546,9 +5550,10 @@ extension Viewport {
         )
         let snapReference: ViewportSpatialOverlaySemanticSnapshot.SnapReference? = {
             let anchors = snapResolutionOptions?.referenceLineAnchors ?? []
-            guard snapOverlayResult != nil || !anchors.isEmpty else { return nil }
+            let result = displayedSnapOverlayResult
+            guard result != nil || !anchors.isEmpty else { return nil }
             return .init(
-                result: snapOverlayResult,
+                result: result,
                 referenceLineAnchors: anchors,
                 modelBounds: modelBounds,
                 context: activeCanvasDrag.map {
