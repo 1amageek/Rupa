@@ -165,8 +165,10 @@ func manufacturingPowderBedProcessReportsUnimplementedPowderEscapeAnalysis() thr
 
 @Test(.timeLimit(.minutes(1)))
 func manufacturingCapabilityLedgerEntryKeepsPrintabilityIncomplete() throws {
-    let ledger = CapabilityLedgerService().ledger(
-        additionalEntries: ManufacturingCapabilityLedgerProvider.entries()
+    let assessment = CADInteractionQualityAssessmentService().assess()
+    let ledger = CapabilityLedger(
+        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
+            + ManufacturingCapabilityLedgerProvider.entries()
     )
     let entry = try #require(
         ledger.entry(id: ManufacturingDomain.validatePrintabilityCapabilityID.rawValue)

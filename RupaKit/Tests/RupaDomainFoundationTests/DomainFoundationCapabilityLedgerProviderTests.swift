@@ -4,8 +4,10 @@ import Testing
 
 @Test(.timeLimit(.minutes(1)))
 func domainFoundationCapabilityLedgerEntryTracksIncompleteFoundationGates() throws {
-    let ledger = CapabilityLedgerService().ledger(
-        additionalEntries: DomainFoundationCapabilityLedgerProvider.entries()
+    let assessment = CADInteractionQualityAssessmentService().assess()
+    let ledger = CapabilityLedger(
+        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
+            + DomainFoundationCapabilityLedgerProvider.entries()
     )
     let entry = try #require(ledger.entry(id: "domainFoundation.contracts"))
 

@@ -4,7 +4,9 @@ import Testing
 @Test(.timeLimit(.minutes(1)))
 func capabilityLedgerMirrorsCurrentQualityAssessmentEntries() {
     let assessment = CADInteractionQualityAssessmentService().assess()
-    let ledger = CapabilityLedgerService().ledger()
+    let ledger = CapabilityLedger(
+        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
+    )
 
     #expect(ledger.entries.map(\.id) == assessment.entries.map(\.area.rawValue).sorted())
     #expect(ledger.blockingGateCount == assessment.counts.blockingGapCount)
@@ -58,7 +60,11 @@ func capabilityLedgerMergesAdditionalDomainEntriesByCategory() throws {
         openWork: ["Implement the domain."],
         nextRequiredResult: "Domain fixture must become executable."
     )
-    let ledger = CapabilityLedgerService().ledger(additionalEntries: [domainEntry])
+    let assessment = CADInteractionQualityAssessmentService().assess()
+    let ledger = CapabilityLedger(
+        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
+            + [domainEntry]
+    )
 
     let entry = try #require(ledger.entry(id: "domain.fixture"))
     #expect(entry.category == .domainModule)
@@ -69,7 +75,10 @@ func capabilityLedgerMergesAdditionalDomainEntriesByCategory() throws {
 
 @Test(.timeLimit(.minutes(1)))
 func capabilityLedgerKeepsBlockingGateEvidenceVisible() throws {
-    let ledger = CapabilityLedgerService().ledger()
+    let assessment = CADInteractionQualityAssessmentService().assess()
+    let ledger = CapabilityLedger(
+        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
+    )
     let sketchPrecision = try #require(ledger.entry(id: "sketchPrecision"))
 
     #expect(sketchPrecision.title == "Sketch constraints, dimensions, numeric input, and precision construction")
