@@ -80,7 +80,7 @@ struct WorkspaceObjectShapeInspectorView: View {
     private func objectSizeControls(_ shapes: [InspectorObjectShape]) -> some View {
         InspectorVectorRow(title: "Size") {
             workspaceLengthControl(
-                "X",
+                shapes.first?.sizeLabels[0] ?? "X",
                 values: shapes.compactMap(\.size?.x),
                 displayUnit: displayUnit,
                 sliderMetersRange: sizeSliderMetersRange, axisField: true
@@ -88,7 +88,7 @@ struct WorkspaceObjectShapeInspectorView: View {
                 onSetSize(.x, meters, shapes)
             }
             workspaceLengthControl(
-                "Y",
+                shapes.first?.sizeLabels[1] ?? "Y",
                 values: shapes.compactMap(\.size?.y),
                 displayUnit: displayUnit,
                 sliderMetersRange: sizeSliderMetersRange, axisField: true
@@ -96,7 +96,7 @@ struct WorkspaceObjectShapeInspectorView: View {
                 onSetSize(.y, meters, shapes)
             }
             workspaceLengthControl(
-                "Z",
+                shapes.first?.sizeLabels[2] ?? "Z",
                 values: shapes.compactMap(\.size?.z),
                 displayUnit: displayUnit,
                 sliderMetersRange: sizeSliderMetersRange, axisField: true
@@ -105,6 +105,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             }
         }
         .help("Source size")
+        .disabled(!shapes.allSatisfy { $0.sizeLabels == shapes.first?.sizeLabels })
     }
 
     @ViewBuilder

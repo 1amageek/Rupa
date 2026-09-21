@@ -16,6 +16,11 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
+Face offset operates in the source profile frame. Moving the start cap compensates
+placement along the transformed sketch normal, keeping the opposite cap fixed on
+every construction plane. Cylinder wall offsets retain the center and change the
+radius. Plane and transformed-placement regression tests own this invariant.
+
 ### Spatial path editing
 
 [SpatialPathEditing](SpatialPathEditing/DESIGN.md) owns explicit planar-to-spatial

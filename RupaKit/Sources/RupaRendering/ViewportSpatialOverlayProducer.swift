@@ -1750,6 +1750,14 @@ enum ViewportSpatialOverlayProducer {
             case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID):
+                if componentID.generatedTopologySubshapeID != nil {
+                    let color = target == snapshot.interaction.hoveredTarget ? hoverColor : selectionColor
+                    meshes.append(.init(family: .transform, value: try selectedFaceMesh(
+                        componentID, item: item, component: component,
+                        color: SIMD4<Float>(color.x, color.y, color.z, 0.3))))
+                    emitted = true
+                    continue
+                }
                 guard let face = topology.faces.first(where: { $0.componentID == componentID }) else {
                     throw RealityViewportSpatialBatch.invalid("Selected face is missing from body topology.")
                 }
@@ -1814,6 +1822,30 @@ enum ViewportSpatialOverlayProducer {
         }
 
         if emitted { activeFamilies.insert(.transform) }
+    }
+
+    static func selectedFaceMesh(
+        _ componentID: SelectionComponentID, item: ViewportSceneItem,
+        component: ViewportBodyComponent, color: SIMD4<Float>
+    ) throws -> RealityViewportSpatialBatch.Mesh {
+        guard let mesh = component.mesh, let topology = component.topology else {
+            throw RealityViewportSpatialBatch.invalid("Selected CAD face has no evaluated mesh.")
+        }
+        var indices: [UInt32] = []
+        for run in topology.meshFaceRuns where run.componentID == componentID {
+            guard run.triangleRange.lowerBound >= 0,
+                  run.triangleRange.upperBound <= mesh.indices.count / 3 else {
+                throw RealityViewportSpatialBatch.invalid("Selected CAD face has invalid triangle provenance.")
+            }
+            indices.append(contentsOf: mesh.indices[(run.triangleRange.lowerBound * 3)..<(run.triangleRange.upperBound * 3)])
+        }
+        guard !indices.isEmpty, indices.allSatisfy({ Int($0) < mesh.positions.count }) else {
+            throw RealityViewportSpatialBatch.invalid("Selected CAD face has no valid drawn triangles.")
+        }
+        // Transform once per shared vertex, retaining the kernel's indexed face triangles.
+        let positions = try mesh.positions.map { try ViewportWorldTransformAlgebra.transformedPoint($0, by: item.modelTransform) }
+        return .init(positions: positions, indices: indices, topology: .triangles,
+                     color: color, depth: .scene)
     }
 
     private static func appendDragPreview(

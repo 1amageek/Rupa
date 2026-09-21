@@ -10,6 +10,28 @@ import Testing
 @MainActor
 @Suite("Object editing SSOT", .serialized, .timeLimit(.minutes(1)))
 struct WorkspaceObjectEditingSSOTTests {
+    @Test
+    func inspectorAxesChangeMatchingEvaluatedExtent() throws {
+        for plane in [SketchPlane.xy, .yz, .zx] {
+        for axis in [InspectorObjectAxis.x, .y, .z] {
+            let session = EditorSession()
+            _ = try session.execute(.createExtrudedRectangle(name: "Axis proof", plane: plane,
+                width: .length(0.1, .meter), height: .length(0.2, .meter),
+                depth: .length(0.3, .meter), direction: .normal))
+            let node = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
+            let feature = try #require(node.reference?.featureID)
+            let before = try #require(try BodyDisplaySnapshotService().snapshots(document: session.document)[feature]).bounds
+            let commands = try WorkspaceObjectShapeInspectorStateBuilder.sizeCommands(axis, meters: 0.4,
+                nodeIDs: [node.id], in: session.document)
+            for command in commands { _ = try session.execute(command) }
+            let after = try #require(try BodyDisplaySnapshotService().snapshots(document: session.document)[feature]).bounds
+            #expect(abs(after.maxX - after.minX - (axis == .x ? 0.4 : before.maxX - before.minX)) < 1e-9)
+            #expect(abs(after.maxY - after.minY - (axis == .y ? 0.4 : before.maxY - before.minY)) < 1e-9)
+            #expect(abs(after.maxZ - after.minZ - (axis == .z ? 0.4 : before.maxZ - before.minZ)) < 1e-9)
+        }
+        }
+    }
+
     private func encoded(_ value: some Encodable) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
@@ -127,15 +149,15 @@ struct WorkspaceObjectEditingSSOTTests {
             let commands = try WorkspaceObjectShapeInspectorStateBuilder.sizeCommands(axis, meters: meters,
                 nodeIDs: [first, second], in: before.document.document)
             #expect(commands.count == 1)
-            let kind: ObjectDimensionKind = axis == .x ? .sizeX : axis == .y ? .sizeY : .sizeZ
+            let kind: ObjectDimensionKind = axis == .x ? .sizeX : axis == .y ? .sizeZ : .sizeY
             #expect(commands == [.setObjectDimension(target: .init(sceneNodeID: first), kind: kind,
                 value: .length(meters, .meter))])
             current = try await perform(commands, in: workspace)
             let result = try #require(try shape(first, in: current).size)
             #expect(abs((axis == .x ? result.x : axis == .y ? result.y : result.z) - meters) < 1e-8)
-            #expect(abs(result.y - (axis == .y ? meters : size.y)) < 1e-8)
-            #expect(abs(result.x - (axis == .x || (cylinder && axis == .z) ? meters : size.x)) < 1e-8)
-            #expect(abs(result.z - (axis == .z || (cylinder && axis == .x) ? meters : size.z)) < 1e-8)
+            #expect(abs(result.y - (axis == .y || (cylinder && axis == .x) ? meters : size.y)) < 1e-8)
+            #expect(abs(result.x - (axis == .x || (cylinder && axis == .y) ? meters : size.x)) < 1e-8)
+            #expect(abs(result.z - (axis == .z ? meters : size.z)) < 1e-8)
             #expect(try shape(second, in: current).size == result)
             #expect([first, second].map { current.document.document.productMetadata.sceneNodes[$0]?.localTransform } == transforms)
             #expect(current.viewport.items != before.viewport.items)

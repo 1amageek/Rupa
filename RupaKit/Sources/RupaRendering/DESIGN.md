@@ -36,6 +36,14 @@ predicate now belongs to [ViewportMeasurement](ViewportMeasurement/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
+Face editing retains the extrusion's sketch frame, transformed into the selected
+occurrence, in the prepared handle. Its outward axis and source-to-world scale
+own both drag measurement and release. Cylinder walls use radial displacement;
+preview evaluates the same face-offset command as commit, never an AABB proxy.
+Selected face shading consumes the existing mesh face runs, not a planar fill of
+the B-Rep loop. Regression tests cover principal planes, transformed occurrences,
+radial edits and selected triangle provenance; UI integration checks the mounted result.
+
 ### Unified object controls
 
 Object-scope editing uses `emitBodyTransform` and `ViewportBodyTransformInput`

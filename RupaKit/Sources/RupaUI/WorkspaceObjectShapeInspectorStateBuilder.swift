@@ -33,10 +33,20 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
             var hollowLimit: Double? = nil
             let definition = snapshot.objectRegistry.definition(for: object.typeID)
             var properties = object.properties
+            var sizeLabels = ["X", "Y", "Z"]
             if object.typeID == .cube || object.typeID == .cylinder {
                 let source = try ObjectDimensionSourceResolver().resolve(
                     target: SelectionTarget(sceneNodeID: node.id), in: document)
-                size = .init(x: source.sizeX, y: source.sizeY, z: source.sizeZ)
+                let axes = try Self.sizeAxes(featureID: source.featureID, in: document)
+                sizeLabels = axes.map(\.label)
+                let values = axes.map { axis in
+                    switch axis.kind {
+                    case .sizeX: source.sizeX
+                    case .sizeY: source.sizeY
+                    default: source.sizeZ
+                    }
+                }
+                size = .init(x: values[0], y: values[1], z: values[2])
                 // The bound belongs to the source: a box is bounded by each of its sides and a
                 // cylinder by half its own radius, and only the source knows which prism this is.
                 cornerRadiusLimit = try document.maximumAllEdgeCornerRadius(
@@ -81,7 +91,7 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 typeID: object.typeID, definition: definition, properties: properties,
                 center: bounds.map { .init(x: ($0.minimum.x + $0.maximum.x) / 2,
                     y: ($0.minimum.y + $0.maximum.y) / 2, z: ($0.minimum.z + $0.maximum.z) / 2) },
-                size: size, cornerRadiusLimit: cornerRadiusLimit, hollowLimit: hollowLimit)
+                size: size, sizeLabels: sizeLabels, cornerRadiusLimit: cornerRadiusLimit, hollowLimit: hollowLimit)
         }
     }
 
@@ -119,12 +129,30 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
     static func sizeCommands(
         _ axis: InspectorObjectAxis, meters: Double, nodeIDs: [SceneNodeID], in document: DesignDocument
     ) throws -> [EditorCommand] {
-        let kind: ObjectDimensionKind = switch axis {
-        case .x: .sizeX
-        case .y: .sizeY
-        case .z: .sizeZ
+        var seen = Set<FeatureID>()
+        return try nodeIDs.flatMap { id -> [EditorCommand] in
+            let source = try ObjectDimensionSourceResolver().resolve(target: .init(sceneNodeID: id), in: document)
+            let axes = try sizeAxes(featureID: source.featureID, in: document)
+            let index = axis == .x ? 0 : axis == .y ? 1 : 2
+            let commands = try dimensionCommands(axes[index].kind, meters: meters, nodeIDs: [id], in: document)
+            return seen.insert(source.featureID).inserted ? commands : []
         }
-        return try dimensionCommands(kind, meters: meters, nodeIDs: nodeIDs, in: document)
+    }
+
+    private static func sizeAxes(featureID: FeatureID, in document: DesignDocument) throws
+        -> [(label: String, kind: ObjectDimensionKind)] {
+        guard let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
+              case .extrude(let extrusion) = feature.operation,
+              let profile = document.cadDocument.designGraph.nodes[extrusion.profile.featureID],
+              case .sketch(let sketch) = profile.operation else {
+            throw EditorError(code: .referenceUnresolved, message: "Size controls require the source sketch frame.")
+        }
+        switch sketch.plane {
+        case .xy: return [("X", .sizeX), ("Y", .sizeZ), ("Z", .sizeY)]
+        case .yz: return [("X", .sizeY), ("Y", .sizeX), ("Z", .sizeZ)]
+        case .zx: return [("X", .sizeZ), ("Y", .sizeY), ("Z", .sizeX)]
+        case .plane: return [("U", .sizeX), ("Depth", .sizeY), ("V", .sizeZ)]
+        }
     }
 
     static func dimensionCommands(

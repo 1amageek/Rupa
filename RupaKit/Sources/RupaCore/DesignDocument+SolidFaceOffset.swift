@@ -162,7 +162,8 @@ extension DesignDocument {
 
         cadDocument = updatedCADDocument
         if abs(translationYDelta) > 0.0 {
-            try translateSceneNode(resolvedTarget.sceneNodeID, y: translationYDelta)
+            try translateSceneNode(resolvedTarget.sceneNodeID,
+                along: SketchPlaneCoordinateSystem(plane: sketch.plane).normal * translationYDelta)
         }
         try synchronizeObjectPropertiesFromSource(
             featureID: featureID,
@@ -271,7 +272,8 @@ extension DesignDocument {
 
         cadDocument = updatedCADDocument
         if abs(translationYDelta) > 0.0 {
-            try translateSceneNode(sceneNodeID, y: translationYDelta)
+            try translateSceneNode(sceneNodeID,
+                along: SketchPlaneCoordinateSystem(plane: sketch.plane).normal * translationYDelta)
         }
         let sizeY = abs(try resolvedLengthValue(extrude.distance, owner: "Extrude distance"))
         try synchronizeCylinderObjectProperties(
@@ -285,7 +287,7 @@ extension DesignDocument {
 
     mutating func translateSceneNode(
         _ id: SceneNodeID,
-        y delta: Double
+        along delta: Vector3D
     ) throws {
         guard var node = productMetadata.sceneNodes[id] else {
             throw EditorError(
@@ -295,7 +297,10 @@ extension DesignDocument {
         }
         var values = node.localTransform.matrix.values
         try node.localTransform.validate()
-        values[7] += delta
+        for row in 0..<3 {
+            values[row * 4 + 3] += values[row * 4] * delta.x
+                + values[row * 4 + 1] * delta.y + values[row * 4 + 2] * delta.z
+        }
         node.localTransform = Transform3D(matrix: try Matrix4x4(values: values))
         productMetadata.sceneNodes[id] = node
     }

@@ -4352,6 +4352,18 @@ public struct Viewport: View {
         measure: some ViewportAffordanceMeasuring
     ) throws -> Bool {
         switch target.action {
+        case .profileFaceMove(let selectionTarget, _) where target.profileFaceFrame != nil:
+            guard let frame = target.profileFaceFrame else { return false }
+            let distance = try frame.distance(from: dragState.startPoint, to: current, measure: measure)
+            guard abs(distance) > 1e-12 else {
+                clearDragPreviewDocument()
+                return true
+            }
+            var preview = document
+            try preview.offsetBodyFace(target: selectionTarget, distance: .length(distance, .meter),
+                                       objectRegistry: objectRegistry)
+            setDragPreviewDocument(preview, target: selectionTarget)
+            return true
         case .profileEdgeChamfer(let selectionTarget, let edge):
             guard let baseEdit = dragState.baseEdits[target.featureID],
                   let distance = try baseEdit.profileEdgeChamferDistance(
@@ -4800,7 +4812,10 @@ public struct Viewport: View {
             return nil
         }
         let measure = try affordanceMeasure()
-        guard let distance = try baseEdit.profileFaceDragDistance(
+        let measuredDistance = try activeAffordanceDrag.target.profileFaceFrame.map {
+            CGFloat(try $0.distance(from: activeAffordanceDrag.startPoint, to: end, measure: measure))
+        }
+        guard let distance = try measuredDistance ?? baseEdit.profileFaceDragDistance(
             face,
             start: activeAffordanceDrag.startPoint,
             current: end,

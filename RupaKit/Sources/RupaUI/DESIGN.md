@@ -24,6 +24,12 @@ live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
 
+Inspector size fields map principal sketch-plane dimensions to model X/Y/Z in
+both reading and writing. Core's source dimensions remain U/depth/V. Arbitrary
+planes display U/Depth/V explicitly, not misleading Cartesian axis labels.
+Placement transforms remain separate from source dimensions. Axis-permutation
+tests must check evaluated geometry, not only property round trips.
+
 Box face/corner resize intents follow the
 [Rendering resize contract](../RupaRendering/DESIGN.md#responsibilities-and-boundaries).
 The UI submits source dimensions and the compensating occurrence translation

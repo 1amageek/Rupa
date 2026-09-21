@@ -918,7 +918,8 @@ private extension ViewportSpatialOverlayProducer {
             checkpoint: checkpoint,
             worldLines: &worldLines,
             worldFills: &worldFills,
-            markers: &markers
+            markers: &markers,
+            meshes: &meshes
         )
         try emitTransforms(
             input: input,
@@ -2287,7 +2288,8 @@ private extension ViewportSpatialOverlayProducer {
         checkpoint: (Int, Int, Int) throws -> Void,
         worldLines: inout [SurfaceTransformAffordanceSource.WorldLine],
         worldFills: inout [SurfaceTransformAffordanceSource.WorldFill],
-        markers: inout [SurfaceTransformAffordanceSource.Marker]
+        markers: inout [SurfaceTransformAffordanceSource.Marker],
+        meshes: inout [SurfaceTransformAffordanceSource.Mesh]
     ) throws {
         if input.enabledRoutes.contains(.constructionPlane) {
             var registeredPlaneHandles: [(ViewportSpatialHandleIdentity, String?)] = []
@@ -2417,8 +2419,19 @@ private extension ViewportSpatialOverlayProducer {
               let target = input.constructionFaceTarget else { return }
         guard case .face(let componentID) = target.component,
               let item = sceneItem(for: target, input: input),
-              case .body(let component) = item.kind,
-              let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
+              case .body(let component) = item.kind else {
+            throw RealityViewportSpatialBatch.invalid("Construction-face highlight has no matching body topology.")
+        }
+        if componentID.generatedTopologySubshapeID != nil {
+            let mesh = try selectedFaceMesh(componentID, item: item, component: component,
+                color: SIMD4<Float>(hoverColor.x, hoverColor.y, hoverColor.z, 0.16))
+            try checkpoint(mesh.positions.count, mesh.indices.count, 1)
+            meshes.append(.init(route: .constructionFace, positions: mesh.positions,
+                indices: mesh.indices, topology: mesh.topology, color: mesh.color,
+                family: .construction, identity: nil, state: .normal))
+            return
+        }
+        guard let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
             throw RealityViewportSpatialBatch.invalid("Construction-face highlight has no matching body topology.")
         }
         let points = face.points.map { item.modelTransform.viewportTransformedPoint($0) }
@@ -3015,13 +3028,17 @@ private extension ViewportSpatialOverlayProducer {
                 guard let item = sceneItem(for: target, input: input),
                       case .body = item.kind else { continue }
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
+                let frame = componentID.generatedTopologySubshapeID == nil ? nil
+                    : try ViewportProfileFaceFrame.resolve(item: item, face: face,
+                        componentID: componentID, document: input.document)
                 try emitProfileHandle(
                     route: .profileFace,
                     action: .profileFaceMove(target, face),
                     target: target,
                     item: item,
                     edit: edit,
-                    anchor: edit.worldPoint(edit.position(for: face)),
+                    anchor: frame?.anchor ?? edit.worldPoint(edit.position(for: face)),
+                    profileFaceFrame: frame,
                     offsetPoints: nil,
                     path: circlePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                     input: input,
@@ -3115,6 +3132,7 @@ private extension ViewportSpatialOverlayProducer {
         item: ViewportSceneItem,
         edit: ViewportObjectEditState,
         anchor: Point3D,
+        profileFaceFrame: ViewportProfileFaceFrame? = nil,
         offsetPoints: CGFloat?,
         path: Path,
         input: SurfaceTransformAffordanceSource.RawInput,
@@ -3124,11 +3142,12 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
-        let affordanceTarget = ViewportAffordanceTarget(
+        var affordanceTarget = ViewportAffordanceTarget(
             featureID: item.featureID,
             selectionTarget: target,
             action: action
         )
+        affordanceTarget.profileFaceFrame = profileFaceFrame
         let member = ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
             occurrenceID: item.id,
             featureID: item.featureID,

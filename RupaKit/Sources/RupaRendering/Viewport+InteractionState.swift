@@ -418,6 +418,7 @@ struct ViewportAffordanceTarget: Equatable, Sendable {
     var featureID: FeatureID
     var selectionTarget: SelectionTarget?
     var action: ViewportAffordanceAction
+    var profileFaceFrame: ViewportProfileFaceFrame? = nil
 
     init(
         featureID: FeatureID,

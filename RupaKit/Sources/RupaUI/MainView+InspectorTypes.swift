@@ -67,6 +67,7 @@ struct InspectorObjectShape: Identifiable, Equatable {
     var properties: ObjectPropertySet
     var center: InspectorVector3D?
     var size: InspectorVector3D?
+    var sizeLabels: [String] = ["X", "Y", "Z"]
     var cornerRadiusLimit: Double? = nil
     var hollowLimit: Double? = nil
 }
