@@ -297,6 +297,7 @@ extension ViewportSpatialOverlayProducer {
             /// resolves it on every update.
             var offset: RealityViewportSpatialBatch.Offset = .zero
             var objectPreviewOccurrenceID: String? = nil
+            var boxAxes: simd_double3x3? = nil
         }
 
         struct Label: Sendable {
@@ -612,6 +613,7 @@ extension ViewportSpatialOverlayProducer {
             marker.hitTolerancePoints = value.hitTolerancePoints
             marker.offset = value.offset
             marker.objectPreviewOccurrenceID = value.objectPreviewOccurrenceID
+            marker.boxAxes = value.boxAxes
             markers.append(.init(family: value.family, value: marker))
             activeFamilies.insert(value.family)
         }
@@ -2869,6 +2871,10 @@ private extension ViewportSpatialOverlayProducer {
 
         if let member = objectMembers?.first,
            objectMembers?.count == 1, let resize = member.handleResize {
+            let frame = resize.worldFromBox.matrix.values
+            let boxAxes = simd_double3x3(SIMD3(frame[0], frame[4], frame[8]),
+                                       SIMD3(frame[1], frame[5], frame[9]),
+                                       SIMD3(frame[2], frame[6], frame[10]))
             for action in resize.handleActions {
                 let identity = try affordance(action)
                 let anchor = try resize.point(for: action)
@@ -2878,7 +2884,7 @@ private extension ViewportSpatialOverlayProducer {
                 try appendMarker(.init(route: .bodyTransform, anchor: anchor, shape: .box,
                                        diameterPoints: 10, color: color, family: .transform,
                                        identity: identity, state: state(for: identity, input: input),
-                                       hitTolerancePoints: 8, occurrenceID: occurrenceID),
+                                       hitTolerancePoints: 8, occurrenceID: occurrenceID, boxAxes: boxAxes),
                                  to: &markers, checkpoint: checkpoint)
             }
         }

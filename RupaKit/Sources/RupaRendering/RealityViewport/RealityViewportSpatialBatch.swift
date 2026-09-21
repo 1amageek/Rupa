@@ -91,6 +91,24 @@ struct RealityViewportSpatialBatch: Sendable {
         /// every update together with the marker's point diameter.
         var offset: Offset = .zero
         var objectPreviewOccurrenceID: String? = nil
+        /// Source-frame edge directions; lengths are normalized at presentation.
+        var boxAxes: simd_double3x3? = nil
+
+        func nativeBoxAxes(applying mutation: Transform3D? = nil) throws -> simd_float3x3? {
+            guard let boxAxes else { return nil }
+            guard case .box = shape else { throw RealityViewportSpatialBatch.invalid("Only box markers accept a box frame.") }
+            func unit(_ axis: SIMD3<Double>) throws -> SIMD3<Float> {
+                var value = Vector3D(x: axis.x, y: axis.y, z: axis.z)
+                if let mutation { value = try ViewportWorldTransformAlgebra.transformedVector(value, by: mutation) }
+                let normalized = try ViewportWorldTransformAlgebra.normalized(value, describing: "resize marker axis")
+                return SIMD3(Float(normalized.x), Float(normalized.y), Float(normalized.z))
+            }
+            let result = try simd_float3x3(unit(boxAxes.columns.0), unit(boxAxes.columns.1), unit(boxAxes.columns.2))
+            guard result.determinant.isFinite, result.determinant != 0 else {
+                throw RealityViewportSpatialBatch.invalid("A resize marker frame is singular.")
+            }
+            return result
+        }
     }
 
     /// Native filled/stroked Path coordinates are screen points about this world anchor.
@@ -475,7 +493,15 @@ struct RealityViewportSpatialBatch: Sendable {
             try validateHandle(marker.handleIndex)
             try validateHitTolerance(marker.hitTolerancePoints)
             try item()
-            try charge(1, stride: MemoryLayout<Marker>.stride + MemoryLayout<(Entity, Marker)>.stride)
+            try charge(1, stride: MemoryLayout<Marker>.stride + MemoryLayout<(Entity, Marker, LowLevelMesh?)>.stride)
+            if try marker.nativeBoxAxes() != nil {
+                try positions(8)
+                let sum = triangleCount.addingReportingOverflow(12)
+                guard !sum.overflow, sum.partialValue <= limits.maxTriangleCount else { throw Self.exhausted() }
+                triangleCount = sum.partialValue
+                try charge(8, stride: MemoryLayout<SIMD3<Float>>.stride)
+                try charge(36, stride: MemoryLayout<UInt32>.stride)
+            }
             if marker.handleIndex != nil, let tolerance = marker.hitTolerancePoints, tolerance > 0 {
                 try item()
                 markerCollisionCount += 1

@@ -505,9 +505,11 @@ private struct MountedObjectHandleViewport {
     func handleEntity(_ action: ViewportAffordanceAction, marker: Bool) throws -> (RealityViewport, ModelEntity) {
         let identity = try #require(cache.state.identity)
         let surface = try #require(cache.surface(for: identity))
+        let isResize: Bool
+        switch action { case .faceMove, .vertexMove: isResize = true; default: isResize = false }
         func find(_ entity: Entity) throws -> ModelEntity? {
             if let model = entity as? ModelEntity,
-               (model.model?.mesh.lowLevelMesh == nil) == marker,
+               (isResize || model.model?.mesh.lowLevelMesh == nil) == marker,
                let index = surface.spatialHandleIndex(for: entity),
                let record = cache.interactionRecord(at: index, for: identity),
                let input = try ViewportBodyTransformInput(record: record), input.action == action { return model }
@@ -741,6 +743,7 @@ func boxFaceAndCornerHandlesReachSourceResizeWithoutPlacementFallback() async th
         switch action { case .faceMove, .vertexMove: return true; default: return false }
     }
     #expect(resizeRecords.count == 14)
+    #expect(source.markers.filter { $0.boxAxes != nil }.count == 14)
     #expect(source.markers.filter { if case .cone = $0.shape { true } else { false } }.count == 3)
     var resizes: [ViewportBodyResizeDragTarget] = []
     var placements = 0
@@ -761,6 +764,17 @@ func boxFaceAndCornerHandlesReachSourceResizeWithoutPlacementFallback() async th
         })
         let input = try #require(try ViewportBodyTransformInput(record: record))
         let resize = try #require(input.members.first?.resize)
+        let visual = try #require(marker.components[ModelComponent.self]?.mesh.lowLevelMesh)
+        let frame = resize.worldFromBox.matrix.values
+        let expectedAxes = [SIMD3<Float>(Float(frame[0]), Float(frame[4]), Float(frame[8])),
+                            SIMD3<Float>(Float(frame[1]), Float(frame[5]), Float(frame[9])),
+                            SIMD3<Float>(Float(frame[2]), Float(frame[6]), Float(frame[10]))]
+        visual.withUnsafeBytes(bufferIndex: 0) { bytes in
+            let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+            for (axis, endpoint) in [1, 2, 4].enumerated() {
+                #expect(simd_length(vertices[endpoint] - vertices[0] - simd_normalize(expectedAxes[axis])) < 1e-5)
+            }
+        }
         let center = try ViewportWorldTransformAlgebra.transformedPoint(
             Point3D(x: (resize.minimum.x + resize.maximum.x) / 2,
                     y: (resize.minimum.y + resize.maximum.y) / 2,

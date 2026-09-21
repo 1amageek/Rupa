@@ -217,6 +217,11 @@ The overlay revision advances whenever an input not already represented by
 `ViewportSceneSnapshotKey` can change a world or camera-relative descriptor,
 including selection, hover, active preview/affordance, snap, reference, and
 measurement state. It does not advance for a camera-only change. The producer
+passes the source resize frame's three linear axes with black face and gray
+corner markers. These are the same box-frame axes used for their anchors and
+resize mutations, not camera or world reference axes. Native marker rendering
+owns point-size normalization and composition with the occurrence's drag preview.
+The producer
 passes only raw checked-`Sendable` immutable source and interaction captures to
 the cache worker;
 `ViewportScene` and its transitive value members acquire checked `Sendable`

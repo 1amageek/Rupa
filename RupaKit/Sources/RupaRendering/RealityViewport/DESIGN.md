@@ -20,6 +20,19 @@ mesh oriented along the producer's explicit world axis. Their point-sized
 placement and screen-point hit radius use the same marker owner as other handles;
 camera changes update placement without rebuilding the cone resource.
 
+Resize box markers carry optional source-owned linear axes. The native owner
+normalizes their lengths without orthogonalizing them: rotated, nonuniformly
+scaled, reflected and sheared frames retain their edge directions and face
+planes. Consecutive oriented markers with the exact same source axes and preview
+occurrence share one eight-vertex, twelve-triangle LowLevelMesh; entity identity
+and hit records remain independent. Admission conservatively charges each marker.
+The mesh is updated in place after applying its occurrence preview's linear
+transform. No per-camera resource generation occurs. The existing point diameter
+and camera-facing hit-tolerance sibling remain unchanged. Invalid or singular
+axes fail admission/update rather than becoming world-aligned handles. Native
+tests inspect actual vertices before/after preview and verify mounted picking;
+producer/resize tests keep the visual frame and interaction baseline consistent.
+
 The component owns:
 
 - bounded native `MeshResource`/`LowLevelMesh` and collision resource creation;

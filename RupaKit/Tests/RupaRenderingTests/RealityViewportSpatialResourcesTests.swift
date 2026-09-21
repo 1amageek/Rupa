@@ -12,6 +12,89 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct RealityViewportSpatialResourcesTests {
+    @Test(.timeLimit(.minutes(1)))
+    func orientedResizeMarkersKeepFrameThroughPreview() async throws {
+        _ = NSApplication.shared
+        let axes = simd_double3x3(SIMD3(2, 1, 0), SIMD3(-0.3, 1, 0.2), SIMD3(0, 0, -3))
+        let marker = RealityViewportSpatialBatch.Marker(shape: .box, anchor: .origin,
+            diameterPoints: 10, color: [0.6, 0.63, 0.65, 1], handleIndex: 0,
+            hitTolerancePoints: 8, objectPreviewOccurrenceID: "box", boxAxes: axes)
+        let batch = try RealityViewportSpatialBatch(markers: [marker], handleCount: 1,
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        var unoriented = marker
+        unoriented.boxAxes = nil
+        let baseline = try RealityViewportSpatialBatch(markers: [unoriented], handleCount: 1,
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        #expect(batch.positionCount - baseline.positionCount == 8 && batch.triangleCount - baseline.triangleCount == 12)
+        var invalid = marker
+        invalid.boxAxes = simd_double3x3(0)
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try RealityViewportSpatialBatch(markers: [invalid], handleCount: 1,
+                renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        }
+        #expect(throws: MeshSourcePresentationRenderError.self) {
+            try RealityViewportSpatialBatch(markers: [marker], handleCount: 1,
+                renderOrigin: .origin, retainedSurfaceByteCount: 0,
+                limits: .init(maxItemCount: 640, maxPositionCount: 7,
+                              maxTriangleCount: 377_040, maxRetainedByteCount: 22_473_160))
+        }
+        let prepared = try await RealityViewportSpatialResources.prepare(batch: batch)
+        let visual = try #require(prepared.root.children.first as? ModelEntity)
+        let resource = try #require(visual.model?.mesh)
+        let mesh = try #require(resource.lowLevelMesh)
+        let collider = try #require(prepared.root.children.first { $0.components[CollisionComponent.self] != nil })
+        let camera = Entity()
+        camera.position.z = 3
+        var lens = OrthographicCameraComponent()
+        lens.scale = 4; lens.near = 0.01; lens.far = 100
+        camera.components.set(lens)
+        let capture = CameraCapture()
+        let controller = NSHostingController(rootView: RealityView { content in
+            content.camera = .virtual
+            content.add(camera); content.add(prepared.root)
+            capture.content = content
+        }.frame(width: 400, height: 300))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        defer { window.contentViewController = nil; window.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !visual.isEnabled {
+            try #require(ContinuousClock.now < deadline)
+            controller.view.layoutSubtreeIfNeeded()
+            if let content = capture.content {
+                do { try prepared.updateCamera(camera: camera, content: content) }
+                catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable { }
+            }
+            if !visual.isEnabled { try await Task.sleep(for: .milliseconds(10)) }
+        }
+        let content = try #require(capture.content)
+        let rotation = try ViewportWorldTransformAlgebra.rotation(axis: .unitZ, radians: 0.7, about: .origin)
+        for mutation in [Transform3D.identity, rotation, .identity] {
+            try prepared.updateCamera(camera: camera, content: content, objectPreviews: ["box": mutation])
+            #expect(visual.model?.mesh === resource)
+            #expect(visual.isEnabled && collider.isEnabled)
+            #expect(prepared.handleIndex(for: collider) == 0)
+            #expect(simd_length(visual.position - collider.position) < 1e-5)
+            let expected = try (0..<3).map { index in
+                let column = axes[index]
+                let value = try ViewportWorldTransformAlgebra.transformedVector(
+                    .init(x: column.x, y: column.y, z: column.z), by: mutation)
+                return simd_normalize(SIMD3<Float>(Float(value.x), Float(value.y), Float(value.z)))
+            }
+            mesh.withUnsafeBytes(bufferIndex: 0) { bytes in
+                let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+                for (axis, endpoint) in [1, 2, 4].enumerated() {
+                    #expect(simd_length(vertices[endpoint] - vertices[0] - expected[axis]) < 1e-5)
+                }
+            }
+            let start = try #require(content.project(point: visual.position, to: .local))
+            let end = try #require(content.project(point: visual.position + SIMD3(visual.scale.x, 0, 0), to: .local))
+            #expect(abs(end.x - start.x - 10) < 0.1)
+        }
+    }
+
     private var triangle: RealityViewportSpatialBatch.Mesh {
         .init(positions: [.init(x: -0.7, y: -0.5, z: 0), .init(x: 0.2, y: -0.5, z: 0),
                           .init(x: -0.25, y: 0.6, z: 0)],

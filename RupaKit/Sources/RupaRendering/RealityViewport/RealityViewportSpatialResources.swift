@@ -20,7 +20,7 @@ final class RealityViewportSpatialResources {
     private let batch: RealityViewportSpatialBatch
     private var labels: [(Entity, RealityViewportSpatialBatch.Label, Entity?)] = []
     private var quadCollision: ShapeResource?
-    private var markers: [(Entity, RealityViewportSpatialBatch.Marker)] = []
+    private var markers: [(Entity, RealityViewportSpatialBatch.Marker, LowLevelMesh?)] = []
     private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine, [Entity], [ModelEntity])] = []
     private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
@@ -933,18 +933,41 @@ final class RealityViewportSpatialResources {
         var sphere: MeshResource?
         var box: MeshResource?
         var cone: MeshResource?
+        var previousBox: (axes: simd_double3x3, occurrence: String?, mesh: LowLevelMesh, resource: MeshResource)?
         for marker in batch.markers {
             try Task.checkCancellation()
             let mesh: MeshResource
+            var orientedBox: LowLevelMesh?
             switch marker.shape {
             case .sphere:
                 if sphere == nil { sphere = .generateSphere(radius: 0.5) }
                 guard let sphere else { throw RealityViewportSpatialBatch.invalid("Native marker resource is unavailable.") }
                 mesh = sphere
             case .box:
-                if box == nil { box = .generateBox(size: 1) }
-                guard let box else { throw RealityViewportSpatialBatch.invalid("Native marker resource is unavailable.") }
-                mesh = box
+                if let previousBox, previousBox.axes == marker.boxAxes,
+                   previousBox.occurrence == marker.objectPreviewOccurrenceID {
+                    mesh = previousBox.resource
+                    orientedBox = previousBox.mesh
+                } else if let axes = try marker.nativeBoxAxes(), let sourceAxes = marker.boxAxes {
+                    let geometry = try LowLevelMesh(descriptor: descriptor(vertices: 8, indices: 36))
+                    geometry.withUnsafeMutableIndices { bytes in
+                        let indices = bytes.bindMemory(to: UInt32.self)
+                        let faces: [UInt32] = [0, 2, 3, 0, 3, 1, 4, 5, 7, 4, 7, 6,
+                            0, 1, 5, 0, 5, 4, 2, 6, 7, 2, 7, 3,
+                            0, 4, 6, 0, 6, 2, 1, 3, 7, 1, 7, 5]
+                        for index in faces.indices { indices[index] = faces[index] }
+                    }
+                    geometry.parts.replaceAll([.init(indexCount: 36, topology: .triangle,
+                        bounds: .init(min: .zero, max: .zero))])
+                    updateBox(geometry, axes: axes)
+                    mesh = try RealityViewport.nativeResource(from: geometry)
+                    orientedBox = geometry
+                    previousBox = (sourceAxes, marker.objectPreviewOccurrenceID, geometry, mesh)
+                } else {
+                    if box == nil { box = .generateBox(size: 1) }
+                    guard let box else { throw RealityViewportSpatialBatch.invalid("Native marker resource is unavailable.") }
+                    mesh = box
+                }
             case .cone:
                 if cone == nil { cone = .generateCone(height: 1, radius: 0.35) }
                 guard let cone else { throw RealityViewportSpatialBatch.invalid("Native arrow resource is unavailable.") }
@@ -965,7 +988,7 @@ final class RealityViewportSpatialResources {
                 entity.orientation = simd_quatf(from: SIMD3(0, 1, 0), to: simd_normalize(direction))
             }
             entity.isEnabled = false
-            result.markers.append((entity, marker))
+            result.markers.append((entity, marker, orientedBox))
             result.register(entity, handleIndex: marker.handleIndex)
             result.root(for: marker.attachment).addChild(entity)
             // A marker carries a footprint only where the producer asked for
@@ -1180,7 +1203,7 @@ final class RealityViewportSpatialResources {
                 entity.isEnabled = false
                 collider?.isEnabled = false
             }
-            for (entity, _) in markers { entity.isEnabled = false }
+            for (entity, _, _) in markers { entity.isEnabled = false }
             for (entity, _, _, _, _) in cameraLines { entity.isEnabled = false }
             for (_, label, line, _) in boundsRulers {
                 label.isEnabled = false; line.isEnabled = false
@@ -1224,9 +1247,11 @@ final class RealityViewportSpatialResources {
             }
             entity.isEnabled = true
         }
-        for (entity, marker) in markers {
+        var updatedBox: LowLevelMesh?
+        for (entity, marker, orientedBox) in markers {
+            let mutation = marker.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }
             let point = try RealityViewportSpatialBatch.CameraPoint(anchor: marker.anchor, offset: marker.offset)
-                .applying(marker.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] })
+                .applying(mutation)
             guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection) else {
                 entity.isEnabled = false
                 continue
@@ -1235,6 +1260,10 @@ final class RealityViewportSpatialResources {
             // placement from this entity's position after each move. The
             // scale set here stays visual and never reaches the tolerance.
             entity.position = placement.position
+            if let orientedBox, orientedBox !== updatedBox, let axes = try marker.nativeBoxAxes(applying: mutation) {
+                Self.updateBox(orientedBox, axes: axes)
+                updatedBox = orientedBox
+            }
             entity.scale = SIMD3(repeating: placement.metersPerPoint * marker.diameterPoints)
             entity.isEnabled = true
         }
@@ -2051,6 +2080,26 @@ final class RealityViewportSpatialResources {
             result.append(source[offset])
         }
         return result
+    }
+
+    private static func updateBox(_ mesh: LowLevelMesh, axes: simd_float3x3) {
+        var bounds = BoundingBox()
+        // The mesh owns eight initialized vertices. The scoped borrow never
+        // escapes; MainActor serializes native preparation and camera updates.
+        mesh.withUnsafeMutableBytes(bufferIndex: 0) { bytes in
+            let vertices = bytes.bindMemory(to: SIMD3<Float>.self)
+            for index in 0..<8 {
+                let corner = SIMD3<Float>(index & 1 == 0 ? -0.5 : 0.5,
+                                          index & 2 == 0 ? -0.5 : 0.5,
+                                          index & 4 == 0 ? -0.5 : 0.5)
+                let point = axes * corner
+                vertices[index] = point
+                bounds.formUnion(BoundingBox(min: point, max: point))
+            }
+        }
+        var part = mesh.parts[0]
+        part.bounds = bounds
+        mesh.parts[0] = part
     }
 
     private static func descriptor(vertices: Int, indices: Int) -> LowLevelMesh.Descriptor {
