@@ -699,7 +699,7 @@ final class RealityViewportSpatialResources {
             })
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
-            let materials = [Float(0.035), 0.08, 0.14].map { opacity in
+            let materials = [Float(0.012), 0.028, 0.055].map { opacity in
                 var line = material([1, 1, 1, 1], depth: .scene)
                 line.blending = .transparent(opacity: .init(scale: opacity))
                 line.writesDepth = false
