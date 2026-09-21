@@ -202,7 +202,7 @@ private struct ProjectMainViewContent: View {
     @State private var headerHoverHint = WorkspaceHoverHint()
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
-    @State private var viewportCameraFrame: ViewportCameraFrame?
+    @State private var viewportCameraState = WorkspaceViewportCameraState()
     @State private var viewportCameraFrameRequest: ViewportCameraFrameRequest?
     @State private var viewportProjectedGridMinorStep: ViewportProjectedGrid.ScaleReadout.Length?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
@@ -313,7 +313,6 @@ private struct ProjectMainViewContent: View {
         self._presentedHeaderPanel = State(initialValue: nil)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
-        self._viewportCameraFrame = State(initialValue: nil)
         self._viewportCameraFrameRequest = State(initialValue: nil)
         self._viewportProjectedGridMinorStep = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
@@ -2123,7 +2122,7 @@ private struct ProjectMainViewContent: View {
                 viewportProjectionBasis = basis
             },
             onCameraFrameChange: { frame in
-                viewportCameraFrame = frame
+                viewportCameraState.update(frame)
             },
             onCameraFrameRequestResult: { id, result in
                 guard viewportCameraFrameRequest?.id == id else { return }
@@ -2997,7 +2996,6 @@ private struct ProjectMainViewContent: View {
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
         let scaleFitPromptState = workspaceScaleFitPromptState
-        let scaleReadout = workspaceCanvasScaleReadout
         HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
             WorkspaceSelectionScopeControl(
                 selection: $selectionScope,
@@ -3024,7 +3022,6 @@ private struct ProjectMainViewContent: View {
 
             workspaceCanvasHeaderReadouts(
                 presentation: presentation,
-                scaleReadout: scaleReadout,
                 scaleFitPromptState: scaleFitPromptState
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -3083,7 +3080,6 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private func workspaceCanvasHeaderReadouts(
         presentation: WorkspaceTopBarPresentation,
-        scaleReadout: WorkspaceCanvasScaleReadout?,
         scaleFitPromptState: WorkspaceScaleFitPromptState?
     ) -> some View {
         ViewThatFits(in: .horizontal) {
@@ -3111,9 +3107,8 @@ private struct ProjectMainViewContent: View {
                     )
                 }
 
-                if let scaleReadout {
-                    workspaceCanvasScaleReadoutSeat(scaleReadout)
-                }
+                WorkspaceCanvasScaleReadoutView(camera: viewportCameraState,
+                                               minorStep: viewportProjectedGridMinorStep)
 
                 if let scaleFitPromptState {
                     workspaceScaleFitPromptButton(scaleFitPromptState)
@@ -3236,11 +3231,8 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private var workspaceOverflowPanelSections: some View {
         workspacePanelSection("Views") {
-            workspaceValueRow(
-                "Scale",
-                workspaceCanvasScaleReadout?.text ?? "Not measured",
-                accessibilityIdentifier: "WorkspaceScale.overflowReadout"
-            )
+            WorkspaceCanvasScaleReadoutView(camera: viewportCameraState,
+                                           minorStep: viewportProjectedGridMinorStep, isOverflow: true)
             Button {
                 createSavedViewFromCurrentViewport()
             } label: {
@@ -3251,7 +3243,7 @@ private struct ProjectMainViewContent: View {
                     .frame(maxWidth: .infinity, minHeight: 26)
                     .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             }
-            .disabled(viewportCameraFrame == nil)
+            .disabled(!viewportCameraState.isReady)
             .buttonStyle(.plain)
             .foregroundStyle(Color.primary.opacity(0.78))
             .background {
@@ -3649,37 +3641,6 @@ private struct ProjectMainViewContent: View {
                 applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
             }
         )
-    }
-
-    /// What the canvas is currently drawn at: the grid's resolved minor step
-    /// and the camera's zoom.
-    ///
-    /// Both have to have arrived. A zero step or a flat 100% would be a
-    /// reading, and there is nothing yet to read.
-    private var workspaceCanvasScaleReadout: WorkspaceCanvasScaleReadout? {
-        WorkspaceCanvasScaleReadout(
-            minorStep: viewportProjectedGridMinorStep,
-            zoom: viewportCameraFrame?.camera.zoom
-        )
-    }
-
-    /// The scale readout as a header seat.
-    ///
-    /// It reports and does not act, so it carries no menu: which scale the
-    /// document is set to is chosen in the Document inspector, which owns the
-    /// preset list whole. It names itself through its accessibility label
-    /// rather than through the hover hint, because the hint stands in the room
-    /// the readouts occupy and a seat that replaced itself on hover would
-    /// leave the pointer over nothing.
-    private func workspaceCanvasScaleReadoutSeat(
-        _ readout: WorkspaceCanvasScaleReadout
-    ) -> some View {
-        workspaceValuePill("Scale", readout.text)
-            .help("Canvas Scale")
-            .accessibilityElement(children: .ignore)
-            .accessibilityIdentifier("WorkspaceScale.readout")
-            .accessibilityLabel("Canvas Scale")
-            .accessibilityValue(readout.accessibilityValue)
     }
 
     @ViewBuilder
@@ -4424,7 +4385,7 @@ private struct ProjectMainViewContent: View {
             .help("Update Saved View From Current View")
             .accessibilityLabel("Update \(savedView.name) From Current View")
             .accessibilityIdentifier("WorkspaceSavedView.update.\(identifierSuffix)")
-            .disabled(viewportCameraFrame == nil)
+            .disabled(!viewportCameraState.isReady)
 
             Button {
                 removeSavedView(savedView)
@@ -5645,7 +5606,7 @@ private struct ProjectMainViewContent: View {
 
     private func createSavedViewFromCurrentViewport() {
         let projectionBasis = viewportProjectionBasis
-        guard let cameraFrame = viewportCameraFrame else {
+        guard let cameraFrame = viewportCameraState.frame else {
             reportToolStatus("The current camera cannot be captured. Reframe the view and try again.", severity: .warning)
             return
         }
@@ -5667,7 +5628,7 @@ private struct ProjectMainViewContent: View {
     private func updateSavedViewFromCurrentViewport(_ savedView: SavedView) {
         let savedViewID = savedView.id
         let projectionBasis = viewportProjectionBasis
-        guard let cameraFrame = viewportCameraFrame else {
+        guard let cameraFrame = viewportCameraState.frame else {
             reportToolStatus("The current camera cannot be captured. Reframe the view and try again.", severity: .warning)
             return
         }

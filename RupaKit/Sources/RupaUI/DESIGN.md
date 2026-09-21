@@ -828,6 +828,13 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
 
 ## Runtime Flows
 
+Camera receipts retain their latest complete frame for saved-view commands in
+`WorkspaceViewportCameraState`. Workspace chrome observes only readiness;
+`WorkspaceCanvasScaleReadoutView` observes zoom locally. Pan and zoom must not
+invalidate the Inspector or rebuild split-pane constraints. The mounted latency
+test in `WorkspaceInspectorLatencyTests` and observation test in
+`WorkspaceViewportCameraStateTests` verify this boundary.
+
 The application coordinator publishes a new workspace view only after
 `ProjectController` accepts a load or transaction. `MainView` derives title and
 viewport from that view in the same publication lifetime, then lets

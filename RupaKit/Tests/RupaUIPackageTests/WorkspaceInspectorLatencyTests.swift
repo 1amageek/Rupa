@@ -4,8 +4,79 @@ import RupaCore
 import RupaKit
 import RupaProject
 import Testing
+import SwiftUI
 @testable import RupaUI
 @testable import RupaRendering
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func workspaceCanvasMeasuresMountedPanAndPrimitiveAddition() async throws {
+    _ = NSApplication.shared
+    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
+    _ = try await workspace.evaluate()
+    let controller = NSHostingController(rootView: MainView(workspace: workspace,
+        operationSequencer: ProjectWorkspaceOperationSequencer()))
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1120, height: 720),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentViewController = controller
+    controller.view.frame = window.contentLayoutRect
+    defer { window.contentViewController = nil; window.close() }
+    func input(in view: NSView) -> ViewportInputSurface.InputView? {
+        if let value = view as? ViewportInputSurface.InputView { return value }
+        for child in view.subviews { if let value = input(in: child) { return value } }
+        return nil
+    }
+    for _ in 0..<30 {
+        controller.view.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let surface = try #require(input(in: controller.view))
+    let pan = try #require(surface.onPan)
+    let clock = ContinuousClock()
+    var durations: [Duration] = []
+    for index in 0..<40 {
+        let start = clock.now
+        pan(CGSize(width: index.isMultiple(of: 2) ? 3 : -3, height: 1), surface.bounds.size)
+        controller.view.layoutSubtreeIfNeeded()
+        durations.append(start.duration(to: clock.now))
+        try await Task.sleep(for: .milliseconds(16))
+    }
+    durations.sort()
+    print("CANVAS_PAN median=\(durations[20]) p95=\(durations[38]) max=\(durations[39])")
+    let zoom = try #require(surface.onZoom)
+    durations.removeAll(keepingCapacity: true)
+    for index in 0..<40 {
+        let start = clock.now
+        zoom(index.isMultiple(of: 2) ? 1.01 : 1 / 1.01,
+             CGPoint(x: surface.bounds.midX, y: surface.bounds.midY), surface.bounds.size)
+        controller.view.layoutSubtreeIfNeeded()
+        durations.append(start.duration(to: clock.now))
+        try await Task.sleep(for: .milliseconds(16))
+    }
+    durations.sort()
+    print("CANVAS_ZOOM median=\(durations[20]) p95=\(durations[38]) max=\(durations[39])")
+    let planner = DefaultProjectWorkspaceActionPlanner()
+    var previous: RealityViewport?
+    for shape in WorkspaceSolidShape.allCases {
+        let current = try #require(workspace.view)
+        let commandPlanner = WorkspaceCanvasCommandPlanner(context: .init(
+            document: current.document.document, selection: current.selection,
+            workspaceState: current.workspaceState, objectRegistry: current.objectRegistry,
+            polygonState: .standard, sketchInputState: .init()), solidShape: shape)
+        let start = clock.now
+        let command = try #require(try commandPlanner.clickCommand(tool: .solid, targetSceneNodeID: nil,
+            modelPoint: .init(x: 0, y: 0), modelWorldPoint: nil, sketchPlane: .xy, placementCellMeters: 0.04))
+        _ = try await workspace.perform(planner.source(name: shape.rawValue, commands: [command], from: current))
+        let evaluated = clock.now
+        let updated = try #require(workspace.view)
+        let plan = try MeshSourcePresentationRenderPlan(scene: updated.viewport)
+        let planned = clock.now
+        previous = try await RealityViewport.prepare(plan: plan, spatialBatch: nil, reusing: previous)
+        print("CANVAS_ADD shape=\(shape.rawValue) evaluation=\(start.duration(to: evaluated)) plan=\(evaluated.duration(to: planned)) native=\(planned.duration(to: clock.now))")
+        #expect(updated.viewport.items.count > current.viewport.items.count)
+    }
+}
 
 @MainActor
 @Test(.serialized, .timeLimit(.minutes(1)), arguments: [false, true])

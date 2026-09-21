@@ -1379,7 +1379,7 @@ current root for one mount; withdrawing a frame detaches its root and leaves
 the scene mounted. The preparation
 request owns immutable source/overlay values until completion; the host owns
 native resources. The material owner generates its four custom programs once,
-asynchronously, before a mount publishes, and owns them for the lifetime of
+asynchronously with independent compilations overlapped, before a mount publishes, and owns them for the lifetime of
 that mounted viewport; no program is compiled while resolving a surface,
 because resolving a surface cannot suspend. The camera
 session remains owned by `ViewportControlSession`, not by RealityKit entities.
