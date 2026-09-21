@@ -78,7 +78,7 @@ public struct MeasurementService {
         var profiles: [MeasurementResult.Profile] = []
         var solids: [MeasurementResult.Solid] = []
         var sheets: [MeasurementResult.Sheet] = []
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         var profileCache: [FeatureID: MeasuredProfile] = [:]
         var includedProfileFeatureIDs: Set<FeatureID> = []
         var includedSketchFeatureIDs: Set<FeatureID> = []
@@ -1178,7 +1178,7 @@ public struct MeasurementService {
         guard area > tolerance.distance * tolerance.distance else {
             return nil
         }
-        var loopBounds = BoundsAccumulator()
+        var loopBounds = MeasurementBoundsAccumulator()
         for point in loop {
             loopBounds.include(frame.map(point))
         }
@@ -1239,7 +1239,7 @@ public struct MeasurementService {
             topOffset = extrusionDirection * distance
         }
 
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         bounds.include(profile.baseBounds.translated(by: bottomOffset))
         bounds.include(profile.baseBounds.translated(by: topOffset))
         guard let solidBounds = bounds.bounds else {
@@ -1316,7 +1316,7 @@ public struct MeasurementService {
             return nil
         }
 
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         bounds.include(profile.baseBounds)
         bounds.include(profile.baseBounds.translated(by: sweepVector))
         guard let solidBounds = bounds.bounds else {
@@ -1720,7 +1720,7 @@ public struct MeasurementService {
                 message: "Measurement expected a non-empty triangle mesh."
             )
         }
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         for point in mesh.positions {
             bounds.include(point)
         }
@@ -1784,7 +1784,7 @@ public struct MeasurementService {
         parameters: ParameterTable
     ) throws -> MeasurementResult.Bounds? {
         let frame = try planeFrame(for: sketch.plane)
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         for entity in sketch.entities.values {
             switch entity {
             case .point(let point):
@@ -1813,7 +1813,7 @@ public struct MeasurementService {
         guard let curves else {
             return nil
         }
-        var bounds = BoundsAccumulator()
+        var bounds = MeasurementBoundsAccumulator()
         for curve in curves {
             for point in curve.points {
                 bounds.include(point)
@@ -2278,38 +2278,6 @@ private struct ResolvedProfileSegment {
 private struct MeasurementPoint2D: Equatable {
     var x: Double
     var y: Double
-}
-
-private struct BoundsAccumulator {
-    private(set) var bounds: MeasurementResult.Bounds?
-
-    mutating func include(_ point: Point3D) {
-        include(
-            MeasurementResult.Bounds(
-                minX: point.x,
-                minY: point.y,
-                minZ: point.z,
-                maxX: point.x,
-                maxY: point.y,
-                maxZ: point.z
-            )
-        )
-    }
-
-    mutating func include(_ next: MeasurementResult.Bounds) {
-        guard let current = bounds else {
-            bounds = next
-            return
-        }
-        bounds = MeasurementResult.Bounds(
-            minX: min(current.minX, next.minX),
-            minY: min(current.minY, next.minY),
-            minZ: min(current.minZ, next.minZ),
-            maxX: max(current.maxX, next.maxX),
-            maxY: max(current.maxY, next.maxY),
-            maxZ: max(current.maxZ, next.maxZ)
-        )
-    }
 }
 
 private extension MeasurementResult.Bounds {

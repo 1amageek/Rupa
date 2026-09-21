@@ -42,7 +42,7 @@ public struct MeshSnapshotService: Sendable {
             metadata: document.productMetadata
         )
 
-        var accumulator = MeshBoundsAccumulator()
+        var accumulator = MeasurementBoundsAccumulator()
         var bodies: [MeshSummaryResult.Body] = []
         var vertexCount = 0
         var normalCount = 0
@@ -56,7 +56,7 @@ public struct MeshSnapshotService: Sendable {
         let faceCountByBodyID = topologyMaterialResolver.faceCountByBodyID(in: evaluatedDocument.brep)
 
         for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
-            var bodyBounds = MeshBoundsAccumulator()
+            var bodyBounds = MeasurementBoundsAccumulator()
             for position in mesh.positions {
                 bodyBounds.include(position)
                 accumulator.include(position)
@@ -147,32 +147,5 @@ public struct MeshSnapshotService: Sendable {
         }
         let materialIDs = Set(faceBindings.compactMap { $0.materialID })
         return materialIDs.count <= 1 ? .completeFace : .mixedFace
-    }
-}
-
-private struct MeshBoundsAccumulator {
-    private(set) var bounds: MeasurementResult.Bounds?
-
-    mutating func include(_ point: Point3D) {
-        let next = MeasurementResult.Bounds(
-            minX: point.x,
-            minY: point.y,
-            minZ: point.z,
-            maxX: point.x,
-            maxY: point.y,
-            maxZ: point.z
-        )
-        guard let current = bounds else {
-            bounds = next
-            return
-        }
-        bounds = MeasurementResult.Bounds(
-            minX: min(current.minX, next.minX),
-            minY: min(current.minY, next.minY),
-            minZ: min(current.minZ, next.minZ),
-            maxX: max(current.maxX, next.maxX),
-            maxY: max(current.maxY, next.maxY),
-            maxZ: max(current.maxZ, next.maxZ)
-        )
     }
 }
