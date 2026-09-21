@@ -156,12 +156,7 @@ struct Outliner: View {
         guard ids.isEmpty == false else {
             return .ignored
         }
-        let lifecycle = lifecycle(ids: ids, projection: projection)
-        guard lifecycle.canDelete else {
-            actionError = "Roots, locked scene nodes, and generated pattern outputs cannot be deleted."
-            return .handled
-        }
-        onIntent(.delete(ids: lifecycle.deletableIDs))
+        sendDelete(lifecycle(ids: ids, projection: projection))
         return .handled
     }
 
@@ -487,11 +482,15 @@ struct Outliner: View {
         projection: OutlinerProjection
     ) {
         let lifecycle = contextLifecycle(for: contextID, projection: projection)
+        if lifecycle.canDelete { settleSelection(for: contextID) }
+        sendDelete(lifecycle)
+    }
+
+    private func sendDelete(_ lifecycle: OutlinerLifecycleAvailability) {
         guard lifecycle.canDelete else {
             actionError = "Roots, locked scene nodes, and generated pattern outputs cannot be deleted."
             return
         }
-        settleSelection(for: contextID)
         onIntent(.delete(ids: lifecycle.deletableIDs))
     }
 

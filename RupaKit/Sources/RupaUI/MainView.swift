@@ -4923,23 +4923,24 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleDeleteSelection() -> Bool {
-        guard let action = WorkspaceKeyboardRouter().action(
-            for: WorkspaceKeyboardInput(isDelete: true), context: workspaceKeyboardContext
-        ) else { return false }
-        return applyWorkspaceKeyboardAction(action) == .handled
+        handleWorkspaceKeyboardInput(WorkspaceKeyboardInput(isDelete: true)) == .handled
     }
 
     private func handleWorkspaceKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
+        handleWorkspaceKeyboardInput(WorkspaceKeyboardInput(keyPress: keyPress))
+    }
+
+    private func handleWorkspaceKeyboardInput(_ input: WorkspaceKeyboardInput) -> KeyPress.Result {
         guard let action = WorkspaceKeyboardRouter().action(
-            for: keyPress,
-            context: workspaceKeyboardContext
+            for: input,
+            context: workspaceKeyboardContext(for: input)
         ) else {
             return .ignored
         }
         return applyWorkspaceKeyboardAction(action)
     }
 
-    private var workspaceKeyboardContext: WorkspaceKeyboardContext {
+    private func workspaceKeyboardContext(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardContext {
         WorkspaceKeyboardContext(
             isSelectToolActive: selectedTool == .select,
             isPolygonToolActive: selectedTool == .polygon,
@@ -4951,9 +4952,13 @@ private struct ProjectMainViewContent: View {
             isCurveControlVertexSlideActive: slideCommandState.isCurveControlVerticesActive,
             isSurfaceControlVertexSlideActive: slideCommandState.isSurfaceControlVerticesActive,
             selectionScope: selectionScope,
-            hasCurveControlVertexSlideInput: selectedSplineControlPointSlideInput() != nil,
-            hasSurfaceControlVertexSlideTargets: selectedPolySplineSurfaceVertexTargets.isEmpty == false
-                || selectedSurfaceControlPointReferences.isEmpty == false
+            hasCurveControlVertexSlideInput: !input.isDelete
+                && slideCommandState.isCurveControlVerticesActive
+                && selectedSplineControlPointSlideInput() != nil,
+            hasSurfaceControlVertexSlideTargets: !input.isDelete
+                && slideCommandState.isSurfaceControlVerticesActive
+                && (!selectedPolySplineSurfaceVertexTargets.isEmpty
+                    || !selectedSurfaceControlPointReferences.isEmpty)
         )
     }
 

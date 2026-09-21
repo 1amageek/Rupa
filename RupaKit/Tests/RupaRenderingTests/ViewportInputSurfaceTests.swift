@@ -6,8 +6,8 @@ import Testing
 @MainActor
 @Suite
 struct ViewportInputSurfaceTests {
-    @Test(.timeLimit(.minutes(1)))
-    func nativeDeleteReachesHostingCommandWithoutStealingTextEditing() async throws {
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func nativeDeleteReachesHostingCommandWithoutStealingTextEditing(handledByCanvas: Bool) async throws {
         let input = ViewportInputSurface.InputView()
         struct Host: NSViewRepresentable {
             let input: ViewportInputSurface.InputView
@@ -15,12 +15,16 @@ struct ViewportInputSurfaceTests {
             func updateNSView(_ nsView: NSView, context: Context) {}
         }
         var deletes = 0
+        var hostingDeletes = 0
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 240, height: 160),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        input.onDelete = { deletes += 1; return true }
-        window.contentView = NSHostingView(rootView: Host(input: input).onDeleteCommand { deletes += 1 })
+        input.onDelete = {
+            if handledByCanvas { deletes += 1 }
+            return handledByCanvas
+        }
+        window.contentView = NSHostingView(rootView: Host(input: input).onDeleteCommand { hostingDeletes += 1 })
         window.makeKeyAndOrderFront(nil)
         window.contentView?.layoutSubtreeIfNeeded()
         #expect(window.makeFirstResponder(input))
@@ -32,7 +36,8 @@ struct ViewportInputSurfaceTests {
             window.sendEvent(event)
             await Task.yield()
         }
-        #expect(deletes == 2)
+        #expect(deletes == (handledByCanvas ? 2 : 0))
+        #expect(hostingDeletes == (handledByCanvas ? 0 : 1))
         let field = NSTextField(frame: CGRect(x: 0, y: 0, width: 100, height: 24))
         field.stringValue = "Box"
         input.addSubview(field)
@@ -45,7 +50,8 @@ struct ViewportInputSurfaceTests {
             isARepeat: false, keyCode: 51))
         window.sendEvent(event)
         #expect(editor.string == "Bo")
-        #expect(deletes == 2)
+        #expect(deletes == (handledByCanvas ? 2 : 0))
+        #expect(hostingDeletes == (handledByCanvas ? 0 : 1))
     }
 
     @Test

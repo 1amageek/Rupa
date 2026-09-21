@@ -32,6 +32,11 @@ transaction; selection scope, locked/root refusal, source dependencies and Undo
 remain owned by the existing UI/Core path. Native key-event tests and signed-App
 Canvas/sidebar deletion followed by Undo verify delivery, not just router enums.
 
+Keyboard context resolves slide-selection geometry only for an active slide
+command and never for Delete. Native deletion and SwiftUI key input share the
+same input-to-action path. Outliner keyboard and context-menu deletion share
+one lifecycle gate while retaining their distinct selection/focus behavior.
+
 Inspector size fields map principal sketch-plane dimensions to model X/Y/Z in
 both reading and writing. Core's source dimensions remain U/depth/V. Arbitrary
 planes display U/Depth/V explicitly, not misleading Cartesian axis labels.
