@@ -118,7 +118,6 @@ build geometry, create a second camera, or retain a second presentation scene.
 | [RupaCore](../RupaCore/DESIGN.md) | depends on | Validated source/evaluation, stable identity contracts, and `DesignDocument.sceneNodeAppearance(id:)` | Supplies the appearance each node carries, plus source-derived navigation metadata. | Presentation resolves no document default of its own and never mutates the document. |
 | [RealityViewport](RealityViewport/DESIGN.md) | child | Native scene/resource/camera/material/input adapter | Owns RealityKit objects and the matching scene-root lifecycle. | No custom render pipeline or spatial Canvas fallback. |
 | [ViewportMeasurement](ViewportMeasurement/DESIGN.md) | child | Transient world endpoints, distance, ruler descriptors | Produces non-authoritative spatial measurement values. | It does not own RealityKit entity lifetime. |
-| [RupaResponsivenessBaseline](../RupaResponsivenessBaseline/DESIGN.md) | coordinates with | Versioned fixture and pinned MainActor/memory acceptance policy | Owns the threshold and environment against which native preparation is measured. | A new native interval must be measured in the signed App; an offscreen duration does not satisfy this contract. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | Matching frame state, tool intents, visible errors, and the native gesture refusal callback | Composes `RealityView` and non-spatial SwiftUI chrome, and records the refusals this module reports. | UI never becomes a geometry or camera authority, and never re-derives which refusals are reportable. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | used by | Foundation-value viewport operation/state contract | Routes camera/display operations to the mounted session. | Applied state is not proof of a displayed frame. |
 | [Rendering tests](../../Tests/RupaRenderingTests) | verification owner | CPU admission and target RealityKit GPU behavior | Verifies the target lifecycle, native camera/material/input, provenance, and frame coherence. | Capability tests do not prove current-production or CAD integration; CPU tests do not prove live RealityView behavior. |
@@ -2123,9 +2122,29 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     unconditionally. The refusal changes focus only; hover resolution
     publishes the pointer position either way.
 
+11. One distance separates a click from a drag across the whole surface:
+    `ViewportInputSurface.dragActivationDistance`. It decides both halves of
+    a primary gesture — whether the canvas shows an edit on the way, and
+    whether the release commits it — and the secondary button's release and
+    the canvas drag placeholder's rectangle read the same value rather than
+    carrying a number each, so the canvas cannot preview an edit the release
+    then declines to make.
+
+    A press below the distance publishes no drag preview at all: a hand
+    resting on the button moves a pixel or two, and those pixels must not
+    build a ghost edit and evaluate a preview document that the release only
+    puts back.
+
+    Activation latches. Once a press has travelled past the distance it stays
+    a drag for the rest of that press, so bringing the pointer back to where
+    it started commits a drag that moved nothing, rather than re-measuring at
+    release and picking whatever the pointer came to rest on. The latch is
+    released by the press that follows, by a cancelled gesture, and by a drag
+    that leaves the canvas for an input exclusion rect.
+
 ### Native shading and spatial content
 
-11. Display modes are presentation choices over one matching scene:
+12. Display modes are presentation choices over one matching scene:
     `solid`, `solidWithEdges`, `wireframe`, and `normals`. Studio uses native
     lit materials, Flat uses `UnlitMaterial`, and MatCap/Normals use native
     `CustomMaterial` only when a built-in RealityKit feature is insufficient.
@@ -2133,7 +2152,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     root; custom material discard and pre-clipped replacement Mesh are not
     alternatives. The reason and failure mode for each remaining custom path are
     recorded by the component design and tests.
-12. `Viewport` resolves one immutable `[SceneOccurrenceID: Material]` in its
+13. `Viewport` resolves one immutable `[SceneOccurrenceID: Material]` in its
     initializer from the supplied document, `presentationSceneNodeIDByOccurrenceID`,
     and exactly the provided evaluation-owned visible `presentationScene.items`.
     Every entry is `DesignDocument.sceneNodeAppearance(id:)`, so the chain from a
@@ -2174,7 +2193,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     authors an appearance must read as authored before a person changes a
     session setting. A `.material` occurrence carrying no entry falls back to
     `Material.neutralBaseColor`, read from Core rather than restated here.
-13. World geometry, grid/axes, curve/sketch paths, selection highlights,
+14. World geometry, grid/axes, curve/sketch paths, selection highlights,
     measurement/ruler lines and labels, section/analysis, snap/reference
     guides, pattern/drag previews, construction planes, and edit/feature
     handles are RealityKit entities under the same scene root and frame token.
@@ -2194,7 +2213,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     when it contains only an object outline, a generic topology marker, or a
     sampled curve but omits that route's dimension, guide, handle, hover/active
     state, or active world preview.
-14. The prepared graph distinguishes static world resources from bounded
+15. The prepared graph distinguishes static world resources from bounded
     view-dependent annotation placement. Camera changes update native camera
     transforms immediately and may update bounded label/annotation transforms;
     they never rebuild the world MeshResource graph, retessellate CAD, or rerun
@@ -2311,7 +2330,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
 
 ### Lifecycle, cancellation, and bounds
 
-15. Preparation owns at most one active worker and one newest pending request.
+16. Preparation owns at most one active worker and one newest pending request.
     Replacement and teardown cancel the actual worker, wait for its cooperative
     exit, and reject every stale completion by the complete preparation
     identity. The same worker prepares the optional surface and required
@@ -2332,7 +2351,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     rendered frame; exact-ready identity and handle authority advance only with
     that complete replacement. Typed failure keeps display continuity but grants
     no authority to the old overlay.
-16. Count admission precedes every mesh, collision, line, text, material, and
+17. Count admission precedes every mesh, collision, line, text, material, and
    Entity request. Byte admission covers every application-owned retained and
    scratch buffer before allocation or growth, including six owned UInt32
    collision indices per source triangle for the original/reversed pair.
@@ -2364,13 +2383,13 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     the candidate's native ShapeResource. Native resources are released with
     their scene root; no unsafe pointer or borrowed source buffer crosses a task
     boundary.
-17. Engine-neutral source traversal, transform/material resolution,
+18. Engine-neutral source traversal, transform/material resolution,
     provenance-map construction, and descriptor creation remain off-main when
     their APIs permit. Native RealityKit APIs follow their declared isolation.
     In the macOS 27 SDK, `LowLevelMesh` construction and its scoped mutable-byte
     borrows are MainActor operations; their input-proportional copy interval is
     therefore measured at the maximum admitted geometry and must satisfy the
-    MainActor acceptance row owned by `RupaResponsivenessBaseline` (half of the
+    MainActor acceptance row owned by the responsiveness acceptance policy (half of the
     frame at the pinned minimum refresh rate). Exceeding that budget lowers
     admission or requires a supported native restructuring; moving the API to
     an unsupported executor is not an option. Entity/root mutation and mounted
@@ -2378,7 +2397,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     an Entity. Every post-await completion rechecks the frame tuple before
     publication, and the host never blocks MainActor on GPU completion,
     readback, or a semaphore.
-18. Failure is typed and visible. A resource, camera, material, collision,
+19. Failure is typed and visible. A resource, camera, material, collision,
     projection, hit-test, or frame-swap failure preserves the previous complete
     frame only while it still matches the authoritative mounted tuple. A stale
     previous root is detached and non-pickable rather than exposed as current,
@@ -2500,6 +2519,7 @@ and visible compositing remain manual acceptance, not a hidden-host guarantee.
 | Frame identity and atomic swap | Affected-target compile coverage proves every production `Viewport` caller supplies document-generation or real presentation-snapshot identity and that no separate `documentGeneration` initializer input remains. Existing internal `ViewportSceneSnapshotKey.Source`/`ViewportSceneSnapshotCache` behavior tests prove a same-ID document with a changed generation rebuilds and a real presentation snapshot forms a distinct key; source review verifies the private control-context and scene-builder generation are both derived through `sceneDocumentGeneration` from that same source identity, without a testing-only façade. Change-key tests mutate each exact input group, route-availability bit, and display unit and prove one monotonic overlay-revision advance; `A -> B -> A` produces three distinct identities and overflow is refused. Body-path tests change selection, hover, measurement, and active preview and prove that same-source/snapshot overlay preparation keeps the mounted surface, camera, and grid continuously visible and continuously authoritative for CAD hit and handle lookup at the requested identity, and that a changed source or snapshot and a typed failure recorded for that identity each withdraw display and authority together. A press issued with no gap after a native axis commit, which lands inside the overlay-only rebuild that commit starts, is proved to reach the native route and commit again rather than being refused. Candidate publication replaces the retained display without an empty rendered frame and advances spatial presentation plus handle authority together; failure retains display-only continuity with a typed error, while a changed source/snapshot synchronously withdraws the prior root. Pan, orbit, zoom, projection transition, resize, grid-step, and chrome-only changes preserve the revision and perform zero semantic captures or worker calls. Explicit-plane fixtures prove creation/placement/measurement previews do not read control basis during capture, and `.visibleCell` placement changes through the native grid frame without scene traversal. CPU lifecycle tests reject stale/cancelled `(ViewportSceneSnapshotKey, optional snapshotID, viewportRevision, overlayRevision)` combinations and coalesce to one newest pending request. Source-path review proves the common full-frame modifier covers idle, preparing, ready, and explicit validation-failure branches. The real App compares the Canvas accessibility allocated-area marker with its parent before and after inspector width changes and through empty, ready-Box, and hover/preparing states; individual controls retain intrinsic frames inside that shared coordinate space, and no duplicate hosted-layout proof is required. |
 | Native camera | macOS 27-or-later mounted tests retain the raw native inverse-query counterexamples, then exercise documented native orthographic/symmetric-perspective lens forms, centered and off-center fit/pan framing, native render/project parity, child-owned composed-ray/project round trips, fit, orbit, pan, zoom, saved views, invalid/stale explicit-miss paths, and no geometry rebuild on camera changes. Lens skew or an unsupported projective component is rejected. |
 | Pointer button routing and hover keyboard focus | `Tests/RupaRenderingTests/ViewportInputSurfaceTests.swift` drives the real `ViewportInputSurface.InputView` responder methods with in-process NSEvents and proves the button-to-operation table: a middle-button drag publishes orbit deltas and no pan, a secondary-button drag publishes pan deltas and no orbit, and a two-step middle drag publishes one delta per step equal to that step's own movement rather than the distance from the press, which is the incremental latch pan and orbit share. The hover focus split is proved against a real never-ordered NSWindow: with a first responder that is editing nothing a mouse move takes the keyboard, while with an `NSTextField` holding a live field editor the same move leaves that editor first responder and still publishes the hover point. |
+| Drag activation distance and latch | `Tests/RupaRenderingTests/ViewportInputSurfaceTests.swift` drives the real `ViewportInputSurface.InputView` with in-process NSEvents and proves that one distance decides both halves of a primary gesture: a press that travels four points publishes no drag preview and releases as a pick, while one that travels five publishes a preview and releases as a canvas drag. The latch is proved by a press that travels thirty points and returns to one point from where it started, which still commits a canvas drag from the press point rather than picking what the pointer came to rest on, and by a second press after an activated one, which publishes no preview until it travels the distance again. The preview's own origin is proved to be the press point, published first at the step that crosses the distance rather than at the first pixel of travel. |
 | Native resources/materials | GPU tests cover `MeshResource`/`LowLevelMesh` triangles and lines, exact-payload resource sharing across translated occurrences with distinct hit provenance, non-sharing for non-equivalent transforms, built-in lit/unlit materials, culling, background, wire, material/random color, the document-authored metallic, roughness, and opacity reaching the native surface under every shading preset, transparent blending selected by an opacity below one and proven on the GPU by a translucent render landing below an opaque one, same-shading immutable material-map replacement, invalid-map atomic failure, camera-only no-resolution/no-rebuild behavior, checked grouping-metadata refusal under a lowered caller byte limit, and bounded resource failure. |
 | Native clipping and custom RealityKit features | Section tests exercise `ClippingComponent` hierarchy, visible-side hit filtering, and plane updates without geometry replacement. MatCap, normals, and annotation paths prove why built-ins are insufficient, use only RealityKit material/resource APIs, and never call a custom render pipeline. |
 | Native input/provenance | Mounted Ortho/Persp tests prove native-project-derived ray round trips, three-point affine/miss rules, finite prepared-bounds ray length, native near/far filtering, and stale-tuple miss without CPU CAD projection or triangle intersection. Apple-GPU front/back quad tests compare rendered visibility with distance-sorted native `.all` hits from the collision-only original/reversed mesh for culling on/off. Tests normalize both native face ranges to the exact occurrence/source face, reject indices outside `0..<2N`, and prove section/back-face filters preserve only visible hits. Hidden, clipped, stale, and missing-map cases are explicit miss/failure. The selected CAD face's `exactWorldPoint` is proved behaviorally on the press and drag routes: in a mounted CAD presentation a pixel where the selected face is occluded by the same body's nearer face yields no `modelWorldPoint`, and a pixel that face itself draws yields the surface point the frame drew. Hover consumes the same private admission helper as its only exact-point supplier, so source review covers hover rather than a separate mounted case. |

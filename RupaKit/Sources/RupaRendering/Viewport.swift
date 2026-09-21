@@ -3391,7 +3391,7 @@ public struct Viewport: View {
         }
 
         let dragDistance = hypot(current.x - start.x, current.y - start.y)
-        guard dragDistance > 4.0 else {
+        guard dragDistance > ViewportInputSurface.dragActivationDistance else {
             activeCanvasDrag = nil
             publishSelectionDragPreview(hits: [])
             return

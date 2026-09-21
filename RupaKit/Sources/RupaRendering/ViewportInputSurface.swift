@@ -14,6 +14,14 @@ extension ViewportInputModifierFlags {
 }
 
 struct ViewportInputSurface: NSViewRepresentable {
+    /// How far a press has to travel before it counts as a drag rather than a click.
+    ///
+    /// One number decides both halves of the gesture: whether the release commits an edit, and
+    /// whether the edit is shown on the way there. Two numbers would let the canvas preview an
+    /// edit the release then declines to make. The secondary button asks the same question of
+    /// its own release, and the canvas drag placeholder of its rectangle, so they read it too.
+    static let dragActivationDistance: CGFloat = 4.0
+
     var onPress: (CGPoint, CGSize, ViewportSelectionIntent) -> Void
     var onPick: (CGPoint, CGSize, ViewportSelectionIntent) -> Void
     var onCanvasDrag: (CGPoint, CGPoint, CGSize, ViewportSelectionIntent) -> Void
@@ -81,6 +89,7 @@ extension ViewportInputSurface {
         private var dragStart: CGPoint?
         private var secondaryDragStart: CGPoint?
         private var primaryDragCancelled = false
+        private var primaryDragActivated = false
         private var isOrbiting = false
         private var isInsideInputExclusion = false
         private var trackedPointerLocation: CGPoint?
@@ -112,6 +121,7 @@ extension ViewportInputSurface {
             if dragStart != nil { primaryDragCancelled = true }
             dragStart = nil
             secondaryDragStart = nil
+            primaryDragActivated = false
             onDragPreview?(nil, nil, bounds.size)
         }
 
@@ -172,6 +182,7 @@ extension ViewportInputSurface {
             publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
             primaryDragCancelled = false
+            primaryDragActivated = false
             dragStart = location(from: event)
             guard let dragStart,
                   !isInputExcluded(dragStart) else {
@@ -192,7 +203,31 @@ extension ViewportInputSurface {
                 return
             }
             markCanvasInputActive()
-            onDragPreview?(dragStart, location(from: event), bounds.size)
+            let location = location(from: event)
+            guard updatePrimaryDragActivation(from: dragStart, to: location) else {
+                return
+            }
+            onDragPreview?(dragStart, location, bounds.size)
+        }
+
+        /// Whether the press that began at `start` has become a drag by the time it reached
+        /// `current`, taking note when it has.
+        ///
+        /// A hand resting on the button moves a pixel or two, and every one of those pixels used
+        /// to be published as a drag: pressing a handle to select it moved the thing it was aimed
+        /// at, evaluated the edit, and put it back on release. The release already ignored that
+        /// movement, so the canvas was showing edits the release had no intention of making.
+        ///
+        /// Once a press has travelled far enough it stays a drag. Bringing a drag back to its
+        /// press point is how it is reduced to nothing, and the release commits that nothing
+        /// rather than re-measuring and picking whatever the pointer came to rest on.
+        private func updatePrimaryDragActivation(from start: CGPoint, to current: CGPoint) -> Bool {
+            if primaryDragActivated {
+                return true
+            }
+            let distance = hypot(current.x - start.x, current.y - start.y)
+            primaryDragActivated = distance > ViewportInputSurface.dragActivationDistance
+            return primaryDragActivated
         }
 
         override func mouseUp(with event: NSEvent) {
@@ -213,14 +248,14 @@ extension ViewportInputSurface {
             }
 
             dragStart = nil
-            let dragDistance = hypot(end.x - start.x, end.y - start.y)
-            if dragDistance <= 4.0 {
-                onPick?(end, bounds.size, intent)
-                onDragPreview?(nil, nil, bounds.size)
-            } else {
+            if updatePrimaryDragActivation(from: start, to: end) {
                 onCanvasDrag?(start, end, bounds.size, intent)
                 onDragPreview?(nil, nil, bounds.size)
+            } else {
+                onPick?(end, bounds.size, intent)
+                onDragPreview?(nil, nil, bounds.size)
             }
+            primaryDragActivated = false
             primaryDragCancelled = false
         }
 
@@ -256,7 +291,7 @@ extension ViewportInputSurface {
             markCanvasInputActive()
             if let start = secondaryDragStart {
                 let dragDistance = hypot(end.x - start.x, end.y - start.y)
-                if dragDistance <= 4.0 {
+                if dragDistance <= ViewportInputSurface.dragActivationDistance {
                     onSecondaryClick?(end, bounds.size)
                 }
             }
@@ -553,6 +588,7 @@ extension ViewportInputSurface {
                 || isOrbiting
             dragStart = nil
             secondaryDragStart = nil
+            primaryDragActivated = false
             shiftScrollAccumulator = 0.0
             resetOrbitTracking()
             isInsideInputExclusion = true

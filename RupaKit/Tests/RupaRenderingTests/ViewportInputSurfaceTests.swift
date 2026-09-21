@@ -253,6 +253,115 @@ struct ViewportInputSurfaceTests {
         #expect(hovers.first.flatMap { $0 } != nil)
     }
 
+    @Test
+    func aPressThatBarelyMovesPublishesNoDragPreview() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var previews: [CGPoint] = []
+        var picks: [CGPoint] = []
+        view.onDragPreview = { start, _, _ in
+            if let start { previews.append(start) }
+        }
+        view.onPick = { point, _, _ in picks.append(point) }
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 13, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 12, y: 10)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 12, y: 10)))
+
+        #expect(previews.isEmpty)
+        #expect(picks.count == 1)
+    }
+
+    @Test
+    func aDragBroughtBackToItsPressPointStillCommitsAsADrag() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var drags: [(CGPoint, CGPoint)] = []
+        var picks: [CGPoint] = []
+        view.onCanvasDrag = { start, end, _, _ in drags.append((start, end)) }
+        view.onPick = { point, _, _ in picks.append(point) }
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 40, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 11, y: 10)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 11, y: 10)))
+
+        #expect(picks.isEmpty)
+        #expect(drags.count == 1)
+        #expect(drags.first?.0 == CGPoint(x: 10, y: 110))
+        #expect(drags.first?.1 == CGPoint(x: 11, y: 110))
+    }
+
+    @Test
+    func theDragPreviewBeginsAtThePressPointOnceTheDragActivates() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var previews: [(CGPoint, CGPoint)] = []
+        view.onDragPreview = { start, end, _ in
+            if let start, let end { previews.append((start, end)) }
+        }
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 12, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 40, y: 10)))
+
+        #expect(previews.count == 1)
+        #expect(previews.first?.0 == CGPoint(x: 10, y: 110))
+        #expect(previews.first?.1 == CGPoint(x: 40, y: 110))
+    }
+
+    @Test
+    func theDragActivationLatchIsReleasedByTheNextPress() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var previews: [CGPoint] = []
+        view.onDragPreview = { start, _, _ in
+            if let start { previews.append(start) }
+        }
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 60, y: 10)))
+        view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: CGPoint(x: 60, y: 10)))
+        let activatedPreviews = previews.count
+
+        view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+        view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: CGPoint(x: 13, y: 10)))
+
+        #expect(activatedPreviews == 1)
+        #expect(previews.count == activatedPreviews)
+    }
+
+    /// The distance that starts the preview is the distance that commits the
+    /// release: one step short of it the gesture is a click that drew nothing,
+    /// one step past it a drag that drew its preview first.
+    @Test
+    func oneDistanceDecidesBothHalvesOfThePrimaryGesture() throws {
+        func gesture(travel: CGFloat) throws -> (previews: Int, picks: Int, drags: Int) {
+            let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+            var previews = 0
+            var picks = 0
+            var drags = 0
+            view.onDragPreview = { start, _, _ in
+                if start != nil { previews += 1 }
+            }
+            view.onPick = { _, _, _ in picks += 1 }
+            view.onCanvasDrag = { _, _, _, _ in drags += 1 }
+
+            let end = CGPoint(x: 10 + travel, y: 10)
+            view.mouseDown(with: try mouseEvent(type: .leftMouseDown, location: CGPoint(x: 10, y: 10)))
+            view.mouseDragged(with: try mouseEvent(type: .leftMouseDragged, location: end))
+            view.mouseUp(with: try mouseEvent(type: .leftMouseUp, location: end))
+            return (previews, picks, drags)
+        }
+
+        let short = try gesture(travel: 4.0)
+        #expect(short.previews == 0)
+        #expect(short.picks == 1)
+        #expect(short.drags == 0)
+
+        let long = try gesture(travel: 5.0)
+        #expect(long.previews == 1)
+        #expect(long.picks == 0)
+        #expect(long.drags == 1)
+    }
+
     private func mouseEvent(
         type: NSEvent.EventType,
         location: CGPoint
