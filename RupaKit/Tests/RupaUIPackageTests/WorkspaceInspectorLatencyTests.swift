@@ -87,7 +87,13 @@ func workspaceInspectorMeasuresRealGeometryUpdateStages() async throws {
 }
 
 @MainActor
-private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
+@Test(.timeLimit(.minutes(1)))
+func workspaceSelectionMeasuresAffordanceStages() async throws {
+    try await measureGeometryUpdateStages(includesOverlays: true, selectionOnly: true)
+}
+
+@MainActor
+private func measureGeometryUpdateStages(includesOverlays: Bool, selectionOnly: Bool = false) async throws {
     _ = NSApplication.shared
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
     var current = try await workspace.evaluate()
@@ -99,6 +105,21 @@ private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
     current = try #require(workspace.view)
     let item = try #require(current.viewport.items.first)
     let nodeID = try #require(current.sceneNodeIDByOccurrenceID[item.id])
+    let stableSnapshotID = current.viewport.snapshotID
+    var mountedWindow: NSWindow?
+    if selectionOnly {
+        let controller = NSHostingController(rootView: MainView(workspace: workspace,
+            operationSequencer: ProjectWorkspaceOperationSequencer()))
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1120, height: 720),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        controller.view.frame = window.contentLayoutRect
+        mountedWindow = window
+        controller.view.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(500))
+    }
+    defer { mountedWindow?.contentViewController = nil; mountedWindow?.close() }
     var previous: RealityViewport?
     let clock = ContinuousClock()
     var maximumMainActorGap: Duration = .zero
@@ -118,10 +139,14 @@ private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
         let start = clock.now
         let commands = try WorkspaceTransformMatrix.commands(replacing: .rotationY,
             with: Double(index * 5), nodeIDs: [nodeID], in: current.document.document)
-        if !commands.isEmpty {
+        if selectionOnly {
+            let selection = index.isMultiple(of: 2) ? SelectionModel() : SelectionModel(selectedTargets: [.init(sceneNodeID: nodeID)])
+            _ = try await workspace.applySelection(.replace(selection))
+        } else if !commands.isEmpty {
             _ = try await workspace.perform(planner.source(name: "Rotate", commands: commands, from: current))
         }
         current = try #require(workspace.view)
+        if selectionOnly { #expect(current.viewport.snapshotID == stableSnapshotID) }
         let published = clock.now
         let plan = try MeshSourcePresentationRenderPlan(scene: current.viewport)
         let planned = clock.now
@@ -134,12 +159,13 @@ private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
                 documentGeneration: current.documentGeneration)
             let body = try #require(scene.items.first { $0.sceneNodeID == nodeID })
             let target = SelectionTarget(sceneNodeID: nodeID)
-            let selection = SelectionModel(selectedTargets: [target])
+            let selection = selectionOnly ? current.selection : SelectionModel(selectedTargets: [target])
+            let targets = selection.selectedTargets
             let snapshot = ViewportSpatialOverlaySemanticSnapshot(
                 scene: scene,
-                interaction: .init(selectedFeatureIDs: [body.featureID], selectedSceneNodeIDs: [nodeID],
-                    hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [target],
-                    objectSelectionTargets: [target], selectedSketchEntities: [], previewSketchEntities: [],
+                interaction: .init(selectedFeatureIDs: targets.isEmpty ? [] : [body.featureID], selectedSceneNodeIDs: targets.isEmpty ? [] : [nodeID],
+                    hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: targets,
+                    objectSelectionTargets: targets, selectedSketchEntities: [], previewSketchEntities: [],
                     hoveredSketchEntity: nil, selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
                 sketchCurveSource: .init(document: document, scene: scene, selection: selection, ruler: ruler),
                 surfaceTransformSource: .init(document: document, scene: scene, selection: selection, ruler: ruler),
@@ -155,7 +181,11 @@ private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
         let prepared = clock.now
         #expect(plan.triangleCount > 0)
         #expect(native.snapshotID == current.viewport.snapshotID)
-        print("INSPECTOR_LATENCY overlays=\(includesOverlays) \(index) workspace=\(start.duration(to: published)) plan=\(published.duration(to: planned)) overlay=\(planned.duration(to: overlaid)) native=\(overlaid.duration(to: prepared)) mainActorGap=\(maximumMainActorGap)")
+        print("INSPECTOR_LATENCY selectionOnly=\(selectionOnly) overlays=\(includesOverlays) \(index) workspace=\(start.duration(to: published)) plan=\(published.duration(to: planned)) overlay=\(planned.duration(to: overlaid)) native=\(overlaid.duration(to: prepared)) mainActorGap=\(maximumMainActorGap)")
         previous = native
+        if selectionOnly {
+            mountedWindow?.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(150))
+        }
     }
 }

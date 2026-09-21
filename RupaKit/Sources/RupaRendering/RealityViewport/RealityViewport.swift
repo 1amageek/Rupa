@@ -144,14 +144,39 @@ final class RealityViewport {
         let lines: MeshResource?
     }
 
-    /// Immutable assets may outlive a frame; entities and appearance never do.
+    /// Immutable assets may outlive a frame; applied entity state never does.
     private struct SurfaceResources {
         let plan: MeshSourcePresentationRenderPlan
         let materials: RealityViewportMaterial
+        let materialVariants: [SurfaceMaterialVariants]
         let resources: [NativeResourceReference]
         let groupByGeometry: [Geometry: Int]
         let instances: [GeometryInstanceRecord]
         let bounds: BoundingBox
+    }
+
+    /// Bounded by the three visual states of one admitted occurrence. Native
+    /// values are immutable after creation; entities and frame authority are not cached.
+    @MainActor
+    private final class SurfaceMaterialVariants {
+        struct Key: Equatable {
+            let mode: ViewportDisplayMode
+            let shading: ViewportShading
+            let surface: ViewportSurface
+            let wire: ColorRGBA
+        }
+        private var entries: [(MeshSourcePresentationVisualState, Key, (any RealityKit.Material, UnlitMaterial))] = []
+
+        func resolve(_ key: Key, state: MeshSourcePresentationVisualState,
+                     using materials: RealityViewportMaterial) throws -> (any RealityKit.Material, UnlitMaterial) {
+            let index = entries.firstIndex { $0.0 == state }
+            if let index, entries[index].1 == key { return entries[index].2 }
+            let pair = (try materials.surface(displayMode: key.mode, shading: key.shading, surface: key.surface),
+                        materials.line(color: key.wire))
+            if let index { entries[index] = (state, key, pair) }
+            else { entries.append((state, key, pair)) }
+            return pair
+        }
     }
 
     private init(snapshotID: EvaluationSnapshotID?, origin: Point3D) {
@@ -278,7 +303,9 @@ final class RealityViewport {
             }
             bounds.formUnion(BoundingBox(min: minimum, max: maximum))
         }
-        return SurfaceResources(plan: plan, materials: materials, resources: nativeResources,
+        return SurfaceResources(plan: plan, materials: materials,
+                                materialVariants: plan.occurrences.map { _ in SurfaceMaterialVariants() },
+                                resources: nativeResources,
                                 groupByGeometry: grouping.groupByGeometry,
                                 instances: grouping.instances, bounds: bounds)
     }
@@ -687,10 +714,11 @@ final class RealityViewport {
         }
         var prepared: [(any RealityKit.Material, UnlitMaterial)] = []
         if let surfaceResources {
-          for occurrence in surfaceResources.plan.occurrences {
+          for (index, occurrence) in surfaceResources.plan.occurrences.enumerated() {
             let material = occurrenceMaterials[occurrence.occurrenceID]
             var color = shading.resolvedColor(for: occurrence.occurrenceID, materialColor: material?.baseColor)
-            switch interaction.state(for: occurrence.occurrenceID) {
+            let state = interaction.state(for: occurrence.occurrenceID)
+            switch state {
             case .normal: break
             case .selected: color = SIMD4<Float>(0.14, 0.66, 0.95, 1)
             case .hovered: color = SIMD4<Float>(0.36, 0.77, 0.98, 1)
@@ -700,8 +728,9 @@ final class RealityViewport {
             // made of.
             let surface = ViewportSurface(color: Self.color(color), authoring: material)
             let wire = shading.resolvedWireColor(for: occurrence.occurrenceID, objectColor: color)
-            prepared.append((try surfaceResources.materials.surface(displayMode: displayMode, shading: shading, surface: surface),
-                             surfaceResources.materials.line(color: Self.color(wire))))
+            prepared.append(try surfaceResources.materialVariants[index].resolve(
+                .init(mode: displayMode, shading: shading, surface: surface, wire: Self.color(wire)),
+                state: state, using: surfaceResources.materials))
           }
         }
         try applySection(plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)

@@ -1106,9 +1106,7 @@ final class RealityViewportSpatialResources {
             }
         }
         try Task.checkCancellation()
-        if !result.markerCollisions.isEmpty || !result.labelCollisions.isEmpty {
-            result.quadCollision = quadCollision
-        }
+        result.quadCollision = quadCollision
         return result
     }
 

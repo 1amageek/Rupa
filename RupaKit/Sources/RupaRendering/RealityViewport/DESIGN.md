@@ -1382,12 +1382,25 @@ Retained pictures do not regain query authority while preparation is pending.
 Spatial preparation reuses its immutable unit-quad collision shape from the
 previous candidate. The shape has no frame-dependent geometry; per-frame collider
 entities, transforms and handle indexes remain separate. A frame without quad
-colliders drops the reference. This avoids repeated native collision cooking
-after each value update without retaining past frames or changing admission.
+colliders retains the single immutable shape until the viewport chain releases
+it, but owns no retired collider or handle. Selection toggling therefore does
+not repeat native collision cooking or revive stale interaction authority.
 `ViewportBodyCommitFrameHandoffTests` checks native predecessor/successor bounds,
-collision resource reuse, independent frame provenance and retirement. These
+collision resource reuse and independent frame provenance. These
 owners and their mutation entry points are MainActor-isolated Apple-platform
 implementations; no WASM/Embedded alternative storage is introduced.
+
+Each surface occurrence owns at most three lazily resolved material pairs, one
+for each normal/hovered/selected visual state. A pair is reusable only when its
+display mode, shading, resolved surface and wire color match exactly. A changed
+key replaces that state's pair; failed validation never installs a pair.
+Same-snapshot overlay replacements share these immutable material values, not
+entities, applied appearance, section state or query authority. New surface plans
+start fresh variant owners, so removed occurrences and old appearance history
+are not retained. Native material values are assigned without mutating their
+cached parameters. This avoids repeated RealityKit shader parameter rebuilding
+on selection and frame replacement. Native tests verify reuse, invalidation,
+failure and independent entity state; mounted selection timing verifies latency.
 
 The host owns the native scene for the canvas lifetime and the candidate and
 current root for one mount; withdrawing a frame detaches its root and leaves
