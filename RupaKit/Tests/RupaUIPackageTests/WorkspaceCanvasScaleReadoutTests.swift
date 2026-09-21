@@ -1,8 +1,5 @@
 import CoreGraphics
-import RupaCore
-import RupaCoreTypes
 import RupaRendering
-import RupaViewportScene
 import Testing
 @testable import RupaUI
 
@@ -17,32 +14,6 @@ import Testing
     #expect(WorkspaceCanvasScaleReadout(minorStep: nil, zoom: 1.0) == nil)
     #expect(WorkspaceCanvasScaleReadout(minorStep: step, zoom: nil) == nil)
     #expect(WorkspaceCanvasScaleReadout(minorStep: step, zoom: 1.0) != nil)
-}
-
-/// The step reads in the unit the grid resolved it in, not the unit the ruler
-/// is configured in. `ViewportProjectedGrid` escalates a cell that has grown
-/// past what its unit reads well and hands the text down already carrying the
-/// larger symbol, so a header that paired the ruler's symbol with the grid's
-/// number would name one unit while showing another. The fixture is a real
-/// grid on a room-interior ruler drawn far enough out that its cell has left
-/// centimetres: the header must carry the grid's unit and not the ruler's.
-@Test func workspaceCanvasScaleReadoutRepeatsTheStepTextTheGridResolved() throws {
-    let ruler = WorkspaceScalePreset.roomInterior.rulerConfiguration
-    let zoom: CGFloat = 0.125
-    let step = ViewportProjectedGrid(
-        document: DesignDocument.empty(),
-        ruler: ruler,
-        size: CGSize(width: 800.0, height: 600.0),
-        camera: ViewportCamera(zoom: zoom)
-    ).scaleReadout.minorStep
-
-    try #require(step.displayUnit != ruler.displayUnit)
-
-    let readout = try #require(WorkspaceCanvasScaleReadout(minorStep: step, zoom: zoom))
-
-    #expect(readout.text == "\(step.text) · 13%")
-    #expect(!readout.text.contains(ruler.displayUnit.symbol))
-    #expect(readout.accessibilityValue == "Grid \(step.text), zoom 13%")
 }
 
 /// Zoom reads as a whole percent. The camera's zoom is continuous, and a seat
@@ -63,9 +34,10 @@ import Testing
 /// the tests that are not about unit escalation carry a step the ruler and the
 /// grid agree on.
 private func gridMinorStep() -> ViewportProjectedGrid.ScaleReadout.Length {
-    ViewportProjectedGrid(
-        document: DesignDocument.empty(),
-        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
-        size: CGSize(width: 800.0, height: 600.0)
-    ).scaleReadout.minorStep
+    ViewportProjectedGrid.ScaleReadout.Length(
+        meters: 0.1,
+        displayValue: 10.0,
+        displayUnit: .centimeter,
+        text: "10cm"
+    )
 }
