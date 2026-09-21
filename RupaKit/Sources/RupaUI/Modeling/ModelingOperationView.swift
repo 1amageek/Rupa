@@ -34,6 +34,12 @@ struct ModelingOperationView: View {
         let refusal = planningRefusal
         VStack(alignment: .leading, spacing: 12) {
             Text(draft.kind.rawValue).font(.headline)
+            Text(hasMatchingPreview
+                 ? "Preview ready. Choose Apply to add the result to the document."
+                 : "Set dimensions, then choose Preview. Choose Apply after the preview is ready.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("Modeling.instructions")
             Form {
                 TextField("Name", text: $draft.name)
                 if ![.box, .cylinder, .sphere].contains(draft.kind) {

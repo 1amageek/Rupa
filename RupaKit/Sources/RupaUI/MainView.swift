@@ -105,6 +105,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportControlSession: ViewportControlSession
     @State private var isViewportShadingPresented = false
     @State private var modelingDraft: ModelingOperationDraft?
+    @State private var solidShape: WorkspaceSolidShape = .box
     @State private var modelingPreview = ModelingPreviewState()
     @State private var modelingTask: Task<Void, Never>?
     @State private var meshDraft: MeshOperationDraft?
@@ -418,6 +419,12 @@ private struct ProjectMainViewContent: View {
     }
 
     private func beginModelingOperation(_ kind: ModelingOperationDraft.Kind) {
+        switch kind {
+        case .box: activateSolidShape(.box); return
+        case .sphere: activateSolidShape(.sphere); return
+        case .cylinder: activateSolidShape(.cylinder); return
+        default: break
+        }
         cancelModelingOperation()
         selectedTool = .select
         modelingDraft = ModelingOperationDraft(
@@ -2753,6 +2760,8 @@ private struct ProjectMainViewContent: View {
 
     private var canvasDragPreviewKind: ViewportCanvasDragPreviewKind? {
         switch selectedTool {
+        case .solid where solidShape != .box:
+            .circle(radiusMeters: activeSketchLengthInputMeters)
         case .sketch, .solid:
             .rectangle(
                 widthMeters: activeSketchWidthInputMeters,
@@ -2780,6 +2789,8 @@ private struct ProjectMainViewContent: View {
 
     private var canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? {
         switch selectedTool {
+        case .solid where solidShape != .box:
+            .circle(radiusMeters: activeSketchLengthInputMeters)
         case .sketch:
             .rectangle(
                 widthMeters: activeSketchWidthInputMeters,
@@ -3720,7 +3731,11 @@ private struct ProjectMainViewContent: View {
     private var floatingToolPalette: some View {
         WorkspaceToolPalette(
             selectedTool: selectedTool,
+            solidShape: solidShape,
+            selectedOperation: modelingDraft?.kind,
             activate: { activateTool($0) },
+            activateSolid: activateSolidShape,
+            beginModelingOperation: beginModelingOperation,
             accessibilityIdentifier: { canvasToolIdentifier(for: $0) }
         )
     }
@@ -4691,6 +4706,12 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    private func activateSolidShape(_ shape: WorkspaceSolidShape) {
+        cancelModelingOperation()
+        solidShape = shape
+        activateTool(.solid)
+    }
+
     private func activateTool(_ tool: ModelingTool) {
         let hasTransientModelingOperation = modelingDraft != nil
             || meshDraft != nil
@@ -4713,7 +4734,7 @@ private struct ProjectMainViewContent: View {
             viewAlignedConstructionPlaneRequest = nil
         }
         setActiveTool(tool)
-        reportToolStatus(tool.activationPrompt)
+        reportToolStatus(tool == .solid ? solidShape.activationPrompt : tool.activationPrompt)
     }
 
     private func beginSurfaceModelingOperation() {
@@ -4789,6 +4810,7 @@ private struct ProjectMainViewContent: View {
         let polygonState = polygonToolState
         let currentSketchInputState = sketchInputState
         let placementCellMeters = viewportProjectedGridMinorStep?.meters
+        let currentSolidShape = solidShape
         submitSource(name: "canvasClick") { current in
             let planner = WorkspaceCanvasCommandPlanner(
                 context: WorkspaceCanvasCommandPlanner.Context(
@@ -4798,7 +4820,8 @@ private struct ProjectMainViewContent: View {
                     objectRegistry: current.objectRegistry,
                     polygonState: polygonState,
                     sketchInputState: currentSketchInputState
-                )
+                ),
+                solidShape: currentSolidShape
             )
             do {
                 guard let command = try planner.clickCommand(
@@ -6528,6 +6551,7 @@ private struct ProjectMainViewContent: View {
         reportViewportDragSnapFailures(resolution)
         let resolvedDrag = resolution.drag
         let tool = selectedTool
+        let currentSolidShape = solidShape
         let polygonState = polygonToolState
         let currentSketchInputState = sketchInputState
         submitSource(name: "canvasDrag") { current in
@@ -6539,7 +6563,8 @@ private struct ProjectMainViewContent: View {
                     objectRegistry: current.objectRegistry,
                     polygonState: polygonState,
                     sketchInputState: currentSketchInputState
-                )
+                ),
+                solidShape: currentSolidShape
             )
             do {
                 guard let command = try planner.dragCommand(

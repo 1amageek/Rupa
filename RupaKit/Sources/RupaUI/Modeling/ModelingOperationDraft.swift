@@ -16,6 +16,26 @@ struct ModelingOperationDraft: Equatable {
         case chamfer = "Chamfer"
 
         var id: String { rawValue }
+
+        /// Operations not already represented by a canvas placement tool.
+        static var paletteOperations: [Self] {
+            allCases.filter { ![.box, .sphere, .cylinder, .sweep].contains($0) }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .box: "cube"
+            case .sphere: "globe"
+            case .cylinder: "cylinder"
+            case .extrude: "arrow.up.to.line"
+            case .revolve: "arrow.trianglehead.2.clockwise.rotate.90"
+            case .sweep: "arrow.triangle.2.circlepath"
+            case .loft: "square.stack.3d.up"
+            case .boolean: "square.on.square"
+            case .fillet: "square.on.circle"
+            case .chamfer: "cube.transparent"
+            }
+        }
     }
 
     var kind: Kind

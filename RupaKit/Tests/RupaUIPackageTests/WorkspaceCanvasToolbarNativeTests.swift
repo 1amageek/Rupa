@@ -67,7 +67,11 @@ func workspaceCanvasToolbarPaletteKeepsNarrowScrollableHitRegion() async throws 
         .overlay(alignment: .leading) {
             WorkspaceToolPalette(
                 selectedTool: .select,
+                solidShape: .box,
+                selectedOperation: nil,
                 activate: { _ in },
+                activateSolid: { _ in },
+                beginModelingOperation: { _ in },
                 accessibilityIdentifier: { "CanvasTool.\($0.rawValue)" }
             )
         }

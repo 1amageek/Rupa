@@ -81,6 +81,19 @@ path; the row is not a second source graph or a dynamic definition editor.
 
 ## Contracts and Invariants
 
+- Primitive entries in the palette and Model menu activate the shared Solid
+  canvas tool with a MainView-owned `WorkspaceSolidShape`. Click places a default
+  primitive; drag sets its rectangle or radius. Sphere uses the construction
+  plane's world center; Cylinder extrudes its local circle along the plane normal
+  using the existing workspace depth. Circle footprint previews use the same
+  radius defaults and explicit input as planning. Box retains its rectangle and
+  profile-extrusion routes. Selection never publishes source; click/release uses
+  the existing snapshot-bound Workspace transaction.
+- Extrude, Revolve, Loft, Boolean, Fillet and Chamfer are exposed in the palette
+  through the existing draft entry point; Sweep retains its canvas route. One
+  button renderer owns metrics, colors, selection, accessibility and hover hints.
+  Draft forms explain Preview-before-Apply and retain typed operand validation.
+
 - The parent [canvas tool route](../DESIGN.md#canvas-side-tool-routing) launches
   Surface as the existing Loft draft with sheet output enabled. It consumes the
   current ordered profile selection and retains the same preview, Apply, typed

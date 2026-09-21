@@ -1068,8 +1068,11 @@ license the stronger claim that nothing is broken, so every row carries an
 evidence state rather than a verdict.
 
 The canvas tool rows rest on a compositional argument rather than on per-tool
-GUI evidence. `WorkspaceToolPalette` builds every button from one
-`ForEach(ModelingTool.allCases)` with a single `activate` closure.
+GUI evidence. `WorkspaceToolPalette` builds canvas buttons from
+`ModelingTool.allCases` and operation buttons from
+`ModelingOperationDraft.Kind.paletteOperations`, using one button renderer.
+Solid's picker selects a MainView-owned primitive kind consumed by both the
+footprint preview and command planner; see [Modeling](Modeling/DESIGN.md).
 `activateTool` carries one per-tool branch, `.surface`, and sends every other
 tool to `setActiveTool`. `handleViewportPick` routes every tool other than
 `select` and `mesh` through one `submitSource` into
@@ -1091,8 +1094,8 @@ presentation gate.
 The Model drafts rest on a compositional argument of the same shape. The
 toolbar `Menu` at `WorkspaceCommand.model` builds its ten items from one
 `ForEach(ModelingOperationDraft.Kind.allCases)` with a single
-`beginModelingOperation` closure, and that closure is uniform: it cancels an
-open draft, forces `selectedTool` to `.select`, and stores a
+`beginModelingOperation` closure. Primitive entries activate canvas placement;
+the other entries cancel an open draft, force `selectedTool` to `.select`, and store a
 `ModelingOperationDraft` whose only per-kind input is the kind. Every draft
 therefore opens the same `ModelingOperationView` at `Modeling.operation` and
 commits over the same `Modeling.preview` and `Modeling.apply` pair.

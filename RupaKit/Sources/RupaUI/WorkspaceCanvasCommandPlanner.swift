@@ -13,6 +13,7 @@ struct WorkspaceCanvasCommandPlanner {
     }
 
     let context: Context
+    var solidShape: WorkspaceSolidShape = .box
 
     func clickCommand(
         tool: ModelingTool,
@@ -26,6 +27,9 @@ struct WorkspaceCanvasCommandPlanner {
         case .select, .measure, .mesh:
             return nil
         case .solid:
+            if solidShape != .box {
+                return try roundSolidCommand(center: modelPoint, edge: nil, plane: sketchPlane)
+            }
             if let targetSceneNodeID {
                 return try solidCommand(targetSceneNodeID: targetSceneNodeID)
             }
@@ -115,6 +119,9 @@ struct WorkspaceCanvasCommandPlanner {
                 sketchPlane: sketchPlane
             )
         case .solid:
+            if solidShape != .box {
+                return try roundSolidCommand(center: startModelPoint, edge: endModelPoint, plane: sketchPlane)
+            }
             return try solidDragCommand(
                 startModelPoint: startModelPoint,
                 endModelPoint: endModelPoint,
@@ -166,6 +173,26 @@ struct WorkspaceCanvasCommandPlanner {
             return nil
         }
         return CADInputValueNormalizer.standard.lengthMeters(value)
+    }
+
+    private func roundSolidCommand(center: Point2D, edge: Point2D?, plane: SketchPlane) throws -> EditorCommand {
+        let (localCenter, radius) = try circleGeometry(center: center, edge: edge, plane: plane)
+        switch solidShape {
+        case .sphere:
+            let coordinates = try SketchPlaneCoordinateSystem(plane: plane)
+            return .createAnalyticSphere(
+                name: nextFeatureName(prefix: solidShape.rawValue),
+                center: coordinates.point(from: localCenter), radius: normalized(radius)
+            )
+        case .cylinder:
+            return .createExtrudedCircle(
+                name: nextFeatureName(prefix: solidShape.rawValue), plane: plane,
+                center: sketchPoint(localCenter), radius: length(radius),
+                depth: length(scaleDefaults.sketchDepthMeters), direction: .normal
+            )
+        case .box:
+            throw commandError("Box placement requires the rectangular placement path.")
+        }
     }
 
     private func solidCommand(targetSceneNodeID: SceneNodeID) throws -> EditorCommand {
@@ -318,12 +345,12 @@ struct WorkspaceCanvasCommandPlanner {
         modelPoint: Point2D,
         sketchPlane: SketchPlane
     ) throws -> EditorCommand {
-        try requireFinite(modelPoint, message: "Canvas circle placement requires a finite model coordinate.")
+        let (center, radius) = try circleGeometry(center: modelPoint, edge: nil, plane: sketchPlane)
         return .createCircleSketch(
             name: nextFeatureName(prefix: "Circle Sketch"),
             plane: sketchPlane,
-            center: sketchPoint(localPoint(modelPoint, on: sketchPlane)),
-            radius: length(activeLengthMeters ?? scaleDefaults.curveRadiusMeters)
+            center: sketchPoint(center),
+            radius: length(radius)
         )
     }
 
@@ -332,22 +359,28 @@ struct WorkspaceCanvasCommandPlanner {
         edgeModelPoint: Point2D,
         sketchPlane: SketchPlane
     ) throws -> EditorCommand {
-        try requireFinite(centerModelPoint, message: "Canvas circle drag requires finite model coordinates.")
-        try requireFinite(edgeModelPoint, message: "Canvas circle drag requires finite model coordinates.")
-        let center = localPoint(centerModelPoint, on: sketchPlane)
-        let edge = localPoint(edgeModelPoint, on: sketchPlane)
-        let deltaX = edge.x - center.x
-        let deltaY = edge.y - center.y
-        let radius = activeLengthMeters ?? sqrt(deltaX * deltaX + deltaY * deltaY)
-        guard radius.isFinite, radius > 0.0 else {
-            throw commandError("Canvas circle drag requires a non-zero radius.")
-        }
+        let (center, radius) = try circleGeometry(center: centerModelPoint, edge: edgeModelPoint, plane: sketchPlane)
         return .createCircleSketch(
             name: nextFeatureName(prefix: "Circle Sketch"),
             plane: sketchPlane,
             center: sketchPoint(center),
             radius: length(radius)
         )
+    }
+
+    /// One footprint contract for circles and round solid placement.
+    private func circleGeometry(center: Point2D, edge: Point2D?, plane: SketchPlane) throws -> (Point2D, Double) {
+        try requireFinite(center, message: "Circular placement requires a finite center.")
+        if let edge { try requireFinite(edge, message: "Circular placement requires a finite radius point.") }
+        let localCenter = localPoint(center, on: plane)
+        let radius = activeLengthMeters ?? edge.map {
+            let localEdge = localPoint($0, on: plane)
+            return hypot(localEdge.x - localCenter.x, localEdge.y - localCenter.y)
+        } ?? scaleDefaults.curveRadiusMeters
+        guard radius.isFinite, radius > 0 else {
+            throw commandError("Circular placement requires a positive finite radius.")
+        }
+        return (localCenter, radius)
     }
 
     private func sectionClickCommand(

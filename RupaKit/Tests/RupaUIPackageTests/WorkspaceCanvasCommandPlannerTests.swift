@@ -4,6 +4,75 @@ import SwiftCAD
 @testable import RupaUI
 
 @MainActor
+@Test(.timeLimit(.minutes(1)), arguments: [WorkspaceSolidShape.sphere, .cylinder])
+func roundSolidsShareCanvasClickDragAndFailureContracts(shape: WorkspaceSolidShape) throws {
+    for plane in [SketchPlane.xy, .yz, .zx] {
+        for isDrag in [false, true] {
+            let session = EditorSession()
+            let generation = session.generation
+            var planner = workspaceCanvasCommandPlanner(session: session)
+            planner.solidShape = shape
+            let command = try #require(isDrag
+                ? planner.dragCommand(tool: .solid, startModelPoint: Point2D(x: 0, y: 0),
+                    endModelPoint: Point2D(x: 0.03, y: 0.04), sketchPlane: plane,
+                    startWorldPoint: nil, endWorldPoint: nil)
+                : planner.clickCommand(tool: .solid, targetSceneNodeID: nil,
+                    modelPoint: Point2D(x: 0, y: 0), modelWorldPoint: nil,
+                    sketchPlane: plane, placementCellMeters: nil))
+            #expect(session.generation == generation)
+            let radius = isDrag ? 0.05 : WorkspaceScaleDefaults(ruler: session.workspaceState.ruler).curveRadiusMeters
+            switch command {
+            case .createAnalyticSphere(_, let center, let actualRadius):
+                #expect(shape == .sphere && center == .origin)
+                #expect(abs(actualRadius - radius) < 1e-10)
+            case .createExtrudedCircle(_, let actualPlane, let center, let actualRadius, _, _):
+                #expect(shape == .cylinder && actualPlane == plane)
+                #expect(center == SketchPoint(x: .length(0, .meter), y: .length(0, .meter)))
+                #expect(actualRadius == .length(radius, .meter))
+            default: Issue.record("Round primitive took the wrong canvas command path.")
+            }
+            #expect(try session.execute(command).didMutate)
+            let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(session.document.cadDocument)
+            #expect(evaluated.brep.bodies.count == 1)
+        }
+    }
+    let session = EditorSession()
+    var planner = workspaceCanvasCommandPlanner(session: session)
+    planner.solidShape = shape
+    for end in [Point2D(x: 0, y: 0), Point2D(x: .nan, y: 1)] {
+        #expect(throws: EditorError.self) {
+            _ = try planner.dragCommand(tool: .solid, startModelPoint: Point2D(x: 0, y: 0),
+                endModelPoint: end, sketchPlane: .xy, startWorldPoint: nil, endWorldPoint: nil)
+        }
+    }
+    #expect(session.document.cadDocument.designGraph.order.isEmpty)
+}
+
+@Test func paletteCoversExistingOperationsWithoutDuplicatingCanvasTools() {
+    #expect(Set(ModelingOperationDraft.Kind.paletteOperations) == [.extrude, .revolve, .loft, .boolean, .fillet, .chamfer])
+    #expect(Set(WorkspaceSolidShape.allCases) == [.box, .sphere, .cylinder])
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func sphereCanvasPlacementPreservesTranslatedPlaneOrigin() throws {
+    let session = EditorSession()
+    var planner = workspaceCanvasCommandPlanner(session: session)
+    planner.solidShape = .sphere
+    let origin = Point3D(x: 0.1, y: 0.2, z: 0.3)
+    let planned = try planner.clickCommand(tool: .solid, targetSceneNodeID: nil,
+        modelPoint: Point2D(x: 0, y: 0), modelWorldPoint: origin,
+        sketchPlane: .plane(Plane3D(origin: origin, normal: .unitX)), placementCellMeters: nil)
+    let command = try #require(planned)
+    guard case .createAnalyticSphere(_, let center, _) = command else {
+        Issue.record("Expected an analytic sphere.")
+        return
+    }
+    #expect(center == origin)
+    #expect(try session.execute(command).didMutate)
+}
+
+@MainActor
 @Test(.timeLimit(.minutes(1)))
 func workspaceCanvasCommandPlannerBuildsExecutableSolidDragWithoutMutatingPlanningState() throws {
     let session = EditorSession()
