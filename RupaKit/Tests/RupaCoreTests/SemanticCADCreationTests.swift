@@ -162,6 +162,22 @@ struct SemanticCADCreationTests {
   }
 
   @Test(.timeLimit(.minutes(1)))
+  func analyticSphereRespectsExplicitMeshConstraintsAndRollsBackExhaustion() throws {
+    var document = DesignDocument.empty()
+    document.modelingSettings.tessellationOptions.maxEdgeLength = 1.0e-5
+    let session = EditorSession(document: document)
+    do {
+      _ = try session.execute(.createAnalyticSphere(name: "Constrained Sphere", center: .origin, radius: 0.75))
+      Issue.record("An exhausted mesh request must not publish a sphere or silently reduce fidelity.")
+    } catch let error as EditorError {
+      #expect(error.code == .evaluationFailed)
+      #expect(error.message.contains("resourceExhausted"))
+    }
+    assertUnchangedEmptySession(session)
+    #expect(session.document.modelingSettings == document.modelingSettings)
+  }
+
+  @Test(.timeLimit(.minutes(1)))
   func analyticSphereRollsBackCADWhenProductSynchronizationFails() throws {
     let definitions = ObjectTypeCatalog.builtInDefinitions.filter {
       $0.id != .sphere

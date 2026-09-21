@@ -7,8 +7,8 @@ import Foundation
 /// multiple of the quadrants it covers. This type is the one owner of that relation: the resolver
 /// reads the span a count divides, and the schema reads the counts the canvas can resolve.
 package enum DisplayTessellationArc: Hashable, Sendable {
-    /// A full turn of the circular profile the body is swept from.
-    case sweptProfile
+    /// A full turn of a circular profile or an analytic sphere's great circle.
+    case circularSection
     /// One rounded corner of the all-edge round.
     case allEdgeRound
 
@@ -16,7 +16,7 @@ package enum DisplayTessellationArc: Hashable, Sendable {
     package init?(dividedBy binding: ObjectPropertyDefinition.RenderBinding?) {
         switch binding {
         case .some(.sideSegments):
-            self = .sweptProfile
+            self = .circularSection
         case .some(.cornerSideSegments), .some(.bevelSideSegments):
             self = .allEdgeRound
         default:
@@ -32,7 +32,7 @@ package enum DisplayTessellationArc: Hashable, Sendable {
     /// The number of quadrant charts the kernel samples the arc as.
     package var quadrantCount: Int {
         switch self {
-        case .sweptProfile:
+        case .circularSection:
             4
         case .allEdgeRound:
             1

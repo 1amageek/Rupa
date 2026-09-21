@@ -1164,6 +1164,25 @@ distance would enclose would be reporting a solid this document does not hold.
 
 ### Display tessellation resolution
 
+The sphere schema declares `sides.x` as a display-only full-circle segment
+count, with the same default and admissible counts as the cylinder's circular
+section. Its radius remains read-only source-derived metadata with no render
+binding. The common resolver obtains the sphere radius from its analytic CAD
+primitive, not Product metadata, and maps the count to angular and sagitta
+tolerances through the same calculation used by circular extrusion profiles.
+The count controls great-circle boundary resolution; interior sphere sampling
+remains the kernel's responsibility. Neither count edits nor Mesh generation
+change the analytic sphere, exact B-Rep, modeling tolerance, or resource ceiling.
+
+The count is explicit persisted display intent, not an automatic fallback after
+resource exhaustion. Explicit document edge-length constraints and stricter
+feature overrides still apply, and exhausted requests still fail atomically.
+`DisplayTessellationTests` verifies source/B-Rep preservation, resolution changes,
+scale-independent angular fidelity, and unchanged count validation. Core sphere
+creation tests and the fixed hundred-case semantic replay verify downstream
+execution. RupaKit composition consumes the same resolved configuration as Core;
+Rendering receives only the resulting admitted Mesh and must verify it on Metal.
+
 `DesignDocument.displayTessellationOptions` is the single owner of the mapping
 from declared subdivision counts to the `TessellationOptions` the evaluator
 receives. It keys `featureOverrides` by the body object's `sourceFeatureID`,
@@ -1190,12 +1209,12 @@ authority on whether that arc exists:
 
 | Binding | Arc it divides | Span | Radius |
 |---|---|---|---|
-| `segments.side` | The circular profile the body is swept from | `2 * .pi` | The profile circle radius, when the profile is a single circle |
+| `segments.side` | A swept circular profile or analytic sphere great circle | `2 * .pi` | The source profile circle or sphere radius |
 | `corner.segments` | One rounded corner of the all-edge round | `.pi / 2` | The all-edge fillet radius |
 | `bevel.segments` | One rounded corner of the all-edge round | `.pi / 2` | The all-edge fillet radius |
 
 When the graph holds no such arc — a rounding radius of zero, or a body that is
-not swept from a profile — the count claims nothing and the body keeps the
+neither swept from a circular profile nor an analytic sphere — the count claims nothing and the body keeps the
 document's own tolerances. That is truthful absence rather than a fallback:
 there is no arc for the count to divide, so no resolution it could name would
 move a triangle.

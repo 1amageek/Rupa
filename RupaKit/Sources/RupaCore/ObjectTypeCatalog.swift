@@ -436,7 +436,8 @@ public enum ObjectTypeCatalog {
     ]
 
     private static let sphereProperties: [ObjectPropertyDefinition] = [
-        .derivedLength(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .derivedLength(id: "radius", title: "Radius", binding: nil, defaultValue: 0.5),
+        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, effect: .tessellation, defaultValue: 64),
     ]
 
     private static let polySplineProperties: [ObjectPropertyDefinition] = [

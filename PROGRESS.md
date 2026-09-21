@@ -14,7 +14,9 @@
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`
 - [x] S8 Remove unused drawing projection exporters and CLI response fields `depends:none` `parallel:none`
 - [ ] S9 Verify facade/preview removal and consolidated UI display helpers; implementation commit 13b081fc has no completed UI verification. `depends:S8` `parallel:none`
-- [ ] S10 Verify consolidated solid direct-edit behavior and expression resolution; implementation commit c6e8e514 has no completed behavioral test run. `depends:S9` `parallel:none`
+- [ ] S10 Verify consolidated solid direct-edit behavior and expression resolution; implementation commit c6e8e514 now passes seven focused edge/vertex command tests, while broader cleanup verification remains pending. `depends:S9` `parallel:none`
 - [x] S11 Restore benchmark assets with package-private CAD/performance ownership preserved and JSON/CLI/responsiveness tools separated; verified byte restoration, builds, persistence, measurement, and rejection behavior. `depends:none` `parallel:none`
 - [x] S12 Restore CADAPI-100 requirements and reconcile relocated design links; frozen catalog/digests and three architecture-boundary tests pass. `depends:S11` `parallel:none`
-- [ ] S13 Complete cleanup integration verification: fixed replay realizes 95/100; SPH-001 through SPH-005 fail before publication with executionRejected, also failing 10 JSON/CLI tests. Signed-App/UI and prior direct-edit verification remain unproven. `depends:S8,S9,S10,S11,S12` `parallel:none`
+- [x] R1 Complete sphere source/display integration with unchanged analytic source, oracles and resource ceilings; 46 focused tests and fixed 100-case replay pass, including explicit mesh-exhaustion rollback. `depends:none` `parallel:none`
+- [ ] R2 Verify the mounted viewport and cleanup consumers: preserve concurrent work, execute Apple-platform rendering/input tests and actual App sphere display, resolve scoped failures, review and commit. `depends:R1` `parallel:none`
+- [ ] S13 Complete integration verification of sphere, JSON/CLI, UI and direct-edit paths; require unchanged 100-case acceptance and record actual signed-App evidence without inferring it from builds. `depends:S8,S9,S10,S11,S12,R1,R2` `parallel:none`

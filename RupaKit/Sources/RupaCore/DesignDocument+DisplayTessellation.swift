@@ -78,15 +78,15 @@ extension DesignDocument {
     ) throws -> [DisplayTessellationClaim] {
         let counts = try declaredSubdivisionCounts(of: object, objectRegistry: objectRegistry)
         guard !counts.isEmpty else { return [] }
-        let sweptProfile = counts.contains { $0.arc == .sweptProfile }
-            ? try sweptProfileArc(featureID)
+        let circularSection = counts.contains { $0.arc == .circularSection }
+            ? try circularSectionArc(featureID)
             : nil
         let allEdgeRound = counts.contains { $0.arc == .allEdgeRound }
             ? try allEdgeRoundArc(featureID)
             : nil
         return counts.compactMap { arc, count in
             let geometry = switch arc {
-            case DisplayTessellationArc.sweptProfile: sweptProfile
+            case DisplayTessellationArc.circularSection: circularSection
             case DisplayTessellationArc.allEdgeRound: allEdgeRound
             }
             guard let geometry else { return nil }
@@ -104,7 +104,7 @@ extension DesignDocument {
     ) throws -> [(arc: DisplayTessellationArc, count: Int)] {
         guard let definition = objectRegistry.definition(for: object.typeID) else {
             guard let count = ProfileTessellationPolicy.arcSegmentCount(from: object) else { return [] }
-            return [(.sweptProfile, count)]
+            return [(.circularSection, count)]
         }
         var counts: [(arc: DisplayTessellationArc, count: Int)] = []
         for property in definition.properties where property.effect == .tessellation {
@@ -128,8 +128,15 @@ extension DesignDocument {
         return counts
     }
 
-    /// The arc the body is swept from, or `nil` when the profile holds none.
-    private func sweptProfileArc(_ featureID: FeatureID) throws -> DisplayTessellationArcGeometry? {
+    /// The sphere's great circle or swept profile arc, resolved from the analytic source.
+    private func circularSectionArc(_ featureID: FeatureID) throws -> DisplayTessellationArcGeometry? {
+        if let feature = cadDocument.designGraph.nodes[featureID],
+           case .primitive(let primitive) = feature.operation,
+           case .sphere(let sphere) = primitive.definition {
+            return DisplayTessellationArcGeometry(
+                radius: try resolvedPositiveLengthValue(sphere.radius, owner: "Sphere display radius")
+            )
+        }
         guard let feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)],
               case let .extrude(extrude) = feature.operation,
               let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],

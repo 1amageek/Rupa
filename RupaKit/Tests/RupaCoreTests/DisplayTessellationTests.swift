@@ -149,6 +149,64 @@ struct DisplayTessellationTests {
         ))
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func sphereResolutionChangesOnlyTheDisplayMeshAtEveryScale() throws {
+        for radius in [0.001, 0.75, 100.0] {
+            var document = DesignDocument.empty()
+            let featureID = try document.createAnalyticSphere(
+                name: "Sphere", center: .origin, radius: radius
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let source = try encoder.encode(document.cadDocument)
+            let node = try Self.bodyNode(of: document)
+            #expect(node.object?.properties["sides.x"] == .integer(64))
+            let options = try document.displayTessellationOptions()
+            let resolved = try #require(options.featureOverrides[featureID])
+            #expect(Self.approximatelyEqual(resolved.angularTolerance, 2.0 * .pi / 63.5))
+            #expect(Self.approximatelyEqual(
+                resolved.linearTolerance, radius * (1.0 - cos(.pi / 64.0))
+            ))
+            let fine = try DocumentEvaluator.modelingDefault(for: document)
+                .evaluate(document.cadDocument)
+            try document.setSceneNodeObjectProperty(
+                id: node.id, propertyID: "sides.x", value: .integer(32)
+            )
+            let coarse = try DocumentEvaluator.modelingDefault(for: document)
+                .evaluate(document.cadDocument, reusing: fine)
+            #expect(try encoder.encode(document.cadDocument) == source)
+            #expect(coarse.brep == fine.brep)
+            #expect(coarse.evaluationMetrics.rebuiltFeatureCount == 0)
+            let coarseMesh = try #require(coarse.meshes.values.first)
+            let fineMesh = try #require(fine.meshes.values.first)
+            #expect(!coarseMesh.positions.isEmpty)
+            #expect(coarseMesh.positions.count < fineMesh.positions.count)
+            for position in fineMesh.positions {
+                let distance = sqrt(position.x * position.x + position.y * position.y + position.z * position.z)
+                #expect(abs(distance - radius) <= radius * 1.0e-10)
+            }
+            for invalid in [0, 9, 260] {
+                let before = try encoder.encode(document.productMetadata)
+                #expect(throws: (any Error).self) {
+                    try document.setSceneNodeObjectProperty(
+                        id: node.id, propertyID: "sides.x", value: .integer(invalid)
+                    )
+                }
+                #expect(try encoder.encode(document.productMetadata) == before)
+                #expect(try encoder.encode(document.cadDocument) == source)
+            }
+            let stricter = TessellationOptions(linearTolerance: radius * 1.0e-5, angularTolerance: 0.01)
+            document.modelingSettings.tessellationOptions.featureOverrides[featureID] = stricter
+            document.modelingSettings.tessellationOptions.maxEdgeLength = radius / 100.0
+            let constrained = try #require(
+                try document.displayTessellationOptions().featureOverrides[featureID]
+            )
+            #expect(constrained.linearTolerance == stricter.linearTolerance)
+            #expect(constrained.angularTolerance == stricter.angularTolerance)
+            #expect(constrained.maxEdgeLength == radius / 100.0)
+        }
+    }
+
     // MARK: - Helpers
 
     /// The counts the schema offers for the side subdivision of a cylinder.
