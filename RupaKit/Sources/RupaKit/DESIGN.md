@@ -266,8 +266,12 @@ flowchart LR
     from the shared semantic compiler. It never accepts a wire DTO, raw
     `FeatureGraphTransaction`, or caller-owned persistent identifiers. Each
     project evaluation uses a transaction-local CAD cache seeded from the exact
-    immutable published evaluation; staged preview or rejected candidates are
-    never visible to a later evaluation.
+    immutable CAD evaluation matching its candidate document; another staged
+    or rejected candidate's revision state is never visible to that evaluation.
+    The factory retains the last admitted immutable CAD conversion pairs under
+    the [CAD integration contract](../RupaCADIntegration/DESIGN.md). This is not
+    revision authority; changed Mesh values are reconverted and every request
+    remains admitted and validated.
 18. The complete compiled plan is one workspace action and at most one
     `ProjectSourceTransaction`, exact evaluation, undo entry, workspace
     revision, and publication. Nodes are never individually published.

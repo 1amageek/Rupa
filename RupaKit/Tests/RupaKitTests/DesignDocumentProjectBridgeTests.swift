@@ -1,11 +1,92 @@
 import Foundation
 import RupaKit
+import RupaCADIntegration
 import RupaCoreTypes
 import RupaEvaluation
 import RupaGeometry
 import RupaProjectModel
 import SwiftCAD
 import Testing
+
+@Test(.timeLimit(.minutes(1)))
+func cadConversionReuseRemainsAdmittedAndSafeAcrossConcurrentEvaluators() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let document = session.document
+    let project = try DesignDocumentProjectBridge().sourceModel(for: document)
+    let evaluation = try #require(session.currentEvaluation)
+    let cache = CADMeshSourceConversionCache()
+    let references = project.objectDefinitions.values.compactMap {
+        $0.representations.source(for: .presentation)
+    }
+    let configuration = CADGeometryEvaluationConfiguration(tolerance: document.modelingSettings.tolerance,
+        tessellationOptions: try document.displayTessellationOptions())
+    func provider() throws -> CADGeometrySourceProvider {
+        let isolated = CADDocumentEvaluationCache()
+        try isolated.seed(validatedDocument: evaluation.validatedDocument.validatedCADDocument,
+            evaluatedDocument: evaluation.evaluatedDocument, sourceRevision: .init(1), configuration: configuration)
+        var result = CADGeometrySourceProvider(document: document.cadDocument, configuration: configuration, cache: isolated)
+        result.conversionCache = cache
+        return result
+    }
+    let request = try GeometrySourceEvaluationRequest(references: references, sourceRevision: .init(1),
+        purpose: .presentation, allowance: .init(.standard))
+    let baseline = try provider().evaluate(request, in: project)
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        for _ in 0..<8 {
+            let evaluator = try provider()
+            group.addTask {
+                let result = try evaluator.evaluate(request, in: project)
+                for reference in references {
+                    #expect(result[reference]?.mesh == baseline[reference]?.mesh)
+                    #expect(result[reference]?.copyTelemetry.didCopy == false)
+                }
+            }
+        }
+        try await group.waitForAll()
+    }
+    let refused = try GeometrySourceEvaluationRequest(references: references, sourceRevision: .init(1),
+        purpose: .presentation, allowance: .exhausted)
+    let error = #expect(throws: EvaluationError.self) { _ = try provider().evaluate(refused, in: project) }
+    #expect(error?.code == .resourceExhausted)
+    #expect(cache.snapshot().count == baseline.count)
+    cache.replace(with: [:])
+    #expect(cache.snapshot().isEmpty)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func designDocumentFactoryReusesOnlyUnchangedConversionsAcrossIsolatedEvaluators() throws {
+    let session = EditorSession()
+    let firstCommand = try #require(session.createDefaultExtrudedRectangle())
+    let feature = try #require(firstCommand.primaryFeatureID)
+    let factory = DefaultDesignDocumentProjectEvaluatorFactory()
+    func evaluate() throws -> EvaluatedProjectSnapshot {
+        let evaluator = try factory.makeEvaluator(for: session.document, reusing: session.currentEvaluation)
+        // Distinct staged candidates may have the same proposed revision.
+        // Conversion reuse must not share their transaction revision authority.
+        return try evaluator.evaluate(project: DesignDocumentProjectBridge().sourceModel(for: session.document),
+                                      purpose: .presentation, revision: .init(99))
+    }
+    let initial = try evaluate()
+    let original = try #require(initial.occurrences.values.first)
+    #expect(original.copyTelemetry.didCopy)
+    let unchanged = try #require(evaluate().occurrences[original.occurrenceID])
+    #expect(!unchanged.copyTelemetry.didCopy)
+    #expect(unchanged.mesh.vertexPositions.storageIdentityToken === original.mesh.vertexPositions.storageIdentityToken)
+
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let added = try evaluate()
+    #expect(added.occurrences.count == 2)
+    #expect(added.occurrences[original.occurrenceID]?.copyTelemetry.didCopy == false)
+    #expect(added.occurrences.values.filter { $0.copyTelemetry.didCopy }.count == 1)
+
+    _ = try session.execute(.setExtrudeDistance(featureID: feature, distance: .length(0.37, .meter)))
+    let changed = try evaluate()
+    let replacement = try #require(changed.occurrences[original.occurrenceID])
+    #expect(replacement.copyTelemetry.didCopy)
+    #expect(replacement.mesh != original.mesh)
+    #expect(changed.occurrences.values.filter { $0.copyTelemetry.didCopy }.count == 1)
+}
 
 @Test(.timeLimit(.minutes(1)))
 func designDocumentBridgeProjectsSceneHierarchyAndCADReferences() throws {

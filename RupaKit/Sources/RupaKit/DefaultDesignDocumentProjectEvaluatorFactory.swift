@@ -13,6 +13,7 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
     /// `EvaluationResourcePolicy` refuses any limit above the module hard
     /// ceiling at construction.
     public let resourcePolicy: EvaluationResourcePolicy
+    private let conversionCache = CADMeshSourceConversionCache()
 
     public init(resourcePolicy: EvaluationResourcePolicy = .standard) {
         self.resourcePolicy = resourcePolicy
@@ -37,14 +38,16 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
             tessellationOptions: try document.displayTessellationOptions()
         )
         let cadEvaluationCache = CADDocumentEvaluationCache()
+        var cadProvider = CADGeometrySourceProvider(
+            document: document.cadDocument,
+            configuration: configuration,
+            cache: cadEvaluationCache
+        )
+        cadProvider.conversionCache = conversionCache
         let registry = try GeometrySourceEvaluationProviderRegistry(
             providers: [
                 MeshSourceEvaluationProvider(),
-                CADGeometrySourceProvider(
-                    document: document.cadDocument,
-                    configuration: configuration,
-                    cache: cadEvaluationCache
-                ),
+                cadProvider,
             ]
         )
         return DesignDocumentProjectEvaluator(

@@ -21,6 +21,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
     public let providerID = Self.identifier
     private let resolver: any CADGeometrySourceResolving
     private let cache: CADDocumentEvaluationCache
+    package var conversionCache: CADMeshSourceConversionCache?
 
     public init(
         document: CADDocument,
@@ -110,6 +111,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
         var results: [GeometrySourceReference: GeometryEvaluationResult] = [:]
         var publications: [CADDocumentEvaluationCache.Publication] = []
+        let reusableConversions = conversionCache?.snapshot() ?? [:]
         results.reserveCapacity(outputs.count)
         publications.reserveCapacity(sourceOrder.count)
         for sourceID in sourceOrder {
@@ -138,7 +140,8 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 source: source,
                 outputs: sourceOutputs,
                 sourceRevision: request.sourceRevision,
-                admission: &admission
+                admission: &admission,
+                reusableConversions: reusableConversions
             )
             try Task.checkCancellation()
             results.merge(evaluation.results) { existing, _ in existing }
@@ -147,6 +150,18 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
 
         try Task.checkCancellation()
         try cache.publish(publications)
+        if let conversionCache {
+            let admittedIdentities = Set(results.values.map { $0.mesh.identity })
+            var conversions: CADMeshSourceConversionCache.Entries = [:]
+            conversions.reserveCapacity(results.count)
+            for publication in publications {
+                for converted in publication.meshSourcesByBodyID.values
+                where admittedIdentities.contains(converted.source.identity) {
+                    conversions[converted.source.identity] = converted
+                }
+            }
+            conversionCache.replace(with: conversions)
+        }
         return results
     }
 
@@ -154,7 +169,8 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         source: CADGeometryEvaluationSource,
         outputs: [ValidatedOutput],
         sourceRevision: DocumentTransactionRevision,
-        admission: inout CADTessellationAdmission
+        admission: inout CADTessellationAdmission,
+        reusableConversions: CADMeshSourceConversionCache.Entries
     ) throws -> SourceEvaluation {
         try Task.checkCancellation()
         let evaluator = source.evaluator
@@ -263,6 +279,11 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             // this call returns while the kernel budget covers only what this
             // invocation tessellated.
             let predictedUsage = try admission.admit(mesh)
+            let identity = GeometrySourceID(rawValue: "cad.\(source.sourceID).\(bodyID.description)")
+            if meshSourcesByBodyID[bodyID] == nil,
+               let reused = reusableConversions[identity], reused.mesh == mesh {
+                meshSourcesByBodyID[bodyID] = reused
+            }
             let meshSource: MeshSource
             let copyTelemetry: GeometryCopyTelemetry
             if let cached = meshSourcesByBodyID[bodyID] {
@@ -272,9 +293,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                 let materialized: CADMeshSourceMaterialization
                 do {
                     materialized = try CADMeshSourceConverter.makeMeshSource(
-                        identity: GeometrySourceID(
-                            rawValue: "cad.\(source.sourceID).\(bodyID.description)"
-                        ),
+                        identity: identity,
                         mesh: mesh
                     )
                 } catch let error as CADMeshSourceConversionError {

@@ -170,6 +170,21 @@ project state. Exact and Mesh entries are retained only for cache reuse and are
 replaced atomically by newer compatible revisions. Provider requests and
 conversion scratch are invocation-local.
 
+`CADMeshSourceConversionCache` retains only the last fully admitted provider
+request's immutable conversion pairs. Its factory owner may share those pairs
+across transaction-local evaluators, but never shares CAD revision state.
+Reuse requires the same source identity and exact Swift-CAD Mesh value; source
+validation, current allowance admission, actual resource accounting and engine
+validation still run. A rejected project transaction can leave only a pure
+conversion result, never a committed revision or source state. Replacing the
+whole dictionary bounds retention to one admitted request, not edit history.
+Native and any supported cross-target compilation use the same Mutex dictionary
+owner: reads copy the immutable dictionary under lock, comparisons run outside,
+and replacement releases the previous dictionary outside the lock. No callbacks
+or I/O occur in either critical section. Owner release releases the last entries.
+Tests must prove unchanged reuse, changed geometry invalidation, and revision
+independence; a cache hit does not waive any failure or budget check.
+
 ## Failure, Concurrency, and Constraints
 
 Evaluation is synchronous and `Sendable`; its caller chooses the task/executor.
