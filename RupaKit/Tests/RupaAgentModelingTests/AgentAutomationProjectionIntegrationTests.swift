@@ -2,7 +2,7 @@ import Foundation
 import RupaAgentIntegrationTestFixtures
 import RupaCore
 import Testing
-@testable import RupaAgent
+@testable import RupaAgentRuntime
 
 @Test func agentListsRegisteredSessions() async throws {
     let server = AgentCommandController()

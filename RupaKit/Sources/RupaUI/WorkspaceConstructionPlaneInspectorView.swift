@@ -20,7 +20,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 workspaceInspectorValueRow("Active", state.isActive ? "Yes" : "No")
                     .accessibilityIdentifier("InspectorConstructionPlane.active")
                 if let sceneNodeID = state.sceneNodeID {
-                    workspaceInspectorValueRow("Scene Node", shortID(sceneNodeID))
+                    workspaceInspectorValueRow("Scene Node", WorkspaceInspectorNumberText.shortID(sceneNodeID))
                         .accessibilityIdentifier("InspectorConstructionPlane.sceneNode")
                 }
 
@@ -93,7 +93,4 @@ struct WorkspaceConstructionPlaneInspectorView: View {
         }
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

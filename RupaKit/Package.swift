@@ -85,10 +85,6 @@ let package = Package(
             targets: ["RupaRendering"]
         ),
         .library(
-            name: "RupaPreview",
-            targets: ["RupaPreview"]
-        ),
-        .library(
             name: "RupaAutomation",
             targets: ["RupaAutomation"]
         ),
@@ -143,10 +139,6 @@ let package = Package(
         .executable(
             name: "rupa-responsiveness-fixture-document",
             targets: ["RupaResponsivenessFixtureDocumentCLI"]
-        ),
-        .library(
-            name: "RupaAgent",
-            targets: ["RupaAgent"]
         ),
         .library(
             name: "RupaCLIKit",
@@ -300,7 +292,6 @@ let package = Package(
                 "RupaDomainFoundation",
                 "RupaProject",
                 "RupaRendering",
-                "RupaPreview",
                 "RupaViewportScene",
                 .product(name: "MacComponent", package: "mac-component"),
                 .product(name: "SwiftCAD", package: "swift-CAD"),
@@ -343,12 +334,6 @@ let package = Package(
             exclude: ["DESIGN.md"]
         ),
         .target(
-            name: "RupaPreview",
-            dependencies: [
-                "RupaCore",
-            ]
-        ),
-        .target(
             name: "RupaAutomation",
             dependencies: [
                 "RupaCore",
@@ -381,14 +366,6 @@ let package = Package(
                 "RupaDomainFoundation",
                 "RupaCore",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
-        ),
-        .target(
-            name: "RupaAgent",
-            dependencies: [
-                "RupaAgentProtocol",
-                "RupaAgentRuntime",
-                "RupaAgentTransport",
             ]
         ),
         .target(
@@ -577,7 +554,6 @@ let package = Package(
         .target(
             name: "RupaAgentIntegrationTestFixtures",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -713,7 +689,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentContractTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAutomation",
@@ -734,7 +709,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentSurfaceTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAutomation",
@@ -747,7 +721,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentSketchTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -761,7 +734,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentModelingTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -775,7 +747,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentSelectionTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -789,7 +760,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentInspectionTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -803,7 +773,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentTopologyPersistenceTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
@@ -817,7 +786,6 @@ let package = Package(
         .testTarget(
             name: "RupaAgentTransportTests",
             dependencies: [
-                "RupaAgent",
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",

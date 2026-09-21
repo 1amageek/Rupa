@@ -186,8 +186,8 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
         lineIDs: Set<SketchEntityID>,
         endpoints: Set<SketchSplineEndpointReference>
     ) -> String {
-        let lineSummaries = lineIDs.map { "Line \(shortID($0))" }
-        let endpointSummaries = endpoints.map { "Spline \(shortID($0.splineID)) \($0.endpoint.rawValue)" }
+        let lineSummaries = lineIDs.map { "Line \(WorkspaceInspectorNumberText.shortID($0))" }
+        let endpointSummaries = endpoints.map { "Spline \(WorkspaceInspectorNumberText.shortID($0.splineID)) \($0.endpoint.rawValue)" }
         return (lineSummaries + endpointSummaries)
             .sorted()
             .joined(separator: ", ")
@@ -196,20 +196,20 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
     private func splineEndpointSmoothSummary(
         endpoints: Set<SketchSplineEndpointReference>
     ) -> String {
-        endpoints.map { "Spline \(shortID($0.splineID)) \($0.endpoint.rawValue)" }
+        endpoints.map { "Spline \(WorkspaceInspectorNumberText.shortID($0.splineID)) \($0.endpoint.rawValue)" }
             .sorted()
             .joined(separator: ", ")
     }
 
     private func sketchLineCandidateTitle(_ candidate: InspectorSketchLineCandidate) -> String {
         if let length = sketchLineLength(start: candidate.start, end: candidate.end) {
-            return "Line \(shortID(candidate.id))  \(formatted(length))"
+            return "Line \(WorkspaceInspectorNumberText.shortID(candidate.id))  \(formatted(length))"
         }
-        return "Line \(shortID(candidate.id))"
+        return "Line \(WorkspaceInspectorNumberText.shortID(candidate.id))"
     }
 
     private func sketchSplineEndpointCandidateTitle(_ candidate: InspectorSplineEndpointCandidate) -> String {
-        "Spline \(shortID(candidate.splineID)) \(candidate.endpoint.rawValue)"
+        "Spline \(WorkspaceInspectorNumberText.shortID(candidate.splineID)) \(candidate.endpoint.rawValue)"
     }
 
     private func sketchLineLength(
@@ -229,7 +229,4 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
         )
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

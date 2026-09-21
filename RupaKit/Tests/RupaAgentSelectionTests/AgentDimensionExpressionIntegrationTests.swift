@@ -5,7 +5,7 @@ import RupaAgentProtocol
 import RupaCore
 import SwiftCAD
 import Testing
-@testable import RupaAgent
+@testable import RupaAgentRuntime
 
 @MainActor
 @Test func agentDimensionExpressionDefaultsFollowWorkspaceDisplayUnitWhenOmitted() async throws {

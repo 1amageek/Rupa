@@ -34,7 +34,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
 
     var body: some View {
         inspectorSection("Bridge Source") {
-            workspaceInspectorValueRow("Source ID", shortID(bridgeCurve.sourceID))
+            workspaceInspectorValueRow("Source ID", WorkspaceInspectorNumberText.shortID(bridgeCurve.sourceID))
             workspaceInspectorValueRow("Continuity", bridgeContinuityTitle(bridgeCurve.continuity))
             workspaceInspectorValueRow("Trim", bridgeCurve.trimsSourceCurves ? "Source curves trimmed" : "Off")
             workspaceInspectorValueRow(
@@ -359,29 +359,26 @@ struct WorkspaceBridgeCurveInspectorView: View {
     private func sketchReferenceTitle(_ reference: SketchReference) -> String {
         switch reference {
         case .entity(let entityID):
-            return "Entity \(shortID(entityID))"
+            return "Entity \(WorkspaceInspectorNumberText.shortID(entityID))"
         case .lineStart(let entityID):
-            return "Line \(shortID(entityID)) Start"
+            return "Line \(WorkspaceInspectorNumberText.shortID(entityID)) Start"
         case .lineEnd(let entityID):
-            return "Line \(shortID(entityID)) End"
+            return "Line \(WorkspaceInspectorNumberText.shortID(entityID)) End"
         case .circleCenter(let entityID):
-            return "Circle \(shortID(entityID)) Center"
+            return "Circle \(WorkspaceInspectorNumberText.shortID(entityID)) Center"
         case .circleRadius(let entityID):
-            return "Circle \(shortID(entityID)) Radius"
+            return "Circle \(WorkspaceInspectorNumberText.shortID(entityID)) Radius"
         case .arcCenter(let entityID):
-            return "Arc \(shortID(entityID)) Center"
+            return "Arc \(WorkspaceInspectorNumberText.shortID(entityID)) Center"
         case .arcStart(let entityID):
-            return "Arc \(shortID(entityID)) Start"
+            return "Arc \(WorkspaceInspectorNumberText.shortID(entityID)) Start"
         case .arcEnd(let entityID):
-            return "Arc \(shortID(entityID)) End"
+            return "Arc \(WorkspaceInspectorNumberText.shortID(entityID)) End"
         case .arcRadius(let entityID):
-            return "Arc \(shortID(entityID)) Radius"
+            return "Arc \(WorkspaceInspectorNumberText.shortID(entityID)) Radius"
         case .splineControlPoint(let entityID, let index):
-            return "Spline \(shortID(entityID)) Point \(index + 1)"
+            return "Spline \(WorkspaceInspectorNumberText.shortID(entityID)) Point \(index + 1)"
         }
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

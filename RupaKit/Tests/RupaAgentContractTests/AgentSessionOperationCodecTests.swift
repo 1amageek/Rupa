@@ -1,7 +1,8 @@
 import Foundation
 import Testing
 import RupaCore
-@testable import RupaAgent
+import RupaAgentProtocol
+@testable import RupaAgentRuntime
 
 @Test func agentMessageCodecRoundTripsDocumentLifecycleAndHistoryRequests() throws {
     let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!

@@ -13,7 +13,7 @@
 - [x] S7 Object parameters the Inspector offers reach the canvas. Commits 3900f5cb..85197f92. `depends:S1` `parallel:none`
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`
 - [x] S8 Remove unused drawing projection exporters and CLI response fields `depends:none` `parallel:none`
-- [ ] S9 Remove facade/preview targets and consolidate UI display helpers `depends:S8` `parallel:none`
+- [x] S9 Remove facade/preview targets and consolidate UI display helpers. Commit pending. `depends:S8` `parallel:none`
 - [ ] S10 Consolidate duplicated solid direct-edit processing and expression resolution `depends:S9` `parallel:none`
 - [ ] S11 Remove benchmark/responsiveness/performance-only targets from RupaKit `depends:S10` `parallel:none`
 - [ ] S12 Update package design and architecture boundary tests for removed targets `depends:S11` `parallel:none`

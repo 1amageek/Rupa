@@ -96,7 +96,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                         )
                     } label: {
                         Label(
-                            "Draft -\(formattedDegrees(draftAngleMagnitudeDegrees))",
+                            "Draft -\(WorkspaceInspectorNumberText.formattedDegrees(draftAngleMagnitudeDegrees))",
                             systemImage: "minus"
                         )
                     }
@@ -110,7 +110,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                         )
                     } label: {
                         Label(
-                            "Draft +\(formattedDegrees(draftAngleMagnitudeDegrees))",
+                            "Draft +\(WorkspaceInspectorNumberText.formattedDegrees(draftAngleMagnitudeDegrees))",
                             systemImage: "plus"
                         )
                     }
@@ -346,10 +346,6 @@ struct WorkspaceTopologyEditInspectorView: View {
             return 5.0
         }
         return min(max(abs(degrees), 0.1), 89.0)
-    }
-
-    private func formattedDegrees(_ degrees: Double) -> String {
-        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
     }
 
     private func gapFillTitle(_ gapFill: OffsetCurveGapFill) -> String {

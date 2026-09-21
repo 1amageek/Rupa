@@ -43,7 +43,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaAutomation",
             "RupaDomainFoundation",
             "RupaUI",
-            "RupaAgent",
             "RupaAgentProtocol",
             "RupaAgentRuntime",
             "RupaAgentTransport",
@@ -54,7 +53,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
         "RupaAutomation": [
             "RupaDomainFoundation",
             "RupaUI",
-            "RupaAgent",
             "RupaAgentProtocol",
             "RupaAgentRuntime",
             "RupaAgentTransport",
@@ -64,7 +62,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
         ],
         "RupaDomainFoundation": [
             "RupaUI",
-            "RupaAgent",
             "RupaAgentProtocol",
             "RupaAgentRuntime",
             "RupaAgentTransport",
@@ -207,7 +204,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaDomainFoundation",
             "RupaProject",
             "RupaRendering",
-            "RupaPreview",
             "RupaViewportScene",
         ],
         "RupaAgentUI": [
@@ -227,9 +223,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaGeometry",
             "RupaProjectModel",
             "RupaViewportScene",
-        ],
-        "RupaPreview": [
-            "RupaCore",
         ],
         "RupaAutomation": [
             "RupaCore",

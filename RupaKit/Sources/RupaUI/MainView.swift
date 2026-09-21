@@ -4,7 +4,6 @@ import RupaCore
 import RupaDomainFoundation
 import RupaKit
 import RupaGeometry
-import RupaPreview
 import RupaProject
 import RupaRendering
 import SwiftUI
@@ -4660,7 +4659,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func sweepPreviewFeatureLabel(_ featureID: FeatureID?) -> String {
-        featureID.map { shortID($0) } ?? "Missing"
+        featureID.map { WorkspaceInspectorNumberText.shortID($0) } ?? "Missing"
     }
 
     private func sweepPreviewSectionLabel(_ section: SweepSectionReference?) -> String {
@@ -7750,7 +7749,7 @@ private struct ProjectMainViewContent: View {
         )
         return WorkspaceDocumentInspectorState(
             documentName: documentTitle,
-            documentID: shortID(snapshot.document.document.id),
+            documentID: WorkspaceInspectorNumberText.shortID(snapshot.document.document.id),
             sourceUnitTitle: "m",
             displayUnit: snapshot.workspaceState.displayUnit,
             sourceFeatureCount: snapshot.document.document.cadDocument.designGraph.order.count,
@@ -7981,7 +7980,7 @@ private struct ProjectMainViewContent: View {
             return name
         }
         if let id = plane.sourceID {
-            return "\(sectionAnalysisPlaneSourceTitle(plane.sourceKind)) \(shortID(id))"
+            return "\(sectionAnalysisPlaneSourceTitle(plane.sourceKind)) \(WorkspaceInspectorNumberText.shortID(id))"
         }
         return sectionAnalysisPlaneSourceTitle(plane.sourceKind)
     }
@@ -8481,7 +8480,7 @@ private struct ProjectMainViewContent: View {
             if let startAngle = entity.startAngle {
                 numericControl(
                     "Start Angle",
-                    values: [degrees(fromRadians: startAngle)],
+                    values: [WorkspaceInspectorNumberText.degrees(fromRadians: startAngle)],
                     sliderRange: -360.0 ... 360.0
                 ) { degrees in
                     setSelectedSketchArcStartAngle(entity.target, degrees: degrees)
@@ -8492,7 +8491,7 @@ private struct ProjectMainViewContent: View {
             if let endAngle = entity.endAngle {
                 numericControl(
                     "End Angle",
-                    values: [degrees(fromRadians: endAngle)],
+                    values: [WorkspaceInspectorNumberText.degrees(fromRadians: endAngle)],
                     sliderRange: -360.0 ... 360.0
                 ) { degrees in
                     setSelectedSketchArcEndAngle(entity.target, degrees: degrees)
@@ -10045,7 +10044,7 @@ private struct ProjectMainViewContent: View {
         let deltaX = end.x - start.x
         let deltaY = end.y - start.y
         let angle = atan2(deltaY, deltaX)
-        return angle.isFinite ? degrees(fromRadians: angle) : nil
+        return angle.isFinite ? WorkspaceInspectorNumberText.degrees(fromRadians: angle) : nil
     }
 
     private func sketchLineArcSagitta(for entity: InspectorSketchEntity) -> Double {
@@ -10085,9 +10084,9 @@ private struct ProjectMainViewContent: View {
     private func sweepSectionSummary(_ section: SweepSectionReference) -> String {
         switch section {
         case .profile(let profile):
-            return "Profile \(shortID(profile.featureID))"
+            return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"
         case .curve(let curve):
-            return "Curve \(shortID(curve.featureID))"
+            return "Curve \(WorkspaceInspectorNumberText.shortID(curve.featureID))"
         }
     }
 
@@ -10128,10 +10127,6 @@ private struct ProjectMainViewContent: View {
             return "None"
         }
         return library.materials[defaultMaterialID]?.name ?? "Missing"
-    }
-
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
     }
 
     private func lengthControl(
@@ -10391,7 +10386,7 @@ private struct ProjectMainViewContent: View {
                 unit: unit
             )
         case .angle:
-            return formattedDegrees(degrees(fromRadians: value))
+            return WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: value))
         }
     }
 
@@ -10406,7 +10401,7 @@ private struct ProjectMainViewContent: View {
                 preferredUnit: snapshot.workspaceState.displayUnit
             ).text
         case .angle:
-            return WorkspaceInspectorNumberText.string(from: degrees(fromRadians: value))
+            return WorkspaceInspectorNumberText.string(from: WorkspaceInspectorNumberText.degrees(fromRadians: value))
         }
     }
 
@@ -10437,14 +10432,6 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    private func formattedDegrees(_ degrees: Double) -> String {
-        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
-    }
-
-    private func degrees(fromRadians radians: Double) -> Double {
-        radians * 180.0 / Double.pi
-    }
-
     private func arcSpanDegrees(
         startAngle: Double,
         endAngle: Double
@@ -10457,7 +10444,7 @@ private struct ProjectMainViewContent: View {
         while span > fullCircle {
             span -= fullCircle
         }
-        return degrees(fromRadians: span)
+        return WorkspaceInspectorNumberText.degrees(fromRadians: span)
     }
 
 }

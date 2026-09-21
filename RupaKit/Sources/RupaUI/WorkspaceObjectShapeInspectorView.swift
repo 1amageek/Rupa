@@ -337,7 +337,7 @@ struct WorkspaceObjectShapeInspectorView: View {
         case .text(let text):
             return text
         case .material(let materialID):
-            return materialID.map { shortID($0) } ?? "None"
+            return materialID.map { WorkspaceInspectorNumberText.shortID($0) } ?? "None"
         }
     }
 
@@ -363,7 +363,4 @@ struct WorkspaceObjectShapeInspectorView: View {
         return visibleValues
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

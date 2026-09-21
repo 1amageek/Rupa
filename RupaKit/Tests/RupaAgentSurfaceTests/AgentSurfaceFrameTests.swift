@@ -5,7 +5,7 @@ import RupaAgentIntegrationTestFixtures
 import RupaCore
 import RupaAgentTestFixtures
 import SwiftCAD
-@testable import RupaAgent
+@testable import RupaAgentRuntime
 
 @MainActor
 @Test func agentTogglesSurfaceFrameDisplayThroughSurfaceSourceReference() async throws {

@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
-import RupaAgent
+import RupaAgentProtocol
 import RupaAgentTransport
 
 public func agentPoint(

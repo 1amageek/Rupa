@@ -5,7 +5,8 @@ import RupaAgentIntegrationTestFixtures
 import RupaAutomation
 import RupaCore
 import RupaDomainFoundation
-@testable import RupaAgent
+import RupaAgentProtocol
+@testable import RupaAgentRuntime
 
 @Test(.timeLimit(.minutes(1)))
 func agentCapabilitiesExposeOnlyTypedAgentRequests() throws {

@@ -26,7 +26,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     WorkspaceInspectorTextRow(title: "Object", value: objectTitle(for: node)),
                     WorkspaceInspectorTextRow(title: "Target", value: selectedTargetSummary),
                     WorkspaceInspectorTextRow(title: "Geometry", value: geometryTitle(for: node)),
-                    WorkspaceInspectorTextRow(title: "Scene Node ID", value: shortID(node.id)),
+                    WorkspaceInspectorTextRow(title: "Scene Node ID", value: WorkspaceInspectorNumberText.shortID(node.id)),
                     WorkspaceInspectorTextRow(title: "Primary", value: "Yes"),
                 ]
             )
@@ -122,7 +122,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         switch reference.kind {
         case .feature, .body, .sketch:
             if let featureID = reference.featureID {
-                rows.append(WorkspaceInspectorTextRow(title: "Feature ID", value: shortID(featureID)))
+                rows.append(WorkspaceInspectorTextRow(title: "Feature ID", value: WorkspaceInspectorNumberText.shortID(featureID)))
                 if let feature = document.cadDocument.designGraph.nodes[featureID] {
                     rows += featureRows(for: feature)
                 } else {
@@ -131,7 +131,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             }
         case .componentInstance:
             if let componentInstanceID = reference.componentInstanceID {
-                rows.append(WorkspaceInspectorTextRow(title: "Instance ID", value: shortID(componentInstanceID)))
+                rows.append(WorkspaceInspectorTextRow(title: "Instance ID", value: WorkspaceInspectorNumberText.shortID(componentInstanceID)))
                 if let instance = document.productMetadata.componentInstances[componentInstanceID] {
                     rows.append(WorkspaceInspectorTextRow(title: "Instance", value: instance.name))
                     rows.append(
@@ -203,7 +203,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Extrude"),
                 WorkspaceInspectorTextRow(
                     title: "Profile Source",
-                    value: shortID(extrude.profile.featureID)
+                    value: WorkspaceInspectorNumberText.shortID(extrude.profile.featureID)
                 ),
             ]
         case .revolve(let revolve):
@@ -211,7 +211,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Revolve"),
                 WorkspaceInspectorTextRow(
                     title: "Profile Source",
-                    value: shortID(revolve.profile.featureID)
+                    value: WorkspaceInspectorNumberText.shortID(revolve.profile.featureID)
                 ),
                 WorkspaceInspectorTextRow(title: "Axis Origin", value: pointSummary(revolve.axis.origin)),
                 WorkspaceInspectorTextRow(title: "Axis Direction", value: vectorSummary(revolve.axis.direction)),
@@ -223,13 +223,13 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     title: "Sections",
                     value: valueSummary(sweep.sections.map(sweepSectionSummary))
                 ),
-                WorkspaceInspectorTextRow(title: "Path Source", value: shortID(sweep.path.featureID)),
+                WorkspaceInspectorTextRow(title: "Path Source", value: WorkspaceInspectorNumberText.shortID(sweep.path.featureID)),
             ]
             if sweep.guides.isEmpty == false {
                 rows.append(
                     WorkspaceInspectorTextRow(
                         title: "Guides",
-                        value: valueSummary(sweep.guides.map { shortID($0.featureID) })
+                        value: valueSummary(sweep.guides.map { WorkspaceInspectorNumberText.shortID($0.featureID) })
                     )
                 )
             }
@@ -243,7 +243,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 ),
                 WorkspaceInspectorTextRow(
                     title: "Guides",
-                    value: valueSummary(loft.guides.map { shortID($0.featureID) })
+                    value: valueSummary(loft.guides.map { WorkspaceInspectorNumberText.shortID($0.featureID) })
                 ),
                 WorkspaceInspectorTextRow(
                     title: "Result",
@@ -263,9 +263,9 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Boolean"),
                 WorkspaceInspectorTextRow(
                     title: "Targets",
-                    value: valueSummary(boolean.targets.map { shortID($0.featureID) })
+                    value: valueSummary(boolean.targets.map { WorkspaceInspectorNumberText.shortID($0.featureID) })
                 ),
-                WorkspaceInspectorTextRow(title: "Tool", value: shortID(boolean.tool.featureID)),
+                WorkspaceInspectorTextRow(title: "Tool", value: WorkspaceInspectorNumberText.shortID(boolean.tool.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Boolean Operation",
                     value: boolean.operation.rawValue.capitalized
@@ -316,7 +316,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .faceLoopOffset(let faceLoopOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Face Loop"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceLoopOffset.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceLoopOffset.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Face",
                     value: faceLoopOffset.face.subshapeID.role
@@ -325,7 +325,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .edgeOffset(let edgeOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Edge"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(edgeOffset.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(edgeOffset.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Support Face",
                     value: edgeOffset.supportFace.subshapeID.role
@@ -334,13 +334,13 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .faceKnife(let faceKnife):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Face Knife"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceKnife.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceKnife.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Loop Points", value: "\(faceKnife.loop.count)"),
             ]
         case .faceDelete(let faceDelete):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Delete Face"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceDelete.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceDelete.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Faces",
                     value: "\(faceDelete.faces.count)"
@@ -349,7 +349,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .faceDraft(let faceDraft):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Draft Face"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceDraft.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceDraft.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Faces",
                     value: "\(faceDraft.faces.count)"
@@ -375,21 +375,21 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .curveEdit(let curveEdit):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Edit"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(curveEdit.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(curveEdit.source.featureID)),
                 WorkspaceInspectorTextRow(title: "Curve Index", value: "\(curveEdit.source.curveIndex)"),
                 WorkspaceInspectorTextRow(title: "Edits", value: "\(curveEdit.edits.count)"),
             ]
         case .curveOffset(let curveOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Offset"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(curveOffset.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(curveOffset.source.featureID)),
                 WorkspaceInspectorTextRow(title: "Curve Index", value: "\(curveOffset.source.curveIndex)"),
                 WorkspaceInspectorTextRow(title: "Side", value: curveOffset.side.rawValue.capitalized),
             ]
         case .curveTrim(let curveTrim):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Trim"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(curveTrim.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(curveTrim.source.featureID)),
                 WorkspaceInspectorTextRow(title: "Curve Index", value: "\(curveTrim.source.curveIndex)"),
             ]
         case .primitive(let primitive):
@@ -405,43 +405,43 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .faceOffset(let faceOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Face"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceOffset.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceOffset.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Face", value: faceOffset.face.subshapeID.role),
             ]
         case .faceMove(let faceMove):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Move Face"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceMove.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceMove.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Face", value: faceMove.face.subshapeID.role),
             ]
         case .edgeMove(let edgeMove):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Move Edge"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(edgeMove.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(edgeMove.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Edge", value: edgeMove.edge.subshapeID.role),
             ]
         case .vertexMove(let vertexMove):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Move Vertex"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(vertexMove.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(vertexMove.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Vertex", value: vertexMove.vertex.subshapeID.role),
             ]
         case .linearPattern(let pattern):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Linear Pattern"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(pattern.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(pattern.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Count", value: "\(pattern.count)"),
             ]
         case .radialPattern(let pattern):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Radial Pattern"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(pattern.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(pattern.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Count", value: "\(pattern.count)"),
             ]
         case .gridPattern(let pattern):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Grid Pattern"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(pattern.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(pattern.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Count",
                     value: "\(pattern.firstCount) x \(pattern.secondCount)"
@@ -450,37 +450,37 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .curveDrivenPattern(let pattern):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Pattern"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(pattern.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(pattern.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Count", value: "\(pattern.count)"),
             ]
         case .chamfer(let chamfer):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Chamfer"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(chamfer.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(chamfer.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Edges", value: "\(chamfer.edges.count)"),
             ]
         case .fillet(let fillet):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Fillet"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(fillet.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(fillet.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Edges", value: "\(fillet.edges.count)"),
             ]
         case .g2Blend(let blend):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "G2 Blend"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(blend.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(blend.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Edges", value: "\(blend.edges.count)"),
             ]
         case .setbackCorner(let corner):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Setback Corner"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(corner.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(corner.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Vertex", value: corner.vertex.subshapeID.role),
             ]
         case .shell(let shell):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Shell"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(shell.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(shell.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Removed Faces",
                     value: "\(shell.removedFaces.count)"
@@ -489,7 +489,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .thicken(let thicken):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Thicken"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(thicken.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(thicken.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Side",
                     value: String(describing: thicken.side).capitalized
@@ -500,7 +500,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .curveExtend(let curveExtend):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Extend"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(curveExtend.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(curveExtend.source.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "End",
                     value: String(describing: curveExtend.end).capitalized
@@ -509,8 +509,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .curveMatch(let curveMatch):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Match"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(curveMatch.source.featureID)),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(curveMatch.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(curveMatch.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(curveMatch.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Continuity",
                     value: String(describing: curveMatch.continuity).capitalized
@@ -521,7 +521,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Surface Offset"),
                 WorkspaceInspectorTextRow(
                     title: "Target",
-                    value: shortID(surfaceOffset.target.featureID)
+                    value: WorkspaceInspectorNumberText.shortID(surfaceOffset.target.featureID)
                 ),
             ]
         case .surfaceTrim(let surfaceTrim):
@@ -529,7 +529,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Surface Trim"),
                 WorkspaceInspectorTextRow(
                     title: "Target",
-                    value: shortID(surfaceTrim.target.featureID)
+                    value: WorkspaceInspectorNumberText.shortID(surfaceTrim.target.featureID)
                 ),
                 WorkspaceInspectorTextRow(title: "Loops", value: "\(surfaceTrim.loops.count)"),
             ]
@@ -538,14 +538,14 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Surface Extend"),
                 WorkspaceInspectorTextRow(
                     title: "Target",
-                    value: shortID(surfaceExtend.target.featureID)
+                    value: WorkspaceInspectorNumberText.shortID(surfaceExtend.target.featureID)
                 ),
             ]
         case .surfaceMatch(let surfaceMatch):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Surface Match"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(surfaceMatch.source.featureID)),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(surfaceMatch.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(surfaceMatch.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(surfaceMatch.target.featureID)),
                 WorkspaceInspectorTextRow(
                     title: "Continuity",
                     value: String(describing: surfaceMatch.continuity).capitalized
@@ -554,25 +554,25 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .mirror(let mirror):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Mirror"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(mirror.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(mirror.target.featureID)),
             ]
         case .joinBodies(let join):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Join Bodies"),
                 WorkspaceInspectorTextRow(
                     title: "Targets",
-                    value: join.targets.map { shortID($0.featureID) }.joined(separator: ", ")
+                    value: join.targets.map { WorkspaceInspectorNumberText.shortID($0.featureID) }.joined(separator: ", ")
                 ),
             ]
         case .unjoinBody(let unjoin):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Unjoin Body"),
-                WorkspaceInspectorTextRow(title: "Target", value: shortID(unjoin.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(unjoin.target.featureID)),
             ]
         case .projectCurve(let projectCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Project Curve"),
-                WorkspaceInspectorTextRow(title: "Source", value: shortID(projectCurve.source.featureID)),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(projectCurve.source.featureID)),
             ]
         }
     }
@@ -598,7 +598,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             rows.append(WorkspaceInspectorTextRow(title: "Properties", value: "\(object.properties.values.count)"))
         }
         if let sourceFeatureID = object.sourceFeatureID {
-            rows.append(WorkspaceInspectorTextRow(title: "Source Feature", value: shortID(sourceFeatureID)))
+            rows.append(WorkspaceInspectorTextRow(title: "Source Feature", value: WorkspaceInspectorNumberText.shortID(sourceFeatureID)))
         }
         if let sourceSection = object.sourceSection {
             rows.append(
@@ -609,7 +609,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             )
         }
         if let componentInstanceID = object.componentInstanceID {
-            rows.append(WorkspaceInspectorTextRow(title: "Component Instance", value: shortID(componentInstanceID)))
+            rows.append(WorkspaceInspectorTextRow(title: "Component Instance", value: WorkspaceInspectorNumberText.shortID(componentInstanceID)))
         }
         return rows
     }
@@ -706,9 +706,9 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     private func sweepSectionSummary(_ section: SweepSectionReference) -> String {
         switch section {
         case .profile(let profile):
-            return "Profile \(shortID(profile.featureID))"
+            return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"
         case .curve(let curve):
-            return "Curve \(shortID(curve.featureID))"
+            return "Curve \(WorkspaceInspectorNumberText.shortID(curve.featureID))"
         }
     }
 
@@ -724,17 +724,17 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             details.append("tangent \(section.smoothTangentMode.rawValue)")
         }
         guard details.isEmpty == false else {
-            return "Profile \(shortID(section.featureID))"
+            return "Profile \(WorkspaceInspectorNumberText.shortID(section.featureID))"
         }
-        return "Profile \(shortID(section.featureID)) \(details.joined(separator: ", "))"
+        return "Profile \(WorkspaceInspectorNumberText.shortID(section.featureID)) \(details.joined(separator: ", "))"
     }
 
     private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {
         switch section {
         case .profile(let profile):
-            return "Profile \(shortID(profile.featureID))"
+            return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"
         case .curve(let featureID):
-            return "Curve \(shortID(featureID))"
+            return "Curve \(WorkspaceInspectorNumberText.shortID(featureID))"
         }
     }
 
@@ -778,7 +778,4 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         return visibleValues
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

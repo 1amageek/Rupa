@@ -19,9 +19,9 @@ struct PatternArrayInspectorView: View {
         inspectorSection("Pattern Array") {
             inspectorRow("Name", state.name)
             inspectorRow("Role", state.selectionRoleTitle)
-            inspectorRow("Source ID", shortID(state.sourceID))
-            inspectorRow("Definition", state.definitionName ?? shortID(state.definitionID))
-            inspectorRow("Root", state.rootSceneNodeName ?? shortID(state.rootSceneNodeID))
+            inspectorRow("Source ID", WorkspaceInspectorNumberText.shortID(state.sourceID))
+            inspectorRow("Definition", state.definitionName ?? WorkspaceInspectorNumberText.shortID(state.definitionID))
+            inspectorRow("Root", state.rootSceneNodeName ?? WorkspaceInspectorNumberText.shortID(state.rootSceneNodeID))
             inspectorRow("Distribution", state.distributionTitle)
             outputModePicker
             inspectorRow("Outputs", "\(state.outputCount)")
@@ -206,7 +206,7 @@ struct PatternArrayInspectorView: View {
         if let angleRadians = angularAxis.angleRadians {
             numericControl(
                 angularAxis.angleModeTitle,
-                values: [degrees(fromRadians: angleRadians)],
+                values: [WorkspaceInspectorNumberText.degrees(fromRadians: angleRadians)],
                 sliderRange: -360.0 ... 360.0
             ) { degrees in
                 setRadialAngle(degrees: degrees)
@@ -253,7 +253,7 @@ struct PatternArrayInspectorView: View {
         if let twistRadians = curve.twistRadians {
             numericControl(
                 "Twist",
-                values: [degrees(fromRadians: twistRadians)],
+                values: [WorkspaceInspectorNumberText.degrees(fromRadians: twistRadians)],
                 sliderRange: -360.0 ... 360.0
             ) { degrees in
                 setCurveTwist(degrees: degrees)
@@ -686,16 +686,8 @@ struct PatternArrayInspectorView: View {
         "(\(shortNumber(vector.x)), \(shortNumber(vector.y)), \(shortNumber(vector.z)))"
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
-
     private func shortNumber(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...3)))
-    }
-
-    private func degrees(fromRadians radians: Double) -> Double {
-        radians * 180.0 / Double.pi
     }
 
     private var inspectorLabelWidth: CGFloat { 124 }

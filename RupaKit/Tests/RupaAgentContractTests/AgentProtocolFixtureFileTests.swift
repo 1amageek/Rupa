@@ -4,7 +4,7 @@ import RupaCore
 import RupaCoreTypes
 import RupaDomainFoundation
 import Testing
-@testable import RupaAgent
+@testable import RupaAgentRuntime
 
 @Suite("Semantic Agent protocol fixtures")
 struct AgentProtocolFixtureFileTests {

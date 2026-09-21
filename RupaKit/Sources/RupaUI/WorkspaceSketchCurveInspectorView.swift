@@ -35,14 +35,14 @@ struct WorkspaceSketchCurveInspectorView: View {
         inspectorSection("Curve Selection") {
             workspaceInspectorValueRow("Kind", sketchEntityKindTitle(entity.entityKind))
             workspaceInspectorValueRow("Target", targetSummary)
-            workspaceInspectorValueRow("Source", entity.sourceFeatureName ?? shortID(entity.sourceFeatureID))
-            workspaceInspectorValueRow("Source ID", shortID(entity.sourceFeatureID))
-            workspaceInspectorValueRow("Entity ID", shortID(entity.entityID))
+            workspaceInspectorValueRow("Source", entity.sourceFeatureName ?? WorkspaceInspectorNumberText.shortID(entity.sourceFeatureID))
+            workspaceInspectorValueRow("Source ID", WorkspaceInspectorNumberText.shortID(entity.sourceFeatureID))
+            workspaceInspectorValueRow("Entity ID", WorkspaceInspectorNumberText.shortID(entity.entityID))
             if let joinedCurveSourceID = entity.joinedCurveSourceID {
-                workspaceInspectorValueRow("Join Source", shortID(joinedCurveSourceID))
+                workspaceInspectorValueRow("Join Source", WorkspaceInspectorNumberText.shortID(joinedCurveSourceID))
             }
             if let joinedCurveGroupSourceID = entity.joinedCurveGroupSourceID {
-                workspaceInspectorValueRow("Join Group", shortID(joinedCurveGroupSourceID))
+                workspaceInspectorValueRow("Join Group", WorkspaceInspectorNumberText.shortID(joinedCurveGroupSourceID))
             }
             if let continuity = entity.joinedCurveGroupContinuity {
                 workspaceInspectorValueRow("Join Continuity", sketchCurveJoinContinuityTitle(continuity))
@@ -122,7 +122,7 @@ struct WorkspaceSketchCurveInspectorView: View {
                     workspaceInspectorValueRow("Join", curveContinuityJoinSummary(join))
                     workspaceInspectorValueRow("Gap", formatted(join.positionGap))
                     if let tangentAngle = join.tangentAngle {
-                        workspaceInspectorValueRow("Tangent", formattedDegrees(degrees(fromRadians: tangentAngle)))
+                        workspaceInspectorValueRow("Tangent", WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: tangentAngle)))
                     }
                     if let curvatureGap = join.curvatureGap {
                         workspaceInspectorValueRow("Curvature", formattedCurvature(curvatureGap))
@@ -237,15 +237,4 @@ struct WorkspaceSketchCurveInspectorView: View {
         "\(value.formatted(.number.precision(.fractionLength(0...4)))) 1/m"
     }
 
-    private func formattedDegrees(_ degrees: Double) -> String {
-        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
-    }
-
-    private func degrees(fromRadians radians: Double) -> Double {
-        radians * 180.0 / Double.pi
-    }
-
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

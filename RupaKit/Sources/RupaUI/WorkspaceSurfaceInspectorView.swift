@@ -242,7 +242,7 @@ struct WorkspaceSurfaceInspectorView: View {
         )
         workspaceInspectorValueRow(
             "Max Normal Angle",
-            formattedDegrees(degrees(fromRadians: face.maxNormalAngle))
+            WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: face.maxNormalAngle))
         )
     }
 
@@ -474,7 +474,7 @@ struct WorkspaceSurfaceInspectorView: View {
         if let normalAngle = adjacency.normalAngle {
             workspaceInspectorValueRow(
                 "Normal Angle",
-                formattedDegrees(degrees(fromRadians: normalAngle))
+                WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: normalAngle))
             )
         }
         workspaceInspectorValueRow("Position Gap", formatted(adjacency.positionGap))
@@ -504,7 +504,7 @@ struct WorkspaceSurfaceInspectorView: View {
 
     private func surfaceAdjacencyEdgeSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
         let names = adjacency.edgePersistentNames.map(surfaceSubshapeIDTail)
-        return valueSummary(names.isEmpty ? [shortID(adjacency.id)] : names)
+        return valueSummary(names.isEmpty ? [WorkspaceInspectorNumberText.shortID(adjacency.id)] : names)
     }
 
     private func surfaceAdjacencyFaceSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
@@ -524,7 +524,7 @@ struct WorkspaceSurfaceInspectorView: View {
 
     private func surfaceAnalysisFaceSummary(_ face: InspectorSurfaceFaceAnalysis) -> String {
         let names = face.faceSubshapeIDs.map(surfaceSubshapeIDTail)
-        return valueSummary(names.isEmpty ? [shortID(face.id)] : names)
+        return valueSummary(names.isEmpty ? [WorkspaceInspectorNumberText.shortID(face.id)] : names)
     }
 
     private func surfaceContinuityTitle(
@@ -628,10 +628,6 @@ struct WorkspaceSurfaceInspectorView: View {
         return "x \(x), y \(y), z \(z)"
     }
 
-    private func formattedDegrees(_ degrees: Double) -> String {
-        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
-    }
-
     private func shortNumber(_ value: Double) -> String {
         value.formatted(.number.precision(.fractionLength(0...6)))
     }
@@ -689,15 +685,8 @@ struct WorkspaceSurfaceInspectorView: View {
         return (uLowerBound, uUpperBound, vLowerBound, vUpperBound)
     }
 
-    private func degrees(fromRadians radians: Double) -> Double {
-        radians * 180.0 / .pi
-    }
-
     private func valueSummary(_ values: [String]) -> String {
         values.isEmpty ? "None" : values.joined(separator: ", ")
     }
 
-    private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
-        String(id.description.prefix(8))
-    }
 }

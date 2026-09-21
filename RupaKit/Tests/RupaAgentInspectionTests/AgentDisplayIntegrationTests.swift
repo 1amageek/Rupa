@@ -3,7 +3,7 @@ import RupaAgentIntegrationTestFixtures
 import RupaAgentProtocol
 import RupaCore
 import Testing
-@testable import RupaAgent
+@testable import RupaAgentRuntime
 
 @Test func agentReturnsCADInteractionQualityAssessmentWithoutSession() async throws {
     let response = AgentCommandController().handle(.cadInteractionQualityAssessment)

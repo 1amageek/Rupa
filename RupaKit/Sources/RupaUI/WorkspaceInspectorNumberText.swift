@@ -2,6 +2,18 @@ import Foundation
 import RupaCore
 
 enum WorkspaceInspectorNumberText {
+    static func shortID<T: CustomStringConvertible>(_ id: T) -> String {
+        String(id.description.prefix(8))
+    }
+
+    static func degrees(fromRadians radians: Double) -> Double {
+        radians * 180.0 / Double.pi
+    }
+
+    static func formattedDegrees(_ degrees: Double) -> String {
+        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
+    }
+
     static func compact(_ value: Double) -> String {
         if value != 0, abs(value) < 0.005 {
             return String(format: "%.2g", locale: Locale(identifier: "en_US_POSIX"), value)
