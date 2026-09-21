@@ -1029,7 +1029,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 CADInteractionQualityEvidence(
                     label: "Structured capability descriptors and non-mutating summaries",
                     sourceFiles: [
-                        "RupaKit/Sources/RupaAgent/AgentCapabilityDescriptor.swift",
+                        "RupaKit/Sources/RupaAgentProtocol/AgentCapabilityDescriptor.swift",
                         "RupaKit/Sources/RupaAgentProtocol/AgentMessage.swift",
                         "RupaKit/Sources/RupaAgentRuntime/ProjectAgentCommandController.swift",
                         "RupaKit/Sources/RupaCore/DesignDisplaySnapshotResult.swift",

@@ -62,7 +62,6 @@ flowchart TD
     AgentUI --> Kit["RupaKit"]
     UI --> Kit
     UI --> Rendering["RupaRendering"]
-    UI --> Preview["RupaPreview"]
     CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
     CLIComposition --> CLIKit["RupaCLIKit"]
     CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
@@ -81,10 +80,10 @@ flowchart TD
     Core --> SwiftCAD["Swift-CAD"]
 ```
 
-`RupaAgent` is an umbrella that re-exports the split `RupaAgentProtocol`,
-`RupaAgentRuntime`, and `RupaAgentTransport` targets. The app host composes RupaUI
-and `RupaAgentUI.AgentHost` beside each other; AgentHost owns listener and
-workspace-registration lifecycle without depending on RupaUI.
+The app host composes RupaUI and `RupaAgentUI.AgentHost` beside each other;
+AgentHost owns listener and workspace-registration lifecycle without depending
+on RupaUI. AgentProtocol, AgentRuntime, and AgentTransport are separate module
+boundaries with no umbrella facade.
 
 The supported implementation has one editing pipeline:
 
@@ -92,7 +91,7 @@ The supported implementation has one editing pipeline:
 |---|---|---|
 | GUI tool | `ProjectWorkspace` source or interaction plan through `ProjectController` | Undoable source mutation or source-independent workspace publication and UI update. |
 | CLI project command | RupaCore command on the App-owned document | In-memory publication; persistence requires explicit API save. |
-| CLI live mode | RupaAgent request into the registered app `ProjectWorkspace` | Project mutation, dirty state, diagnostics, structured CLI result. |
+| CLI live mode | `RupaAgentRuntime` request over `RupaAgentTransport` into the registered app `ProjectWorkspace` | Project mutation, dirty state, diagnostics, structured CLI result. |
 | Batch automation | Ordered `AutomationCommand` execution inside a `ProjectWorkspace` source or interaction transaction | Ordered results with project coordinates and diagnostics; failed batches publish no partial source, selection, workspace, or history state. |
 
 The product pipeline is CAD-centered but does not require CAD. Product Objects
@@ -182,14 +181,12 @@ ApplicationProfile switching is deliberately excluded from the initial package g
       RupaAgentUI/
       RupaViewportScene/
       RupaRendering/
-      RupaPreview/
       RupaAutomation/
       RupaDomainFoundation/
       RupaManufacturing/
       RupaAgentProtocol/
       RupaAgentRuntime/
       RupaAgentTransport/
-      RupaAgent/
       RupaCLIKit/
       RupaCLIComposition/
     Tests/
@@ -236,10 +233,10 @@ The app host delegates editor behavior to RupaKit.
 | Command implementation | `RupaCore` |
 | Editor UI implementation | `RupaUI` |
 | Rendering implementation | `RupaRendering` |
-| Import and export workflows | `RupaCore` and `RupaPreview` as appropriate |
+| Import and export workflows | `RupaCore` and `RupaUI` as appropriate |
 | CLI implementation | `RupaCLIKit` |
 | Automation schema | `RupaAutomation` |
-| Live app coordination | `RupaAgent` |
+| Live app coordination | `RupaAgentUI`, `RupaAgentRuntime`, and `RupaAgentTransport` |
 
 `ApplicationRoot` composes exactly one `ProjectController`, one MainActor
 `ProjectWorkspace`, one `ProjectWorkspaceOperationSequencer`, one domain registry,
@@ -278,7 +275,6 @@ flowchart TD
 | `RupaAgentUI` | Library | `RupaAgentUI` |
 | `RupaViewportScene` | Library | `RupaViewportScene` |
 | `RupaRendering` | Library | `RupaRendering` |
-| `RupaPreview` | Library | `RupaPreview` |
 | `RupaAutomation` | Library | `RupaAutomation` |
 | `RupaDomainFoundation` | Library | `RupaDomainFoundation` |
 | `RupaManufacturing` | Library | `RupaManufacturing` |
@@ -286,7 +282,6 @@ flowchart TD
 | `RupaAgentRuntime` | Library | `RupaAgentRuntime` |
 | `RupaAgentTransport` | Library | `RupaAgentTransport` |
 | `RupaProjectAccess` | Library | `RupaProjectAccess` |
-| `RupaAgent` | Library | `RupaAgent` |
 | `RupaCLIKit` | Library | `RupaCLIKit` |
 | `RupaCLIComposition` | Library | `RupaCLIComposition` |
 
@@ -811,7 +806,7 @@ flowchart LR
     Snapshot --> Status["EvaluationStatus"]
     Snapshot --> Diagnostics["EditorDiagnostic"]
     Snapshot --> Invalidation["RenderInvalidation"]
-    Invalidation --> Viewport["RupaRendering / RupaPreview"]
+    Invalidation --> Viewport["RupaRendering / RupaUI"]
 ```
 
 | Case | Required result |
@@ -1008,18 +1003,6 @@ Mesh-only and external-provider presentation stay fully renderable and pickable.
 
 RupaViewportScene owns no SwiftUI, AppKit, or Metal view code; it exposes value types and services that `RupaRendering` draws and hit-tests.
 
-### RupaPreview
-
-RupaPreview owns non-editor preview surfaces.
-
-| File | Responsibility |
-|---|---|
-| `RealityKitPreview.swift` | RealityKit-based preview surface. |
-| `QuickLookPreview.swift` | Quick Look integration. |
-| `USDZPreviewService.swift` | USDZ preview generation and handoff. |
-
-RupaPreview is for preview and AR workflows, not primary document mutation.
-
 ### RupaAutomation
 
 RupaAutomation defines the stable machine-facing command contract.
@@ -1036,13 +1019,13 @@ RupaAutomation defines the stable machine-facing command contract.
 
 Automation command execution always routes into RupaCore. Initial automation coverage includes document description, display unit changes, rename, parameter upsert, parameter deletion, feature suppression toggles, component definition creation, component instance creation, scene/component visibility, lock, and local transform state changes, validation, line sketch creation, circle sketch creation, arc sketch creation, spline sketch creation, rectangle sketch creation, selected source-line, connected open source line-chain, open source arc, connected open line/arc chain, and sampled open spline Slot profile creation, source line/arc sketch vertex offset through `offsetSketchVertex` and through `offsetCurve` payloads that include a source line or arc endpoint `vertexHandle`, generated body vertex Offset Vertex dispatch through `offsetCurve` for normal extrudes that resolve to connected source line/arc endpoints, profile extrude including closed spline and Slot profiles, extruded rectangle creation, extruded circle creation, saved construction-plane description, saved construction-plane creation, saved construction-plane rename, saved construction-plane source editing through `setConstructionPlane`, view-aligned construction-plane creation from explicit origin and view normal, active construction-plane switching, construction-plane creation from generated Face, source Region, generated Face+Edge perpendicular, parallel normal-separated Face/Region midplane, generated vertex, and source point sketch-entity targets, editable rectangle-extrude face offset, editable cylinder side/depth face offset, vertical-edge fillet/chamfer, generated-edge re-chamfer on closed line-loop and supported line+arc profile corners with endpoint-direction-preserving arc traversal, generated-edge re-fillet on closed line-loop profiles and supported line-line, line-arc, arc-line, and arc-arc corners in line+arc profiles, rectangle profile corner vertex move, source sketch entity point/radius/angle edits with fixed-aware point-reference propagation, spline control-point edits, smooth internal spline-knot constraint solving, spline endpoint-to-line tangent solving, tangent spline endpoint solving, ordered same-sketch `alignSketchVertex` G0/G1/G2 endpoint alignment for supported point-backed source targets, initial affected-line angle propagation, equal-length line propagation, initial line-to-circle/arc tangent propagation, circular concentric center propagation, and equal-radius circular propagation for supported constraints, source sketch entity dimension edits including fixed-aware constrained rectangle side propagation and arc-span angle dimensions, persistent selection dimension creation, target update, source line length target application, fixed-aware source same-plane point-to-point distance target application including standalone sketch point entities, fixed-first fallback to a second movable point, source same-plane point-to-whole-source-line closest finite-segment distance target application for non-arc source points or fixed-point/movable-line pairs, valid arc endpoint distance solutions, and spline control-point distance solutions, source circle/arc radius target application, source line relative angle target application, source arc span angle target application, supported generated opposing editable body face-pair distance target application through `setObjectDimension`, and removal between measurable topology or sketch targets, and source line-to-arc conversion.
 
-Drawing projection generation is a read-only Automation command. `generateDrawingProjection` consumes a `SavedViewID`, validates that the saved view is orthographic, evaluates or reuses current model geometry, extracts boundary and crease stroke candidates from mesh topology while removing coplanar face diagonals, and returns `DrawingProjectionResult` with saved-view metadata, projection frame, 2D stroke coordinates, depth ranges, truncation diagnostics, stroke-level hidden-line visibility summaries (`visible`, `hidden`, `partiallyHidden`, `unclassified`), and projected-triangle visibility segments with visible/hidden counts. When the saved view references section scene nodes, the same command runs non-mutating section analysis, stores closed section contours, and derives typed linear or radial hatch segments with section source, body, projected 2D, hatch pattern, spacing, angle, length, and truncation metadata. The same result now carries drawing annotations resolved from `ProductMetadata.measurements`; measurement anchors are re-resolved from world, source sketch, source curve parameter, generated topology, or generated edge parameter references, projected into drawing space, and exported separately from model-driving dimensions. Annotation labels are passed through a deterministic drawing layout service before export: explicit measurement label positions are preserved as manual placements, automatic placements search nearby label candidates, label bounds are included in projection bounds, and leader segments are emitted when the label is separated from its anchor cluster. This is drawing analysis output, not a viewport screenshot. `DrawingProjectionSVGExporter` and `DrawingProjectionPDFExporter` consume the structured result without re-evaluating the model and emit deterministic vector layers for visible, hidden, partially hidden, unclassified, section hatch, section contour, drawing annotation, and annotation leader output. Both exporters use shared `DrawingProjectionPagePreset` and `DrawingProjectionStylePreset` contracts so Letter/A4 page size and technical/presentation line styles are selected once and applied consistently across SVG and PDF. CLI `rupa view projection` can write SVG through `--svg-output` and PDF through `--pdf-output`, select export page and style through `--drawing-page` and `--drawing-style`, and still return the structured projection JSON. B-rep-accurate hidden-line output for curved analytic topology consumes the same structured result in later stages.
+Drawing projection generation is a read-only Automation command. `generateDrawingProjection` consumes a `SavedViewID`, validates that the saved view is orthographic, evaluates or reuses current model geometry, extracts structured boundary/crease strokes and section analysis, resolves measurement annotations, and returns `DrawingProjectionResult`. This is drawing analysis output, not a viewport screenshot; dedicated file exporters are not part of the current package boundary.
 
 Surface automation coverage also includes direct B-spline surface source creation, Surface CV moves and slides, CV weight edits, knot value edits, shape-preserving knot insertion, fraction-based `splitSurfaceSpan`, explicit knot multiplicity edits, compatible G0/G1/G2 boundary matching, surface-frame display, and surface-control-point display through the same RupaCore command path.
 
-### RupaAgent
+### Agent modules
 
-RupaAgent coordinates the running app and command-line clients. The target is an umbrella that re-exports three split targets:
+The Agent modules coordinate the running app and command-line clients without an umbrella facade:
 
 | Split target | Owns |
 |---|---|
@@ -1050,7 +1033,7 @@ RupaAgent coordinates the running app and command-line clients. The target is an
 | `RupaAgentRuntime` | `ProjectAgentCommandController`, `ProjectWorkspaceRegistry`, capability/domain dispatch, and project-coordinate validation. |
 | `RupaAgentTransport` | Authenticated loopback HTTP client/listener, bounded HTTP framing, and response-loss classification. |
 
-App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following types are the combined responsibility surface of the umbrella:
+App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following types keep their ownership in the modules above:
 
 | Type | Responsibility |
 |---|---|
@@ -1064,7 +1047,7 @@ App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following 
 | `AgentHTTPFraming` | Provides bounded request/response header and body parsing. |
 | `ProjectWorkspaceRegistry` | Registers, reconciles, leases, and resolves application-owned workspaces by runtime session ID and file path. |
 
-RupaAgent transports automation requests. It does not implement CAD commands.
+Agent transport carries automation requests. It does not implement CAD commands.
 
 The registry rejects duplicate current project identities, validates exact project
 coordinates, and lets unregister wait for accepted operation leases before
@@ -1598,9 +1581,8 @@ CLI exit codes map from these typed errors through `CLIExitCode`.
 | `RupaCore` | Kept UI-free so it can be expanded beyond macOS later without changing document semantics. |
 | `RupaUI` | Depends on SwiftUI and platform UI availability. |
 | `RupaRendering` | Depends on Metal and platform view bridges. |
-| `RupaPreview` | Depends on RealityKit, Quick Look, and USD tooling availability. |
-| `RupaAgent` | Loopback HTTP host and client are macOS first through the App composition. |
-| `RupaCLIKit` | Testable CLI implementation. Commands that touch live sessions are macOS first through RupaAgent. |
+| `RupaAgentUI` / `RupaAgentTransport` | Loopback HTTP host and client are macOS first through the App composition. |
+| `RupaCLIKit` | Testable CLI implementation. Commands that touch live sessions use the Agent runtime/transport boundary. |
 | Xcode `RupaCLIProduct` | Signed macOS application wrapper that distributes the `rupa` executable. |
 
 If package-wide iOS and visionOS platforms are declared, macOS-only targets and APIs must be guarded explicitly.

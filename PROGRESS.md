@@ -16,5 +16,5 @@
 - [x] S9 Remove facade/preview targets and consolidate UI display helpers. Commit 13b081fc. `depends:S8` `parallel:none`
 - [x] S10 Consolidate duplicated solid direct-edit processing and expression resolution. Commit pending. `depends:S9` `parallel:none`
 - [x] S11 Remove benchmark/responsiveness/performance-only targets from RupaKit. Commit d10c7605. `depends:S10` `parallel:none`
-- [x] S12 Update package design and architecture boundary tests for removed targets. Commit pending. `depends:S11` `parallel:none`
+- [x] S12 Update package design and architecture boundary tests for removed targets. Commits 69277aff and pending. `depends:S11` `parallel:none`
 - [ ] S13 Run focused and package integration verification `depends:S12` `parallel:none`

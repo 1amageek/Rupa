@@ -268,11 +268,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaProjectAccess",
             "RupaProjectAccessPlatform",
         ],
-        "RupaAgent": [
-            "RupaAgentProtocol",
-            "RupaAgentRuntime",
-            "RupaAgentTransport",
-        ],
         "RupaMCP": [
             "RupaAgentProtocol",
             "RupaCoreTypes",

@@ -67,7 +67,6 @@ flowchart LR
     UI[RupaUI] --> Core
     UI --> Kit
     UI --> Domain
-    UI --> Preview[RupaPreview]
     UI --> Rendering
     UI --> ViewportScene
     UI --> SwiftCAD
@@ -107,10 +106,6 @@ flowchart LR
     AgentUI --> Domain
     AgentUI --> AgentRuntime
     AgentUI --> AgentTransport
-    Agent[RupaAgent] --> AgentProtocol
-    Agent --> AgentRuntime
-    Agent --> AgentTransport
-    Preview --> Core
     Manufacturing[RupaManufacturing] --> Core
     Manufacturing --> Automation
     Manufacturing --> Domain
@@ -142,7 +137,6 @@ flowchart LR
 | `RupaAgentRuntime` | Main-actor registry of shared `ProjectWorkspace` instances, immutable project snapshot reads, capability/domain dispatch, and Agent request routing through the project-operation boundary | Independent editor sessions, package/source authority, HTTP IO, SwiftUI workspace layout |
 | `RupaAgentTransport` | Bounded loopback HTTP IO, same-connection challenge/RPC authentication, listener/client connection ownership, deadlines, and injected endpoint/key contracts | Product discovery placement, Agent command semantics, semantic endpoint status, or CAD mutation logic |
 | `RupaProjectAccess` | Transport-neutral live target, session, explicit-save, finish, monotonic-open, and typed access-failure contracts | Workspace/controller construction, package bytes, HTTP IO, App lifecycle, or CLI parsing |
-| `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
 | `RupaUI` | SwiftUI workspace state, command panels, inspectors, and project-view presentation | Agent registration, HTTP/runtime implementation, or Core CAD algorithms |

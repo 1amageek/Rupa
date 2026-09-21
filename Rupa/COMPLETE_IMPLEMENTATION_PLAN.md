@@ -100,7 +100,7 @@ flowchart LR
 | W3 Surface and curve foundation | Swift-CAD, RupaCore | W1, W2 | NURBS/B-spline curves and surfaces, UVN frames, trims, continuity, PolySpline reconstruction. |
 | W4 Selection and viewport interaction | RupaRendering, RupaUI, RupaCore | W1-W3 | Stable picking, handles, previews, hover, drag, subobject and semantic selection. |
 | W5 Drawings and inspection | RupaCore, RupaUI, export services | W1-W4 | Hidden-line, sections, dimensions, sheets, schedules, annotations, mass/area/volume. |
-| W6 Automation and Agent contract | RupaAutomation, RupaAgent, RupaCLIKit | W1-W5 | Capability discovery, command execution, batch transactions, dry run, typed diagnostics. |
+| W6 Automation and Agent contract | RupaAutomation, RupaAgentRuntime, RupaAgentTransport, RupaCLIKit | W1-W5 | Capability discovery, command execution, batch transactions, dry run, typed diagnostics. |
 | W7 Domain foundation | RupaCore, RupaDomainFoundation | W0-W6 baseline | Semantic storage, projection manifest, registry, validators, ownership resolver, capability registry. |
 | W8 Manufacturing | RupaManufacturing | W1-W7 | 3D print/CNC readiness, thickness, clearance, supportability, build volume, export validation. |
 | W9 Architecture | RupaArchitecture | W7, W5 | Site, level, room, wall, opening, roof, schedules, building drawings, IFC/DXF/PDF paths. |

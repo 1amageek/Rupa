@@ -97,14 +97,11 @@ flowchart TD
     Project --> Core
     UI["RupaUI"] --> Umbrella
     UI --> Rendering["RupaRendering"]
-    UI --> Preview["RupaPreview"]
     Automation["RupaAutomation"] --> Core
     AgentUI["RupaAgentUI"] --> Runtime["RupaAgentRuntime"]
     AgentUI --> Transport["RupaAgentTransport"]
     Runtime --> Umbrella
     Runtime --> Automation
-    Agent["RupaAgent"] --> Runtime
-    Agent --> Transport
     CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
     CLIComposition --> CLIKit["RupaCLIKit"]
     CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
@@ -117,9 +114,7 @@ flowchart TD
 | `RupaProject` / `RupaKit` | Project source/package/evaluation authority and the shared application workspace boundary. |
 | `RupaUI` | Complete SwiftUI editor surface. |
 | `RupaRendering` | Provider-neutral viewport presentation and interaction rendering, with Metal limited to the identity-buffer backend. |
-| `RupaPreview` | RealityKit, Quick Look, and USDZ preview surfaces. |
 | `RupaAutomation` | Stable command schema and batch execution contract. |
-| `RupaAgent` | Running-app coordination, IPC, workspace registry, locking. |
 | `RupaCLIKit` | Testable CLI command implementation, terminal UX, JSON output, exit codes. |
 | Xcode `RupaCLIProduct` | Sole signed product wrapper for the thin `rupa` executable. |
 
@@ -368,17 +363,13 @@ flowchart TD
     UI --> Core["RupaCore"]
     UI --> Kit["RupaKit"]
     UI --> Rendering["RupaRendering"]
-    UI --> Preview["RupaPreview"]
     AgentUI --> Runtime["RupaAgentRuntime"]
     AgentUI --> Transport["RupaAgentTransport"]
     AgentUI --> Kit
     Rendering --> Core
-    Preview --> Core
     Automation["RupaAutomation"] --> Core
     Runtime --> Automation
     Runtime --> Kit
-    Agent["RupaAgent"] --> Runtime
-    Agent --> Transport
     CLIProduct["Xcode RupaCLIProduct"] --> CLIComposition["RupaCLIComposition"]
     CLIComposition --> CLIKit["RupaCLIKit"]
     CLIComposition --> AccessComposition["RupaProjectAccessComposition"]
