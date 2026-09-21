@@ -7,7 +7,6 @@ import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
-import RupaResponsivenessBaseline
 import RupaViewportScene
 import SwiftCAD
 import Testing
@@ -817,10 +816,10 @@ func realityViewportPreparesMaximumAdmittedNativeLineUpload() async throws {
         #expect(overBudgetError?.code == .resourceExhausted)
     }
 
-    let baselineBytes = try ResponsivenessFootprintProbe.physicalFootprintBytes()
+    let baselineBytes = try MeshSourcePresentationFootprintProbe.physicalFootprintBytes()
     // One millisecond is the established measurement resolution; sampled
     // process footprint is evidence for this run, not an opaque SDK bound.
-    let sampler = ResponsivenessFootprintPeakSampler(intervalSeconds: 0.001)
+    let sampler = MeshSourcePresentationFootprintPeakSampler(intervalSeconds: 0.001)
     sampler.start()
     let viewport: RealityViewport
     do {
@@ -830,7 +829,7 @@ func realityViewportPreparesMaximumAdmittedNativeLineUpload() async throws {
         throw error
     }
     await sampler.stop()
-    let retainedBytes = try ResponsivenessFootprintProbe.physicalFootprintBytes()
+    let retainedBytes = try MeshSourcePresentationFootprintProbe.physicalFootprintBytes()
     let peak = try sampler.peakBytes()
     let baselineSigned = try #require(Int64(exactly: baselineBytes))
     let retainedSigned = try #require(Int64(exactly: retainedBytes))

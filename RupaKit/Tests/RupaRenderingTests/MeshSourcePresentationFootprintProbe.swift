@@ -2,12 +2,12 @@ import Darwin
 import Foundation
 import Synchronization
 
-/// Reads `phys_footprint` for the current process.
-///
-/// The value is a proxy for resident memory. A failed read is a typed failure so
-/// a missing sample is never reported as zero bytes.
-public enum ResponsivenessFootprintProbe {
-    public static func physicalFootprintBytes() throws -> UInt64 {
+enum MeshSourcePresentationFootprintError: Error {
+    case sampleUnavailable(String)
+}
+
+enum MeshSourcePresentationFootprintProbe {
+    static func physicalFootprintBytes() throws -> UInt64 {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(
             MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
@@ -18,19 +18,15 @@ public enum ResponsivenessFootprintProbe {
             }
         }
         guard status == KERN_SUCCESS else {
-            throw ResponsivenessBaselineError(
-                code: .footprintSampleUnavailable,
-                message: "task_info(TASK_VM_INFO) failed with status \(status)."
+            throw MeshSourcePresentationFootprintError.sampleUnavailable(
+                "task_info(TASK_VM_INFO) failed with status \(status)."
             )
         }
         return UInt64(info.phys_footprint)
     }
 }
 
-/// Samples `phys_footprint` from a background task while the MainActor performs
-/// one synchronous preparation, so the peak of an uninterruptible interval is
-/// observable from inside the process.
-public final class ResponsivenessFootprintPeakSampler: Sendable {
+final class MeshSourcePresentationFootprintPeakSampler: Sendable {
     private struct State {
         var peakBytes: UInt64 = 0
         var sampleCount: Int = 0
@@ -41,11 +37,11 @@ public final class ResponsivenessFootprintPeakSampler: Sendable {
     private let intervalSeconds: Double
     private let task: Mutex<Task<Void, Never>?> = Mutex(nil)
 
-    public init(intervalSeconds: Double) {
+    init(intervalSeconds: Double) {
         self.intervalSeconds = intervalSeconds
     }
 
-    public func start() {
+    func start() {
         let interval = intervalSeconds
         let sampler = self
         let started = Task.detached(priority: .userInitiated) {
@@ -62,7 +58,7 @@ public final class ResponsivenessFootprintPeakSampler: Sendable {
         task.withLock { $0 = started }
     }
 
-    public func stop() async {
+    func stop() async {
         let running = task.withLock { value -> Task<Void, Never>? in
             let running = value
             value = nil
@@ -75,20 +71,14 @@ public final class ResponsivenessFootprintPeakSampler: Sendable {
         await running.value
     }
 
-    /// Throws when any sample failed, so an incomplete series is never reported
-    /// as a measurement.
-    public func peakBytes() throws -> (bytes: UInt64, sampleCount: Int) {
+    func peakBytes() throws -> (bytes: UInt64, sampleCount: Int) {
         try state.withLock { state in
             if let failureMessage = state.failureMessage {
-                throw ResponsivenessBaselineError(
-                    code: .footprintSampleUnavailable,
-                    message: failureMessage
-                )
+                throw MeshSourcePresentationFootprintError.sampleUnavailable(failureMessage)
             }
             guard state.sampleCount > 0 else {
-                throw ResponsivenessBaselineError(
-                    code: .footprintSampleUnavailable,
-                    message: "The footprint sampler completed no samples."
+                throw MeshSourcePresentationFootprintError.sampleUnavailable(
+                    "The footprint sampler completed no samples."
                 )
             }
             return (state.peakBytes, state.sampleCount)
@@ -97,7 +87,7 @@ public final class ResponsivenessFootprintPeakSampler: Sendable {
 
     private func sample() {
         do {
-            let bytes = try ResponsivenessFootprintProbe.physicalFootprintBytes()
+            let bytes = try MeshSourcePresentationFootprintProbe.physicalFootprintBytes()
             state.withLock { state in
                 state.peakBytes = max(state.peakBytes, bytes)
                 state.sampleCount += 1

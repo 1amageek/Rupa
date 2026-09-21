@@ -113,40 +113,8 @@ let package = Package(
             targets: ["RupaAgentTransport"]
         ),
         .library(
-            name: "RupaAgentCADBenchmark",
-            targets: ["RupaAgentCADBenchmark"]
-        ),
-        .library(
-            name: "RupaAgentCADBenchmarkJSONAdapter",
-            targets: ["RupaAgentCADBenchmarkJSONAdapter"]
-        ),
-        .executable(
-            name: "rupa-agent-cad-benchmark",
-            targets: ["RupaAgentCADBenchmarkCLI"]
-        ),
-        .library(
-            name: "RupaResponsivenessBaseline",
-            targets: ["RupaResponsivenessBaseline"]
-        ),
-        .executable(
-            name: "rupa-responsiveness-baseline",
-            targets: ["RupaResponsivenessBaselineCLI"]
-        ),
-        .library(
-            name: "RupaResponsivenessFixtureDocument",
-            targets: ["RupaResponsivenessFixtureDocument"]
-        ),
-        .executable(
-            name: "rupa-responsiveness-fixture-document",
-            targets: ["RupaResponsivenessFixtureDocumentCLI"]
-        ),
-        .library(
             name: "RupaCLIKit",
             targets: ["RupaCLIKit"]
-        ),
-        .executable(
-            name: "rupa-geometry-buffer-benchmark",
-            targets: ["RupaGeometryBufferBenchmark"]
         ),
     ],
     dependencies: [
@@ -407,95 +375,6 @@ let package = Package(
             exclude: ["DESIGN.md"]
         ),
         .target(
-            name: "RupaAgentCADBenchmark",
-            dependencies: [
-                "RupaAgentRuntime",
-                "RupaAgentProtocol",
-                "RupaKit",
-                "RupaCore",
-                "RupaCoreTypes",
-                "RupaGeometry",
-                "RupaCADDomain",
-                "RupaDomainFoundation",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-            ],
-            exclude: ["DESIGN.md", "Aggregate/DESIGN.md", "Semantic/DESIGN.md"]
-        ),
-        .target(
-            name: "RupaAgentCADBenchmarkJSONAdapter",
-            dependencies: ["RupaAgentCADBenchmark", "RupaCoreTypes"],
-            exclude: ["DESIGN.md"]
-        ),
-        .executableTarget(
-            name: "RupaAgentCADBenchmarkCLI",
-            dependencies: [
-                "RupaAgentCADBenchmark",
-                "RupaAgentCADBenchmarkJSONAdapter",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
-            exclude: ["DESIGN.md"]
-        ),
-        .target(
-            name: "RupaResponsivenessBaseline",
-            dependencies: [
-                "RupaRendering",
-                "RupaViewportScene",
-                "RupaEvaluation",
-                "RupaGeometry",
-                "RupaProjectModel",
-                "RupaCoreTypes",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-            ],
-            exclude: ["DESIGN.md"]
-        ),
-        .executableTarget(
-            name: "RupaResponsivenessBaselineCLI",
-            dependencies: [
-                "RupaResponsivenessBaseline",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
-            exclude: ["DESIGN.md"]
-        ),
-        .testTarget(
-            name: "RupaResponsivenessBaselineTests",
-            dependencies: [
-                "RupaResponsivenessBaseline",
-            ]
-        ),
-        .target(
-            name: "RupaResponsivenessFixtureDocument",
-            dependencies: [
-                "RupaResponsivenessBaseline",
-                "RupaCore",
-                "RupaCoreTypes",
-                "RupaGeometry",
-                "RupaProject",
-                "RupaProjectModel",
-                "RupaProjectPackage",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-            ],
-            exclude: ["DESIGN.md"]
-        ),
-        .executableTarget(
-            name: "RupaResponsivenessFixtureDocumentCLI",
-            dependencies: [
-                "RupaResponsivenessBaseline",
-                "RupaResponsivenessFixtureDocument",
-                .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ],
-            exclude: ["DESIGN.md"]
-        ),
-        .testTarget(
-            name: "RupaResponsivenessFixtureDocumentTests",
-            dependencies: [
-                "RupaResponsivenessBaseline",
-                "RupaResponsivenessFixtureDocument",
-                "RupaCore",
-                "RupaProject",
-                "RupaProjectPackage",
-            ]
-        ),
-        .target(
             name: "RupaCLIKit",
             dependencies: [
                 "RupaMCP",
@@ -528,20 +407,6 @@ let package = Package(
             ],
             path: "Sources/RupaCLIComposition",
             exclude: ["DESIGN.md"]
-        ),
-        .executableTarget(
-            name: "RupaPerformanceBenchmark",
-            dependencies: [
-                "RupaAutomation",
-                "RupaCore",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
-        ),
-        .executableTarget(
-            name: "RupaGeometryBufferBenchmark",
-            dependencies: [
-                "RupaGeometry",
-            ]
         ),
         .target(
             name: "RupaAgentTestFixtures",
@@ -821,7 +686,6 @@ let package = Package(
                 "RupaCore",
                 "RupaKit",
                 "RupaRendering",
-                "RupaResponsivenessBaseline",
                 "RupaViewportScene",
             ]
         ),
@@ -855,35 +719,6 @@ let package = Package(
                 "RupaCoreTypes",
                 "RupaMCP",
                 .product(name: "MCP", package: "swift-sdk"),
-            ]
-        ),
-        .testTarget(
-            name: "RupaAgentCADBenchmarkTests",
-            dependencies: [
-                "RupaAgentCADBenchmark",
-                "RupaCADDomain",
-                "RupaCore",
-                "RupaDomainFoundation",
-                "RupaKit",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
-            ],
-            resources: [
-                .process("Fixtures"),
-            ]
-        ),
-        .testTarget(
-            name: "RupaAgentCADBenchmarkJSONAdapterTests",
-            dependencies: [
-                "RupaAgentCADBenchmarkJSONAdapter",
-                "RupaAgentCADBenchmark",
-            ]
-        ),
-        .testTarget(
-            name: "RupaAgentCADBenchmarkCLITests",
-            dependencies: [
-                "RupaAgentCADBenchmarkCLI",
-                "RupaAgentCADBenchmarkJSONAdapter",
-                "RupaAgentCADBenchmark",
             ]
         ),
     ],
