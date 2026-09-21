@@ -180,6 +180,9 @@ effect through CAD conversion, validation and presentation consumers.
 validation and traverses paired edge buffers together. Every existing validation
 check remains active, including for decoded sources; no trust flag or validation
 cache bypasses malformed-input detection.
+Triangle loop uniqueness follows from its three validated distinct-endpoint
+edges, covering every vertex pair without a per-face Set; polygons retain the
+explicit uniqueness Set. Repeated vertices still fail with `invalidFaceLoop`.
 Already-triangular faces validate all three corner/vertex references but return
 their existing winding directly, without allocating polygon scratch positions.
 Polygon planarity and ear-clipping behavior remain unchanged. Triangulation

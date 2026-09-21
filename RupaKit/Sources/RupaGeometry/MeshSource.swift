@@ -127,7 +127,9 @@ public struct MeshSource: Codable, Equatable, Sendable {
             var faceVertexIDs: Set<MeshVertexID> = []
             for cornerIndex in faceRange.start..<faceRange.end {
                 let vertexID = cornerVertexIDs[cornerIndex]
-                guard faceVertexIDs.insert(vertexID).inserted else {
+                // A triangle's three checked edges cover every vertex pair;
+                // distinct edge endpoints already reject any repeated vertex.
+                guard faceRange.count == 3 || faceVertexIDs.insert(vertexID).inserted else {
                     throw MeshSourceError(
                         code: .invalidFaceLoop,
                         message: "Mesh faces must not repeat vertices in one loop."

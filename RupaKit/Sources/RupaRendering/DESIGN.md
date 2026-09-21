@@ -2382,6 +2382,11 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    Entity request. Byte admission covers every application-owned retained and
    scratch buffer before allocation or growth, including six owned UInt32
    collision indices per source triangle for the original/reversed pair.
+   Already-triangular faces retain Geometry's checked source winding and use
+   their three source corner indices directly for boundary provenance, avoiding
+   one temporary hash table per face. Polygon boundary lookup and triangulation
+   are unchanged. Mixed triangle/polygon tests verify winding, corner offsets,
+   boundary counts and rejection of repeated triangle vertices.
    Before publication, the producer computes one overflow-checked conservative
    retained charge for the complete handle-identity table, including its enum
    and array element storage, nested selection/index arrays, normalized

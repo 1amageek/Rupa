@@ -14,6 +14,36 @@ import Testing
 @testable import RupaGeometry
 
 @Test(.timeLimit(.minutes(1)))
+func presentationTriangleBoundariesPreserveSourceOrderAndRejectRepeatedVertices() throws {
+    var builder = MeshSourceBuilder(identity: "mesh.triangle-boundaries")
+    let a = try builder.addVertex(.init(x: 0, y: 0, z: 0))
+    let b = try builder.addVertex(.init(x: 1, y: 0, z: 0))
+    let c = try builder.addVertex(.init(x: 1, y: 1, z: 0))
+    let d = try builder.addVertex(.init(x: 0, y: 1, z: 0))
+    _ = try builder.addTriangle(c, b, a)
+    _ = try builder.addFace(vertexIDs: [a, b, c, d])
+    _ = try builder.addTriangle(d, c, a)
+    let source = try builder.build()
+    let (scene, _) = try presentationScene(source: source,
+        references: [.authoredMesh(source.identity)], transforms: [.identity])
+    let occurrence = try #require(MeshSourcePresentationRenderPlan(scene: scene).occurrences.first)
+    #expect(Array(occurrence.vertexIndices.prefix(3)) == [2, 1, 0])
+    #expect(Array(occurrence.vertexIndices.suffix(3)) == [3, 2, 0])
+    #expect(Array(occurrence.boundaryCornerIndices.prefix(3)) == [0, 1, 2])
+    #expect(Array(occurrence.boundaryCornerIndices.suffix(3)) == [7, 8, 9])
+    #expect(occurrence.boundaryIndexCount == 20)
+    for repeated in [[a, a, c], [a, b, a], [a, b, b]] {
+        var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
+        payload["cornerVertexIDs"] = try JSONSerialization.jsonObject(with:
+            JSONEncoder().encode(repeated + Array(source.cornerVertexIDs.dropFirst(3))))
+        let malformed = try JSONDecoder().decode(MeshSource.self,
+            from: JSONSerialization.data(withJSONObject: payload))
+        let error = #expect(throws: MeshSourceError.self) { try malformed.validate() }
+        #expect(error?.code == .invalidFaceLoop)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func presentationPlanBoundaryIndicesExcludeTriangulationDiagonals() throws {
     let (scene, _) = try presentationScene(
         references: [.authoredMesh(GeometrySourceID(rawValue: "mesh.presentation"))],

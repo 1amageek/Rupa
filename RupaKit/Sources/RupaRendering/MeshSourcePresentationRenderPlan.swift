@@ -404,6 +404,21 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 )
             }
             let range = mesh.faceCornerRanges[faceIndex]
+            if range.count == 3 {
+                // Geometry preserves a triangle's checked source winding.
+                // Every side is a boundary, so no vertex-to-corner map is needed.
+                faceIDs.append(mesh.faceIDs[faceIndex])
+                for corner in range.start..<range.end {
+                    boundaryCornerIndices.append(UInt32(corner))
+                    vertexIndices.append(try positionIndex(
+                        for: mesh.cornerVertexIDs[corner],
+                        in: triangulationIndex,
+                        vertexCount: vertexCount
+                    ))
+                }
+                boundaryIndexCount = try Charge.sum(boundaryIndexCount, 6)
+                continue
+            }
             var cornerByVertex: [MeshVertexID: Int] = [:]
             cornerByVertex.reserveCapacity(range.count)
             for corner in range.start..<range.end {
