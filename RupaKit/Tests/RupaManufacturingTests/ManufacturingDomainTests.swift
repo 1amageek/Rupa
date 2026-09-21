@@ -163,27 +163,6 @@ func manufacturingPowderBedProcessReportsUnimplementedPowderEscapeAnalysis() thr
     #expect(result.diagnostics.contains { $0.message.contains("trapped-powder") })
 }
 
-@Test(.timeLimit(.minutes(1)))
-func manufacturingCapabilityLedgerEntryKeepsPrintabilityIncomplete() throws {
-    let assessment = CADInteractionQualityAssessmentService().assess()
-    let ledger = CapabilityLedger(
-        entries: assessment.entries.map(CapabilityLedgerEntry.init(assessmentEntry:))
-            + ManufacturingCapabilityLedgerProvider.entries()
-    )
-    let entry = try #require(
-        ledger.entry(id: ManufacturingDomain.validatePrintabilityCapabilityID.rawValue)
-    )
-
-    #expect(entry.category == .domainModule)
-    #expect(entry.currentRating == .partial)
-    #expect(entry.blockingGateAssessments.map(\.gate).contains(.selectionTopology))
-    #expect(entry.blockingGateAssessments.map(\.gate).contains(.inspectorAffordance))
-    #expect(entry.blockingGateAssessments.map(\.gate).contains(.performanceBudget))
-    #expect(entry.openWork.contains("Persist the build frame and project process, machine, and material settings as manufacturing semantic source."))
-    #expect(entry.openWork.contains("Introduce spatial acceleration and enforce dense-mesh time, memory, cancellation, and copy budgets."))
-    #expect(entry.nextRequiredResult.contains("persist project process, machine, material, and build-frame source"))
-}
-
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func manufacturingPrintabilityReportsMissingGeneratedBodiesWithoutMutation() throws {

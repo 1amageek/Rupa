@@ -1,3 +1,5 @@
+@testable import RupaAgentCADBenchmark
+
 @MainActor
 struct CADBenchmarkAggregateBuilder {
     func build(
