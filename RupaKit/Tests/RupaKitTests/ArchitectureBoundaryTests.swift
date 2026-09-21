@@ -203,6 +203,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         "RupaUI": [
             "RupaKit",
             "RupaCore",
+            "RupaGeometry",
             "RupaDomainFoundation",
             "RupaProject",
             "RupaRendering",
@@ -210,12 +211,8 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaViewportScene",
         ],
         "RupaAgentUI": [
-            "RupaKit",
             "RupaAgentProtocol",
-            "RupaAgentRuntime",
             "RupaAgentTransport",
-            "RupaCore",
-            "RupaDomainFoundation",
         ],
         "RupaViewportScene": [
             "RupaCore",
@@ -246,7 +243,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaManufacturing": [
             "RupaDomainFoundation",
-            "RupaAutomation",
             "RupaCore",
         ],
         "RupaAgentProtocol": [
@@ -277,7 +273,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
         ],
         "RupaCADDomain": [
             "RupaAutomation",
-            "RupaCapabilities",
             "RupaCore",
             "RupaDomainFoundation",
         ],
@@ -285,10 +280,7 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaAgentProtocol",
             "RupaCoreTypes",
         ],
-        "RupaProjectAccessPlatform": [
-            "RupaAgentTransport",
-            "RupaProjectAccess",
-        ],
+        "RupaProjectAccessPlatform": [],
         "RupaProjectAccessComposition": [
             "RupaAgentProtocol",
             "RupaAgentTransport",
@@ -328,7 +320,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaDomainFoundation",
             "RupaGeometry",
             "RupaKit",
-            "RupaProject",
         ],
         "RupaAgentCADBenchmarkJSONAdapter": [
             "RupaAgentCADBenchmark",

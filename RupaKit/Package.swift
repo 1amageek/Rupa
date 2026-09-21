@@ -276,10 +276,6 @@ let package = Package(
         ),
         .target(
             name: "RupaProjectAccessPlatform",
-            dependencies: [
-                "RupaProjectAccess",
-                "RupaAgentTransport",
-            ],
             path: "Sources/RupaProjectAccessPlatform",
             exclude: ["DESIGN.md"]
         ),
@@ -314,12 +310,8 @@ let package = Package(
         .target(
             name: "RupaAgentUI",
             dependencies: [
-                "RupaKit",
                 "RupaAgentProtocol",
-                "RupaAgentRuntime",
                 "RupaAgentTransport",
-                "RupaCore",
-                "RupaDomainFoundation",
             ],
             exclude: ["DESIGN.md"]
         ),
@@ -380,7 +372,6 @@ let package = Package(
                 "RupaDomainFoundation",
                 "RupaAutomation",
                 "RupaCore",
-                "RupaCapabilities",
             ],
             exclude: ["DESIGN.md"]
         ),
@@ -388,7 +379,6 @@ let package = Package(
             name: "RupaManufacturing",
             dependencies: [
                 "RupaDomainFoundation",
-                "RupaAutomation",
                 "RupaCore",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
@@ -445,7 +435,6 @@ let package = Package(
                 "RupaAgentRuntime",
                 "RupaAgentProtocol",
                 "RupaKit",
-                "RupaProject",
                 "RupaCore",
                 "RupaCoreTypes",
                 "RupaGeometry",
