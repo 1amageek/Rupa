@@ -922,7 +922,6 @@ struct RealityViewportSpatialResourcesTests {
         defer { content.remove(labelRoot) }
         var originalLabels: [Entity] = []
         var heights: [CGFloat] = []
-        var placementWidths: [Float] = []
         var readouts: [ViewportProjectedGrid.ScaleReadout] = []
         for frame in 0..<2 {
             camera.position.x = Float(frame) * 0.6
@@ -945,7 +944,7 @@ struct RealityViewportSpatialResourcesTests {
             #expect(placementEntity.isEnabled && placementEntity.model?.mesh === placementMesh)
             #expect(abs(placementEntity.scale.y - 0.7) < 1e-6)
             #expect(simd_distance(placementEntity.position, [0.2, -0.3, 0]) < 1e-6)
-            placementWidths.append(placementEntity.scale.x)
+            #expect(abs(placementEntity.scale.x - Float(readout.minorStep.meters)) < 1e-6)
             let labels = labelRoot.children.filter { $0.components[TextComponent.self] != nil && $0.isEnabled }
             try #require(!labels.isEmpty)
             if frame == 0 { originalLabels = labels }
@@ -975,7 +974,6 @@ struct RealityViewportSpatialResourcesTests {
         }
         #expect(abs(heights[0] - heights[1]) < 1)
         #expect(readouts.count == 2)
-        #expect(placementWidths[1] > placementWidths[0])
         let previousReadout = try #require(readouts.last)
         let transforms = prepared.root.children.map(\.transform)
         var invalid = ruler

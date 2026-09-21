@@ -767,7 +767,7 @@ public enum ViewportProjectedGrid {
             return adjustedStep(
                 minorStepMeters,
                 scale: scale,
-                minimumPixels: 8.0
+                minimumPixels: 24.0
             )
         case .fixed:
             return minorStepMeters

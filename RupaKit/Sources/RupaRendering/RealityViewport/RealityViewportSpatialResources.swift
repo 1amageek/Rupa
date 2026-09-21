@@ -699,11 +699,13 @@ final class RealityViewportSpatialResources {
             })
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
-            let entity = ModelEntity(mesh: resource, materials: [
-                material([1, 1, 1, 0.055], depth: .scene),
-                material([1, 1, 1, 0.135], depth: .scene),
-                material([1, 1, 1, 0.22], depth: .scene)
-            ])
+            let materials = [Float(0.035), 0.08, 0.14].map { opacity in
+                var line = material([1, 1, 1, 1], depth: .scene)
+                line.blending = .transparent(opacity: .init(scale: opacity))
+                line.writesDepth = false
+                return line
+            }
+            let entity = ModelEntity(mesh: resource, materials: materials)
             entity.isEnabled = false
             result.grid = (entity, mesh)
             result.root.addChild(entity)

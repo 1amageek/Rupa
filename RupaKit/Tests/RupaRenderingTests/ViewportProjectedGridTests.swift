@@ -116,6 +116,9 @@ import RupaViewportScene
     #expect(adaptive.scaleReadout.visualSpacingMode == .adaptive)
     #expect(fixed.scaleReadout.snapStep.meters == ruler.minorTickMeters)
     #expect(adaptive.minorStepMeters >= ruler.minorTickMeters)
+    #expect(adaptive.minorStepPixels >= 24)
+    #expect(adaptive.scaleReadout.snapStep.meters == ruler.minorTickMeters)
+    #expect(adaptive.worldLines.count < fixed.worldLines.count)
     #expect(fixed.worldLines.count <= ViewportProjectedGrid.maximumGridLineCount)
     #expect(adaptive.worldLines.count <= ViewportProjectedGrid.maximumGridLineCount)
 }

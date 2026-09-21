@@ -978,6 +978,7 @@ final class RealityViewport {
         cameraCalibrationDepth = nil
         discardRegionRaster()
         root.isEnabled = false
+        spatialResources?.setGridLabelsEnabled(false)
     }
 
     /// Releases the region raster and the frame it was admitted for. The key
@@ -992,7 +993,9 @@ final class RealityViewport {
     func setPresentationEnabled(_ enabled: Bool) {
         clipper.isEnabled = enabled
         spatialResources?.root.isEnabled = enabled
-        spatialResources?.setGridLabelsEnabled(enabled)
+        // Published annotations survive native-camera readiness waits. Their
+        // next complete frame owns visibility; invalidation explicitly hides them.
+        if enabled { spatialResources?.setGridLabelsEnabled(true) }
     }
 
     func triangle(for hit: CollisionCastHit) -> MeshSourcePresentationTriangle? {

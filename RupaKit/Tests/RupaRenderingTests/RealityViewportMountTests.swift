@@ -606,6 +606,22 @@ struct RealityViewportMountTests {
         #expect(firstReady)
         let initialGridMesh = try #require(nativeGridModel()?.model?.mesh)
 
+        let mountedScene = try #require(viewport.root.scene)
+        let tickQuery = EntityQuery(where: .has(TextComponent.self))
+        let tickDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !mountedScene.performQuery(tickQuery).contains(where: {
+            $0.isEnabledInHierarchy && $0.visualBounds(relativeTo: $0).extents.y > 0
+        }), ContinuousClock.now < tickDeadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let publishedTicks = Array(mountedScene.performQuery(tickQuery)).filter { $0.isEnabledInHierarchy }
+        try #require(!publishedTicks.isEmpty)
+        // The mount withholds spatial picking while waiting for the next native
+        // camera frame. That must not withdraw already published annotations.
+        viewport.setPresentationEnabled(false)
+        #expect(publishedTicks.allSatisfy { $0.isEnabledInHierarchy })
+        viewport.setPresentationEnabled(true)
+
         if isometric {
             let initialLayout = layout(camera: camera)
             let plane = ViewportCanvasPlane.displayed(for: basis)
@@ -755,6 +771,8 @@ struct RealityViewportMountTests {
         let replacementProjection = try #require(replacement.project(.origin))
         #expect(hypot(replacementProjection.x - expectedUpdatedProjection.x,
                       replacementProjection.y - expectedUpdatedProjection.y) <= 1)
+        replacement.invalidateCamera()
+        #expect(originalLabels.allSatisfy { !$0.isEnabledInHierarchy })
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])

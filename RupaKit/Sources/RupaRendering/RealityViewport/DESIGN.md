@@ -609,6 +609,15 @@ project authority, or native object. It is validated in full before the current
 grid is mutated; an invalid or over-budget frame preserves the previous complete
 grid and returns the existing typed failure rather than retaining frozen
 coverage, dropping labels, or publishing a partial update.
+Adaptive minor lines target at least 24 canvas points at the camera scale
+anchor; this is presentation spacing only and never changes ruler snap values.
+Fixed mode and the existing line-budget admission remain unchanged.
+Minor, major and origin lines use explicit native blending opacity (0.035,
+0.08 and 0.14) without depth writes; object depth still occludes grid lines.
+Published scale labels remain enabled while a changed camera awaits its native
+projection. Spatial picking still waits for the complete new frame. Only an
+explicit hidden grid, invalid camera, detach, or a complete replacement label
+frame withdraws those annotations; camera readiness alone must not blank them.
 Grid-only failure is a recoverable component status, returned separately from
 camera/section failures. `RealityViewportView` keeps the native frame enabled and
 reports it through the dedicated grid-status receiver; the receiver is required
