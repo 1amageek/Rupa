@@ -12,7 +12,7 @@ import OSLog
 /// are emitted under one subsystem and category so a single `xctrace` or
 /// Instruments filter selects them together.
 ///
-/// The offline harness in `RupaResponsivenessBaseline` measures neither
+/// The offline measurement harness measures neither
 /// interval as the application pays it: it cannot bring up a mounted frame, so
 /// it performs no native upload at all, and its publication figure excludes the
 /// observation invalidation a live SwiftUI scope adds. That figure is therefore

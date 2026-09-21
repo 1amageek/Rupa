@@ -83,9 +83,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
             "RupaCLI",
             "RupaUI",
         ],
-        "RupaAgentCADBenchmark": [
-            "RupaAutomation",
-        ],
         "RupaAgentTransport": [
             "RupaCore",
             "RupaAutomation",
@@ -129,16 +126,6 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
     }
 
     #expect(violations.isEmpty, Comment(rawValue: violations.joined(separator: "\n")))
-}
-
-@Test(.timeLimit(.minutes(1)))
-func agentCADBenchmarkDoesNotDependDirectlyOnAutomationLowering() throws {
-    let dependencies = try packageManifestProductionTargetDependencies()[
-        "RupaAgentCADBenchmark",
-        default: []
-    ]
-
-    #expect(!dependencies.contains("RupaAutomation"))
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -303,55 +290,6 @@ func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throw
             "RupaCLIKit",
             "RupaProjectAccessComposition",
             "RupaProjectAccessPlatform",
-        ],
-        "RupaAgentCADBenchmark": [
-            "RupaAgentProtocol",
-            "RupaAgentRuntime",
-            "RupaCADDomain",
-            "RupaCore",
-            "RupaCoreTypes",
-            "RupaDomainFoundation",
-            "RupaGeometry",
-            "RupaKit",
-        ],
-        "RupaAgentCADBenchmarkJSONAdapter": [
-            "RupaAgentCADBenchmark",
-            "RupaCoreTypes",
-        ],
-        "RupaAgentCADBenchmarkCLI": [
-            "RupaAgentCADBenchmark",
-            "RupaAgentCADBenchmarkJSONAdapter",
-        ],
-        "RupaPerformanceBenchmark": [
-            "RupaCore",
-            "RupaAutomation",
-        ],
-        "RupaGeometryBufferBenchmark": [
-            "RupaGeometry",
-        ],
-        "RupaResponsivenessBaseline": [
-            "RupaCoreTypes",
-            "RupaEvaluation",
-            "RupaGeometry",
-            "RupaProjectModel",
-            "RupaRendering",
-            "RupaViewportScene",
-        ],
-        "RupaResponsivenessBaselineCLI": [
-            "RupaResponsivenessBaseline",
-        ],
-        "RupaResponsivenessFixtureDocument": [
-            "RupaCore",
-            "RupaCoreTypes",
-            "RupaGeometry",
-            "RupaProject",
-            "RupaProjectModel",
-            "RupaProjectPackage",
-            "RupaResponsivenessBaseline",
-        ],
-        "RupaResponsivenessFixtureDocumentCLI": [
-            "RupaResponsivenessBaseline",
-            "RupaResponsivenessFixtureDocument",
         ],
     ]
 

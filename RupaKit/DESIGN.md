@@ -4,9 +4,9 @@
 
 This document is the package-level design for the `RupaKit` Swift package. It
 composes the verified T09 Mesh-editing foundation, the T10 Agent-to-project
-geometry route, the T12 Agent CAD benchmark, and the CADAPI-D public modeling
-contract while keeping one existing project authority. CADAPI-D is a target
-design: the current source still exposes legacy Automation payloads until its
+geometry route, and the CADAPI-D public modeling contract while keeping one
+existing project authority. CADAPI-D is a target design: the current source
+still exposes legacy Automation payloads until its
 separate implementation task passes the gates defined below.
 
 RUPA-RK is likewise a target package contract, not a completed production
@@ -17,7 +17,7 @@ identity renderer still supplies part of picking. The RealityKit
 resource/entity/frame designs below describe the completed `RealityView` path;
 capability probes are not package or CAD integration evidence.
 
-Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
+Parent: [system design](../DESIGN.md). Direct children used by T10 are:
 
 - [RupaGeometry](Sources/RupaGeometry/DESIGN.md)
 - [RupaEvaluation](Sources/RupaEvaluation/DESIGN.md)
@@ -41,13 +41,6 @@ Parent: [system design](../DESIGN.md). Direct children used by T10/T12 are:
 - [RupaAgentUI](Sources/RupaAgentUI/DESIGN.md)
 - [RupaAgentRuntime](Sources/RupaAgentRuntime/DESIGN.md)
 - [RupaCLIKit](Sources/RupaCLIKit/DESIGN.md)
-- [RupaAgentCADBenchmark](Sources/RupaAgentCADBenchmark/DESIGN.md)
-- [RupaAgentCADBenchmarkJSONAdapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md)
-- [RupaAgentCADBenchmarkCLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md)
-- [RupaResponsivenessBaseline](Sources/RupaResponsivenessBaseline/DESIGN.md)
-- [RupaResponsivenessBaselineCLI](Sources/RupaResponsivenessBaselineCLI/DESIGN.md)
-- [RupaResponsivenessFixtureDocument](Sources/RupaResponsivenessFixtureDocument/DESIGN.md)
-- [RupaResponsivenessFixtureDocumentCLI](Sources/RupaResponsivenessFixtureDocumentCLI/DESIGN.md)
 
 Package dependencies are the local targets and external packages declared by
 [`Package.swift`](Package.swift), notably `swift-CAD`, Swift Collections, and
@@ -60,8 +53,7 @@ indexed by [ARCHITECTURE.md](ARCHITECTURE.md).
 
 The package design is the parent of the changed and reused module designs. It is
 not a replacement for the system source-authority or state contracts linked
-below. The T12 benchmark target is now declared in `Package.swift` as an upper-
-level consumer; its implementation remains behind the child design boundary.
+below.
 
 ## Responsibilities and Boundaries
 
@@ -75,7 +67,7 @@ The package design owns:
 - the direct UI-to-`ProjectWorkspace` route and the project-access contract
   through which CLI and MCP adapters submit typed intent without acquiring
   source or package authority;
-- package-wide API and verification boundaries for T10 and T12.
+- package-wide API and verification boundaries for T10.
 - the CADAPI-D dependency rule that one registered semantic CAD operation
   vocabulary serves both direct invocation and declarative program execution;
 - the dependency boundary through which the child `RupaCADDomain` supplies the
@@ -91,12 +83,8 @@ The package design owns:
   RupaRendering/RupaUI alone own transient parallel camera/display state.
 
 It does not own Mesh topology algorithms, concrete CAD operation semantics, source asset mutation,
-archive encoding, HTTP framing, MCP framing, general CLI behavior, LLM reasoning, or a bicycle-specific or
-benchmark-specific CAD command. Those are delegated to child designs or
-existing normative contracts. T12's runner, catalog, source/B-Rep oracle, and
-score values are owned by its child design; they do not become another project
-authority. The dedicated benchmark JSON adapter and executable own only their
-versioned exchange and process boundaries.
+archive encoding, HTTP framing, MCP framing, general CLI behavior, LLM reasoning, or a bicycle-specific CAD
+command. Those are delegated to child designs or existing normative contracts.
 
 Concrete version-1 operation IDs, argument/output schemas, lowerers,
 availability, compactness, and exact-sphere requirements are owned only by the
@@ -141,12 +129,6 @@ flowchart LR
     Kit --> AgentRuntime
     AgentUI[RupaAgentUI\napplication host] --> AgentRuntime
     AgentUI --> AgentTransport[RupaAgentTransport]
-    AgentRuntime --> Benchmark["RupaAgentCADBenchmark\nupper-level target"]
-    Core --> Benchmark
-    Automation --> Benchmark
-    Kit --> Benchmark
-    Benchmark --> JSONAdapter["RupaAgentCADBenchmarkJSONAdapter\nversioned bounded JSON"]
-    JSONAdapter --> BenchmarkCLI["RupaAgentCADBenchmarkCLI\ndedicated executable"]
     AgentProtocol --> Access["RupaProjectAccess\ntransport-neutral intent"]
     AgentProtocol --> MCP["RupaMCP\nfixed stdio tools"]
     CLIProduct["signed Xcode RupaCLI product"] --> CLIComposition["RupaCLIComposition\nexecutable composition"]
@@ -173,20 +155,13 @@ flowchart LR
 | [RupaProject design](Sources/RupaProject/DESIGN.md) | child | Staging/publication contract | Owns project transaction integration. | Geometry algorithms remain below this boundary. |
 | [RupaAutomation design](Sources/RupaAutomation/DESIGN.md) | child | Binding-aware prepared source-plan execution and internal graph transaction | Executes a fully validated plan inside caller-owned staging. | Raw feature graphs remain internal and are not an Agent vocabulary. |
 | [RupaDomainFoundation design](Sources/RupaDomainFoundation/DESIGN.md) | child | Generic semantic operation, program graph, validation, and compilation contracts | Defines one operation/value/reference model shared by both public invocation forms. | It owns no concrete CAD vocabulary or project publication. |
-| [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) | child | Concrete versioned CAD descriptors, outputs, lowerers, and estimates | Registers the universal operations used by both public forms and all 100 benchmark realizations. | It depends downward only and never owns IDs, project coordinates, publication, transport, or benchmark semantics. |
-| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit, Make Editable, and visibility-filtered exact project-view contracts | Owns application-facing exact-snapshot adaptation while retaining complete source/evaluation/navigation authority. | Presentation filtering must not create an alternate source or project authority; the benchmark CLI remains a separate upper sibling. |
+| [RupaCADDomain design](Sources/RupaCADDomain/DESIGN.md) | child | Concrete versioned CAD descriptors, outputs, lowerers, and estimates | Registers the universal operations used by both public forms. | It depends downward only and never owns IDs, project coordinates, publication, or transport. |
+| [RupaKit integration design](Sources/RupaKit/DESIGN.md) | child | Transport-neutral read/edit, Make Editable, and visibility-filtered exact project-view contracts | Owns application-facing exact-snapshot adaptation while retaining complete source/evaluation/navigation authority. | Presentation filtering must not create an alternate source or project authority. |
 | [RupaUI design](Sources/RupaUI/DESIGN.md) | child | snapshot-owned project title, direct workspace UI route, and viewport controls | Presents immutable workspace state and forwards UI/API actions to the same mounted viewport controller. | Visible project identity comes from `ProjectViewSnapshot`; camera state is not project state. |
 | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) | child | process-lifetime host and injected handler contract | Owns Agent listener lifecycle and registration bridge for the App-owned workspace. | The App composes one controller/router; host never creates a shadow workspace or saves a package. |
 | [RupaAgentProtocol design](Sources/RupaAgentProtocol/DESIGN.md) | child | Codable Agent Mesh and bounded viewport-control DTOs | Carries Foundation-value viewport list/state/execute values without importing Rendering. | It must not expose a second view/source authority or claim draw completion. |
 | [RupaMCP design](Sources/RupaMCP/DESIGN.md) | child | fixed tool catalog, bounded schemas, dual-era stdio server | Adapts semantic and explicit viewport calls to the existing project-access path. | It never chooses a window or owns viewport/project state. |
 | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) | child | Control-plane registered-workspace request routing | Binds wire values to the exact current full project view without global MainActor isolation. | It never creates a session, calls CAD/Mesh/rendering directly, or saves a package. |
-| [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) | child | Exactly-100 per-case and aggregate verification contract | Composes all reviewed registered-Agent routes and immutable source/B-Rep oracles into measured scheduling, baselines, and a canonical report. | Catalog presence is not implementation evidence; production authority modules must not depend on it. |
-| [Benchmark JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md) | child | versioned envelopes, context fingerprint, bounded decode, JSON candidate | Binds one external decision to the exact public context of one activated case. | It cannot import private expectations or accept a catalog-only case. |
-| [Benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) | child | dedicated request/evaluate process contract | Exposes the JSON adapter as `rupa-agent-cad-benchmark` without changing `rupa`. | It owns no envelope meaning, network transport, or project state. |
-| [RupaResponsivenessBaseline design](Sources/RupaResponsivenessBaseline/DESIGN.md) | child | Versioned fixture, production-path measurement, and one verdict per acceptance row | Records the responsiveness baseline the RupaRendering acceptance table is judged against, using only public production contracts. | It owns no production behaviour and never relaxes a threshold or invents a value for an unobservable measure. |
-| [Responsiveness baseline CLI design](Sources/RupaResponsivenessBaselineCLI/DESIGN.md) | child | dedicated measurement process contract | Exposes the baseline as `rupa-responsiveness-baseline` without changing `rupa`. | Its exit code is non-zero when measurement fails, when any acceptance row rejects, and when any row was not measured, with a distinct code per outcome. |
-| [RupaResponsivenessFixtureDocument design](Sources/RupaResponsivenessFixtureDocument/DESIGN.md) | child | Fixture-to-project-package projection with reload verification | Materializes the measured fixture as a `.rupa` package so a signed application can be measured against the content the harness measured. | It is a separate target so `rupa-responsiveness-baseline` does not link the project and package stack, which would change the footprint its recorded baseline was taken against. |
-| [Responsiveness fixture document CLI design](Sources/RupaResponsivenessFixtureDocumentCLI/DESIGN.md) | child | dedicated export process contract | Exposes the export as `rupa-responsiveness-fixture-document` without changing `rupa`. | It exits non-zero unless the writer reported a verified write, and prints the written document's identity so a later measurement can be attributed to it. |
 
 ## Architecture
 
@@ -213,17 +188,10 @@ flowchart TD
     Rendering --> UI["RupaUI\nMainActor publish + Canvas"]
     K --> R["RupaAgentRuntime\nregistered route"]
     K --> M["RupaMCP\nbounded stdio adapter"]
-    R --> B["RupaAgentCADBenchmark\nrunner / oracle / report"]
-    C --> B
-    A --> B
-    B --> J["Benchmark JSON adapter\nenvelope / fingerprint / bound"]
-    J --> CLI["Dedicated benchmark CLI"]
 ```
 
 This direction avoids leaking project coordinates into the geometry kernel and
-avoids making `RupaGeometry` depend on `RupaCore` or `RupaProject`. The
-benchmark is an upper-level consumer: no source, project, runtime, protocol, or
-geometry target depends back on it.
+avoids making `RupaGeometry` depend on `RupaCore` or `RupaProject`.
 
 ## Contracts and Invariants
 
@@ -253,8 +221,6 @@ records are owned by the four child designs:
 | `RupaAgentUI` owns the process-lifetime Agent host and registration bridge; the App composes one controller/router over the same workspace. | [RupaAgentUI design](Sources/RupaAgentUI/DESIGN.md) |
 | Agent capability/status, lease, compilation, immutable projection, and encoding are control-plane work; Runtime reaches UI/project ownership only through the existing workspace/application ports. | [RupaAgentRuntime design](Sources/RupaAgentRuntime/DESIGN.md) |
 | Existing CAD/Mesh and state contracts remain authoritative for their domains. | [CAD/Mesh responsibility](../Rupa/CAD_MESH_RESPONSIBILITY_CONTRACT.md), [state/project contract](../Rupa/STATE_AND_PROJECT_CONTRACT.md) |
-| `RupaAgentCADBenchmark` is a bounded verification composition above the production Agent route: all 100 targets retain individual reviewed evidence, while aggregate execution composes fresh isolated `ProjectAgentCommandController` runs into measured scheduling, immutable baselines, and one canonical report. | [RupaAgentCADBenchmark design](Sources/RupaAgentCADBenchmark/DESIGN.md) |
-| The external benchmark path is one-way: `RupaAgentCADBenchmark` -> JSON adapter -> dedicated CLI. It accepts only activated cases, fingerprints candidate-visible context, and never makes transport or candidate data authoritative. | [JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md), [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md) |
 
 The package design does not introduce a second authority or source clone. For
 CAD source mutation, the public contract has exactly two forms:
@@ -273,8 +239,6 @@ source program. The currently exposed raw Automation routes are legacy
 implementation inventory and must not be described as satisfying CADAPI-D.
 
 T10 adds the typed Agent adapter surface over the existing RupaKit use cases.
-T12 adds the benchmark consumer plus its bounded JSON/CLI adapter; neither is a
-second modeling vocabulary or the implementation proof for CADAPI-D.
 
 ### CAD identity phases
 
@@ -314,24 +278,19 @@ in [RupaGeometry](Sources/RupaGeometry/DESIGN.md#runtime-flows),
 [RupaDomainFoundation](Sources/RupaDomainFoundation/DESIGN.md#runtime-flows),
 [RupaAutomation](Sources/RupaAutomation/DESIGN.md#runtime-flows),
 [Agent host](Sources/RupaAgentUI/DESIGN.md#runtime-flows),
-[Agent benchmark](Sources/RupaAgentCADBenchmark/DESIGN.md#runtime-flows),
-[JSON adapter](Sources/RupaAgentCADBenchmarkJSONAdapter/DESIGN.md#runtime-flows),
-and [benchmark CLI](Sources/RupaAgentCADBenchmarkCLI/DESIGN.md#runtime-flows).
 
 ## State, Ownership, and Lifecycle
 
-The package owns no shared mutable T10/T12 or access-session state. State and
+The package owns no shared mutable T10 or access-session state. State and
 lifetime are delegated to the child owners: Mesh buffers to `RupaGeometry`,
 source assets to `RupaCore`, package archive I/O to `RupaProjectPackage`,
 evaluation budgets/results to `RupaEvaluation`, exact/derived CAD cache state
 to `RupaCADIntegration`, project publication to `RupaProject`, observable
 workspace view to `RupaKit`, derived plan task/data to `RupaRendering`, UI state
 to `RupaUI`, document-lifetime camera/display state to the mounted viewport
-controller, request routing/registration leases to the Agent control plane,
-Agent listener lifetime to `RupaAgentUI`, and benchmark catalog,
-capability-availability/execution-regression baseline evidence, case/oracle,
-and report values to `RupaAgentCADBenchmark`. External request/response buffers
-and fingerprints are invocation-local values owned by the JSON adapter and CLI.
+controller, request routing/registration leases to the Agent control plane, and
+Agent listener lifetime to `RupaAgentUI`. External request/response buffers are
+invocation-local values owned by their adapter.
 `RupaProjectAccess` owns only immutable live target, session, result, and error
 contracts; the live App adapter owns the client session lifetime while transport
 endpoint and authentication details remain below the public API boundary.
@@ -372,15 +331,6 @@ parallel renderers.
 Viewport commands are the narrow exception: only validated list/state/execute
 dispatch enters the explicitly selected mounted MainActor controller. Ordinary
 status/capability and encoding work remain independent of MainActor.
-The T12 benchmark used per-case fresh authorities and fixed serial concurrency
-one during activation. Its completed post-100 integration proved bounded-one
-and bounded-two evidence equivalence, observed MainActor serialization, and
-selected conservative concurrency one after speedup failed to repeat. Baseline
-environment/catalog/capability drift is explicit; oracle or infrastructure
-failure invalidates a run without canonicalizing failures or updating the
-execution-regression baseline.
-The external adapter remains serial at one case per process and enforces its
-versioned byte ceiling before decode; it cannot introduce pre-100 parallelism.
 CADAPI-D compilation rejects unknown operation/version, invalid type or unit,
 duplicate or missing symbol, cyclic dependency, non-source route/effect, and an
 owner-defined semantic resource-limit excess before source mutation.
@@ -417,8 +367,6 @@ contracts rather than duplicating their behavioral cases:
 | CAD prepared execution | `RupaAutomation` / `RupaKit` | Later implementation must prove one program produces at most one source transaction, evaluation, undo entry, and publication; all prepublication failures roll back and postpublication failures are no-retry. |
 | Public cutover | `RupaAgentProtocol` / `RupaAgentRuntime` / `RupaCLIKit` | Later codec, catalog, runtime, and actual-CLI tests must prove one primitive is one direct call, a repeated assembly stays compact relative to distinct intent, both forms use the same compiler, and raw graph/Automation mutation payloads are absent or rejected. |
 | Application Agent host | `RupaAgentUI` / Rupa App | ACCESS-O focused same-workspace registration, router delegation, explicit save port, process-lifetime host, and typed failure preservation. |
-| Agent CAD benchmark | `RupaAgentCADBenchmark` | The historical 95-realized/5-unsupported report remains provenance. CADAPI-100 reuses the exact 100 targets and oracles but requires 100 realized results through the semantic direct/program API, followed by actual signed App/CLI save/reload evidence. Reference-plan results are control-path evidence only. |
-| External benchmark JSON | JSON adapter / dedicated CLI | Explicit discriminator golden JSON, context fingerprint drift, bounded stdin/file decode, inactive-case/privacy rejection, direct protocol integration, and actual process exit/JSON behavior. |
 | Actual rendered workflow | Signed-App integration | One real multi-body Agent mutation, purpose-selected bounded presentation evaluation, visible matching render data, interactive UI/run loop, bounded retained memory, concurrent Agent response, explicit save/reload, and no fallback. |
 
 Any public contract or dependency change requires rechecking the system root,
