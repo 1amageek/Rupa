@@ -69,6 +69,12 @@ extension DesignDocument {
                 .nodes[extrude.profile.featureID]?.operation else {
             return nil
         }
+        // An uncapped extrusion keeps the profile a capped one has, so the recognizer still names
+        // its family and the result kind is the only thing that says the body is a sheet. A
+        // fillet rounds a solid, so a sheet is not a prism this rounds.
+        guard extrude.resultKind == .solid else {
+            return nil
+        }
         guard let profile = try recognizedAllEdgeFilletProfile(in: sketch) else {
             return nil
         }
@@ -97,12 +103,17 @@ extension DesignDocument {
     /// here rather than deriving one from the dimensions it displays.
     package func maximumAllEdgeCornerRadius(featureID: FeatureID) throws -> Double? {
         guard let target = try allEdgeFilletTarget(featureID: featureID) else {
-            // A hollow or swept cylinder is not one of the prisms the kernel rounds, but it is
-            // one the person can round by clearing the hole or restoring the full turn first. It
-            // publishes a bound of zero rather than none at all, so its corner control collapses
-            // instead of refusing every drag.
-            guard let resolved = try resolvedCylinderProfile(featureID: featureID),
-                  resolved.profile.hollowRadius > 0 || resolved.profile.isFullTurn == false else {
+            // A hollow, swept, or uncapped cylinder is not one of the prisms the kernel rounds,
+            // but it is one the person can round by clearing the hole, restoring the full turn,
+            // or putting the caps back first. It publishes a bound of zero rather than none at
+            // all, so its corner control collapses instead of refusing every drag.
+            guard let resolved = try resolvedCylinderProfile(featureID: featureID) else {
+                return nil
+            }
+            let isUncapped = try cylinderCaps(featureID: featureID) == false
+            guard resolved.profile.hollowRadius > 0 ||
+                    resolved.profile.isFullTurn == false ||
+                    isUncapped else {
                 return nil
             }
             return 0
@@ -120,6 +131,7 @@ extension DesignDocument {
     /// is repaired.
     func validateBoxCornerTarget(_ featureID: FeatureID) throws {
         guard case let .extrude(extrude) = cadDocument.designGraph.nodes[featureID]?.operation,
+              extrude.resultKind == .solid,
               case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation,
               let profile = try recognizedAllEdgeFilletProfile(in: sketch) else {
             throw unroundableAllEdgeTarget()

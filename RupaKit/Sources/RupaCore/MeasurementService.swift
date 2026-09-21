@@ -253,6 +253,32 @@ public struct MeasurementService {
                 sketchBounds: sourceSketchBounds,
                 profile: profile
             )
+            if extrude.resultKind == .sheet {
+                // An uncapped extrusion bounds no volume, so it is measured as the sheet it is
+                // rather than as the solid its profile and distance would enclose.
+                var evaluatedSheetSkipReason: String?
+                let sheet = try measureEvaluatedSheet(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSheetSkipReason
+                )
+                guard let sheet else {
+                    let detail = evaluatedSheetSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped an extrude sheet outside the supported evaluation subset.\(detail)"
+                        )
+                    )
+                    return
+                }
+                sheets.append(sheet)
+                bounds.include(sheet.bounds)
+                return
+            }
             var evaluatedSkipReason: String?
             let solid: MeasurementResult.Solid?
             if profile.result.kind == .curveLoop {

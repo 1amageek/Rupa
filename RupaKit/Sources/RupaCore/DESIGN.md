@@ -1086,6 +1086,82 @@ Every other sketch names no cylinder profile, and each caller keeps the
 behaviour it already has for a profile it cannot name rather than guessing which
 entity is the wall.
 
+### Cylinder caps
+
+`Caps` is whether the two ends of a cylinder are closed. It is the one property
+in this group that does not rewrite the profile: the wall of a capped cylinder
+and the wall of an uncapped one are swept from the same circle, arc, annulus or
+annular sector, and what differs is only whether the extrusion sews the two ends
+onto the wall it sweeps. So the flag lives on the extrusion as
+`ExtrudeFeature.resultKind`, owned by the
+[CADIR design](../../../swift-CAD/Sources/CADIR/DESIGN.md), and none of the
+profile paths above see it. An uncapped cylinder has exactly the faces its
+capped form has, less the two caps.
+
+An uncapped cylinder is a sheet, not a solid that lost two faces, and that one
+fact moves three values that have to move together:
+
+| Value | Capped | Uncapped |
+|---|---|---|
+| `ExtrudeFeature.resultKind` | `.solid` | `.sheet` |
+| the extrude node's one output role | `.body` | `.sheet` |
+| the body object's `geometryRole` | `.solid` | `.surface` |
+
+`DesignGraph.validateExtrudeContract` binds the first two and `ProductMetadata`
+binds the second to the third, so any two of them disagreeing is a document that
+fails validation rather than one that evaluates into a body nothing describes.
+`setCylinderCaps` writes all three in one transaction and validates before it
+commits, which is what `setCylinderHollow` and `setCylinderAngle` already do for
+the one value each of them moves.
+
+The feature's outputs are the only authority on a cylinder's `geometryRole`, and
+a type's declared role is a default rather than a second authority.
+`ProductMetadata` forces every object of a type that declares a role to carry
+it, so `cylinder` declares none: it is the one built-in type whose objects are a
+body under one setting of their own property and a surface under the other.
+Declaring nothing loses no check, because the role still has to agree with the
+feature the object names. `ObjectTypeRegistry` is resolved at run time and is no
+part of what a document stores, so a cylinder saved before caps existed reads
+the same catalog every new one does and needs no migration: it carries `.solid`,
+its extrusion declares a `.body` output, and the two agree.
+
+`Caps` excludes `Corner`, and nothing else. An all-edge fillet rounds a solid,
+so an uncapped cylinder offers it nothing to round — but the profile is
+unchanged, which is the whole point of putting the flag on the extrusion, so
+`recognizedAllEdgeFilletProfile` still names the circle underneath one.
+`allEdgeFilletTarget` and `validateBoxCornerTarget` therefore read `resultKind`
+and refuse a sheet explicitly rather than waiting for a profile that will never
+stop being recognizable, and `maximumAllEdgeCornerRadius` publishes zero for an
+uncapped cylinder the way it already does for a hollow or a swept one, so the
+control collapses instead of refusing every drag. Clearing the caps on a rounded
+cylinder is refused before the rebuild, the way a hollow or an angle on one
+already is.
+
+`Caps` excludes neither `Hollow` nor `Angle`. All four combinations evaluate and
+pass exact validation. A hollow full turn is one sheet body of two disjoint
+shells, one for each of the profile's two boundary loops, and that is a valid
+body rather than a defect: the shells bound no volume between them and none is
+claimed. A hollow sector is one shell, because its single loop already joins the
+wall to the hole. So no pair of controls in this group bounds the other, and the
+family table above describes the wall of a capped and an uncapped cylinder
+alike.
+
+Nothing silently puts the caps back. Every mutator that changes a cylinder's
+depth, size or placement binds the `ExtrudeFeature` the document already holds
+and writes the field it means to change, rather than constructing a new feature
+out of the parts it read, so a field it does not know about is carried forward
+unchanged. Only the authoring paths construct an `ExtrudeFeature` from nothing,
+and those are creating a body that has no caps setting yet. This invariant is
+what keeps a `Size Y` drag on an uncapped cylinder from handing back a solid,
+and it is why `resultKind` is a stored field with a default rather than
+something each edit derives.
+
+An uncapped cylinder is measured as the sheet it is. `MeasurementService`
+reports a volume, a surface area and a centre of mass for a solid extrusion; for
+a sheet one it reports the sheet's own measurements instead, the way it already
+separates the two kinds of sweep. Reporting the volume the profile and the
+distance would enclose would be reporting a solid this document does not hold.
+
 ### Display tessellation resolution
 
 `DesignDocument.displayTessellationOptions` is the single owner of the mapping

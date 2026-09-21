@@ -49,18 +49,21 @@ struct ObjectPropertyEffectTests {
 
     @Test(.timeLimit(.minutes(1)))
     func sourcePropertyWithoutRoutingFailsVisibly() throws {
+        // The contract is that a `source` property the router cannot apply fails rather than
+        // being stored as an edit nothing performed. It is proven on a schema this test owns,
+        // because proving it on whichever built-in property happened to be unrouted retires the
+        // test the moment that property gets a mutator, which is what happened to `bevel`.
+        let registry = try registryDeclaringAnUnroutedSourceProperty()
         var document = DesignDocument.empty()
         let node = try polygonSketchNode(in: &document)
         let before = document.productMetadata.sceneNodes[node.id]
 
         do {
-            // A polygon profile declares `bevel` with the `source` effect, and the kernel's
-            // all-edge fillet builds a box or a circular cylinder, never a hexagonal prism, so no
-            // mutation can apply it. It is the property this contract is proven on.
             try document.setSceneNodeObjectProperty(
                 id: node.id,
-                propertyID: PropertyID(rawValue: "bevel"),
-                value: .length(0.01)
+                propertyID: unroutedPropertyID,
+                value: .length(0.01),
+                objectRegistry: registry
             )
             Issue.record("A source property the router cannot apply must fail.")
         } catch let error as EditorError {
@@ -68,6 +71,32 @@ struct ObjectPropertyEffectTests {
         }
 
         #expect(document.productMetadata.sceneNodes[node.id] == before)
+    }
+
+    private var unroutedPropertyID: PropertyID { PropertyID(rawValue: "unrouted.length") }
+
+    /// The built-in catalog with one extra `source` property on the polygon profile, bound to a
+    /// binding no mutation names.
+    private func registryDeclaringAnUnroutedSourceProperty() throws -> ObjectTypeRegistry {
+        let unrouted = ObjectPropertyDefinition(
+            id: unroutedPropertyID,
+            title: "Unrouted",
+            group: "Shape",
+            valueKind: .length,
+            defaultValue: .length(0.0),
+            inspectorControl: .textField,
+            effect: .source,
+            renderBinding: ObjectPropertyDefinition.RenderBinding(rawValue: "unrouted.length")
+        )
+        let definitions = ObjectTypeCatalog.builtInDefinitions.map { definition -> ObjectTypeDefinition in
+            guard definition.id == .polygon else {
+                return definition
+            }
+            var extended = definition
+            extended.properties.append(unrouted)
+            return extended
+        }
+        return try ObjectTypeRegistry(definitions: definitions)
     }
 
     @Test(.timeLimit(.minutes(1)))

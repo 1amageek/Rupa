@@ -85,7 +85,9 @@ public enum ObjectTypeCatalog {
             systemImage: "cylinder",
             representation: .threeDimensional,
             category: .body,
-            geometryRole: .solid,
+            // A cylinder is a solid while its caps are on and a surface while they are off, so the
+            // role is the one its own extrusion declares rather than one this type forces on it.
+            geometryRole: nil,
             properties: cylinderProperties
         ),
         definition(

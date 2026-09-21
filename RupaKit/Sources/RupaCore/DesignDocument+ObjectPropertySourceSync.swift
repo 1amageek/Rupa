@@ -181,6 +181,26 @@ extension DesignDocument {
         )
     }
 
+    /// Applies the `caps` a `.cylinder` declares to its extrusion's result kind, which is the
+    /// single truth of whether the body's two ends are closed.
+    private mutating func setCylinderCapsProperty(
+        object: ObjectDescriptor,
+        definition: ObjectTypeDefinition,
+        binding: ObjectPropertyDefinition.RenderBinding,
+        featureID: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+              case .boolean(let includesCaps) = definition.resolvedProperties(object.properties)[property.id] else {
+            throw EditorError(code: .commandInvalid, message: "Caps require a boolean value.")
+        }
+        try setCylinderCaps(
+            featureID: featureID,
+            includesCaps: includesCaps,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private mutating func applyBodyObjectPropertyToSource(
         object: ObjectDescriptor,
         definition: ObjectTypeDefinition,
@@ -267,6 +287,16 @@ extension DesignDocument {
             }
             if binding == .angle {
                 try setCylinderAngleProperty(
+                    object: object,
+                    definition: definition,
+                    binding: binding,
+                    featureID: featureID,
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
+            if binding == .capVisibility {
+                try setCylinderCapsProperty(
                     object: object,
                     definition: definition,
                     binding: binding,
@@ -583,12 +613,6 @@ extension DesignDocument {
         return value
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): One schema property declares the `source` effect but
-    // reaches no mutation, so every edit to it fails here instead of reaching the canvas.
-    // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `caps`. Do not
-    // treat an edit to it as applied until the mutation exists and a test drives the property
-    // through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition
@@ -903,6 +927,31 @@ extension DesignDocument {
         }
     }
 
+    /// Writes the caps flag and the geometry role it implies onto the body object.
+    ///
+    /// The role is part of the same edit rather than something a later reader derives, because
+    /// `ProductMetadata` validates the role against the output the feature declares and the two
+    /// are only ever written together.
+    mutating func synchronizeCylinderCapsObjectProperty(
+        featureID: FeatureID,
+        resultKind: ExtrudeResultKind,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
+            Self.setBooleanProperty(
+                .capVisibility,
+                to: resultKind == .solid,
+                object: &object,
+                definition: definition
+            )
+            object.geometryRole = resultKind.objectGeometryRole
+        }
+    }
+
     private mutating func updateTypedObjectProperties(
         featureID: FeatureID,
         category: ObjectDescriptor.Category,
@@ -1017,6 +1066,19 @@ extension DesignDocument {
             return
         }
         object.properties[property.id] = .angle(degrees)
+    }
+
+    static func setBooleanProperty(
+        _ binding: ObjectPropertyDefinition.RenderBinding,
+        to value: Bool,
+        object: inout ObjectDescriptor,
+        definition: ObjectTypeDefinition
+    ) {
+        guard let property = definition.property(for: binding),
+              property.valueKind == .boolean else {
+            return
+        }
+        object.properties[property.id] = .boolean(value)
     }
 
     static func setIntegerProperty(
