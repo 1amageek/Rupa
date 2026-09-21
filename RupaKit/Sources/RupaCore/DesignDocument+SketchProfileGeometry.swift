@@ -167,12 +167,15 @@ extension DesignDocument {
         try validatePositiveLength(radiusMeters, owner: owner)
 
         let profile = try sketchProfileFeature(featureID: featureID, owner: owner)
-        guard let entry = singleCircleEntry(in: profile.sketch) else {
+        guard let cylinder = try recognizedCylinderCircleProfile(in: profile.sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Circle geometry requires a sketch holding a single circle."
+                message: "Circle geometry requires a sketch holding a circle profile."
             )
         }
+        // The radius this node names is the outer circle, and it has to stay outside the hollow the
+        // profile already holds. Refusing before the rebuild leaves the document as it was.
+        try validateCylinderHollow(cylinder.hollowRadius, outerRadius: radiusMeters)
 
         // The cylinder this profile extrudes may already carry an all-edge fillet, and a smaller
         // radius has to keep admitting it. Refusing before the rebuild leaves the document as it
@@ -188,9 +191,9 @@ extension DesignDocument {
         }
 
         var sketch = profile.sketch
-        sketch.entities[entry.id] = .circle(
+        sketch.entities[cylinder.outer.id] = .circle(
             SketchCircle(
-                center: entry.circle.center,
+                center: cylinder.center,
                 radius: .length(radiusMeters, .meter)
             )
         )

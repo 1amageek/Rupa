@@ -116,7 +116,14 @@ Box Corner Inspector values are projected from the exact source through
 [Core's Corner contract](../RupaCore/DESIGN.md), not stale stored property defaults.
 Its slider is bounded by the maximum Core publishes for that body, because the
 bound depends on which prism the kernel rounds and only the source knows that.
-The Inspector never derives one from the dimensions it displays.
+The Inspector never derives one from the dimensions it displays. A cylinder's
+Hollow is read and bounded the same way, through
+[Core's hollow cylinder profile contract](../RupaCore/DESIGN.md): its value comes
+from the hole in the circle profile rather than from the stored property, and its
+maximum from the wall that hole has to stay inside. Corner and Hollow exclude each
+other, and Core says so by publishing a maximum of zero for whichever one the body
+cannot currently take, so the Inspector collapses that control rather than offering
+a drag that can only fail.
 Corner Sides remains a product display property consumed by Core's shared
 evaluation-quality resolver; it does not change the CAD radius.
 
@@ -577,6 +584,16 @@ whose effect is `source`, `tessellation`, or `appearance`, and shows a value row
 for a `derived` property. It infers nothing about reachability from the property
 identifier, so a schema change is the only thing that changes which controls
 exist.
+
+A numeric bound Core publishes is the control's range, not a refusal the person
+discovers by dragging. The all-edge corner maximum comes from Core's own
+resolution of which prism the body is, and a cylinder's hollow maximum from the
+same place, so a control stops where the document stops. Where two properties
+exclude each other, each publishes a maximum of zero while the other is
+positive: a hollow cylinder's corner control and a filleted cylinder's hollow
+control both collapse to zero rather than refusing every drag, and the person
+clears one before authoring the other. This surfaces the Core contract
+`The hollow cylinder profile` states; the Inspector derives no bound of its own.
 
 Continuous edits stay live without racing the document. A slider drag enqueues
 through the workspace operation sequencer, which replaces a pending, not yet

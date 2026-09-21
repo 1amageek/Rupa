@@ -38,11 +38,19 @@ extension DesignDocument {
                 message: "Face offset requires an editable sketch profile."
             )
         }
-        if let circleEntry = singleCircleEntry(in: sketch) {
+        if let cylinder = try recognizedCylinderCircleProfile(in: sketch) {
+            // A tube has two cylindrical walls, and one offset of the outer circle would move the
+            // wrong one as readily as the right one, so the hollow is refused rather than guessed.
+            guard cylinder.inner == nil else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Face offset requires a solid cylinder. Clear the hollow first."
+                )
+            }
             try offsetCylinderFace(
                 face: face,
                 offsetMeters: offsetMeters,
-                circleEntry: circleEntry,
+                circleEntry: (id: cylinder.outer.id, circle: cylinder.outer.circle),
                 sketch: &sketch,
                 profileFeature: &profileFeature,
                 feature: &feature,

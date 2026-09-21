@@ -96,7 +96,15 @@ extension DesignDocument {
     /// a control bound by it is always an edit that applies. The Inspector reads the bound from
     /// here rather than deriving one from the dimensions it displays.
     package func maximumAllEdgeCornerRadius(featureID: FeatureID) throws -> Double? {
-        guard let target = try allEdgeFilletTarget(featureID: featureID) else { return nil }
+        guard let target = try allEdgeFilletTarget(featureID: featureID) else {
+            // A hollow cylinder is not one of the prisms the kernel rounds, but it is one the
+            // person can round by clearing the hole first. It publishes a bound of zero rather than
+            // none at all, so its corner control collapses instead of refusing every drag.
+            guard let hollow = try cylinderHollow(featureID: featureID), hollow > 0 else {
+                return nil
+            }
+            return 0
+        }
         let tolerance = modelingSettings.tolerance.distance
         return max(0, target.radiusBound(tolerance: tolerance) - tolerance)
     }

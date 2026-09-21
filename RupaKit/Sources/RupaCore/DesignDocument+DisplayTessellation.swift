@@ -136,8 +136,10 @@ extension DesignDocument {
               case let .sketch(sketch) = profileFeature.operation else {
             return nil
         }
-        if let circleEntry = singleCircleEntry(in: sketch) {
-            let radius = try resolvedLengthValue(circleEntry.circle.radius, owner: "Swept profile radius")
+        // The outer circle bounds the whole family: a tube's inner wall is a smaller arc, which
+        // the resolution the outer radius asks for already covers.
+        if let profile = try recognizedCylinderCircleProfile(in: sketch) {
+            let radius = profile.outer.radius
             return radius > 0 ? DisplayTessellationArcGeometry(radius: radius) : nil
         }
         let holdsArc = sketch.entities.values.contains { entity in

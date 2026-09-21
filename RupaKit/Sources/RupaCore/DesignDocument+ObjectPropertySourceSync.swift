@@ -141,6 +141,26 @@ extension DesignDocument {
         )
     }
 
+    /// Applies the `hollow` a `.cylinder` declares to the concentric hole in its circle profile,
+    /// which is the single truth of how hollow the body is.
+    private mutating func setCylinderHollowProperty(
+        object: ObjectDescriptor,
+        definition: ObjectTypeDefinition,
+        binding: ObjectPropertyDefinition.RenderBinding,
+        featureID: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+              case .length(let hollow) = definition.resolvedProperties(object.properties)[property.id] else {
+            throw EditorError(code: .commandInvalid, message: "Hollow requires a length value.")
+        }
+        try setCylinderHollow(
+            featureID: featureID,
+            hollow: hollow,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private mutating func applyBodyObjectPropertyToSource(
         object: ObjectDescriptor,
         definition: ObjectTypeDefinition,
@@ -207,6 +227,16 @@ extension DesignDocument {
         case .some(.cylinder):
             if binding == .cornerRadius {
                 try setAllEdgeCornerRadius(
+                    object: object,
+                    definition: definition,
+                    binding: binding,
+                    featureID: featureID,
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
+            if binding == .hollow {
+                try setCylinderHollowProperty(
                     object: object,
                     definition: definition,
                     binding: binding,
@@ -526,8 +556,8 @@ extension DesignDocument {
     // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
     // reach no mutation, so every edit to one fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `angle`, `caps`,
-    // and `hollow`. Do not treat an edit to any of these as applied until the mutation exists and
+    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `angle` and
+    // `caps`. Do not treat an edit to either of these as applied until the mutation exists and
     // a test drives the property through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
@@ -812,6 +842,20 @@ extension DesignDocument {
             Self.setLengthProperty(.sizeX, to: radius * 2.0, object: &object, definition: definition)
             Self.setLengthProperty(.sizeY, to: sizeY, object: &object, definition: definition)
             Self.setLengthProperty(.sizeZ, to: radius * 2.0, object: &object, definition: definition)
+        }
+    }
+
+    mutating func synchronizeCylinderHollowObjectProperty(
+        featureID: FeatureID,
+        hollow: Double,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
+            Self.setLengthProperty(.hollow, to: hollow, object: &object, definition: definition)
         }
     }
 

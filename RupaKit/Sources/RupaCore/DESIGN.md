@@ -772,13 +772,15 @@ Invariants:
 
   | Property | Declared on | Why no mutation reaches it |
   |---|---|---|
-  | `angle`, `caps`, `hollow` | `cylinder` | Not yet routed in Core; the kernel builds all three |
+  | `angle`, `caps` | `cylinder` | Not yet routed in Core; the kernel builds both |
 
   The remaining row clears inside Core. A polygon or slot `bevel` stood here
   while the kernel's all-edge fillet built only a box or a circular cylinder;
   the [swift-CAD design](../../../swift-CAD/DESIGN.md) now builds the convex
   prism both profiles extrude, and `Polygon and slot bevel` below is the proof
-  that the property reaches it.
+  that the property reaches it. A cylinder `hollow` stood here while a circle
+  profile was one circle; `The hollow cylinder profile` below is the family that
+  holds two, and `Cylinder hollow` the proof that the property reaches it.
 
 Segment counts are display resolution, not exact geometry. The kernel keeps
 circles and arcs as rational arcs and derives a segment count from tolerance, so
@@ -945,6 +947,65 @@ segments. Until the profile could carry arcs that property named an arc the
 rectangle did not have and reached nothing. How a body extruded from the profile
 resolves its own mesh is owned by `Display tessellation resolution` below and is
 unchanged here.
+
+### The hollow cylinder profile
+
+`Hollow` is the radius of a concentric hole through a cylinder, so a hollow of
+`h` on a cylinder of radius `r` is the tube whose wall runs from `h` to `r`.
+The reading is a radius rather than a wall thickness because the property's
+default is zero and zero is a solid cylinder: a wall of zero thickness and a
+wall as thick as the radius both describe the same solid, so no monotone
+control could name both ends of a thickness.
+
+The property is declared on the `cylinder` body and rewrites the circle profile
+that body's extrusion consumes, reaching the sketch through the body's
+`sourceFeatureID` the way `size.x` and `radius` already do. That profile is one
+family, not two shapes: one outer circle, plus one inner circle concentric with
+it that exists only while the hollow is positive. `CylinderCircleProfile` is
+the single owner of what that family is, and every path that reads or rewrites
+a cylinder's circle profile resolves it rather than counting circle entities
+itself.
+
+Invariants the family carries:
+
+- The outer circle's entity ID survives every edit. The inner circle's ID is
+  minted when the hollow goes from zero to positive, kept while it stays
+  positive, and dropped when it returns to zero. This is the identity rule
+  `RectangleProfileBuilder` follows for a rectangle's corner arcs.
+- The inner circle is concentric with the outer one and strictly inside it. The
+  hollow is either exactly zero or bounded by `hollow > tolerance` and
+  `radius - hollow > tolerance`. The radius carries the same bound from the
+  other side, so shrinking a cylinder onto the hole it already has is refused
+  the way shrinking one onto its own fillet already is.
+- The inner circle is a hole, not a second body. `SketchProfileExtractor` nests
+  a loop inside the loop that contains it and makes it that profile's hole, so
+  one extrusion of the family builds one tube: a solid cylinder evaluates to six
+  faces and a hollow one to ten, four around each wall and two annular caps.
+- `Hollow` and `Corner` exclude each other, in both directions and before the
+  rebuild rather than after it. A tube is none of the four convex prisms
+  `What the kernel's all-edge fillet accepts` above lists, so a positive hollow
+  on a filleted cylinder and a positive corner on a hollow one are both refused
+  with `EditorError(code: .commandInvalid)`, leaving the document unchanged. The
+  Inspector is not left holding a control that can only fail: a hollow cylinder
+  publishes an all-edge corner maximum of zero, and a filleted cylinder a hollow
+  maximum of zero, so each control is bounded by the other rather than refusing
+  every drag. Core owns both maxima; the
+  [RupaUI design](../RupaUI/DESIGN.md) owns surfacing them.
+
+Three paths accept the whole family. `setCylinderHollow` is the mutator the
+body's `Hollow` submits to. `setCylinderDimensions` is the body's own radius and
+height edit, which has to keep working over a hole the way it already keeps
+working under a fillet. `setCircleSketchGeometry` is the nested `.circle` sketch
+node's own radius: `createExtrudedCircle` hides that node under the body rather
+than removing it, so the profile stays selectable and editable underneath a
+hollow cylinder, and its radius names the outer circle. All three refuse a
+radius the current hollow no longer fits inside.
+
+A profile the family does not recognize is not one this design edits. The
+recognizer reports no cylinder profile for a sketch holding anything but one
+circle or two concentric nested ones, and each caller keeps the behaviour it
+already has for a profile it cannot name, rather than guessing which circle is
+the wall.
 
 ### Display tessellation resolution
 
@@ -1268,6 +1329,7 @@ T09-B owns the following behavioral proof:
 | Box bevel and corner radius | `Tests/RupaCoreTests/RectangleProfileBevelTests.swift` proves that a profile's `bevel` and its box's `corner.radius` are two views of one fillet, the evaluated face count rising from 6 to 26 and both properties reading back the same value; that resizing the profile under the wrapper still resynchronizes the body and keeps the fillet; that a rounded profile and a bevelled box each refuse the other with `.commandInvalid` and no metadata change; that a bevel on a profile with no body yet is bounded by the profile's own sides and applied by the extrusion that creates the body; that a depth edit resolves through the wrapper to the hidden extrusion and is refused when the new depth no longer admits the radius; and that changing an existing bevel rebuilds only the fillet, reusing the profile and the extrusion. |
 | Cylinder corner radius and circle bevel | `Tests/RupaCoreTests/CylinderCornerTests.swift` proves that a cylinder's `corner.radius` and its circle profile's `bevel` are two views of one fillet, the evaluated face count rising from 6 to 14 and an edit to either reading back on both while the body keeps its reference; that the dimensions of a rounded cylinder resolve through the wrapper to the hidden extrusion, survive a `.rupa` round trip, and on zero restore that extrusion into the visible feature while its hidden node is removed; that a radius the cross-section or the height cannot admit is refused before the mutation, leaving the source fingerprint and the metadata unchanged, including one just inside half the cylinder radius, where the rim torus would self-intersect; that the maximum Core publishes is instead an edit that applies; that shrinking either the circle or the cylinder below the radius it already carries is refused the same way; and that a bevel on a circle profile with no body yet is bounded by half its own radius and applied by the extrusion that creates the cylinder. |
 | Polygon and slot bevel | `Tests/RupaCoreTests/PolygonSlotBevelTests.swift` proves that a polygon or slot profile's `bevel` is the all-edge fillet on the prism it extrudes, and, since neither body is a typed object and so carries no `corner.radius` of its own, the whole Inspector surface for that fillet: the evaluated face count rises from 8 to 38 for a hexagonal prism and from 8 to 20 for a slot's stadium prism, and returns on zero. It further proves that a four-sided polygon rounds through the polygon family the rectangle recognizer refuses; that the maximum each of the three families publishes is an edit that applies and evaluates while one tolerance past its bound is refused with the source fingerprint and the metadata unchanged; that a shallow prism is bounded by its depth rather than by its sides; that reshaping a polygon under a bevel its new cross-section no longer admits is refused before the rebuild, leaving the fillet and the document as they were; that a bevel on a slot with no body yet is bounded by half its own width and applied by the extrusion that creates the prism; and that a slot along an arc refuses a positive bevel and accepts zero. |
+| Cylinder hollow | `Tests/RupaCoreTests/CylinderHollowTests.swift` proves that a cylinder's `hollow` is the concentric hole in its circle profile rather than a number stored beside it: a positive hollow mints the inner circle and the evaluated face count rises from 6 to 10, a return to zero drops that entity and restores 6, and the body keeps its reference across both. It further proves that `hollow` and `corner.radius` refuse each other in both orders with `.commandInvalid`, the tube staying at 10 faces with its hollow intact and the rounded cylinder at 14 with its radius intact; that each maximum collapses to zero while the other edit holds the body, so the Inspector collapses the control it cannot accept instead of offering a drag that can only fail; and that a radius the current hollow no longer fits inside is refused before the rebuild by both `setCylinderDimensions` and `setCircleSketchGeometry`, while a radius the hole still fits inside is accepted by both and keeps that hole. |
 
 CADAPI-C must additionally prove:
 

@@ -111,7 +111,7 @@ extension DesignDocument {
         cadDocument = candidate.cadDocument
         productMetadata = candidate.productMetadata
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        if isPrimitiveExtrudeBody(featureID: bodyFeatureID) {
+        if try isPrimitiveExtrudeBody(featureID: bodyFeatureID) {
             try synchronizeObjectPropertiesFromSource(
                 featureID: bodyFeatureID,
                 objectRegistry: objectRegistry
@@ -290,13 +290,21 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-    private func isPrimitiveExtrudeBody(featureID: FeatureID) -> Bool {
+    private func isPrimitiveExtrudeBody(featureID: FeatureID) throws -> Bool {
         guard let feature = cadDocument.designGraph.nodes[featureID],
               case let .extrude(extrude) = feature.operation,
               let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             return false
         }
-        return isRectangleProfile(sketch) || singleCircleEntry(in: sketch) != nil
+        if isRectangleProfile(sketch) {
+            return true
+        }
+        // A hollow cylinder is no longer a body whose dimensions name it, so an edge moved on one
+        // is recorded as a source edit rather than synchronized back onto cylinder properties.
+        guard let cylinder = try recognizedCylinderCircleProfile(in: sketch) else {
+            return false
+        }
+        return cylinder.inner == nil
     }
 }

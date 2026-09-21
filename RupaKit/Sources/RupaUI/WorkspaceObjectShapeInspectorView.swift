@@ -145,6 +145,25 @@ struct WorkspaceObjectShapeInspectorView: View {
         }
     }
 
+    /// The bound the source publishes for a length the body's own geometry limits.
+    ///
+    /// A body's `corner.radius` and a profile's `bevel` are the same all-edge fillet seen from the
+    /// two ends, so they take the same bound. A cylinder's `hollow` takes its own: the hole has to
+    /// stay inside the wall the body is built to. Every other length keeps its declared range.
+    private func sourceLengthLimit(
+        _ binding: ObjectPropertyDefinition.RenderBinding?,
+        shapes: [InspectorObjectShape]
+    ) -> Double? {
+        switch binding {
+        case .cornerRadius, .bevel:
+            return shapes.compactMap(\.cornerRadiusLimit).min()
+        case .hollow:
+            return shapes.compactMap(\.hollowLimit).min()
+        default:
+            return nil
+        }
+    }
+
     @ViewBuilder
     private func lengthObjectPropertyControl(
         _ property: ObjectPropertyDefinition,
@@ -158,13 +177,8 @@ struct WorkspaceObjectShapeInspectorView: View {
             return nil
         }
         if meters.count == values.count {
-            // A body's `corner.radius` and a profile's `bevel` are the same all-edge fillet seen
-            // from the two ends, so they take the same bound.
-            let roundsEveryEdge = property.renderBinding == .cornerRadius
-                || property.renderBinding == .bevel
-            let cornerLimit = roundsEveryEdge
-                ? shapes.compactMap(\.cornerRadiusLimit).min() : nil
-            let range = cornerLimit.map { 0...$0 } ?? lengthSliderRange(for: property, values: meters)
+            let sourceLimit = sourceLengthLimit(property.renderBinding, shapes: shapes)
+            let range = sourceLimit.map { 0...$0 } ?? lengthSliderRange(for: property, values: meters)
             workspaceLengthControl(
                 property.title,
                 values: meters,

@@ -163,11 +163,13 @@ struct SketchProfileSourcePropertyTests {
             value: .length(0.3)
         ))
 
-        let circle = try #require(
-            store.document.singleCircleEntry(in: try sketch(in: store, featureID: featureID))
+        let profile = try #require(
+            try store.document.recognizedCylinderCircleProfile(
+                in: try sketch(in: store, featureID: featureID)
+            )
         )
-        let radius = try store.document.resolvedLengthValue(circle.circle.radius, owner: "Circle radius")
-        #expect(nearlyEqual(radius, 0.3))
+        #expect(nearlyEqual(profile.outer.radius, 0.3))
+        #expect(profile.inner == nil)
     }
 
     // MARK: - Rectangle

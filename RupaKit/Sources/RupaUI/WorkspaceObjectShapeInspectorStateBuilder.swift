@@ -30,6 +30,7 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
             }
             let size: InspectorVector3D?
             let cornerRadiusLimit: Double?
+            var hollowLimit: Double? = nil
             let definition = snapshot.objectRegistry.definition(for: object.typeID)
             var properties = object.properties
             if object.typeID == .cube || object.typeID == .cylinder {
@@ -40,6 +41,10 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 // cylinder by half its own radius, and only the source knows which prism this is.
                 cornerRadiusLimit = try document.maximumAllEdgeCornerRadius(
                     featureID: source.featureID)
+                // The hollow is bounded by the wall it has to stay inside, which only the circle
+                // profile knows, and it publishes zero on a body already carrying a fillet so the
+                // two controls collapse each other rather than refusing every drag.
+                hollowLimit = try document.maximumCylinderHollow(featureID: source.featureID)
                 for property in definition?.properties ?? [] {
                     switch property.renderBinding {
                     case .sizeX: properties[property.id] = .length(source.sizeX)
@@ -49,6 +54,12 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                         if let radius = source.radius { properties[property.id] = .length(radius) }
                     case .cornerRadius:
                         properties[property.id] = .length(try document.boxCornerRadius(source.featureID))
+                    case .hollow:
+                        // The hole in the circle profile is the single truth of how hollow the body
+                        // is, so the reading comes from it rather than from the stored property.
+                        if let hollow = try document.cylinderHollow(featureID: source.featureID) {
+                            properties[property.id] = .length(hollow)
+                        }
                     default: break
                     }
                 }
@@ -70,7 +81,7 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 typeID: object.typeID, definition: definition, properties: properties,
                 center: bounds.map { .init(x: ($0.minimum.x + $0.maximum.x) / 2,
                     y: ($0.minimum.y + $0.maximum.y) / 2, z: ($0.minimum.z + $0.maximum.z) / 2) },
-                size: size, cornerRadiusLimit: cornerRadiusLimit)
+                size: size, cornerRadiusLimit: cornerRadiusLimit, hollowLimit: hollowLimit)
         }
     }
 

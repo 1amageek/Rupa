@@ -68,6 +68,7 @@ struct InspectorObjectShape: Identifiable, Equatable {
     var center: InspectorVector3D?
     var size: InspectorVector3D?
     var cornerRadiusLimit: Double? = nil
+    var hollowLimit: Double? = nil
 }
 
 struct InspectorSketchEntity: Equatable {

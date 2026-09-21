@@ -32,5 +32,8 @@
       - [x] S7.6.3.1 An exact all-edge fillet of a convex prism whose cap profile is a loop of segments and tangent arcs `depends:none` `parallel:none`
       - [x] S7.6.3.2 Polygon and slot bevel route to that fillet from the Inspector `depends:S7.6.3.1` `parallel:none`
   - [ ] S7.7 Cylinder angle, caps, and hollow through the circle profile source `depends:S7.1,S7.5` `parallel:none`
+    - [x] S7.7.1 Hollow as a concentric hole in the circle profile `depends:none` `parallel:none`
+    - [ ] S7.7.2 Angle as a sector profile that restores a circle at a full turn `depends:S7.7.1` `parallel:none`
+    - [ ] S7.7.3 Caps as the sheet a linear sweep of the same profile builds `depends:S7.7.2` `parallel:none`
   - [x] S7.8 A document saved against an earlier schema still opens, and a value its type no longer declares is reported rather than rejected `depends:S7.1` `parallel:none`
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`

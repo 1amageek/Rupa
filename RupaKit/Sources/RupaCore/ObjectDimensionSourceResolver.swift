@@ -61,9 +61,9 @@ package struct ObjectDimensionSourceResolver: Sendable {
             sketchPlane: sketch.plane,
             document: document
         )
-        if let circleEntry = singleCircleEntry(in: sketch) {
+        if let profile = try document.recognizedCylinderCircleProfile(in: sketch) {
             let radius = try resolvedPositiveLengthValue(
-                circleEntry.circle.radius,
+                profile.outer.circle.radius,
                 owner: "Cylinder radius",
                 document: document
             )
@@ -76,7 +76,7 @@ package struct ObjectDimensionSourceResolver: Sendable {
                 sizeY: abs(depth),
                 sizeZ: radius * 2.0,
                 radius: radius,
-                radiusExpression: circleEntry.circle.radius,
+                radiusExpression: profile.outer.circle.radius,
                 depthExpression: extrude.distance
             )
         }
@@ -217,20 +217,6 @@ package struct ObjectDimensionSourceResolver: Sendable {
             }
             return false
         }
-    }
-
-    private func singleCircleEntry(in sketch: Sketch) -> (id: SketchEntityID, circle: SketchCircle)? {
-        var circleEntry: (id: SketchEntityID, circle: SketchCircle)?
-        for (id, entity) in sketch.entities {
-            guard case .circle(let circle) = entity else {
-                return nil
-            }
-            guard circleEntry == nil else {
-                return nil
-            }
-            circleEntry = (id, circle)
-        }
-        return circleEntry
     }
 
     private func resolvedLengthValue(

@@ -652,12 +652,14 @@ extension DesignDocument {
     /// The order is the contract: a circle, then a rectangle, then a regular polygon, then a
     /// stadium. `AllEdgeFilletProfile` owns why an axis-aligned square stops at the rectangle.
     func recognizedAllEdgeFilletProfile(in sketch: Sketch) throws -> AllEdgeFilletProfile? {
-        if let circleEntry = singleCircleEntry(in: sketch) {
-            let radius = try resolvedLengthValue(circleEntry.circle.radius, owner: "Circle radius")
-            guard radius > 0 else {
+        if let cylinder = try recognizedCylinderCircleProfile(in: sketch) {
+            // A tube is none of the four prisms the kernel's all-edge fillet accepts, so a hollow
+            // cylinder names no profile here rather than falling through to a recognizer that
+            // would read its two circles as some other shape.
+            guard cylinder.inner == nil, cylinder.outer.radius > 0 else {
                 return nil
             }
-            return .circle(radius: radius)
+            return .circle(radius: cylinder.outer.radius)
         }
         if let rectangle = try recognizedRectangleProfile(in: sketch) {
             return .rectangle(
@@ -957,18 +959,53 @@ extension DesignDocument {
         return arcEntry
     }
 
-    func singleCircleEntry(in sketch: Sketch) -> (id: SketchEntityID, circle: SketchCircle)? {
-        var circleEntry: (id: SketchEntityID, circle: SketchCircle)?
+    /// Names the circle profile family a cylinder extrudes, or `nil` for a sketch outside it.
+    ///
+    /// `CylinderCircleProfile` owns what the family is. Two circles are one profile only when the
+    /// inner one is concentric with the outer one and strictly inside it, which is what makes the
+    /// extrusion one tube rather than two bodies. Anything else — a third circle, an entity that is
+    /// not a circle, two circles side by side — is a sketch no cylinder edit names, and each caller
+    /// keeps the behaviour it already has for a profile it cannot name.
+    ///
+    /// The recognizer resolves radii but judges no bound beyond the containment that makes the
+    /// family well formed. A caller that requires a positive radius, or one the current hollow
+    /// leaves room for, states that itself.
+    func recognizedCylinderCircleProfile(in sketch: Sketch) throws -> CylinderCircleProfile? {
+        var entries: [CylinderCircleProfile.Entry] = []
         for (id, entity) in sketch.entities {
-            guard case .circle(let circle) = entity else {
+            guard case .circle(let circle) = entity, entries.count < 2 else {
                 return nil
             }
-            guard circleEntry == nil else {
-                return nil
-            }
-            circleEntry = (id, circle)
+            let radius = try resolvedLengthValue(circle.radius, owner: "Cylinder radius")
+            entries.append(CylinderCircleProfile.Entry(id: id, circle: circle, radius: radius))
         }
-        return circleEntry
+        let tolerance = modelingSettings.tolerance.distance
+        switch entries.count {
+        case 1:
+            return CylinderCircleProfile(outer: entries[0], inner: nil)
+        case 2:
+            let sorted = entries.sorted { $0.radius > $1.radius }
+            let outer = sorted[0]
+            let inner = sorted[1]
+            let centerOffset = try sketchPointDistance(outer.circle.center, inner.circle.center)
+            guard inner.radius > tolerance,
+                  outer.radius - inner.radius > tolerance,
+                  centerOffset <= tolerance else {
+                return nil
+            }
+            return CylinderCircleProfile(outer: outer, inner: inner)
+        default:
+            return nil
+        }
+    }
+
+    private func sketchPointDistance(_ first: SketchPoint, _ second: SketchPoint) throws -> Double {
+        let owner = "Circle center"
+        let deltaX = try resolvedLengthValue(first.x, owner: owner)
+            - resolvedLengthValue(second.x, owner: owner)
+        let deltaY = try resolvedLengthValue(first.y, owner: owner)
+            - resolvedLengthValue(second.y, owner: owner)
+        return (deltaX * deltaX + deltaY * deltaY).squareRoot()
     }
 
     private func lineOrientationDistance(_ first: Double, _ second: Double) -> Double {
