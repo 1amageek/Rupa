@@ -217,6 +217,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case deleteBodyFaces(targets: [SelectionTarget])
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
+    case createBodyEdgeTreatment(name: String, target: SelectionTarget, treatment: BodyEdgeTreatment)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
@@ -601,6 +602,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "draftBodyFaces"
         case .chamferBodyEdges:
             "chamferBodyEdges"
+        case .createBodyEdgeTreatment:
+            "createBodyEdgeTreatment"
         case .filletBodyEdges:
             "filletBodyEdges"
         case .moveBodyEdge:
@@ -792,6 +795,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .deleteBodyFaces,
              .draftBodyFaces,
              .chamferBodyEdges,
+             .createBodyEdgeTreatment,
              .filletBodyEdges,
              .moveBodyEdge,
              .moveBodyVertex,

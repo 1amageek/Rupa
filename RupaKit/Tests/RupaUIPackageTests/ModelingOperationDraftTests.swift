@@ -103,11 +103,17 @@ struct ModelingOperationDraftTests {
         let edge = SelectionTarget(sceneNodeID: profile.target.sceneNodeID, component: .edge(.generatedTopology(SubshapeID(featureID: profile.feature, role: "body:edge:first", ordinal: 0))))
         var draft = makeDraft(.fillet, targets: [edge])
         draft.distance = "0.025 in"
-        draft.filletSegments = "16"
-        #expect(try draft.command(in: document) == .filletBodyEdges(targets: [edge], radius: .length(0.025 * 0.0254, .meter), segmentCount: 16))
+        #expect(try draft.command(in: document) == .createBodyEdgeTreatment(name: draft.name,
+            target: edge, treatment: .fillet(radius: .length(0.025 * 0.0254, .meter))))
         draft.kind = .chamfer
         draft.distance = "0.75 mm"
-        #expect(try draft.command(in: document) == .chamferBodyEdges(targets: [edge], distance: .length(0.00075, .meter)))
+        #expect(try draft.command(in: document) == .createBodyEdgeTreatment(name: draft.name,
+            target: edge, treatment: .chamfer(distance: .length(0.00075, .meter))))
+        draft.kind = .g2Blend
+        #expect(try draft.command(in: document) == .createBodyEdgeTreatment(name: draft.name,
+            target: edge, treatment: .g2Blend(distance: .length(0.00075, .meter))))
+        draft.targets.append(edge)
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
     /// Every workspace scale the app ships opens a primitive draft the kernel
@@ -171,7 +177,7 @@ struct ModelingOperationDraftTests {
         )
         var chamfer = makeDraft(.chamfer, targets: [edge])
         chamfer.distance = fieldText(forMeters: toleranceMeters, preferredUnit: chamfer.unit)
-        #expect(throws: Never.self) { try chamfer.command(in: document) }
+        #expect(throws: EditorError.self) { try chamfer.command(in: document) }
         chamfer.distance = "0 mm"
         #expect(throws: EditorError.self) { try chamfer.command(in: document) }
     }

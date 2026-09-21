@@ -81,6 +81,14 @@ path; the row is not a second source graph or a dynamic definition editor.
 
 ## Contracts and Invariants
 
+Selected-edge Fillet, Chamfer and G2 Blend use the
+[Core native edge treatment](../../RupaCore/BodyEdgeTreatment/DESIGN.md) contract,
+not extrusion-profile corner rewriting. They require one generated CAD edge
+and an amount above modeling tolerance. The kernel's unsupported geometry is
+reported by Preview without publication. Subdivision counts are display
+quality, so these forms do not expose them as shape parameters. Existing
+profile-corner manipulation remains a distinct source-editing operation.
+
 - Primitive entries in the palette and Model menu activate the shared Solid
   canvas tool with a MainView-owned `WorkspaceSolidShape`. Click places a default
   primitive; drag sets its rectangle or radius. Sphere uses the construction
@@ -106,11 +114,9 @@ path; the row is not a second source graph or a dynamic definition editor.
   angle is rejected. A length that gives a new feature its extent, such as a
   size, a radius or an extrude distance, must exceed the document's own
   distance tolerance, because Core refuses one at or below it, and the refusal
-  names that threshold as a readable length. An amount applied to geometry
-  that already exists, such as a fillet radius or a chamfer distance, is a
-  different quantity: Core asks only that it be positive, so this component
-  asks the same and does not invent a stricter threshold it would then refuse
-  work for. Core's remaining geometric requirements, such as whether a sketch
+  names that threshold as a readable length. Native edge-treatment amounts
+  must also exceed that tolerance, matching the kernel. Core's remaining
+  geometric requirements, such as whether a sketch
   yields a closed profile or whether an edge treatment holds together, stay
   typed failures from the actual preview rather than preconditions restated
   here.
@@ -130,8 +136,9 @@ path; the row is not a second source graph or a dynamic definition editor.
 - The form shows ordered operands and their roles. Loft section order can be
   changed explicitly; Boolean's last operand is the tool. Selection replacement
   is explicit. Authored Mesh cannot masquerade as a CAD feature.
-- Feature-only operations reject transformed occurrences, including transformed
-  ancestors, instead of ignoring their world placement. Kernel limitations
+- Feature-only operations other than native edge treatments reject transformed occurrences, including transformed
+  ancestors, instead of ignoring their world placement. Edge treatments retain
+  the occurrence placement and interpret the amount in source coordinates. Kernel limitations
   remain typed failures from actual preview/evaluation, not successful fallbacks.
 - Editing a draft invalidates the parent's previous preview. Apply is enabled
   only for a completed matching preview and while no operation is running.

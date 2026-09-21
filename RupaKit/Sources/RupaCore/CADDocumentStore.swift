@@ -1806,6 +1806,22 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createBodyEdgeTreatment:
+            func run() throws {
+                guard case .createBodyEdgeTreatment(let name, let target, let treatment) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Expected native edge treatment command.")
+                }
+                let transaction = try document.prepareBodyEdgeTreatment(
+                    name: name, target: target, treatment: treatment, objectRegistry: objectRegistry
+                )
+                var updated = document
+                _ = try updated.appendFeatureGraph(transaction, objectRegistry: objectRegistry)
+                document = updated
+                primaryFeatureID = transaction.primaryFeatureID
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .chamferBodyEdges:
             func run() throws {
                 guard case .chamferBodyEdges(let targets, let distance) = command else {

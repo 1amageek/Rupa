@@ -14,6 +14,7 @@ struct ModelingOperationDraft: Equatable {
         case boolean = "Boolean"
         case fillet = "Fillet"
         case chamfer = "Chamfer"
+        case g2Blend = "G2 Blend"
 
         var id: String { rawValue }
 
@@ -34,6 +35,7 @@ struct ModelingOperationDraft: Equatable {
             case .boolean: "square.on.square"
             case .fillet: "square.on.circle"
             case .chamfer: "cube.transparent"
+            case .g2Blend: "point.topleft.down.to.point.bottomright.curvepath"
             }
         }
     }
@@ -54,7 +56,6 @@ struct ModelingOperationDraft: Equatable {
     var sheet = false
     var smooth = false
     var closesSectionLoop = false
-    var filletSegments = "12"
 
     /// Opens a draft at the default the workspace scale publishes for what
     /// the kind is about to author.
@@ -88,7 +89,7 @@ struct ModelingOperationDraft: Equatable {
 
     private static func seedMeters(for kind: Kind, ruler: RulerConfiguration) -> Double {
         switch kind {
-        case .fillet, .chamfer:
+        case .fillet, .chamfer, .g2Blend:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
         case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
@@ -187,17 +188,22 @@ struct ModelingOperationDraft: Equatable {
                 throw invalid("Select target CAD bodies, then a separate tool body last.")
             }
             return .createBoolean(name: name, targets: features.dropLast().map { BooleanTargetReference(featureID: $0) }, tool: BooleanToolReference(featureID: tool), operation: booleanOperation, keepTools: keepTools)
-        case .fillet, .chamfer:
+        case .fillet, .chamfer, .g2Blend:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
-            guard !edges.isEmpty, edges.count == targets.count else {
-                throw invalid("Select CAD edges for this operation.")
+            guard edges.count == 1, targets.count == 1,
+                  case .edge(let component) = edges[0].component,
+                  component.generatedTopologySubshapeID != nil else {
+                throw invalid("Select one generated CAD edge. Multi-edge blends are not supported by this operation.")
             }
-            let amount = try positiveLength(distance, label: kind == .fillet ? "Radius" : "Distance")
-            if kind == .chamfer { return .chamferBodyEdges(targets: edges, distance: .length(amount, .meter)) }
-            guard let segments = Int(filletSegments), segments >= 1 else {
-                throw invalid("Fillet segments must be a positive integer.")
+            let amount = CADExpression.length(try modelableLength(distance,
+                label: kind == .fillet ? "Radius" : "Distance", in: document), .meter)
+            let treatment: BodyEdgeTreatment
+            switch kind {
+            case .fillet: treatment = .fillet(radius: amount)
+            case .chamfer: treatment = .chamfer(distance: amount)
+            default: treatment = .g2Blend(distance: amount)
             }
-            return .filletBodyEdges(targets: edges, radius: .length(amount, .meter), segmentCount: segments)
+            return .createBodyEdgeTreatment(name: name, target: edges[0], treatment: treatment)
         }
     }
 
@@ -208,13 +214,14 @@ struct ModelingOperationDraft: Equatable {
         case .boolean: role = index == targets.count - 1 ? "Tool" : "Target"
         case .loft: role = "Section \(index + 1)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
-        case .fillet, .chamfer: role = "Edge \(index + 1)"
+        case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
         default: role = "Profile"
         }
         return "\(role): \(name)"
     }
 
     private func operandNodes(in document: DesignDocument) throws -> [SceneNode] {
+        let preservesOccurrence = [.fillet, .chamfer, .g2Blend].contains(kind)
         var seen = Set<SceneNodeID>()
         var nodes: [SceneNode] = []
         for target in targets where seen.insert(target.sceneNodeID).inserted {
@@ -224,7 +231,7 @@ struct ModelingOperationDraft: Equatable {
             var ancestors: Set<SceneNodeID> = [node.id]
             var current = node
             while true {
-                guard current.localTransform == .identity else {
+                guard preservesOccurrence || current.localTransform == .identity else {
                     throw invalid("\(node.name) has an occurrence transform. This operation requires source-frame CAD geometry; its placement cannot be ignored.")
                 }
                 guard let parent = document.productMetadata.sceneNodes.values.first(where: { $0.childIDs.contains(current.id) }) else { break }
@@ -243,20 +250,7 @@ struct ModelingOperationDraft: Equatable {
         return value
     }
 
-    /// A length that establishes geometry, measured against the tolerance of
-    /// the document it will be modelled in.
-    ///
-    /// Core holds this threshold on every length that gives a new feature its
-    /// extent: `createAnalyticSphere` refuses a radius at or below
-    /// `modelingSettings.tolerance.distance`, a sketch drawn at or below it
-    /// yields no profile for `extrudeProfile` to sweep, and the kernel's
-    /// extrude evaluator refuses a distance that does not exceed it. The
-    /// tolerance belongs to the document rather than to this panel, so it is
-    /// read from the document being planned against, the same layer
-    /// `RevolveAxis.validate(tolerance:)` already uses, which also lets the
-    /// refusal name the threshold as a length read in the same unit the field
-    /// prefers. An amount applied to existing geometry is a different quantity
-    /// and uses `positiveLength(_:label:)`.
+    /// Native feature extents and edge blends both exceed modeling tolerance.
     private func modelableLength(
         _ text: String,
         label: String,
@@ -274,22 +268,6 @@ struct ModelingOperationDraft: Equatable {
                     + threshold.text + " " + threshold.unit.symbol + "."
             )
         }
-        return value
-    }
-
-    /// An amount applied to geometry that already exists.
-    ///
-    /// A fillet radius and a chamfer distance do not establish an extent of
-    /// their own; they modify an edge of a body whose size Core has already
-    /// accepted. Core asks only that such an amount be positive, and whether
-    /// the geometry it produces holds together is decided against the same
-    /// tolerance when the edit is evaluated. Restating the size threshold here
-    /// would refuse work Core performs, such as a micrometre chamfer on a
-    /// part measured in micrometres, so the panel asks what Core asks and
-    /// leaves the geometric outcome a typed failure from the actual preview.
-    private func positiveLength(_ text: String, label: String) throws -> Double {
-        let value = try length(text, label: label)
-        guard value > 0 else { throw invalid("\(label) must be greater than zero.") }
         return value
     }
 

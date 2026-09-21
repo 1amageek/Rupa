@@ -15,6 +15,7 @@ enum PreparedAutomationSourceCommandValidation {
              .applySemanticExtensionMutations,
              .applyNamespacedSemanticExtensionMutations,
              .appendFeatureGraph,
+             .createBodyEdgeTreatment,
              .createSketch,
              .validateDocument:
             return false

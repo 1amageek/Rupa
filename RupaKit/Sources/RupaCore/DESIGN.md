@@ -12,7 +12,9 @@ Dependencies used by this boundary are `RupaCoreTypes`, `RupaGeometry`,
 `RupaProjectModel`, and Swift-CAD. Users include `RupaProject`, `RupaKit`, and
 existing application/domain adapters through the public Core contracts.
 
-Parent: [RupaKit package design](../../DESIGN.md). Children: none.
+Parent: [RupaKit package design](../../DESIGN.md). Children include
+[SpatialPathEditing](SpatialPathEditing/DESIGN.md) and
+[BodyEdgeTreatment](BodyEdgeTreatment/DESIGN.md).
 
 ## Responsibilities and Boundaries
 

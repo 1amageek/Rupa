@@ -120,8 +120,7 @@ struct ModelingOperationView: View {
             Toggle("Keep tool bodies", isOn: $draft.keepTools)
         case .fillet:
             lengthField("Radius", text: $draft.distance)
-            TextField("Segments", text: $draft.filletSegments)
-        case .chamfer:
+        case .chamfer, .g2Blend:
             lengthField("Distance", text: $draft.distance)
         }
     }
