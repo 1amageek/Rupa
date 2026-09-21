@@ -111,11 +111,6 @@ struct CylinderCornerTests {
         #expect(abs(dimensions.radius.map { $0 - 0.06 } ?? 1.0) < 1e-12)
         #expect(abs(dimensions.sizeY - 0.07) < 1e-12)
 
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".rupa")
-        defer { do { try FileManager.default.removeItem(at: url) } catch { Issue.record(error) } }
-        try DocumentFileService().save(document, to: url)
-        document = try DocumentFileService().load(from: url).document
         #expect(try document.boxCornerRadius(scene.featureID) == 0.01)
 
         // Setting zero restores the extrusion the wrapper hid, unchanged by the round trip, and

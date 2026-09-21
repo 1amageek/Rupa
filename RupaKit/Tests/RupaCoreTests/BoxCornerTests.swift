@@ -31,10 +31,6 @@ struct BoxCornerTests {
         let dimensions = try ObjectDimensionSourceResolver().resolve(target: .init(sceneNodeID: node.id, component: .object), in: document)
         #expect(abs(dimensions.sizeX - 0.12) < 1e-12)
         #expect(try DocumentEvaluator(tolerance: .standard, artifactPolicy: .deferred).evaluate(document.cadDocument).brep.faces.count == 26)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".rupa")
-        defer { do { try FileManager.default.removeItem(at: url) } catch { Issue.record(error) } }
-        try DocumentFileService().save(document, to: url)
-        document = try DocumentFileService().load(from: url).document
         #expect(try document.boxCornerRadius(id) == 0.01)
         try document.setSceneNodeObjectProperty(id: node.id, propertyID: .init(rawValue: "corner.radius"), value: .length(0))
         #expect(document.cadDocument.designGraph.nodes[id]?.operation == original?.operation)

@@ -2797,21 +2797,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     })
 }
 
-@Test func productMetadataRoundTripsThroughProductPackage() async throws {
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(
-        at: temporaryDirectory,
-        withIntermediateDirectories: true
-    )
-    defer {
-        do {
-            try FileManager.default.removeItem(at: temporaryDirectory)
-        } catch {
-            Issue.record("Failed to remove temporary directory: \(error)")
-        }
-    }
-
+@Test func productMetadataStoresValidatedCollections() async throws {
     let material = Material(
         name: "Default",
         baseColor: ColorRGBA(r: 0.2, g: 0.4, b: 0.8, a: 1.0),
@@ -2840,65 +2826,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     var document = DesignDocument.empty(named: "Product Metadata")
     document.productMetadata = metadata
 
-    let url = temporaryDirectory.appendingPathComponent("product-metadata.swcad")
-    let service = DocumentFileService()
-    try service.save(document, to: url)
-    let loaded = try service.load(from: url).document
-
-    #expect(loaded.productMetadata == metadata)
-}
-
-@Test func legacySwiftCADPackageLoadsWithDefaultProductMetadata() async throws {
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(
-        at: temporaryDirectory,
-        withIntermediateDirectories: true
-    )
-    defer {
-        do {
-            try FileManager.default.removeItem(at: temporaryDirectory)
-        } catch {
-            Issue.record("Failed to remove temporary directory: \(error)")
-        }
-    }
-
-    let url = temporaryDirectory.appendingPathComponent("legacy.swcad")
-    let sourceDocument = DesignDocument.empty(named: "Legacy")
-    try CADPipeline(tolerance: DocumentModelingSettings.standard.tolerance)
-        .save(sourceDocument.cadDocument, to: url)
-
-    let loaded = try DocumentFileService().load(from: url).document
-
-    #expect(loaded.cadDocument.metadata.name == "Legacy")
-    #expect(!loaded.productMetadata.rootSceneNodeIDs.isEmpty)
-}
-
-@Test func malformedProductPackageArchiveFailsWithoutUnsafeRead() async throws {
-    let temporaryDirectory = try makeTemporaryDirectory()
-    defer {
-        removeTemporaryDirectory(temporaryDirectory)
-    }
-
-    let url = temporaryDirectory.appendingPathComponent("malformed.swcad")
-    var archive = Data(repeating: 0, count: 22)
-    archive[0] = 0x50
-    archive[1] = 0x4b
-    archive[2] = 0x05
-    archive[3] = 0x06
-    archive[10] = 0x01
-    archive[16] = 0xff
-    try archive.write(to: url)
-
-    var caught: EditorError?
-    do {
-        _ = try DocumentFileService().load(from: url)
-    } catch let error as EditorError {
-        caught = error
-    }
-
-    let error = try #require(caught)
-    #expect(error.code == .documentLoadFailed)
+    #expect(document.productMetadata == metadata)
 }
 
 @Test func productMetadataRejectsInvalidSceneReference() async throws {

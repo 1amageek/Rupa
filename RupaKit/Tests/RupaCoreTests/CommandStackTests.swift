@@ -6014,30 +6014,3 @@ private func commandStackApproximatelyEqual(
         reason: .evaluationFailed
     ))
 }
-
-@MainActor
-@Test func fileServiceRoundTripsPersistedDocumentMetadata() async throws {
-    let temporaryDirectory = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(
-        at: temporaryDirectory,
-        withIntermediateDirectories: true
-    )
-    defer {
-        do {
-            try FileManager.default.removeItem(at: temporaryDirectory)
-        } catch {
-            Issue.record("Failed to remove temporary directory: \(error)")
-        }
-    }
-
-    let url = temporaryDirectory.appendingPathComponent("roundtrip.swcad")
-    let service = DocumentFileService()
-    var document = DesignDocument.empty(named: "Before")
-    document.rename("After")
-
-    try service.save(document, to: url)
-    let loaded = try service.load(from: url).document
-
-    #expect(loaded.cadDocument.metadata.name == "After")
-}

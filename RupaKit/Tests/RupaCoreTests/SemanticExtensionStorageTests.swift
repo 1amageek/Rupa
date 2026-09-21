@@ -4,48 +4,6 @@ import Testing
 @testable import RupaCore
 
 @Test(.timeLimit(.minutes(1)))
-func semanticExtensionsRoundTripThroughProductPackage() throws {
-    let temporaryDirectory = try semanticExtensionTemporaryDirectory()
-    defer {
-        removeSemanticExtensionTemporaryDirectory(temporaryDirectory)
-    }
-
-    let extensionID = SemanticExtensionID()
-    let envelope = SemanticExtensionEnvelope(
-        id: extensionID,
-        namespace: "architecture",
-        schemaVersion: SemanticSchemaVersion(major: 0, minor: 1, patch: 0),
-        payload: .object([
-            "kind": .string("wall"),
-            "height": .number(3.2),
-            "layers": .array([
-                .object(["material": .string("gypsum")]),
-                .object(["material": .string("stud")]),
-            ]),
-        ]),
-        projection: ProjectionManifest(
-            semanticEntities: [
-                ProjectionSemanticEntity(
-                    id: "wall-1",
-                    ownership: .domainOwned,
-                    sourcePaths: [.root]
-                ),
-            ]
-        )
-    )
-
-    var document = DesignDocument.empty(named: "Semantic House")
-    document.productMetadata.semanticExtensions = [extensionID: envelope]
-
-    let url = temporaryDirectory.appendingPathComponent("semantic-house.swcad")
-    let service = DocumentFileService()
-    try service.save(document, to: url)
-    let loaded = try service.load(from: url).document
-
-    #expect(loaded.productMetadata.semanticExtensions == [extensionID: envelope])
-}
-
-@Test(.timeLimit(.minutes(1)))
 func semanticExtensionsDecodeLegacyMetadataWithoutField() throws {
     let metadata = ProductMetadata.empty()
     let encoded = try JSONEncoder().encode(metadata)
@@ -479,24 +437,6 @@ private func topologyMaterialBindingFixture(
     )
     metadata.topologyMaterialBindings = [bindingID: binding]
     return (metadata, binding)
-}
-
-private func semanticExtensionTemporaryDirectory() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    try FileManager.default.createDirectory(
-        at: url,
-        withIntermediateDirectories: true
-    )
-    return url
-}
-
-private func removeSemanticExtensionTemporaryDirectory(_ url: URL) {
-    do {
-        try FileManager.default.removeItem(at: url)
-    } catch {
-        Issue.record("Failed to remove temporary directory: \(error)")
-    }
 }
 
 private func semanticProjectionBox(

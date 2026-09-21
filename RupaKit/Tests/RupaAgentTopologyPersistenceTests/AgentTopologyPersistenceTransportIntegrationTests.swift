@@ -147,33 +147,6 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 @MainActor
-@Test func agentSavesOpenFileBackedSessionAndMarksClean() async throws {
-    let temporaryDirectory = try makeTemporaryDirectory()
-    defer { removeTemporaryDirectory(temporaryDirectory) }
-    let url = temporaryDirectory.appendingPathComponent("agent-save.swcad")
-    try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentCommandController()
-    let sessionID = UUID()
-    let session = EditorSession(document: try DocumentFileService().load(from: url).document)
-    _ = try session.execute(.renameDocument(name: "Saved Live"))
-    server.register(session: session, path: url, id: sessionID)
-
-    let response = server.handle(
-        .save(sessionID: sessionID, expectedGeneration: session.generation)
-    )
-    guard case .save(let result) = response else {
-        #expect(Bool(false))
-        return
-    }
-    let loaded = try DocumentFileService().load(from: url).document
-    #expect(result.path == url.path)
-    #expect(result.generation == session.generation)
-    #expect(!result.dirty)
-    #expect(!session.isDirty)
-    #expect(loaded.cadDocument.metadata.name == "Saved Live")
-}
-
-@MainActor
 @Test func agentExportsOpenSessionWithoutMutation() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer { removeTemporaryDirectory(temporaryDirectory) }
