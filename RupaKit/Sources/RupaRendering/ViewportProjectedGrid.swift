@@ -6,7 +6,7 @@ import RupaViewportScene
 public enum ViewportProjectedGrid {
     public typealias Axis = ViewportCoordinateAxis
     static let maximumGridLineCount = 360
-    static let labelFontSize: CGFloat = 24
+    static let labelFontSize: CGFloat = 18
     private static let minimumScaleLabelSpacingPixels: CGFloat = 72.0
     private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 

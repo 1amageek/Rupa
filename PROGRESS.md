@@ -1,5 +1,7 @@
 # Progress
 
+- [x] GS1 Reduce oversized grid labels from 24pt to 18pt, retaining contrast, full-text bounds and hover continuity. Four native GPU/handoff cases and signed App build pass; restarted App screenshot confirms the adjusted labels. Implementation commit accompanies this record. `depends:none` `parallel:none`
+
 - [x] GL1 Retain mounted camera and grid labels across hover updates (da10f92c). User-requested readability correction uses 24pt semibold and opaque 75% gray; eight native GPU/projection/reuse/failure cases pass and the restarted App visibly displays complete labels. Readability commit accompanies this record. `depends:none` `parallel:none`
 
 - [x] TX1 Remove label line limits and ellipsis policies across Inspector, lists, panels and viewport chrome; wrap long text, grow rows and move header hints outside the fixed-height control row. Nine focused functions (ten cases), signed App build and review pass. Commit c55112b4. `depends:none` `parallel:none`
