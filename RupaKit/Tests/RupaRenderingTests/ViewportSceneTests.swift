@@ -3145,7 +3145,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
         ]
     )
 
-    #expect(layout.inputExclusionRects.count == 3)
+    #expect(layout.inputExclusionRects.count == 2)
     #expect(layout.containsCanvasChrome(CGPoint(x: overlayRect.midX, y: overlayRect.midY)))
     #expect(layout.containsCanvasChrome(CGPoint(
         x: overlayRect.minX - ViewportCanvasChromeLayout.inputExclusionPadding / 2.0,
