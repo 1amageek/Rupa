@@ -1184,17 +1184,6 @@ public final class ProjectAgentCommandController: AgentRequestHandling {
         }
     }
 
-    private func normalizedDocumentName(_ name: String) throws -> String {
-        let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Document name must not be empty."
-            )
-        }
-        return normalized
-    }
-
     private func parseDimensionExpression(
         _ expression: String,
         targetKind: QuantityKind,

@@ -4870,18 +4870,6 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    private func observeWorkspaceOperation<Result: Sendable>(
-        _ task: Task<Result, Error>
-    ) {
-        Task { @MainActor in
-            do {
-                _ = try await task.value
-            } catch {
-                reportToolStatus(error.localizedDescription, severity: .warning)
-            }
-        }
-    }
-
     private func finishCanvasSourceCommand(_ result: CommandExecutionResult?) async throws {
         guard result?.didMutate == true else {
             return
@@ -6982,51 +6970,6 @@ private struct ProjectMainViewContent: View {
     }
 
     @ViewBuilder
-    private func componentBrowserRow(_ id: SceneNodeID, depth: Int) -> some View {
-        if let node = snapshot.document.document.productMetadata.sceneNodes[id] {
-            HStack(spacing: 6) {
-                Spacer()
-                    .frame(width: CGFloat(depth) * 12)
-
-                Image(systemName: sceneNodeSystemImage(for: node.reference))
-                    .frame(width: 16)
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(node.name)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(sceneNodeKindTitle(for: node.reference))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                sceneNodeControlButton(
-                    systemImage: node.isVisible ? "eye" : "eye.slash",
-                    help: node.isVisible ? "Hide Component" : "Show Component"
-                ) {
-                    toggleSceneNodeVisibility(id)
-                }
-
-                sceneNodeControlButton(
-                    systemImage: node.isLocked ? "lock" : "lock.open",
-                    help: node.isLocked ? "Unlock Component" : "Lock Component"
-                ) {
-                    toggleSceneNodeLock(id)
-                }
-            }
-            .onHover { isHovered in
-                setHoveredSceneNode(id, isHovered: isHovered)
-            }
-        }
-    }
-
-    @ViewBuilder
     private func componentDefinitionRow(_ id: ComponentDefinitionID) -> some View {
         if let definition = snapshot.document.document.productMetadata.componentDefinitions[id] {
             Label {
@@ -7045,45 +6988,6 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    @ViewBuilder
-    private func componentInstanceRow(_ id: ComponentInstanceID) -> some View {
-        if let instance = snapshot.document.document.productMetadata.componentInstances[id] {
-            HStack(spacing: 6) {
-                Image(systemName: "cube.transparent")
-                    .frame(width: 16)
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(instance.name)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(componentDefinitionName(for: instance.definitionID))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 8)
-
-                sceneNodeControlButton(
-                    systemImage: instance.isVisible ? "eye" : "eye.slash",
-                    help: instance.isVisible ? "Hide Component Instance" : "Show Component Instance"
-                ) {
-                    toggleComponentInstanceVisibility(id)
-                }
-
-                sceneNodeControlButton(
-                    systemImage: instance.isLocked ? "lock" : "lock.open",
-                    help: instance.isLocked ? "Unlock Component Instance" : "Lock Component Instance"
-                ) {
-                    toggleComponentInstanceLock(id)
-                }
-            }
-        }
-    }
-
     private func browserAssetRow(_ row: SidebarAssetRow) -> some View {
         Label {
             VStack(alignment: .leading, spacing: 1) {
@@ -7098,60 +7002,6 @@ private struct ProjectMainViewContent: View {
             }
         } icon: {
             WorkspaceSidebarSymbol(systemName: row.systemImage)
-        }
-    }
-
-    private func sceneNodeControlButton(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .medium))
-                .frame(width: 20, height: 20)
-        }
-        .buttonStyle(.borderless)
-        .help(help)
-    }
-
-    private func sceneNodeSystemImage(for reference: SceneNodeReference?) -> String {
-        guard let reference else {
-            return "square.stack.3d.down.right"
-        }
-        switch reference.kind {
-        case .feature:
-            return "point.3.filled.connected.trianglepath.dotted"
-        case .body:
-            return "cube"
-        case .sketch:
-            return "pencil.and.outline"
-        case .componentInstance:
-            return "cube.transparent"
-        case .construction:
-            return "axis.3d"
-        case .authoredMesh:
-            return "square.3.layers.3d"
-        }
-    }
-
-    private func toggleSceneNodeVisibility(_ id: SceneNodeID) {
-        submitSource(name: "toggleSceneNodeVisibility") { current in
-            guard let node = current.document.document.productMetadata.sceneNodes[id] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Scene node \(id) no longer exists."
-                )
-            }
-            return [.setSceneNodeVisibility(id: id, isVisible: !node.isVisible)]
-        }
-    }
-
-    private func toggleSceneNodeLock(_ id: SceneNodeID) {
-        submitSource(name: "toggleSceneNodeLock") { current in
-            guard let node = current.document.document.productMetadata.sceneNodes[id] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Scene node \(id) no longer exists."
-                )
-            }
-            return [.setSceneNodeLock(id: id, isLocked: !node.isLocked)]
         }
     }
 
@@ -7239,32 +7089,6 @@ private struct ProjectMainViewContent: View {
                 including \(plan.dependentSceneNodeIDs.count) built from the selection.
                 """
             )
-        }
-    }
-
-    private func toggleComponentInstanceVisibility(_ id: ComponentInstanceID) {
-        submitSource(name: "toggleComponentInstanceVisibility") { current in
-            guard let instance = current.document.document.productMetadata.componentInstances[id] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Component instance \(id) no longer exists."
-                )
-            }
-            return [
-                .setComponentInstanceVisibility(id: id, isVisible: !instance.isVisible),
-            ]
-        }
-    }
-
-    private func toggleComponentInstanceLock(_ id: ComponentInstanceID) {
-        submitSource(name: "toggleComponentInstanceLock") { current in
-            guard let instance = current.document.document.productMetadata.componentInstances[id] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Component instance \(id) no longer exists."
-                )
-            }
-            return [.setComponentInstanceLock(id: id, isLocked: !instance.isLocked)]
         }
     }
 
@@ -7522,22 +7346,10 @@ private struct ProjectMainViewContent: View {
         )
     }
 
-    private func selectedSurfaceAnalysisSummaryResult(
-        for nodes: [SceneNode]
-    ) -> Result<SurfaceAnalysisResult?, Error> {
-        surfaceInspectorStateBuilder.analysisSummaryResult(for: nodes)
-    }
-
     private func selectedSurfaceAnalysisResult(
         for nodes: [SceneNode]
     ) -> Result<InspectorSurfaceAnalysis?, Error> {
         surfaceInspectorStateBuilder.analysisResult(for: nodes)
-    }
-
-    private func selectedSurfaceContinuitySummaryResult(
-        for nodes: [SceneNode]
-    ) -> Result<RupaCore.SurfaceContinuityResult?, Error> {
-        surfaceInspectorStateBuilder.continuitySummaryResult(for: nodes)
     }
 
     private func selectedSurfaceContinuityResult(
@@ -9924,31 +9736,6 @@ private struct ProjectMainViewContent: View {
         return 0.0 ... visibleSpan
     }
 
-    private func extrudeFeatureID(for node: SceneNode) -> FeatureID? {
-        guard let featureID = node.reference?.featureID,
-              let feature = snapshot.document.document.cadDocument.designGraph.nodes[featureID],
-              case .extrude = feature.operation else {
-            return nil
-        }
-        return featureID
-    }
-
-    private func resolvedExtrudeDistance(featureID: FeatureID) -> Double? {
-        guard let feature = snapshot.document.document.cadDocument.designGraph.nodes[featureID],
-              case .extrude(let extrude) = feature.operation else {
-            return nil
-        }
-        do {
-            let quantity = try snapshot.document.document.cadDocument.parameters.resolvedValue(for: extrude.distance)
-            guard quantity.kind == .length else {
-                return nil
-            }
-            return quantity.value
-        } catch {
-            return nil
-        }
-    }
-
     private var sortedMaterialOptions: [WorkspaceObjectMaterialOption] {
         snapshot.document.document.productMetadata.materialLibrary.materials
             .sorted { lhs, rhs in
@@ -10367,10 +10154,6 @@ private struct ProjectMainViewContent: View {
         case .authoredMesh:
             return "Authored Mesh"
         }
-    }
-
-    private func componentDefinitionName(for id: ComponentDefinitionID) -> String {
-        snapshot.document.document.productMetadata.componentDefinitions[id]?.name ?? "Missing Definition"
     }
 
     private var evaluationStatusTitle: String {

@@ -3434,23 +3434,6 @@ struct SketchPointConstraintPropagator: Sendable {
         }
     }
 
-    private func circularRadiusReference(
-        for entityID: SketchEntityID,
-        in sketch: Sketch
-    ) -> SketchReference? {
-        guard let entity = sketch.entities[entityID] else {
-            return nil
-        }
-        switch entity {
-        case .circle:
-            return .circleRadius(entityID)
-        case .arc:
-            return .arcRadius(entityID)
-        case .point, .line, .spline:
-            return nil
-        }
-    }
-
     private func otherLineEndpoint(for reference: SketchReference) -> SketchReference? {
         switch reference {
         case let .lineStart(entityID):

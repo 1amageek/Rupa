@@ -24,22 +24,14 @@ surface renderer, and the Agent controller is globally MainActor-isolated.
 This phase changes design contracts only; it does not claim the production
 implementation or live App has been fixed.
 
-RUPA-RK is the target native viewport cutover layered on that responsiveness
-target; it is not current production until RK-2 through RK-5 and RK-IV pass.
-Until then, production world rendering is a migration hybrid:
-`RealityViewportView` supplies the RealityKit surface and native camera, two
-SwiftUI `Canvas` passes still draw the grid/axes and world overlays/previews,
-and the legacy identity renderer remains part of picking. The target makes
-RealityKit the only world-rendering backend: CAD and Mesh source, evaluation,
-history, stable identities, and project publication remain Rupa authority,
-while RealityKit owns only the mounted presentation scene, native camera,
-materials, spatial resources, collision queries, and frame display.
-macOS-27-or-later `RealityView` is the target live host, and
-native `ClippingComponent` owns section-plane clipping;
-`RealityRenderer` capability probes are offscreen evidence only and do not
-prove CAD integration. Existing Metal pipelines, `MTKView`/`CAMetalLayer`,
-identity GPU readback, and spatial SwiftUI `Canvas` drawing are migration
-targets, not a completed fallback or parallel production backend.
+RUPA-RK's migration milestones below are historical acceptance requirements,
+not a description of the current backend. The production native viewport and
+the completed legacy-backend removals are owned by the
+[Rendering design](RupaKit/Sources/RupaRendering/DESIGN.md).
+CAD/Mesh source, evaluation, history and project publication remain Rupa
+authority; RealityKit owns mounted world presentation and native picking.
+SwiftUI retains nonspatial chrome and selection rectangles, not a parallel
+world renderer. Offscreen capability probes alone do not prove App integration.
 
 This document has no parent. Its direct children are the
 [RupaKit package design](RupaKit/DESIGN.md), which indexes the changed module

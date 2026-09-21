@@ -2298,14 +2298,6 @@ enum ViewportSpatialOverlayProducer {
         return local.map { ViewportLayout.transformedPoint($0, by: item.modelTransform) }
     }
 
-    private static func makeLines(
-        _ points: [Point3D],
-        color: SIMD4<Float>,
-        depth: RealityViewportSpatialBatch.Depth = .scene
-    ) throws -> RealityViewportSpatialBatch.Mesh {
-        try line(points, color: color, depth: depth)
-    }
-
     private static func counts(
         in input: ViewportSpatialOverlayInput
     ) -> [ViewportSpatialOverlayFamily: Int] {

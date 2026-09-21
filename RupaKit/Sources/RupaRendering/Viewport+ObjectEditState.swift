@@ -4,18 +4,6 @@ import SwiftUI
 import RupaViewportScene
 import SwiftCAD
 
-struct ViewportVertexHandle: Equatable {
-    var vertex: ViewportBodyVertex
-    var position: ViewportModelPoint3D
-    var point: CGPoint
-}
-
-struct ViewportFaceHandle: Equatable {
-    var face: ViewportBodyFace
-    var position: ViewportModelPoint3D
-    var point: CGPoint
-}
-
 struct ViewportModelPoint3D: Equatable {
     var x: CGFloat
     var y: CGFloat

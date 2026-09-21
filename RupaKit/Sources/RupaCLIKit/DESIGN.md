@@ -49,6 +49,12 @@ flowchart LR
 
 ## Contracts and Invariants
 
+Selection commands use the registered commands' existing options and the shared
+`CLISelectionInputParser`. Unregistered single/multiple-target option wrappers
+are removed; command names, flags, payload parsing and access routing are unchanged.
+The `RupaCLITests` Xcode scheme isolates CLI verification from unrelated package
+test targets, following the package's existing focused-test scheme convention.
+
 1. Every project command opens at most one access session and uses one
    monotonic deadline supplied by product composition. Production uses the
    shared 120-second request budget. The CLI never creates a local workspace

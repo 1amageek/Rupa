@@ -17,9 +17,9 @@ to the App-owned `ProjectWorkspace`. It is a child of the
 
 Production prepares snapshot-bound RealityKit frame values asynchronously and
 mounts surfaces and world-space overlays in one native `RealityView`. SwiftUI
-owns only nonspatial chrome and the screen-space selection marquee. Legacy
-identity picking remains until RK-4, and RK-5/RK-IV own its removal and final
-integrated acceptance. Source tests and builds remain distinct from signed-App
+owns only nonspatial chrome and the screen-space selection marquee. Native
+picking and the retired legacy backend are owned by the Rendering design.
+Source tests and builds remain distinct from signed-App
 live acceptance; the latter must be recorded for the integrated application.
 
 ## Responsibilities and Boundaries
@@ -36,6 +36,10 @@ Keyboard context resolves slide-selection geometry only for an active slide
 command and never for Delete. Native deletion and SwiftUI key input share the
 same input-to-action path. Outliner keyboard and context-menu deletion share
 one lifecycle gate while retaining their distinct selection/focus behavior.
+
+Outliner owns scene and component-instance rows and their state actions.
+MainView composes it and retains only the separate component-definition and
+asset sections; retired private row renderers are not alternate UI paths.
 
 Inspector size fields map principal sketch-plane dimensions to model X/Y/Z in
 both reading and writing. Core's source dimensions remain U/depth/V. Arbitrary

@@ -9,13 +9,11 @@ contract while keeping one existing project authority. CADAPI-D is a target
 design: the current source still exposes legacy Automation payloads until its
 separate implementation task passes the gates defined below.
 
-RUPA-RK is likewise a target package contract, not a completed production
-cutover. The running viewport is currently a migration hybrid:
-`RealityViewportView` supplies the RealityKit surface and native camera,
-SwiftUI `Canvas` still supplies the grid and world overlays, and the legacy
-identity renderer still supplies part of picking. The RealityKit
-resource/entity/frame designs below describe the completed `RealityView` path;
-capability probes are not package or CAD integration evidence.
+RUPA-RK's milestones below retain historical acceptance requirements. Current
+world rendering and picking use the native `RealityView` path owned by the
+[Rendering design](Sources/RupaRendering/DESIGN.md); the legacy identity and
+spatial Canvas backends have been removed. Capability probes alone remain
+insufficient evidence for package or App integration.
 
 Parent: [system design](../DESIGN.md). Direct production children used by T10/T12 are:
 

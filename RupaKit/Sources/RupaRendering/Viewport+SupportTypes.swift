@@ -3,13 +3,6 @@ import RupaCore
 import SwiftUI
 import RupaViewportScene
 
-enum TransformHandleStyle {
-    case vertex
-    case faceCenter
-    case axisEndScale(ViewportCoordinateAxis)
-    case axisCenterScale(ViewportCoordinateAxis)
-}
-
 enum ViewportTheme {
     static let background = Color(red: 0.105, green: 0.112, blue: 0.118)
     static let gridMinor = Color.white.opacity(0.055)
@@ -63,47 +56,6 @@ struct ViewportEdgeAccessibilityMarker: Identifiable {
     var point: CGPoint
     var modelPoint: Point2D
     var sketchPlane: SketchPlane
-}
-
-enum ViewportFaceHighlightStyle {
-    case selected
-    case hovered
-
-    var color: Color {
-        switch self {
-        case .selected:
-            return ViewportTheme.selection
-        case .hovered:
-            return ViewportTheme.hover
-        }
-    }
-
-    var fillOpacity: Double {
-        switch self {
-        case .selected:
-            return 0.30
-        case .hovered:
-            return 0.18
-        }
-    }
-
-    var strokeOpacity: Double {
-        switch self {
-        case .selected:
-            return 0.96
-        case .hovered:
-            return 0.76
-        }
-    }
-
-    var lineWidth: CGFloat {
-        switch self {
-        case .selected:
-            return 2.8
-        case .hovered:
-            return 2.0
-        }
-    }
 }
 
 extension ViewportBodyFace {

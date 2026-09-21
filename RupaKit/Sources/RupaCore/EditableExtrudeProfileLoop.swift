@@ -1057,42 +1057,6 @@ struct EditableExtrudeProfileLoop: Equatable, Sendable {
         return quantity.value
     }
 
-    private static func lineSketch(
-        plane: SketchPlane,
-        vertices: [Point],
-        tolerance: Double
-    ) -> Sketch {
-        var entities: [SketchEntityID: SketchEntity] = [:]
-        var lineIDs: [SketchEntityID] = []
-        for index in vertices.indices {
-            let nextIndex = (index + 1) % vertices.count
-            let lineID = SketchEntityID()
-            lineIDs.append(lineID)
-            entities[lineID] = .line(
-                SketchLine(
-                    start: sketchPoint(vertices[index]),
-                    end: sketchPoint(vertices[nextIndex])
-                )
-            )
-        }
-
-        var constraints: [SketchConstraint] = []
-        for index in lineIDs.indices {
-            let lineID = lineIDs[index]
-            let nextLineID = lineIDs[(index + 1) % lineIDs.count]
-            let start = vertices[index]
-            let end = vertices[(index + 1) % vertices.count]
-            if nearlyEqual(start.y, end.y, tolerance: tolerance) {
-                constraints.append(.horizontal(lineID))
-            } else if nearlyEqual(start.x, end.x, tolerance: tolerance) {
-                constraints.append(.vertical(lineID))
-            }
-            constraints.append(.coincident(.lineEnd(lineID), .lineStart(nextLineID)))
-        }
-
-        return Sketch(plane: plane, entities: entities, constraints: constraints)
-    }
-
     private func chamferReplacement(
         at index: Int,
         distance: Double,
