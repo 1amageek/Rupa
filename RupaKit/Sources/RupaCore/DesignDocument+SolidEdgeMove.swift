@@ -300,11 +300,12 @@ extension DesignDocument {
         if isRectangleProfile(sketch) {
             return true
         }
-        // A hollow cylinder is no longer a body whose dimensions name it, so an edge moved on one
-        // is recorded as a source edit rather than synchronized back onto cylinder properties.
-        guard let cylinder = try recognizedCylinderCircleProfile(in: sketch) else {
+        // A hollow or swept cylinder is no longer a body whose dimensions name it, so an edge
+        // moved on one is recorded as a source edit rather than synchronized back onto cylinder
+        // properties.
+        guard let cylinder = try recognizedCylinderProfile(in: sketch) else {
             return false
         }
-        return cylinder.inner == nil
+        return cylinder.inner == nil && cylinder.isFullTurn
     }
 }

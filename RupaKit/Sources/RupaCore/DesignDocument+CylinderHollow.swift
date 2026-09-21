@@ -3,27 +3,10 @@ import Foundation
 import RupaCoreTypes
 
 extension DesignDocument {
-    /// The circle profile family a cylinder body extrudes, with the sketch feature carrying it.
-    ///
-    /// The body ID may name the all-edge fillet wrapper, so the extrusion is resolved the way every
-    /// other cylinder edit resolves it.
-    func resolvedCylinderCircleProfile(
-        featureID: FeatureID
-    ) throws -> (profileFeature: FeatureNode, sketch: Sketch, profile: CylinderCircleProfile)? {
-        guard let feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)],
-              case let .extrude(extrude) = feature.operation,
-              let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
-              case let .sketch(sketch) = profileFeature.operation,
-              let profile = try recognizedCylinderCircleProfile(in: sketch) else {
-            return nil
-        }
-        return (profileFeature, sketch, profile)
-    }
-
-    /// The hollow this cylinder currently carries, or `nil` when the body extrudes no circle
-    /// profile family and so has no hollow to read.
+    /// The hollow this cylinder currently carries, or `nil` when the body extrudes no profile
+    /// family and so has no hollow to read.
     package func cylinderHollow(featureID: FeatureID) throws -> Double? {
-        try resolvedCylinderCircleProfile(featureID: featureID)?.profile.hollowRadius
+        try resolvedCylinderProfile(featureID: featureID)?.profile.hollowRadius
     }
 
     /// The largest hollow this cylinder accepts, or `nil` when it accepts none.
@@ -32,8 +15,11 @@ extension DesignDocument {
     /// publishes zero rather than a bound every drag would refuse. The value otherwise sits one
     /// tolerance inside the wall the profile has to keep, the same way `maximumAllEdgeCornerRadius`
     /// sits inside the kernel's own bound, so the end of a control bound by it always applies.
+    ///
+    /// A swept cylinder keeps the full bound: the hole is the same hole, and the chord the sweep
+    /// needs is checked against the hollow the caller actually sends.
     package func maximumCylinderHollow(featureID: FeatureID) throws -> Double? {
-        guard let resolved = try resolvedCylinderCircleProfile(featureID: featureID) else {
+        guard let resolved = try resolvedCylinderProfile(featureID: featureID) else {
             return nil
         }
         let cornerRadius = try boxCornerRadius(featureID)
@@ -44,7 +30,7 @@ extension DesignDocument {
         return max(0, resolved.profile.outer.radius - 2.0 * tolerance)
     }
 
-    /// Rejects a hollow the circle profile family cannot hold.
+    /// Rejects a hollow the profile family cannot hold.
     ///
     /// Zero is the solid cylinder and is always accepted; clearing a hole is how a tube is
     /// repaired. A positive hollow has to leave a wall on both sides of itself, so the radius
@@ -61,19 +47,19 @@ extension DesignDocument {
         }
     }
 
-    /// Rewrites the circle profile family so the cylinder carries this hollow.
+    /// Rewrites the profile family so the cylinder carries this hollow.
     ///
-    /// The outer circle is untouched. The inner one is minted when the hollow goes from zero to
-    /// positive, rewritten while it stays positive, and dropped when it returns to zero. It carries
-    /// no constraint: `SketchProfileExtractor` nests a loop inside the loop that contains it by
-    /// containment, so concentricity is the centre expression the two circles share, not a solver
-    /// constraint, and this mutator is the only author of that entity.
+    /// The wall and the turn are carried forward untouched, but they are rewritten all the same:
+    /// a hole changes where the radial lines of a partial sweep begin, so the whole family is
+    /// authored at once by `CylinderProfileBuilder`. The inner entity is minted when the hollow
+    /// goes from zero to positive, rewritten while it stays positive, and dropped when it returns
+    /// to zero.
     package mutating func setCylinderHollow(
         featureID: FeatureID,
         hollow: Double,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        guard let resolved = try resolvedCylinderCircleProfile(featureID: featureID) else {
+        guard let resolved = try resolvedCylinderProfile(featureID: featureID) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Hollow requires a cylinder built from an editable circle profile."
@@ -92,25 +78,22 @@ extension DesignDocument {
             }
         }
         try validateCylinderHollow(hollow, outerRadius: resolved.profile.outer.radius)
+        // The hole becomes the smallest arc the family holds, so a sweep the outer wall carried
+        // comfortably can stop being a shape once a hollow is added inside it.
+        let turn = currentCylinderTurn(resolved.profile)
+        try validateCylinderSweep(
+            turn,
+            outerRadius: resolved.profile.outer.radius,
+            hollowMeters: hollow
+        )
 
-        var sketch = resolved.sketch
-        if hollow == 0 {
-            if let inner = resolved.profile.inner {
-                sketch.entities[inner.id] = nil
-                sketch.entityOrder.removeAll { $0 == inner.id }
-            }
-        } else {
-            let innerID = resolved.profile.inner?.id ?? SketchEntityID()
-            sketch.entities[innerID] = .circle(
-                SketchCircle(
-                    center: resolved.profile.center,
-                    radius: .length(hollow, .meter)
-                )
-            )
-            if sketch.entityOrder.isEmpty == false, sketch.entityOrder.contains(innerID) == false {
-                sketch.entityOrder.append(innerID)
-            }
-        }
+        let sketch = try rebuiltCylinderSketch(
+            resolved.sketch,
+            profile: resolved.profile,
+            outer: currentCylinderWall(resolved.profile),
+            hollowMeters: hollow,
+            turn: turn
+        )
         try commitSketchProfile(resolved.profileFeature, sketch: sketch, owner: "Cylinder hollow")
         try synchronizeCylinderHollowObjectProperty(
             featureID: featureID,

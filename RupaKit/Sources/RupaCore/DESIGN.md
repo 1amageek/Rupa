@@ -772,15 +772,16 @@ Invariants:
 
   | Property | Declared on | Why no mutation reaches it |
   |---|---|---|
-  | `angle`, `caps` | `cylinder` | Not yet routed in Core; the kernel builds both |
+  | `caps` | `cylinder` | Not yet routed in Core; the kernel builds it |
 
-  The remaining row clears inside Core. A polygon or slot `bevel` stood here
-  while the kernel's all-edge fillet built only a box or a circular cylinder;
-  the [swift-CAD design](../../../swift-CAD/DESIGN.md) now builds the convex
-  prism both profiles extrude, and `Polygon and slot bevel` below is the proof
-  that the property reaches it. A cylinder `hollow` stood here while a circle
-  profile was one circle; `The hollow cylinder profile` below is the family that
-  holds two, and `Cylinder hollow` the proof that the property reaches it.
+  The rows that have cleared, cleared inside Core. A polygon or slot `bevel`
+  stood here while the kernel's all-edge fillet built only a box or a circular
+  cylinder; the [swift-CAD design](../../../swift-CAD/DESIGN.md) now builds the
+  convex prism both profiles extrude, and `Polygon and slot bevel` below is the
+  proof that the property reaches it. A cylinder `hollow` and `angle` stood here
+  while a circle profile was one circle; `The cylinder profile family` below is
+  the family that also holds a hole and a sector, and `Cylinder hollow` and
+  `Cylinder angle` the proof that each property reaches it.
 
 Segment counts are display resolution, not exact geometry. The kernel keeps
 circles and arcs as rational arcs and derives a segment count from tolerance, so
@@ -948,7 +949,7 @@ rectangle did not have and reached nothing. How a body extruded from the profile
 resolves its own mesh is owned by `Display tessellation resolution` below and is
 unchanged here.
 
-### The hollow cylinder profile
+### The cylinder profile family
 
 `Hollow` is the radius of a concentric hole through a cylinder, so a hollow of
 `h` on a cylinder of radius `r` is the tube whose wall runs from `h` to `r`.
@@ -957,55 +958,133 @@ default is zero and zero is a solid cylinder: a wall of zero thickness and a
 wall as thick as the radius both describe the same solid, so no monotone
 control could name both ends of a thickness.
 
-The property is declared on the `cylinder` body and rewrites the circle profile
-that body's extrusion consumes, reaching the sketch through the body's
-`sourceFeatureID` the way `size.x` and `radius` already do. That profile is one
-family, not two shapes: one outer circle, plus one inner circle concentric with
-it that exists only while the hollow is positive. `CylinderCircleProfile` is
-the single owner of what that family is, and every path that reads or rewrites
-a cylinder's circle profile resolves it rather than counting circle entities
-itself.
+`Angle` is the sweep that wall turns through, so an angle of `θ` is the sector
+of the same cylinder running from the profile's own start angle to `θ` past it.
+The reading is a turn rather than a cut because the property's default is a full
+turn and a full turn is the circle the cylinder starts as: the sweep is
+`(0°, 360°]`, `360°` restores the closed circle, and the schema's `[0°, 360°]`
+range holds one shape at its top end rather than a degenerate one.
+
+Both properties are declared on the `cylinder` body and rewrite the profile that
+body's extrusion consumes, reaching the sketch through the body's
+`sourceFeatureID` the way `size.x` and `radius` already do. They edit one
+family, not four shapes:
+
+| Sweep | Hollow | Entities | Faces |
+|---|---|---|---|
+| full turn | zero | one circle | 6 |
+| full turn | positive | two concentric circles | 10 |
+| partial | zero | one arc, two radial lines through the centre | 5 to 8 |
+| partial | positive | two concentric arcs, two radial lines | 6 to 10 |
+
+`CylinderProfile` is the single owner of what that family is, and every path
+that reads or rewrites a cylinder's profile resolves it rather than counting
+entities itself. The lateral counts are ranges because the kernel splits a
+rational arc at the quadrant boundaries it crosses: a body carries two caps,
+one to four faces for each arc the profile holds, and two more for the radial
+walls a partial sweep adds.
 
 Invariants the family carries:
 
-- The outer circle's entity ID survives every edit. The inner circle's ID is
-  minted when the hollow goes from zero to positive, kept while it stays
-  positive, and dropped when it returns to zero. This is the identity rule
+- Every entity ID survives every edit that keeps the entity. The outer one lives
+  across the change from circle to arc and back. The inner one is minted when
+  the hollow goes from zero to positive, kept while it stays positive — across
+  that same change of kind — and dropped when it returns to zero. The two radial
+  lines are minted when the sweep leaves a full turn, rewritten while it stays
+  partial, and dropped when it returns to one. This is the identity rule
   `RectangleProfileBuilder` follows for a rectangle's corner arcs.
-- The inner circle is concentric with the outer one and strictly inside it. The
+- The inner entity is concentric with the outer one and strictly inside it. The
   hollow is either exactly zero or bounded by `hollow > tolerance` and
   `radius - hollow > tolerance`. The radius carries the same bound from the
   other side, so shrinking a cylinder onto the hole it already has is refused
   the way shrinking one onto its own fillet already is.
-- The inner circle is a hole, not a second body. `SketchProfileExtractor` nests
+- A sector's two arcs share the start and end angles within `tolerance.angle`,
+  and each radial line joins the two arcs at one of those angles — or the centre
+  to the outer arc when the hollow is zero — within `tolerance.distance`. The
+  start angle is the profile's own, not zero: the builder keeps the angle the
+  outer entity already carries and uses zero only when it mints one, so turning
+  an angle down and back up rotates nothing.
+- The sweep is bounded by the chord it leaves, not by an angle.
+  `SketchProfileExtractor` walks a loop by stepping from one entity's end to the
+  next entity's start while those points are further apart than
+  `tolerance.distance`, so an arc whose own two endpoints are closer than that
+  closes a loop by itself and the extractor rejects the profile as open. The
+  accepted sweep is therefore `2·r·sin(θ/2) > tolerance.distance` at the
+  smallest radius the family holds — the hollow when it is positive, the outer
+  radius otherwise. The bound is one expression at both ends, because the chord
+  a sliver leaves and the chord a near-full turn leaves are the same quantity: a
+  cylinder of radius 0.05 m accepts 0.01° and 359.99° and refuses 0.001° and
+  359.999°, while one of radius 0.5 m accepts all four. A sweep inside the bound
+  is refused with `EditorError(code: .commandInvalid)` and no minimum angle is
+  published as a bound, because the refusal is a point at each end of the
+  control rather than a control that can only fail, and because the point moves
+  with the radius.
+- The inner entity is a hole, not a second body. `SketchProfileExtractor` nests
   a loop inside the loop that contains it and makes it that profile's hole, so
   one extrusion of the family builds one tube: a solid cylinder evaluates to six
   faces and a hollow one to ten, four around each wall and two annular caps.
-- `Hollow` and `Corner` exclude each other, in both directions and before the
-  rebuild rather than after it. A tube is none of the four convex prisms
-  `What the kernel's all-edge fillet accepts` above lists, so a positive hollow
-  on a filleted cylinder and a positive corner on a hollow one are both refused
-  with `EditorError(code: .commandInvalid)`, leaving the document unchanged. The
-  Inspector is not left holding a control that can only fail: a hollow cylinder
-  publishes an all-edge corner maximum of zero, and a filleted cylinder a hollow
-  maximum of zero, so each control is bounded by the other rather than refusing
-  every drag. Core owns both maxima; the
-  [RupaUI design](../RupaUI/DESIGN.md) owns surfacing them.
+- `Corner` excludes both of the others, in both directions and before the
+  rebuild rather than after it. Neither a tube nor a sector is one of the four
+  convex prisms `What the kernel's all-edge fillet accepts` above lists, so a
+  positive corner on either, and a hollow or a partial sweep on a filleted
+  cylinder, are refused with `EditorError(code: .commandInvalid)` leaving the
+  document unchanged. The Inspector is not left holding a control that can only
+  fail: a hollow or swept cylinder publishes an all-edge corner maximum of zero,
+  and a filleted cylinder a hollow maximum of zero, so each control is bounded
+  by the other rather than refusing every drag. Core owns both maxima; the
+  [RupaUI design](../RupaUI/DESIGN.md) owns surfacing them. `Hollow` and `Angle`
+  do not exclude each other: an annular sector is one profile the extractor
+  nests and the evaluator builds.
 
-Three paths accept the whole family. `setCylinderHollow` is the mutator the
-body's `Hollow` submits to. `setCylinderDimensions` is the body's own radius and
-height edit, which has to keep working over a hole the way it already keeps
-working under a fillet. `setCircleSketchGeometry` is the nested `.circle` sketch
-node's own radius: `createExtrudedCircle` hides that node under the body rather
-than removing it, so the profile stays selectable and editable underneath a
-hollow cylinder, and its radius names the outer circle. All three refuse a
-radius the current hollow no longer fits inside.
+One builder writes every shape. A radial line runs from the hollow, or the
+centre, out to the outer radius at one of the sweep's two ends, so its endpoints
+depend on all three of radius, hollow and sweep at once: a mutator that moves
+any one of them has to rebuild the family rather than rewrite one entity.
+`CylinderProfileBuilder` is that single author. It takes the three numbers and
+the IDs the profile already holds and returns the entities, the entity order,
+and the IDs it used, which is the shape `RectangleProfileBuilder` already has.
+The hazard it closes is concrete: before it, `setCylinderDimensions` and
+`setCircleSketchGeometry` wrote a `.circle` straight over the outer entity, which
+on a sector would turn the outer arc back into a closed circle and leave two
+radial lines spanning nothing — a document that still evaluates but no longer
+holds the sector the body displayed.
 
-A profile the family does not recognize is not one this design edits. The
-recognizer reports no cylinder profile for a sketch holding anything but one
-circle or two concentric nested ones, and each caller keeps the behaviour it
-already has for a profile it cannot name, rather than guessing which circle is
-the wall.
+The family carries no constraints, which is what `SketchBuilder.circle` already
+does for the circle it creates. Concentricity is the centre expression the
+entities share, a radial line's endpoints are written from the same radius and
+angle the arcs are, and this builder is their only author, so a solver
+constraint would be a second authority over numbers one author already agrees
+on.
+
+Four paths accept the whole family. `setCylinderHollow` and `setCylinderAngle`
+are the mutators the body's `Hollow` and `Angle` submit to.
+`setCylinderDimensions` is the body's own radius and height edit, which has to
+keep working over a hole and across a sector the way it already keeps working
+under a fillet. `setCircleSketchGeometry` is the nested sketch node's own
+radius: `createExtrudedCircle` hides that node under the body rather than
+removing it, so the profile stays selectable and editable underneath a hollow or
+swept cylinder, and its radius names the outer entity. All four refuse a radius
+the current hollow no longer fits inside, and the two radius paths also refuse
+one that would take the current sweep inside the chord bound.
+
+A cylinder's size is the diameter of the wall it is cut from, not the bounding
+box of the sector that survives the cut. `Size X` and `Size Z` read `2·r` at
+every sweep, because the number the reader reports is the number the radius
+mutator writes back, and a reader that reported a 90° sector's bounds would
+halve the cylinder on the next round trip.
+
+A profile the family does not recognize is not one this design edits, and
+because the builder rewrites every entity in the family, the recognizer's
+strictness is what keeps a cylinder edit off a sketch someone drew. It names
+only the exact family: one or two circles, or one or two arcs closed by exactly
+two lines, sharing one centre, with two arcs sharing their start and end angles
+and the lines meeting the arcs — or the centre — at those angles. A stadium
+holds two arcs and two lines too, and an annular half turn holds the same counts
+as one, so concentricity is what separates them: a stadium's two arcs sit at
+different centres and fall through to `recognizedStadiumProfile` unchanged.
+Every other sketch names no cylinder profile, and each caller keeps the
+behaviour it already has for a profile it cannot name rather than guessing which
+entity is the wall.
 
 ### Display tessellation resolution
 

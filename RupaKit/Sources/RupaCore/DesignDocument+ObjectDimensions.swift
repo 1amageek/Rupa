@@ -184,7 +184,7 @@ extension DesignDocument {
         }
         guard var profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
               case var .sketch(sketch) = profileFeature.operation,
-              let profile = try recognizedCylinderCircleProfile(in: sketch) else {
+              let profile = try recognizedCylinderProfile(in: sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Cylinder dimensions require an editable circle profile."
@@ -193,12 +193,24 @@ extension DesignDocument {
         // A hollow cylinder has to keep a wall outside its hole, so a radius the current hollow no
         // longer fits inside is refused before the rebuild, the way the fillet above already is.
         try validateCylinderHollow(profile.hollowRadius, outerRadius: radiusMeters)
+        // A solid sector's chord is measured on the wall itself, so shrinking the radius can close
+        // a turn the profile used to hold.
+        let turn = currentCylinderTurn(profile)
+        try validateCylinderSweep(
+            turn,
+            outerRadius: radiusMeters,
+            hollowMeters: profile.hollowRadius
+        )
 
-        sketch.entities[profile.outer.id] = .circle(
-            SketchCircle(
-                center: profile.center,
-                radius: radius
-            )
+        // The wall is rewritten through the builder rather than over the outer entity alone: a
+        // sector's radial lines end on that wall, so a radius written past them would leave the
+        // profile spanning nothing.
+        sketch = try rebuiltCylinderSketch(
+            sketch,
+            profile: profile,
+            outer: CylinderProfileBuilder.Wall(radius: radius, meters: radiusMeters),
+            hollowMeters: profile.hollowRadius,
+            turn: turn
         )
         profileFeature.operation = .sketch(sketch)
         extrude.distance = sizeY
@@ -324,8 +336,14 @@ extension DesignDocument {
             )
         }
         let depth = try resolvedLengthValue(extrude.distance, owner: "Extrude distance")
-        if let profile = try recognizedCylinderCircleProfile(in: sketch) {
-            let radius = try resolvedPositiveLengthValue(profile.outer.circle.radius, owner: "Cylinder radius")
+        if let profile = try recognizedCylinderProfile(in: sketch) {
+            let radius = try resolvedPositiveLengthValue(
+                profile.outer.radiusExpression,
+                owner: "Cylinder radius"
+            )
+            // The sizes are the diameter the wall is built to rather than the extent of the shape,
+            // because `setCylinderDimensions` writes this radius straight back onto the wall: a
+            // sector reporting its own bounding box would halve itself on the next round trip.
             return (
                 sizeX: radius * 2.0,
                 sizeY: abs(depth),

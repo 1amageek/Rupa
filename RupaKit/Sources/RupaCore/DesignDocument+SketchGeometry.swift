@@ -652,11 +652,13 @@ extension DesignDocument {
     /// The order is the contract: a circle, then a rectangle, then a regular polygon, then a
     /// stadium. `AllEdgeFilletProfile` owns why an axis-aligned square stops at the rectangle.
     func recognizedAllEdgeFilletProfile(in sketch: Sketch) throws -> AllEdgeFilletProfile? {
-        if let cylinder = try recognizedCylinderCircleProfile(in: sketch) {
-            // A tube is none of the four prisms the kernel's all-edge fillet accepts, so a hollow
-            // cylinder names no profile here rather than falling through to a recognizer that
-            // would read its two circles as some other shape.
-            guard cylinder.inner == nil, cylinder.outer.radius > 0 else {
+        if let cylinder = try recognizedCylinderProfile(in: sketch) {
+            // A tube and a sector are none of the four prisms the kernel's all-edge fillet
+            // accepts, so neither names a profile here rather than falling through to a recognizer
+            // that would read their entities as some other shape. A half turn of a tube is two
+            // arcs and two lines, which is the shape a stadium is, and only the concentricity this
+            // recognizer already checked tells the two apart.
+            guard cylinder.inner == nil, cylinder.isFullTurn, cylinder.outer.radius > 0 else {
                 return nil
             }
             return .circle(radius: cylinder.outer.radius)
@@ -959,44 +961,233 @@ extension DesignDocument {
         return arcEntry
     }
 
-    /// Names the circle profile family a cylinder extrudes, or `nil` for a sketch outside it.
+    /// Names the profile family a cylinder extrudes, or `nil` for a sketch outside it.
     ///
-    /// `CylinderCircleProfile` owns what the family is. Two circles are one profile only when the
-    /// inner one is concentric with the outer one and strictly inside it, which is what makes the
-    /// extrusion one tube rather than two bodies. Anything else — a third circle, an entity that is
-    /// not a circle, two circles side by side — is a sketch no cylinder edit names, and each caller
-    /// keeps the behaviour it already has for a profile it cannot name.
+    /// `CylinderProfile` owns what the family is. Two walls are one profile only when the inner
+    /// one is concentric with the outer one and strictly inside it, which is what makes the
+    /// extrusion one tube rather than two bodies. A partial sweep is one profile only when its two
+    /// radial lines land exactly on the ends the arcs already have. Anything else — a third
+    /// circle, an arc beside a circle, a line that spans something other than the wall — is a
+    /// sketch no cylinder edit names, and each caller keeps the behaviour it already has for a
+    /// profile it cannot name.
     ///
-    /// The recognizer resolves radii but judges no bound beyond the containment that makes the
-    /// family well formed. A caller that requires a positive radius, or one the current hollow
-    /// leaves room for, states that itself.
-    func recognizedCylinderCircleProfile(in sketch: Sketch) throws -> CylinderCircleProfile? {
-        var entries: [CylinderCircleProfile.Entry] = []
+    /// The strictness is the safety gate rather than fussiness. `CylinderProfileBuilder` rewrites
+    /// every entity of whatever it recognizes, so a permissive reading here would silently replace
+    /// a sketch the user drew by hand with the family this one happens to resemble.
+    ///
+    /// The recognizer resolves radii and angles but judges no bound beyond the containment and
+    /// coincidence that make the family well formed. A caller that requires a positive radius, a
+    /// hollow the wall leaves room for, or a sweep whose chord clears the tolerance states that
+    /// itself.
+    func recognizedCylinderProfile(in sketch: Sketch) throws -> CylinderProfile? {
+        var circles: [(id: SketchEntityID, circle: SketchCircle)] = []
+        var arcs: [(id: SketchEntityID, arc: SketchArc)] = []
+        var lines: [(id: SketchEntityID, line: SketchLine)] = []
         for (id, entity) in sketch.entities {
-            guard case .circle(let circle) = entity, entries.count < 2 else {
+            switch entity {
+            case .circle(let circle):
+                circles.append((id, circle))
+            case .arc(let arc):
+                arcs.append((id, arc))
+            case .line(let line):
+                lines.append((id, line))
+            case .point, .spline:
+                return nil
+            }
+        }
+        if arcs.isEmpty, lines.isEmpty {
+            return try fullTurnCylinderProfile(circles: circles)
+        }
+        if circles.isEmpty, lines.count == 2, arcs.count == 1 || arcs.count == 2 {
+            return try sectorCylinderProfile(arcs: arcs, lines: lines)
+        }
+        return nil
+    }
+
+    /// The two shapes whose wall closes on itself: one circle, or two concentric ones.
+    private func fullTurnCylinderProfile(
+        circles: [(id: SketchEntityID, circle: SketchCircle)]
+    ) throws -> CylinderProfile? {
+        var entries: [CylinderProfile.Entry] = []
+        for (id, circle) in circles {
+            guard entries.count < 2 else {
                 return nil
             }
             let radius = try resolvedLengthValue(circle.radius, owner: "Cylinder radius")
-            entries.append(CylinderCircleProfile.Entry(id: id, circle: circle, radius: radius))
+            entries.append(
+                CylinderProfile.Entry(id: id, radiusExpression: circle.radius, radius: radius)
+            )
         }
         let tolerance = modelingSettings.tolerance.distance
         switch entries.count {
         case 1:
-            return CylinderCircleProfile(outer: entries[0], inner: nil)
+            return CylinderProfile(
+                center: circles[0].circle.center,
+                outer: entries[0],
+                inner: nil,
+                startAngle: 0,
+                sweep: 2.0 * .pi,
+                radialEdges: nil
+            )
         case 2:
-            let sorted = entries.sorted { $0.radius > $1.radius }
-            let outer = sorted[0]
-            let inner = sorted[1]
-            let centerOffset = try sketchPointDistance(outer.circle.center, inner.circle.center)
-            guard inner.radius > tolerance,
-                  outer.radius - inner.radius > tolerance,
+            let order = zip(entries, circles).sorted { $0.0.radius > $1.0.radius }
+            let outer = order[0]
+            let inner = order[1]
+            let centerOffset = try sketchPointDistance(
+                outer.1.circle.center, inner.1.circle.center
+            )
+            guard inner.0.radius > tolerance,
+                  outer.0.radius - inner.0.radius > tolerance,
                   centerOffset <= tolerance else {
                 return nil
             }
-            return CylinderCircleProfile(outer: outer, inner: inner)
+            return CylinderProfile(
+                center: outer.1.circle.center,
+                outer: outer.0,
+                inner: inner.0,
+                startAngle: 0,
+                sweep: 2.0 * .pi,
+                radialEdges: nil
+            )
         default:
             return nil
         }
+    }
+
+    /// The two shapes whose wall turns part of the way: one arc or two concentric ones, closed by
+    /// a radial line at each end of the turn.
+    private func sectorCylinderProfile(
+        arcs: [(id: SketchEntityID, arc: SketchArc)],
+        lines: [(id: SketchEntityID, line: SketchLine)]
+    ) throws -> CylinderProfile? {
+        let tolerance = modelingSettings.tolerance.distance
+        let angleTolerance = modelingSettings.tolerance.angle
+
+        var entries: [CylinderProfile.Entry] = []
+        var centers: [SketchPoint] = []
+        var starts: [Double] = []
+        var sweeps: [Double] = []
+        for (id, arc) in arcs {
+            let radius = try resolvedLengthValue(arc.radius, owner: "Cylinder radius")
+            let startAngle = try resolvedAngleValue(arc.startAngle, owner: "Cylinder start angle")
+            let endAngle = try resolvedAngleValue(arc.endAngle, owner: "Cylinder end angle")
+            let sweep = endAngle - startAngle
+            guard sweep > 0, sweep < 2.0 * .pi else {
+                return nil
+            }
+            entries.append(
+                CylinderProfile.Entry(id: id, radiusExpression: arc.radius, radius: radius)
+            )
+            centers.append(arc.center)
+            starts.append(startAngle)
+            sweeps.append(sweep)
+        }
+
+        let order = (0..<entries.count).sorted { entries[$0].radius > entries[$1].radius }
+        let outerIndex = order[0]
+        let outer = entries[outerIndex]
+        let center = centers[outerIndex]
+        let startAngle = starts[outerIndex]
+        let sweep = sweeps[outerIndex]
+
+        var inner: CylinderProfile.Entry?
+        if order.count == 2 {
+            let innerIndex = order[1]
+            let candidate = entries[innerIndex]
+            let centerOffset = try sketchPointDistance(center, centers[innerIndex])
+            guard candidate.radius > tolerance,
+                  outer.radius - candidate.radius > tolerance,
+                  centerOffset <= tolerance,
+                  angleSeparation(starts[innerIndex], startAngle) <= angleTolerance,
+                  angleSeparation(
+                      starts[innerIndex] + sweeps[innerIndex], startAngle + sweep
+                  ) <= angleTolerance else {
+                return nil
+            }
+            inner = candidate
+        }
+
+        // A radial line spans the wall at one end of the turn, so its two endpoints are the arc
+        // endpoints already resolved — the centre itself when there is no hollow. Each line has to
+        // land on one end of the turn, and the two of them on different ends, or the profile is
+        // not the family this rewrites.
+        let resolvedCenter = try resolvedSketchPoint(center, owner: "Cylinder center")
+        let innerRadius = inner?.radius ?? 0
+        let ends: [[(x: Double, y: Double)]] = [
+            [
+                polarPoint(resolvedCenter, innerRadius, startAngle),
+                polarPoint(resolvedCenter, outer.radius, startAngle),
+            ],
+            [
+                polarPoint(resolvedCenter, innerRadius, startAngle + sweep),
+                polarPoint(resolvedCenter, outer.radius, startAngle + sweep),
+            ],
+        ]
+        var matched: [SketchEntityID?] = [nil, nil]
+        for (id, line) in lines {
+            let start = try resolvedSketchPoint(line.start, owner: "Cylinder radial line start")
+            let end = try resolvedSketchPoint(line.end, owner: "Cylinder radial line end")
+            guard let slot = (0..<2).first(where: { slot in
+                matched[slot] == nil && spansEnd(start: start, end: end, ends[slot], tolerance)
+            }) else {
+                return nil
+            }
+            matched[slot] = id
+        }
+        guard let radialStart = matched[0], let radialEnd = matched[1] else {
+            return nil
+        }
+
+        return CylinderProfile(
+            center: center,
+            outer: outer,
+            inner: inner,
+            startAngle: startAngle,
+            sweep: sweep,
+            radialEdges: CylinderProfile.RadialEdges(start: radialStart, end: radialEnd)
+        )
+    }
+
+    private func spansEnd(
+        start: (x: Double, y: Double),
+        end: (x: Double, y: Double),
+        _ expected: [(x: Double, y: Double)],
+        _ tolerance: Double
+    ) -> Bool {
+        let forward = pointDistance(start, expected[0]) <= tolerance
+            && pointDistance(end, expected[1]) <= tolerance
+        let reverse = pointDistance(start, expected[1]) <= tolerance
+            && pointDistance(end, expected[0]) <= tolerance
+        return forward || reverse
+    }
+
+    private func polarPoint(
+        _ center: (x: Double, y: Double),
+        _ radius: Double,
+        _ angle: Double
+    ) -> (x: Double, y: Double) {
+        (x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+    }
+
+    private func pointDistance(
+        _ first: (x: Double, y: Double),
+        _ second: (x: Double, y: Double)
+    ) -> Double {
+        let deltaX = first.x - second.x
+        let deltaY = first.y - second.y
+        return (deltaX * deltaX + deltaY * deltaY).squareRoot()
+    }
+
+    /// How far apart two directions are, measured the short way around the circle.
+    private func angleSeparation(_ first: Double, _ second: Double) -> Double {
+        let period = 2.0 * Double.pi
+        var delta = (first - second).truncatingRemainder(dividingBy: period)
+        if delta > period / 2.0 {
+            delta -= period
+        } else if delta < -period / 2.0 {
+            delta += period
+        }
+        return abs(delta)
     }
 
     private func sketchPointDistance(_ first: SketchPoint, _ second: SketchPoint) throws -> Double {

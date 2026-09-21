@@ -61,12 +61,15 @@ package struct ObjectDimensionSourceResolver: Sendable {
             sketchPlane: sketch.plane,
             document: document
         )
-        if let profile = try document.recognizedCylinderCircleProfile(in: sketch) {
+        if let profile = try document.recognizedCylinderProfile(in: sketch) {
             let radius = try resolvedPositiveLengthValue(
-                profile.outer.circle.radius,
+                profile.outer.radiusExpression,
                 owner: "Cylinder radius",
                 document: document
             )
+            // The sizes are the diameter the wall is built to rather than the bounding box of the
+            // shape, because the radius this source carries is what `setCylinderDimensions` writes
+            // back: a sector reporting its own extent would halve itself on the next round trip.
             return ObjectDimensionSource(
                 target: target,
                 featureID: featureID,
@@ -76,7 +79,7 @@ package struct ObjectDimensionSourceResolver: Sendable {
                 sizeY: abs(depth),
                 sizeZ: radius * 2.0,
                 radius: radius,
-                radiusExpression: profile.outer.circle.radius,
+                radiusExpression: profile.outer.radiusExpression,
                 depthExpression: extrude.distance
             )
         }

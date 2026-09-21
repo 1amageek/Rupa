@@ -167,15 +167,23 @@ extension DesignDocument {
         try validatePositiveLength(radiusMeters, owner: owner)
 
         let profile = try sketchProfileFeature(featureID: featureID, owner: owner)
-        guard let cylinder = try recognizedCylinderCircleProfile(in: profile.sketch) else {
+        guard let cylinder = try recognizedCylinderProfile(in: profile.sketch) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Circle geometry requires a sketch holding a circle profile."
             )
         }
-        // The radius this node names is the outer circle, and it has to stay outside the hollow the
+        // The radius this node names is the outer wall, and it has to stay outside the hollow the
         // profile already holds. Refusing before the rebuild leaves the document as it was.
         try validateCylinderHollow(cylinder.hollowRadius, outerRadius: radiusMeters)
+        // A solid sector's chord is measured on the wall itself, so shrinking the radius can close
+        // a turn the profile used to hold.
+        let turn = currentCylinderTurn(cylinder)
+        try validateCylinderSweep(
+            turn,
+            outerRadius: radiusMeters,
+            hollowMeters: cylinder.hollowRadius
+        )
 
         // The cylinder this profile extrudes may already carry an all-edge fillet, and a smaller
         // radius has to keep admitting it. Refusing before the rebuild leaves the document as it
@@ -190,12 +198,15 @@ extension DesignDocument {
             )
         }
 
-        var sketch = profile.sketch
-        sketch.entities[cylinder.outer.id] = .circle(
-            SketchCircle(
-                center: cylinder.center,
-                radius: .length(radiusMeters, .meter)
-            )
+        // The wall is rewritten through the builder rather than over the outer entity alone: a
+        // sector's radial lines end on that wall, so a radius written past them would leave the
+        // profile spanning nothing.
+        let sketch = try rebuiltCylinderSketch(
+            profile.sketch,
+            profile: cylinder,
+            outer: CylinderProfileBuilder.Wall(meters: radiusMeters),
+            hollowMeters: cylinder.hollowRadius,
+            turn: turn
         )
         try commitSketchProfile(profile.feature, sketch: sketch, owner: owner)
         try synchronizeObjectPropertiesAffectedBySketch(

@@ -38,7 +38,7 @@ extension DesignDocument {
                 message: "Face offset requires an editable sketch profile."
             )
         }
-        if let cylinder = try recognizedCylinderCircleProfile(in: sketch) {
+        if let cylinder = try recognizedCylinderProfile(in: sketch) {
             // A tube has two cylindrical walls, and one offset of the outer circle would move the
             // wrong one as readily as the right one, so the hollow is refused rather than guessed.
             guard cylinder.inner == nil else {
@@ -47,10 +47,24 @@ extension DesignDocument {
                     message: "Face offset requires a solid cylinder. Clear the hollow first."
                 )
             }
+            // A sector's wall is an arc closed by two radial lines, and offsetting the arc alone
+            // would leave the lines spanning nothing, so the sweep is refused the same way.
+            guard cylinder.isFullTurn else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Face offset requires a full cylinder. Restore the angle to a full turn first."
+                )
+            }
             try offsetCylinderFace(
                 face: face,
                 offsetMeters: offsetMeters,
-                circleEntry: (id: cylinder.outer.id, circle: cylinder.outer.circle),
+                circleEntry: (
+                    id: cylinder.outer.id,
+                    circle: SketchCircle(
+                        center: cylinder.center,
+                        radius: cylinder.outer.radiusExpression
+                    )
+                ),
                 sketch: &sketch,
                 profileFeature: &profileFeature,
                 feature: &feature,

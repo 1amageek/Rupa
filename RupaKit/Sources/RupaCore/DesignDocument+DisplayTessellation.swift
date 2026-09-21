@@ -136,9 +136,10 @@ extension DesignDocument {
               case let .sketch(sketch) = profileFeature.operation else {
             return nil
         }
-        // The outer circle bounds the whole family: a tube's inner wall is a smaller arc, which
-        // the resolution the outer radius asks for already covers.
-        if let profile = try recognizedCylinderCircleProfile(in: sketch) {
+        // The outer wall bounds the whole family: a tube's inner wall is a smaller arc, and a
+        // sector's wall is a shorter one, both of which the resolution the outer radius asks for
+        // already covers.
+        if let profile = try recognizedCylinderProfile(in: sketch) {
             let radius = profile.outer.radius
             return radius > 0 ? DisplayTessellationArcGeometry(radius: radius) : nil
         }

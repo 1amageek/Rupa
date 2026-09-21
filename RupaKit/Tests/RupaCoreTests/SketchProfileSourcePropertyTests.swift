@@ -164,7 +164,7 @@ struct SketchProfileSourcePropertyTests {
         ))
 
         let profile = try #require(
-            try store.document.recognizedCylinderCircleProfile(
+            try store.document.recognizedCylinderProfile(
                 in: try sketch(in: store, featureID: featureID)
             )
         )

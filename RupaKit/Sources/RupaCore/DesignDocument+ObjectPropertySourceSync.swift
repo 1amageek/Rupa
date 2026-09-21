@@ -161,6 +161,26 @@ extension DesignDocument {
         )
     }
 
+    /// Applies the `angle` a `.cylinder` declares to the turn its profile's wall sweeps, which is
+    /// the single truth of how far around the body goes.
+    private mutating func setCylinderAngleProperty(
+        object: ObjectDescriptor,
+        definition: ObjectTypeDefinition,
+        binding: ObjectPropertyDefinition.RenderBinding,
+        featureID: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard let property = definition.properties.first(where: { $0.renderBinding == binding }),
+              case .angle(let degrees) = definition.resolvedProperties(object.properties)[property.id] else {
+            throw EditorError(code: .commandInvalid, message: "Angle requires an angle value.")
+        }
+        try setCylinderAngle(
+            featureID: featureID,
+            degrees: degrees,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private mutating func applyBodyObjectPropertyToSource(
         object: ObjectDescriptor,
         definition: ObjectTypeDefinition,
@@ -237,6 +257,16 @@ extension DesignDocument {
             }
             if binding == .hollow {
                 try setCylinderHollowProperty(
+                    object: object,
+                    definition: definition,
+                    binding: binding,
+                    featureID: featureID,
+                    objectRegistry: objectRegistry
+                )
+                return
+            }
+            if binding == .angle {
+                try setCylinderAngleProperty(
                     object: object,
                     definition: definition,
                     binding: binding,
@@ -553,12 +583,12 @@ extension DesignDocument {
         return value
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Several schema properties declare the `source` effect but
-    // reach no mutation, so every edit to one fails here instead of reaching the canvas.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): One schema property declares the `source` effect but
+    // reaches no mutation, so every edit to it fails here instead of reaching the canvas.
     // Production path: the Inspector shape section submits `setSceneNodeObjectProperty`, which
-    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `angle` and
-    // `caps`. Do not treat an edit to either of these as applied until the mutation exists and
-    // a test drives the property through to the evaluated geometry.
+    // routes through `applyObjectPropertyToSource`. Unreachable today: cylinder `caps`. Do not
+    // treat an edit to it as applied until the mutation exists and a test drives the property
+    // through to the evaluated geometry.
     private func unsupportedObjectSourceProperty(
         binding: ObjectPropertyDefinition.RenderBinding,
         definition: ObjectTypeDefinition
@@ -859,6 +889,20 @@ extension DesignDocument {
         }
     }
 
+    mutating func synchronizeCylinderAngleObjectProperty(
+        featureID: FeatureID,
+        degrees: Double,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try updateTypedObjectProperties(
+            featureID: featureID,
+            category: .body,
+            objectRegistry: objectRegistry
+        ) { object, definition in
+            Self.setSweepAngleProperty(.angle, to: degrees, object: &object, definition: definition)
+        }
+    }
+
     private mutating func updateTypedObjectProperties(
         featureID: FeatureID,
         category: ObjectDescriptor.Category,
@@ -954,6 +998,25 @@ extension DesignDocument {
             return
         }
         object.properties[property.id] = .angle(normalizedAngleDegrees(degrees))
+    }
+
+    /// Stores an angle that names a turn rather than a direction.
+    ///
+    /// `setAngleProperty` folds its value into `[0°, 360°)` because the angles it writes are
+    /// directions, where a full turn and none are the same heading. A cylinder's sweep is a turn:
+    /// `360°` is the closed circle and `0°` is no body at all, so folding one onto the other would
+    /// store the shape the caller refused.
+    static func setSweepAngleProperty(
+        _ binding: ObjectPropertyDefinition.RenderBinding,
+        to degrees: Double,
+        object: inout ObjectDescriptor,
+        definition: ObjectTypeDefinition
+    ) {
+        guard let property = definition.property(for: binding),
+              property.valueKind == .angle else {
+            return
+        }
+        object.properties[property.id] = .angle(degrees)
     }
 
     static func setIntegerProperty(
