@@ -3,11 +3,7 @@
 - [x] S1 Product hierarchy lifecycle (group, ungroup, delete) reachable from the workspace. Commit b700eade. `depends:none` `parallel:none`
 - [x] S2 Editor commands reachable from the workspace menus and keys: Escape unwinding, selection scope keys, the Tools menu with per-tool prompts, and the answered construction plane key. Commit c3e35355. `depends:S1` `parallel:none`
 - [x] S3 What the workspace says reaches the screen, and the canvas stops carrying build notes. Commit 8f6b2fa1. `depends:S1` `parallel:none`
-- [x] S4 Workspace chrome: one canvas header above the canvas, and the inspector spends its width on the inspector `depends:S1` `parallel:none`
-  - [x] S4.1 Inspector content fills the pane it is given `depends:none` `parallel:none`
-  - [x] S4.2 One canvas header bar above the canvas; the floating rail and the chip row are gone `depends:S4.1` `parallel:none`
-  - [x] S4.3 Header controls say what they are the moment they are pointed at `depends:S4.2` `parallel:none`
-  - [x] S4.4 The scale readout moves into the header and the canvas keeps only the axis triad `depends:S4.2` `parallel:none`
+- [x] S4 Workspace chrome: one canvas header above the canvas, and the inspector spends its width on the inspector. Commits 9ef80a92, 11c870bd, f483c413. `depends:S1` `parallel:none`
 - [ ] S5 Viewport interaction contract on RealityViewport `depends:S1,S3` `parallel:none`
   - [ ] S5.1 One affordance-to-command commit path replacing per-builder rederivation `depends:none` `parallel:none`
   - [ ] S5.2 Drag threshold, drag preview origin, and Escape cancellation `depends:S5.1` `parallel:none`
