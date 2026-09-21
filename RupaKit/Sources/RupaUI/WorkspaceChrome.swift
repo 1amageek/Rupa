@@ -1,33 +1,29 @@
 import RupaCore
 import SwiftUI
 
-enum WorkspaceUtilityRailLayout {
-    static let width: CGFloat = expandedWidth
-    static let expandedWidth: CGFloat = 178
-    static let collapsedWidth: CGFloat = 38
-    static let maximumExpandedHeight: CGFloat = 620
-    static let contentPadding: CGFloat = 8
-    static let collapsedContentPadding: CGFloat = 6
-    static let sectionSpacing: CGFloat = 8
+/// The metrics a header panel's content is laid out at.
+///
+/// A panel is presented in a popover, which sizes itself to what it contains,
+/// so the width here is the one the panel asks for rather than a share of the
+/// canvas.
+enum WorkspaceCanvasPanelLayout {
+    static let width: CGFloat = 220
+    static let maximumHeight: CGFloat = 620
+    static let contentPadding: CGFloat = 10
+    static let sectionSpacing: CGFloat = 10
     static let sectionHeaderSpacing: CGFloat = 7
-    static let compactButtonSpacing: CGFloat = 5
-    static let compactButtonSize = CGSize(width: 26.0, height: 26.0)
 
     static var contentWidth: CGFloat {
-        expandedWidth - contentPadding * 2
-    }
-
-    static var collapsedContentWidth: CGFloat {
-        collapsedWidth - collapsedContentPadding * 2
+        width - contentPadding * 2
     }
 }
 
 @MainActor
-func workspaceRailSection<Content: View>(
+func workspacePanelSection<Content: View>(
     _ title: String,
     @ViewBuilder content: () -> Content
 ) -> some View {
-    VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionHeaderSpacing) {
+    VStack(alignment: .leading, spacing: WorkspaceCanvasPanelLayout.sectionHeaderSpacing) {
         Text(title)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -37,46 +33,7 @@ func workspaceRailSection<Content: View>(
     .frame(maxWidth: .infinity, alignment: .leading)
 }
 
-@MainActor
-func workspaceToggleButton(
-    isOn: Binding<Bool>,
-    systemImage: String,
-    title: String,
-    help: String,
-    accessibilityIdentifier: String
-) -> some View {
-    Button {
-        isOn.wrappedValue.toggle()
-    } label: {
-        VStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 14, weight: .semibold))
-            Text(title)
-                .font(.caption2)
-                .lineLimit(1)
-        }
-        .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.primary.opacity(0.72))
-        .frame(maxWidth: .infinity, minHeight: 42)
-        .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(isOn.wrappedValue ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(
-                    isOn.wrappedValue ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.10),
-                    lineWidth: 1
-                )
-        }
-    }
-    .buttonStyle(.plain)
-    .help(help)
-    .accessibilityLabel(title)
-    .accessibilityValue(isOn.wrappedValue ? "On" : "Off")
-    .accessibilityIdentifier(accessibilityIdentifier)
-}
-
-/// Lays a rail row out as a secondary title and its value.
+/// Lays a panel row out as a secondary title and its value.
 ///
 /// `accessibilityIdentifier` names the value `Text`, not the row. macOS gives
 /// a row collapsed with `.accessibilityElement(children: .ignore)` the `Other`

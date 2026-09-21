@@ -106,8 +106,8 @@ flowchart LR
     Planner --> Workspace["ProjectWorkspace"]
     Intent --> Measure["Rendering-owned transient two-point Measure"]
     Measure --> Status["Visible distance + projected ruler"]
-    Compact["7 compact rail actions"] --> Destination["Expanded-rail destination"]
-    Destination --> Rail["Native ScrollViewReader + existing sections"]
+    Header["Canvas header seats"] --> Intent
+    Header --> Panel["Analysis and overflow popovers"]
 ```
 
 ## Contracts and Invariants
@@ -185,19 +185,14 @@ from that panel's measured rectangle rather than measured a second time,
 because a second measurement of the same view carries the same number while
 adding a second workspace value that changes in the same frame.
 
-The overlay's trailing side carries two chromes, and they share one vertical
-budget. The top bar holds the trailing corner, and the band it occupies is
-reserved at both ends of the canvas, so the utility rail is offered only the
-height between those two bands. A rail declares the height it opens to, and
-it reaches that height only while the canvas has room for it, giving height
-back as the canvas shrinks. Two consequences follow, and both are contracts.
-The rail never covers the top bar: a canvas too short for the declared rail
--- which is what opening the bottom logs pane produces -- yields a shorter
-rail rather than a rail laid over the corner. And the rail stays centred on
-the canvas at every height, which is where the tool palette on the leading
-side is centred too; reserving the band at one end only would move the rail
-off that centre line by half the band. Chrome on opposite edges shares no
-budget, because nothing puts two of them in one band.
+The canvas carries chrome on two edges and on no others. The tool palette
+rides the leading edge and the context panel the bottom one. They share no
+budget, because chrome on opposite edges never lands in one band, so each is
+laid out as an independent overlay and neither can take height from the
+other. The trailing side carries nothing at all: what used to float there is
+now the canvas header, a real bar outside the canvas, which costs the canvas
+no area, punches no input-exclusion hole in it, and cannot change its height
+by appearing.
 
 The host holds the rectangles it has been handed in a reference its own body
 never reads, and publishes them to the workspace as one value on the
@@ -229,27 +224,63 @@ produce its named result. Successful source changes retain the existing single
 Workspace transaction and Undo behavior. Cancellation before publication does
 not mutate source; an already published command is reversed only through Undo.
 
-The right compact rail has seven navigation actions. Each action expands and
-positions the existing rail at the corresponding destination rather than merely
-opening the rail at its first row.
+### The canvas header
 
-| Compact action | Destination | Truthful state |
-|---|---|---|
-| Canvas Controls | Rail header | Expanded/collapsed only |
-| Selection | Select | Current selection scope |
-| Snap | Snap | Effective Grid/Object snap state |
-| Construction Plane | Plane | Effective mode, active plane and pending origin request |
-| Surface Analysis | Analysis | Effective applicable overlay; if no supported target exists, the section states that precondition instead of claiming an active result |
-| Saved Views | Views | Current saved-view count and camera-capture availability |
-| Scene Diagnostics | Scene | Current issue count and warning state |
+One home per concern. The selection scope, the snaps, the working plane, the
+viewport's own fit, display mode and shading, and the surface-analysis panel
+stand once in a header bar above the canvas, always visible and always one
+click. The selection readout, the active plane's name, the scale-fit prompt
+and the overflow button close the row. What is touched rarely -- saved-view
+management, construction-plane rows, domain commands and scene counts --
+waits behind the overflow button. Nothing is duplicated: a concern that has a
+seat in the header has no second copy anywhere else in the workspace.
 
-The destination is transient MainView presentation state. The expanded rail
-uses native `ScrollViewReader` IDs on its existing sections; no navigation model,
-coordinator or second rail is introduced. Compact action accessibility
-identifiers remain individually addressable and are not replaced by an ancestor
-identifier. Expansion, section focus and collapse never change source,
-selection, camera, analysis settings or Undo history. Collapse is the cancel
-transition for rail navigation.
+| Seat | Control | Identifier | Group |
+|---|---|---|---|
+| Scope | `WorkspaceSelectionScopeControl` | `WorkspaceSelectionScope.<scope>` | fixed |
+| Snap | `WorkspaceSnapControl` | `WorkspaceSnap.grid`, `WorkspaceSnap.object`, `WorkspaceGrid.fixed`, `WorkspacePlane.twoDSnap` | fixed |
+| Plane | `WorkspacePlaneModeControl` | `WorkspacePlane.<mode>` | fixed |
+| View | fit, display mode and shading | `WorkspaceViewport.fit`, `.fitVisible`, `.fitSelected`, `.displayMode`, `.shading` | fixed |
+| Analysis | the surface-analysis panel's button | `WorkspaceCanvasHeader.analysis` | fixed |
+| Plane name | the active construction plane | `WorkspacePlane.activeName` | yielding |
+| Selection | scope name and selection count | `WorkspaceTopBar.SelectionScope` | yielding |
+| Scale fit | the fit prompt, while one is offered | `WorkspaceScaleFitPrompt` | yielding |
+| Overflow | views, planes, domain commands, scene counts | `WorkspaceCanvasHeader.more` | fixed |
+
+The bar's height is declared and never measured from its content. The
+selection readout, the plane name and the scale-fit prompt come and go with
+the selection, the plane and the camera, and a bar whose height followed them
+would move the canvas under the pointer every time one of them arrived. Width
+is the dimension that can run out instead, and the header divides its seats
+into two groups to say what happens when it does. Fixed seats are laid out at
+the widths they declare and never shrink; `WorkspaceCanvasHeaderLayout` sums
+those declared widths, and that sum has to fit inside the canvas column's own
+declared minimum, which is the narrowest the canvas is ever laid out at.
+Yielding seats are offered what is left and leave the row when it is not
+enough, rather than push a fixed seat out: a chip compressed to an ellipsis
+still carries its icon, its padding and its background, so a readout that only
+truncated would keep a floor under the row. What leaves stays reachable, since
+the plane name and the scene counts have their own rows in the overflow panel.
+Header controls are therefore icon-first:
+a control that would have to carry a word to be recognised carries an icon
+and says its name on hover instead.
+
+Both panels are popovers anchored to their own header button, not `Menu`s. A
+SwiftUI `Menu` on macOS is an `NSMenu`: it keeps leaf buttons as menu items
+and drops the stacks, frames and backgrounds around them, which is every
+container the surface-analysis control, the saved-view rows, the
+construction-plane rows and the domain command rows are built from. The
+viewport's fit, display-mode and shading controls stay `Menu`s, because they
+are buttons and nothing else. One optional `WorkspaceCanvasHeaderPanel` in
+MainView says which panel is open, so opening one closes the other and
+neither can be open twice. Opening, reading and closing a panel never changes
+source, selection, camera, analysis settings or Undo history.
+
+A popover's content is presented in its own window, so a test that mounts the
+header reaches the header's seats and not a panel's contents. Each panel's
+controls are therefore owned where they are declared -- as the control types
+the panel presents -- and the header owns only that it offers the button that
+presents them.
 
 ### Workspace keyboard and menu reach
 
@@ -294,15 +325,15 @@ own cancellation, which is decided before the general path is reached.
 Digits 1 through 6 choose what a click selects. The scope is a mode that was
 otherwise reachable only through six 25 pt icons, and picking a face and
 then an edge of the same body is an ordinary sequence, so the trip to the
-rail costs more than the pick it precedes. `WorkspaceSelectionScope` owns
-both directions of the mapping, so the router and the rail cannot disagree
-about which digit means which scope; the digits follow the order the rail
-already shows, which is `allCases`, and the rail's tooltip carries the digit
+header costs more than the pick it precedes. `WorkspaceSelectionScope` owns
+both directions of the mapping, so the router and the header cannot disagree
+about which digit means which scope; the digits follow the order the header
+already shows, which is `allCases`, and the seat's tooltip carries the digit
 so the key is discoverable from the control it duplicates. The scope keys are offered only while Select is the active
 tool and no command is taking typed input, because a numeric field would
 otherwise lose the digits typed into it. Changing the scope changes no
-source, and the top bar names the scope beside the selection count so that a
-scope changed by key is visible without opening the rail.
+source, and the header names the scope beside the selection count so that a
+scope changed by key is visible where the scope icons stand.
 
 Space asks for a construction plane from the current selection, and the
 router always delivers the request. Whether a plane can be built is a
@@ -334,7 +365,7 @@ and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection
 that cannot build one. `ModelingToolTests` owns that every case carries a
 title, a summary and a prompt, and that exactly the first ten carry a key in
-the rail's order. `WorkspaceTopBarPresentationTests` owns the scope name
+the tool palette's order. `WorkspaceTopBarPresentationTests` owns the scope name
 beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
@@ -385,14 +416,14 @@ is state and not a message, so the failure item reads its icon and tint from
 `evaluationStatusSystemImage` and `evaluationStatusTint`, which describe the
 document's status rather than a severity.
 
-The canvas chrome and the utility rail carry what is about the model and can
+The canvas chrome and the canvas header carry what is about the model and can
 be acted on where it stands. Three kinds of content therefore do not belong on
 them. The project's own development notes are the first: an implementation
 rating and the gate an area has not yet met describe this repository's
 progress, not the user's document, and the user can neither act on them nor
 dismiss them. Values a control beside them already carries are the second: the
 ruler the canvas scale badge holds together with the menu that changes it, the
-selection count the top bar carries beside the scope that explains it, the
+selection count the header carries beside the scope that explains it, the
 visible and locked tallies the eye and the lock beside them already show, the
 overlay the analysis toggles above it are already set to, and the node count
 the outliner lists in full. Where such a control genuinely withholds the value
@@ -437,8 +468,7 @@ Live App checks own row alignment, disclosure, selection, and action hit targets
 
 ### Workspace behavior
 
-Viewport tool names appear immediately while hovering a left palette or
-compact right-rail button. `WorkspaceToolNameHint` is a SwiftUI presentation
+Viewport tool names appear immediately while hovering a tool palette button. `WorkspaceToolNameHint` is a SwiftUI presentation
 adapter: each button owns its local hover flag and publishes its existing
 title and bounds anchor; `WorkspaceCanvasOverlayHost` draws one noninteractive
 screen-space name label outside the scroll containers, toward the RealityView.
@@ -667,11 +697,13 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
     project snapshot. `onViewportMount(documentLifetimeID, session)` registers
     that session with the App, while `onViewportUnmount(viewportInstanceID)`
     invalidates the active viewport token.
-11. The compact viewport-local top bar is always present and displays fit
-    actions (`Fit Visible Objects`, `Fit Selected Objects`) and a four-case
-    display menu (`Solid`, `Solid + Mesh Edges`, `Wireframe`, `Normals`). It may
-    also display existing selection and scale status, but it does not become a
-    source or evaluation command surface.
+11. The canvas header is always present and displays fit actions
+    (`Fit Visible Objects`, `Fit Selected Objects`) and a four-case display
+    menu (`Solid`, `Solid + Mesh Edges`, `Wireframe`, `Normals`). It stands
+    above the canvas rather than over it, so it covers no part of the viewport
+    and reserves no exclusion in it. It may also display existing selection and
+    scale status, but it does not become a source or evaluation command
+    surface.
     Wireframe and normals describe the source face presentation rather than
     exact B-rep geometry; normals use RGB direction encoding.
 12. The viewport measures the size actually allocated by the native split pane.
@@ -685,7 +717,7 @@ obsolete queued work; it does not establish a GPU frame-latency guarantee.
     MainView rejects a generation mismatch before planning the single Core move
     command; Workspace independently checks transaction/publication coordinates.
     A replacement document recreates the Outliner and its private drag lifetime.
-14. The viewport top bar opens native shading controls beside display mode.
+14. The canvas header opens native shading controls beside display mode.
     MainView forwards edits to `.setShading` on the same session used by the
     renderer. It never submits a source transaction for presentation settings.
 15. The Rendering-owned central camera strip (`ViewportAxisTriad`) remains at
@@ -920,12 +952,6 @@ API; static text and callback-only tests are insufficient.
 Saved-view UI tests also prove an absent current frame disables create/update,
 restore failure is visible and non-mutating, and no fallback frame reaches a
 workspace command.
-`WorkspaceUtilityRailDestinationTests` audits the shipped sources so every
-compact rail action has both a button and the matching expanded-section
-`ScrollViewReader` identifier. `ScrollViewProxy.scrollTo` is silent when no
-view carries the identifier, so a destination with a button and no anchor would
-expand the rail at its first row and still look like a working action.
-
 Chrome publication timing has no in-process fixture. `MainView` and
 `WorkspaceCanvasOverlayHost` hold the state privately, and a same-frame
 re-entry is not visible in any value either view exposes: the rectangles that
@@ -939,19 +965,20 @@ before the chrome was laid out.
 
 A launch cannot show that anything was measured, because a host that
 publishes nothing also raises nothing. Delivery is proved in process instead:
-mounted in an `NSWindow` with a visible context panel, the host publishes four
-canvas-local rectangles and a reserved height equal to the context panel's own
-measured height. Neither check is sound without the other.
+mounted in an `NSWindow` with a visible context panel, the host publishes two
+canvas-local rectangles -- the tool palette's and the context panel's -- and a
+reserved height equal to the context panel's own measured height. Neither check is sound without the other.
 
 ### UI operation ownership
 
-The workspace exposes thirty-four operations: twelve canvas tools, seven
-utility rail destinations, ten Model drafts, and five Mesh drafts. Each row
-names the control a user clicks and the test that owns that control's
-contract, and records what the evidence for that operation actually covers. A
-package test owns the command a control produces. Nothing owns the fact that
-the shipped control reaches it: the App UI runner is retired, so that half of
-every row is currently unowned.
+The workspace exposes twenty-seven operations that change the model: twelve
+canvas tools, ten Model drafts and five Mesh drafts. The canvas header's own
+controls change how the model is viewed, scoped and snapped rather than what
+it is, and they are listed after those rows. Each row names the control a user
+clicks and the test that owns that control's contract, and records what the
+evidence for that operation actually covers. A package test owns the command a
+control produces. Nothing owns the fact that the shipped control reaches it:
+the App UI runner is retired, so that half of every row is currently unowned.
 
 | Family | Operations | Control identifier | Owning test | Evidence |
 |---|---|---|---|---|
@@ -960,12 +987,14 @@ every row is currently unowned.
 | Canvas tool | `select` | `CanvasTool.select` | `WorkspaceCanvasCommandPlannerTests` for the absent canvas command, `ViewportBodyTransformInputTests` and `ViewportSelectionDragFrameReadinessTests` for the gizmo drag | lower-layer verified |
 | Canvas tool | `measure` | `CanvasTool.measure` | `ViewportMeasurementTests`, `WorkspaceMeasurementPresentationGateTests` | lower-layer verified |
 | Canvas tool | `mesh` | `CanvasTool.mesh` | `WorkspaceCanvasCommandPlannerTests` for the absent canvas command, `MeshOperationDraftTests` and `ModelingAndMeshOperationCoverageTests` for the element route | lower-layer verified |
-| Rail destination | `controls`, `selection`, `snap`, `views`, `plane`, `analysis`, `scene` | `WorkspaceUtilityRail.<case>` | `WorkspaceUtilityRailDestinationTests` | source-audit verified, by contract |
-| Rail section body | Saved views | `WorkspaceSavedView.*` | the `workspaceSavedViewBuilder*` tests in `RupaUIPackageTests` | lower-layer verified |
-| Rail section body | Snap toggles | `WorkspaceSnap.*` | none | unverified |
-| Rail section body | Active plane name | `WorkspacePlane.activeName` | none | unverified, read-only |
-| Rail section body | Surface analysis overlay and sample density | `WorkspaceSurfaceAnalysis.<option>`, `WorkspaceSurfaceAnalysis.density.<density>` | none | unverified |
-| Rail section body | Analysis and Scene readouts | `WorkspaceAnalysis.<row>`, `WorkspaceScene.<row>` | none | unverified, read-only |
+| Header seat | Selection scope | `WorkspaceSelectionScope.<scope>` | `WorkspaceSelectionScopeTests` and `WorkspaceCanvasHeaderSeatNativeTests` for the seat's declared and mounted width | lower-layer verified |
+| Header seat | Snap toggles | `WorkspaceSnap.grid`, `.object`, `WorkspaceGrid.fixed`, `WorkspacePlane.twoDSnap` | `WorkspaceCanvasHeaderSeatNativeTests` for the seat's mounted width | lower-layer verified |
+| Header seat | Working plane mode | `WorkspacePlane.<mode>` | `WorkspaceCanvasHeaderSeatNativeTests` for the seat's mounted width | lower-layer verified |
+| Header seat | Viewport fit, display mode and shading | `WorkspaceViewport.*` | none | unverified |
+| Header panel | Surface analysis overlay and sample density | `WorkspaceCanvasHeader.analysis` presents `WorkspaceSurfaceAnalysis.<option>` and `.density.<density>` | none | unverified |
+| Header panel | Saved views | `WorkspaceCanvasHeader.more` presents `WorkspaceSavedView.*` | the `workspaceSavedViewBuilder*` tests in `RupaUIPackageTests` | lower-layer verified |
+| Header panel | Construction-plane rows, domain commands and scene counts | `WorkspaceCanvasHeader.more` presents `WorkspacePlane.*`, `WorkspaceDomainCommandList`, `WorkspaceScene.bodies` and `.issues` | none | unverified |
+| Header readout | Active plane name and selection | `WorkspacePlane.activeName`, `WorkspaceTopBar.SelectionScope` | none | unverified, read-only |
 | Model draft | box, cylinder, sphere, extrude, revolve, sweep, loft, boolean, fillet, chamfer | `Modeling.begin.<title>` | `ModelingOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
 | Mesh draft | translate, position, extrude, delete, addFace | `Modeling.mesh` panel | `MeshOperationDraftTests`, `ModelingAndMeshOperationCoverageTests` | lower-layer verified |
 
@@ -1032,27 +1061,30 @@ as its three `RadioButton`s, so a test names them by role and label. Adding
 per-case identifiers would name controls the accessibility tree already
 distinguishes.
 
-A rail section reached through `WorkspaceUtilityRail.expand` proves the section
-renders and its controls work; it does not prove the compact destination button
-scrolls to it. `WorkspaceUtilityRailDestinationTests` owns that second claim by
-auditing the shipped sources, because `ScrollViewProxy.scrollTo` fails silently.
-All seven anchors sit unconditionally in `expandedWorkspaceUtilityRail`, so the
-anchor exists whenever the rail is expanded. The compact rail's `.analysis`
-and `.scene` buttons are hittable without going through `.expand`, and
-expanding the rail from either one renders every section body into a single
-`ScrollView`, so one expansion publishes both the Analysis controls and the
-Scene readouts. `WorkspaceUtilityRail.collapse` is published but is not
-hittable, so a test reads both sections in one expansion rather than
-collapsing between them.
+A header panel's contents are presented in a popover, which macOS puts in its
+own window. A test that mounts the header in an `NSWindow` therefore reaches
+the header's seats and the two panel buttons, and reaches nothing inside
+either panel. The panels' controls are owned where they are declared instead:
+`WorkspaceSurfaceAnalysisControl` and the saved-view builder are mounted and
+tested as themselves, not through the button that presents them. What the
+header owns is that the button exists, that exactly one panel is open at a
+time, and that presenting either one changes no source, selection or camera.
 
-The Analysis and Scene sections publish one control group and six read-only
-rows. `WorkspaceSurfaceAnalysis.<option>` and
-`WorkspaceSurfaceAnalysis.density.<density>` are `.plain` buttons with `Image`
-labels that already report as hittable, so they take no `.contentShape`. The
-six rows name their value `Text` through the `workspaceValueRow` identifier
-path as `WorkspaceAnalysis.target`, `.overlay`, `.samples` and
-`WorkspaceScene.bodies`, `.nodes`, `.issues`, which is what lets a test read
-the overlay summary and the sample density change when a control is clicked.
+The header's own seats carry the width contract, and it is proved in two
+halves because it is made of two claims. `WorkspaceCanvasHeaderLayout` sums
+the widths the fixed seats declare, and `WorkspaceCanvasHeaderLayoutTests`
+asserts that sum fits inside the canvas column's declared minimum and that the
+window is never narrower than the three columns it holds -- a fixed seat that
+did not fit would be clipped at the width the workspace is actually laid out
+at, and the split pane's own minimum only constrains a divider drag. That
+arithmetic is only worth anything if the declared widths are the real ones, so
+`WorkspaceCanvasHeaderSeatNativeTests` mounts each multi-button seat in a
+window the width of the narrowest canvas column and asserts it asks for
+exactly the width the sum counted.
+`WorkspaceSurfaceAnalysis.<option>` and `WorkspaceSurfaceAnalysis.density.<density>`
+are `.plain` buttons with `Image` labels that already report as hittable, so
+they take no `.contentShape`; the header's own icon buttons carry
+`.contentShape(Rectangle())` for the same reason the tool palette's do.
 
 The App `RupaUITests` runner is retired, so no row above carries GUI evidence,
 and `scripts/test-ui-contracts.sh` is the supported verification entry point.
@@ -1080,16 +1112,16 @@ therefore names the value `Text` rather than the row, which is what
 `WorkspacePlane.activeName` is the one row that takes that path. A `CheckBox`
 publishes its value as a number, not as a string.
 
-A rail section body is reachable only after the rail is expanded, because the
-compact rail publishes the destination buttons and none of the section rows.
+A header panel's rows are reachable only after its button is clicked, because
+the header publishes the two panel buttons and none of the rows behind them.
 The inspector is open when the workspace launches and
 `WorkspaceCommand.inspector` toggles it, so a test that needs the inspector
 checks for the content it wants before deciding to click.
 
 Four route invariants have no owner while the App UI runner stays retired. The
 Model menu publishes all ten drafts and one of them commits a feature. The
-Analysis controls change the overlay and density readouts in the same
-expansion that publishes the Scene readouts. The measure tool reports a
+Analysis controls change the overlay and density readouts while the analysis
+popover is open. The measure tool reports a
 distance between two points on a body. The CAD-to-mesh route opens
 `Modeling.mesh` with an element selected and commits one mesh operation. Each
 is stated so that it can be built from the shipped chrome, so claiming it needs

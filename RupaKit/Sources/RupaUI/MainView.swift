@@ -90,7 +90,7 @@ public struct MainView: View {
                 .id(snapshot.documentLifetimeID)
             } else {
                 ProgressView("Loading Project")
-                    .frame(minWidth: 1_120, minHeight: 720)
+                    .frame(minWidth: WorkspaceEditorSplitLayout.minimumWindowWidth, minHeight: 720)
             }
         }
     }
@@ -198,8 +198,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportProjectionBasis: ViewportProjectionBasis
     @State private var viewportChromeGeometry: WorkspaceCanvasChromeGeometry
     @State private var viewportCameraResetSignal: Int
-    @State private var isUtilityRailExpanded: Bool
-    @State private var utilityRailDestination: WorkspaceUtilityRailDestination?
+    @State private var presentedHeaderPanel: WorkspaceCanvasHeaderPanel?
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var viewportCameraFrame: ViewportCameraFrame?
@@ -225,7 +224,6 @@ private struct ProjectMainViewContent: View {
         isPreviewExpanded: Bool = false,
         columnVisibility: NavigationSplitViewVisibility = .all,
         isInspectorPresented: Bool = true,
-        isUtilityRailExpanded: Bool = false,
         domainRegistry: DomainRegistry = DomainRegistry(),
         operationSequencer: ProjectWorkspaceOperationSequencer,
         newProject: @escaping @MainActor () -> Void = {},
@@ -311,7 +309,7 @@ private struct ProjectMainViewContent: View {
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportChromeGeometry = State(initialValue: .empty)
         self._viewportCameraResetSignal = State(initialValue: 0)
-        self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
+        self._presentedHeaderPanel = State(initialValue: nil)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
         self._viewportCameraFrame = State(initialValue: nil)
@@ -341,7 +339,11 @@ private struct ProjectMainViewContent: View {
     public var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 248, max: 320)
+                .navigationSplitViewColumnWidth(
+                    min: WorkspaceEditorSplitLayout.sidebarMinimumWidth,
+                    ideal: 248,
+                    max: 320
+                )
         } detail: {
             editorDetailPane
                 .navigationTitle(documentTitle)
@@ -350,7 +352,7 @@ private struct ProjectMainViewContent: View {
                 }
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 1_120, minHeight: 720)
+        .frame(minWidth: WorkspaceEditorSplitLayout.minimumWindowWidth, minHeight: 720)
         .onChange(of: modelingDraft) { _, _ in invalidateModelingPreview() }
         .onChange(of: meshDraft) { _, _ in invalidateModelingPreview() }
         .task(id: meshOverlayRequest) { await updateMeshSelectionOverlay() }
@@ -1809,15 +1811,19 @@ private struct ProjectMainViewContent: View {
     /// redistributes as the window resizes. See `RupaUI/DESIGN.md`.
     private var editorDetailPane: some View {
         HSplitPane {
-            workArea
+            canvasColumn
             if isInspectorPresented || modelingDraft != nil
                 || historyPreviewTitle != nil || selectedTool == .mesh {
                 inspectorDetailPane
             }
         }
-        .leadingPaneWidth(minimum: 560)
-        .trailingPaneWidth(320, minimum: 320, maximum: 320)
-        .dividerDragStrip(width: 10)
+        .leadingPaneWidth(minimum: WorkspaceEditorSplitLayout.minimumCanvasWidth)
+        .trailingPaneWidth(
+            WorkspaceEditorSplitLayout.inspectorWidth,
+            minimum: WorkspaceEditorSplitLayout.inspectorWidth,
+            maximum: WorkspaceEditorSplitLayout.inspectorWidth
+        )
+        .dividerDragStrip(width: WorkspaceEditorSplitLayout.dividerDragStripWidth)
     }
 
     @ViewBuilder
@@ -1896,6 +1902,16 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// The canvas column: the header bar, then the canvas and the logs pane
+    /// below it. The header is a sibling of the canvas rather than an overlay
+    /// on it, so it takes no canvas area and punches no input-exclusion hole.
+    private var canvasColumn: some View {
+        VStack(spacing: 0) {
+            workspaceCanvasHeader
+            workArea
+        }
+    }
+
     private var workArea: some View {
         CollapsibleView(isExpanded: $isPreviewExpanded) {
             WorkspaceCanvasOverlayHost(
@@ -1927,12 +1943,8 @@ private struct ProjectMainViewContent: View {
                 } else {
                     viewportCanvas
                 }
-            } topBar: {
-                workspaceTopBar
             } toolPalette: {
                 floatingToolPalette
-            } utilityRail: {
-                workspaceUtilityRail
             } contextPanel: {
                 viewportContextPanelContainer
             }
@@ -2963,8 +2975,16 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    private var workspaceTopBar: some View {
-        workspaceTopBarContent(
+    /// The canvas header.
+    ///
+    /// The seats are laid out at the width they declare and never shrink; the
+    /// readouts after them take what is left and stand down when it is not
+    /// enough.
+    /// `WorkspaceCanvasHeaderLayout` owns both halves of that budget and
+    /// `WorkspaceCanvasHeaderLayoutTests` holds it to the narrowest width the
+    /// canvas column is laid out at.
+    private var workspaceCanvasHeader: some View {
+        workspaceCanvasHeaderContent(
             presentation: WorkspaceTopBarPresentation(
                 selectedTargetCount: selectedTargetCount,
                 selectionScope: selectionScope
@@ -2973,37 +2993,299 @@ private struct ProjectMainViewContent: View {
     }
 
     @ViewBuilder
-    private func workspaceTopBarContent(
+    private func workspaceCanvasHeaderContent(
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
         let scaleFitPromptState = workspaceScaleFitPromptState
-        HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
+        HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
+            WorkspaceSelectionScopeControl(selection: $selectionScope)
+            workspaceCanvasHeaderDivider
+            WorkspaceSnapControl(
+                isGridSnapEnabled: $isGridSnapEnabled,
+                isObjectTargetingEnabled: $isObjectTargetingEnabled,
+                isFixedGridVisualSpacing: fixedGridVisualSpacingBinding,
+                isConstructionPlaneSnapEnabled: $isConstructionPlaneSnapEnabled
+            )
+            workspaceCanvasHeaderDivider
+            WorkspacePlaneModeControl(selection: $workspacePlaneMode)
+            workspaceCanvasHeaderDivider
             workspaceViewportFitMenu
             workspaceViewportDisplayModeMenu
             workspaceViewportShadingButton
+            workspaceCanvasHeaderPanelButton(.analysis)
 
-            workspaceStatusChip(
-                presentation.selectionScopeTitle,
-                systemImage: presentation.selectionScopeSystemImage,
-                tint: .secondary
+            workspaceCanvasHeaderReadouts(
+                presentation: presentation,
+                scaleFitPromptState: scaleFitPromptState
             )
-            .accessibilityIdentifier("WorkspaceTopBar.SelectionScope")
+            .frame(maxWidth: .infinity, alignment: .trailing)
 
-            if let selectionTitle = presentation.selectionTitle {
+            workspaceCanvasHeaderPanelButton(.more)
+        }
+        .padding(.horizontal, WorkspaceCanvasHeaderLayout.horizontalPadding)
+        .frame(height: WorkspaceCanvasHeaderLayout.height)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.bar)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.12))
+                .frame(height: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("WorkspaceCanvasHeader")
+    }
+
+    /// The header's readouts, which leave the row rather than truncate inside
+    /// it.
+    ///
+    /// A chip compressed to an ellipsis still carries its icon, its padding
+    /// and its background, so readouts that only truncated would keep a floor
+    /// under the row and push the overflow button off the narrowest canvas
+    /// column. They stand together while they fit, fall back to the scale-fit
+    /// prompt alone, which is the only one of them that is an action, and
+    /// leave the row when even that does not fit. What leaves stays reachable:
+    /// the plane name and the scene counts have their rows in the overflow
+    /// panel.
+    ///
+    /// The cluster is the header's only flexible child, so it is also what
+    /// holds the overflow button against the trailing edge.
+    @ViewBuilder
+    private func workspaceCanvasHeaderReadouts(
+        presentation: WorkspaceTopBarPresentation,
+        scaleFitPromptState: WorkspaceScaleFitPromptState?
+    ) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
+                if let activeConstructionPlane {
+                    workspaceValuePill(
+                        "Plane",
+                        activeConstructionPlane.name,
+                        accessibilityIdentifier: "WorkspacePlane.activeName"
+                    )
+                }
+
                 workspaceStatusChip(
-                    selectionTitle,
-                    systemImage: "scope",
+                    presentation.selectionScopeTitle,
+                    systemImage: presentation.selectionScopeSystemImage,
                     tint: .secondary
                 )
+                .accessibilityIdentifier("WorkspaceTopBar.SelectionScope")
+
+                if let selectionTitle = presentation.selectionTitle {
+                    workspaceStatusChip(
+                        selectionTitle,
+                        systemImage: "scope",
+                        tint: .secondary
+                    )
+                }
+
+                if let scaleFitPromptState {
+                    workspaceScaleFitPromptButton(scaleFitPromptState)
+                }
             }
 
-            if let scaleFitPromptState {
-                workspaceScaleFitPromptButton(scaleFitPromptState)
+            HStack(spacing: WorkspaceCanvasHeaderLayout.itemSpacing) {
+                if let scaleFitPromptState {
+                    workspaceScaleFitPromptButton(scaleFitPromptState)
+                }
+            }
+
+            Color.clear
+                .frame(width: 0.0, height: 0.0)
+        }
+    }
+
+    private var workspaceCanvasHeaderDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.14))
+            .frame(
+                width: WorkspaceCanvasHeaderLayout.dividerWidth,
+                height: WorkspaceCanvasHeaderLayout.dividerHeight
+            )
+    }
+
+    /// One header seat that opens a popover.
+    ///
+    /// A popover rather than a `Menu`: `Menu` content on macOS is an `NSMenu`,
+    /// which carries rows and cannot lay out the stacks, frames and backgrounds
+    /// these panels are built from. One optional `presentedHeaderPanel` decides
+    /// which panel is open, so opening one closes the other.
+    private func workspaceCanvasHeaderPanelButton(
+        _ panel: WorkspaceCanvasHeaderPanel
+    ) -> some View {
+        let isPresented = Binding(
+            get: { presentedHeaderPanel == panel },
+            set: { presentedHeaderPanel = $0 ? panel : nil }
+        )
+        return Button {
+            presentedHeaderPanel = presentedHeaderPanel == panel ? nil : panel
+        } label: {
+            Image(systemName: panel.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .frame(
+                    width: WorkspaceCanvasHeaderLayout.controlSize.width,
+                    height: WorkspaceCanvasHeaderLayout.controlSize.height
+                )
+                .contentShape(
+                    RoundedRectangle(
+                        cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                        style: .continuous
+                    )
+                )
+                .foregroundStyle(
+                    presentedHeaderPanel == panel
+                        ? Color.accentColor
+                        : Color.primary.opacity(0.72)
+                )
+                .background {
+                    RoundedRectangle(
+                        cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                        style: .continuous
+                    )
+                        .fill(
+                            presentedHeaderPanel == panel
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.primary.opacity(0.06)
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+        .help(panel.title)
+        .accessibilityLabel(panel.title)
+        .accessibilityIdentifier(panel.accessibilityIdentifier)
+        .popover(isPresented: isPresented, arrowEdge: .bottom) {
+            workspaceCanvasHeaderPanelContent(panel)
+        }
+    }
+
+    @ViewBuilder
+    private func workspaceCanvasHeaderPanelContent(
+        _ panel: WorkspaceCanvasHeaderPanel
+    ) -> some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: WorkspaceCanvasPanelLayout.sectionSpacing) {
+                switch panel {
+                case .analysis:
+                    workspaceSurfaceAnalysisPanelSections
+                case .more:
+                    workspaceOverflowPanelSections
+                }
+            }
+            .padding(WorkspaceCanvasPanelLayout.contentPadding)
+            .frame(width: WorkspaceCanvasPanelLayout.width, alignment: .topLeading)
+        }
+        .scrollIndicators(.automatic)
+        .frame(width: WorkspaceCanvasPanelLayout.width)
+        .frame(maxHeight: WorkspaceCanvasPanelLayout.maximumHeight)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("\(panel.accessibilityIdentifier).panel")
+    }
+
+    @ViewBuilder
+    private var workspaceSurfaceAnalysisPanelSections: some View {
+        workspacePanelSection("Analysis") {
+            WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
+            workspaceValueRow(
+                "Target",
+                selectedSurfaceAnalysisSummary == nil ? "No supported target" : "Selected target",
+                accessibilityIdentifier: "WorkspaceAnalysis.target"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var workspaceOverflowPanelSections: some View {
+        workspacePanelSection("Views") {
+            Button {
+                createSavedViewFromCurrentViewport()
+            } label: {
+                Label("Save Current", systemImage: "plus.viewfinder")
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 26)
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
+            .disabled(viewportCameraFrame == nil)
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.primary.opacity(0.78))
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+            }
+            .help("Save Current View")
+            .accessibilityLabel("Save Current View")
+            .accessibilityIdentifier("WorkspaceSavedView.createCurrent")
+
+            if savedViews.isEmpty {
+                workspaceValueRow("Saved", "None")
+            } else {
+                VStack(spacing: 5) {
+                    ForEach(savedViews) { savedView in
+                        workspaceSavedViewRow(savedView)
+                    }
+                }
             }
         }
-        .workspaceCanvasTopChromeContainer()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("WorkspaceTopBar")
+
+        workspacePanelSection("Plane") {
+            let planeSummary = savedConstructionPlaneSummary
+            workspaceValueRow("Snap", constructionPlaneSnapSummary)
+            if planeSummary.planes.isEmpty {
+                workspaceValueRow("Saved", "None")
+            } else {
+                VStack(spacing: 5) {
+                    ForEach(planeSummary.planes, id: \.id) { plane in
+                        workspaceConstructionPlaneRow(plane)
+                    }
+                }
+            }
+            if viewAlignedConstructionPlaneRequest != nil {
+                workspaceValueRow("Command", "Pick View Origin")
+            }
+        }
+
+        if commandCatalog.hasDomainCommands {
+            workspacePanelSection("Domain") {
+                VStack(spacing: 5) {
+                    ForEach(commandCatalog.domainCommands) { command in
+                        WorkspaceDomainCommandRow(
+                            command: command,
+                            displayUnit: snapshot.workspaceState.displayUnit,
+                            generation: snapshot.documentGeneration
+                        ) { request in
+                            try await runWorkspaceOperation {
+                                guard let current = workspace.view else {
+                                    throw ProjectWorkspaceActionError(
+                                        code: .snapshotUnavailable,
+                                        message: "The project workspace has no published view snapshot."
+                                    )
+                                }
+                                let plan = try domainCommandDispatcher.dispatch(
+                                    request,
+                                    from: current
+                                )
+                                return try await workspace.execute(plan)
+                            }
+                        }
+                    }
+                }
+                .accessibilityIdentifier("WorkspaceDomainCommandList")
+            }
+        }
+
+        workspacePanelSection("Scene") {
+            workspaceValueRow(
+                "Bodies",
+                "\(snapshot.evaluationSnapshot.bodyCount)",
+                accessibilityIdentifier: "WorkspaceScene.bodies"
+            )
+            workspaceValueRow(
+                "Issues",
+                diagnosticSummary,
+                accessibilityIdentifier: "WorkspaceScene.issues"
+            )
+        }
     }
 
     private var workspaceViewportFitMenu: some View {
@@ -3024,13 +3306,18 @@ private struct ProjectMainViewContent: View {
             .disabled(!viewportControlSession.canFitSelected)
             .accessibilityIdentifier("WorkspaceViewport.fitSelected")
         } label: {
-            Label("Fit", systemImage: "viewfinder")
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
+            Image(systemName: "viewfinder")
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
         } primaryAction: {
             performViewportControl(.fitVisible)
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(
+            width: WorkspaceCanvasHeaderLayout.controlSize.width,
+            height: WorkspaceCanvasHeaderLayout.controlSize.height
+        )
         .disabled(!viewportControlSession.canFitVisible)
         .help("Fit Visible or Selected Objects")
         .accessibilityLabel("Viewport Fit")
@@ -3050,7 +3337,18 @@ private struct ProjectMainViewContent: View {
             isViewportShadingPresented.toggle()
         } label: {
             Image(systemName: "slider.horizontal.3")
-                .font(.caption.weight(.medium))
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .frame(
+                    width: WorkspaceCanvasHeaderLayout.controlSize.width,
+                    height: WorkspaceCanvasHeaderLayout.controlSize.height
+                )
+                .contentShape(
+                    RoundedRectangle(
+                        cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                        style: .continuous
+                    )
+                )
         }
         .buttonStyle(.plain)
         .disabled(!viewportControlSession.isReady)
@@ -3075,14 +3373,16 @@ private struct ProjectMainViewContent: View {
             viewportDisplayModeButton(.wireframe)
             viewportDisplayModeButton(.normals)
         } label: {
-            Label(
-                viewportDisplayModeTitle(viewportDisplayMode),
-                systemImage: viewportDisplayModeSystemImage(viewportDisplayMode)
-            )
-            .font(.caption.weight(.medium))
-            .lineLimit(1)
+            Image(systemName: viewportDisplayModeSystemImage(viewportDisplayMode))
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
         }
         .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(
+            width: WorkspaceCanvasHeaderLayout.controlSize.width,
+            height: WorkspaceCanvasHeaderLayout.controlSize.height
+        )
         .help("Viewport Display Mode")
         .accessibilityLabel("Viewport Display Mode")
         .accessibilityValue(viewportDisplayModeTitle(viewportDisplayMode))
@@ -3349,258 +3649,6 @@ private struct ProjectMainViewContent: View {
             activate: { activateTool($0) },
             accessibilityIdentifier: { canvasToolIdentifier(for: $0) }
         )
-    }
-
-    private var workspaceUtilityRail: some View {
-        Group {
-            if isUtilityRailExpanded {
-                expandedWorkspaceUtilityRail
-            } else {
-                collapsedWorkspaceUtilityRail
-            }
-        }
-    }
-
-    private var expandedWorkspaceUtilityRail: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
-                    workspaceUtilityRailHeader
-                        .id(WorkspaceUtilityRailDestination.controls)
-
-                    workspaceRailSection("Select") {
-                        WorkspaceSelectionScopeControl(selection: $selectionScope)
-                    }
-                    .id(WorkspaceUtilityRailDestination.selection)
-
-                    workspaceRailSection("Snap") {
-                        HStack(spacing: 6) {
-                            workspaceToggleButton(
-                                isOn: $isGridSnapEnabled,
-                                systemImage: "grid",
-                                title: "Grid",
-                                help: "Grid Snap",
-                                accessibilityIdentifier: "WorkspaceSnap.grid"
-                            )
-                            workspaceToggleButton(
-                                isOn: $isObjectTargetingEnabled,
-                                systemImage: "dot.scope",
-                                title: "Object",
-                                help: "Object Targeting",
-                                accessibilityIdentifier: "WorkspaceSnap.object"
-                            )
-                            workspaceToggleButton(
-                                isOn: fixedGridVisualSpacingBinding,
-                                systemImage: "lock",
-                                title: "Fixed",
-                                help: "Fixed Visual Grid",
-                                accessibilityIdentifier: "WorkspaceGrid.fixed"
-                            )
-                        }
-                    }
-                    .id(WorkspaceUtilityRailDestination.snap)
-
-                    workspaceRailSection("Views") {
-                        Button {
-                            createSavedViewFromCurrentViewport()
-                        } label: {
-                            Label("Save Current", systemImage: "plus.viewfinder")
-                                .font(.caption.weight(.medium))
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, minHeight: 26)
-                        }
-                        .disabled(viewportCameraFrame == nil)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.primary.opacity(0.78))
-                        .background {
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                .fill(Color.primary.opacity(0.06))
-                        }
-                        .help("Save Current View")
-                        .accessibilityLabel("Save Current View")
-                        .accessibilityIdentifier("WorkspaceSavedView.createCurrent")
-
-                        if savedViews.isEmpty {
-                            workspaceValueRow("Saved", "None")
-                        } else {
-                            VStack(spacing: 5) {
-                                ForEach(savedViews) { savedView in
-                                    workspaceSavedViewRow(savedView)
-                                }
-                            }
-                        }
-                    }
-                    .id(WorkspaceUtilityRailDestination.views)
-
-                    workspaceRailSection("Plane") {
-                        let planeSummary = savedConstructionPlaneSummary
-                        WorkspacePlaneModeControl(selection: $workspacePlaneMode)
-                        workspaceToggleButton(
-                            isOn: $isConstructionPlaneSnapEnabled,
-                            systemImage: "square.grid.2x2",
-                            title: "2D",
-                            help: "2D Construction Plane Snap",
-                            accessibilityIdentifier: "WorkspacePlane.twoDSnap"
-                        )
-                        if let activeConstructionPlane = activeConstructionPlane {
-                            workspaceValueRow(
-                                "Active",
-                                activeConstructionPlane.name,
-                                accessibilityIdentifier: "WorkspacePlane.activeName"
-                            )
-                        }
-                        workspaceValueRow("Snap", constructionPlaneSnapSummary)
-                        if planeSummary.planes.isEmpty {
-                            workspaceValueRow("Saved", "None")
-                        } else {
-                            VStack(spacing: 5) {
-                                ForEach(planeSummary.planes, id: \.id) { plane in
-                                    workspaceConstructionPlaneRow(plane)
-                                }
-                            }
-                        }
-                        if viewAlignedConstructionPlaneRequest != nil {
-                            workspaceValueRow("Command", "Pick View Origin")
-                        }
-                    }
-                    .id(WorkspaceUtilityRailDestination.plane)
-
-                    workspaceRailSection("Analysis") {
-                        WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
-                        workspaceValueRow(
-                            "Target",
-                            selectedSurfaceAnalysisSummary == nil ? "No supported target" : "Selected target",
-                            accessibilityIdentifier: "WorkspaceAnalysis.target"
-                        )
-                    }
-                    .id(WorkspaceUtilityRailDestination.analysis)
-
-                    if commandCatalog.hasDomainCommands {
-                        workspaceRailSection("Domain") {
-                            VStack(spacing: 5) {
-                                ForEach(commandCatalog.domainCommands) { command in
-                                    WorkspaceDomainCommandRow(
-                                        command: command,
-                                        displayUnit: snapshot.workspaceState.displayUnit,
-                                        generation: snapshot.documentGeneration
-                                    ) { request in
-                                        try await runWorkspaceOperation {
-                                            guard let current = workspace.view else {
-                                                throw ProjectWorkspaceActionError(
-                                                    code: .snapshotUnavailable,
-                                                    message: "The project workspace has no published view snapshot."
-                                                )
-                                            }
-                                            let plan = try domainCommandDispatcher.dispatch(
-                                                request,
-                                                from: current
-                                            )
-                                            return try await workspace.execute(plan)
-                                        }
-                                    }
-                                }
-                            }
-                            .accessibilityIdentifier("WorkspaceDomainCommandList")
-                        }
-                    }
-
-                    workspaceRailSection("Scene") {
-                        workspaceValueRow(
-                            "Bodies",
-                            "\(snapshot.evaluationSnapshot.bodyCount)",
-                            accessibilityIdentifier: "WorkspaceScene.bodies"
-                        )
-                        workspaceValueRow(
-                            "Issues",
-                            diagnosticSummary,
-                            accessibilityIdentifier: "WorkspaceScene.issues"
-                        )
-                    }
-                    .id(WorkspaceUtilityRailDestination.scene)
-                }
-                .padding(WorkspaceUtilityRailLayout.contentPadding)
-            }
-            .scrollIndicators(.hidden)
-            .frame(width: WorkspaceUtilityRailLayout.expandedWidth, alignment: .topLeading)
-            .frame(maxHeight: WorkspaceUtilityRailLayout.maximumExpandedHeight, alignment: .topLeading)
-            .workspaceGlassContainer()
-            .accessibilityIdentifier("WorkspaceUtilityRail.expanded")
-            .onAppear {
-                focusUtilityRail(using: proxy)
-            }
-            .onChange(of: utilityRailDestination) { _, _ in
-                focusUtilityRail(using: proxy)
-            }
-        }
-    }
-
-    private var workspaceUtilityRailHeader: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 12, weight: .semibold))
-                .symbolRenderingMode(.hierarchical)
-            Text("Controls")
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            workspaceIconButton(
-                systemImage: "chevron.right",
-                help: "Collapse Canvas Controls",
-                accessibilityIdentifier: "WorkspaceUtilityRail.collapse"
-            ) {
-                setUtilityRailExpanded(false)
-            }
-        }
-        .foregroundStyle(.secondary)
-    }
-
-    private var collapsedWorkspaceUtilityRail: some View {
-        WorkspaceUtilityRailCompactView(
-            selectionScope: selectionScope,
-            isGridSnapEnabled: isGridSnapEnabled,
-            isObjectTargetingEnabled: isObjectTargetingEnabled,
-            constructionPlaneTitle: constructionPlaneSnapSummary,
-            isConstructionPlaneActive: workspacePlaneMode != .adaptive
-                || activeConstructionPlane != nil
-                || viewAlignedConstructionPlaneRequest != nil,
-            surfaceAnalysisTitle: selectedSurfaceAnalysisSummary == nil
-                ? "No supported target"
-                : surfaceAnalysisOverlaySummary,
-            isSurfaceAnalysisActive: selectedSurfaceAnalysisSummary != nil
-                && surfaceAnalysisOverlaySummary != "Off",
-            savedViewCount: savedViews.count,
-            diagnosticTitle: diagnosticSummary,
-            hasDiagnostics: !diagnostics.isEmpty
-        ) { destination in
-            setUtilityRailExpanded(true, destination: destination)
-        }
-    }
-
-    private func setUtilityRailExpanded(
-        _ isExpanded: Bool,
-        destination: WorkspaceUtilityRailDestination? = nil
-    ) {
-        utilityRailDestination = isExpanded ? destination : nil
-        withAnimation(.easeInOut(duration: 0.16)) {
-            isUtilityRailExpanded = isExpanded
-        }
-    }
-
-    private func focusUtilityRail(using proxy: ScrollViewProxy) {
-        guard let destination = utilityRailDestination else {
-            return
-        }
-        Task { @MainActor in
-            await Task.yield()
-            guard isUtilityRailExpanded,
-                  utilityRailDestination == destination else {
-                return
-            }
-            withAnimation(.easeInOut(duration: 0.16)) {
-                proxy.scrollTo(destination, anchor: .top)
-            }
-            utilityRailDestination = nil
-        }
     }
 
     private var isViewportContextPanelVisible: Bool {

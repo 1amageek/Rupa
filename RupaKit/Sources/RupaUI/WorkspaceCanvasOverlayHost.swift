@@ -1,14 +1,12 @@
 import RupaRendering
 import SwiftUI
 
-struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View, UtilityRail: View, ContextPanel: View>: View {
+struct WorkspaceCanvasOverlayHost<Content: View, ToolPalette: View, ContextPanel: View>: View {
     var isContextPanelVisible: Bool
     var onHover: (Bool) -> Void
     var onChromeGeometryChange: (WorkspaceCanvasChromeGeometry) -> Void
     @ViewBuilder var content: () -> Content
-    @ViewBuilder var topBar: () -> TopBar
     @ViewBuilder var toolPalette: () -> ToolPalette
-    @ViewBuilder var utilityRail: () -> UtilityRail
     @ViewBuilder var contextPanel: () -> ContextPanel
     @State private var store = WorkspaceCanvasChromeRectStore()
 
@@ -16,9 +14,6 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
         ZStack {
             content()
                 .zIndex(0)
-        }
-        .overlay(alignment: .topTrailing) {
-            trailingChrome
         }
         .overlay(alignment: .leading) {
             toolPalette()
@@ -45,30 +40,6 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
         .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
         .overlayPreferenceValue(WorkspaceToolNameHint.Preference.self) { hint in
             WorkspaceToolNameHint.overlay(hint)
-        }
-    }
-
-    /// The chrome the canvas carries on its trailing side.
-    ///
-    /// The top bar and the utility rail are laid out over the same canvas, so
-    /// they share one vertical budget rather than being laid out as two
-    /// independent overlays, which lets the rail grow through the corner the
-    /// bar holds whenever the canvas is shorter than the height the rail
-    /// declares -- which is what opening the bottom logs pane does to it.
-    /// `WorkspaceTrailingChromeLayout` owns how that budget is divided.
-    private var trailingChrome: some View {
-        WorkspaceTrailingChromeLayout(
-            spacing: WorkspaceCanvasOverlayLayout.edgePadding
-        ) {
-            topBar()
-                .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
-                .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayChrome(.topBar, onChange: setChromeRect)
-                .onHover(perform: onHover)
-            utilityRail()
-                .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
-                .workspaceCanvasOverlayChrome(.utilityRail, onChange: setChromeRect)
-                .onHover(perform: onHover)
         }
     }
 
@@ -126,7 +97,11 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
     }
 }
 
-private enum WorkspaceCanvasOverlayLayout {
+/// The metrics the canvas lays its own edge chrome out at.
+///
+/// `WorkspaceToolNameHint` places itself beside the tool palette in the same
+/// coordinate space, so the padding is not private to this file.
+enum WorkspaceCanvasOverlayLayout {
     static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
     static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
 }

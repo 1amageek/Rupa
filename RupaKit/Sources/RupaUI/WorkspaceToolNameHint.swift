@@ -44,8 +44,8 @@ struct WorkspaceToolNameHint: ViewModifier {
                         .fixedSize()
                         .offset(
                             x: hint.edge == .trailing
-                                ? bounds.maxX + WorkspaceUtilityRailLayout.contentPadding
-                                : bounds.minX - geometry.size.width - WorkspaceUtilityRailLayout.contentPadding,
+                                ? bounds.maxX + WorkspaceCanvasOverlayLayout.edgePadding
+                                : bounds.minX - geometry.size.width - WorkspaceCanvasOverlayLayout.edgePadding,
                             y: bounds.midY - WorkspaceChromeControlMetrics.controlHeight / 2
                         )
                         .accessibilityIdentifier("WorkspaceToolNameHint")

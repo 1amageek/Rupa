@@ -27,20 +27,10 @@ func workspaceSelectionScopeLimitsPresentationOccurrencePickingToObjectSelection
     #expect(!WorkspaceSelectionScope.object.allowsPresentationOccurrencePick(for: .mesh))
 }
 
-@Test func workspaceSelectionScopeControlFitsUtilityRailAsSingleIconRow() {
+@Test func workspaceSelectionScopeControlStandsInTheHeaderAsOneIconRow() {
     #expect(WorkspaceSelectionScopeControlLayout.columnCount == WorkspaceSelectionScope.allCases.count)
     #expect(WorkspaceSelectionScopeControlLayout.rowCount(itemCount: WorkspaceSelectionScope.allCases.count) == 1)
-    #expect(WorkspaceSelectionScopeControlLayout.fitsInUtilityRail)
-    #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= WorkspaceUtilityRailLayout.contentWidth)
-    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 25.0)
-    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height == 26.0)
-    #expect(WorkspaceUtilityRailLayout.contentWidth == 162.0)
-}
-
-@Test func workspaceUtilityRailDefaultsToCompactCanvasFootprint() {
-    #expect(WorkspaceUtilityRailLayout.collapsedWidth < WorkspaceUtilityRailLayout.expandedWidth)
-    #expect(WorkspaceUtilityRailLayout.collapsedWidth <= 40.0)
-    #expect(WorkspaceUtilityRailLayout.maximumExpandedHeight <= 620.0)
-    #expect(WorkspaceUtilityRailLayout.collapsedContentWidth == WorkspaceUtilityRailLayout.compactButtonSize.width)
-    #expect(WorkspaceUtilityRailLayout.compactButtonSize.height <= ViewportCanvasChromeMetrics.topControlHeight)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize == WorkspaceCanvasHeaderLayout.controlSize)
+    #expect(WorkspaceSelectionScopeControlLayout.spacing == WorkspaceCanvasHeaderLayout.seatItemSpacing)
+    #expect(WorkspaceSelectionScopeControlLayout.contentWidth == 160.0)
 }

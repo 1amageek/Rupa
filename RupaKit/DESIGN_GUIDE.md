@@ -6,27 +6,26 @@ Rupa is a CAD workspace. The canvas is the primary work surface, and every overl
 
 ```mermaid
 flowchart TD
-    Canvas[Canvas and model geometry] --> Overlay[Overlay UI]
-    Overlay --> Chrome[Top status and commands]
+    Column[Canvas column] --> Header[Canvas header]
+    Column --> Canvas[Canvas and model geometry]
+    Canvas --> Overlay[Overlay UI]
     Overlay --> Tools[Tool palette]
-    Overlay --> Rail[Utility rail]
     Overlay --> Context[Context panel]
-    Chrome --> Rule[Compact inset and compact internal padding]
-    Tools --> Rule
-    Rail --> Rule
+    Header --> Seat[Declared height and fixed seats that never shrink]
+    Tools --> Rule[Compact inset and compact internal padding]
     Context --> Rule
 ```
 
 | Rule | Guidance |
 |---|---|
 | Prefer compact overlay insets | Canvas overlays should use a 4 pt outer inset by default. Increase only when overlap with system chrome or hit targets is proven. |
-| Keep overlay internals dense | Top/context panels and viewport badges should share a 26 pt container height with 4 pt horizontal padding. Utility rails should default to 8 pt padding. |
+| Keep overlay internals dense | Context panels, viewport badges and canvas-header seats should share a 26 pt container height with 4 pt horizontal padding. |
 | Keep small repeated pills compact | Status chips and value pills should default to 4 pt horizontal padding inside the shared 18 pt content height. |
 | Keep tool palettes compact | Tool palettes should keep their container padding near 2 pt and item spacing near 4 pt while preserving tappable icon targets. |
 | Do not use decorative spacing on canvas | Extra padding, large card margins, and oversized floating containers hide geometry and reduce picking confidence. |
 | Avoid nested framed surfaces | Canvas overlays may use one Liquid Glass surface. Avoid cards inside cards or decorative wrapper layers on the canvas. |
-| Use shared Liquid Glass chrome | Canvas badges, command chrome, compact rails, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top chrome must flow through `viewportCanvasTopChrome`; top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
-| Keep top chrome content-width | Top command chrome and viewport badges should hug their controls. Clamp to a maximum width only after measuring content; do not add spacers or fixed maximum-width frames that create empty canvas-obscuring background. |
+| Use shared Liquid Glass chrome | Canvas badges, command chrome, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top chrome must flow through `viewportCanvasTopChrome`; top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
+| Keep canvas overlays content-width | Viewport badges and other chrome laid out over the canvas should hug their controls. The canvas header is not an overlay: it stands above the canvas and spans the column, so it neither hides geometry nor competes for picking area. Clamp to a maximum width only after measuring content; do not add spacers or fixed maximum-width frames that create empty canvas-obscuring background. |
 | Keep document title out of canvas chrome | The document title belongs in navigation/window chrome. Canvas chrome should only show viewport, command, selection, and diagnostic state. |
 
 ## Canvas Chrome Tokens
@@ -54,21 +53,20 @@ flowchart TD
 
 | Component | Outer placement | Internal spacing |
 |---|---:|---:|
-| `workspaceTopBar` | 4 pt top and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, content-width, no document title |
+| `workspaceCanvasHeader` | Above the canvas in the canvas column, spanning its width | 34 pt declared height, 26 pt seats, 6 pt horizontal padding, 4 pt item spacing, no document title |
 | `viewportBadge` | 4 pt top-leading overlay inset | 26 pt borderless `viewportCanvasTopChrome` container; compact unit/status/zoom plus one resolved-grid readout |
 | `floatingToolPalette` | 4 pt leading overlay inset | 2 pt container padding, 4 pt item spacing |
-| `workspaceUtilityRail` | 4 pt trailing overlay inset | 8 pt container padding, 8 pt section spacing |
 | `viewportContextPanel` | 4 pt bottom and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, scrolls horizontally only when content cannot fit |
 | `workspaceValuePill` | Inline in compact panels | 4 pt horizontal padding inside the shared 18 pt content height |
 | `workspaceStatusChip` | Inline in compact panels | 4 pt horizontal padding inside the shared 18 pt content height |
-| `WorkspaceSelectionScopeControl` | Utility rail `Select` section | One fixed-width icon rail; full labels belong in tooltips and accessibility metadata |
+| `WorkspaceSelectionScopeControl` | Canvas header, first seat | One fixed-width icon rail; full labels belong in tooltips and accessibility metadata |
 
 ## Affordance Rules
 
 | Topic | Rule |
 |---|---|
 | Picking | Overlay controls must not sit over common pick zones unless they are directly related to the active command. |
-| Snapping | Snap and construction-plane indicators should summarize state compactly; detailed controls belong in the utility rail or inspector. |
+| Snapping | Snap and construction-plane indicators should summarize state compactly; detailed controls belong in the inspector or the canvas header's overflow panel. |
 | Scale | Canvas scale should stay visible through grid labels and a compact resolved-grid readout; configuration controls belong in document settings or inspector panels. Grid intervals should advance through a readable 1-2-5 progression across zoom levels, rather than arbitrary doubled values. Display-unit changes are formatting changes and must preserve physical ruler distances. Kilometer units are reserved for site-range readouts, while ordinary part and building edits should remain readable in μm, mm, cm, or m. |
 | Length editing | Inspector and dimension length fields should present readable units for the current magnitude, accept explicit and architectural length notation, use large-range slider scaling where a slider exists, and persist canonical meters. |
 | Dimensions | Dimension labels and handles are part of the canvas, not chrome. Keep surrounding chrome away from dimension-heavy regions. |

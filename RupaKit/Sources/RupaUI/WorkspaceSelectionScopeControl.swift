@@ -2,18 +2,14 @@ import SwiftUI
 
 struct WorkspaceSelectionScopeControlLayout: Equatable {
     static let columnCount = 6
-    static let spacing: CGFloat = 2.0
-    static let buttonSize = CGSize(width: 25.0, height: 26.0)
+    static let spacing: CGFloat = WorkspaceCanvasHeaderLayout.seatItemSpacing
+    static let buttonSize = WorkspaceCanvasHeaderLayout.controlSize
     static let iconSize: CGFloat = 12.0
     static let cornerRadius: CGFloat = 6.0
 
     static var contentWidth: CGFloat {
         CGFloat(columnCount) * buttonSize.width
             + CGFloat(columnCount - 1) * spacing
-    }
-
-    static var fitsInUtilityRail: Bool {
-        contentWidth <= WorkspaceUtilityRailLayout.contentWidth
     }
 
     static func rowCount(itemCount: Int) -> Int {

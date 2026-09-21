@@ -17,12 +17,8 @@ func workspaceCanvasOverlayExclusionsUseCanvasLocalCoordinates() async throws {
         onChromeGeometryChange: { geometry = $0 }
     ) {
         Color.clear
-    } topBar: {
-        Color.red.frame(width: 100, height: 30)
     } toolPalette: {
         Color.blue.frame(width: 30, height: 150)
-    } utilityRail: {
-        Color.green.frame(width: 40, height: 180)
     } contextPanel: {
         Color.orange.frame(width: 180, height: 30)
     }
@@ -41,12 +37,21 @@ func workspaceCanvasOverlayExclusionsUseCanvasLocalCoordinates() async throws {
         controller.view.layoutSubtreeIfNeeded()
         try await Task.sleep(for: .milliseconds(20))
     }
-    #expect(geometry.exclusions.count == 4)
+    #expect(geometry.exclusions.count == 2)
     for exclusion in geometry.exclusions {
         #expect(CGRect(x: 0, y: 0, width: 400, height: 300).contains(exclusion.rect))
     }
-    let rail = try #require(geometry.exclusions.first { $0.fittingEdges == .trailing })
-    #expect(rail.rect.maxX == 400)
+    // The canvas carries chrome on the leading and bottom edges and on no
+    // others, so nothing is reserved against the trailing edge the header used
+    // to float over.
+    #expect(!geometry.exclusions.contains { $0.fittingEdges == .trailing })
+    #expect(!geometry.exclusions.contains { $0.fittingEdges == .top })
+    // The exclusion covers the gap the palette keeps from the canvas edge as
+    // well as the palette itself, so it starts at the edge rather than at the
+    // palette, and the viewport fits its content clear of both.
+    let palette = try #require(geometry.exclusions.first { $0.fittingEdges == .leading })
+    #expect(palette.rect.minX == 0.0)
+    #expect(palette.rect.width == 30.0 + ViewportCanvasChromeMetrics.edgePadding)
     // The reserved height is the context panel's own measured height, not a
     // second measurement of the same view and not a rounded exclusion edge.
     #expect(geometry.contextPanelHeight == 30.0 + ViewportCanvasChromeMetrics.edgePadding)
