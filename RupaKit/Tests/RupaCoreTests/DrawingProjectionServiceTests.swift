@@ -161,34 +161,6 @@ import Testing
 }
 
 @MainActor
-@Test func drawingProjectionPNGExporterRejectsOversizedBitmapBeforeContextAllocation() throws {
-    let result = try drawingProjectionResultWithMeasurement(
-        name: "Export Guard",
-        kind: .distance,
-        anchors: [
-            .worldPoint(.origin, role: .start),
-            .worldPoint(Point3D(x: 1.0, y: 0.0, z: 0.0), role: .end),
-        ]
-    )
-    let exporter = DrawingProjectionPNGExporter(
-        options: DrawingProjectionPNGExporter.Options(
-            width: 20_000.0,
-            height: 20_000.0,
-            padding: 32.0,
-            pixelScale: 1.0
-        )
-    )
-
-    do {
-        _ = try exporter.png(for: result)
-        Issue.record("Oversized PNG export should fail before bitmap context allocation.")
-    } catch let error as EditorError {
-        #expect(error.code == .exportFailed)
-        #expect(error.message.contains("maximum bitmap size"))
-    }
-}
-
-@MainActor
 @Test func drawingProjectionGeneratesSectionContoursAndHatchesFromSavedViewSectionState() throws {
     let session = EditorSession()
     _ = try session.execute(

@@ -26,12 +26,6 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var savedViews: [SavedView]?
     public var savedViewID: SavedViewID?
     public var drawingProjection: DrawingProjectionResult?
-    public var drawingProjectionSVGPath: String?
-    public var drawingProjectionSVGByteCount: UInt64?
-    public var drawingProjectionPDFPath: String?
-    public var drawingProjectionPDFByteCount: UInt64?
-    public var drawingProjectionPNGPath: String?
-    public var drawingProjectionPNGByteCount: UInt64?
 
     public init(
         message: String,
@@ -54,13 +48,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         viewportGridScale: ViewportGridScaleSnapshot? = nil,
         savedViews: [SavedView]? = nil,
         savedViewID: SavedViewID? = nil,
-        drawingProjection: DrawingProjectionResult? = nil,
-        drawingProjectionSVGPath: String? = nil,
-        drawingProjectionSVGByteCount: UInt64? = nil,
-        drawingProjectionPDFPath: String? = nil,
-        drawingProjectionPDFByteCount: UInt64? = nil,
-        drawingProjectionPNGPath: String? = nil,
-        drawingProjectionPNGByteCount: UInt64? = nil
+        drawingProjection: DrawingProjectionResult? = nil
     ) {
         self.message = message
         self.effect = effect
@@ -83,12 +71,6 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.savedViews = savedViews
         self.savedViewID = savedViewID
         self.drawingProjection = drawingProjection
-        self.drawingProjectionSVGPath = drawingProjectionSVGPath
-        self.drawingProjectionSVGByteCount = drawingProjectionSVGByteCount
-        self.drawingProjectionPDFPath = drawingProjectionPDFPath
-        self.drawingProjectionPDFByteCount = drawingProjectionPDFByteCount
-        self.drawingProjectionPNGPath = drawingProjectionPNGPath
-        self.drawingProjectionPNGByteCount = drawingProjectionPNGByteCount
     }
 }
 

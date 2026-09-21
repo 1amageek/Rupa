@@ -352,8 +352,6 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ExportPreset.swift",
                         "RupaKit/Sources/RupaCore/ExportResult.swift",
                         "RupaKit/Sources/RupaCore/DrawingProjectionService.swift",
-                        "RupaKit/Sources/RupaCore/DrawingProjectionSVGExporter.swift",
-                        "RupaKit/Sources/RupaCore/DrawingProjectionPDFExporter.swift",
                         "swift-CAD/Sources/CADExchange/OfficialFormatExchange.swift",
                         "swift-CAD/Sources/CADExchange/PDFExporter.swift",
                         "RupaKit/Sources/RupaAgentRuntime/ProjectAgentCommandController.swift",
@@ -361,15 +359,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DrawingProjectionServiceTests.swift",
-                        "RupaKit/Tests/RupaCoreTests/DrawingProjectionSVGExporterTests.swift",
-                        "RupaKit/Tests/RupaCoreTests/DrawingProjectionPDFExporterTests.swift",
                         "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
                         "RupaKit/Tests/RupaAgentTopologyPersistenceTests/AgentTopologyPersistenceTransportIntegrationTests.swift",
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
-                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours, linear and radial hatch segments, and measurement-backed drawing annotations for SVG and PDF export.",
-                        "Drawing page/style presets are implemented for SVG/PDF output; parametric material hatching and curved analytic hidden-line support remain separate gaps.",
+                        "Saved-view drawing projection generates structured hidden-line strokes, section contours, hatch segments, and measurement-backed drawing annotations.",
                     ]
                 ),
             ],
