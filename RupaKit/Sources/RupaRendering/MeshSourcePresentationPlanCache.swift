@@ -26,6 +26,7 @@ final class MeshSourcePresentationPlanCache {
     @ObservationIgnored private var requestID: UUID?
     @ObservationIgnored private var pendingRequest: (request: RealityViewportPreparationRequest, id: UUID)?
     private var current: Prepared?
+    @ObservationIgnored private var precedingMountedFrame: Prepared?
 
     init(
         builder: @escaping Builder = { scene in
@@ -61,20 +62,34 @@ final class MeshSourcePresentationPlanCache {
     ///
     /// A pointer can only have addressed pixels that were drawn, so the frame
     /// the view mounted answers for it. That is the exact-ready frame once this
-    /// identity is prepared, and otherwise the mounted frame the display is
+    /// identity is mounted, and otherwise the mounted frame the display is
     /// still showing for the same scene and snapshot, whose ordered handle
     /// indexes name its own prepared record table. A recorded failure for this
     /// identity keeps the display but withdraws its authority, and a changed
     /// scene or snapshot withdraws both.
     private func queryAuthority(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
-        switch state {
-        case let .ready(current, _, surface) where current == identity:
-            return surface
-        case let .failed(current, _) where current == identity:
-            return nil
-        default:
-            return displaySurface(for: identity)
+        queryFrame(for: identity)?.surface
+    }
+
+    private func queryFrame(for identity: RealityViewportPreparationRequest.Identity) -> Prepared? {
+        if case let .failed(failed, _) = state, failed == identity { return nil }
+        guard let requested = state.identity,
+              requested.scene == identity.scene, requested.snapshotID == identity.snapshotID,
+              let current, current.identity.scene == identity.scene,
+              current.identity.snapshotID == identity.snapshotID else { return nil }
+        if current.surface.root.scene != nil {
+            precedingMountedFrame = nil
+            return current
         }
+        // Publication may precede the RealityView update. Keep native hits and
+        // their ordered semantic records together until that update mounts it.
+        if let precedingMountedFrame,
+           precedingMountedFrame.identity.scene == identity.scene,
+           precedingMountedFrame.identity.snapshotID == identity.snapshotID,
+           precedingMountedFrame.surface.root.scene != nil {
+            return precedingMountedFrame
+        }
+        return current
     }
 
     /// Queries the frame mounted for `identity`, never a frame drawn for a
@@ -329,7 +344,7 @@ final class MeshSourcePresentationPlanCache {
     ) throws -> ViewportMeshElementHit? {
         let surface = try querySurface(for: identity)
         let pointerHit = try surface.surfaceHit(at: point, revision: revision)
-        guard let current, current.surface === surface, let plan = current.plan else { return nil }
+        guard let frame = queryFrame(for: identity), frame.surface === surface, let plan = frame.plan else { return nil }
         return try MeshSourcePresentationMeshElementResolver.resolve(
             at: point, domain: domain, in: plan,
             project: { try self.project($0, for: identity, revision: revision) },
@@ -364,9 +379,9 @@ final class MeshSourcePresentationPlanCache {
 
     func interactionRecord(at index: UInt32, for identity: RealityViewportPreparationRequest.Identity) -> ViewportSpatialInteractionRecord? {
         guard let surface = queryAuthority(for: identity),
-              let current, current.surface === surface,
-              Int(index) < current.interactionRecords.count else { return nil }
-        return current.interactionRecords[Int(index)]
+              let frame = queryFrame(for: identity), frame.surface === surface,
+              Int(index) < frame.interactionRecords.count else { return nil }
+        return frame.interactionRecords[Int(index)]
     }
 
     /// Every prepared interaction record of the frame that answers for `identity`.
@@ -380,12 +395,12 @@ final class MeshSourcePresentationPlanCache {
         for identity: RealityViewportPreparationRequest.Identity
     ) throws -> [ViewportSpatialInteractionRecord] {
         let surface = try querySurface(for: identity)
-        guard let current, current.surface === surface else {
+        guard let frame = queryFrame(for: identity), frame.surface === surface else {
             throw notReadyFailure(
                 "The native interaction records are unavailable before the prepared frame is retained."
             )
         }
-        return current.interactionRecords
+        return frame.interactionRecords
     }
 
     /// The failure recorded for this identity, or `nil` when the current state is not
@@ -420,6 +435,8 @@ final class MeshSourcePresentationPlanCache {
         }
         let requestID = UUID()
         if displaySurface(for: request.identity) == nil {
+            if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
+            precedingMountedFrame = nil
             current?.surface.invalidateCamera()
             // The old frame may remain a picture, but cannot answer queries
             // for the newly requested scene or snapshot.
@@ -534,6 +551,8 @@ final class MeshSourcePresentationPlanCache {
         buildTask?.cancel()
         pendingRequest = nil
         requestID = nil
+        if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
+        precedingMountedFrame = nil
         current?.surface.invalidateCamera()
         current = nil
         state = .idle
@@ -546,6 +565,8 @@ final class MeshSourcePresentationPlanCache {
         pendingRequest = nil
         requestID = nil
         if displaySurface(for: identity) == nil {
+            if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
+            precedingMountedFrame = nil
             current?.surface.invalidateCamera()
             current = nil
         }
@@ -581,6 +602,9 @@ final class MeshSourcePresentationPlanCache {
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
             case let .success(prepared):
+                if let current, current.surface.root.scene != nil {
+                    precedingMountedFrame = current
+                }
                 self.current = prepared
                 if requested == identity {
                     state = .ready(identity: identity, plan: prepared.plan, surface: prepared.surface)

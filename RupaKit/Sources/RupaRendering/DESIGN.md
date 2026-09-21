@@ -286,12 +286,16 @@ gets a new revision. Overflow is a typed failure, never wraparound. This
 synchronous comparison makes the new preparation identity visible in the same
 body evaluation. A pointer can only have addressed pixels that were drawn, so one
 cache rule owns which frame answers, and every CAD, handle,
-projection, and section query resolve through it: the exact-ready frame when the
-requested identity is prepared, otherwise the mounted frame whose scene key and
+projection, and section query resolve through it: the exact-ready frame after
+the host mounts it, otherwise the mounted frame whose scene key and
 optional real snapshot ID are equal and whose overlay revision alone differs. The
 display-only scheduling path above grants no additional query authority. An
-overlay-only rebuild therefore never converts a press into a silent refusal. A
-changed source or snapshot, an idle cache, or a typed failure recorded for the
+overlay-only rebuild therefore never converts a press into a silent refusal.
+A completed but unmounted successor does not replace the query owner. The cache
+retains at most one preceding mounted frame, including its own handle table,
+until the successor mounts; a later query or publication releases it. All of
+these owners remain MainActor-isolated on the native Apple backend.
+A changed source or snapshot, an idle cache, or a typed failure recorded for the
 requested identity withdraws authority, and no other frame inherits it, so two
 frames never disagree about which one answers. Withdrawal removes neither the
 picture nor the native host: the `RealityView` stays mounted and keeps showing

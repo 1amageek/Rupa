@@ -14,7 +14,7 @@ struct RealityViewportMountTests {
     @Test(.timeLimit(.minutes(1)), arguments: [false, true])
     func referenceAxesFollowMountedCameraWithoutGrid(perspective: Bool) async throws {
         _ = NSApplication.shared
-        let renderOrigin = Point3D(x: 0.003, y: 0.002, z: -0.001)
+        let renderOrigin = Point3D(x: 0.3, y: -0.2, z: 0.1)
         let batch = try RealityViewportSpatialBatch(includesAxes: true,
             renderOrigin: renderOrigin, retainedSurfaceByteCount: 0)
         #expect(!batch.includesGrid && batch.meshes.isEmpty && batch.handleCount == 0)
@@ -49,17 +49,25 @@ struct RealityViewportMountTests {
             try #require(viewport.root.findEntity(named: "Reference Axis \(name)") as? ModelEntity)
         }
         let meshes = try axes.map { try #require($0.model?.mesh) }
-        for (frame, zoom) in [CGFloat(0.05), 1, 30].enumerated() {
-            let basis: ViewportProjectionBasis = frame == 0 ? .axisFront(.z) : frame == 1 ? .axisFront(.x) : .isometric
+        // Frame 53 reproduces inward Float rounding after origin rebasing;
+        // retain the neighboring orientations, then finish at the GPU fixture.
+        for frame in [0, 1, 52, 53, 54, 2] {
+            let zoom = [CGFloat(0.05), 1, 30][frame % 3]
+            let basis: ViewportProjectionBasis = frame == 0 ? .axisFront(.z) : frame == 1 ? .axisFront(.x)
+                : frame == 2 ? .isometric : .orbit(yaw: CGFloat(frame) * 0.37, elevation: CGFloat(frame) * 0.11)
             let revision = UInt64(frame + 1)
             if frame > 0 {
+                reportedError = nil
                 size = frame == 1 ? CGSize(width: 640, height: 240) : CGSize(width: 512, height: 384)
                 window.setContentSize(size)
                 controller.rootView = view(basis, zoom: zoom, revision: revision)
             }
             let deadline = ContinuousClock.now.advanced(by: .seconds(8))
-            while viewport.appliedViewportRevision != revision || viewport.project(.origin) == nil
-                    || axes.filter({ $0.isEnabledInHierarchy }).count < 2 {
+            while viewport.appliedViewportRevision != revision || viewport.project(.origin) == nil {
+                if let reportedError {
+                    Issue.record("Orbit frame \(frame), perspective \(perspective): \(reportedError.message)")
+                    throw reportedError
+                }
                 try #require(ContinuousClock.now < deadline, "Native reference axes never became visible.")
                 try await Task.sleep(for: .milliseconds(20))
             }
@@ -85,7 +93,7 @@ struct RealityViewportMountTests {
                 let length = hypot(b.x - a.x, b.y - a.y)
                 #expect(length > 0.001, "frame \(frame), axis \(index): \(a) -> \(b)")
                 let distance = abs((b.x - a.x) * (origin.y - a.y) - (b.y - a.y) * (origin.x - a.x)) / length
-                #expect(distance < 0.5, "Native axis moved away from the CAD origin.")
+                #expect(distance < 0.5, "Native axis moved away from the CAD origin at frame \(frame).")
                 if frame < 2 && index != (frame == 0 ? 2 : 0) {
                     func atEdge(_ p: CGPoint) -> Bool {
                         min(abs(p.x), abs(p.y), abs(p.x - size.width), abs(p.y - size.height)) < 0.5
@@ -482,6 +490,7 @@ struct RealityViewportMountTests {
         _ = NSApplication.shared
         let batch = try RealityViewportSpatialBatch(
             includesGrid: true,
+            includesAxes: true,
             renderOrigin: .origin,
             retainedSurfaceByteCount: 0
         )
@@ -613,7 +622,9 @@ struct RealityViewportMountTests {
         }), ContinuousClock.now < tickDeadline {
             try await Task.sleep(for: .milliseconds(10))
         }
-        let publishedTicks = Array(mountedScene.performQuery(tickQuery)).filter { $0.isEnabledInHierarchy }
+        let publishedTicks = Array(mountedScene.performQuery(tickQuery)).filter {
+            $0.isEnabledInHierarchy && !$0.name.hasPrefix("Reference Axis ")
+        }
         try #require(!publishedTicks.isEmpty)
         let renderer = try RealityRenderer()
         renderer.cameraSettings.colorBackground = .color(CGColor(gray: 0, alpha: 1))
@@ -795,6 +806,7 @@ struct RealityViewportMountTests {
         #expect(blankTextFrames == 0, "A model replacement withdrew already drawn tick labels.")
         for (label, parent) in zip(originalLabels, originalParents) {
             #expect(label.parent === parent)
+            #expect(label.isEnabledInHierarchy)
             #expect(label.visualBounds(relativeTo: label).extents.y > 0)
         }
         #expect(replacement.gridScaleReadout != nil)

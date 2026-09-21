@@ -26,7 +26,7 @@ final class RealityViewportSpatialResources {
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
     private var grid: (entity: ModelEntity, mesh: LowLevelMesh)?
     private var gridLabels: [(entity: Entity, text: String)] = []
-    private var gridLabelRoot: Entity?
+    private var referenceAnnotationRoot: Entity?
     private var gridPlacement: ModelEntity?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
     struct MarkerCollision {
@@ -81,7 +81,7 @@ final class RealityViewportSpatialResources {
         let axis: ViewportCoordinateAxis
         let line: ModelEntity
         let mesh: LowLevelMesh
-        let label: Entity
+        var label: Entity
     }
     private var axes: [AxisResource] = []
     private(set) var collisionBounds: BoundingBox?
@@ -1377,31 +1377,47 @@ final class RealityViewportSpatialResources {
     }
 
     /// Transfers ownership only at mount handoff, never during preparation.
-    func takeGridLabels(from previous: RealityViewportSpatialResources) {
-        guard grid != nil else {
-            previous.clearGridLabels()
-            return
+    func takeReferenceAnnotations(from previous: RealityViewportSpatialResources) {
+        if batch.includesAxes, !previous.axes.isEmpty {
+            for index in axes.indices {
+                axes[index].label.removeFromParent()
+                axes[index].label = previous.axes[index].label
+            }
+            previous.axes = []
         }
-        guard gridLabels.isEmpty else { return }
-        gridLabels = previous.gridLabels
-        previous.gridLabels = []
-        let parent = gridLabelRoot ?? root
+        if grid != nil, gridLabels.isEmpty {
+            gridLabels = previous.gridLabels
+            previous.gridLabels = []
+        }
+        previous.clearReferenceAnnotations()
+        let parent = referenceAnnotationRoot ?? root
         for label in gridLabels where label.entity.parent !== parent { parent.addChild(label.entity) }
+        for axis in axes {
+            if axis.label.parent !== parent { parent.addChild(axis.label) }
+        }
     }
 
-    func clearGridLabels() {
+    func clearReferenceAnnotations() {
         for label in gridLabels { label.entity.removeFromParent() }
         gridLabels = []
+        for axis in axes {
+            axis.line.removeFromParent()
+            axis.label.removeFromParent()
+        }
+        axes = []
     }
 
-    func attachGridLabels(to parent: Entity) {
-        guard gridLabelRoot !== parent else { return }
-        gridLabelRoot = parent
+    func attachReferenceAnnotations(to parent: Entity) {
+        guard referenceAnnotationRoot !== parent else { return }
+        referenceAnnotationRoot = parent
         for label in gridLabels where label.entity.parent !== parent { parent.addChild(label.entity) }
+        for axis in axes {
+            if axis.label.parent !== parent { parent.addChild(axis.label) }
+        }
     }
 
-    func setGridLabelsEnabled(_ enabled: Bool) {
-        gridLabelRoot?.isEnabled = enabled
+    func setReferenceAnnotationsEnabled(_ enabled: Bool) {
+        referenceAnnotationRoot?.isEnabled = enabled
     }
 
     private func disableAxes() {
@@ -1478,19 +1494,25 @@ final class RealityViewportSpatialResources {
             // Correct measured inward quantization, not a guessed world extent.
             // The final check rejects a frame if native Float cannot represent it.
             func corrected(_ point: SIMD3<Float>, target: CGPoint, outward: CGFloat) throws -> SIMD3<Float> {
-                guard let projected = projection.project(point) else {
-                    throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not projectable.")
+                var candidate = point
+                var displacement: CGFloat = 0
+                // Reprojection includes native Float cancellation. One correction
+                // can round back inward, especially after render-origin rebasing.
+                for _ in 0..<8 {
+                    guard let projected = projection.project(candidate) else {
+                        throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not projectable.")
+                    }
+                    let error = shift(projected, from: target) * outward
+                    if error >= -pointResolution { return candidate }
+                    displacement = max(displacement * 2, displacement - error + pointResolution)
+                    candidate = projection.point(at: CGPoint(
+                        x: target.x + unit.x * displacement * outward,
+                        y: target.y + unit.y * displacement * outward), depth: projection.sampleDepth)
                 }
-                let error = shift(projected, from: target) * outward
-                guard error < 0 else { return point }
-                let amount = (-error + pointResolution) * outward
-                return projection.point(at: CGPoint(x: target.x + unit.x * amount, y: target.y + unit.y * amount),
-                                        depth: projection.sampleDepth)
+                return candidate
             }
             start = try corrected(start, target: screen.start, outward: -1)
             end = try corrected(end, target: screen.end, outward: 1)
-            start = Self.roundedOutward(start, awayFrom: end)
-            end = Self.roundedOutward(end, awayFrom: start)
             guard let projectedStart = projection.project(start), let projectedEnd = projection.project(end) else {
                 throw RealityViewportSpatialBatch.invalid("The native reference-axis endpoint is not projectable.")
             }
@@ -1561,17 +1583,6 @@ final class RealityViewportSpatialResources {
                 axisResource.label.isEnabled = false
             }
         }
-    }
-
-    private static func roundedOutward(_ point: SIMD3<Float>, awayFrom other: SIMD3<Float>) -> SIMD3<Float> {
-        var result = point
-        if other.x > point.x { result.x = point.x.nextDown }
-        else if other.x < point.x { result.x = point.x.nextUp }
-        if other.y > point.y { result.y = point.y.nextDown }
-        else if other.y < point.y { result.y = point.y.nextUp }
-        if other.z > point.z { result.z = point.z.nextDown }
-        else if other.z < point.z { result.z = point.z.nextUp }
-        return result
     }
 
     private static func axisLabelPoint(start: CGPoint, end: CGPoint, viewportSize: CGSize,
@@ -1730,7 +1741,7 @@ final class RealityViewportSpatialResources {
         }
         gridLabels.removeAll(keepingCapacity: true)
         for (label, value, transform) in text {
-            let parent = gridLabelRoot ?? root
+            let parent = referenceAnnotationRoot ?? root
             if label.parent !== parent { parent.addChild(label) }
             gridLabels.append((label, value))
             // TextComponent's native plane uses typographic points (1/72 inch).

@@ -991,17 +991,17 @@ final class RealityViewport {
         if camera.parent !== parent { parent.addChild(camera) }
     }
 
-    func takeGridLabels(from previous: RealityViewport) {
+    func takeReferenceAnnotations(from previous: RealityViewport) {
         guard let previous = previous.spatialResources else { return }
         if let spatialResources {
-            spatialResources.takeGridLabels(from: previous)
+            spatialResources.takeReferenceAnnotations(from: previous)
         } else {
-            previous.clearGridLabels()
+            previous.clearReferenceAnnotations()
         }
     }
 
-    func attachGridLabels(to root: Entity) {
-        spatialResources?.attachGridLabels(to: root)
+    func attachReferenceAnnotations(to root: Entity) {
+        spatialResources?.attachReferenceAnnotations(to: root)
     }
 
     func unbind(owner: ObjectIdentifier? = nil) {
@@ -1029,7 +1029,7 @@ final class RealityViewport {
         cameraCalibrationDepth = nil
         discardRegionRaster()
         root.isEnabled = false
-        spatialResources?.setGridLabelsEnabled(false)
+        spatialResources?.setReferenceAnnotationsEnabled(false)
     }
 
     /// Releases the region raster and the frame it was admitted for. The key
@@ -1046,7 +1046,7 @@ final class RealityViewport {
         spatialResources?.root.isEnabled = enabled
         // Published annotations survive native-camera readiness waits. Their
         // next complete frame owns visibility; invalidation explicitly hides them.
-        if enabled { spatialResources?.setGridLabelsEnabled(true) }
+        if enabled { spatialResources?.setReferenceAnnotationsEnabled(true) }
     }
 
     func triangle(for hit: CollisionCastHit) -> MeshSourcePresentationTriangle? {

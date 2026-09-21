@@ -1,5 +1,8 @@
 # Progress
 
+- [x] HF1 Preserve XYZ text entities at native mount handoff, keep pointer queries and handle baselines on the mounted frame until its successor attaches, and revalidate bounded Float endpoint correction after render-origin rebasing. Native mount/GPU, overlay-handoff, stale-revision, failure and grid-retention tests pass; implementation commit accompanies this record. `depends:none` `parallel:none`
+- [ ] HF2 Verify cumulative native hover/camera/selection behavior, signed App build and saved-document restart. `depends:HF1` `parallel:none`
+
 - [x] AS1 Reuse bounded per-occurrence material variants across overlay frames and preserve one immutable handle quad through deselection. Eight native GPU/selection/material/drag/lifetime tests pass. Mounted Debug selection preparation interval falls from 178.57ms to 96.25ms (median of three warm selections); this is not first-pixel latency. About 94ms of MainActor scheduling delay remains; Inspector-off control measures 47ms. Ineffective Inspector layout experiments were reverted. Implementation commit accompanies this record; complete latency elimination is not claimed. `depends:none` `parallel:none`
 - [x] AS2 Verify AS1 (bb6746a9): eight native tests plus two mounted UI selection/geometry tests pass; signed App build and codesign verification pass. Saved current Box/Sphere edits to .verification/SelectionPerformance-20260921-2355.rupa, restarted the 23:56 build, restored that document and visually verified Canvas selection and affordances for both objects. Remaining mounted UI latency is recorded in AS1; no complete-latency-elimination claim. `depends:AS1` `parallel:none`
 

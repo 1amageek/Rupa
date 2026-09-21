@@ -65,13 +65,13 @@ struct RealityViewportView: View {
         ) == true
         if mount.current !== viewport {
             viewport.adoptCamera(from: mount.current, parent: mount.cameraRoot)
-            viewport.attachGridLabels(to: mount.gridLabelRoot)
-            if let previous = mount.current { viewport.takeGridLabels(from: previous) }
-            mount.detach(preservingGridLabels: true)
-            for entity in content.entities where entity !== mount.gridLabelRoot && entity !== mount.cameraRoot { content.remove(entity) }
+            viewport.attachReferenceAnnotations(to: mount.referenceAnnotationRoot)
+            if let previous = mount.current { viewport.takeReferenceAnnotations(from: previous) }
+            mount.detach(preservingReferenceAnnotations: true)
+            for entity in content.entities where entity !== mount.referenceAnnotationRoot && entity !== mount.cameraRoot { content.remove(entity) }
             if !content.entities.contains(where: { $0 === mount.cameraRoot }) { content.add(mount.cameraRoot) }
-            if !content.entities.contains(where: { $0 === mount.gridLabelRoot }) { content.add(mount.gridLabelRoot) }
-            mount.gridLabelContent = content
+            if !content.entities.contains(where: { $0 === mount.referenceAnnotationRoot }) { content.add(mount.referenceAnnotationRoot) }
+            mount.referenceAnnotationContent = content
             content.add(viewport.root)
             mount.current = viewport
         }
@@ -116,8 +116,8 @@ struct RealityViewportView: View {
     private final class Mount {
         var current: RealityViewport?
         let cameraRoot = Entity()
-        let gridLabelRoot = Entity()
-        var gridLabelContent: RealityViewCameraContent?
+        let referenceAnnotationRoot = Entity()
+        var referenceAnnotationContent: RealityViewCameraContent?
         private var lastError: MeshSourcePresentationRenderError?
         private var lastGridError: MeshSourcePresentationRenderError?
         private var lastGridReadout: ViewportProjectedGrid.ScaleReadout?
@@ -238,16 +238,16 @@ struct RealityViewportView: View {
             }
         }
 
-        func detach(preservingGridLabels: Bool = false) {
+        func detach(preservingReferenceAnnotations: Bool = false) {
             frameSubscription?.cancel()
             frameSubscription = nil
             pending = nil
             reportTask?.cancel()
             reportTask = nil
-            if !preservingGridLabels {
-                gridLabelContent?.remove(cameraRoot)
-                gridLabelContent?.remove(gridLabelRoot)
-                gridLabelContent = nil
+            if !preservingReferenceAnnotations {
+                referenceAnnotationContent?.remove(cameraRoot)
+                referenceAnnotationContent?.remove(referenceAnnotationRoot)
+                referenceAnnotationContent = nil
             }
             // Owner-checked unbind also removes the root. A retiring mount
             // must not remove a root already adopted by its replacement.

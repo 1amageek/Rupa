@@ -275,17 +275,32 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
     let renderOrigin = Point3D(x: 100, y: -40, z: 12)
     let identity = nativeCameraQueryIdentity(overlayRevision: 1)
     let cache = MeshSourcePresentationPlanCache()
-    cache.prepare(.init(
-        identity: identity,
-        scene: nil,
-        fallbackOrigin: renderOrigin,
-        spatialOverlay: { origin, charge in
-            (try RealityViewportSpatialBatch(
-                renderOrigin: origin,
-                retainedSurfaceByteCount: charge
-            ), [])
-        }
-    ))
+    let featureID = FeatureID()
+    let reference = SelectionReference.surface(.controlPoint(.init(
+        surface: .init(subshape: .init(subshapeID: .init(featureID: featureID, role: "surface", ordinal: 0),
+                                      geometrySignature: .vertex(point: renderOrigin))), uIndex: 1, vIndex: 2)))
+    let anchor = Point3D(x: renderOrigin.x + 0.5, y: renderOrigin.y + 0.5, z: renderOrigin.z)
+    func request(_ identity: RealityViewportPreparationRequest.Identity, baseline: Point3D) throws -> RealityViewportPreparationRequest {
+        let record = try ViewportSpatialInteractionRecord(target: .surfaceControlPoint(.init(
+            featureID: featureID, target: reference, point: baseline,
+            modelTransform: .identity, dragMode: .planar)), occurrenceID: "hover.surface")
+        return .init(identity: identity, scene: nil, fallbackOrigin: renderOrigin,
+            spatialOverlay: { origin, charge in
+                try ViewportSpatialOverlayProducer.makeBuilder(from: .init(
+                    markers: [.init(family: .transform, value: .init(shape: .box, anchor: anchor,
+                        diameterPoints: 12, color: [1, 0, 0, 1], handleIndex: 0, hitTolerancePoints: 4))],
+                    interactionRecords: [record], renderOrigin: origin,
+                    retainedSurfaceByteCount: charge, topologyRevision: identity.overlayRevision))(origin, charge)
+            })
+    }
+    func expectBaseline(_ identity: RealityViewportPreparationRequest.Identity, at point: CGPoint, baseline: Point3D) throws {
+        let records = try cache.interactionRecords(at: point, for: identity, revision: 1)
+        try #require(records.count == 1)
+        if case .surfaceControlPoint(let value) = records[0].target {
+            #expect(value.point == baseline)
+        } else { Issue.record("The mounted handle lost its frame-owned baseline.") }
+    }
+    cache.prepare(try request(identity, baseline: anchor))
     let readyDeadline = ContinuousClock.now.advanced(by: .seconds(5))
     while cache.surface(for: identity) == nil, ContinuousClock.now < readyDeadline {
         if case let .failed(_, error) = cache.state { throw error }
@@ -293,9 +308,6 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
     }
     let viewport = try #require(cache.surface(for: identity))
     let size = CGSize(width: 512, height: 384)
-    let anchor = Point3D(x: renderOrigin.x + 0.5,
-                         y: renderOrigin.y + 0.5,
-                         z: renderOrigin.z)
     let layout = ViewportLayout(
         modelBounds: CGRect(x: renderOrigin.x, y: renderOrigin.z, width: 1, height: 1),
         size: size,
@@ -389,11 +401,47 @@ func nativeCameraCacheForwardsExactReadyQueriesAndRejectsStaleFrames() async thr
             revision: 1
         )
     }
+    // Completion is not mounting: pointer queries must keep using the drawn
+    // frame until the host installs the newly prepared overlay.
+    let replacementIdentity = RealityViewportPreparationRequest.Identity(
+        scene: identity.scene, snapshotID: identity.snapshotID, overlayRevision: 2)
+    cache.prepare(try request(replacementIdentity, baseline: renderOrigin))
+    let replacementDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while cache.surface(for: replacementIdentity) == nil {
+        try #require(ContinuousClock.now < replacementDeadline)
+        if case let .failed(_, error) = cache.state { throw error }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let replacement = try #require(cache.surface(for: replacementIdentity))
+    #expect(replacement.root.scene == nil)
+    #expect(cache.hasReadyCamera(for: replacementIdentity, revision: 1))
+    #expect(try cache.projectWithinDepthRange(anchor, for: replacementIdentity, revision: 1) == screenPoint)
+    try expectBaseline(replacementIdentity, at: screenPoint, baseline: anchor)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.projectWithinDepthRange(anchor, for: replacementIdentity, revision: 2)
+    }
+    controller.rootView = RealityViewportView(
+        viewport: replacement, viewportRevision: 1, displayMode: .solid,
+        shading: .init(style: .flat), occurrenceMaterials: [:], layout: layout,
+        interaction: interaction, sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+        onUpdateResult: { reportedError = $0 }
+    ).frame(width: size.width, height: size.height)
+    let handoffDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while !replacement.isCameraReady(revision: 1) {
+        try #require(ContinuousClock.now < handoffDeadline)
+        controller.view.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(viewport.root.scene == nil)
+    try expectBaseline(replacementIdentity, at: screenPoint, baseline: renderOrigin)
     window.contentViewController = nil
     window.close()
     let unmountDeadline = ContinuousClock.now.advanced(by: .seconds(5))
-    while viewport.appliedViewportRevision != nil, ContinuousClock.now < unmountDeadline {
+    while replacement.appliedViewportRevision != nil, ContinuousClock.now < unmountDeadline {
         try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        try cache.projectWithinDepthRange(anchor, for: replacementIdentity, revision: 1)
     }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try cache.projectWithinDepthRange(anchor, for: identity, revision: 1)

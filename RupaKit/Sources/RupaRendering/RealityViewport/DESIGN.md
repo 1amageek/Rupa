@@ -246,7 +246,8 @@ first admitted surface position or the request fallback), invokes the batch
 builder with the surface charge, prepares both native resource families, and
 publishes one complete `RealityViewport` only after request-identity recheck.
 A same-identity restart remains distinguishable by the cache's private request
-UUID. The cache may retain one current native owner and one preparing candidate;
+UUID. The cache may retain one current native owner, one preceding mounted
+query owner during host handoff, and one preparing candidate;
 only the newest additional pending request is retained, as engine-neutral
 values, until the active worker exits.
 
@@ -593,7 +594,14 @@ and use the existing camera projection to place clipped endpoints at its finite
 in-frustum `sampleDepth`. This depth is solely the numerically stable inverse-
 projection plane and does not change line visibility. Native `TextComponent`
 labels remain at the existing near annotation depth and therefore keep their
-separate placement/occlusion behavior. A camera update uses the already-applied
+separate placement/occlusion behavior. Reference-axis and grid labels share the
+mount-owned stable annotation parent. Ownership transfers only at mount handoff,
+never during asynchronous preparation; existing axis text entities
+remain attached across overlay replacement. Disabling axes or removing spatial
+resources removes the retired entities, and camera invalidation hides the
+annotation parent. The native mount test observes engine frames and entity
+identity across repeated replacements, with grid and XYZ labels together.
+A camera update uses the already-applied
 `ViewportLayout`/native camera mapping to update at most six positions, three
 enabled states, and label transforms. The pure clipping
 operation is bounded by three lines and the six frustum
@@ -606,9 +614,14 @@ an invalid frame returns the existing typed camera/spatial failure without
 partially publishing new axes. After conversion to native Float positions, the
 owner reprojects both endpoints and verifies that every mathematically
 nondegenerate segment is still finite, noncollapsed, and covers the clipped
-screen interval without an inward endpoint. Outward Float correction may only
-recover that exact interval; it cannot extend an axis beyond the mathematical
-clip. A genuinely projected-degenerate axis remains explicitly disabled.
+screen interval without an inward endpoint. Correction reprojects each rounded
+candidate: a single inverse projection followed by Float rounding is not proof
+that the correction survived. Each endpoint permits at most eight measured
+outward corrections, doubling the prior displacement when quantization absorbs
+it; failure to cover the interval remains typed failure. This recovers numerical
+coverage at the clip boundary, not an authored world extent. A native regression
+uses a translated render origin and the failing orbit/zoom combination. A
+genuinely projected-degenerate axis remains explicitly disabled.
 
 Grid geometry is camera-owned bounded presentation rather than immutable
 world-source topology. The static producer does not materialize grid lines or

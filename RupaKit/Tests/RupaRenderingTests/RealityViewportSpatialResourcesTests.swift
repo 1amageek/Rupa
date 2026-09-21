@@ -918,7 +918,7 @@ struct RealityViewportSpatialResourcesTests {
         let ruler = RulerConfiguration(displayUnit: .meter, minorTickMeters: 0.1, majorTickMeters: 1, visibleSpanMeters: 100)
         let labelRoot = Entity()
         content.add(labelRoot)
-        prepared.attachGridLabels(to: labelRoot)
+        prepared.attachReferenceAnnotations(to: labelRoot)
         defer { content.remove(labelRoot) }
         var originalLabels: [Entity] = []
         var heights: [CGFloat] = []
@@ -995,8 +995,8 @@ struct RealityViewportSpatialResourcesTests {
         #expect(try prepared.updateCamera(camera: camera, content: content,
             gridRuler: ruler, gridBasis: .axisFront(.z), gridSize: CGSize(width: 800, height: 600)) == nil)
         let replacement = try await RealityViewportSpatialResources.prepare(batch: batch)
-        replacement.attachGridLabels(to: labelRoot)
-        replacement.takeGridLabels(from: prepared)
+        replacement.attachReferenceAnnotations(to: labelRoot)
+        replacement.takeReferenceAnnotations(from: prepared)
         content.add(replacement.root)
         defer { content.remove(replacement.root) }
         #expect(try replacement.updateCamera(camera: camera, content: content,
@@ -1007,8 +1007,8 @@ struct RealityViewportSpatialResourcesTests {
         for label in transferred { #expect(label.visualBounds(relativeTo: label).extents.y > 0) }
         let withoutGrid = try await RealityViewportSpatialResources.prepare(batch:
             .init(renderOrigin: .origin, retainedSurfaceByteCount: 0))
-        withoutGrid.attachGridLabels(to: labelRoot)
-        withoutGrid.takeGridLabels(from: replacement)
+        withoutGrid.attachReferenceAnnotations(to: labelRoot)
+        withoutGrid.takeReferenceAnnotations(from: replacement)
         #expect(labelRoot.children.isEmpty)
     }
 
