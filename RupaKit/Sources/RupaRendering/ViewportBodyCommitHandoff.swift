@@ -1,13 +1,15 @@
 import Foundation
 import Observation
+import RupaCore
 import SwiftCAD
 
-/// Holds display intent across the asynchronous source-publication boundary.
+/// Holds display intent until the committed native frame replaces its predecessor.
 @Observable
 @MainActor
 final class ViewportBodyCommitHandoff {
     private(set) var source: ViewportSourceIdentity?
     private(set) var mutation: Transform3D?
+    private(set) var snapshotID: EvaluationSnapshotID?
     private var occurrenceIDs: [String] = []
     @ObservationIgnored private var token: UUID?
 
@@ -22,6 +24,7 @@ final class ViewportBodyCommitHandoff {
     @discardableResult
     func begin(
         source: ViewportSourceIdentity,
+        snapshotID: EvaluationSnapshotID? = nil,
         mutation: Transform3D,
         occurrenceIDs: [String],
         commit: @escaping @MainActor () async throws -> ViewportSourceIdentity,
@@ -31,14 +34,15 @@ final class ViewportBodyCommitHandoff {
         let token = UUID()
         self.token = token
         self.source = source
+        self.snapshotID = snapshotID
         self.mutation = mutation
         self.occurrenceIDs = occurrenceIDs
         let task = Task { @MainActor [weak self] in
             do {
                 let published = try await commit()
                 guard let self, self.token == token else { return }
-                // A new publication may not have reached SwiftUI yet. Retain
-                // its predecessor's preview until observe() sees that change.
+                // Publication is not a draw receipt. Keep the predecessor's
+                // preview until observe() receives the applied successor frame.
                 if published == source { self.reset() }
             } catch {
                 guard let self, self.token == token else { return }
@@ -59,6 +63,7 @@ final class ViewportBodyCommitHandoff {
         token = nil
         source = nil
         mutation = nil
+        snapshotID = nil
         occurrenceIDs = []
     }
 }

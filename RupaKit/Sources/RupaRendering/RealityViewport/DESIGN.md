@@ -1374,12 +1374,27 @@ replacement or unmount
 
 ## State, Ownership, and Lifecycle
 
+Released body transforms retain their source snapshot and display mutation until
+the native applied-frame receipt names the successor source. Source publication
+alone does not retire them. Any predecessor overlay replacement applies that
+same snapshot-scoped mutation; a successor snapshot never applies it twice.
+Retained pictures do not regain query authority while preparation is pending.
+Spatial preparation reuses its immutable unit-quad collision shape from the
+previous candidate. The shape has no frame-dependent geometry; per-frame collider
+entities, transforms and handle indexes remain separate. A frame without quad
+colliders drops the reference. This avoids repeated native collision cooking
+after each value update without retaining past frames or changing admission.
+`ViewportBodyCommitFrameHandoffTests` checks native predecessor/successor bounds,
+collision resource reuse, independent frame provenance and retirement. These
+owners and their mutation entry points are MainActor-isolated Apple-platform
+implementations; no WASM/Embedded alternative storage is introduced.
+
 The host owns the native scene for the canvas lifetime and the candidate and
 current root for one mount; withdrawing a frame detaches its root and leaves
 the scene mounted. The preparation
 request owns immutable source/overlay values until completion; the host owns
 native resources. The material owner generates its four custom programs once,
-asynchronously with independent compilations overlapped, before a mount publishes, and owns them for the lifetime of
+asynchronously and sequentially (concurrent SDK shader registration can crash), before a mount publishes, and owns them for the lifetime of
 that mounted viewport; no program is compiled while resolving a surface,
 because resolving a surface cannot suspend. The camera
 session remains owned by `ViewportControlSession`, not by RealityKit entities.

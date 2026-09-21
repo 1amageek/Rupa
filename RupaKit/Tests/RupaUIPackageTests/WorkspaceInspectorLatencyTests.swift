@@ -79,8 +79,15 @@ func workspaceCanvasMeasuresMountedPanAndPrimitiveAddition() async throws {
 }
 
 @MainActor
-@Test(.serialized, .timeLimit(.minutes(1)), arguments: [false, true])
-func workspaceInspectorMeasuresRealGeometryUpdateStages(includesOverlays: Bool) async throws {
+@Test(.timeLimit(.minutes(1)))
+func workspaceInspectorMeasuresRealGeometryUpdateStages() async throws {
+    for includesOverlays in [false, true] {
+        try await measureGeometryUpdateStages(includesOverlays: includesOverlays)
+    }
+}
+
+@MainActor
+private func measureGeometryUpdateStages(includesOverlays: Bool) async throws {
     _ = NSApplication.shared
     let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace()
     var current = try await workspace.evaluate()

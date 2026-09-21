@@ -19,6 +19,7 @@ final class RealityViewportSpatialResources {
     let sectionedRoot = Entity()
     private let batch: RealityViewportSpatialBatch
     private var labels: [(Entity, RealityViewportSpatialBatch.Label, Entity?)] = []
+    private var quadCollision: ShapeResource?
     private var markers: [(Entity, RealityViewportSpatialBatch.Marker)] = []
     private var cameraLines: [(ModelEntity, LowLevelMesh, RealityViewportSpatialBatch.CameraLine, [Entity], [ModelEntity])] = []
     private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
@@ -674,7 +675,8 @@ final class RealityViewportSpatialResources {
     }
 
     static func prepare(batch: RealityViewportSpatialBatch,
-                        surfacePlan: MeshSourcePresentationRenderPlan? = nil) async throws -> RealityViewportSpatialResources {
+                        surfacePlan: MeshSourcePresentationRenderPlan? = nil,
+                        reusing previous: RealityViewportSpatialResources? = nil) async throws -> RealityViewportSpatialResources {
         try Task.checkCancellation()
         try batch.validate(surfacePlan: surfacePlan)
         let result = RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan)
@@ -885,7 +887,7 @@ final class RealityViewportSpatialResources {
                 }
             }
         }
-        var quadCollision: ShapeResource?
+        var quadCollision = previous?.quadCollision
         for label in batch.labels {
             try Task.checkCancellation()
             let resource = try await textResource(label.text, cache: &textResources)
@@ -1104,6 +1106,9 @@ final class RealityViewportSpatialResources {
             }
         }
         try Task.checkCancellation()
+        if !result.markerCollisions.isEmpty || !result.labelCollisions.isEmpty {
+            result.quadCollision = quadCollision
+        }
         return result
     }
 

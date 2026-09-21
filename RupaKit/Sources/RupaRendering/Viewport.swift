@@ -636,7 +636,7 @@ public struct Viewport: View {
                         sectionTolerance: sectionAnalysis?.toleranceMeters ?? 0,
                         excludedRects: chromeLayout.inputExclusionRects,
                         objectPreviewTransforms: bodyPreviewTransforms,
-                        objectPreviewSnapshotID: presentationScene?.snapshotID,
+                        objectPreviewSnapshotID: bodyCommitHandoff.snapshotID ?? presentationScene?.snapshotID,
                         gridRuler: workspaceRuler,
                         gridSpacing: gridVisualSpacingMode,
                         onGridUpdateResult: { error, readout in
@@ -656,6 +656,9 @@ public struct Viewport: View {
                             guard let revision else {
                                 constructionPlaneHandleMarkers = []
                                 return
+                            }
+                            if presentationSurface.isCameraReady(revision: revision) {
+                                bodyCommitHandoff.observe(sourceIdentity)
                             }
                             do {
                                 let markers = try ViewportConstructionPlaneHandleMarkerResolver.resolve(
@@ -952,7 +955,7 @@ public struct Viewport: View {
                 clearCanvasHover()
             }
             .onChange(of: sourceIdentity) { _, _ in
-                bodyCommitHandoff.observe(sourceIdentity)
+                if presentationScene == nil { bodyCommitHandoff.observe(sourceIdentity) }
                 cancelNativeInputGesture()
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution()
@@ -3900,7 +3903,10 @@ public struct Viewport: View {
 
     private var bodyPreviewTransforms: [String: Transform3D] {
         guard case .bodyTransform(let press) = nativeInputGesture,
-              let mutation = press.mutation else { return bodyCommitHandoff.transforms(for: sourceIdentity) }
+              let mutation = press.mutation else {
+            return bodyCommitHandoff.transforms(for:
+                presentationScene == nil ? sourceIdentity : (bodyCommitHandoff.source ?? sourceIdentity))
+        }
         return Dictionary(uniqueKeysWithValues: press.input.members.map { ($0.occurrenceID, mutation) })
     }
 
@@ -3958,14 +3964,14 @@ public struct Viewport: View {
         }
         if let resizeTarget, let onBodyResizeCommit {
             bodyCommitHandoff.begin(
-                source: sourceIdentity, mutation: mutation,
+                source: sourceIdentity, snapshotID: press.snapshotID, mutation: mutation,
                 occurrenceIDs: press.input.members.map(\.occurrenceID),
                 commit: { try await onBodyResizeCommit(resizeTarget) },
                 onFailure: reportNativeGestureFailure
             )
         } else if !targets.isEmpty, let onBodyPlacementCommit {
             bodyCommitHandoff.begin(
-                source: sourceIdentity, mutation: mutation,
+                source: sourceIdentity, snapshotID: press.snapshotID, mutation: mutation,
                 occurrenceIDs: press.input.members.map(\.occurrenceID),
                 commit: { try await onBodyPlacementCommit(targets) },
                 onFailure: reportNativeGestureFailure

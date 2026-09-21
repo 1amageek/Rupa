@@ -216,7 +216,8 @@ final class RealityViewport {
             try prepared.attachSurfaces()
         }
         if let spatialBatch {
-            let spatial = try await RealityViewportSpatialResources.prepare(batch: spatialBatch, surfacePlan: plan)
+            let spatial = try await RealityViewportSpatialResources.prepare(batch: spatialBatch, surfacePlan: plan,
+                                                                            reusing: previous?.spatialResources)
             try Task.checkCancellation()
             prepared.spatialResources = spatial
             prepared.root.addChild(spatial.root)

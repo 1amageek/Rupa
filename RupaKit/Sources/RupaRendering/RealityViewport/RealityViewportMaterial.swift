@@ -72,9 +72,8 @@ struct RealityViewportMaterial {
         let matCapShader = CustomMaterial.SurfaceShader(named: matCapFunction, in: library)
         let normalsShader = CustomMaterial.SurfaceShader(named: normalsFunction, in: library)
 
-        async let matCap = Self.programs(for: matCapShader)
-        async let normals = Self.programs(for: normalsShader)
-        (matCapPrograms, normalsPrograms) = try await (matCap, normals)
+        matCapPrograms = try await Self.programs(for: matCapShader)
+        normalsPrograms = try await Self.programs(for: normalsShader)
     }
 
     /// Compiles `shader` once for the opaque pass and once for alpha blending.
@@ -90,9 +89,9 @@ struct RealityViewportMaterial {
         opaqueDescriptor.lightingModel = .unlit
         var alphaDescriptor = opaqueDescriptor
         alphaDescriptor.blendMode = .alpha
-        async let opaque = program(for: shader, descriptor: opaqueDescriptor)
-        async let alpha = program(for: shader, descriptor: alphaDescriptor)
-        return try await BlendedPrograms(opaque: opaque, alpha: alpha)
+        let opaque = try await program(for: shader, descriptor: opaqueDescriptor)
+        let alpha = try await program(for: shader, descriptor: alphaDescriptor)
+        return BlendedPrograms(opaque: opaque, alpha: alpha)
     }
 
     private static func program(
