@@ -1,0 +1,887 @@
+import Foundation
+import RupaAgentProtocol
+import RupaAgentRuntime
+import RupaCADDomain
+import RupaCore
+import RupaKit
+
+/// Runs the category-neutral production lifecycle and returns only immutable evidence.
+/// Candidate selection and command construction are injected through public contracts;
+/// geometry expectations and category oracles remain outside this harness.
+@MainActor
+struct CADCaseLifecycleHarness {
+    enum Mode {
+        case normal
+        case stale
+    }
+
+    private static let defaultPlanningWallNanoseconds: UInt64 = 1
+    private let caseID: CADBenchmarkCaseID
+    private let challenge: CADChallenge
+    private let programPlanner: @MainActor (CADCandidateAction) throws -> CADSemanticProgramPlan
+    private let timeoutWallNanoseconds: UInt64
+    private let preRouteDelayNanoseconds: UInt64
+    private let postRegistrationDelayNanoseconds: UInt64
+
+    init(
+        caseID: CADBenchmarkCaseID,
+        challenge: CADChallenge,
+        programPlanner: @escaping @MainActor (CADCandidateAction) throws -> CADSemanticProgramPlan,
+        timeoutWallNanoseconds: UInt64,
+        preRouteDelayNanoseconds: UInt64 = 0,
+        postRegistrationDelayNanoseconds: UInt64 = 0,
+    ) {
+        self.caseID = caseID
+        self.challenge = challenge
+        self.programPlanner = programPlanner
+        self.timeoutWallNanoseconds = max(1, timeoutWallNanoseconds)
+        self.preRouteDelayNanoseconds = preRouteDelayNanoseconds
+        self.postRegistrationDelayNanoseconds = postRegistrationDelayNanoseconds
+    }
+
+    func runReference(
+        candidate: any CADCandidateProtocol
+    ) async throws -> CADCaseLifecycleRecord {
+        let totalStart = now()
+        let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
+        guard !Task.isCancelled else {
+            return await preflightResult(
+                outcome: .cancellation,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                diagnostics: ["\(caseID.rawValue) was cancelled before candidate planning."]
+            )
+        }
+
+        let planningStart = now()
+        let context = candidateContext(controller: controller)
+        try context.validate()
+        let decision: CADCandidateDecision
+        do {
+            decision = try await deadline.run {
+                try await candidate.decide(for: context)
+            }
+        } catch is CADCaseDeadlineError {
+            return await preflightResult(
+                outcome: .timeout,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: elapsed(since: planningStart),
+                diagnostics: ["\(caseID.rawValue) candidate planning exceeded its shared deadline."]
+            )
+        }
+        guard case .action(let action) = decision else {
+            return await preflightResult(
+                outcome: .invalidSubmission,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: elapsed(since: planningStart),
+                diagnostics: [
+                    "\(caseID.rawValue) candidate returned a non-action decision before publication."
+                ]
+            )
+        }
+        return await perform(
+            action: action,
+            controller: controller,
+            mode: .normal,
+            deadline: deadline,
+            planningWallNanoseconds: elapsed(since: planningStart),
+            totalStart: totalStart
+        )
+    }
+
+    func run(
+        action: CADCandidateAction
+    ) async throws -> CADCaseLifecycleRecord {
+        let totalStart = now()
+        let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
+        let controller = try CADBenchmarkControllerFactory.make(name: caseID.rawValue)
+        return await perform(
+            action: action,
+            controller: controller,
+            mode: .normal,
+            deadline: deadline,
+            planningWallNanoseconds: elapsed(since: totalStart),
+            totalStart: totalStart
+        )
+    }
+
+    func runStale(
+        action: CADCandidateAction
+    ) async throws -> CADCaseLifecycleRecord {
+        let totalStart = now()
+        let deadline = CADCaseDeadline(timeoutWallNanoseconds: timeoutWallNanoseconds)
+        let controller = try CADBenchmarkControllerFactory.make(name: "\(caseID.rawValue).stale")
+        return await perform(
+            action: action,
+            controller: controller,
+            mode: .stale,
+            deadline: deadline,
+            planningWallNanoseconds: elapsed(since: totalStart),
+            totalStart: totalStart
+        )
+    }
+
+    private func perform(
+        action: CADCandidateAction,
+        controller: ProjectAgentCommandController,
+        mode: Mode,
+        deadline: CADCaseDeadline,
+        planningWallNanoseconds: UInt64,
+        totalStart: UInt64
+    ) async -> CADCaseLifecycleRecord {
+        guard !Task.isCancelled else {
+            return await preflightResult(
+                outcome: .cancellation,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) was cancelled before lifecycle setup."]
+            )
+        }
+
+        let workspace: ProjectWorkspace
+        do {
+            workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(
+                document: .empty(named: caseID.rawValue)
+            )
+            _ = try await deadline.run { @MainActor in
+                try await workspace.evaluate()
+            }
+        } catch is CADCaseDeadlineError {
+            return await preflightResult(
+                outcome: .timeout,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) workspace evaluation exceeded its shared deadline."]
+            )
+        } catch {
+            return await preflightResult(
+                outcome: .infrastructureFailure,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) fresh workspace setup failed: \(message(error))"]
+            )
+        }
+
+        guard let initialView = workspace.view else {
+            return await preflightResult(
+                outcome: .infrastructureFailure,
+                controller: controller,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) fresh workspace published no initial view."]
+            )
+        }
+        let planResult = Result { try programPlanner(action) }
+
+        let sessionID = UUID()
+        do {
+            _ = try await deadline.run { @MainActor in
+                let registeredID = try await controller.register(
+                    workspace: workspace,
+                    id: sessionID
+                )
+                if let ledger = CADBenchmarkRegistrationObservation.ledger {
+                    await ledger.registered(registeredID)
+                }
+                if postRegistrationDelayNanoseconds > 0 {
+                    let delay = Int64(min(
+                        postRegistrationDelayNanoseconds,
+                        UInt64(Int64.max)
+                    ))
+                    try await Task.sleep(for: .nanoseconds(delay))
+                }
+                return registeredID
+            }
+        } catch is CADCaseDeadlineError {
+            return await preflightResult(
+                outcome: .timeout,
+                controller: controller,
+                sessionIDToUnregister: sessionID,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) registration exceeded its shared deadline."]
+            )
+        } catch {
+            return await preflightResult(
+                outcome: .infrastructureFailure,
+                controller: controller,
+                sessionIDToUnregister: sessionID,
+                deadline: deadline,
+                totalStart: totalStart,
+                planningWallNanoseconds: planningWallNanoseconds,
+                diagnostics: ["\(caseID.rawValue) registration failed: \(message(error))"]
+            )
+        }
+
+        let attempted: CADCaseLifecycleRecord
+        switch planResult {
+        case .failure(let error):
+            let retained = workspace.view ?? initialView
+            attempted = record(
+                outcome: .invalidSubmission,
+                initialView: initialView,
+                finalView: retained,
+                routeEvidence: routeEvidence(from: initialView, to: retained),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    cancellationCheckpointCount: 2
+                ),
+                diagnostics: [message(error)]
+            )
+        case .success(let plan):
+            attempted = await execute(
+                plan: plan,
+                controller: controller,
+                workspace: workspace,
+                sessionID: sessionID,
+                initialView: initialView,
+                mode: mode,
+                deadline: deadline,
+                planningWallNanoseconds: planningWallNanoseconds,
+                totalStart: totalStart
+            )
+        }
+
+        return await finalizeCleanup(
+            attempted,
+            controller: controller,
+            sessionIDToUnregister: sessionID,
+            totalStart: totalStart
+        )
+    }
+
+    private func execute(
+        plan: CADSemanticProgramPlan,
+        controller: ProjectAgentCommandController,
+        workspace: ProjectWorkspace,
+        sessionID: UUID,
+        initialView: ProjectViewSnapshot,
+        mode: Mode,
+        deadline: CADCaseDeadline,
+        planningWallNanoseconds: UInt64,
+        totalStart: UInt64
+    ) async -> CADCaseLifecycleRecord {
+        if Task.isCancelled {
+            return record(
+                outcome: .cancellation,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) was cancelled before the production route."]
+            )
+        }
+        if deadline.exceeded {
+            return record(
+                outcome: .timeout,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) exceeded its wall-time budget before publication."]
+            )
+        }
+
+        if let unavailable = unavailableOperation(in: plan, controller: controller) {
+            return record(
+                outcome: .invalidSubmission,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) semantic operation \(unavailable) is unavailable in the live registry."]
+            )
+        }
+
+        if mode == .stale {
+            return await executeStale(
+                plan: plan,
+                controller: controller,
+                workspace: workspace,
+                sessionID: sessionID,
+                initialView: initialView,
+                deadline: deadline,
+                planningWallNanoseconds: planningWallNanoseconds,
+                totalStart: totalStart
+            )
+        }
+
+        let routeStart = now()
+        let response: AgentResponse
+        do {
+            response = try await deadlineResponse(
+                controller: controller,
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
+                deadline: deadline
+            )
+        } catch is CADCaseDeadlineError {
+            return record(
+                outcome: .timeout,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: elapsed(since: routeStart),
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) production route exceeded its shared deadline."]
+            )
+        } catch {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(from: initialView, to: workspace.view ?? initialView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: elapsed(since: routeStart),
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) production route failed: \(message(error))"]
+            )
+        }
+
+        let routeWall = elapsed(since: routeStart)
+        let finalView = workspace.view ?? initialView
+        guard let mutation = mutationEvidence(from: response, for: plan) else {
+            return record(
+                outcome: .executionFailure,
+                initialView: initialView,
+                finalView: finalView,
+                response: response,
+                routeEvidence: routeEvidence(from: initialView, to: finalView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: [responseMessage(response)]
+            )
+        }
+        guard workspace.view != nil else {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: initialView,
+                response: response,
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) production mutation published no final view."]
+            )
+        }
+        if mutation.commandCount != plan.commandCount {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: initialView,
+                finalView: finalView,
+                response: response,
+                routeEvidence: routeEvidence(from: initialView, to: finalView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) production metrics disagreed with the dispatched command count."]
+            )
+        }
+        guard mutation.didMutate else {
+            return record(
+                outcome: .executionFailure,
+                initialView: initialView,
+                finalView: finalView,
+                response: response,
+                routeEvidence: routeEvidence(from: initialView, to: finalView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) command returned without source publication."]
+            )
+        }
+        if Task.isCancelled {
+            return record(
+                outcome: .cancelledAfterPublication,
+                initialView: initialView,
+                finalView: finalView,
+                response: response,
+                routeEvidence: routeEvidence(from: initialView, to: finalView),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 5
+                ),
+                diagnostics: ["\(caseID.rawValue) was cancelled after publication; the committed coordinate was retained without retry."]
+            )
+        }
+        return record(
+            outcome: .published,
+            initialView: initialView,
+            finalView: finalView,
+            response: response,
+            routeEvidence: routeEvidence(from: initialView, to: finalView),
+            deadline: deadline,
+            telemetry: telemetry(
+                planningWallNanoseconds: planningWallNanoseconds,
+                routeWallNanoseconds: routeWall,
+                totalStart: totalStart,
+                actionCount: 1,
+                commandCount: plan.commandCount,
+                cancellationCheckpointCount: 5
+            )
+        )
+    }
+
+    private func executeStale(
+        plan: CADSemanticProgramPlan,
+        controller: ProjectAgentCommandController,
+        workspace: ProjectWorkspace,
+        sessionID: UUID,
+        initialView: ProjectViewSnapshot,
+        deadline: CADCaseDeadline,
+        planningWallNanoseconds: UInt64,
+        totalStart: UInt64
+    ) async -> CADCaseLifecycleRecord {
+        let preparation: AgentResponse
+        do {
+            preparation = try await deadlineResponse(
+                controller: controller,
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
+                deadline: deadline
+            )
+        } catch is CADCaseDeadlineError {
+            return record(
+                outcome: .timeout,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(
+                    from: initialView,
+                    to: workspace.view ?? initialView
+                ),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) stale-fixture preparation exceeded its shared deadline."]
+            )
+        } catch {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(
+                    from: initialView,
+                    to: workspace.view ?? initialView
+                ),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) stale-fixture preparation failed: \(message(error))"]
+            )
+        }
+        guard mutationEvidence(from: preparation, for: plan) != nil,
+              let retained = workspace.view else {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: initialView,
+                finalView: workspace.view ?? initialView,
+                routeEvidence: routeEvidence(
+                    from: initialView,
+                    to: workspace.view ?? initialView
+                ),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    totalStart: totalStart,
+                    actionCount: 1,
+                    commandCount: plan.commandCount,
+                    cancellationCheckpointCount: 3
+                ),
+                diagnostics: ["\(caseID.rawValue) could not establish stale production coordinates."]
+            )
+        }
+
+        let routeStart = now()
+        let staleResponse: AgentResponse
+        do {
+            staleResponse = try await deadlineResponse(
+                controller: controller,
+                request: request(plan: plan, sessionID: sessionID, coordinates: initialView),
+                deadline: deadline
+            )
+        } catch is CADCaseDeadlineError {
+            let after = workspace.view ?? retained
+            return record(
+                outcome: .timeout,
+                initialView: retained,
+                finalView: after,
+                routeEvidence: routeEvidence(from: retained, to: after),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: elapsed(since: routeStart),
+                    totalStart: totalStart,
+                    actionCount: 2,
+                    commandCount: plan.commandCount * 2,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) stale request exceeded its shared deadline."]
+            )
+        } catch {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: retained,
+                finalView: workspace.view ?? retained,
+                routeEvidence: routeEvidence(from: retained, to: workspace.view ?? retained),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: elapsed(since: routeStart),
+                    totalStart: totalStart,
+                    actionCount: 2,
+                    commandCount: plan.commandCount * 2,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) stale request failed: \(message(error))"]
+            )
+        }
+        let routeWall = elapsed(since: routeStart)
+        let after = workspace.view ?? retained
+        guard case .programExecution(.prepublicationFailure) = staleResponse else {
+            return record(
+                outcome: .infrastructureFailure,
+                initialView: retained,
+                finalView: after,
+                response: staleResponse,
+                routeEvidence: routeEvidence(from: retained, to: after),
+                deadline: deadline,
+                telemetry: telemetry(
+                    planningWallNanoseconds: planningWallNanoseconds,
+                    routeWallNanoseconds: routeWall,
+                    totalStart: totalStart,
+                    actionCount: 2,
+                    commandCount: plan.commandCount * 2,
+                    cancellationCheckpointCount: 4
+                ),
+                diagnostics: ["\(caseID.rawValue) stale coordinates were not rejected."]
+            )
+        }
+        return record(
+            outcome: .executionFailure,
+            initialView: retained,
+            finalView: after,
+            response: staleResponse,
+            routeEvidence: routeEvidence(from: retained, to: after),
+            deadline: deadline,
+            telemetry: telemetry(
+                planningWallNanoseconds: planningWallNanoseconds,
+                routeWallNanoseconds: routeWall,
+                totalStart: totalStart,
+                actionCount: 2,
+                commandCount: plan.commandCount * 2,
+                cancellationCheckpointCount: 4
+            ),
+            diagnostics: [responseMessage(staleResponse)]
+        )
+    }
+
+    private func candidateContext(
+        controller: ProjectAgentCommandController
+    ) -> CADCandidateContext {
+        CADActivatedCaseContextFactory.make(
+            challenge: challenge,
+            controller: controller
+        )
+    }
+
+    private func unavailableOperation(
+        in plan: CADSemanticProgramPlan,
+        controller: ProjectAgentCommandController
+    ) -> String? {
+        let descriptors = controller.capabilityDescriptors()
+        for step in plan.steps {
+            let available = descriptors.contains { descriptor in
+                descriptor.name == step.operationID.rawValue
+                    && descriptor.semanticOperation?.invocationForms.contains(.program) == true
+                    && descriptor.semanticOperation?.version == RupaCADDomain.operationVersion
+            }
+            if !available {
+                return step.operationID.rawValue
+            }
+        }
+        return nil
+    }
+
+    private func request(
+        plan: CADSemanticProgramPlan,
+        sessionID: UUID,
+        coordinates: ProjectViewSnapshot
+    ) -> AgentRequest {
+        .executeProgram(
+            AgentSemanticProgramExecutionRequest(
+                sessionID: sessionID,
+                authority: AgentProjectAuthorityCoordinate(
+                    projectID: coordinates.projectID,
+                    documentGeneration: coordinates.documentGeneration,
+                    transactionRevision: coordinates.transactionRevision,
+                    publicationSequence: coordinates.publicationSequence,
+                    workspaceRevision: coordinates.workspaceState.revision
+                ),
+                dryRun: false,
+                program: plan.request
+            )
+        )
+    }
+
+    private func mutationEvidence(
+        from response: AgentResponse,
+        for plan: CADSemanticProgramPlan
+    ) -> (didMutate: Bool, commandCount: Int)? {
+        guard case .programExecution(.success(.committed(let receipt))) = response else {
+            return nil
+        }
+        let execution = receipt.telemetry.execution
+        guard execution.stepCount == plan.steps.count,
+              execution.commandCount > 0 else {
+            return nil
+        }
+        return (true, execution.commandCount)
+    }
+
+    private func deadlineResponse(
+        controller: ProjectAgentCommandController,
+        request: AgentRequest,
+        deadline: CADCaseDeadline
+    ) async throws -> AgentResponse {
+        if preRouteDelayNanoseconds > 0 {
+            let delay = Int64(min(preRouteDelayNanoseconds, UInt64(Int64.max)))
+            try await deadline.run {
+                try await Task.sleep(for: .nanoseconds(delay))
+            }
+        }
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: request,
+            id: "\(caseID.rawValue).\(request.methodName)"
+        )
+        return try await deadline.run { @MainActor in
+            try CADBenchmarkControllerFactory.semanticResponse(
+                from: await controller.handle(envelope),
+                for: envelope
+            )
+        }
+    }
+
+    private func preflightResult(
+        outcome: CADCaseLifecycleRecord.Outcome,
+        controller: ProjectAgentCommandController,
+        sessionIDToUnregister: UUID? = nil,
+        deadline: CADCaseDeadline,
+        totalStart: UInt64,
+        planningWallNanoseconds: UInt64 = defaultPlanningWallNanoseconds,
+        diagnostics: [String]
+    ) async -> CADCaseLifecycleRecord {
+        let pending = record(
+            outcome: outcome,
+            routeEvidence: .empty,
+            deadline: deadline,
+            telemetry: telemetry(
+                planningWallNanoseconds: planningWallNanoseconds,
+                totalStart: totalStart,
+                cancellationCheckpointCount: 1
+            ),
+            diagnostics: diagnostics
+        )
+        return await finalizeCleanup(
+            pending,
+            controller: controller,
+            sessionIDToUnregister: sessionIDToUnregister,
+            totalStart: totalStart
+        )
+    }
+
+    private func finalizeCleanup(
+        _ record: CADCaseLifecycleRecord,
+        controller: ProjectAgentCommandController,
+        sessionIDToUnregister: UUID?,
+        totalStart: UInt64
+    ) async -> CADCaseLifecycleRecord {
+        let cleanupStart = now()
+        if let sessionIDToUnregister {
+            await controller.unregister(id: sessionIDToUnregister)
+            if let ledger = CADBenchmarkRegistrationObservation.ledger {
+                await ledger.unregistered(sessionIDToUnregister)
+            }
+        }
+        let remainingRegistrationCount = await sessionCount(controller)
+        return record.withCleanup(
+            cleanupWallNanoseconds: elapsed(since: cleanupStart),
+            remainingRegistrationCount: remainingRegistrationCount,
+            totalWallNanoseconds: elapsed(since: totalStart)
+        )
+    }
+
+    private func sessionCount(_ controller: ProjectAgentCommandController) async -> Int {
+        let envelope = CADBenchmarkControllerFactory.envelope(
+            request: .status,
+            id: "\(caseID.rawValue).status"
+        )
+        let handled = await controller.handle(envelope)
+        guard case .ordinary(.status(let status)) = handled else {
+            return 1
+        }
+        return status.sessionCount
+    }
+
+    private func record(
+        outcome: CADCaseLifecycleRecord.Outcome,
+        initialView: ProjectViewSnapshot? = nil,
+        finalView: ProjectViewSnapshot? = nil,
+        response: AgentResponse? = nil,
+        routeEvidence: CADCaseLifecycleRecord.RouteEvidence = .empty,
+        deadline: CADCaseDeadline,
+        telemetry: CADCaseLifecycleRecord.Telemetry,
+        diagnostics: [String] = []
+    ) -> CADCaseLifecycleRecord {
+        CADCaseLifecycleRecord(
+            caseID: caseID,
+            outcome: outcome,
+            initialView: initialView,
+            finalView: finalView,
+            response: response,
+            routeEvidence: routeEvidence,
+            telemetry: telemetry,
+            deadline: deadline,
+            diagnostics: diagnostics
+        )
+    }
+
+    private func telemetry(
+        planningWallNanoseconds: UInt64,
+        routeWallNanoseconds: UInt64 = 0,
+        totalStart: UInt64,
+        actionCount: Int = 0,
+        commandCount: Int = 0,
+        cancellationCheckpointCount: Int
+    ) -> CADCaseLifecycleRecord.Telemetry {
+        CADCaseLifecycleRecord.Telemetry(
+            planningWallNanoseconds: max(1, planningWallNanoseconds),
+            routeWallNanoseconds: routeWallNanoseconds,
+            totalWallNanoseconds: min(
+                timeoutWallNanoseconds,
+                max(1, elapsed(since: totalStart))
+            ),
+            actionCount: actionCount,
+            commandCount: commandCount,
+            timeoutWallNanoseconds: timeoutWallNanoseconds,
+            cancellationCheckpointCount: cancellationCheckpointCount
+        )
+    }
+
+    private func routeEvidence(
+        from initial: ProjectViewSnapshot,
+        to final: ProjectViewSnapshot
+    ) -> CADCaseLifecycleRecord.RouteEvidence {
+        CADCaseLifecycleRecord.RouteEvidence(from: initial, to: final)
+    }
+
+    private func now() -> UInt64 {
+        UInt64((ProcessInfo.processInfo.systemUptime * 1_000_000_000).rounded())
+    }
+
+    private func elapsed(since start: UInt64) -> UInt64 {
+        max(1, now() - start)
+    }
+
+    private func message(_ error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription,
+           !description.isEmpty {
+            return description
+        }
+        return String(describing: error)
+    }
+
+    private func responseMessage(_ response: AgentResponse) -> String {
+        if case .programExecution(.prepublicationFailure(let failure)) = response {
+            return "\(caseID.rawValue) production semantic program was rejected before publication: \(failure.code.rawValue)"
+        }
+        if case .programExecution(.committedFailure(let failure)) = response {
+            return "\(caseID.rawValue) production semantic program failed after publication: \(failure.code.rawValue)"
+        }
+        return "\(caseID.rawValue) production route returned an unexpected response: \(response)"
+    }
+}

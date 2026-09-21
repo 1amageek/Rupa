@@ -132,6 +132,12 @@ func packageSourceImportsRespectArchitectureBoundaries() throws {
 func packageManifestProductionTargetDependenciesRespectArchitectureGraph() throws {
     let graph = try packageManifestProductionTargetDependencies()
     let expectedGraph: [String: Set<String>] = [
+        "RupaGeometryBufferBenchmark": ["RupaGeometry"],
+        "RupaPerformanceBenchmark": ["RupaAutomation", "RupaCore"],
+        "RupaAgentCADBenchmark": [
+            "RupaAgentRuntime", "RupaAgentProtocol", "RupaKit", "RupaCore",
+            "RupaCoreTypes", "RupaGeometry", "RupaCADDomain", "RupaDomainFoundation",
+        ],
         "RupaCoreTypes": [],
         "RupaCapabilities": [
             "RupaCoreTypes",

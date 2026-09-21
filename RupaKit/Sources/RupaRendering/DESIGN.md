@@ -118,6 +118,7 @@ build geometry, create a second camera, or retain a second presentation scene.
 | [RupaCore](../RupaCore/DESIGN.md) | depends on | Validated source/evaluation, stable identity contracts, and `DesignDocument.sceneNodeAppearance(id:)` | Supplies the appearance each node carries, plus source-derived navigation metadata. | Presentation resolves no document default of its own and never mutates the document. |
 | [RealityViewport](RealityViewport/DESIGN.md) | child | Native scene/resource/camera/material/input adapter | Owns RealityKit objects and the matching scene-root lifecycle. | No custom render pipeline or spatial Canvas fallback. |
 | [ViewportMeasurement](ViewportMeasurement/DESIGN.md) | child | Transient world endpoints, distance, ruler descriptors | Produces non-authoritative spatial measurement values. | It does not own RealityKit entity lifetime. |
+| [RupaResponsivenessBaseline](../../../RupaBenchmarks/Sources/RupaResponsivenessBaseline/DESIGN.md) | coordinates with | Versioned fixture and pinned MainActor/memory acceptance policy | Owns the threshold and environment against which native preparation is measured. | A new native interval must be measured in the signed App; an offscreen duration does not satisfy this contract. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | Matching frame state, tool intents, visible errors, and the native gesture refusal callback | Composes `RealityView` and non-spatial SwiftUI chrome, and records the refusals this module reports. | UI never becomes a geometry or camera authority, and never re-derives which refusals are reportable. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | used by | Foundation-value viewport operation/state contract | Routes camera/display operations to the mounted session. | Applied state is not proof of a displayed frame. |
 | [Rendering tests](../../Tests/RupaRenderingTests) | verification owner | CPU admission and target RealityKit GPU behavior | Verifies the target lifecycle, native camera/material/input, provenance, and frame coherence. | Capability tests do not prove current-production or CAD integration; CPU tests do not prove live RealityView behavior. |
@@ -2389,7 +2390,7 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     In the macOS 27 SDK, `LowLevelMesh` construction and its scoped mutable-byte
     borrows are MainActor operations; their input-proportional copy interval is
     therefore measured at the maximum admitted geometry and must satisfy the
-    MainActor acceptance row owned by the responsiveness acceptance policy (half of the
+    MainActor acceptance row owned by `RupaResponsivenessBaseline` (half of the
     frame at the pinned minimum refresh rate). Exceeding that budget lowers
     admission or requires a supported native restructuring; moving the API to
     an unsupported executor is not an option. Entity/root mutation and mounted

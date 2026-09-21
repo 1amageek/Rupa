@@ -1,0 +1,219 @@
+{
+  "contentDigest" : "79e887a1ffe8118ef2eb34be194404f6347630ea5e825c608599594a44dcb77e",
+  "context" : {
+    "buildConfiguration" : "release",
+    "hostModel" : "Mac16,6",
+    "operatingSystemVersion" : "Version 27.0 (Build 26A5388g)",
+    "physicalMemoryBytes" : 38654705664,
+    "processorCount" : 14,
+    "recordedAt" : "2026-09-04T05:37:22Z",
+    "rupaKitRevision" : "19873904b8954f34bc89411c2b3a6995dc4257c5-dirty",
+    "swiftCADRevision" : "bdfb09013c71e093ffbab7a70cab8067caebb7ee-dirty"
+  },
+  "environment" : {
+    "frameIntervalIsDerived" : true,
+    "frameIntervalSeconds" : 0.016666666666666666,
+    "minimumMemoryBytes" : 8589934592,
+    "minimumMemoryIsDerived" : true
+  },
+  "environmentDerivationRule" : "frameInterval is the lowest refresh rate of the release device matrix. The application declares MACOSX_DEPLOYMENT_TARGET 26.0, and every Mac that runs macOS 26 drives a display of at least 60 Hz, so the lowest refresh rate is 60 Hz and frameInterval is 1\/60 second. minimumMemory is the physical memory of the lowest-memory supported device, and the lowest-memory Mac that runs macOS 26 ships 8 GB, so minimumMemory is 8 GiB. Changing the deployment target or the supported device matrix requires reselecting both values and re-recording every baseline that is still cited as evidence.",
+  "faceCount" : 301632,
+  "fixture" : {
+    "baseRadiusMeters" : 0.03,
+    "bodyCount" : 12,
+    "bodySpacingMeters" : 0.2,
+    "lengthMeters" : 0.45,
+    "name" : "multi-body-cylinder-assembly",
+    "radiusStepMeters" : 0.002,
+    "segmentCount" : 6284,
+    "version" : 1
+  },
+  "footprint" : {
+    "baselineBytes" : 106791680,
+    "peakSampleCount" : 71,
+    "peakSamplingIntervalSeconds" : 0.001,
+    "planRetainedBytes" : 106840832,
+    "preparationPeakBytes" : 106840832
+  },
+  "planTriangleCount" : 301632,
+  "predictedTriangleCount" : 301632,
+  "rows" : [
+    {
+      "detail" : "Worst of 10 measured iterations. Publication is the synchronous plan construction plus the discarded validation traversal the cache performs before it returns a result. The row is defined over one uninterrupted publication, so a single measured iteration decides it.",
+      "measured" : "135.089 ms",
+      "row" : "mainActorStatePublication",
+      "threshold" : "8.333 ms",
+      "verdict" : "rejects"
+    },
+    {
+      "detail" : "Worst of 10 measured iterations. The measured interval excludes the counted fill and stroke submissions, so it is a lower bound and the row rejects on the lower bound alone.",
+      "measured" : "138.801 ms",
+      "row" : "canvasConsumption",
+      "threshold" : "16.667 ms",
+      "verdict" : "rejects"
+    },
+    {
+      "detail" : "Readiness is measured from the first request for a plan to its availability. The production cache prepares synchronously, so readiness equals the preparation interval.",
+      "measured" : "135.089 ms",
+      "row" : "planReadiness",
+      "threshold" : "2000.000 ms",
+      "verdict" : "accepts"
+    },
+    {
+      "detail" : "The production preparation is a synchronous MainActor call with no cancellation point, so the earliest a cancellation request can take effect is when that call returns. The measured value is therefore the preparation interval itself, not a separately observed cancellation latency.",
+      "measured" : "135.089 ms",
+      "row" : "cancellation",
+      "threshold" : "100.000 ms",
+      "verdict" : "rejects"
+    },
+    {
+      "detail" : "Sampled phys_footprint with exactly one plan retained, minus the footprint before preparation. The value is a resident-memory proxy, not the plan's exact allocation. The warm-up already built and released an identical plan, so the allocator can satisfy this allocation from pages it already holds and the delta is a lower bound. A lower bound below the ceiling cannot establish acceptance; the signed-application footprint run owns this row.",
+      "measured" : "0.05 MB",
+      "row" : "planRetainedBytes",
+      "threshold" : "204.80 MB",
+      "verdict" : "notMeasured"
+    },
+    {
+      "detail" : "Peak sampled phys_footprint during preparation from 71 samples at 1.000 ms intervals, minus the footprint before preparation. The value is a resident-memory proxy, not the plan's exact working allocation. The warm-up already built and released an identical plan, so the allocator can satisfy this allocation from pages it already holds and the delta is a lower bound. A lower bound below the ceiling cannot establish acceptance; the signed-application footprint run owns this row.",
+      "measured" : "0.05 MB",
+      "row" : "planWorkingBytes",
+      "threshold" : "204.80 MB",
+      "verdict" : "notMeasured"
+    }
+  ],
+  "samples" : [
+    {
+      "drawWorkSeconds" : 0.137487541,
+      "fillCount" : 301632,
+      "index" : 0,
+      "mainActorBlockedSeconds" : 0.27257666599999997,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.049834208,
+      "preparationSeconds" : 0.135089125,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.085254917
+    },
+    {
+      "drawWorkSeconds" : 0.134116708,
+      "fillCount" : 301632,
+      "index" : 1,
+      "mainActorBlockedSeconds" : 0.263317708,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.047920334,
+      "preparationSeconds" : 0.129201,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.081280666
+    },
+    {
+      "drawWorkSeconds" : 0.133461834,
+      "fillCount" : 301632,
+      "index" : 2,
+      "mainActorBlockedSeconds" : 0.26106387600000003,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.04719475,
+      "preparationSeconds" : 0.127602042,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.080407292
+    },
+    {
+      "drawWorkSeconds" : 0.136558417,
+      "fillCount" : 301632,
+      "index" : 3,
+      "mainActorBlockedSeconds" : 0.263560584,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.04836125,
+      "preparationSeconds" : 0.127002167,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.078640917
+    },
+    {
+      "drawWorkSeconds" : 0.137903291,
+      "fillCount" : 301632,
+      "index" : 4,
+      "mainActorBlockedSeconds" : 0.27018233199999997,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.048332291,
+      "preparationSeconds" : 0.13227904099999999,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.08394675
+    },
+    {
+      "drawWorkSeconds" : 0.138801042,
+      "fillCount" : 301632,
+      "index" : 5,
+      "mainActorBlockedSeconds" : 0.27003062499999997,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.048574833,
+      "preparationSeconds" : 0.13122958299999998,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.08265475
+    },
+    {
+      "drawWorkSeconds" : 0.131334542,
+      "fillCount" : 301632,
+      "index" : 6,
+      "mainActorBlockedSeconds" : 0.262595834,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.048618667,
+      "preparationSeconds" : 0.131261292,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.082642625
+    },
+    {
+      "drawWorkSeconds" : 0.137033666,
+      "fillCount" : 301632,
+      "index" : 7,
+      "mainActorBlockedSeconds" : 0.264849749,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.047220083,
+      "preparationSeconds" : 0.127816083,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.080596
+    },
+    {
+      "drawWorkSeconds" : 0.137468292,
+      "fillCount" : 301632,
+      "index" : 8,
+      "mainActorBlockedSeconds" : 0.2691835,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.048290542,
+      "preparationSeconds" : 0.131715208,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.083424666
+    },
+    {
+      "drawWorkSeconds" : 0.134223917,
+      "fillCount" : 301632,
+      "index" : 9,
+      "mainActorBlockedSeconds" : 0.265931334,
+      "pathCount" : 301632,
+      "planConstructionSeconds" : 0.048325583,
+      "preparationSeconds" : 0.131707417,
+      "projectedPointCount" : 904896,
+      "strokeCount" : 301632,
+      "triangleCount" : 301632,
+      "validationTraversalSeconds" : 0.083381834
+    }
+  ],
+  "sceneItemCount" : 12,
+  "vertexCount" : 150840,
+  "warmupCount" : 1
+}

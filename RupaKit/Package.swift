@@ -8,6 +8,7 @@ let package = Package(
         .macOS("27.0"),
     ],
     products: [
+        .library(name: "RupaAgentCADBenchmark", targets: ["RupaAgentCADBenchmark"]),
         .library(
             name: "RupaKit",
             targets: ["RupaKit"]
@@ -125,6 +126,46 @@ let package = Package(
         .package(url: "https://github.com/1amageek/swift-sdk", from: "0.13.0"),
     ],
     targets: [
+        .target(
+            name: "RupaAgentCADBenchmark",
+            dependencies: [
+                "RupaAgentRuntime",
+                "RupaAgentProtocol",
+                "RupaKit",
+                "RupaCore",
+                "RupaCoreTypes",
+                "RupaGeometry",
+                "RupaCADDomain",
+                "RupaDomainFoundation",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            exclude: ["DESIGN.md", "Aggregate/DESIGN.md", "Semantic/DESIGN.md"]
+        ),
+        .testTarget(
+            name: "RupaAgentCADBenchmarkTests",
+            dependencies: [
+                "RupaAgentCADBenchmark",
+                "RupaCADDomain",
+                "RupaCore",
+                "RupaDomainFoundation",
+                "RupaKit",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            resources: [
+                .process("Fixtures"),
+            ]
+        ),
+        .executableTarget(
+            name: "RupaPerformanceBenchmark",
+            dependencies: [
+                "RupaAutomation", "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .executableTarget(
+            name: "RupaGeometryBufferBenchmark",
+            dependencies: ["RupaGeometry"]
+        ),
         .target(
             name: "RupaKit",
             dependencies: [

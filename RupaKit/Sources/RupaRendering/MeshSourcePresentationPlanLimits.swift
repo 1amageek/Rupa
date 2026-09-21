@@ -70,7 +70,7 @@ public struct MeshSourcePresentationPlanLimits: Equatable, Sendable {
     /// 32-bit identity per viewport device pixel; depth is scratch and is not
     /// retained. The ceiling is what the responsiveness plan byte budget
     /// leaves after a plan at `hardMaximum` has taken its share:
-    /// The responsiveness acceptance policy owns that budget as 2.5% of the supported
+    /// `RupaResponsivenessBaseline` owns that budget as 2.5% of the supported
     /// 8-GiB memory floor, which is 214,748,364 bytes, and this module cannot
     /// read it because it does not depend on that module, so the rule is
     /// restated here and changes with it. Subtracting

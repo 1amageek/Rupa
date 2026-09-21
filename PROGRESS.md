@@ -13,8 +13,8 @@
 - [x] S7 Object parameters the Inspector offers reach the canvas. Commits 3900f5cb..85197f92. `depends:S1` `parallel:none`
 - [ ] S6 Integration verification of the whole workspace `depends:S1,S2,S3,S4,S5,S7` `parallel:none`
 - [x] S8 Remove unused drawing projection exporters and CLI response fields `depends:none` `parallel:none`
-- [x] S9 Remove facade/preview targets and consolidate UI display helpers. Commit 13b081fc. `depends:S8` `parallel:none`
-- [x] S10 Consolidate duplicated solid direct-edit processing and expression resolution. Commit pending. `depends:S9` `parallel:none`
-- [x] S11 Remove benchmark/responsiveness/performance-only targets from RupaKit. Commit d10c7605. `depends:S10` `parallel:none`
-- [x] S12 Update package design and architecture boundary tests for removed targets. Commits 69277aff, 3c4b572d. `depends:S11` `parallel:none`
-- [ ] S13 Run focused and package integration verification `depends:S12` `parallel:none`
+- [ ] S9 Verify facade/preview removal and consolidated UI display helpers; implementation commit 13b081fc has no completed UI verification. `depends:S8` `parallel:none`
+- [ ] S10 Verify consolidated solid direct-edit behavior and expression resolution; implementation commit c6e8e514 has no completed behavioral test run. `depends:S9` `parallel:none`
+- [x] S11 Restore benchmark assets with package-private CAD/performance ownership preserved and JSON/CLI/responsiveness tools separated; verified byte restoration, builds, persistence, measurement, and rejection behavior. `depends:none` `parallel:none`
+- [x] S12 Restore CADAPI-100 requirements and reconcile relocated design links; frozen catalog/digests and three architecture-boundary tests pass. `depends:S11` `parallel:none`
+- [ ] S13 Complete cleanup integration verification: fixed replay realizes 95/100; SPH-001 through SPH-005 fail before publication with executionRejected, also failing 10 JSON/CLI tests. Signed-App/UI and prior direct-edit verification remain unproven. `depends:S8,S9,S10,S11,S12` `parallel:none`
