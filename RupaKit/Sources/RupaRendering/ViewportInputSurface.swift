@@ -282,7 +282,7 @@ extension ViewportInputSurface {
                 return
             }
             markCanvasInputActive()
-            panDrag(to: location(from: event))
+            orbitDrag(to: location(from: event))
         }
 
         override func otherMouseUp(with event: NSEvent) {
@@ -297,7 +297,7 @@ extension ViewportInputSurface {
 
         override func mouseMoved(with event: NSEvent) {
             publishModifierFlags(from: event)
-            window?.makeFirstResponder(self)
+            takeKeyboardForHover()
             let location = location(from: event)
             guard !isInputExcluded(location) else {
                 clearInteractionStateForInputExclusion()
@@ -446,6 +446,41 @@ extension ViewportInputSurface {
                 ),
                 bounds.size
             )
+        }
+
+        private func orbitDrag(to end: CGPoint) {
+            guard let start = dragStart else {
+                dragStart = end
+                return
+            }
+
+            dragStart = end
+            onOrbit?(
+                CGSize(
+                    width: end.x - start.x,
+                    height: end.y - start.y
+                ),
+                bounds.size
+            )
+        }
+
+        /// Hovering the canvas takes the keyboard so the viewport's own key handling
+        /// reaches the tool under the pointer, except while the window is editing text.
+        private func takeKeyboardForHover() {
+            guard let window,
+                  window.firstResponder !== self,
+                  !isWindowEditingText(window) else {
+                return
+            }
+
+            window.makeFirstResponder(self)
+        }
+
+        private func isWindowEditingText(_ window: NSWindow) -> Bool {
+            guard let responder = window.firstResponder else { return false }
+            if responder is NSTextInputClient { return true }
+            guard let control = responder as? NSControl else { return false }
+            return control.currentEditor() != nil
         }
 
         private func handleOrbitTouches(_ event: NSEvent) {

@@ -161,6 +161,98 @@ struct ViewportInputSurfaceTests {
         #expect(dragCount == 0)
     }
 
+    @Test
+    func aMiddleButtonDragTurnsTheViewInsteadOfPanningIt() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var orbits: [CGSize] = []
+        var pans: [CGSize] = []
+        view.onOrbit = { delta, _ in orbits.append(delta) }
+        view.onPan = { delta, _ in pans.append(delta) }
+
+        view.otherMouseDown(with: try mouseEvent(type: .otherMouseDown, location: CGPoint(x: 40, y: 40)))
+        view.otherMouseDragged(with: try mouseEvent(type: .otherMouseDragged, location: CGPoint(x: 70, y: 55)))
+        view.otherMouseUp(with: try mouseEvent(type: .otherMouseUp, location: CGPoint(x: 70, y: 55)))
+
+        #expect(pans.isEmpty)
+        #expect(orbits == [CGSize(width: 30, height: -15)])
+    }
+
+    @Test
+    func aMiddleButtonDragTurnsByEachStepItMoves() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var orbits: [CGSize] = []
+        view.onOrbit = { delta, _ in orbits.append(delta) }
+
+        view.otherMouseDown(with: try mouseEvent(type: .otherMouseDown, location: CGPoint(x: 40, y: 40)))
+        view.otherMouseDragged(with: try mouseEvent(type: .otherMouseDragged, location: CGPoint(x: 60, y: 40)))
+        view.otherMouseDragged(with: try mouseEvent(type: .otherMouseDragged, location: CGPoint(x: 60, y: 70)))
+
+        #expect(orbits == [
+            CGSize(width: 20, height: 0),
+            CGSize(width: 0, height: -30),
+        ])
+    }
+
+    @Test
+    func aSecondaryButtonDragStillPansTheView() throws {
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        var orbits: [CGSize] = []
+        var pans: [CGSize] = []
+        view.onOrbit = { delta, _ in orbits.append(delta) }
+        view.onPan = { delta, _ in pans.append(delta) }
+
+        view.rightMouseDown(with: try mouseEvent(type: .rightMouseDown, location: CGPoint(x: 40, y: 40)))
+        view.rightMouseDragged(with: try mouseEvent(type: .rightMouseDragged, location: CGPoint(x: 70, y: 55)))
+
+        #expect(orbits.isEmpty)
+        #expect(pans == [CGSize(width: 30, height: -15)])
+    }
+
+    @Test
+    func hoverTakesTheKeyboardWhenNothingIsEditingText() throws {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 120),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        window.contentView = view
+        _ = window.makeFirstResponder(nil)
+        #expect(window.firstResponder !== view)
+
+        view.mouseMoved(with: try mouseEvent(type: .mouseMoved, location: CGPoint(x: 30, y: 40)))
+
+        #expect(window.firstResponder === view)
+    }
+
+    @Test
+    func hoverLeavesTheKeyboardWithATextFieldBeingEdited() throws {
+        let window = NSWindow(
+            contentRect: CGRect(x: 0, y: 0, width: 200, height: 120),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let container = NSView(frame: CGRect(x: 0, y: 0, width: 200, height: 120))
+        let field = NSTextField(frame: CGRect(x: 0, y: 0, width: 80, height: 22))
+        let view = ViewportInputSurface.InputView(frame: CGRect(x: 0, y: 22, width: 200, height: 98))
+        container.addSubview(field)
+        container.addSubview(view)
+        window.contentView = container
+        #expect(window.makeFirstResponder(field))
+        let editor = try #require(field.currentEditor())
+        #expect(window.firstResponder === editor)
+
+        var hovers: [CGPoint?] = []
+        view.onHover = { point, _ in hovers.append(point) }
+        view.mouseMoved(with: try mouseEvent(type: .mouseMoved, location: CGPoint(x: 120, y: 60)))
+
+        #expect(window.firstResponder === editor)
+        #expect(hovers.count == 1)
+        #expect(hovers.first.flatMap { $0 } != nil)
+    }
+
     private func mouseEvent(
         type: NSEvent.EventType,
         location: CGPoint
