@@ -70,6 +70,10 @@ Draft planning bounds the selected-ID count and validates text and operation
 domains; source membership validation belongs to Workspace staging off MainActor.
 
 The feature-history section displays the source graph's ordered features.
+Thicken is a standard palette operation using the selected generated sheet
+face as a body selector. Its form explains whole-sheet scope and exposes the
+native positive, negative and symmetric side values. Thickness uses the same
+parameter expression parser and preview/apply path as other topology edits.
 Native length-bearing features expose Edit Dimension through Core's
 FeatureLengthEditing contract. A transient form retains the expression text,
 uses existing parameter parsing/formatting, and forwards setFeatureLength to

@@ -19,6 +19,7 @@ struct ModelingOperationDraft: Equatable {
         case surfaceOffset = "Sheet Offset"
         case surfaceExtend = "Extend Trim"
         case shell = "Shell"
+        case thicken = "Thicken"
 
         var id: String { rawValue }
 
@@ -44,6 +45,7 @@ struct ModelingOperationDraft: Equatable {
             case .surfaceOffset: "square.3.layers.3d"
             case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
             case .shell: "shippingbox"
+            case .thicken: "square.stack.3d.up.fill"
             }
         }
     }
@@ -69,6 +71,7 @@ struct ModelingOperationDraft: Equatable {
     var twistAngle = "0"
     var doubleHelical = false
     var approximationTolerance = ""
+    var thickenSide = ThickenSide.positive
 
     /// Opens a draft at the default the workspace scale publishes for what
     /// the kind is about to author.
@@ -102,7 +105,7 @@ struct ModelingOperationDraft: Equatable {
 
     private static func seedMeters(for kind: Kind, ruler: RulerConfiguration) -> Double {
         switch kind {
-        case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell:
+        case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
         case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .surfacePatch, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
@@ -235,7 +238,7 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBodyShell(name: name, target: targets[0],
                 thickness: try topologyLength(distance, label: "Wall thickness", in: document))
-        case .surfaceOffset, .surfaceExtend:
+        case .surfaceOffset, .surfaceExtend, .thicken:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,
                   let feature = features.first,
@@ -245,6 +248,8 @@ struct ModelingOperationDraft: Equatable {
             let edit: SheetSurfaceEdit
             if kind == .surfaceOffset {
                 edit = .offset(distance: try topologyLength(distance, label: "Offset", signed: true, in: document))
+            } else if kind == .thicken {
+                edit = .thicken(thickness: try topologyLength(distance, label: "Thickness", in: document), side: thickenSide)
             } else {
                 let u0 = try number(uBounds[0], label: "U minimum")
                 let u1 = try number(uBounds[1], label: "U maximum")
@@ -281,7 +286,7 @@ struct ModelingOperationDraft: Equatable {
         case .loft: role = "Section \(index + 1)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
         case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
-        case .surfaceOffset, .surfaceExtend: role = "Sheet face"
+        case .surfaceOffset, .surfaceExtend, .thicken: role = "Sheet face"
         case .shell: role = "Opening face"
         default: role = "Profile"
         }
@@ -289,7 +294,7 @@ struct ModelingOperationDraft: Equatable {
     }
 
     private func operandNodes(in document: DesignDocument) throws -> [SceneNode] {
-        let preservesOccurrence = [.fillet, .chamfer, .g2Blend, .surfaceOffset, .surfaceExtend, .shell].contains(kind)
+        let preservesOccurrence = [.fillet, .chamfer, .g2Blend, .surfaceOffset, .surfaceExtend, .shell, .thicken].contains(kind)
         var seen = Set<SceneNodeID>()
         var nodes: [SceneNode] = []
         for target in targets where seen.insert(target.sceneNodeID).inserted {

@@ -664,6 +664,15 @@ or turns a failed candidate into the previous document as a success result.
 
 ### Snap topology demand contract
 
+Topology snapshot face normals use the face-local coedge parameter curve at
+the representative edge's start vertex when available. This evaluates the
+existing UV chart directly instead of globally projecting a known boundary
+point back onto a procedural surface. Coedge orientation selects the endpoint;
+face orientation selects the normal sign. Only edges without a parameter curve
+use spatial projection. A failed normal evaluation remains explicitly absent,
+not a fabricated vector or a retry through a different geometry path.
+`SheetSurfaceEditTests` exercises this path on thickened sheet caps and walls.
+
 `SnapResolver` owns the decision to request a topology summary while resolving
 object candidates. It requests the existing `TopologySnapshotService.snapshot` with
 `metricPolicy: .omit` exactly when:

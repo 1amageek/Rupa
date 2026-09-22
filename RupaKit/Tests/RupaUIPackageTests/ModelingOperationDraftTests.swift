@@ -81,6 +81,19 @@ struct ModelingOperationDraftTests {
         _ = try store.apply(patch.command(in: store.document))
         let topology = try TopologySnapshotService().snapshot(document: store.document, metricPolicy: .omit)
         let target = try #require(topology.entries.first { $0.kind == .face }?.selectionTarget())
+        _ = try store.apply(.upsertParameter(name: "sheet_thickness", expression: .length(0.002, .meter), kind: .length))
+        let thickness = try ParameterExpressionParser().parse("sheet_thickness",
+            parameters: store.document.cadDocument.parameters, targetKind: .length)
+        for side in [ThickenSide.positive, .negative, .symmetric] {
+            var thicken = makeDraft(.thicken, targets: [target])
+            thicken.distance = "sheet_thickness"
+            thicken.thickenSide = side
+            #expect(try thicken.command(in: store.document) == .createSheetSurfaceEdit(
+                name: "Thicken", target: target, edit: .thicken(thickness: thickness, side: side)))
+            thicken.distance = "-2 mm"
+            #expect(throws: EditorError.self) { try thicken.command(in: store.document) }
+        }
+        #expect(ModelingOperationDraft.Kind.paletteOperations.contains(.thicken))
         var offset = makeDraft(.surfaceOffset, targets: [target])
         offset.distance = "-2 mm"
         #expect(try offset.command(in: store.document) == .createSheetSurfaceEdit(

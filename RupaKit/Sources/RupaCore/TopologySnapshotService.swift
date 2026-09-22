@@ -294,15 +294,13 @@ public struct TopologySnapshotService: Sendable {
         _ face: Face,
         in model: BRepModel
     ) -> TopologySummaryResult.Entry.Point? {
-        guard let surface = model.geometry.surfaces[face.surfaceID],
-              let surfacePoint = representativePoint(on: face, in: model) else {
+        guard let surface = model.geometry.surfaces[face.surfaceID] else {
             return nil
         }
         do {
-            let parameter = try surface.parameterProjection(
-                of: surfacePoint,
-                tolerance: .standard
-            )
+            guard let parameter = try representativeParameter(on: face, surface: surface, in: model) else {
+                return nil
+            }
             let surfaceNormal = try surface.normal(
                 u: parameter.u,
                 v: parameter.v,
@@ -318,10 +316,11 @@ public struct TopologySnapshotService: Sendable {
         }
     }
 
-    private func representativePoint(
+    private func representativeParameter(
         on face: Face,
+        surface: Surface3D,
         in model: BRepModel
-    ) -> Point3D? {
+    ) throws -> SurfaceParameter? {
         for loopID in face.loops {
             guard let loop = model.loops[loopID] else { continue }
             for orientedEdge in loop.edges {
@@ -329,7 +328,16 @@ public struct TopologySnapshotService: Sendable {
                       let vertex = model.vertices[edge.startVertexID] else {
                     continue
                 }
-                return vertex.point
+                if let curve = orientedEdge.surfaceParameterCurve {
+                    // Coedge curves follow the oriented use; retain the same
+                    // geometric edge-start sample without an inverse search.
+                    return try curve.parameter(
+                        atNormalizedFraction: orientedEdge.orientation == .forward ? 0 : 1,
+                        tolerance: .standard
+                    )
+                }
+                let projection = try surface.parameterProjection(of: vertex.point, tolerance: .standard)
+                return SurfaceParameter(u: projection.u, v: projection.v)
             }
         }
         return nil

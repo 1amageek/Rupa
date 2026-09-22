@@ -3,6 +3,7 @@ import SwiftCAD
 public enum SheetSurfaceEdit: Codable, Equatable, Sendable, TopologyEditOperation {
     case offset(distance: CADExpression)
     case extend(uDomain: ParameterDomain, vDomain: ParameterDomain)
+    case thicken(thickness: CADExpression, side: ThickenSide)
 
     static var selectionKind: TopologySummaryResult.Entry.Kind { .face }
 
@@ -14,6 +15,8 @@ public enum SheetSurfaceEdit: Codable, Equatable, Sendable, TopologyEditOperatio
             return .surfaceOffset(.init(target: target, distance: distance))
         case .extend(let uDomain, let vDomain):
             return .surfaceExtend(.init(target: target, uDomain: uDomain, vDomain: vDomain))
+        case .thicken(let thickness, let side):
+            return .thicken(.init(target: .init(featureID: sourceID), thickness: thickness, side: side))
         }
     }
 }

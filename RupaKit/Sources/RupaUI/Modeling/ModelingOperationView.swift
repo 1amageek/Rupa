@@ -62,7 +62,7 @@ struct ModelingOperationView: View {
                     }
                 }
                 parameters
-                if [.shell, .fillet, .chamfer, .g2Blend, .surfaceOffset].contains(draft.kind) {
+                if [.shell, .fillet, .chamfer, .g2Blend, .surfaceOffset, .thicken].contains(draft.kind) {
                     Text("Amounts accept length expressions and named parameters from Definitions. Parameter changes reevaluate the applied operation.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -110,6 +110,18 @@ struct ModelingOperationView: View {
             lengthField("Width Y", text: $draft.height)
         case .surfaceOffset:
             lengthField("Signed normal offset", text: $draft.distance)
+        case .thicken:
+            lengthField("Thickness", text: $draft.distance)
+                .contentShape(Rectangle())
+            Picker("Side", selection: $draft.thickenSide) {
+                Text("Positive normal").tag(ThickenSide.positive)
+                Text("Negative normal").tag(ThickenSide.negative)
+                Text("Symmetric").tag(ThickenSide.symmetric)
+            }
+            .contentShape(Rectangle())
+            Text("Thicken the entire sheet containing the selected face. Symmetric distributes the total thickness equally on both sides. Preview verifies the resulting solid.")
+                .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         case .shell:
             lengthField("Wall thickness", text: $draft.distance)
             Text("Remove the selected face and hollow the body inward. The native Shell currently requires one orthogonal six-face solid; Preview verifies the wall thickness fits.")

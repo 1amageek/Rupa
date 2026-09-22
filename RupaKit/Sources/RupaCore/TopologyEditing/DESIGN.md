@@ -6,6 +6,7 @@ Child of [RupaCore](../DESIGN.md), with no children. Owns the translation of
 selected CAD edges into native fillet, chamfer and G2 blend features, and
 selected sheet faces into native offset and trim-domain extension features.
 It also translates a selected solid face and thickness into native Shell.
+Selected sheet faces may identify their entire sheet body for native Thicken.
 It owns in-place length-expression edits of the native operations it exposes.
 
 ## Responsibilities and Boundaries
@@ -67,6 +68,12 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   U/V intervals and enlarges the trim within the underlying surface domain;
   it does not extrapolate an unsupported surface. Unsupported geometry fails
   before source publication, using the same transaction as edge treatments.
+  Thicken uses the selected face to identify its sheet body, then thickens the
+  whole body with the retained positive length expression and explicit side.
+  Swift-CAD owns supported sheet geometry, sewing and solid validity. The
+  existing representation retargeting changes the geometry role to solid;
+  source sheet features, independent representations and occurrence placement
+  remain retained. A solid input or invalid thickness fails atomically.
 
 - A request selects exactly one generated edge of an editable body. Unsupported
   multi-edge blends are refused, not partially applied.
