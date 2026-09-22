@@ -776,8 +776,26 @@ final class RealityViewport {
                 if appliedObjectPreviews[occurrence.occurrenceID.rawValue] != nil {
                     entry.surface.model?.mesh = surfaceResources.resources[instance.groupIndex].visual
                     entry.surface.position = instance.translation
+                    entry.lines?.position = instance.translation
                     entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
                 }
+                continue
+            }
+            // Translation preserves the admitted mesh, normals and winding.
+            // Do not allocate expanded triangle buffers just to move an object.
+            let m = mutation.matrix.values
+            if m[0] == 1, m[5] == 1, m[10] == 1, m[15] == 1,
+               m[1] == 0, m[2] == 0, m[4] == 0, m[6] == 0,
+               m[8] == 0, m[9] == 0, m[12] == 0, m[13] == 0, m[14] == 0 {
+                let position = instance.translation + SIMD3<Float>(Float(m[3]), Float(m[7]), Float(m[11]))
+                guard position.x.isFinite, position.y.isFinite, position.z.isFinite else {
+                    throw RealityViewportSpatialBatch.invalid("Object preview translation is not finite.")
+                }
+                if let previous = objectPreviews.removeValue(forKey: index) { used -= previous.byteCount }
+                entry.surface.model?.mesh = surfaceResources.resources[instance.groupIndex].visual
+                entry.surface.position = position
+                entry.lines?.position = position
+                entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
                 continue
             }
             let preview: RealityViewportObjectPreview
@@ -795,6 +813,7 @@ final class RealityViewport {
                 entry.surface.model?.materials = [surfaceMaterial, lineMaterial]
             }
             entry.surface.position = .zero
+            entry.lines?.position = instance.translation
             entry.lines?.isEnabled = false
         }
         appliedObjectPreviews = mutations

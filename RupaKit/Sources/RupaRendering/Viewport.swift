@@ -4274,6 +4274,9 @@ public struct Viewport: View {
                 }
             }
         } catch {
+            if !ViewportNativeQueryFailure.isTransient(error) {
+                reportNativeGestureFailure(error)
+            }
             nativeInputGesture = .cancelled
             return
         }

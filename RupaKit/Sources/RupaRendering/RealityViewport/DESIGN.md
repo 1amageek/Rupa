@@ -805,7 +805,20 @@ of screen-baked dashes.
 
 ## Contracts and Invariants
 
-Object gesture previews are MainActor-owned, frame-local LowLevelMesh buffers.
+Object translation previews reuse the committed mesh and update the native
+surface and boundary-line positions by the absolute world displacement. This
+path is shared by every shape and requires no vertex-sized preview allocation;
+an admitted sphere must not become unmovable merely because duplicating its
+mesh exceeds the frame budget. Both positions restore on cancellation and on
+transition to another preview kind. Translation is recognized exactly from
+the affine matrix, not by shape or an approximate decomposition. Nonfinite
+native positions are refused before either entity is changed.
+`translationRemainsAvailableWithoutMeshDuplicationHeadroom` in
+[RealityViewportResourceReuseTests](../../../Tests/RupaRenderingTests/RealityViewportResourceReuseTests.swift)
+proves that duplication refusal does not prevent translation; the existing
+mounted preview synchronization test covers both camera projections and
+transitions between translation, deformation and cancellation.
+Other object gesture previews are MainActor-owned, frame-local LowLevelMesh buffers.
 Each affected occurrence borrows immutable plan positions and triangle indices;
 the absolute mutation transforms expanded corners and recomputes face normals.
 The native owner initializes fixed-capacity vertex/index buffers before mounting,

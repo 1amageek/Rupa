@@ -14,6 +14,51 @@ import simd
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func translationRemainsAvailableWithoutMeshDuplicationHeadroom() async throws {
+    let base = try planCacheScene(suffix: "translation-headroom")
+    let item = try #require(base.items.first)
+    var builder = MeshSourceBuilder(identity: item.mesh.identity)
+    // Enough triangles to exceed the remaining preview budget, but not the
+    // admitted source budget. The failure must depend on cost, not shape names.
+    let a = try builder.addVertex(.init(x: 0, y: 0, z: 0))
+    let b = try builder.addVertex(.init(x: 1, y: 0, z: 0))
+    let c = try builder.addVertex(.init(x: 0, y: 1, z: 0))
+    for _ in 0..<256 {
+        _ = try builder.addFace(vertexIDs: [a, b, c])
+    }
+    let mesh = try builder.build()
+    let scene = UniversalViewportScene(snapshotID: base.snapshotID, projectID: base.projectID, items: [
+        .init(id: item.id, definitionID: item.definitionID, displayName: item.displayName,
+              representationID: item.representationID, reference: item.reference, mesh: mesh,
+              worldTransform: .identity, worldBounds: try mesh.bounds())
+    ])
+    let baseline = try MeshSourcePresentationRenderPlan(scene: scene)
+    let limits = MeshSourcePresentationPlanLimits.standard
+    let headroom = max(4096, baseline.workingByteCount - baseline.retainedByteCount)
+    let plan = try MeshSourcePresentationRenderPlan(scene: scene, planLimits: .init(
+        maxItemCount: limits.maxItemCount, maxPositionCount: limits.maxPositionCount,
+        maxTriangleCount: limits.maxTriangleCount,
+        maxRetainedByteCount: baseline.retainedByteCount + headroom))
+    let occurrence = try #require(plan.occurrences.first)
+    #expect(throws: MeshSourcePresentationRenderError.self) {
+        _ = try RealityViewportObjectPreview(occurrence: occurrence, availableBytes: headroom)
+    }
+    let viewport = try await RealityViewport.prepare(plan: plan)
+    let surface = try #require(surfaceEntities(in: viewport).first)
+    let resource = try #require(surface.model?.mesh)
+    let position = surface.position
+    for offset in [0.25, -0.5, 0.75] {
+        try viewport.applyObjectPreviews([item.id.rawValue:
+            ViewportWorldTransformAlgebra.translation(.init(x: offset, y: 0, z: 0))], displayMode: .solidWithEdges)
+        #expect(surface.model?.mesh === resource)
+        #expect(abs(surface.position.x - position.x - Float(offset)) < 1e-6)
+    }
+    try viewport.applyObjectPreviews([:], displayMode: .solid)
+    #expect(surface.position == position)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws {
     let baseScene = try planCacheScene(suffix: "resource-reuse-base")
     let baseItem = try #require(baseScene.items.first)
@@ -144,6 +189,19 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
     }
     let committedPixels = pixels()
 
+    // Placement translation must reuse both meshes, including after a
+    // deformation preview, and never accumulate displacement between samples.
+    let originalPosition = nextSurfaces[0].position
+    for offset in [0.25, -0.5, 0.75] {
+        try nextViewport.applyObjectPreviews([baseItem.id.rawValue:
+            ViewportWorldTransformAlgebra.translation(.init(x: offset, y: 0, z: 0))], displayMode: .solidWithEdges)
+        #expect(nextSurfaces[0].model?.mesh === baseMesh)
+        #expect(abs(nextSurfaces[0].position.x - originalPosition.x - Float(offset)) < 1e-6)
+        #expect(nextSurfaces[1].model?.mesh === baseMesh)
+    }
+    try nextViewport.applyObjectPreviews([:], displayMode: .solid)
+    #expect(nextSurfaces[0].position == originalPosition)
+
     // Solid previews own drawing buffers, preserve shear, and never mutate
     // another occurrence sharing the committed native asset.
     let mutation = Transform3D(matrix: try Matrix4x4(values: [
@@ -200,6 +258,11 @@ func realityViewportReusesEqualNativeAssetsAcrossSnapshotUpdates() async throws 
     }
     try nextViewport.applyObjectPreviews([:], displayMode: .solid)
     #expect(nextSurfaces[0].model?.mesh === baseMesh)
+    try nextViewport.applyObjectPreviews([baseItem.id.rawValue:
+        ViewportWorldTransformAlgebra.translation(.init(x: 0.5, y: 0, z: 0))], displayMode: .solid)
+    #expect(nextSurfaces[0].model?.mesh === baseMesh)
+    #expect(abs(nextSurfaces[0].position.x - originalPosition.x - 0.5) < 1e-6)
+    try nextViewport.applyObjectPreviews([:], displayMode: .solid)
     #expect(throws: MeshSourcePresentationRenderError.self) {
         _ = try RealityViewportObjectPreview(occurrence: occurrence, availableBytes: 1)
     }
