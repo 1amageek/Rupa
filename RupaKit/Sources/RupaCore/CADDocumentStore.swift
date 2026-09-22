@@ -1487,6 +1487,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .setFeatureLength:
+            func run() throws {
+                guard case .setFeatureLength(let featureID, let expression) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected setFeatureLength.")
+                }
+                var updated = document
+                let sourceValidation = try validatedSource ?? document.validate(objectRegistry: objectRegistry)
+                let updatedValidation = try updated.setFeatureLength(featureID: featureID,
+                    expression: expression, validatedDocument: sourceValidation)
+                document = updated
+                try commitMutation()
+                validatedSource = updatedValidation
+                evaluateCurrentDocument()
+            }
+            try run()
         case .setExtrudeDistance:
             func run() throws {
                 guard case .setExtrudeDistance(let featureID, let distance) = command else {

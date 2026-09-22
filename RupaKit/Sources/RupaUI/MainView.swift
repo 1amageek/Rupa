@@ -1411,6 +1411,8 @@ private struct ProjectMainViewContent: View {
             } else {
                 FeatureHistoryView(
                     orderedFeatures: featureHistoryFeatures,
+                    parameters: snapshot.document.document.cadDocument.parameters,
+                    displayUnit: snapshot.workspaceState.ruler.displayUnit,
                     visibleFeatureIDs: featureHistoryVisibleIDs,
                     namesByID: featureHistoryNamesByID,
                     isBusy: modelingPreview.isBusy,

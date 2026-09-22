@@ -6,6 +6,7 @@ Child of [RupaCore](../DESIGN.md), with no children. Owns the translation of
 selected CAD edges into native fillet, chamfer and G2 blend features, and
 selected sheet faces into native offset and trim-domain extension features.
 It also translates a selected solid face and thickness into native Shell.
+It owns in-place length-expression edits of the native operations it exposes.
 
 ## Responsibilities and Boundaries
 
@@ -37,6 +38,22 @@ conformers own no document mutation, evaluation, cache or publication. Existing
 ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
 
 ## Contracts and Invariants
+
+- FeatureLengthEditing describes and replaces one native operation's editable
+  length without owning graph state. The native implementation handles Extrude,
+  Fillet, Chamfer, G2 Blend, Shell, Thicken and Sheet Offset. Unsupported
+  operations expose no field and reject replacement. Core retains feature ID,
+  operands, outputs, name and suppression; graph-stable replacement updates
+  expression dependencies. Workspace stages, evaluates and publishes exactly
+  as for creation. Invalid units, stale IDs and infeasible geometry fail before
+  publication; no representation or occurrence is recreated.
+  The store passes its current validated source and retains the graph-stable
+  validation transition for incremental evaluation, matching existing dimension
+  commands. Stale validation is rejected before mutation.
+- The UI reads the same field contract, formats/parses existing expressions,
+  and submits a setFeatureLength command through existing preview/apply.
+  This length editor does not replace multi-field primitive, sketch or surface
+  control editors, and does not claim all feature properties are editable.
 
 - Shell selects one current generated solid face to remove and a positive
   physical thickness above modeling tolerance. The existing native Shell
@@ -96,3 +113,8 @@ offset geometry, trim extension, source round-trip, Undo and invalid-edit
 atomicity. Changes require reviewing Core dispatch and Modeling UI.
 `GeometryRepresentationAuthorityTests` verifies that CAD topology edits and trim
 changes preserve independently selected Mesh presentation and baked provenance.
+`FeatureLengthEditingTests` verifies all seven native length replacements with
+actual geometry, retained identities, persistence, Undo, parameter rebinding,
+atomic refusal and incremental reuse. `RupaUIPackageTests/FeatureLengthDraftTests`
+verifies expression forwarding; the signed App owns history form/preview/apply
+and visible Undo verification.

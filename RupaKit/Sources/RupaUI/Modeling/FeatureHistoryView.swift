@@ -50,7 +50,10 @@ func featureHistoryReorderCommand(
 }
 
 struct FeatureHistoryView: View {
+    @State private var lengthDraft: FeatureLengthDraft?
     let orderedFeatures: [FeatureNode]
+    let parameters: ParameterTable
+    let displayUnit: LengthDisplayUnit
     let visibleFeatureIDs: Set<FeatureID>?
     let featureNamesByID: [FeatureID: String]
     let isBusy: Bool
@@ -59,6 +62,8 @@ struct FeatureHistoryView: View {
 
     init(
         orderedFeatures: [FeatureNode],
+        parameters: ParameterTable,
+        displayUnit: LengthDisplayUnit,
         visibleFeatureIDs: Set<FeatureID>? = nil,
         namesByID: [FeatureID: String] = [:],
         isBusy: Bool,
@@ -66,6 +71,8 @@ struct FeatureHistoryView: View {
         onPreview: @escaping (EditorCommand, String) -> Void
     ) {
         self.orderedFeatures = orderedFeatures
+        self.parameters = parameters
+        self.displayUnit = displayUnit
         self.visibleFeatureIDs = visibleFeatureIDs
         self.featureNamesByID = namesByID
         self.isBusy = isBusy
@@ -117,6 +124,7 @@ struct FeatureHistoryView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .accessibilityValue(presentation.statusTitle)
                 Spacer(minLength: 0)
                 Text(presentation.statusTitle)
@@ -124,6 +132,10 @@ struct FeatureHistoryView: View {
                     .foregroundStyle(feature.isSuppressed ? .secondary : .tertiary)
                     .accessibilityIdentifier("FeatureHistory.\(feature.id).status")
                 Menu {
+                    if let draft = FeatureLengthDraft(feature: feature, parameters: parameters, unit: displayUnit) {
+                        Button("Edit Dimension…") { lengthDraft = draft }
+                            .contentShape(Rectangle())
+                    }
                     Button(feature.isSuppressed ? "Unsuppress…" : "Suppress…") {
                         onPreview(
                             .setFeatureSuppression(
@@ -133,11 +145,15 @@ struct FeatureHistoryView: View {
                             feature.isSuppressed ? "Unsuppress Feature" : "Suppress Feature"
                         )
                     }
+                    .contentShape(Rectangle())
                     Button("Move Earlier…") { reorder(feature.id, offset: -1) }
+                        .contentShape(Rectangle())
                         .disabled(orderedIndex == orderedFeatures.startIndex)
                     Button("Move Later…") { reorder(feature.id, offset: 1) }
+                        .contentShape(Rectangle())
                         .disabled(orderedIndex == orderedFeatures.index(before: orderedFeatures.endIndex))
                 } label: { WorkspaceSidebarSymbol(systemName: "ellipsis") }
+                    .contentShape(Rectangle())
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .disabled(isBusy)
@@ -149,6 +165,15 @@ struct FeatureHistoryView: View {
                     : "Depends on \(feature.inputs.count) earlier feature(s)"
             )
         }
+        .sheet(item: $lengthDraft) { draft in
+            FeatureLengthEditorView(draft: draft, parameters: parameters,
+                onCancel: { lengthDraft = nil },
+                onPreview: { command in
+                    lengthDraft = nil
+                    onPreview(command, "Edit \(draft.title)")
+                })
+        }
+        .onChange(of: orderedFeatures) { _, _ in lengthDraft = nil }
     }
 
     private func reorder(_ featureID: FeatureID, offset: Int) {

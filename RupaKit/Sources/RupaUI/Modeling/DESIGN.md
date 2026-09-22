@@ -70,6 +70,11 @@ Draft planning bounds the selected-ID count and validates text and operation
 domains; source membership validation belongs to Workspace staging off MainActor.
 
 The feature-history section displays the source graph's ordered features.
+Native length-bearing features expose Edit Dimension through Core's
+FeatureLengthEditing contract. A transient form retains the expression text,
+uses existing parameter parsing/formatting, and forwards setFeatureLength to
+the existing history preview/apply flow. Source graph changes dismiss the
+form; it never writes directly or allocates a new feature ID.
 Suppress/unsuppress and move actions prepare existing source commands, preview
 their evaluated candidate and require Apply. Core owns dependency validation;
 the UI does not silently move dependent features or suppress a dependency tree.

@@ -164,6 +164,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         oppositeCorner: SketchPoint
     )
     case setExtrudeDistance(featureID: FeatureID, distance: CADExpression)
+    case setFeatureLength(featureID: FeatureID, expression: CADExpression)
     case setCubeDimensions(
         featureID: FeatureID,
         sizeX: CADExpression,
@@ -572,6 +573,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createRectangleSketchFromCorners"
         case .setExtrudeDistance:
             "setExtrudeDistance"
+        case .setFeatureLength:
+            "setFeatureLength"
         case .setCubeDimensions:
             "setCubeDimensions"
         case .setCylinderDimensions:
@@ -785,6 +788,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .setBridgeCurveParameters,
              .createRectangleSketchFromCorners,
              .setExtrudeDistance,
+             .setFeatureLength,
              .setCubeDimensions,
              .setCylinderDimensions,
              .setObjectDimension,
