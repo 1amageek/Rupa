@@ -21,9 +21,12 @@ struct WorkspaceToolPalette: View {
                             .popover(isPresented: $isSolidPickerPresented, arrowEdge: .trailing) {
                                 VStack(alignment: .leading, spacing: 8) {
                                     ForEach(WorkspaceSolidShape.allCases) { shape in
-                                        Button(shape.rawValue, systemImage: shape.systemImage) {
+                                        Button {
                                             isSolidPickerPresented = false
                                             activateSolid(shape)
+                                        } label: {
+                                            Label(shape.rawValue, systemImage: shape.systemImage)
+                                                .contentShape(Rectangle())
                                         }
                                         .fixedSize(horizontal: true, vertical: true)
                                     }

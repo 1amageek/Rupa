@@ -58,6 +58,7 @@ struct WorkspaceParameterInspectorView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .frame(width: 14, height: 14)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -77,6 +78,7 @@ struct WorkspaceParameterInspectorView: View {
                 } label: {
                     Image(systemName: "checkmark")
                         .frame(width: 14, height: 14)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -103,6 +105,7 @@ struct WorkspaceParameterInspectorView: View {
                 }
             } label: {
                 Label("Delete", systemImage: "trash")
+                    .contentShape(Rectangle())
             }
             .controlSize(.small)
             .disabled(isSubmitting)
@@ -141,6 +144,7 @@ struct WorkspaceParameterInspectorView: View {
                     applyNewParameter()
                 } label: {
                     Label("Add", systemImage: "plus")
+                        .contentShape(Rectangle())
                 }
                 .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || newExpression.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

@@ -171,6 +171,7 @@ struct WorkspaceDocumentInspectorView: View {
                                 Image(systemName: "checkmark")
                             }
                         }
+                        .contentShape(Rectangle())
                     }
                     .help(option.accessibilityValue)
                 }
@@ -185,6 +186,7 @@ struct WorkspaceDocumentInspectorView: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                .contentShape(Rectangle())
             }
             .controlSize(.small)
         }
@@ -231,6 +233,7 @@ struct WorkspaceDocumentInspectorView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -274,6 +277,7 @@ struct WorkspaceDocumentInspectorView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)

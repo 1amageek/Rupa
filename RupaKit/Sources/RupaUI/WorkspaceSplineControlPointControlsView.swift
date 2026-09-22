@@ -67,6 +67,7 @@ struct WorkspaceSplineControlPointControlsView: View {
                         onAddSmoothControlPoint(entity, index)
                     } label: {
                         Label("Smooth", systemImage: "point.3.connected.trianglepath.dotted")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.spline.smoothControlPoint")
                 }
@@ -243,6 +244,7 @@ struct WorkspaceSplineControlPointControlsView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.bordered)
         .controlSize(.small)

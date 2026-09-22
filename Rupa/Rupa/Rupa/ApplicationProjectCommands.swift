@@ -12,6 +12,7 @@ struct ApplicationProjectCommands: Commands {
             Button("New Project") {
                 coordinator.startNewProject()
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("n", modifiers: .command)
             .disabled(!coordinator.canCreateNew)
 
@@ -20,6 +21,7 @@ struct ApplicationProjectCommands: Commands {
                     coordinator.startLoad(from: url)
                 }
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("o", modifiers: .command)
             .disabled(!coordinator.canOpen)
         }
@@ -30,6 +32,7 @@ struct ApplicationProjectCommands: Commands {
                     coordinator.startSave(to: url)
                 }
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("s", modifiers: .command)
             .disabled(!coordinator.canSave)
 
@@ -38,6 +41,7 @@ struct ApplicationProjectCommands: Commands {
                     coordinator.startSave(to: url)
                 }
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("s", modifiers: [.command, .shift])
             .disabled(!coordinator.canSave)
         }
@@ -46,12 +50,14 @@ struct ApplicationProjectCommands: Commands {
             Button("Undo") {
                 coordinator.startUndo()
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("z", modifiers: .command)
             .disabled(!coordinator.canUndo)
 
             Button("Redo") {
                 coordinator.startRedo()
             }
+            .contentShape(Rectangle())
             .keyboardShortcut("z", modifiers: [.command, .shift])
             .disabled(!coordinator.canRedo)
         }
@@ -64,8 +70,10 @@ struct ApplicationProjectCommands: Commands {
                             coordinator.startImportGeometry(from: input.url, format: format, unitForUnmarkedData: input.unit)
                         }
                     }
+                    .contentShape(Rectangle())
                 }
             }
+            .contentShape(Rectangle())
             .disabled(!coordinator.canSave)
 
             Menu("Export Geometry") {
@@ -75,13 +83,16 @@ struct ApplicationProjectCommands: Commands {
                             coordinator.startExportGeometry(to: output.url, format: format, unit: output.unit)
                         }
                     }
+                    .contentShape(Rectangle())
                 }
             }
+            .contentShape(Rectangle())
             .disabled(!coordinator.canSave)
 
             Button("Cancel Project Operation") {
                 coordinator.cancelCurrentOperation()
             }
+            .contentShape(Rectangle())
             .keyboardShortcut(".", modifiers: .command)
             .disabled(!coordinator.canCancelOperation)
         }

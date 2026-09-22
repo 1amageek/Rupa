@@ -324,6 +324,7 @@ struct PatternArrayInspectorView: View {
                     isCurvePathPickActive ? "Cancel Path Pick" : "Pick Path in Viewport",
                     systemImage: isCurvePathPickActive ? "xmark.circle" : "cursorarrow.click"
                 )
+                .contentShape(Rectangle())
             }
             .controlSize(.small)
             .accessibilityIdentifier("InspectorPatternArray.curve.path.pick")
@@ -399,6 +400,7 @@ struct PatternArrayInspectorView: View {
                 setRectangularSecondAxisEnabled(true)
             } label: {
                 Label("Add Second Axis", systemImage: "plus")
+                    .contentShape(Rectangle())
             }
             .controlSize(.small)
             .accessibilityIdentifier("InspectorPatternArray.rectangular.secondAxis.add")
@@ -411,6 +413,7 @@ struct PatternArrayInspectorView: View {
                 setRectangularSecondAxisEnabled(false)
             } label: {
                 Label("Remove Second Axis", systemImage: "minus")
+                    .contentShape(Rectangle())
             }
             .controlSize(.small)
             .accessibilityIdentifier("InspectorPatternArray.rectangular.secondAxis.remove")
@@ -423,6 +426,7 @@ struct PatternArrayInspectorView: View {
                 setRadialAxisEnabled(true)
             } label: {
                 Label("Add Radial Repetition", systemImage: "plus")
+                    .contentShape(Rectangle())
             }
             .controlSize(.small)
             .accessibilityIdentifier("InspectorPatternArray.radial.radialAxis.add")
@@ -435,6 +439,7 @@ struct PatternArrayInspectorView: View {
                 setRadialAxisEnabled(false)
             } label: {
                 Label("Remove Radial Repetition", systemImage: "minus")
+                    .contentShape(Rectangle())
             }
             .controlSize(.small)
             .accessibilityIdentifier("InspectorPatternArray.radial.radialAxis.remove")

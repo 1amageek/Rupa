@@ -279,6 +279,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 Button("Reset Transform") {
                     onCommitProperties(nodes.map { .setSceneNodeTransform(id: $0.id, localTransform: .identity) }, "Reset Object Transforms")
                 }
+                .contentShape(Rectangle())
                 .disabled(isBusy || nodes.contains(where: \.isLocked) || nodes.allSatisfy { $0.localTransform.matrix == .identity })
             }
         }

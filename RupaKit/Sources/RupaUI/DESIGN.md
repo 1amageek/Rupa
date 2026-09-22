@@ -1180,10 +1180,12 @@ that a pointer over a seat reaches that value, because a hover is delivered by
 a tracking area in a window that is on screen and the package's mounted tests
 keep their windows off it. That half is a live check until an integration
 runner owns it.
-`WorkspaceSurfaceAnalysis.<option>` and `WorkspaceSurfaceAnalysis.density.<density>`
-are `.plain` buttons with `Image` labels that already report as hittable, so
-they take no `.contentShape`; the header's own icon buttons carry
-`.contentShape(Rectangle())` for the same reason the tool palette's do.
+Buttons and menus declare their interaction shape explicitly. Custom labels
+apply `contentShape` after their padding and frame so empty space inside the
+control remains interactive. Circular controls retain circular hit regions;
+composite containers do not acquire a shape on behalf of their child controls.
+Native text buttons and command menus retain their platform styling and declare
+the rectangular control boundary without replacing their action or disabled state.
 
 The App `RupaUITests` runner is retired, so no row above carries GUI evidence,
 and `scripts/test-ui-contracts.sh` is the supported verification entry point.

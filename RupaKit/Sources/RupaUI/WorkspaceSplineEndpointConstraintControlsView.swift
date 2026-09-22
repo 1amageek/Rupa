@@ -117,6 +117,7 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
                             onAddLineTangency(entity, endpoint, candidate.id)
                         } label: {
                             Label(sketchLineCandidateTitle(candidate), systemImage: "line.diagonal")
+                                .contentShape(Rectangle())
                         }
                     }
                 }
@@ -131,12 +132,14 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
                                 sketchSplineEndpointCandidateTitle(candidate),
                                 systemImage: "point.3.connected.trianglepath.dotted"
                             )
+                            .contentShape(Rectangle())
                         }
                     }
                 }
             }
         } label: {
             Label(title, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                .contentShape(Rectangle())
         }
         .accessibilityIdentifier("InspectorCurve.spline.\(endpoint.rawValue)Tangent")
     }
@@ -154,10 +157,12 @@ struct WorkspaceSplineEndpointConstraintControlsView: View {
                         sketchSplineEndpointCandidateTitle(candidate),
                         systemImage: "point.3.connected.trianglepath.dotted"
                     )
+                    .contentShape(Rectangle())
                 }
             }
         } label: {
             Label(title, systemImage: "point.3.connected.trianglepath.dotted")
+                .contentShape(Rectangle())
         }
         .accessibilityIdentifier("InspectorCurve.spline.\(endpoint.rawValue)Smooth")
     }

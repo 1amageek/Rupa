@@ -39,6 +39,7 @@ struct ApplicationToolCommands: Commands {
             )
         ) {
             Label(tool.title, systemImage: tool.systemImage)
+                .contentShape(Rectangle())
         }
         // The command list is part of the window's chrome whether or not a
         // workspace is focused, so the menu is disabled rather than absent.

@@ -111,6 +111,7 @@ struct Outliner: View {
             set: { if !$0 { actionError = nil } }
         )) {
             Button("OK") { actionError = nil }
+                .contentShape(Rectangle())
         } message: {
             Text(actionError ?? "The action could not be completed.")
         }
@@ -172,6 +173,7 @@ struct Outliner: View {
 
             Menu {
                 Button("Show All") { onIntent(.showAll) }
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("WorkspaceSidebar.outliner.showAll")
                 Button("Isolate Selection") {
                     let ids = orderedSelectedIDs(projection: projection)
@@ -182,10 +184,12 @@ struct Outliner: View {
                     }
                     onIntent(.isolate(ids: ids))
                 }
+                .contentShape(Rectangle())
                 .disabled(!projection.canMutate(ids: orderedSelectedIDs(projection: projection)))
             } label: {
                 WorkspaceSidebarSymbol(systemName: "ellipsis.circle")
                     .accessibilityLabel("Outliner Actions")
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
 
@@ -211,6 +215,7 @@ struct Outliner: View {
                 }
                 .frame(width: 13, height: 18)
                 .foregroundStyle(row.hasChildren ? .secondary : .tertiary)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(!row.hasChildren)
@@ -333,16 +338,21 @@ struct Outliner: View {
         .contextMenu {
             if row.canRename {
                 Button("Rename") { beginRename(row) }
+                    .contentShape(Rectangle())
                     .disabled(selectedIDs.contains(row.id) && selectedIDs.count > 1)
             }
             Divider()
             Button("Show") { sendContextVisibility(for: row.id, isVisible: true, projection: projection) }
+                .contentShape(Rectangle())
                 .disabled(!contextCanMutate(row.id, projection: projection))
             Button("Hide") { sendContextVisibility(for: row.id, isVisible: false, projection: projection) }
+                .contentShape(Rectangle())
                 .disabled(!contextCanMutate(row.id, projection: projection))
             Button("Lock") { sendContextLock(for: row.id, isLocked: true, projection: projection) }
+                .contentShape(Rectangle())
                 .disabled(!contextCanMutate(row.id, projection: projection))
             Button("Unlock") { sendContextLock(for: row.id, isLocked: false, projection: projection) }
+                .contentShape(Rectangle())
                 .disabled(!contextCanMutate(row.id, projection: projection))
             Divider()
             Button("Isolate Selection") {
@@ -353,10 +363,12 @@ struct Outliner: View {
                 }
                 onIntent(.isolate(ids: ids))
             }
+            .contentShape(Rectangle())
             .disabled(!contextCanMutate(row.id, projection: projection))
             Button("Frame Current Selection") {
                 onIntent(.frameCurrentSelection)
             }
+            .contentShape(Rectangle())
             .disabled(!OutlinerProjection.frameSelectionIsEnabled(
                 rowID: row.id,
                 selectedIDs: selectedIDs,
@@ -367,15 +379,18 @@ struct Outliner: View {
             Button(lifecycle.groupActionTitle) {
                 sendContextGroup(for: row.id, projection: projection)
             }
+            .contentShape(Rectangle())
             .disabled(!lifecycle.canGroup)
             Button(lifecycle.ungroupActionTitle) {
                 sendContextUngroup(for: row.id, projection: projection)
             }
+            .contentShape(Rectangle())
             .disabled(!lifecycle.canUngroup)
             Divider()
             Button("Delete", role: .destructive) {
                 sendContextDelete(for: row.id, projection: projection)
             }
+            .contentShape(Rectangle())
             .disabled(!lifecycle.canDelete)
         }
     }

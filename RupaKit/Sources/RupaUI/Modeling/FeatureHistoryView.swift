@@ -122,6 +122,7 @@ struct FeatureHistoryView: View {
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -152,7 +153,10 @@ struct FeatureHistoryView: View {
                     Button("Move Later…") { reorder(feature.id, offset: 1) }
                         .contentShape(Rectangle())
                         .disabled(orderedIndex == orderedFeatures.index(before: orderedFeatures.endIndex))
-                } label: { WorkspaceSidebarSymbol(systemName: "ellipsis") }
+                } label: {
+                    WorkspaceSidebarSymbol(systemName: "ellipsis")
+                        .contentShape(Rectangle())
+                }
                     .contentShape(Rectangle())
                     .menuStyle(.borderlessButton)
                     .fixedSize()

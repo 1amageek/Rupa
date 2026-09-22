@@ -52,6 +52,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onProject(entity)
             } label: {
                 Label("Project", systemImage: "square.on.square")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canProject == false)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).project")
@@ -75,6 +76,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onAlignVertex(entity)
             } label: {
                 Label("Align", systemImage: "arrow.triangle.merge")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canAlignVertex == false)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignVertex")
@@ -96,6 +98,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onOffsetVertex(entity)
             } label: {
                 Label("Offset Vertex", systemImage: "arrow.left.and.right")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canOffsetVertex == false)
             .accessibilityIdentifier("InspectorCurve.offsetVertex")
@@ -130,6 +133,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                     cornerTreatmentTitle(cornerTreatment),
                     systemImage: cornerTreatment == .fillet ? "circle.dashed" : "line.diagonal"
                 )
+                .contentShape(Rectangle())
             }
             .disabled(state.canApplyCornerTreatment == false)
             .accessibilityIdentifier("InspectorCurve.cornerTreatment.apply")
@@ -161,6 +165,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onExtend(entity.target)
             } label: {
                 Label("Extend", systemImage: "arrow.up.right.line")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canExtend == false)
             .accessibilityIdentifier("InspectorCurve.extend")
@@ -184,6 +189,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onJoin(entity)
             } label: {
                 Label("Join", systemImage: "link.badge.plus")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canJoin == false)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).join")
@@ -192,6 +198,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
                 onUnjoin(entity)
             } label: {
                 Label("Unjoin", systemImage: "link.badge.minus")
+                    .contentShape(Rectangle())
             }
             .disabled(state.canUnjoin == false)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).unjoin")

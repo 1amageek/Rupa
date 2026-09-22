@@ -92,6 +92,7 @@ struct WorkspaceSurfaceInspectorView: View {
             } label: {
                 Image(systemName: entry.kind.systemImage)
                     .frame(width: 16, height: 16)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -111,6 +112,7 @@ struct WorkspaceSurfaceInspectorView: View {
                     onSelectBasisReference(spanReference)
                 } label: {
                     Label("Edit Span", systemImage: "square.split.2x1")
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -121,6 +123,7 @@ struct WorkspaceSurfaceInspectorView: View {
                     onSelectBasisReference(knotReference)
                 } label: {
                     Label("Edit Knot", systemImage: "circle.grid.cross")
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -133,6 +136,7 @@ struct WorkspaceSurfaceInspectorView: View {
                     onSelectBasisReference(reference)
                 } label: {
                     Label("Inspect", systemImage: "scope")
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -340,6 +344,7 @@ struct WorkspaceSurfaceInspectorView: View {
                             }
                         } label: {
                             Label("Match Boundary", systemImage: "link")
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.bordered)
                     }
@@ -430,6 +435,7 @@ struct WorkspaceSurfaceInspectorView: View {
                     )
                 } label: {
                     Label("Apply Trim", systemImage: "checkmark")
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .disabled(resolvedTrimDomainDraft(trimDomain) == nil)
@@ -448,6 +454,7 @@ struct WorkspaceSurfaceInspectorView: View {
                     )
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.bordered)
                 .disabled(trimDomain.isFullDomain)

@@ -44,6 +44,7 @@ struct MeshOperationView: View {
                                             draft.elements.removeAll { $0 == element }
                                         } label: {
                                             Image(systemName: "minus.circle")
+                                                .contentShape(Rectangle())
                                         }
                                         .accessibilityLabel("Deselect \(MeshOperationDraft.title(element))")
                                     }
@@ -52,6 +53,7 @@ struct MeshOperationView: View {
                             }
                         }
                         Button("Clear Selection") { draft.elements.removeAll() }
+                            .contentShape(Rectangle())
                     }
                     .padding(10)
                     .background {
@@ -96,9 +98,12 @@ struct MeshOperationView: View {
             if isBusy { ProgressView("Evaluating…").controlSize(.small) }
             HStack {
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+                    .contentShape(Rectangle())
                 Spacer()
                 Button("Preview", action: onPreview).disabled(isBusy || draft.elements.isEmpty)
+                    .contentShape(Rectangle())
                 Button("Apply", action: onApply).disabled(isBusy || !hasMatchingPreview).keyboardShortcut(.defaultAction)
+                    .contentShape(Rectangle())
             }
         }
         .padding(16)

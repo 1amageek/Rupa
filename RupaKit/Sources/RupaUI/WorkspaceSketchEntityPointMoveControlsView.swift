@@ -62,6 +62,7 @@ struct WorkspaceSketchEntityPointMoveControlsView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.bordered)
         .controlSize(.small)

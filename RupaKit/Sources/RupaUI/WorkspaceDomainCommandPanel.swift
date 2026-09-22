@@ -231,6 +231,7 @@ struct WorkspaceDomainCommandPanel: View {
             } label: {
                 Label("Run", systemImage: "play.fill")
                     .font(.caption.weight(.semibold))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)

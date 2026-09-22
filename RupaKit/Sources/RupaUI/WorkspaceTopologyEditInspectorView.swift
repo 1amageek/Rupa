@@ -42,6 +42,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Offset -\(formatted(state.faceOffsetStepMeters))",
                             systemImage: "minus"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorFace.offsetNegative")
 
@@ -52,6 +53,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Offset +\(formatted(state.faceOffsetStepMeters))",
                             systemImage: "plus"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorFace.offsetPositive")
                 }
@@ -72,6 +74,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             state.faceTargets.count == 1 ? "Delete Face" : "Delete Faces",
                             systemImage: "trash"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorFace.delete")
                 }
@@ -99,6 +102,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Draft -\(WorkspaceInspectorNumberText.formattedDegrees(draftAngleMagnitudeDegrees))",
                             systemImage: "minus"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorFaceDraft.negative")
 
@@ -113,6 +117,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Draft +\(WorkspaceInspectorNumberText.formattedDegrees(draftAngleMagnitudeDegrees))",
                             systemImage: "plus"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorFaceDraft.positive")
                 }
@@ -153,6 +158,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Offset \(formatted(edgeOffsetDistanceMeters))",
                             systemImage: "arrow.up.left.and.arrow.down.right"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorEdge.offset")
                 }
@@ -162,6 +168,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                         onProjectEdges(state.projectableEdgeTargets)
                     } label: {
                         Label("Project", systemImage: "square.on.square")
+                            .contentShape(Rectangle())
                     }
                     .disabled(state.projectableEdgeTargets.isEmpty)
                     .accessibilityIdentifier("InspectorEdge.project")
@@ -175,6 +182,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Fillet \(formatted(state.edgeFilletRadiusMeters))",
                             systemImage: "circle.dashed"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorEdge.fillet")
 
@@ -185,6 +193,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Chamfer \(formatted(state.edgeChamferStepMeters))",
                             systemImage: "line.diagonal"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorEdge.chamfer")
                 }
@@ -217,6 +226,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "X -\(formatted(state.vertexMoveStepMeters))",
                             systemImage: "arrow.left"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorVertex.moveXNegative")
 
@@ -227,6 +237,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "X +\(formatted(state.vertexMoveStepMeters))",
                             systemImage: "arrow.right"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorVertex.moveXPositive")
                 }
@@ -238,6 +249,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Y -\(formatted(state.vertexMoveStepMeters))",
                             systemImage: "arrow.down"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorVertex.moveYNegative")
 
@@ -248,6 +260,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                             "Y +\(formatted(state.vertexMoveStepMeters))",
                             systemImage: "arrow.up"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorVertex.moveYPositive")
                 }
@@ -274,6 +287,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                         )
                     } label: {
                         Label("Inward", systemImage: "minus.circle")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorRegion.offsetInward")
 
@@ -287,6 +301,7 @@ struct WorkspaceTopologyEditInspectorView: View {
                         )
                     } label: {
                         Label("Outward", systemImage: "plus.circle")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorRegion.offsetOutward")
                 }

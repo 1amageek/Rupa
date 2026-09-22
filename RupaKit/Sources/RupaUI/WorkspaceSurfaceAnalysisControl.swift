@@ -47,6 +47,7 @@ struct WorkspaceSurfaceAnalysisControl: View {
                         lineWidth: 1
                     )
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(option.help)
@@ -81,6 +82,7 @@ struct WorkspaceSurfaceAnalysisControl: View {
                         lineWidth: 1
                     )
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(density.help)

@@ -127,6 +127,7 @@ struct ApplicationRoot: App {
                 Button("OK") {
                     projectCoordinator.clearFailure()
                 }
+                .contentShape(Rectangle())
             } message: { failure in
                 Text(failure.message)
             }

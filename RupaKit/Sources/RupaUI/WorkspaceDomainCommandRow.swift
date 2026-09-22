@@ -59,10 +59,11 @@ struct WorkspaceDomainCommandRow: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Color.secondary.opacity(0.72))
             }
+            .padding(.horizontal, 7)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 7)
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(Color.primary.opacity(0.06))

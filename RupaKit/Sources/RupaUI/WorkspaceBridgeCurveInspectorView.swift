@@ -118,6 +118,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
             onSetTrimSide(bridgeCurve, endpoint, trimSide)
         } label: {
             Label(title, systemImage: trimSide == .towardStart ? "arrow.backward.to.line" : "arrow.forward.to.line")
+                .contentShape(Rectangle())
         }
         .disabled(current == trimSide || bridgeCurve.trimsSourceCurves)
         .accessibilityIdentifier(accessibilityIdentifier)
@@ -132,6 +133,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
                     bridgeCurve.firstEndpoint.reversesSense ? "Start Sense Reversed" : "Start Sense",
                     systemImage: "arrow.left.and.right"
                 )
+                .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.bridge.startSense")
 
@@ -142,6 +144,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
                     bridgeCurve.secondEndpoint.reversesSense ? "End Sense Reversed" : "End Sense",
                     systemImage: "arrow.left.and.right"
                 )
+                .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.bridge.endSense")
         }
@@ -153,6 +156,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
                 onTrimSources(bridgeCurve)
             } label: {
                 Label("Trim Sources", systemImage: "scissors")
+                    .contentShape(Rectangle())
             }
             .disabled(bridgeCurve.trimsSourceCurves)
             .accessibilityIdentifier("InspectorCurve.bridge.trimSources")
@@ -173,6 +177,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
                         bridgeCurve.curvatureDisplay == nil ? "Show Curvature" : "Hide Curvature",
                         systemImage: bridgeCurve.curvatureDisplay == nil ? "waveform.path.ecg" : "eye.slash"
                     )
+                    .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.bridge.curvature.toggle")
             }
@@ -302,6 +307,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
             onSetContinuity(bridgeCurve, endpoint, continuity)
         } label: {
             Label(title, systemImage: systemImage)
+                .contentShape(Rectangle())
         }
         .disabled(current == continuity)
         .accessibilityIdentifier(accessibilityIdentifier)

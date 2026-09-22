@@ -48,12 +48,16 @@ struct ModelingOperationView: View {
                             HStack {
                                 Text(draft.operandTitle(at: index, in: document))
                                 Spacer()
-                                Button { draft.targets.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
-                                    .contentShape(Rectangle())
+                                Button { draft.targets.swapAt(index, index - 1) } label: {
+                                    Image(systemName: "arrow.up")
+                                        .contentShape(Rectangle())
+                                }
                                     .disabled(index == 0)
                                     .accessibilityLabel("Move operand up")
-                                Button { draft.targets.remove(at: index) } label: { Image(systemName: "minus.circle") }
-                                    .contentShape(Rectangle())
+                                Button { draft.targets.remove(at: index) } label: {
+                                    Image(systemName: "minus.circle")
+                                        .contentShape(Rectangle())
+                                }
                                     .accessibilityLabel("Remove operand")
                             }
                         }

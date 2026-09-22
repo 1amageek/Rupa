@@ -376,7 +376,9 @@ private struct ProjectMainViewContent: View {
         }
         .confirmationDialog("Make CAD Editable as Mesh?", isPresented: $showsMakeEditableConfirmation) {
             Button("Make Editable", action: makeSelectedCADEditable)
+                .contentShape(Rectangle())
             Button("Cancel", role: .cancel) {}
+                .contentShape(Rectangle())
         } message: {
             Text("Create an independent Mesh from modeling-quality CAD geometry and switch its presentation. The CAD source is retained. This operation is undoable.")
         }
@@ -1863,7 +1865,9 @@ private struct ProjectMainViewContent: View {
                     }
                     HStack {
                         Button("Cancel", action: cancelModelingOperation).keyboardShortcut(.cancelAction)
+                            .contentShape(Rectangle())
                         Button("Apply", action: applyModelingOperation)
+                            .contentShape(Rectangle())
                             .disabled(modelingPreview.phase != .ready)
                             .keyboardShortcut(.defaultAction)
                     }
@@ -1898,12 +1902,14 @@ private struct ProjectMainViewContent: View {
                         }.pickerStyle(.segmented)
                         Text("Click an Authored Mesh in the canvas. CAD bodies must first be made editable as Mesh.")
                         Button("Make Selected CAD Editable…") { showsMakeEditableConfirmation = true }
+                            .contentShape(Rectangle())
                             .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
                         if let message = modelingPreview.errorMessage {
                             Text(message).foregroundStyle(.red)
                                 .accessibilityIdentifier("Modeling.meshTarget.error")
                         }
                         Button("Cancel", action: cancelModelingOperation)
+                            .contentShape(Rectangle())
                         Spacer()
                     }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -3337,6 +3343,7 @@ private struct ProjectMainViewContent: View {
                 performViewportControl(.fitVisible)
             } label: {
                 Label("Fit Visible Objects", systemImage: "viewfinder")
+                    .contentShape(Rectangle())
             }
             .disabled(!viewportControlSession.canFitVisible)
             .accessibilityIdentifier("WorkspaceViewport.fitVisible")
@@ -3345,6 +3352,7 @@ private struct ProjectMainViewContent: View {
                 performViewportControl(.fitSelected)
             } label: {
                 Label("Fit Selected Objects", systemImage: "scope")
+                    .contentShape(Rectangle())
             }
             .disabled(!viewportControlSession.canFitSelected)
             .accessibilityIdentifier("WorkspaceViewport.fitSelected")
@@ -3352,6 +3360,7 @@ private struct ProjectMainViewContent: View {
             Image(systemName: "viewfinder")
                 .font(.system(size: 13, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
+                .contentShape(Rectangle())
         } primaryAction: {
             performViewportControl(.fitVisible)
         }
@@ -3425,6 +3434,7 @@ private struct ProjectMainViewContent: View {
             Image(systemName: viewportDisplayModeSystemImage(viewportDisplayMode))
                 .font(.system(size: 13, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
+                .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -3460,6 +3470,7 @@ private struct ProjectMainViewContent: View {
                     Image(systemName: "checkmark")
                 }
             }
+            .contentShape(Rectangle())
         }
         .help(viewportDisplayModeHelp(mode))
         .accessibilityIdentifier("WorkspaceViewport.displayMode.\(viewportDisplayModeTitle(mode))")
@@ -3507,6 +3518,7 @@ private struct ProjectMainViewContent: View {
                     maxWidth: WorkspaceChromeControlMetrics.statusMessageMaximumWidth,
                     alignment: .leading
                 )
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Show Logs")
@@ -3539,6 +3551,7 @@ private struct ProjectMainViewContent: View {
                     maxWidth: WorkspaceChromeControlMetrics.statusMessageMaximumWidth,
                     alignment: .leading
                 )
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Show Logs")
@@ -3563,12 +3576,14 @@ private struct ProjectMainViewContent: View {
                 newProject()
             } label: {
                 Image(systemName: "doc.badge.plus")
+                    .contentShape(Rectangle())
             }
             .help("New Document")
 
             Menu {
                 ForEach(ModelingOperationDraft.Kind.allCases) { kind in
                     Button(kind.rawValue) { beginModelingOperation(kind) }
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("Modeling.begin.\(kind.rawValue)")
                 }
                 Divider()
@@ -3576,10 +3591,13 @@ private struct ProjectMainViewContent: View {
                     cancelModelingOperation()
                     selectedTool = .mesh
                 }
+                .contentShape(Rectangle())
                 Button("Make Selected CAD Editable as Mesh…") { showsMakeEditableConfirmation = true }
+                    .contentShape(Rectangle())
                     .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
             } label: {
                 Label("Model", systemImage: "cube")
+                    .contentShape(Rectangle())
             }
             .disabled(modelingPreview.isBusy)
             .accessibilityIdentifier("WorkspaceCommand.model")
@@ -3588,6 +3606,7 @@ private struct ProjectMainViewContent: View {
                 isPreviewExpanded.toggle()
             } label: {
                 Image(systemName: isPreviewExpanded ? "list.bullet.rectangle.fill" : "list.bullet.rectangle")
+                    .contentShape(Rectangle())
             }
             .help(isPreviewExpanded ? "Hide Logs" : "Show Logs")
             .accessibilityIdentifier("WorkspaceCommand.logs")
@@ -3596,6 +3615,7 @@ private struct ProjectMainViewContent: View {
                 validateDocument()
             } label: {
                 Image(systemName: "checkmark.seal")
+                    .contentShape(Rectangle())
             }
             .help("Validate Document")
             .accessibilityIdentifier("WorkspaceCommand.validate")
@@ -3604,6 +3624,7 @@ private struct ProjectMainViewContent: View {
                 isInspectorPresented.toggle()
             } label: {
                 Image(systemName: "sidebar.trailing")
+                    .contentShape(Rectangle())
             }
             .help("Inspector")
             .accessibilityIdentifier("WorkspaceCommand.inspector")
@@ -3677,6 +3698,7 @@ private struct ProjectMainViewContent: View {
                     )
                         .fill(Color.accentColor.opacity(0.14))
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(state.help)
@@ -4204,6 +4226,7 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: entry.isActive ? "smallcircle.filled.circle" : "circle")
                     .font(.system(size: 12, weight: .semibold))
                     .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(entry.isActive ? Color.accentColor : Color.primary.opacity(0.58))
@@ -4219,6 +4242,7 @@ private struct ProjectMainViewContent: View {
                     Image(systemName: "viewfinder")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.68))
@@ -4232,6 +4256,7 @@ private struct ProjectMainViewContent: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.68))
@@ -4286,6 +4311,7 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: isRenaming ? "checkmark" : "pencil")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.primary.opacity(0.72))
@@ -4302,6 +4328,7 @@ private struct ProjectMainViewContent: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
                         .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.56))
@@ -4349,6 +4376,7 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: "viewfinder")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.accentColor)
@@ -4385,6 +4413,7 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.primary.opacity(0.68))
@@ -4399,6 +4428,7 @@ private struct ProjectMainViewContent: View {
                 Image(systemName: "trash")
                     .font(.system(size: 11, weight: .semibold))
                     .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.primary.opacity(0.58))
@@ -8033,6 +8063,7 @@ private struct ProjectMainViewContent: View {
                             projectSelectedCurvesToGeneratedFace(targets, face: faceTarget)
                         } label: {
                             Label("Project Curves", systemImage: "square.on.square")
+                                .contentShape(Rectangle())
                         }
                         .accessibilityIdentifier("InspectorFace.projectCurves")
                     }
@@ -8058,6 +8089,7 @@ private struct ProjectMainViewContent: View {
                         projectSelectedBodyOutlinesToConstructionPlane(targets)
                     } label: {
                         Label("Project Outline", systemImage: "pencil.and.outline")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorObject.projectOutline")
                 }
@@ -8196,6 +8228,7 @@ private struct ProjectMainViewContent: View {
                         createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
                     } label: {
                         Label("Slot", systemImage: "capsule")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.line.createSlot")
                 }
@@ -8204,6 +8237,7 @@ private struct ProjectMainViewContent: View {
                     reverseSelectedSketchCurve(entity.target)
                 } label: {
                     Label("Reverse", systemImage: "arrow.left.arrow.right")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.reverse")
 
@@ -8211,6 +8245,7 @@ private struct ProjectMainViewContent: View {
                     splitSelectedSketchCurve(entity.target)
                 } label: {
                     Label("Split", systemImage: "scissors")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.split")
 
@@ -8218,6 +8253,7 @@ private struct ProjectMainViewContent: View {
                     trimSelectedSketchCurveSegment(entity.target)
                 } label: {
                     Label("Trim", systemImage: "delete.left")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.trim")
             }
@@ -8227,6 +8263,7 @@ private struct ProjectMainViewContent: View {
                         cutSelectedSketchCurve(entity.target, cutter: cutter)
                     } label: {
                         Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.line.cut")
                 }
@@ -8237,6 +8274,7 @@ private struct ProjectMainViewContent: View {
                     convertSelectedSketchLineToArc(entity.target, sagitta: sagitta)
                 } label: {
                     Label("Arc +\(formatted(sagitta))", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.convertArcPositive")
 
@@ -8244,6 +8282,7 @@ private struct ProjectMainViewContent: View {
                     convertSelectedSketchLineToArc(entity.target, sagitta: -sagitta)
                 } label: {
                     Label("Arc -\(formatted(sagitta))", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.convertArcNegative")
 
@@ -8251,6 +8290,7 @@ private struct ProjectMainViewContent: View {
                     convertSelectedSketchLineToSpline(entity.target)
                 } label: {
                     Label("Spline", systemImage: "point.3.connected.trianglepath.dotted")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.line.convertSpline")
             }
@@ -8277,6 +8317,7 @@ private struct ProjectMainViewContent: View {
                         cutSelectedSketchCurve(entity.target, cutter: cutter)
                     } label: {
                         Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.circle.cut")
                 }
@@ -8377,6 +8418,7 @@ private struct ProjectMainViewContent: View {
                         createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
                     } label: {
                         Label("Slot", systemImage: "capsule")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.arc.createSlot")
                 }
@@ -8385,6 +8427,7 @@ private struct ProjectMainViewContent: View {
                     splitSelectedSketchCurve(entity.target)
                 } label: {
                     Label("Split", systemImage: "scissors")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.arc.split")
 
@@ -8392,6 +8435,7 @@ private struct ProjectMainViewContent: View {
                     trimSelectedSketchCurveSegment(entity.target)
                 } label: {
                     Label("Trim", systemImage: "delete.left")
+                        .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.arc.trim")
             }
@@ -8401,6 +8445,7 @@ private struct ProjectMainViewContent: View {
                         cutSelectedSketchCurve(entity.target, cutter: cutter)
                     } label: {
                         Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                            .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.arc.cut")
                 }
@@ -8437,6 +8482,7 @@ private struct ProjectMainViewContent: View {
                             createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
                         } label: {
                             Label("Slot", systemImage: "capsule")
+                                .contentShape(Rectangle())
                         }
                         .accessibilityIdentifier("InspectorCurve.spline.createSlot")
                     }

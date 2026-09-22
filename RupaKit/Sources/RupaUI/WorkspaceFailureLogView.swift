@@ -48,6 +48,7 @@ struct WorkspaceFailureLogView: View {
             Spacer(minLength: 0)
             // Nothing to clear is not an action to offer.
             Button("Clear", action: onClear)
+                .contentShape(Rectangle())
                 .disabled(records.isEmpty)
                 .accessibilityIdentifier("WorkspaceFailureLog.clear")
         }

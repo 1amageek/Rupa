@@ -91,13 +91,16 @@ struct ViewportAxisTriad: View {
     private var orientationMenu: some View {
         Menu {
             Button("Isometric") { onSelectAxis(nil) }
+                .contentShape(Rectangle())
             ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
                 Button("\(axis.label) Front") { onSelectAxis(axis) }
+                    .contentShape(Rectangle())
             }
         } label: {
             Text(projectionTitle)
                 .font(.system(size: 10.0, weight: .medium))
                 .fixedSize(horizontal: true, vertical: true)
+                .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.borderless)

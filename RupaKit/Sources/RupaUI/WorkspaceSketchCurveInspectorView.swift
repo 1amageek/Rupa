@@ -83,6 +83,7 @@ struct WorkspaceSketchCurveInspectorView: View {
                             curvatureDisplay == nil ? "Show Comb" : "Hide Comb",
                             systemImage: curvatureDisplay == nil ? "waveform.path.ecg" : "eye.slash"
                         )
+                        .contentShape(Rectangle())
                     }
                     .accessibilityIdentifier("InspectorCurve.curvatureComb.toggle")
                 }
@@ -111,6 +112,7 @@ struct WorkspaceSketchCurveInspectorView: View {
                         pointDisplay?.isVisible == false ? "Show Points" : "Hide Points",
                         systemImage: pointDisplay?.isVisible == false ? "smallcircle.filled.circle" : "eye.slash"
                     )
+                    .contentShape(Rectangle())
                 }
                 .accessibilityIdentifier("InspectorCurve.points.toggle")
             }

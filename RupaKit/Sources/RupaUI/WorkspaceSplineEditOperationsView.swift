@@ -80,6 +80,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onReverse(target)
             } label: {
                 Label("Reverse", systemImage: "arrow.left.arrow.right")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.reverse")
 
@@ -87,6 +88,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onSplit(target)
             } label: {
                 Label("Split", systemImage: "scissors")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.split")
 
@@ -94,6 +96,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onInsertControlPoint(target)
             } label: {
                 Label("Insert CV", systemImage: "plus")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.insertControlPoint")
 
@@ -101,6 +104,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onRebuild(target)
             } label: {
                 Label("Rebuild", systemImage: "point.3.filled.connected.trianglepath.dotted")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.rebuild")
 
@@ -108,6 +112,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onRefit(target)
             } label: {
                 Label("Refit", systemImage: "arrow.triangle.2.circlepath")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.refit")
 
@@ -115,6 +120,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onExplicit(target)
             } label: {
                 Label("Explicit", systemImage: "slider.horizontal.3")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.explicit")
 
@@ -122,6 +128,7 @@ struct WorkspaceSplineEditOperationsView: View {
                 onTrim(target)
             } label: {
                 Label("Trim", systemImage: "delete.left")
+                    .contentShape(Rectangle())
             }
             .accessibilityIdentifier("InspectorCurve.spline.trim")
         }

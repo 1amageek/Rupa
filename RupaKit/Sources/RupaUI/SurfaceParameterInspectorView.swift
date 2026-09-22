@@ -295,6 +295,7 @@ struct SurfaceParameterInspectorView: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.bordered)
         .controlSize(.small)

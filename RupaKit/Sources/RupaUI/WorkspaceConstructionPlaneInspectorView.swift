@@ -81,12 +81,14 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                     Button("Activate") {
                         onActivate()
                     }
+                    .contentShape(Rectangle())
                     .disabled(state.isActive)
                     .accessibilityIdentifier("InspectorConstructionPlane.activate")
 
                     Button("From View") {
                         onUpdateFromView()
                     }
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("InspectorConstructionPlane.fromView")
                 }
             }
