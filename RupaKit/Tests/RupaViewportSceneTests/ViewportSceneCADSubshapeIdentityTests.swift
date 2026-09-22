@@ -6,6 +6,37 @@ import Testing
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func trimmedBodyCarriesItsOriginalSurfaceControlOverlay() throws {
+    let session = EditorSession()
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+        topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0))
+    let surface = BSplineSurface3D(uDegree: 2, vDegree: 2,
+        uKnots: [0, 0, 0, 0.5, 1, 1, 1], vKnots: [0, 0, 0, 0.5, 1, 1, 1],
+        controlPoints: base.controlPoints, weights: base.weights)
+    _ = try session.execute(.createBSplineSurface(name: "Patch", surface: surface))
+    let source = try #require(SurfaceSourceSummaryService().summarize(document: session.document,
+        displayUnit: .millimeter).sources.first)
+    let face = try #require(source.patches.first?.faceSelectionReference)
+    let control = try #require(source.patches.first?.controlPoints.first?.selectionReference)
+    let corners = [SurfaceParameter(u: 0.2, v: 0.2), SurfaceParameter(u: 0.8, v: 0.2),
+        SurfaceParameter(u: 0.8, v: 0.8), SurfaceParameter(u: 0.2, v: 0.8)]
+    _ = try session.execute(.setSurfaceTrimLoops(target: face, trimLoops: [
+        SurfaceTrimLoop(role: .outer, parameterCurves: (0..<4).map { .polyline([corners[$0], corners[($0 + 1) % 4]]) })
+    ]))
+    let display = try SurfaceControlPointDisplay(target: control, isVisible: true)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: .standard(for: .meter),
+        overlayState: .init(surfaceControlPointDisplays: [display.id: display]), evaluationPolicy: .evaluateOnDemand)
+    let trimID = try #require(session.document.cadDocument.designGraph.order.last)
+    let body = try #require(bodyComponent(in: scene, featureID: trimID))
+    #expect(body.surfaceControlPointDisplays.count == 1)
+    #expect(body.surfaceControlPointDisplays.first?.selectionReference == control)
+    #expect(!body.surfaceKnotDisplays.isEmpty)
+    #expect(!body.surfaceSpanDisplays.isEmpty)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func extrudeBodyItemCarriesThePreparedCADSubshapeIdentityOfItsEvaluatedBody() throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

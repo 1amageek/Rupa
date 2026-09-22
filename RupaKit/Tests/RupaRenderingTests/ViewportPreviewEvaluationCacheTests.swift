@@ -531,15 +531,11 @@ private func previewChamferDocument(
     from document: DesignDocument,
     distance: Double = 0.001
 ) throws -> DesignDocument {
-    let bodyFeatureID = try #require(document.cadDocument.designGraph.order.last)
-    let bodyNodeID = try #require(
-        document.productMetadata.sceneNodes.first { entry in
-            entry.value.reference?.kind == .body && entry.value.reference?.featureID == bodyFeatureID
-        }?.key
-    )
+    let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+    let target = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
     return try ViewportEdgeTreatmentPreviewDocumentBuilder().previewDocument(
         for: .chamfer(
-            target: SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            target: target,
             distance: distance
         ),
         in: document

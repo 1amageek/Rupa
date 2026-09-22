@@ -99,6 +99,12 @@ extension DesignDocument {
             )
         }
         _ = try resolvedAngleValue(options.twistAngle, owner: "Sweep twist angle")
+        if let allowance = options.approximationTolerance {
+            _ = try resolvedPositiveLengthValue(allowance, owner: "Sweep approximation allowance")
+        }
+        if let law = options.twistLaw {
+            for knot in law { _ = try resolvedAngleValue(knot.angle, owner: "Sweep twist law angle") }
+        }
         let endScale = try resolvedScalarValue(options.endScale, owner: "Sweep end scale")
         guard endScale > 0.0 else {
             throw EditorError(

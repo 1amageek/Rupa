@@ -9,87 +9,34 @@ import Testing
     let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .edge(.bodyEdgeRightTop))
     let request = ViewportEdgeTreatmentPreviewRequest.chamfer(target: target, distance: 0.001)
     #expect(request.target == target)
-    #expect(Viewport.drawsTransientBody(
-        sceneNodeID: target.sceneNodeID, previewSceneNodeID: request.target.sceneNodeID, isEdited: false
-    ))
-    #expect(!Viewport.drawsTransientBody(
-        sceneNodeID: SceneNodeID(), previewSceneNodeID: request.target.sceneNodeID, isEdited: false
-    ))
+    #expect(Viewport.drawsTransientBody(sceneNodeID: target.sceneNodeID, previewSceneNodeID: request.target.sceneNodeID, isEdited: false))
+    #expect(!Viewport.drawsTransientBody(sceneNodeID: SceneNodeID(), previewSceneNodeID: request.target.sceneNodeID, isEdited: false))
     #expect(!Viewport.drawsTransientBody(sceneNodeID: nil, previewSceneNodeID: nil, isEdited: false))
     #expect(Viewport.drawsTransientBody(sceneNodeID: nil, previewSceneNodeID: nil, isEdited: true))
 }
 
 @MainActor
-@Test func viewportEdgeTreatmentPreviewBuilderCreatesChamferPreviewWithoutMutatingSource() throws {
+@Test(.timeLimit(.minutes(1)), arguments: [false, true])
+func viewportEdgeTreatmentPreviewMatchesNativeCommit(chamfer: Bool) throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodyNodeID = try #require(previewBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop))
-
-    let preview = try ViewportEdgeTreatmentPreviewDocumentBuilder().previewDocument(
-        for: .chamfer(target: target, distance: 0.001),
-        in: session.document
-    )
-
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: session.document).lines == 4)
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: session.document).arcs == 0)
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: preview).lines == 5)
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: preview).arcs == 0)
-}
-
-@MainActor
-@Test func viewportEdgeTreatmentPreviewBuilderCreatesFilletPreviewWithoutMutatingSource() throws {
-    let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
-    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodyNodeID = try #require(previewBodySceneNodeID(for: bodyFeatureID, in: session.document))
-    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop))
-
-    let preview = try ViewportEdgeTreatmentPreviewDocumentBuilder().previewDocument(
-        for: .fillet(target: target, radius: 0.001, segmentCount: 8),
-        in: session.document
-    )
-
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: session.document).lines == 4)
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: session.document).arcs == 0)
-    #expect(try previewProfileEntityCounts(forBody: bodyFeatureID, in: preview).arcs == 1)
-}
-
-private func previewBodySceneNodeID(
-    for featureID: FeatureID,
-    in document: DesignDocument
-) -> SceneNodeID? {
-    document.productMetadata.sceneNodes.first { entry in
-        entry.value.reference?.kind == .body && entry.value.reference?.featureID == featureID
-    }?.key
-}
-
-private func previewProfileEntityCounts(
-    forBody featureID: FeatureID,
-    in document: DesignDocument
-) throws -> (lines: Int, arcs: Int) {
-    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
-    guard case .extrude(let extrude) = feature.operation else {
-        Issue.record("Preview edge treatment test requires an extrude body.")
-        return (0, 0)
+    let original = session.document
+    let topology = try TopologySnapshotService().snapshot(document: original, metricPolicy: .omit)
+    let target = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
+    let request: ViewportEdgeTreatmentPreviewRequest = chamfer
+        ? .chamfer(target: target, distance: 0.001) : .fillet(target: target, radius: 0.001)
+    let preview = try ViewportEdgeTreatmentPreviewDocumentBuilder().previewDocument(for: request, in: original)
+    let featureID = try #require(preview.cadDocument.designGraph.order.last)
+    #expect(preview.productMetadata.sceneNodes[target.sceneNodeID]?.reference == .body(featureID))
+    for (id, feature) in original.cadDocument.designGraph.nodes {
+        #expect(preview.cadDocument.designGraph.nodes[id] == feature)
     }
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
-    guard case .sketch(let sketch) = profileFeature.operation else {
-        Issue.record("Preview edge treatment test requires a sketch profile.")
-        return (0, 0)
-    }
-    var lineCount = 0
-    var arcCount = 0
-    for entity in sketch.entities.values {
-        switch entity {
-        case .line:
-            lineCount += 1
-        case .arc:
-            arcCount += 1
-        default:
-            break
-        }
-    }
-    return (lineCount, arcCount)
+    let evaluated = try DocumentEvaluator.modelingDefault(for: preview).evaluateExact(preview.cadDocument)
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(evaluated.brep.faces.count == 7)
+    let treatment: BodyEdgeTreatment = chamfer ? .chamfer(distance: .length(0.001, .meter)) : .fillet(radius: .length(0.001, .meter))
+    _ = try session.execute(.createBodyEdgeTreatment(name: "Edge treatment", target: target, treatment: treatment))
+    let committedID = try #require(session.document.cadDocument.designGraph.order.last)
+    #expect(preview.cadDocument.designGraph.nodes[featureID]?.operation == session.document.cadDocument.designGraph.nodes[committedID]?.operation)
+    #expect(session.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference == .body(committedID))
 }

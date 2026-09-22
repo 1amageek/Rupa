@@ -4412,8 +4412,7 @@ public struct Viewport: View {
             updateEdgeTreatmentPreviewDocument(
                 request: .fillet(
                     target: selectionTarget,
-                    radius: Double(radius),
-                    segmentCount: 8
+                    radius: Double(radius)
                 )
             )
             return true
@@ -4432,7 +4431,9 @@ public struct Viewport: View {
                     objectRegistry: objectRegistry
                 ).previewDocument(
                     for: request,
-                    in: document
+                    in: document,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: sceneDocumentGeneration
                 ),
                 target: request.target
             )

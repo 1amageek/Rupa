@@ -15,6 +15,10 @@ struct ModelingOperationDraft: Equatable {
         case fillet = "Fillet"
         case chamfer = "Chamfer"
         case g2Blend = "G2 Blend"
+        case surfacePatch = "Surface Patch"
+        case surfaceOffset = "Sheet Offset"
+        case surfaceExtend = "Extend Trim"
+        case shell = "Shell"
 
         var id: String { rawValue }
 
@@ -36,6 +40,10 @@ struct ModelingOperationDraft: Equatable {
             case .fillet: "square.on.circle"
             case .chamfer: "cube.transparent"
             case .g2Blend: "point.topleft.down.to.point.bottomright.curvepath"
+            case .surfacePatch: "square.dashed"
+            case .surfaceOffset: "square.3.layers.3d"
+            case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
+            case .shell: "shippingbox"
             }
         }
     }
@@ -56,6 +64,11 @@ struct ModelingOperationDraft: Equatable {
     var sheet = false
     var smooth = false
     var closesSectionLoop = false
+    var uBounds = ["0", "1"]
+    var vBounds = ["0", "1"]
+    var twistAngle = "0"
+    var doubleHelical = false
+    var approximationTolerance = ""
 
     /// Opens a draft at the default the workspace scale publishes for what
     /// the kind is about to author.
@@ -89,9 +102,9 @@ struct ModelingOperationDraft: Equatable {
 
     private static func seedMeters(for kind: Kind, ruler: RulerConfiguration) -> Double {
         switch kind {
-        case .fillet, .chamfer, .g2Blend:
+        case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .surfacePatch, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -100,10 +113,20 @@ struct ModelingOperationDraft: Equatable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw invalid("Enter an operation name.")
         }
-        if kind == .box || kind == .cylinder || kind == .sphere {
+        if [.box, .cylinder, .sphere, .surfacePatch].contains(kind) {
             let x = try length(origin[0], label: "Origin X")
             let y = try length(origin[1], label: "Origin Y")
             let z = try length(origin[2], label: "Origin Z")
+            if kind == .surfacePatch {
+                let w = try modelableLength(width, label: "Width", in: document)
+                let h = try modelableLength(height, label: "Height", in: document)
+                return .createBSplineSurface(name: name, surface: .bilinearPatch(
+                    bottomLeft: Point3D(x: x, y: y, z: z),
+                    bottomRight: Point3D(x: x + w, y: y, z: z),
+                    topRight: Point3D(x: x + w, y: y + h, z: z),
+                    topLeft: Point3D(x: x, y: y + h, z: z)
+                ))
+            }
             if kind == .sphere {
                 return .createAnalyticSphere(name: name, center: Point3D(x: x, y: y, z: z), radius: try modelableLength(width, label: "Radius", in: document))
             }
@@ -136,7 +159,7 @@ struct ModelingOperationDraft: Equatable {
             return featureID
         }
         switch kind {
-        case .box, .cylinder, .sphere:
+        case .box, .cylinder, .sphere, .surfacePatch:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
             guard features.count == 1, let feature = features.first else {
@@ -169,9 +192,25 @@ struct ModelingOperationDraft: Equatable {
             try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
             return .createRevolve(name: name, profile: ProfileReference(featureID: feature), axis: revolveAxis, angle: .angle(degrees, .degree))
         case .sweep:
+            let degrees = try number(twistAngle, label: "Twist angle")
+            var options = SweepOptions()
+            if degrees != 0 || doubleHelical {
+                let allowance = try length(approximationTolerance, label: "Positional approximation allowance")
+                guard allowance > 0 else { throw invalid("Positional approximation allowance must be positive.") }
+                options.approximationTolerance = .length(allowance, .meter)
+                if doubleHelical {
+                    options.twistLaw = [
+                        .init(position: 0, angle: .angle(0, .degree)),
+                        .init(position: 0.5, angle: .angle(degrees, .degree)),
+                        .init(position: 1, angle: .angle(0, .degree))
+                    ]
+                } else {
+                    options.twistAngle = .angle(degrees, .degree)
+                }
+            }
             return try SweepSelectionPlanningService(
                 document: document, selection: SelectionModel(selectedTargets: targets)
-            ).command(name: name)
+            ).command(name: name, options: options)
         case .loft:
             guard features.count >= 2 else { throw invalid("Select at least two ordered sketch profiles.") }
             for feature in features {
@@ -188,6 +227,33 @@ struct ModelingOperationDraft: Equatable {
                 throw invalid("Select target CAD bodies, then a separate tool body last.")
             }
             return .createBoolean(name: name, targets: features.dropLast().map { BooleanTargetReference(featureID: $0) }, tool: BooleanToolReference(featureID: tool), operation: booleanOperation, keepTools: keepTools)
+        case .shell:
+            guard targets.count == 1, case .face(let component) = targets[0].component,
+                  component.generatedTopologySubshapeID != nil,
+                  nodes[0].reference?.kind == .body else {
+                throw invalid("Select one generated solid face to remove for the Shell opening.")
+            }
+            return .createBodyShell(name: name, target: targets[0],
+                thickness: try topologyLength(distance, label: "Wall thickness", in: document))
+        case .surfaceOffset, .surfaceExtend:
+            guard targets.count == 1, case .face(let component) = targets[0].component,
+                  component.generatedTopologySubshapeID != nil,
+                  let feature = features.first,
+                  document.cadDocument.designGraph.nodes[feature]?.outputs.contains(where: { $0.role == .sheet }) == true else {
+                throw invalid("Select one generated face of a sheet surface.")
+            }
+            let edit: SheetSurfaceEdit
+            if kind == .surfaceOffset {
+                edit = .offset(distance: try topologyLength(distance, label: "Offset", signed: true, in: document))
+            } else {
+                let u0 = try number(uBounds[0], label: "U minimum")
+                let u1 = try number(uBounds[1], label: "U maximum")
+                let v0 = try number(vBounds[0], label: "V minimum")
+                let v1 = try number(vBounds[1], label: "V maximum")
+                guard u0 < u1, v0 < v1 else { throw invalid("Each minimum must be less than its maximum.") }
+                edit = .extend(uDomain: .closed(u0, u1), vDomain: .closed(v0, v1))
+            }
+            return .createSheetSurfaceEdit(name: name, target: targets[0], edit: edit)
         case .fillet, .chamfer, .g2Blend:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
             guard edges.count == 1, targets.count == 1,
@@ -195,8 +261,8 @@ struct ModelingOperationDraft: Equatable {
                   component.generatedTopologySubshapeID != nil else {
                 throw invalid("Select one generated CAD edge. Multi-edge blends are not supported by this operation.")
             }
-            let amount = CADExpression.length(try modelableLength(distance,
-                label: kind == .fillet ? "Radius" : "Distance", in: document), .meter)
+            let amount = try topologyLength(distance,
+                label: kind == .fillet ? "Radius" : "Distance", in: document)
             let treatment: BodyEdgeTreatment
             switch kind {
             case .fillet: treatment = .fillet(radius: amount)
@@ -215,13 +281,15 @@ struct ModelingOperationDraft: Equatable {
         case .loft: role = "Section \(index + 1)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
         case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
+        case .surfaceOffset, .surfaceExtend: role = "Sheet face"
+        case .shell: role = "Opening face"
         default: role = "Profile"
         }
         return "\(role): \(name)"
     }
 
     private func operandNodes(in document: DesignDocument) throws -> [SceneNode] {
-        let preservesOccurrence = [.fillet, .chamfer, .g2Blend].contains(kind)
+        let preservesOccurrence = [.fillet, .chamfer, .g2Blend, .surfaceOffset, .surfaceExtend, .shell].contains(kind)
         var seen = Set<SceneNodeID>()
         var nodes: [SceneNode] = []
         for target in targets where seen.insert(target.sceneNodeID).inserted {
@@ -241,6 +309,20 @@ struct ModelingOperationDraft: Equatable {
             nodes.append(node)
         }
         return nodes
+    }
+
+    private func topologyLength(
+        _ text: String, label: String, signed: Bool = false, in document: DesignDocument
+    ) throws -> CADExpression {
+        let parameters = document.cadDocument.parameters
+        let expression = try ParameterExpressionParser().parse(text, parameters: parameters,
+            targetKind: .length, defaults: ParameterExpressionDefaults(lengthUnit: unit))
+        let quantity = try parameters.resolvedValue(for: expression)
+        guard quantity.value.isFinite,
+              (signed ? abs(quantity.value) : quantity.value) > document.modelingSettings.tolerance.distance else {
+            throw invalid("\(label) must resolve to a finite \(signed ? "non-zero" : "positive") length above modeling tolerance.")
+        }
+        return expression
     }
 
     private func length(_ text: String, label: String) throws -> Double {

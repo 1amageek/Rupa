@@ -292,6 +292,11 @@ flowchart LR
     legacy implementation inventory and must be removed or rejected before
     CADAPI-D can be called implemented.
 20. Exact B-rep/source topology and modeling tolerance remain authoritative.
+    A source operation may explicitly authorize a certified positional curve or
+    surface approximation while retaining its original parameters. This is
+    distinct from display tessellation and manufacturing tolerance; it never
+    authorizes a display-Mesh fallback. Geometric admission and error proof
+    belong to the [Swift-CAD modeling design](swift-CAD/Sources/CADModeling/DESIGN.md).
     Presentation Mesh fidelity is selected by RupaKit product composition;
     Swift-CAD owns only generic checked tessellation limits and RupaEvaluation
     owns cumulative provider-neutral admission. Limit, overflow, cancellation,

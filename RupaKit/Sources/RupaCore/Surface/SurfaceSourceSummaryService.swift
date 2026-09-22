@@ -792,7 +792,9 @@ public struct SurfaceSourceSummaryService: Sendable {
             guard let featureID = sceneNode.reference?.featureID else {
                 continue
             }
-            mapping[featureID] = sceneNodeID
+            if let sourceID = document.surfaceControlSourceFeatureID(for: featureID) {
+                mapping[sourceID] = sceneNodeID
+            }
         }
         return mapping
     }

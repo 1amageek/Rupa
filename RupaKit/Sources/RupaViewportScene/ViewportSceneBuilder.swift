@@ -325,6 +325,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceKnotDisplaysByFeatureID: surfaceKnotDisplaysByFeatureID,
+                    surfaceSpanDisplaysByFeatureID: surfaceSpanDisplaysByFeatureID,
                     surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
@@ -1367,6 +1369,9 @@ public struct ViewportSceneBuilder {
                 }
                 references[subshapeID.featureID] = SurfaceReference(subshape: stableReference)
             }
+            for (_, trim, _) in authoredSurfaceTrims(in: document) {
+                references[trim.target.featureID] = SurfaceReference(subshape: trim.target.face)
+            }
             return references
         } catch {
             return [:]
@@ -1707,6 +1712,7 @@ public struct ViewportSceneBuilder {
             typeID: resolvedTypeID,
             declaredProperties: object?.properties ?? ObjectPropertySet()
         )
+        let controlSourceID = document.surfaceControlSourceFeatureID(for: featureID)
         let component = ViewportBodyComponent(
             bodyID: snapshot.bodyID,
             subshapeID: snapshot.subshapeID,
@@ -1719,11 +1725,11 @@ public struct ViewportSceneBuilder {
             yMaxMeters: snapshot.bounds.maxY,
             mesh: snapshot.mesh,
             topology: ViewportBodyTopology(snapshot.topology),
-            surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? [],
+            surfaceControlPointDisplays: controlSourceID.flatMap { surfaceControlPointDisplaysByFeatureID[$0] } ?? [],
             surfaceTrimEndpointDisplays: surfaceTrimEndpointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimControlPointDisplays: surfaceTrimControlPointDisplaysByFeatureID[featureID] ?? [],
-            surfaceKnotDisplays: surfaceKnotDisplaysByFeatureID[featureID] ?? [],
-            surfaceSpanDisplays: surfaceSpanDisplaysByFeatureID[featureID] ?? [],
+            surfaceKnotDisplays: controlSourceID.flatMap { surfaceKnotDisplaysByFeatureID[$0] } ?? [],
+            surfaceSpanDisplays: controlSourceID.flatMap { surfaceSpanDisplaysByFeatureID[$0] } ?? [],
             surfaceTrimKnotDisplays: surfaceTrimKnotDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimSpanDisplays: surfaceTrimSpanDisplaysByFeatureID[featureID] ?? [],
             surfaceFrameDisplays: surfaceFrameDisplaysByFeatureID[featureID] ?? []

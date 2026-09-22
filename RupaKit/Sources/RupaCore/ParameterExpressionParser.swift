@@ -209,6 +209,10 @@ public struct ParameterExpressionParser {
         }
 
         func normalizedSingleLiteral(_ expression: CADExpression) -> CADExpression {
+            if case .multiply(.constant(let sign), .constant(let magnitude)) = expression,
+               sign.kind == .scalar, sign.value == -1, magnitude.kind == .scalar {
+                return normalizedSingleLiteral(.constant(.scalar(-magnitude.value)))
+            }
             guard case .constant(let quantity) = expression,
                   quantity.kind == .scalar,
                   targetKind != .scalar else {

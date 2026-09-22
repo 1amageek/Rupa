@@ -877,6 +877,7 @@ extension DesignDocument {
         let existingTrim = existingSurfaceTrimOperation(for: surfaceResolution.featureID)
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
+        let previousMetadata = productMetadata
         do {
             if trimLoops.isEmpty {
                 if let existingTrim {
@@ -915,12 +916,25 @@ extension DesignDocument {
                 )
             }
             cadDocument = updatedCADDocument
+            let oldOutputID = existingTrim?.node.id ?? surfaceResolution.featureID
+            let newOutputID = existingSurfaceTrimOperation(for: surfaceResolution.featureID)?.node.id
+                ?? surfaceResolution.featureID
+            for nodeID in productMetadata.sceneNodes.keys {
+                guard var node = productMetadata.sceneNodes[nodeID],
+                      node.reference?.kind == .body,
+                      node.reference?.featureID == oldOutputID else { continue }
+                node.reference = .body(newOutputID)
+                try node.object?.retargetModelingCADRepresentation(to: newOutputID)
+                productMetadata.sceneNodes[nodeID] = node
+            }
             try validate(objectRegistry: objectRegistry)
         } catch let editorError as EditorError {
             cadDocument = previousCADDocument
+            productMetadata = previousMetadata
             throw editorError
         } catch {
             cadDocument = previousCADDocument
+            productMetadata = previousMetadata
             throw EditorError(
                 code: .commandInvalid,
                 message: "B-spline surface trim loops produced invalid source geometry: \(error)."
@@ -940,6 +954,21 @@ extension DesignDocument {
             return (node, trim)
         }
         return nil
+    }
+
+    /// The editable control surface behind a presented body, when one exists.
+    public func surfaceControlSourceFeatureID(for featureID: FeatureID) -> FeatureID? {
+        switch cadDocument.designGraph.nodes[featureID]?.operation {
+        case .bSplineSurface, .polySpline:
+            return featureID
+        case .surfaceTrim(let trim):
+            guard case .bSplineSurface = cadDocument.designGraph.nodes[trim.target.featureID]?.operation else {
+                return nil
+            }
+            return trim.target.featureID
+        default:
+            return nil
+        }
     }
 
     func generatedPatchFaceReference(

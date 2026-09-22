@@ -5,6 +5,99 @@ import SwiftCAD
 
 @Suite("Modeling operation drafts", .timeLimit(.minutes(1)))
 struct ModelingOperationDraftTests {
+    @Test func topologyAmountsRetainParameterExpressions() throws {
+        var document = DesignDocument.empty()
+        let body = try addBody(to: &document)
+        try document.upsertParameter(name: "wall_thickness", expression: .length(0.0002, .meter), kind: .length)
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let face = try #require(topology.entries.first { $0.kind == .face }?.selectionTarget())
+        let edge = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
+        let expression = try ParameterExpressionParser().parse("wall_thickness * 2",
+            parameters: document.cadDocument.parameters, targetKind: .length)
+        for kind in [ModelingOperationDraft.Kind.shell, .fillet, .chamfer, .g2Blend] {
+            var draft = makeDraft(kind, targets: [kind == .shell ? face : edge])
+            draft.distance = "wall_thickness * 2"
+            let command = try draft.command(in: document)
+            switch kind {
+            case .shell: #expect(command == .createBodyShell(name: draft.name, target: face, thickness: expression))
+            case .fillet: #expect(command == .createBodyEdgeTreatment(name: draft.name, target: edge, treatment: .fillet(radius: expression)))
+            case .chamfer: #expect(command == .createBodyEdgeTreatment(name: draft.name, target: edge, treatment: .chamfer(distance: expression)))
+            default: #expect(command == .createBodyEdgeTreatment(name: draft.name, target: edge, treatment: .g2Blend(distance: expression)))
+            }
+            for invalid in ["missingParameter", "wall_thickness / 0", "-wall_thickness", "2 deg"] {
+                draft.distance = invalid
+                #expect(throws: (any Error).self) { try draft.command(in: document) }
+            }
+        }
+        #expect(document.productMetadata.sceneNodes[body.sceneNodeID] != nil)
+    }
+
+    @Test func shellDraftUsesSelectedOpeningAndPhysicalThickness() throws {
+        let session = EditorSession()
+        _ = try #require(session.createDefaultExtrudedRectangle())
+        let topology = try TopologySnapshotService().snapshot(document: session.document, metricPolicy: .omit)
+        let face = try #require(topology.entries.first { $0.kind == .face }?.selectionTarget())
+        var draft = makeDraft(.shell, targets: [face])
+        draft.distance = "2 mm"
+        #expect(try draft.command(in: session.document) == .createBodyShell(
+            name: "Shell", target: face, thickness: .length(0.002, .meter)))
+        draft.distance = "0"
+        #expect(throws: EditorError.self) { try draft.command(in: session.document) }
+        draft.distance = "2 mm"
+        draft.targets = [.init(sceneNodeID: face.sceneNodeID)]
+        #expect(throws: EditorError.self) { try draft.command(in: session.document) }
+    }
+
+    @Test func doubleHelicalDraftRetainsAngleLawAndExplicitAllowance() throws {
+        var document = DesignDocument.empty()
+        let profile = try addProfile(to: &document, z: 0)
+        let path = try document.createLineSketch(name: "Path", plane: .yz,
+            start: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            end: SketchPoint(x: .length(0, .meter), y: .length(0.03, .meter)))
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
+        var draft = makeDraft(.sweep, targets: [profile.target, .init(sceneNodeID: node.id)])
+        draft.doubleHelical = true
+        draft.twistAngle = "30"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.approximationTolerance = "0.001 mm"
+        guard case .createSweep(_, _, _, _, _, let options) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(options.twistAngle == .angle(0, .degree))
+        #expect(options.approximationTolerance == .length(0.000001, .meter))
+        #expect(options.twistLaw == [
+            .init(position: 0, angle: .angle(0, .degree)),
+            .init(position: 0.5, angle: .angle(30, .degree)),
+            .init(position: 1, angle: .angle(0, .degree))
+        ])
+    }
+
+    @Test func sheetDraftsUseNativeSourceCommands() throws {
+        var patch = makeDraft(.surfacePatch)
+        patch.width = "100 mm"
+        patch.height = "50 mm"
+        let store = CADDocumentStore(document: .empty())
+        _ = try store.apply(patch.command(in: store.document))
+        let topology = try TopologySnapshotService().snapshot(document: store.document, metricPolicy: .omit)
+        let target = try #require(topology.entries.first { $0.kind == .face }?.selectionTarget())
+        var offset = makeDraft(.surfaceOffset, targets: [target])
+        offset.distance = "-2 mm"
+        #expect(try offset.command(in: store.document) == .createSheetSurfaceEdit(
+            name: "Sheet Offset", target: target, edit: .offset(distance: .multiply(.constant(.scalar(-1)), .length(0.002, .meter)))))
+        offset.distance = "-2"
+        #expect(try offset.command(in: store.document) == .createSheetSurfaceEdit(
+            name: "Sheet Offset", target: target, edit: .offset(distance: .length(-0.002, .meter))))
+        offset.distance = "0"
+        #expect(throws: EditorError.self) { try offset.command(in: store.document) }
+        var extend = makeDraft(.surfaceExtend, targets: [target])
+        extend.uBounds = ["0.1", "0.9"]
+        #expect(try extend.command(in: store.document) == .createSheetSurfaceEdit(
+            name: "Extend Trim", target: target, edit: .extend(uDomain: .closed(0.1, 0.9), vDomain: .closed(0, 1))))
+        extend.uBounds = ["1", "0"]
+        #expect(throws: EditorError.self) { try extend.command(in: store.document) }
+    }
+
     @Test func boxForwardsExplicitUnitsAndEvaluates() throws {
         var draft = makeDraft(.box)
         draft.width = "20 mm"

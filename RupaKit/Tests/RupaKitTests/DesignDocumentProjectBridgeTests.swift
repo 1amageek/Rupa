@@ -9,6 +9,93 @@ import SwiftCAD
 import Testing
 
 @Test(.timeLimit(.minutes(1)))
+func trimmedSurfaceKeepsSourceControlsAndRestoresPresentationOnClear() throws {
+    let session = EditorSession()
+    _ = try session.execute(.createBSplineSurface(name: "Patch", surface: .bilinearPatch(
+        bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+        topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0))))
+    let original = session.document
+    let source = try #require(SurfaceSourceSummaryService().summarize(document: original,
+        displayUnit: .millimeter).sources.first)
+    let face = try #require(source.patches.first?.faceSelectionReference)
+    let corners = [SurfaceParameter(u: 0.2, v: 0.2), SurfaceParameter(u: 0.8, v: 0.2),
+        SurfaceParameter(u: 0.8, v: 0.8), SurfaceParameter(u: 0.2, v: 0.8)]
+    let loop = SurfaceTrimLoop(role: .outer, parameterCurves: (0..<4).map {
+        .polyline([corners[$0], corners[($0 + 1) % 4]])
+    })
+    _ = try session.execute(.setSurfaceTrimLoops(target: face, trimLoops: [loop]))
+    let trimmed = session.document
+    let trimmedSource = try #require(SurfaceSourceSummaryService().summarize(document: trimmed,
+        displayUnit: .millimeter).sources.first)
+    #expect(trimmedSource.sceneNodeID == source.sceneNodeID)
+    #expect(trimmedSource.patches.first?.faceSelectionReference == face)
+    let control = try #require(trimmedSource.patches.first?.controlPoints.first?.selectionReference)
+    _ = try session.execute(.moveSurfaceControlPoint(target: control,
+        deltaX: .length(0, .meter), deltaY: .length(0, .meter), deltaZ: .length(0.001, .meter)))
+    #expect(session.document.cadDocument.designGraph != trimmed.cadDocument.designGraph)
+    _ = try session.undo()
+    #expect(session.document.cadDocument.designGraph == trimmed.cadDocument.designGraph)
+    let selectedFace = try #require(TopologySnapshotService().snapshot(document: trimmed, metricPolicy: .omit)
+        .entries.first { $0.kind == .face }?.selectionTarget())
+    guard case .face(let selectedComponent) = selectedFace.component else {
+        Issue.record("Trim output must expose a selectable face.")
+        return
+    }
+    #expect(trimmedSource.patches.first?.faceSelectionComponentID == selectedComponent.rawValue)
+    let factory = DefaultDesignDocumentProjectEvaluatorFactory()
+    let evaluator = try factory.makeEvaluator(for: trimmed, reusing: session.currentEvaluation)
+    let rendered = try evaluator.evaluate(project: DesignDocumentProjectBridge().sourceModel(for: trimmed),
+        purpose: .presentation, revision: .init(1))
+    #expect(rendered.occurrences.count == 1)
+    _ = try session.execute(.setSurfaceTrimLoops(target: face, trimLoops: []))
+    let clearedGraph = session.document.cadDocument.designGraph
+    #expect(clearedGraph.nodes == original.cadDocument.designGraph.nodes)
+    #expect(clearedGraph.order == original.cadDocument.designGraph.order)
+    #expect(clearedGraph.dependencies == original.cadDocument.designGraph.dependencies)
+    #expect(clearedGraph.revision.value > original.cadDocument.designGraph.revision.value)
+    #expect(session.document.productMetadata == original.productMetadata)
+    _ = try session.undo()
+    #expect(session.document.cadDocument.designGraph == trimmed.cadDocument.designGraph)
+    #expect(session.document.productMetadata == trimmed.productMetadata)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func topologyEditsPublishOnlyTheCurrentBodyAndPreserveOccurrence() throws {
+    for sheet in [false, true] {
+        let session = EditorSession()
+        if sheet {
+            _ = try session.execute(.createBSplineSurface(name: "Patch", surface: .bilinearPatch(
+                bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+                topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0))))
+        } else {
+            _ = try #require(session.createDefaultExtrudedRectangle())
+        }
+        let factory = DefaultDesignDocumentProjectEvaluatorFactory()
+        func evaluate() throws -> EvaluatedProjectSnapshot {
+            let evaluator = try factory.makeEvaluator(for: session.document, reusing: session.currentEvaluation)
+            return try evaluator.evaluate(project: DesignDocumentProjectBridge().sourceModel(for: session.document),
+                purpose: .presentation, revision: .init(1))
+        }
+        let initial = try evaluate()
+        let topology = try TopologySnapshotService().snapshot(document: session.document, metricPolicy: .omit)
+        let target = try #require(topology.entries.first { $0.kind == (sheet ? .face : .edge) }?.selectionTarget())
+        if sheet {
+            _ = try session.execute(.createSheetSurfaceEdit(name: "Offset", target: target,
+                edit: .offset(distance: .length(0.002, .meter))))
+        } else {
+            _ = try session.execute(.createBodyEdgeTreatment(name: "Fillet", target: target,
+                treatment: .fillet(radius: .length(0.001, .meter))))
+        }
+        let edited = try evaluate()
+        #expect(edited.occurrences.count == 1)
+        #expect(Set(edited.occurrences.keys) == Set(initial.occurrences.keys))
+        #expect(edited.occurrences.values.first?.mesh != initial.occurrences.values.first?.mesh)
+        _ = try session.undo()
+        #expect(try evaluate().occurrences.values.first?.mesh == initial.occurrences.values.first?.mesh)
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cadConversionReuseRemainsAdmittedAndSafeAcrossConcurrentEvaluators() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

@@ -920,6 +920,11 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    owner. A gesture the user supersedes by releasing a route is a cancellation
    rather than a refusal and reports nothing.
    Every affordance drag measures on the mounted frame.
+   Generated-edge Fillet/Chamfer drag previews prepare Core's native topology
+   transaction and replace the same occurrence in a request-local document.
+   The preview cache evaluates that candidate; release submits the identical
+   native treatment intent to Workspace. Neither path rewrites profile corners
+   or accepts a display subdivision count as physical shape.
    `Viewport.updateAffordanceDrag`, the edge treatment drag preview, and the
    profile corner, profile face, edge chamfer, and edge fillet commit routes
    take their quantities from `MeshSourcePresentationPlanCache` queries made

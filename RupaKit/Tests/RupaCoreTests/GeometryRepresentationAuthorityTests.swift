@@ -226,6 +226,64 @@ func patternCopyRemapsCADRepresentationInsteadOfStoredFeatureID() throws {
     ))
 }
 
+@Test(.timeLimit(.minutes(1)), arguments: [0, 1, 2])
+func topologyEditsPreserveIndependentPresentationAndProvenance(operation: Int) throws {
+    var document = DesignDocument.empty(named: "Mixed topology edit")
+    let featureID: FeatureID
+    if operation == 0 {
+        featureID = try document.createExtrudedRectangle(name: "Body", plane: .xy,
+            width: .length(0.1, .meter), height: .length(0.1, .meter),
+            depth: .length(0.1, .meter), direction: .normal)
+    } else {
+        featureID = try document.createBSplineSurface(name: "Patch", surface: .bilinearPatch(
+            bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+            topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0)))
+    }
+    let nodeID = try #require(document.productMetadata.sceneNodes.first { $0.value.reference == .body(featureID) }?.key)
+    var object = try #require(document.productMetadata.sceneNodes[nodeID]?.object)
+    let cadID = try #require(object.geometryRepresentations.selection?.modeling)
+    let meshID: GeometryRepresentationID = "presentation.mesh"
+    let identity = try ContentIdentity(domain: "rupa.cad-source",
+        fingerprint: ContentFingerprint(algorithm: "source-revision", value: "before-edit"))
+    let asset = try AuthoredMeshAsset(source: triangleMesh(identity: "mesh.retained"),
+        provenance: .derivedFromCAD(representationID: cadID, sourceIdentity: identity))
+    document.authoredMeshAssets[asset.id] = asset
+    object.geometryRepresentations.representations[meshID] = .init(id: meshID, source: .authoredMesh(asset.id))
+    object.geometryRepresentations.selection = .init(modeling: cadID, presentation: meshID)
+    document.productMetadata.sceneNodes[nodeID]?.object = object
+    _ = try document.validate()
+    let session = EditorSession(document: document)
+    if operation == 2 {
+        let source = try #require(SurfaceSourceSummaryService().summarize(document: document,
+            displayUnit: .millimeter).sources.first)
+        let face = try #require(source.patches.first?.faceSelectionReference)
+        let points = [SurfaceParameter(u: 0.2, v: 0.2), SurfaceParameter(u: 0.8, v: 0.2),
+            SurfaceParameter(u: 0.8, v: 0.8), SurfaceParameter(u: 0.2, v: 0.8)]
+        let loop = SurfaceTrimLoop(role: .outer, parameterCurves: (0..<4).map {
+            .polyline([points[$0], points[($0 + 1) % 4]])
+        })
+        _ = try session.execute(.setSurfaceTrimLoops(target: face, trimLoops: [loop]))
+        #expect(session.document.productMetadata.sceneNodes[nodeID]?.object?.geometryRepresentations.selection == object.geometryRepresentations.selection)
+        _ = try session.execute(.setSurfaceTrimLoops(target: face, trimLoops: []))
+    } else {
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let target = try #require(topology.entries.first { $0.kind == (operation == 0 ? .edge : .face) }?.selectionTarget())
+        let command: EditorCommand = operation == 0
+            ? .createBodyEdgeTreatment(name: "Fillet", target: target, treatment: .fillet(radius: .length(0.001, .meter)))
+            : .createSheetSurfaceEdit(name: "Offset", target: target, edit: .offset(distance: .length(0.002, .meter)))
+        _ = try session.execute(command)
+    }
+    _ = try session.document.validate()
+    let edited = try #require(session.document.productMetadata.sceneNodes[nodeID]?.object)
+    #expect(edited.geometryRepresentations.selection == object.geometryRepresentations.selection)
+    #expect(edited.geometryRepresentations.representations.count == 2)
+    #expect(edited.geometryRepresentations.representations[meshID] == object.geometryRepresentations.representations[meshID])
+    #expect(session.document.authoredMeshAssets == document.authoredMeshAssets)
+    _ = try session.undo()
+    #expect(session.document.authoredMeshAssets == document.authoredMeshAssets)
+    #expect(session.document.productMetadata.sceneNodes[nodeID]?.object?.geometryRepresentations.selection == object.geometryRepresentations.selection)
+}
+
 private func representationSet(
     representationID: GeometryRepresentationID,
     source: GeometrySourceReference

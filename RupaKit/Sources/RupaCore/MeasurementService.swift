@@ -1289,7 +1289,9 @@ public struct MeasurementService {
             return nil
         }
         let twistAngle = try resolvedAngle(sweep.options.twistAngle, parameters: parameters)
-        guard abs(twistAngle) <= tolerance.angle else {
+        guard sweep.options.twistLaw == nil,
+              sweep.options.approximationTolerance == nil,
+              abs(twistAngle) <= tolerance.angle else {
             return nil
         }
         let endScale = try resolvedScalar(sweep.options.endScale, parameters: parameters)

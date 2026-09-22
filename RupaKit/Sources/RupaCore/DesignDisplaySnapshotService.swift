@@ -659,6 +659,8 @@ public struct DesignDisplaySnapshotService: Sendable {
         parameters: ParameterTable
     ) -> StraightPrismSweepDisplaySnapshot? {
         guard sweep.sections.count == 1,
+              sweep.options.twistLaw == nil,
+              sweep.options.approximationTolerance == nil,
               let profile = sweep.sections.first?.profile,
               sweep.guides.isEmpty,
               sweep.options.resultKind == .solid,

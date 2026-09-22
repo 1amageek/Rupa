@@ -14,7 +14,7 @@ existing application/domain adapters through the public Core contracts.
 
 Parent: [RupaKit package design](../../DESIGN.md). Children include
 [SpatialPathEditing](SpatialPathEditing/DESIGN.md) and
-[BodyEdgeTreatment](BodyEdgeTreatment/DESIGN.md).
+[TopologyEditing](TopologyEditing/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -24,6 +24,12 @@ every construction plane. Cylinder wall offsets retain the center and change the
 radius. Plane and transformed-placement regression tests own this invariant.
 
 ### Spatial path editing
+
+Authored B-spline trim retains its original surface feature as the CV/knot edit
+authority while the same scene occurrence presents the current trim output.
+`surfaceControlSourceFeatureID(for:)` owns this distinction for summary and
+viewport consumers. Trim removal restores the source presentation atomically;
+dependent features prevent removal rather than being silently rewired.
 
 [SpatialPathEditing](SpatialPathEditing/DESIGN.md) owns explicit planar-to-spatial
 conversion and transactional edits of spatial source knots. It uses Swift-CAD's

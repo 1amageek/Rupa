@@ -218,9 +218,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         let faceSelectionReference: SelectionReference? = surfaceReference.map {
             .surface(.whole($0))
         }
-        let resolvedFaceSubshapeID = faceEntry?.subshapeID
+        let displayedFaceEntry = authoredTrimFeatureID.flatMap { trimID in
+            topologyEntriesByPersistentName.values.first { $0.kind == .face && $0.sourceFeatureID == trimID.description }
+        } ?? faceEntry
+        let resolvedFaceSubshapeID = displayedFaceEntry?.subshapeID
             ?? authoredTrimTargetFace.map { GeneratedSubshapeIdentity.string(for: $0.subshapeID) }
-        let resolvedFaceSelectionComponentID = faceEntry?.selectionComponentID
+        let resolvedFaceSelectionComponentID = displayedFaceEntry?.selectionComponentID
             ?? authoredTrimTargetFace.map {
                 SelectionComponentID.generatedTopology($0.subshapeID).rawValue
             }

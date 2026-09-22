@@ -3058,11 +3058,9 @@ private extension ViewportSpatialOverlayProducer {
                 let wantsFillet = input.interactiveRoutes.contains(.edgeFillet)
                 let wantsChamfer = input.interactiveRoutes.contains(.profileEdgeChamfer)
                 guard wantsFillet || wantsChamfer else { continue }
-                // The legacy interaction route omits generated or otherwise
-                // non-corner edges that cannot carry an edge treatment.
-                // Preserve that disabled-result semantics while resolving
-                // generated corner edges through the same document authority
-                // when possible.
+                guard componentID.generatedTopologySubshapeID != nil else { continue }
+                // The handle mapping supports profile corner edges; other
+                // generated edges use the native numeric operation draft.
                 guard let edge = viewportBodyEdge(
                     for: componentID,
                     target: target,

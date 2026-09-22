@@ -472,6 +472,9 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             return true
         case .face, .edge, .vertex:
             if reference?.kind == .body {
+                if let featureID = sourceFeatureID(for: component) {
+                    return reference?.featureID == featureID
+                }
                 return true
             }
             return isComponentInstanceSubobject(

@@ -97,6 +97,12 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.angle, path: "revolve.angle")
         case .sweep(let feature):
             record(feature.options.twistAngle, path: "sweep.options.twistAngle")
+            if let allowance = feature.options.approximationTolerance {
+                record(allowance, path: "sweep.options.approximationTolerance")
+            }
+            for (index, knot) in (feature.options.twistLaw ?? []).enumerated() {
+                record(knot.angle, path: "sweep.options.twistLaw[\(index)].angle")
+            }
             record(feature.options.endScale, path: "sweep.options.endScale")
             record(feature.options.distanceFraction, path: "sweep.options.distanceFraction")
         case .spatialPath,

@@ -149,7 +149,8 @@ func profileCornerHandlesAnchorEveryGeneratedVertexWithoutAnOffset() throws {
     }
 }
 
-@Test
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
     // The two edge handles share one anchor, so only their fixed screen offsets
     // keep their footprints apart.
@@ -162,27 +163,28 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
             < ProfileMetrics.chamferOffsetPoints - ProfileMetrics.filletOffsetPoints
     )
 
-    let featureID = FeatureID()
-    let nodeID = SceneNodeID()
-    let item = profileBodyItem(
-        featureID: featureID,
-        nodeID: nodeID,
-        topology: ViewportBodyTopology(
-            edges: [
-                .init(
-                    componentID: .bodyEdgeLeftBottom,
-                    start: Point3D(x: -1, y: 0, z: -1),
-                    end: Point3D(x: 1, y: 0, z: -1)
-                ),
-            ]
-        )
-    )
-    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(.bodyEdgeLeftBottom))
-    let raw = profileRawInput(
-        item: item,
-        targets: [target],
-        routes: [.edgeFillet, .profileEdgeChamfer]
-    )
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let scene = ViewportSceneBuilder().build(document: session.document, ruler: .standard(for: .meter))
+    let item = try #require(scene.items.first { $0.featureID == featureID })
+    let nodeID = try #require(item.sceneNodeID)
+    guard case .body(let body) = item.kind else { Issue.record("Expected body"); return }
+    let edge = try #require(body.topology?.edges.first { edge in
+        do {
+            return try GeneratedTopologySelectionResolver().cornerEdge(
+                for: .init(sceneNodeID: nodeID, component: .edge(edge.componentID)),
+                in: session.document, objectRegistry: .builtIn,
+                operationName: "Edge handle fixture") == .leftBottom
+        } catch {
+            // Cap edges are not profile-corner edges; continue locating the fixture.
+            return false
+        }
+    })
+    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(edge.componentID))
+    let raw = ProfileRawInput(document: session.document, scene: scene,
+        selection: .init(selectedTargets: [target]), ruler: .standard(for: .meter),
+        enabledRoutes: [.edgeFillet, .profileEdgeChamfer], interactiveRoutes: [.edgeFillet, .profileEdgeChamfer])
     var interactionRecords: [ViewportSpatialInteractionRecord] = []
     let source = try #require(
         try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
@@ -196,7 +198,8 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
     #expect(source.cameraPaths.count == 2)
 
     let edit = ViewportObjectEditState(item: item)
-    let anchor = Point3D(x: 0, y: 0, z: -1)
+    let anchor = Point3D(x: (edge.start.x + edge.end.x) * 0.5,
+        y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
     let toward = edit.worldPoint(edit.centerPoint)
     let expected: [(ViewportAffordanceAction, CGFloat)] = [
         (.profileEdgeFillet(target, .leftBottom), ProfileMetrics.filletOffsetPoints),

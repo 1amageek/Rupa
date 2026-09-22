@@ -86,6 +86,11 @@ directions share the same immutable lookup result.
 
 ## Contracts and Invariants
 
+For an authored B-spline trim, the presented body uses the trim feature while
+CV, knot and span overlays use Core's `surfaceControlSourceFeatureID`.
+Frame and trim boundary overlays retain their evaluated feature IDs. Source edit
+references are not rewritten to the derived body merely for display.
+
 ### World-space navigation focus
 
 `ViewportCamera.focus` is the optional world-space navigation target. An absent

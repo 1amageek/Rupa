@@ -3,11 +3,11 @@ import RupaCore
 
 enum ViewportEdgeTreatmentPreviewRequest: Equatable, Sendable {
     case chamfer(target: SelectionTarget, distance: Double)
-    case fillet(target: SelectionTarget, radius: Double, segmentCount: Int)
+    case fillet(target: SelectionTarget, radius: Double)
 
     var target: SelectionTarget {
         switch self {
-        case .chamfer(let target, _), .fillet(let target, _, _): return target
+        case .chamfer(let target, _), .fillet(let target, _): return target
         }
     }
 }
@@ -21,24 +21,20 @@ struct ViewportEdgeTreatmentPreviewDocumentBuilder: Sendable {
 
     func previewDocument(
         for request: ViewportEdgeTreatmentPreviewRequest,
-        in document: DesignDocument
+        in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> DesignDocument {
         var preview = document
+        let treatment: BodyEdgeTreatment
         switch request {
-        case .chamfer(let target, let distance):
-            try preview.chamferBodyEdges(
-                targets: [target],
-                distance: .length(distance, .meter),
-                objectRegistry: objectRegistry
-            )
-        case .fillet(let target, let radius, let segmentCount):
-            try preview.filletBodyEdges(
-                targets: [target],
-                radius: .length(radius, .meter),
-                segmentCount: segmentCount,
-                objectRegistry: objectRegistry
-            )
+        case .chamfer(_, let distance): treatment = .chamfer(distance: .length(distance, .meter))
+        case .fillet(_, let radius): treatment = .fillet(radius: .length(radius, .meter))
         }
+        let transaction = try preview.prepareBodyEdgeTreatment(
+            name: "Edge treatment", target: request.target, treatment: treatment, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        try preview.appendTopologyEdit(transaction, replacing: request.target, objectRegistry: objectRegistry)
         return preview
     }
 }

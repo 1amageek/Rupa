@@ -1806,16 +1806,34 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .createBodyEdgeTreatment:
+        case .createBodyEdgeTreatment, .createSheetSurfaceEdit, .createBodyShell:
             func run() throws {
-                guard case .createBodyEdgeTreatment(let name, let target, let treatment) = command else {
-                    throw EditorError(code: .commandInvalid, message: "Expected native edge treatment command.")
+                let transaction: FeatureGraphTransaction
+                let presentationTarget: SelectionTarget
+                switch command {
+                case .createBodyEdgeTreatment(let name, let target, let treatment):
+                    presentationTarget = target
+                    transaction = try document.prepareBodyEdgeTreatment(
+                        name: name, target: target, treatment: treatment, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                case .createSheetSurfaceEdit(let name, let target, let edit):
+                    presentationTarget = target
+                    transaction = try document.prepareSheetSurfaceEdit(
+                        name: name, target: target, edit: edit, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                case .createBodyShell(let name, let target, let thickness):
+                    presentationTarget = target
+                    transaction = try document.prepareBodyShell(
+                        name: name, target: target, thickness: thickness, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                default:
+                    throw EditorError(code: .commandInvalid, message: "Expected native topology edit command.")
                 }
-                let transaction = try document.prepareBodyEdgeTreatment(
-                    name: name, target: target, treatment: treatment, objectRegistry: objectRegistry
-                )
                 var updated = document
-                _ = try updated.appendFeatureGraph(transaction, objectRegistry: objectRegistry)
+                try updated.appendTopologyEdit(transaction, replacing: presentationTarget, objectRegistry: objectRegistry)
                 document = updated
                 primaryFeatureID = transaction.primaryFeatureID
                 try commitMutation()

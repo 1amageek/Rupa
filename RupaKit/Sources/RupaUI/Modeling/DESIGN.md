@@ -40,6 +40,9 @@ The parent keeps a single cancellable task and a value-only preview state.
 Both operation panels fill their allocated inspector region; their intrinsic form
 height must not shrink the Canvas/inspector split. Each panel contains its child
 accessibility elements so Preview, Apply and field identifiers remain distinct.
+CAD fields use the native grouped form layout so operand descriptions and
+instructions receive the full row width instead of a narrow value column.
+Interactive regions declare their rectangular content shape.
 A new draft invalidates the previous token; late completions cannot restore it.
 Taking a ready request for Apply consumes it before awaiting publication, so
 repeated button events cannot commit twice. Source or selection publication
@@ -82,12 +85,32 @@ path; the row is not a second source graph or a dynamic definition editor.
 ## Contracts and Invariants
 
 Selected-edge Fillet, Chamfer and G2 Blend use the
-[Core native edge treatment](../../RupaCore/BodyEdgeTreatment/DESIGN.md) contract,
+[Core topology editing](../../RupaCore/TopologyEditing/DESIGN.md) contract,
 not extrusion-profile corner rewriting. They require one generated CAD edge
 and an amount above modeling tolerance. The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
 quality, so these forms do not expose them as shape parameters. Existing
 profile-corner manipulation remains a distinct source-editing operation.
+
+Sheet Offset and Extend Trim use the same source transaction and occurrence
+placement contract. Offset accepts signed physical length; Extend Trim accepts
+ordered U/V parameter bounds, not physical lengths or unsupported extrapolation.
+The kernel verifies the selected face belongs to a single-face sheet. Existing
+control-point and boundary-continuity editors remain the editing authority for
+their source surfaces. A Surface Patch draft creates an exact bilinear patch
+through the existing Core creation command, supplying an editable starting sheet.
+
+Shell uses the same topology-edit and Workspace lifecycle: one selected generated
+solid face is the opening and the entered source-coordinate length is thickness.
+The panel states the native orthogonal-hexahedron limitation; actual Preview
+checks feasibility. It creates no separate geometry or mutation owner.
+
+Sweep exposes an explicit rotation angle and positional approximation allowance.
+Double-helical Sweep records angles zero, the entered angle, and zero at path
+fractions zero, one-half, and one. This is one source-preserving solid, not two
+overlapping bodies. Its midpoint is an intentional angular-rate reversal.
+The allowance is independent of display quality and manufacturing tolerance;
+unsupported paths and uncertifiable allowances remain visible Preview failures.
 
 - Primitive entries in the palette and Model menu activate the shared Solid
   canvas tool with a MainView-owned `WorkspaceSolidShape`. Click places a default
@@ -136,8 +159,8 @@ profile-corner manipulation remains a distinct source-editing operation.
 - The form shows ordered operands and their roles. Loft section order can be
   changed explicitly; Boolean's last operand is the tool. Selection replacement
   is explicit. Authored Mesh cannot masquerade as a CAD feature.
-- Feature-only operations other than native edge treatments reject transformed occurrences, including transformed
-  ancestors, instead of ignoring their world placement. Edge treatments retain
+- Feature-only operations other than native topology edits reject transformed occurrences, including transformed
+  ancestors, instead of ignoring their world placement. Topology edits retain
   the occurrence placement and interpret the amount in source coordinates. Kernel limitations
   remain typed failures from actual preview/evaluation, not successful fallbacks.
 - Editing a draft invalidates the parent's previous preview. Apply is enabled
@@ -156,9 +179,12 @@ profile-corner manipulation remains a distinct source-editing operation.
   the panel pays that walk once for every evaluation of its body.
 - The Definitions inspector exposes existing named parameter expressions and
   their dependency/dependent summaries through the existing parameter editor.
-  It does not claim that new creation drafts have dynamic expression binding;
-  graph authoring remains outside this component until the product choice is
-  resolved.
+  Topology-edit amounts retain named length expressions through the existing
+  parameter parser and Core commands. Planning resolves the expression only
+  to check its current finite value and tolerance; it does not replace the
+  source expression with that value. Definitions edits then use existing
+  reevaluation, atomic failure and Undo. Other creation fields remain literal
+  inputs until their source contracts are connected explicitly.
 
 ## State, Ownership, and Lifecycle
 
@@ -174,8 +200,8 @@ selection refusal. For every workspace scale preset it also evaluates the
 command a newly opened primitive draft names, so a default the kernel would
 refuse is a test failure rather than a failure record at run time. It holds
 the two thresholds apart by driving both: a size at the document's distance
-tolerance names no command, while an edge amount at that same tolerance does
-and only a non-positive one is refused. It also holds that an operand
+tolerance names no command, and an edge amount at that same tolerance is also
+refused. It also holds that an operand
 producing no profile is refused before the press, reading the refusal text so
 another precondition cannot pass the check for it. Parent
 integration tests own preview cancellation, stale completion and

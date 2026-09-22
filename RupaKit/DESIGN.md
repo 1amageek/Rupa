@@ -61,6 +61,13 @@ exported for those tools; application targets never depend on it.
 
 ## Responsibilities and Boundaries
 
+Precision modeling uses the [system source-authority policy](../DESIGN.md).
+[Core topology editing](Sources/RupaCore/TopologyEditing/DESIGN.md) owns native
+edge and sheet source intents; [Modeling UI](Sources/RupaUI/Modeling/DESIGN.md)
+owns their editable drafts and explicit Sweep approximation input. The existing
+Workspace remains the Preview/Apply/Undo authority. No separate precise/simple
+document modes or duplicate geometry stores are introduced.
+
 The package-local `RupaGeometryBufferBenchmark` and `RupaPerformanceBenchmark`
 executables verify internal chunk sizing, copy budgets, and evaluation counts
 through package-only APIs. Neither is a production dependency or a public

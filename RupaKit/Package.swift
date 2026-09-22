@@ -194,7 +194,7 @@ let package = Package(
                 .product(name: "CADTopology", package: "swift-CAD"),
                 .product(name: "Collections", package: "swift-collections"),
             ],
-            exclude: ["DESIGN.md", "BodyEdgeTreatment/DESIGN.md"]
+            exclude: ["DESIGN.md", "TopologyEditing/DESIGN.md"]
         ),
         .target(
             name: "RupaCoreTypes",

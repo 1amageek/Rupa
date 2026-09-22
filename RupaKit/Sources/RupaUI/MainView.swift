@@ -6149,9 +6149,9 @@ private struct ProjectMainViewContent: View {
             return
         }
         submitSource(
-            .chamferBodyEdges(
-                targets: [target.target],
-                distance: .length(target.distance, .meter)
+            .createBodyEdgeTreatment(
+                name: "Chamfer", target: target.target,
+                treatment: .chamfer(distance: .length(target.distance, .meter))
             )
         )
     }
@@ -6162,10 +6162,9 @@ private struct ProjectMainViewContent: View {
             return
         }
         submitSource(
-            .filletBodyEdges(
-                targets: [target.target],
-                radius: .length(target.radius, .meter),
-                segmentCount: 8
+            .createBodyEdgeTreatment(
+                name: "Fillet", target: target.target,
+                treatment: .fillet(radius: .length(target.radius, .meter))
             )
         )
     }

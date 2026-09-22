@@ -240,6 +240,18 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         }
     }
 
+    /// Retargets an edited CAD output without reidentifying retained source or provenance.
+    mutating func retargetModelingCADRepresentation(to featureID: FeatureID) throws {
+        guard let id = geometryRepresentations.selection?.modeling,
+              var representation = geometryRepresentations.representations[id],
+              case let .cad(sourceID, _) = representation.source else {
+            throw EditorError(code: .commandInvalid,
+                message: "CAD output editing requires a selected modeling CAD representation.")
+        }
+        representation.source = .cad(sourceID: sourceID, outputID: featureID.description)
+        geometryRepresentations.representations[id] = representation
+    }
+
     mutating func remapCADRepresentations(
         using featureIDMap: [FeatureID: FeatureID]
     ) throws {

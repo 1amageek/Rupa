@@ -42,24 +42,32 @@ struct ModelingOperationView: View {
                 .accessibilityIdentifier("Modeling.instructions")
             Form {
                 TextField("Name", text: $draft.name)
-                if ![.box, .cylinder, .sphere].contains(draft.kind) {
+                if ![.box, .cylinder, .sphere, .surfacePatch].contains(draft.kind) {
                     Section("Operands (source coordinates)") {
                         ForEach(draft.targets.indices, id: \.self) { index in
                             HStack {
                                 Text(draft.operandTitle(at: index, in: document))
                                 Spacer()
                                 Button { draft.targets.swapAt(index, index - 1) } label: { Image(systemName: "arrow.up") }
+                                    .contentShape(Rectangle())
                                     .disabled(index == 0)
                                     .accessibilityLabel("Move operand up")
                                 Button { draft.targets.remove(at: index) } label: { Image(systemName: "minus.circle") }
+                                    .contentShape(Rectangle())
                                     .accessibilityLabel("Remove operand")
                             }
                         }
                         Button("Use Current Selection", action: onUseSelection)
+                            .contentShape(Rectangle())
                     }
                 }
                 parameters
+                if [.shell, .fillet, .chamfer, .g2Blend, .surfaceOffset].contains(draft.kind) {
+                    Text("Amounts accept length expressions and named parameters from Definitions. Parameter changes reevaluate the applied operation.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
+            .formStyle(.grouped)
             .disabled(isBusy)
             if let refusal {
                 Text(refusal).foregroundStyle(.secondary).font(.callout).textSelection(.enabled)
@@ -72,10 +80,13 @@ struct ModelingOperationView: View {
             if isBusy { ProgressView("Evaluating…").controlSize(.small) }
             HStack {
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+                    .contentShape(Rectangle())
                 Spacer()
                 Button("Preview", action: onPreview).disabled(isBusy || refusal != nil)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("Modeling.preview")
                 Button("Apply", action: onApply).disabled(isBusy || !hasMatchingPreview)
+                    .contentShape(Rectangle())
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("Modeling.apply")
             }
@@ -93,6 +104,23 @@ struct ModelingOperationView: View {
             lengthField("Width X", text: $draft.width)
             lengthField("Width Y", text: $draft.height)
             lengthField("Depth Z", text: $draft.distance)
+        case .surfacePatch:
+            vectorFields("Origin", values: $draft.origin, unit: draft.unit.symbol)
+            lengthField("Width X", text: $draft.width)
+            lengthField("Width Y", text: $draft.height)
+        case .surfaceOffset:
+            lengthField("Signed normal offset", text: $draft.distance)
+        case .shell:
+            lengthField("Wall thickness", text: $draft.distance)
+            Text("Remove the selected face and hollow the body inward. The native Shell currently requires one orthogonal six-face solid; Preview verifies the wall thickness fits.")
+                .font(.caption).foregroundStyle(.secondary)
+        case .surfaceExtend:
+            Text("Expand the trim within the underlying surface domain. U/V are surface parameters, not lengths.")
+                .font(.caption).foregroundStyle(.secondary)
+            TextField("U minimum", text: $draft.uBounds[0])
+            TextField("U maximum", text: $draft.uBounds[1])
+            TextField("V minimum", text: $draft.vBounds[0])
+            TextField("V maximum", text: $draft.vBounds[1])
         case .cylinder, .sphere:
             vectorFields(draft.kind == .sphere ? "Center" : "Base center", values: $draft.origin, unit: draft.unit.symbol)
             lengthField("Radius", text: $draft.width)
@@ -106,6 +134,11 @@ struct ModelingOperationView: View {
             TextField("Angle (degrees)", text: $draft.angle)
         case .sweep:
             Text("Select the section first, optional guides next, and the path last.").font(.caption).foregroundStyle(.secondary)
+            TextField("Twist angle (degrees)", text: $draft.twistAngle)
+            Toggle("Reverse twist at midpoint (double helix)", isOn: $draft.doubleHelical)
+            lengthField("Positional approximation allowance", text: $draft.approximationTolerance)
+            Text("Twisted sweeps require a straight path normal to the section and no guides. For double helix, the angle is reached at the midpoint and returns to zero at the end. The allowance is a shape error bound, not display quality or manufacturing tolerance.")
+                .font(.caption).foregroundStyle(.secondary)
         case .loft:
             Toggle("Sheet output", isOn: $draft.sheet)
             Toggle("Smooth connectors", isOn: $draft.smooth)
