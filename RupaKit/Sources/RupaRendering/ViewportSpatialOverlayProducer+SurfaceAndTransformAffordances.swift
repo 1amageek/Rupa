@@ -136,6 +136,7 @@ extension ViewportSpatialOverlayProducer {
             let document: DesignDocument
             let scene: ViewportScene
             let selection: SelectionModel
+            var edgeTreatmentHoverTarget: SelectionTarget?
             let editedBodies: [FeatureID: ViewportObjectEditState]
             var bodyPreviewTransforms: [String: Transform3D] = [:]
             var allowsBodyResize = false
@@ -2991,7 +2992,15 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
-        for target in input.selection.selectedTargets {
+        var targets = input.selection.selectedTargets
+        if let target = input.edgeTreatmentHoverTarget,
+           case .edge = target.component,
+           targets.contains(SelectionTarget(sceneNodeID: target.sceneNodeID)),
+           input.document.productMetadata.sceneNodes[target.sceneNodeID]?.isLocked == false,
+           !targets.contains(target) {
+            targets.append(target)
+        }
+        for target in targets {
             switch target.component {
             case .vertex(let componentID):
                 guard input.interactiveRoutes.contains(.profileCorner) else { continue }

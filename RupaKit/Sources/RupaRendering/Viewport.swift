@@ -135,6 +135,7 @@ public struct Viewport: View {
     @State private var placementHighlightFailureDescription: String?
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var hoveredCanvasHit: ViewportHit?
+    @State private var edgeTreatmentHoverTarget: SelectionTarget?
     @State private var hoveredModelPoint: Point2D?
     @State private var measurementSession = ViewportMeasurementSession()
     @State private var automaticMeasurementSummary: String?
@@ -935,6 +936,7 @@ public struct Viewport: View {
                 resetMeasurement()
             }
             .onChange(of: selection.selectedTargets) { _, _ in
+                edgeTreatmentHoverTarget = nil
                 cancelNativeInputGesture()
             }
             .onChange(of: selection.selectedReferences) { _, _ in
@@ -959,6 +961,7 @@ public struct Viewport: View {
                 clearCanvasHover()
             }
             .onChange(of: sourceIdentity) { _, _ in
+                edgeTreatmentHoverTarget = nil
                 if presentationScene == nil { bodyCommitHandoff.observe(sourceIdentity) }
                 cancelNativeInputGesture()
                 clearDragPreviewDocument()
@@ -1535,6 +1538,7 @@ public struct Viewport: View {
             key.bodyTransformMutation = bodyCommitHandoff.mutation
         }
         key.hoveredHit = showsConstructionHighlight ? hoveredCanvasHit : nil
+        key.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         if let drag = activeCanvasDrag, case .creation(let kind) = drag.kind {
             key.creation = .init(kind: kind, drag: drag.modelDrag, plane: drag.sketchPlane)
         }
@@ -1729,7 +1733,8 @@ public struct Viewport: View {
     private func presentationCADSubshapeHit(
         at point: CGPoint,
         visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
-        in scene: ViewportScene
+        in scene: ViewportScene,
+        includesSelectedObjectEdges: Bool = false
     ) throws -> ViewportHit? {
         let probe = try ViewportNativePresentationFrameProbe(
             planCache: presentationPlanCache,
@@ -1863,7 +1868,11 @@ public struct Viewport: View {
                 at: point,
                 topology: topology,
                 modelTransform: item.modelTransform,
-                selectionHitPolicy: selectionHitPolicy,
+                selectionHitPolicy: includesSelectedObjectEdges
+                    && selectionHitPolicy == .object
+                    && selection.selectedTargets.contains(SelectionTarget(sceneNodeID: sceneNodeID))
+                    && document.productMetadata.sceneNodes[sceneNodeID]?.isLocked == false
+                    ? .edge : selectionHitPolicy,
                 visibleSurface: sceneNodeID == visibleSceneNodeID ? visibleFace : nil,
                 probe: probe
             ) else {
@@ -5032,6 +5041,7 @@ public struct Viewport: View {
                 }
             }
         } catch {
+            if ViewportNativeQueryFailure.isTransient(error) { return }
             clearCanvasHover()
             return
         }
@@ -5056,7 +5066,8 @@ public struct Viewport: View {
                 nativeCADHit = try presentationCADSubshapeHit(
                     at: point,
                     visibleSurface: presentationSurface,
-                    in: scene
+                    in: scene,
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil || onEdgeChamferDrag != nil
                 )
             }
             if selectedPresentationHasExactCADContext,
@@ -5071,6 +5082,13 @@ public struct Viewport: View {
             return
         }
         let hit = nativeCADHit
+        if let hit, let nodeID = hit.sceneNodeID,
+           let component = hit.selectionComponent, case .edge = component,
+           selection.selectedTargets.contains(SelectionTarget(sceneNodeID: nodeID)) {
+            edgeTreatmentHoverTarget = SelectionTarget(sceneNodeID: nodeID, component: component)
+        } else {
+            edgeTreatmentHoverTarget = nil
+        }
         hoveredCanvasHit = hit
         let sketchPlane = canvasDragSketchPlane(for: hit)
         hoveredModelPoint = canvasInput(
@@ -5106,6 +5124,7 @@ public struct Viewport: View {
     }
 
     private func clearCanvasHover() {
+        edgeTreatmentHoverTarget = nil
         clearHoverInteractionTargets()
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
@@ -5730,6 +5749,7 @@ extension Viewport {
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
         result.bodyPreviewTransforms = presentationScene == nil ? bodyPreviewTransforms : [:]
+        result.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         result.allowsBodyResize = onBodyResizeCommit != nil
         result.presentationScene = presentationScene
         result.presentationNodeIDs = presentationSceneNodeIDByOccurrenceID

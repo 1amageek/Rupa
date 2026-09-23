@@ -2279,7 +2279,7 @@ private struct ProjectMainViewContent: View {
 
     private var viewportEdgeChamferDragHandler: ((ViewportEdgeChamferDragTarget) -> Void)? {
         guard selectedTool == .select,
-              selectionScope == .edge,
+              selectionScope == .edge || selectionScope == .object,
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2290,7 +2290,7 @@ private struct ProjectMainViewContent: View {
 
     private var viewportEdgeFilletDragHandler: ((ViewportEdgeFilletDragTarget) -> Void)? {
         guard selectedTool == .select,
-              selectionScope == .edge,
+              selectionScope == .edge || selectionScope == .object,
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -6177,7 +6177,7 @@ private struct ProjectMainViewContent: View {
 
     private func handleViewportEdgeChamferDrag(_ target: ViewportEdgeChamferDragTarget) {
         guard selectedTool == .select,
-              selectionScope == .edge else {
+              selectionScope == .edge || selectionScope == .object else {
             return
         }
         submitSource(
@@ -6190,7 +6190,7 @@ private struct ProjectMainViewContent: View {
 
     private func handleViewportEdgeFilletDrag(_ target: ViewportEdgeFilletDragTarget) {
         guard selectedTool == .select,
-              selectionScope == .edge else {
+              selectionScope == .edge || selectionScope == .object else {
             return
         }
         submitSource(

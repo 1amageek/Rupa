@@ -455,6 +455,41 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
 }
 
 @Test
+func selectedObjectHoverEmitsBothEdgeTreatmentsOnlyForAnUnlockedOwner() throws {
+    let featureID = FeatureID()
+    let nodeID = SceneNodeID()
+    let edgeID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(edgeID))
+    let objectTarget = SelectionTarget(sceneNodeID: nodeID)
+    let item = ViewportSceneItem(id: "body", featureID: featureID, sceneNodeID: nodeID,
+        modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+        kind: .body(component: ViewportBodyComponent(sizeXMeters: 2, sizeYMeters: 1,
+            sizeZMeters: 2, yMinMeters: 0, yMaxMeters: 1,
+            topology: ViewportBodyTopology(edges: [.init(componentID: edgeID,
+                start: Point3D(x: -1, y: 0, z: -1), end: Point3D(x: 1, y: 0, z: -1))]))))
+    for selected in [false, true] {
+        for locked in [false, true] {
+            var document = bodyTransformTestDocument([item])
+            document.productMetadata.sceneNodes[nodeID]?.isLocked = locked
+            let selection = SelectionModel(selectedTargets: selected ? [objectTarget] : [])
+            var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+                document: document, scene: ViewportScene(items: [item]), selection: selection,
+                ruler: .standard(for: .meter), enabledRoutes: [.edgeFillet, .profileEdgeChamfer])
+            raw.edgeTreatmentHoverTarget = edgeTarget
+            var records: [ViewportSpatialInteractionRecord] = []
+            _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+                from: raw, interactionRecords: &records, checkpoint: { _, _, _ in })
+            #expect(records.count == (selected && !locked ? 2 : 0))
+            #expect(records.allSatisfy { record in
+                guard case .affordance(let target, _, _, _) = record.target else { return false }
+                return target.selectionTarget == edgeTarget
+            })
+            #expect(raw.selection == selection)
+        }
+    }
+}
+
+@Test
 func unsupportedEdgeFilletSelectionProducesNoHandle() throws {
     let nodeID = SceneNodeID()
     let target = SelectionTarget(

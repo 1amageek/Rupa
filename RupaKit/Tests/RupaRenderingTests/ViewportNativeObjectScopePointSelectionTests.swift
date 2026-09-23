@@ -182,6 +182,84 @@ func viewportNativeObjectScopeFixtureCarriesBothOccurrencesAsSceneItems() async 
 // MARK: - Object scope
 
 @MainActor
+@Test(.timeLimit(.minutes(1)))
+func objectScopeHoverTransfersToBothEdgeTreatmentHandles() async throws {
+    _ = NSApplication.shared
+    let fixture = try rectangleSelectionFixture()
+    let control = objectScopeControlSession()
+    let geometry = try rectangleSelectionScreenGeometry(fixture: fixture, control: control)
+    let size = rectangleSelectionViewportSize
+    let selection = SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: fixture.cadSceneNodeID)])
+    var picks: [ViewportCanvasTarget] = []
+    var fillets: [ViewportEdgeFilletDragTarget] = []
+    var chamfers: [ViewportEdgeChamferDragTarget] = []
+    let viewport = Viewport(document: fixture.document,
+        sourceIdentity: .document(id: fixture.document.id, generation: fixture.generation),
+        controlSession: control, presentationScene: fixture.presentationScene,
+        presentationSceneNodeIDByOccurrenceID: fixture.sceneNodeIDByOccurrenceID,
+        workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: fixture.ruler),
+        currentEvaluation: fixture.currentEvaluation, selection: selection,
+        objectSelectionIndex: .init(document: fixture.document, selection: selection),
+        selectionHitPolicy: .object, allowsObjectAffordances: false,
+        presentationCADInteractionSceneNodeIDs: fixture.interactionSceneNodeIDs,
+        selectedPresentationHasExactCADContext: true, onPick: { picks.append($0) },
+        onEdgeChamferDrag: { chamfers.append($0) }, onEdgeFilletDrag: { fillets.append($0) })
+        .frame(width: size.width, height: size.height)
+    let controller = NSHostingController(rootView: viewport)
+    let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    controller.view.frame = CGRect(origin: .zero, size: size)
+    window.contentViewController = controller
+    window.contentView?.layoutSubtreeIfNeeded()
+    defer { window.contentViewController = nil; window.close() }
+    func input(_ view: NSView) -> ViewportInputSurface.InputView? {
+        if let input = view as? ViewportInputSurface.InputView { return input }
+        for child in view.subviews { if let found = input(child) { return found } }
+        return nil
+    }
+    let readyPoint = try objectScopeCADPoint(geometry: geometry)
+    let deadline = ContinuousClock.now.advanced(by: .seconds(15))
+    while picks.last?.hit == nil, ContinuousClock.now < deadline {
+        input(controller.view)?.onPick?(readyPoint, size, .replace)
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(try #require(picks.last?.hit).selectionComponent == .object)
+    // The left front vertical edge is not hidden by the fixture's right-half occluder.
+    let edge = try #require(fixture.topology.edges.first { edge in
+        abs(edge.start.x - geometry.worldBounds.minX) < 1e-6
+            && abs(edge.end.x - geometry.worldBounds.minX) < 1e-6
+            && abs(edge.start.z - geometry.worldBounds.maxZ) < 1e-6
+            && abs(edge.end.z - geometry.worldBounds.maxZ) < 1e-6
+    })
+    let anchor = try #require(geometry.layout.projectedPoint(Point3D(
+        x: edge.start.x, y: (edge.start.y + edge.end.y) / 2, z: edge.start.z))?.point)
+    // Front/back silhouette edges coincide in this parallel view. Compare
+    // against the mounted edge-scope resolver, not topology array order.
+    let reference = try await objectScopePicks(fixture: fixture, control: control,
+        selectionHitPolicy: .edge, readyPoint: anchor, points: [anchor])
+    let expectedComponent = try #require(reference.first?.target.hit?.selectionComponent)
+    for offset in [CGFloat(18), CGFloat(38)] {
+        let handle = CGPoint(x: anchor.x + offset, y: anchor.y)
+        input(controller.view)?.onHover?(anchor, size)
+        try await Task.sleep(for: .milliseconds(400))
+        input(controller.view)?.onHover?(handle, size)
+        try await Task.sleep(for: .milliseconds(400))
+        let surface = try #require(input(controller.view))
+        surface.onPress?(handle, size, .replace)
+        let end = CGPoint(x: handle.x + 5, y: handle.y)
+        surface.onDragPreview?(handle, end, size)
+        surface.onCanvasDrag?(handle, end, size, .replace)
+        try await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(fillets.count == 1)
+    #expect(chamfers.count == 1)
+    #expect(fillets.first?.target.component == expectedComponent)
+    #expect(chamfers.first?.target.component == expectedComponent)
+    #expect(selection.selectedTargets == [SelectionTarget(sceneNodeID: fixture.cadSceneNodeID)])
+}
+
+@MainActor
 @Test(.timeLimit(.minutes(5)))
 func viewportNativeObjectScopeSelectsTheOccurrenceTheFrameDrew() async throws {
     _ = NSApplication.shared

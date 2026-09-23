@@ -22,6 +22,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var nativeWorldPointValue: ViewportNativeWorldPointInput.Value?
     var bodyTransformMutation: Transform3D?
     var hoveredHit: ViewportHit?
+    var edgeTreatmentHoverTarget: SelectionTarget?
     var creation: Creation?
     var hasCanvasDrag = false
     var modifierControl = false
