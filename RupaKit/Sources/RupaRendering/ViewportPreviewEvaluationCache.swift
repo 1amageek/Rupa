@@ -22,20 +22,30 @@ enum ViewportPreviewEvaluationState {
 /// The viewport builds preview documents that no project authority ever
 /// publishes, so no published evaluation can match them. This cache prepares
 /// their evaluation off `MainActor` through the existing `EvaluationScheduler`
-/// and exposes it only while its revision is still current. Scene construction
-/// never evaluates a preview document on the thread that draws it.
+/// and retains completed display candidates within the current source context.
+/// Exact readiness queries still require the requested revision. Scene
+/// construction never evaluates a preview document on the thread that draws it.
 ///
 /// The scheduler call is synchronous inside an owned detached worker, while the
 /// evaluation kernel observes that worker's cancellation at its cooperative
-/// checkpoints. Replacement and teardown cancel that actual worker. At most
+/// checkpoints. Context replacement and teardown cancel that actual worker. At most
 /// one worker is in flight; a revision requested while it is running replaces
-/// any earlier waiting request and starts when the cancelled worker exits. A
+/// any earlier waiting request and starts when the running worker exits. A
 /// request identity is checked in addition to the revision so a clear/restart
 /// with the same revision cannot publish an older completion.
 @Observable
 @MainActor
 final class ViewportPreviewEvaluationCache {
     private(set) var state: ViewportPreviewEvaluationState = .idle
+
+    struct DisplayPreview {
+        let document: DesignDocument
+        let revision: UInt64
+        let cache: EvaluatedDocumentCache?
+    }
+
+    private(set) var displayPreview: DisplayPreview?
+    @ObservationIgnored private var context: (documentID: DocumentID, generation: DocumentGeneration)?
 
     /// The number of evaluations actually started. Coalescing is observable
     /// only through this count: requesting many revisions during one drag must
@@ -129,8 +139,7 @@ final class ViewportPreviewEvaluationCache {
 
     /// Requests the evaluation of `document` for `revision`. Repeating the call
     /// for the revision the current state already describes does nothing.
-    /// Replacing an in-flight request cancels its actual worker and retains only
-    /// this newest request until that worker exits.
+    /// Retains the newest pending request without starving the running worker.
     func prepare(
         document: DesignDocument,
         generation: DocumentGeneration,
@@ -138,6 +147,10 @@ final class ViewportPreviewEvaluationCache {
         reusing previous: EvaluatedDocument?,
         objectRegistry: ObjectTypeRegistry
     ) {
+        if let context, context.documentID != document.id || context.generation != generation {
+            clear()
+        }
+        context = (document.id, generation)
         guard describedRevision != revision else {
             return
         }
@@ -153,7 +166,6 @@ final class ViewportPreviewEvaluationCache {
         state = .preparing(revision: revision)
         guard activeWorker == nil else {
             pendingRequest = request
-            activeWorker?.cancel()
             return
         }
         start(request)
@@ -162,6 +174,8 @@ final class ViewportPreviewEvaluationCache {
     /// Drops the waiting request, cancels the actual worker, and returns to
     /// `idle`. A late result can no longer reach any state.
     func clear() {
+        context = nil
+        displayPreview = nil
         pendingRequest = nil
         currentRequestID = nil
         activeWorker?.cancel()
@@ -232,6 +246,7 @@ final class ViewportPreviewEvaluationCache {
             let workerWasCancelled = worker.isCancelled || Task.isCancelled
             self?.finish(
                 workerResult: workerResult,
+                document: request.document,
                 revision: request.revision,
                 requestID: request.id,
                 workerWasCancelled: workerWasCancelled
@@ -241,6 +256,7 @@ final class ViewportPreviewEvaluationCache {
 
     private func finish(
         workerResult: WorkerResult,
+        document: DesignDocument,
         revision: UInt64,
         requestID: UUID,
         workerWasCancelled: Bool
@@ -251,12 +267,23 @@ final class ViewportPreviewEvaluationCache {
         activeRequestID = nil
         activeWorker = nil
         completedEvaluationCount += 1
+        if !workerWasCancelled, currentRequestID != nil,
+           case .evaluated(let result) = workerResult {
+            switch result.snapshot.status {
+            case .valid, .notEvaluated:
+                displayPreview = DisplayPreview(document: document, revision: revision,
+                    cache: result.evaluationCache)
+            case .failed:
+                break
+            }
+        }
         if !workerWasCancelled,
            currentRequestID == requestID,
            describedRevision == revision,
            case .evaluated(let result) = workerResult {
             switch result.snapshot.status {
             case .failed(let message):
+                displayPreview = nil
                 state = .failed(revision: revision, message: message)
             case .valid, .notEvaluated:
                 state = .ready(revision: revision, cache: result.evaluationCache)

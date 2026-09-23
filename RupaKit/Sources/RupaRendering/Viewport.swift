@@ -1266,12 +1266,11 @@ public struct Viewport: View {
     }
 
     /// A preview document is projected only together with its own evaluation.
-    /// While that evaluation is preparing or has failed, the viewport keeps
-    /// projecting the published document and its published evaluation.
+    /// A completed candidate remains visible while the newest sample evaluates.
     private var rendersDragPreviewDocument: Bool {
         dragPreviewDocument != nil
             && sceneDocumentGeneration != nil
-            && previewEvaluationCache.isReady(for: dragPreviewRevision)
+            && previewEvaluationCache.displayPreview != nil
     }
 
     private var publishedEvaluatedDocument: EvaluatedDocument? {
@@ -1279,7 +1278,7 @@ public struct Viewport: View {
     }
 
     private var renderingDocument: DesignDocument {
-        rendersDragPreviewDocument ? (dragPreviewDocument ?? document) : document
+        rendersDragPreviewDocument ? (previewEvaluationCache.displayPreview?.document ?? document) : document
     }
 
     private var renderingCurrentEvaluation: DocumentEvaluationContext? {
@@ -1290,7 +1289,7 @@ public struct Viewport: View {
         guard rendersDragPreviewDocument else {
             return evaluationCache
         }
-        return previewEvaluationCache.readyCache(for: dragPreviewRevision)
+        return previewEvaluationCache.displayPreview?.cache
     }
 
     /// Scene construction may evaluate on this thread only for the published
@@ -1489,7 +1488,7 @@ public struct Viewport: View {
            rendersDragPreviewDocument {
             source = .dragPreview(
                 documentID: sceneDocument(usesDragPreviewDocument: true).id,
-                revision: dragPreviewRevision
+                revision: previewEvaluationCache.displayPreview?.revision ?? dragPreviewRevision
             )
         } else {
             switch sourceIdentity {

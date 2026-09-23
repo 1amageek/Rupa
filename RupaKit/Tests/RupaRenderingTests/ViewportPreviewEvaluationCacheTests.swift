@@ -106,6 +106,54 @@ func viewportPreviewEvaluationDiscardsAStaleRevision() async throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func viewportPreviewEvaluationDisplaysProgressWhileLatestRequestWaits() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let first = try previewChamferDocument(from: session.document, distance: 0.001)
+    let latest = try previewChamferDocument(from: session.document, distance: 0.002)
+    let gate = Mutex((calls: 0, releaseFirst: false, releaseLatest: false))
+    let cache = ViewportPreviewEvaluationCache(evaluationOperation: { document, generation, registry, previous in
+        let call = gate.withLock { state in state.calls += 1; return state.calls }
+        while !gate.withLock({ call == 1 ? $0.releaseFirst : $0.releaseLatest }), !Task.isCancelled {
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        return EvaluationScheduler().evaluateResult(document: document, generation: generation,
+            objectRegistry: registry, reusing: previous)
+    })
+    defer {
+        gate.withLock { $0.releaseFirst = true; $0.releaseLatest = true }
+        cache.clear()
+    }
+    cache.prepare(document: first, generation: session.generation, revision: 1,
+        reusing: session.currentEvaluation?.evaluatedDocument, objectRegistry: .builtIn)
+    try await waitUntil { gate.withLock { $0.calls == 1 } }
+    for revision in 2...30 {
+        cache.prepare(document: latest, generation: session.generation, revision: UInt64(revision),
+            reusing: session.currentEvaluation?.evaluatedDocument, objectRegistry: .builtIn)
+    }
+    gate.withLock { $0.releaseFirst = true }
+    try await waitUntil { cache.completedEvaluationCount == 1 }
+    let display = try #require(cache.displayPreview)
+    #expect(display.revision == 1)
+    #expect(display.document.cadDocument.designGraph == first.cadDocument.designGraph)
+    #expect(display.cache?.evaluatedDocument.document.designGraph == first.cadDocument.designGraph)
+    #expect(!cache.isReady(for: 30))
+    #expect(cache.startedEvaluationCount == 2)
+    gate.withLock { $0.releaseLatest = true }
+    try await settle(cache, revision: 30)
+    #expect(cache.displayPreview?.revision == 30)
+    #expect(cache.displayPreview?.document.cadDocument.designGraph == latest.cadDocument.designGraph)
+    // A different source generation must not retain the previous picture,
+    // even when its local preview revision restarts at the same value.
+    cache.prepare(document: latest, generation: try session.generation.advanced(), revision: 30,
+        reusing: nil, objectRegistry: .builtIn)
+    #expect(cache.displayPreview == nil)
+    cache.clear()
+    #expect(cache.displayPreview == nil)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func viewportPreviewEvaluationCoalescesRequestsMadeDuringOneDrag() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

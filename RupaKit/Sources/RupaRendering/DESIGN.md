@@ -1,5 +1,23 @@
 # RupaRendering
 
+## Continuous CAD Preview Progress
+
+`ViewportPreviewEvaluationCache` retains one running evaluation and one newest
+pending request within a document/generation. Pointer updates do not cancel a
+running evaluation. Successful completions publish an immutable display tuple
+of document, revision and evaluation, even while a newer request is pending.
+Viewport keys and builds that picture exclusively from the completed tuple;
+it never pairs the latest requested document with an older evaluation. Exact
+`isReady(for:)`/`readyCache(for:)` queries still require the requested revision.
+Source replacement, gesture cancellation, failure and teardown cancel workers
+and discard the display tuple. Different document/generation requests clear the
+previous context before enqueueing. Release still commits the final measured
+amount through Core, never the intermediate display candidate.
+
+Continuous-preview tests must reject cancellation starvation, mixed document/
+evaluation publication and cross-context/cleared late completions. Timing the
+kernel alone does not establish native input-to-display latency.
+
 ## Purpose and Scope
 
 `RupaRendering` owns the bounded, postpublication presentation contract for one
