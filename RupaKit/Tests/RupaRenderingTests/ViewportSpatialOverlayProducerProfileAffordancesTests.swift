@@ -170,85 +170,79 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
     let item = try #require(scene.items.first { $0.featureID == featureID })
     let nodeID = try #require(item.sceneNodeID)
     guard case .body(let body) = item.kind else { Issue.record("Expected body"); return }
-    let edge = try #require(body.topology?.edges.first { edge in
-        do {
-            return try GeneratedTopologySelectionResolver().cornerEdge(
-                for: .init(sceneNodeID: nodeID, component: .edge(edge.componentID)),
-                in: session.document, objectRegistry: .builtIn,
-                operationName: "Edge handle fixture") == .leftBottom
-        } catch {
-            // Cap edges are not profile-corner edges; continue locating the fixture.
-            return false
-        }
-    })
-    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(edge.componentID))
-    let raw = ProfileRawInput(document: session.document, scene: scene,
-        selection: .init(selectedTargets: [target]), ruler: .standard(for: .meter),
-        enabledRoutes: [.edgeFillet, .profileEdgeChamfer], interactiveRoutes: [.edgeFillet, .profileEdgeChamfer])
-    var interactionRecords: [ViewportSpatialInteractionRecord] = []
-    let source = try #require(
-        try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
-            from: raw,
-            interactionRecords: &interactionRecords,
-            checkpoint: { _, _, _ in }
-        )
-    )
-
-    #expect(source.cameraLines.count == 2)
-    #expect(source.cameraPaths.count == 2)
-
-    let edit = ViewportObjectEditState(item: item)
-    let anchor = Point3D(x: (edge.start.x + edge.end.x) * 0.5,
-        y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
-    let toward = edit.worldPoint(edit.centerPoint)
-    let expected: [(ViewportAffordanceAction, CGFloat)] = [
-        (.profileEdgeFillet(target, .leftBottom), ProfileMetrics.filletOffsetPoints),
-        (.profileEdgeChamfer(target, .leftBottom), ProfileMetrics.chamferOffsetPoints),
-    ]
-    for (action, offsetPoints) in expected {
-        let identity = ViewportSpatialHandleIdentity.affordance(
-            ViewportAffordanceTarget(
-                featureID: featureID,
-                selectionTarget: target,
-                action: action
+    let edges = try #require(body.topology?.edges)
+    #expect(edges.count == 12)
+    for edge in edges {
+        let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(edge.componentID))
+        let raw = ProfileRawInput(document: session.document, scene: scene,
+            selection: .init(selectedTargets: [target]), ruler: .standard(for: .meter),
+            enabledRoutes: [.edgeFillet, .profileEdgeChamfer], interactiveRoutes: [.edgeFillet, .profileEdgeChamfer])
+        var interactionRecords: [ViewportSpatialInteractionRecord] = []
+        let source = try #require(
+            try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+                from: raw,
+                interactionRecords: &interactionRecords,
+                checkpoint: { _, _, _ in }
             )
         )
-        let path = try #require(source.cameraPaths.first { $0.identity == identity })
-        #expect(!path.placement.usesFixedOffset)
-        #expect(path.placement.minimumLength == nil)
-        #expect(path.placement.parallel == offsetPoints)
-        #expect(path.placement.perpendicular == 0)
-        #expect(path.placement.anchor == anchor)
-        #expect(path.placement.toward == toward)
-        #expect(path.hitTolerancePoints == Float(ProfileMetrics.hitTolerancePoints))
 
-        let line = try #require(
-            source.cameraLines.first {
-                $0.points.count == 2 && $0.points[1].parallel == offsetPoints
+        #expect(source.cameraLines.count == 2)
+        #expect(source.cameraPaths.count == 2)
+
+        let edit = ViewportObjectEditState(item: item)
+        let anchor = Point3D(x: (edge.start.x + edge.end.x) * 0.5,
+            y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
+        let toward = edit.worldPoint(edit.centerPoint)
+        let frame = try ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
+        let expected: [(ViewportAffordanceAction, CGFloat)] = [
+            (.profileEdgeFillet(target, frame), ProfileMetrics.filletOffsetPoints),
+            (.profileEdgeChamfer(target, frame), ProfileMetrics.chamferOffsetPoints),
+        ]
+        for (action, offsetPoints) in expected {
+            let identity = ViewportSpatialHandleIdentity.affordance(
+                ViewportAffordanceTarget(
+                    featureID: featureID,
+                    selectionTarget: target,
+                    action: action
+                )
+            )
+            let path = try #require(source.cameraPaths.first { $0.identity == identity })
+            #expect(!path.placement.usesFixedOffset)
+            #expect(path.placement.minimumLength == nil)
+            #expect(path.placement.parallel == offsetPoints)
+            #expect(path.placement.perpendicular == 0)
+            #expect(path.placement.anchor == anchor)
+            #expect(path.placement.toward == toward)
+            #expect(path.hitTolerancePoints == Float(ProfileMetrics.hitTolerancePoints))
+
+            let line = try #require(
+                source.cameraLines.first {
+                    $0.points.count == 2 && $0.points[1].parallel == offsetPoints
+                }
+            )
+            #expect(line.identity == nil)
+            #expect(line.hitTolerancePoints == nil)
+            #expect(line.points[0].usesFixedOffset)
+            #expect(line.points[0].anchor == anchor)
+            #expect(line.points[1].anchor == anchor)
+            #expect(interactionRecords.contains { $0.identity == identity && $0.occurrenceID == item.id })
+        }
+
+        // The fillet is emitted first, so an equal-distance hit resolves to it.
+        let filletIndex = try #require(
+            interactionRecords.firstIndex {
+                guard case .affordance(let affordance) = $0.identity else { return false }
+                return affordance.action == .profileEdgeFillet(target, frame)
             }
         )
-        #expect(line.identity == nil)
-        #expect(line.hitTolerancePoints == nil)
-        #expect(line.points[0].usesFixedOffset)
-        #expect(line.points[0].anchor == anchor)
-        #expect(line.points[1].anchor == anchor)
-        #expect(interactionRecords.contains { $0.identity == identity && $0.occurrenceID == item.id })
+        let chamferIndex = try #require(
+            interactionRecords.firstIndex {
+                guard case .affordance(let affordance) = $0.identity else { return false }
+                return affordance.action == .profileEdgeChamfer(target, frame)
+            }
+        )
+        #expect(filletIndex < chamferIndex)
     }
-
-    // The fillet is emitted first, so an equal-distance hit resolves to it.
-    let filletIndex = try #require(
-        interactionRecords.firstIndex {
-            guard case .affordance(let affordance) = $0.identity else { return false }
-            return affordance.action == .profileEdgeFillet(target, .leftBottom)
-        }
-    )
-    let chamferIndex = try #require(
-        interactionRecords.firstIndex {
-            guard case .affordance(let affordance) = $0.identity else { return false }
-            return affordance.action == .profileEdgeChamfer(target, .leftBottom)
-        }
-    )
-    #expect(filletIndex < chamferIndex)
 }
 
 @Test
@@ -298,8 +292,10 @@ func profileRoutesEmitNothingWhenTheirRouteIsNotInteractive() throws {
 @Test
 func profileEdgeHandleRefusesAnEdgeSelectionBodyTopologyDoesNotBack() throws {
     let nodeID = SceneNodeID()
-    let item = profileBodyItem(featureID: FeatureID(), nodeID: nodeID, topology: nil)
-    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(.bodyEdgeLeftBottom))
+    let featureID = FeatureID()
+    let item = profileBodyItem(featureID: featureID, nodeID: nodeID, topology: nil)
+    let componentID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
+    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(componentID))
     let raw = profileRawInput(item: item, targets: [target], routes: [.edgeFillet])
     var interactionRecords: [ViewportSpatialInteractionRecord] = []
     #expect(throws: MeshSourcePresentationRenderError.self) {

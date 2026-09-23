@@ -325,10 +325,11 @@ func surfaceTransformSourcePropagatesCheckpointCancellationBeforeAllocation() {
 func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
     let featureID = FeatureID()
     let nodeID = SceneNodeID()
+    let componentID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
     let topology = ViewportBodyTopology(
         edges: [
             .init(
-                componentID: .bodyEdgeLeftBottom,
+                componentID: componentID,
                 start: Point3D(x: -1, y: 0, z: -1),
                 end: Point3D(x: 1, y: 0, z: -1)
             ),
@@ -348,7 +349,8 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
             topology: topology
         ))
     )
-    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(.bodyEdgeLeftBottom))
+    let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(componentID))
+    let frame = try ViewportEdgeTreatmentDragFrame(anchor: Point3D(x: 0, y: 0, z: -1), modelTransform: item.modelTransform)
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
         document: .empty(),
         scene: ViewportScene(items: [item]),
@@ -379,14 +381,14 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         $0.identity == .affordance(.init(
             featureID: featureID,
             selectionTarget: target,
-            action: .profileEdgeFillet(target, .leftBottom)
+            action: .profileEdgeFillet(target, frame)
         )) && $0.occurrenceID == item.id
     })
     let filletRecord = try #require(interactionRecords.first {
         $0.identity == .affordance(.init(
             featureID: featureID,
             selectionTarget: target,
-            action: .profileEdgeFillet(target, .leftBottom)
+            action: .profileEdgeFillet(target, frame)
         )) && $0.occurrenceID == item.id
     })
     guard case .affordance(let filletTarget, let filletMembers, let filletGroupEdit, _) = filletRecord.target else {
@@ -404,7 +406,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         $0.identity == .affordance(.init(
             featureID: featureID,
             selectionTarget: target,
-            action: .profileEdgeFillet(target, .leftBottom)
+            action: .profileEdgeFillet(target, frame)
         )) && $0.occurrenceID == item.id
     })?.modelTransform == item.modelTransform)
 
@@ -445,7 +447,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         $0.identity == .affordance(.init(
             featureID: featureID,
             selectionTarget: target,
-            action: .profileEdgeFillet(target, .leftBottom)
+            action: .profileEdgeFillet(target, frame)
         )) && $0.occurrenceID == item.id
     }))
     #expect(cameraLines[0].value.handleIndex == nil)

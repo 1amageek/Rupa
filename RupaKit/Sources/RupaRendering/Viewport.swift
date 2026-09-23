@@ -4382,14 +4382,8 @@ public struct Viewport: View {
             setDragPreviewDocument(preview, target: selectionTarget)
             return true
         case .profileEdgeChamfer(let selectionTarget, let edge):
-            guard let baseEdit = dragState.baseEdits[target.featureID],
-                  let distance = try baseEdit.profileEdgeChamferDistance(
-                      edge,
-                      start: dragState.startPoint,
-                      current: current,
-                      measure: measure
-                  ),
-                  distance > 1.0e-12 else {
+            let distance = try edge.distance(from: dragState.startPoint, to: current, measure: measure)
+            guard distance > 1.0e-12 else {
                 clearDragPreviewDocument()
                 return true
             }
@@ -4401,14 +4395,8 @@ public struct Viewport: View {
             )
             return true
         case .profileEdgeFillet(let selectionTarget, let edge):
-            guard let baseEdit = dragState.baseEdits[target.featureID],
-                  let radius = try baseEdit.profileEdgeFilletRadius(
-                      edge,
-                      start: dragState.startPoint,
-                      current: current,
-                      measure: measure
-                  ),
-                  radius > 1.0e-12 else {
+            let radius = try edge.distance(from: dragState.startPoint, to: current, measure: measure)
+            guard radius > 1.0e-12 else {
                 clearDragPreviewDocument()
                 return true
             }
@@ -4857,19 +4845,11 @@ public struct Viewport: View {
         to end: CGPoint
     ) throws -> (featureID: FeatureID, target: ViewportEdgeChamferDragTarget)? {
         guard let activeAffordanceDrag,
-              case .profileEdgeChamfer(let target, let edge) = activeAffordanceDrag.target.action,
-              let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
+              case .profileEdgeChamfer(let target, let edge) = activeAffordanceDrag.target.action else {
             return nil
         }
         let measure = try affordanceMeasure()
-        guard let distance = try baseEdit.profileEdgeChamferDistance(
-            edge,
-            start: activeAffordanceDrag.startPoint,
-            current: end,
-            measure: measure
-        ) else {
-            return nil
-        }
+        let distance = try edge.distance(from: activeAffordanceDrag.startPoint, to: end, measure: measure)
         guard distance > 1.0e-12 else {
             return nil
         }
@@ -4886,19 +4866,11 @@ public struct Viewport: View {
         to end: CGPoint
     ) throws -> (featureID: FeatureID, target: ViewportEdgeFilletDragTarget)? {
         guard let activeAffordanceDrag,
-              case .profileEdgeFillet(let target, let edge) = activeAffordanceDrag.target.action,
-              let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
+              case .profileEdgeFillet(let target, let edge) = activeAffordanceDrag.target.action else {
             return nil
         }
         let measure = try affordanceMeasure()
-        guard let radius = try baseEdit.profileEdgeFilletRadius(
-            edge,
-            start: activeAffordanceDrag.startPoint,
-            current: end,
-            measure: measure
-        ) else {
-            return nil
-        }
+        let radius = try edge.distance(from: activeAffordanceDrag.startPoint, to: end, measure: measure)
         guard radius > 1.0e-12 else {
             return nil
         }

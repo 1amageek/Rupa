@@ -613,6 +613,8 @@ public struct TopologySnapshotService: Sendable {
                 return SurfaceSummary(kind: "offset")
             case .ruled:
                 return SurfaceSummary(kind: "ruled")
+            case .rollingBall:
+                return SurfaceSummary(kind: "rollingBall")
             }
         }
     }

@@ -102,8 +102,9 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   candidate evaluation is added inside preparation.
 - Rendering prepares the same transaction in a local document and hands it to
   the existing cancellable preview cache; release uses the same native command.
-  Directional drag handles currently cover profile-corner edges; other generated
-  edges remain available through the numeric native draft, never fake handles.
+  Generated-edge drag handles and numeric drafts share this native command.
+  [Rendering](../../RupaRendering/DESIGN.md) owns pointer-to-source-length
+  measurement; neither route reinterprets the edge as a profile corner.
 
 ## State, Ownership, and Lifecycle
 

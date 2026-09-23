@@ -3059,14 +3059,6 @@ private extension ViewportSpatialOverlayProducer {
                 let wantsChamfer = input.interactiveRoutes.contains(.profileEdgeChamfer)
                 guard wantsFillet || wantsChamfer else { continue }
                 guard componentID.generatedTopologySubshapeID != nil else { continue }
-                // The handle mapping supports profile corner edges; other
-                // generated edges use the native numeric operation draft.
-                guard let edge = viewportBodyEdge(
-                    for: componentID,
-                    target: target,
-                    document: input.document,
-                    objectRegistry: input.objectRegistry
-                ) else { continue }
                 guard
                       let item = sceneItem(for: target, input: input),
                       case .body(let component) = item.kind,
@@ -3079,6 +3071,7 @@ private extension ViewportSpatialOverlayProducer {
                 let start = item.modelTransform.viewportTransformedPoint(sourceEdge.start)
                 let end = item.modelTransform.viewportTransformedPoint(sourceEdge.end)
                 let anchor = midpoint(start, end)
+                let edge = try ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
                 if wantsFillet {
                     try emitProfileHandle(

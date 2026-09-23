@@ -57,11 +57,9 @@ enum ViewportProfileHandleKind: String {
 /// The handle and camera pairs the mounted gesture is proven on.
 ///
 /// The list is explicit rather than a product of handles and cameras. The face
-/// is the one handle whose distance is solved on a single world axis, so it is
-/// the only one an axis-front camera can answer: the other three sample the
-/// profile sketch plane, whose normal is world `y`, and `axisFront(.z)` looks
-/// along world `z`, which leaves that plane edge-on and is a typed refusal
-/// rather than a routing failure.
+/// samples a single world axis and includes an axis-front case. The corner
+/// samples the profile sketch plane; edge treatments use horizontal travel in
+/// the mounted view plane. Isometric cases cover both projection modes.
 enum ViewportProfileHandlePressCase: String, CaseIterable {
     case faceIsometricParallel
     case faceIsometricPerspective
@@ -304,9 +302,10 @@ private struct ProfileHandlePressFixture {
                 y: (start.y + end.y) / 2.0,
                 z: (start.z + end.z) / 2.0
             )
-            // Both edge treatments read the inward corner displacement, and the
-            // left bottom corner is inward along positive world x and z.
-            dragDirection = edit.worldAxis(.x) + edit.worldAxis(.z)
+            // Edge treatments scrub a length horizontally in the mounted view.
+            dragDirection = Vector3D(x: basis.xDirection.dx,
+                                     y: basis.yDirection.dx,
+                                     z: basis.zDirection.dx)
         }
 
         guard let projectedAnchor = layout.projectedPoint(anchor)?.point else {

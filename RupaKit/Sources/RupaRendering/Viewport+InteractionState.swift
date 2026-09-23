@@ -449,7 +449,7 @@ enum ViewportAffordanceAction: Equatable, Sendable {
     case vertexMove(ViewportBodyVertex)
     case profileCornerMove(SelectionTarget, ViewportBodyVertex)
     case profileFaceMove(SelectionTarget, ViewportBodyFace)
-    case profileEdgeChamfer(SelectionTarget, ViewportBodyEdge)
-    case profileEdgeFillet(SelectionTarget, ViewportBodyEdge)
+    case profileEdgeChamfer(SelectionTarget, ViewportEdgeTreatmentDragFrame)
+    case profileEdgeFillet(SelectionTarget, ViewportEdgeTreatmentDragFrame)
     case faceMove(ViewportBodyFace)
 }

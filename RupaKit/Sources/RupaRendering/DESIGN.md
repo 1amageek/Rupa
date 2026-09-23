@@ -803,8 +803,17 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    projected direction is degenerate resolves to nothing, and the frame
    disables the entity rather than drawing it somewhere else.
    The two edge treatments instead share one anchor, the midpoint of the
-   selected body topology edge, so an offset along that ray is the only
-   thing that separates them: 18 pt for `profileEdgeFillet` and 38 pt for
+   selected generated edge, independently of its source feature or profile
+   corner classification. Their drag frame scrubs a source-space length using
+   horizontal pointer travel on the mounted frame's view plane at that anchor.
+   Rightward travel increases the amount; leftward travel returns toward zero.
+   The occurrence inverse transform converts world displacement into source
+   metres, including scaled/rotated occurrences. No profile or global-axis
+   reconstruction participates in preview or release. Both consume the same
+   immutable frame; invalid coordinates, stale cameras and singular transforms
+   refuse rather than commit a guessed value.
+   Offsets toward the body centre separate the two handles:
+   18 pt for `profileEdgeFillet` and 38 pt for
    `profileEdgeChamfer`, each with a 10 pt reach. `38 - 18 >= 10 + 10`
    holds the two reaches apart and the drawn marks span `8 + 8 < 20`, so
    neither crosses the other, and changing one offset re-derives the other
@@ -960,13 +969,14 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    | `faceMove`, `profileFaceMove` | world axis delta | the face centre; the face's own world axis |
    | `vertexMove` | two view plane points | the world point of the box corner |
    | `profileCornerMove` | two world plane points | the world box corner; normal world `y` |
-   | `profileEdgeChamfer`, `profileEdgeFillet` | two world plane points | the world edge midpoint; normal world `y` |
+   | `profileEdgeChamfer`, `profileEdgeFillet` | two view plane points with horizontal screen travel | generated edge midpoint; inverse occurrence transform |
    | `rotate` | two world plane points | box centre; normal the rotation axis |
 
    The two-point routes take the displacement between the two answers and
    resolve it on the retained orthonormal world axes: `vertexMove` on all
-   three, `profileCornerMove` and the two edge treatments on world `x` and
-   `z`, which is the profile sketch plane those commits are expressed in.
+   three and `profileCornerMove` on world `x` and `z`, the profile sketch plane.
+   Edge treatments instead measure displacement length after the occurrence
+   inverse transform, with its sign determined by horizontal pointer travel.
    `rotate` is the exception that keeps both answers rather than their
    difference, because an angle is the difference of two absolute directions
    from the pivot and one displacement cannot state it.
