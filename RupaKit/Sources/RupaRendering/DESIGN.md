@@ -2,19 +2,19 @@
 
 ## Selected-Object Edge Hover
 
-Object-mode hover may query exact edges of selected, unlocked CAD occurrences
-using the existing mounted topology resolver. Click selection keeps its original
-scope. Viewport owns one transient edge target on MainActor, retains it during
-the native handle transfer/drag, and clears it on hover exit, selection or source
-replacement. The worker receives its immutable value and emits the existing
-Fillet/Chamfer handles and highlights the exact hovered edge from its sampled
-topology display points only while the owning object remains selected and
-unlocked.
-Overlay invalidation follows edge identity, not pointer coordinates. No new
-geometry, commit route, selection authority or picking backend is introduced.
-Native tests must cover object-mode activation, both handle commits, unchanged
-object selection, and refusal for unselected/locked owners. Edge-mode hover
-uses the same sampled path; occlusion tests retain their contracts. App
+Object-mode hover and click query exact edges of selected, unlocked CAD
+occurrences using the same mounted topology resolver. An exact edge hit takes
+priority over the occurrence selection callback, without changing global scope.
+The existing SelectionModel owns the selected edge. Hover draws only a yellow
+sampled-edge highlight; selected edges own operation handles independently of
+pointer position. Clearing selection removes those handles. No hover transfer
+region, new selection authority, geometry engine or commit route is introduced.
+Native queries must succeed before hover state changes. The MainActor owns
+interaction state and workers consume immutable values. Source replacement and
+canvas exit clear hover without clearing explicit selection. Verification covers
+hover without handles, exact click admission before occurrence callbacks, handle
+persistence on exit, locked-owner refusal and native operation commits. UI
+selection conversion must preserve the exact edge in object scope. App
 verification includes restart.
 
 ## Continuous CAD Preview Progress

@@ -1791,7 +1791,7 @@ enum ViewportSpatialOverlayProducer {
                 }
                 let isHovered = target == snapshot.interaction.hoveredTarget
                     || target == edgeTreatmentHoverTarget
-                let color = isHovered ? hoverColor : selectionColor
+                let color = isHovered ? edgeHoverColor : selectionColor
                 meshes.append(.init(
                     family: .transform,
                     value: try line(points, color: color, depth: .annotation)
@@ -2375,6 +2375,7 @@ extension ViewportSpatialOverlayProducer {
 
     static let selectionColor = SIMD4<Float>(0.14, 0.66, 0.95, 1.0)
     static let hoverColor = SIMD4<Float>(0.24, 0.88, 0.82, 1.0)
+    static let edgeHoverColor = SIMD4<Float>(1.0, 0.82, 0.12, 1.0)
     static let sketchColor = SIMD4<Float>(0.34, 0.62, 1.0, 0.92)
     static let curveColor = SIMD4<Float>(0.96, 0.72, 0.24, 1.0)
     static let bodyColor = SIMD4<Float>(0.62, 0.64, 0.62, 0.50)

@@ -2992,15 +2992,7 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
-        var targets = input.selection.selectedTargets
-        if let target = input.edgeTreatmentHoverTarget,
-           case .edge = target.component,
-           targets.contains(SelectionTarget(sceneNodeID: target.sceneNodeID)),
-           input.document.productMetadata.sceneNodes[target.sceneNodeID]?.isLocked == false,
-           !targets.contains(target) {
-            targets.append(target)
-        }
-        for target in targets {
+        for target in input.selection.selectedTargets {
             switch target.component {
             case .vertex(let componentID):
                 guard input.interactiveRoutes.contains(.profileCorner) else { continue }
@@ -3064,6 +3056,7 @@ private extension ViewportSpatialOverlayProducer {
                     markers: &markers
                 )
             case .edge(let componentID):
+                guard input.document.productMetadata.sceneNodes[target.sceneNodeID]?.isLocked == false else { continue }
                 let wantsFillet = input.interactiveRoutes.contains(.edgeFillet)
                 let wantsChamfer = input.interactiveRoutes.contains(.profileEdgeChamfer)
                 guard wantsFillet || wantsChamfer else { continue }

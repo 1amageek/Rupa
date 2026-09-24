@@ -455,7 +455,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
 }
 
 @Test
-func selectedObjectHoverEmitsBothEdgeTreatmentsOnlyForAnUnlockedOwner() throws {
+func onlySelectedUnlockedEdgesEmitTreatmentHandles() throws {
     let featureID = FeatureID()
     let nodeID = SceneNodeID()
     let edgeID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
@@ -471,7 +471,7 @@ func selectedObjectHoverEmitsBothEdgeTreatmentsOnlyForAnUnlockedOwner() throws {
         for locked in [false, true] {
             var document = bodyTransformTestDocument([item])
             document.productMetadata.sceneNodes[nodeID]?.isLocked = locked
-            let selection = SelectionModel(selectedTargets: selected ? [objectTarget] : [])
+            let selection = SelectionModel(selectedTargets: selected ? [edgeTarget] : [objectTarget], hoveredTarget: edgeTarget)
             var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
                 document: document, scene: ViewportScene(items: [item]), selection: selection,
                 ruler: .standard(for: .meter), enabledRoutes: [.edgeFillet, .profileEdgeChamfer])
@@ -565,7 +565,7 @@ func hoveredSelectedObjectEdgeUsesItsSampledTopologyForTheHighlight() throws {
         $0.family == .transform && $0.value.positions == points
     })
     #expect(highlight.value.topology == .lines)
-    #expect(highlight.value.color == ViewportSpatialOverlayProducer.hoverColor)
+    #expect(highlight.value.color == ViewportSpatialOverlayProducer.edgeHoverColor)
 
     let edgeSelection = SelectionModel(hoveredTarget: edgeTarget)
     let edgeScopeInput = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
@@ -606,7 +606,7 @@ func hoveredSelectedObjectEdgeUsesItsSampledTopologyForTheHighlight() throws {
     let edgeScopeHighlight = try #require(edgeScopeOverlay.meshes.first {
         $0.family == .transform && $0.value.positions == points
     })
-    #expect(edgeScopeHighlight.value.color == ViewportSpatialOverlayProducer.hoverColor)
+    #expect(edgeScopeHighlight.value.color == ViewportSpatialOverlayProducer.edgeHoverColor)
 }
 
 @Test

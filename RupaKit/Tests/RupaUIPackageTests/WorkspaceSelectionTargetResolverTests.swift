@@ -53,6 +53,14 @@ import Testing
     }
     #expect(faceComponentID.generatedTopologySubshapeID != nil)
     #expect(edgeComponentID.generatedTopologySubshapeID != nil)
+    let objectResolver = resolver(document: session.document, sceneRows: sceneRows, scope: .object)
+    #expect(objectResolver.selectionTarget(for: ViewportHit(
+        featureID: bodyFeatureID, sceneNodeID: bodySceneNodeID, kind: .body,
+        selectionComponent: edgeTarget.component
+    )) == edgeTarget)
+    #expect(objectResolver.selectionTarget(for: ViewportHit(
+        featureID: bodyFeatureID, sceneNodeID: bodySceneNodeID, kind: .body
+    )) == SelectionTarget(sceneNodeID: bodySceneNodeID))
 }
 
 @Test func workspaceSelectionTargetResolverDeduplicatesObjectTargetsThroughSceneRows() {

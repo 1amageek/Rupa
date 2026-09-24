@@ -1870,7 +1870,7 @@ public struct Viewport: View {
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: includesSelectedObjectEdges
                     && selectionHitPolicy == .object
-                    && selection.selectedTargets.contains(SelectionTarget(sceneNodeID: sceneNodeID))
+                    && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID })
                     && document.productMetadata.sceneNodes[sceneNodeID]?.isLocked == false
                     ? .edge : selectionHitPolicy,
                 visibleSurface: sceneNodeID == visibleSceneNodeID ? visibleFace : nil,
@@ -4576,19 +4576,25 @@ public struct Viewport: View {
                 // Missing an element in this domain is not a CAD-object selection.
                 return
             }
-            if let occurrenceID = presentationOccurrenceID,
-               let onPresentationOccurrencePick {
-                onPresentationOccurrencePick(occurrenceID, selectionIntent)
-                return
-            }
             do {
                 nativeCADHit = try presentationCADSubshapeHit(
                     at: point,
                     visibleSurface: presentationSurface,
-                    in: sceneContext.scene
+                    in: sceneContext.scene,
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil || onEdgeChamferDrag != nil
                 )
             } catch {
                 // An unavailable frame cannot authorize selection or an edit.
+                return
+            }
+            // Exact edge selection takes precedence over whole-occurrence selection.
+            let selectsEdge: Bool
+            if case .edge? = nativeCADHit?.selectionComponent { selectsEdge = true }
+            else { selectsEdge = false }
+            if !selectsEdge,
+               let occurrenceID = presentationOccurrenceID,
+               let onPresentationOccurrencePick {
+                onPresentationOccurrencePick(occurrenceID, selectionIntent)
                 return
             }
         }
@@ -5031,6 +5037,7 @@ public struct Viewport: View {
                     return
                 }
                 if case .affordance(let target, _, _, _) = record.target {
+                    edgeTreatmentHoverTarget = nil
                     hoveredNativeHandleIdentity = nil
                     setHoveredInteractionTarget(.affordance(target))
                     hoveredCanvasHit = nil
@@ -5084,7 +5091,7 @@ public struct Viewport: View {
         let hit = nativeCADHit
         if let hit, let nodeID = hit.sceneNodeID,
            let component = hit.selectionComponent, case .edge = component,
-           selection.selectedTargets.contains(SelectionTarget(sceneNodeID: nodeID)) {
+           selection.selectedTargets.contains(where: { $0.sceneNodeID == nodeID }) {
             edgeTreatmentHoverTarget = SelectionTarget(sceneNodeID: nodeID, component: component)
         } else {
             edgeTreatmentHoverTarget = nil

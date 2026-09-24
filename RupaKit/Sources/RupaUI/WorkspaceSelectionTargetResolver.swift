@@ -99,7 +99,8 @@ struct WorkspaceSelectionTargetResolver {
             return nil
         }
         switch (selectionScope, component) {
-        case (.face, .face(_)),
+        case (.object, .edge(_)),
+             (.face, .face(_)),
              (.edge, .edge(_)),
              (.vertex, .vertex(_)),
              (.region, .region(_)),

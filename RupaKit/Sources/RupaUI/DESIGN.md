@@ -2,10 +2,10 @@
 
 Edge treatment callbacks and commit admission accept both object and edge
 selection scopes while the Select tool and exact CAD context are active.
-Object-scope hover activation is owned by
+Object-scope edge hover and click admission are owned by
 [Rendering](../RupaRendering/DESIGN.md#selected-object-edge-hover); the UI submits
-the same `createBodyEdgeTreatment` intent without converting object selection
-into persistent edge selection.
+the same `createBodyEdgeTreatment` intent. Edge clicks enter the existing
+SelectionModel without changing global scope; only selected edges offer handles.
 
 Object placement callbacks await the existing workspace operation sequencer and
 source publication, then return the published `ViewportSourceIdentity` to the
