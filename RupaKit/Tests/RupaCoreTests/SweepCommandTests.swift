@@ -922,7 +922,7 @@ private func sweepBooleanMeasureDocument(
 
     let sweepID = try document.createSweep(
         name: "Curve Section Sheet Sweep",
-        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        sections: [.curve(CurveSectionReference(featureID: sectionID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(resultKind: .sheet)
     )
@@ -937,7 +937,7 @@ private func sweepBooleanMeasureDocument(
         Issue.record("Expected a sweep feature.")
         return
     }
-    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionID))])
+    #expect(sweep.sections == [.curve(CurveSectionReference(featureID: sectionID))])
     #expect(sceneNode.object?.sourceSection == .curve(sectionID))
     #expect(feature.inputs.contains(FeatureInput(featureID: sectionID, role: .curve)))
     #expect(feature.outputs == [FeatureOutput(role: .sheet)])
@@ -974,7 +974,7 @@ private func sweepBooleanMeasureDocument(
     )
     let sweepID = try document.createSweep(
         name: "Measured Curve Section Sheet Sweep",
-        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        sections: [.curve(CurveSectionReference(featureID: sectionID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(resultKind: .sheet)
     )
@@ -1040,7 +1040,7 @@ private func sweepBooleanMeasureDocument(
 
     let sweepID = try document.createSweep(
         name: "Generated Curve Section Sheet Sweep",
-        sections: [.curve(SweepCurveSectionReference(featureID: generatedSectionID))],
+        sections: [.curve(CurveSectionReference(featureID: generatedSectionID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(resultKind: .sheet)
     )
@@ -1056,7 +1056,7 @@ private func sweepBooleanMeasureDocument(
         return
     }
     #expect(generatedCurves.first?.plane == .xy)
-    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: generatedSectionID))])
+    #expect(sweep.sections == [.curve(CurveSectionReference(featureID: generatedSectionID))])
     #expect(feature.inputs.contains(FeatureInput(featureID: generatedSectionID, role: .curve)))
     #expect(feature.outputs == [FeatureOutput(role: .sheet)])
     #expect(body.kind == .sheet)
@@ -1229,7 +1229,7 @@ private func sweepBooleanMeasureDocument(
     do {
         _ = try document.createSweep(
             name: "Invalid Curve Section Solid Sweep",
-            sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+            sections: [.curve(CurveSectionReference(featureID: sectionID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(resultKind: .solid)
         )

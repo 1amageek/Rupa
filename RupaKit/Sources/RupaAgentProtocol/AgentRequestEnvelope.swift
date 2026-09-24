@@ -1263,7 +1263,7 @@ private struct SweepEvaluationPlanParams: AgentRequestParameterPayload, Equatabl
     ]
 
     var sessionID: UUID
-    var sections: [SweepSectionReference]
+    var sections: [SectionReference]
     var path: SweepPathReference
     var guides: [SweepGuideReference]
     var targets: [SweepTargetReference]

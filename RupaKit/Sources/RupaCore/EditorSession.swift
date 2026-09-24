@@ -1436,7 +1436,7 @@ public final class EditorSession {
     @discardableResult
     public func createSweep(
         name: String,
-        sections: [SweepSectionReference],
+        sections: [SectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference] = [],
         targets: [SweepTargetReference] = [],

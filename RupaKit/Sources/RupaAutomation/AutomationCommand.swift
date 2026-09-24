@@ -236,7 +236,7 @@ public indirect enum AutomationCommand: Codable, Equatable, Sendable {
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
-        sections: [SweepSectionReference],
+        sections: [SectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference],
         targets: [SweepTargetReference],

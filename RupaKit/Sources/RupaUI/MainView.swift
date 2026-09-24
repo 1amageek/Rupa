@@ -4682,7 +4682,7 @@ private struct ProjectMainViewContent: View {
         featureID.map { WorkspaceInspectorNumberText.shortID($0) } ?? "Missing"
     }
 
-    private func sweepPreviewSectionLabel(_ section: SweepSectionReference?) -> String {
+    private func sweepPreviewSectionLabel(_ section: SectionReference?) -> String {
         guard let section else {
             return "Missing"
         }
@@ -9932,7 +9932,7 @@ private struct ProjectMainViewContent: View {
         return visibleValues
     }
 
-    private func sweepSectionSummary(_ section: SweepSectionReference) -> String {
+    private func sweepSectionSummary(_ section: SectionReference) -> String {
         switch section {
         case .profile(let profile):
             return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"

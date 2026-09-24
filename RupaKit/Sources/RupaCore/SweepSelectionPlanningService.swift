@@ -53,7 +53,7 @@ public struct SweepSelectionPlanningService: Sendable {
     }
 
     private struct Resolution {
-        var section: SweepSectionReference?
+        var section: SectionReference?
         var pathFeatureID: FeatureID?
         var guideFeatureIDs: [FeatureID]
 
@@ -107,7 +107,7 @@ public struct SweepSelectionPlanningService: Sendable {
         let profileReference = candidates.compactMap(\.profileReference).first
         let allCurveFeatureIDs = uniqueFeatureIDs(candidates.compactMap(\.curveFeatureID))
         let targetCurveFeatureID = candidates.last { $0.isTarget }?.curveFeatureID
-        let section: SweepSectionReference?
+        let section: SectionReference?
         let pathFeatureID: FeatureID?
         if let profileReference {
             section = .profile(profileReference)
@@ -125,7 +125,7 @@ public struct SweepSelectionPlanningService: Sendable {
                 pathFeatureID = allCurveFeatureIDs.dropFirst().last
             }
             section = sectionCurveFeatureID.map {
-                .curve(SweepCurveSectionReference(featureID: $0))
+                .curve(CurveSectionReference(featureID: $0))
             }
         }
         let reservedFeatureIDs = Set([pathFeatureID, section?.featureID].compactMap { $0 })

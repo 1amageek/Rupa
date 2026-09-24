@@ -703,7 +703,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         document.productMetadata.componentDefinitions[id]?.name ?? "Missing Definition"
     }
 
-    private func sweepSectionSummary(_ section: SweepSectionReference) -> String {
+    private func sweepSectionSummary(_ section: SectionReference) -> String {
         switch section {
         case .profile(let profile):
             return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"

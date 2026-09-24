@@ -9,7 +9,7 @@ public struct SweepSelectionPreview: Equatable, Sendable {
     }
 
     public var status: Status
-    public var section: SweepSectionReference?
+    public var section: SectionReference?
     public var pathFeatureID: FeatureID?
     public var guideFeatureIDs: [FeatureID]
     public var message: String
@@ -24,7 +24,7 @@ public struct SweepSelectionPreview: Equatable, Sendable {
 
     public init(
         status: Status,
-        section: SweepSectionReference? = nil,
+        section: SectionReference? = nil,
         profileFeatureID: FeatureID? = nil,
         pathFeatureID: FeatureID? = nil,
         guideFeatureIDs: [FeatureID] = [],

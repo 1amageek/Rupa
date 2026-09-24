@@ -143,7 +143,7 @@ extension DesignDocument {
     @discardableResult
     public mutating func createSweep(
         name: String,
-        sections: [SweepSectionReference],
+        sections: [SectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference] = [],
         targets: [SweepTargetReference] = [],

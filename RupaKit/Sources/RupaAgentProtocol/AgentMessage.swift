@@ -179,7 +179,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
     )
     case sweepEvaluationPlan(
         sessionID: UUID,
-        sections: [SweepSectionReference],
+        sections: [SectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference],
         targets: [SweepTargetReference],

@@ -229,7 +229,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                 message: "Pattern array remapping dispatch expected a sweep operation."
             )
         }
-        sweep.sections = try sweep.sections.map(remappedSweepSectionReference)
+        sweep.sections = try sweep.sections.map(remappedSectionReference)
         sweep.path = SweepPathReference(
             featureID: try remappedFeatureID(sweep.path.featureID)
         )
@@ -838,14 +838,14 @@ struct PatternArrayFeatureIDRemapper: Sendable {
         }
     }
 
-    private func remappedSweepSectionReference(
-        _ reference: SweepSectionReference
-    ) throws -> SweepSectionReference {
+    private func remappedSectionReference(
+        _ reference: SectionReference
+    ) throws -> SectionReference {
         switch reference {
         case .profile(let profile):
             return .profile(try remappedProfileReference(profile))
         case .curve(let curve):
-            return .curve(SweepCurveSectionReference(featureID: try remappedFeatureID(curve.featureID)))
+            return .curve(CurveSectionReference(featureID: try remappedFeatureID(curve.featureID)))
         }
     }
 

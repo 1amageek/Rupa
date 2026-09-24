@@ -1741,7 +1741,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Curve Section Sheet Sweep",
-        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        sections: [.curve(CurveSectionReference(featureID: sectionID))],
         path: SweepPathReference(featureID: pathID),
         guides: [],
         targets: [],

@@ -29,7 +29,7 @@ public enum BodySourceSectionReference: Codable, Hashable, Sendable {
         }
     }
 
-    public init(sweepSection: SweepSectionReference) {
+    public init(sweepSection: SectionReference) {
         switch sweepSection {
         case .profile(let profile):
             self = .profile(profile)
