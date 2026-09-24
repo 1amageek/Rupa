@@ -92,6 +92,13 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   Trim creation/removal follows the same representation retargeting contract. A consumed
   source body must not remain in the presentation's geometry requests.
   Input feature geometry remains unchanged; the new feature consumes its body.
+- Face Delete and Face Draft use this same occurrence-retargeting transaction.
+  Their source feature remains in the history, but no second scene node is
+  appended for a body that the kernel replaces. Face Delete changes the retained
+  object's geometry role to surface; Draft retains solid. The command's candidate
+  and rollback boundary covers both the graph append and representation update.
+  `RupaKitTests/ProjectControllerCADIntegrationTests.swift` verifies publication,
+  retained placement/identity, failed-edit atomicity, Undo/Redo and package reload.
 - SelectionModel's shared compatibility check rejects generated subshapes whose
   feature no longer owns the occurrence. Existing publication pruning removes
   these selected/hovered targets atomically; it does not select an arbitrary

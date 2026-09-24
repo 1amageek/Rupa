@@ -112,19 +112,10 @@ extension DesignDocument {
             }
         }
 
-        try appendFeature(feature)
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
-            name: trimmedName,
-            reference: .body(featureID),
-            object: .body(
-                featureID: featureID,
-                documentID: cadDocument.id,
-                sourceSection: nil,
-                typeID: nil,
-                geometryRole: .solid,
-                properties: ObjectPropertySet(),
-                objectRegistry: objectRegistry
-            )
+        try appendTopologyEdit(
+            FeatureGraphTransaction(features: [feature], primaryFeatureID: featureID),
+            replacing: SelectionTarget(sceneNodeID: neutralResolution.sceneNodeID),
+            objectRegistry: objectRegistry
         )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)

@@ -11,6 +11,73 @@ import Synchronization
 import Testing
 @testable import RupaGeometry
 
+@Test(.timeLimit(.minutes(1)), arguments: [false, true])
+func faceEditsRetargetPublishedOccurrenceAndSurviveHistoryAndReload(deleteFace: Bool) async throws {
+    var fixture = try extrudedCADDocument(named: "Face edit", depth: 1)
+    let nodeID = try bodySceneNodeID(in: fixture.document, featureID: fixture.bodyFeatureID)
+    fixture.document.productMetadata.sceneNodes[nodeID]?.localTransform = try Transform3D(
+        matrix: Matrix4x4(values: [1, 0, 0, 2, 0, 1, 0, 3, 0, 0, 1, 4, 0, 0, 0, 1]))
+    let originalNode = try #require(fixture.document.productMetadata.sceneNodes[nodeID])
+    let faces = try TopologySnapshotService().snapshot(document: fixture.document, metricPolicy: .omit)
+        .entries.filter { $0.kind == .face && $0.sceneNodeID == nodeID.description }
+    let cap = try #require(faces.first { $0.generatedRole == "startFace" }?.selectionTarget())
+    let side = try #require(faces.first { $0.generatedRole == "sideFace" }?.selectionTarget())
+    let controller = try makeCADProjectController(document: fixture.document)
+    let initial = try await controller.evaluateCurrent()
+    let initialOccurrence = try #require(initial.occurrences.values.first)
+    let command: EditorCommand = deleteFace ? .deleteBodyFaces(targets: [cap])
+        : .draftBodyFaces(targets: [side], neutralTarget: cap, angle: .angle(10, .degree))
+    let committed = try await controller.commit(ProjectSourceTransaction(
+        name: "Face edit", commands: [command], expectedProjectID: fixture.document.projectID,
+        expectedTransactionRevision: .init(0), expectedPublicationSequence: 1
+    ))
+    let edited = await controller.currentDocument()
+    let editedNode = try #require(edited.productMetadata.sceneNodes[nodeID])
+    let editedFeatureID = try #require(editedNode.reference?.featureID)
+    let occurrence = try #require(committed.evaluation.occurrences[initialOccurrence.occurrenceID])
+    #expect(editedFeatureID != fixture.bodyFeatureID)
+    #expect(edited.cadDocument.designGraph.nodes[fixture.bodyFeatureID]
+        == fixture.document.cadDocument.designGraph.nodes[fixture.bodyFeatureID])
+    #expect(Set(edited.productMetadata.sceneNodes.keys) == Set(fixture.document.productMetadata.sceneNodes.keys))
+    #expect(editedNode.localTransform == originalNode.localTransform)
+    #expect(editedNode.childIDs == originalNode.childIDs)
+    #expect(editedNode.materialID == originalNode.materialID)
+    #expect(editedNode.object?.geometryRole == (deleteFace ? .surface : .solid))
+    #expect(occurrence.representationID == initialOccurrence.representationID)
+    #expect(occurrence.worldTransform == initialOccurrence.worldTransform)
+    #expect(committed.evaluation.occurrences.count == 1)
+    #expect(occurrence.mesh != initialOccurrence.mesh)
+
+    let undone = try await controller.undo(expectedTransactionRevision: .init(1))
+    #expect(await controller.currentDocument().productMetadata == fixture.document.productMetadata)
+    #expect(undone.evaluation.occurrences[initialOccurrence.occurrenceID]?.mesh == initialOccurrence.mesh)
+    let redone = try await controller.redo(expectedTransactionRevision: .init(2))
+    #expect(await controller.currentDocument().productMetadata == edited.productMetadata)
+    #expect(redone.evaluation.occurrences[initialOccurrence.occurrenceID]?.mesh == occurrence.mesh)
+
+    // Reusing the old generated face must fail without publishing any partial source.
+    do {
+        _ = try await controller.commit(ProjectSourceTransaction(
+            name: "Stale face edit", commands: [command], expectedProjectID: edited.projectID,
+            expectedTransactionRevision: .init(3), expectedPublicationSequence: 4
+        ))
+        Issue.record("A stale face edit unexpectedly committed.")
+    } catch {
+        #expect(await controller.currentTransactionRevision() == .init(3))
+        #expect(await controller.currentDocument().productMetadata == edited.productMetadata)
+        #expect(await controller.currentDocument().cadDocument.designGraph == edited.cadDocument.designGraph)
+    }
+    try await withCADProjectTemporaryDirectory { directory in
+        let url = directory.appendingPathComponent("face-edit.rupa")
+        _ = try await controller.save(to: url, expectedTransactionRevision: .init(3))
+        let loaded = try makeCADProjectController(document: fixture.document)
+        let snapshot = try await loaded.load(from: url, expectedTransactionRevision: .init(0))
+        #expect(snapshot.evaluation.occurrences.count == 1)
+        #expect(snapshot.evaluation.occurrences[initialOccurrence.occurrenceID]?.mesh == occurrence.mesh)
+        #expect(await loaded.currentDocument().productMetadata == edited.productMetadata)
+    }
+}
+
 @Test(.timeLimit(.minutes(1)))
 func projectCornerPropertiesPublishRoundedMeshAndDisplayOnlySubdivision() async throws {
     let fixture = try extrudedCADDocument(named: "Corner", depth: 1)
