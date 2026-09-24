@@ -7,12 +7,15 @@ using the existing mounted topology resolver. Click selection keeps its original
 scope. Viewport owns one transient edge target on MainActor, retains it during
 the native handle transfer/drag, and clears it on hover exit, selection or source
 replacement. The worker receives its immutable value and emits the existing
-Fillet/Chamfer handles only while the owning object remains selected and unlocked.
+Fillet/Chamfer handles and highlights the exact hovered edge from its sampled
+topology display points only while the owning object remains selected and
+unlocked.
 Overlay invalidation follows edge identity, not pointer coordinates. No new
 geometry, commit route, selection authority or picking backend is introduced.
 Native tests must cover object-mode activation, both handle commits, unchanged
-object selection, and refusal for unselected/locked owners. Existing edge-mode
-and occlusion tests retain their contracts. App verification includes restart.
+object selection, and refusal for unselected/locked owners. Edge-mode hover
+uses the same sampled path; occlusion tests retain their contracts. App
+verification includes restart.
 
 ## Continuous CAD Preview Progress
 

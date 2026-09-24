@@ -490,6 +490,126 @@ func selectedObjectHoverEmitsBothEdgeTreatmentsOnlyForAnUnlockedOwner() throws {
 }
 
 @Test
+func hoveredSelectedObjectEdgeUsesItsSampledTopologyForTheHighlight() throws {
+    let featureID = FeatureID()
+    let nodeID = SceneNodeID()
+    let edgeID = SelectionComponentID.bodyEdgeLeftBottom
+    let points = [
+        Point3D(x: -1, y: 0, z: -1),
+        Point3D(x: 0, y: 0.5, z: -1),
+        Point3D(x: 1, y: 0, z: -1),
+    ]
+    let edge = ViewportBodyTopology.Edge(
+        componentID: edgeID,
+        start: points[0],
+        end: points[2],
+        displayPoints: points
+    )
+    let item = ViewportSceneItem(
+        id: "body",
+        featureID: featureID,
+        sceneNodeID: nodeID,
+        modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+        kind: .body(component: .init(
+            sizeXMeters: 2,
+            sizeYMeters: 1,
+            sizeZMeters: 2,
+            yMinMeters: 0,
+            yMaxMeters: 1,
+            topology: .init(edges: [edge])
+        ))
+    )
+    let objectTarget = SelectionTarget(sceneNodeID: nodeID)
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(edgeID))
+    let scene = ViewportScene(items: [item])
+    let selection = SelectionModel(selectedTargets: [objectTarget])
+    var surfaceInput = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: bodyTransformTestDocument([item]),
+        scene: scene,
+        selection: selection,
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.edgeFillet]
+    )
+    surfaceInput.edgeTreatmentHoverTarget = edgeTarget
+    let snapshot = ViewportSpatialOverlaySemanticSnapshot(
+        scene: scene,
+        interaction: .init(
+            selectedFeatureIDs: [featureID],
+            selectedSceneNodeIDs: [nodeID],
+            hoveredFeatureIDs: [featureID],
+            hoveredSceneNodeIDs: [nodeID],
+            selectedTargets: [objectTarget],
+            hoveredTarget: objectTarget,
+            selectedSketchEntities: [],
+            previewSketchEntities: [],
+            hoveredSketchEntity: nil,
+            selectedSketchRegions: [],
+            previewSketchRegions: [],
+            hoveredSketchRegion: nil
+        ),
+        surfaceTransformSource: surfaceInput,
+        editedBodies: [:],
+        world: .init(modelBounds: item.modelBounds),
+        measurement: nil,
+        drawsLegacyBodies: false,
+        drawsDragPreviewBodies: false
+    )
+
+    let input = try ViewportSpatialOverlayProducer.makeInput(
+        from: snapshot,
+        renderOrigin: .origin,
+        retainedSurfaceByteCount: 0,
+        topologyRevision: 1
+    )
+    let highlight = try #require(input.meshes.first {
+        $0.family == .transform && $0.value.positions == points
+    })
+    #expect(highlight.value.topology == .lines)
+    #expect(highlight.value.color == ViewportSpatialOverlayProducer.hoverColor)
+
+    let edgeSelection = SelectionModel(hoveredTarget: edgeTarget)
+    let edgeScopeInput = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: bodyTransformTestDocument([item]),
+        scene: scene,
+        selection: edgeSelection,
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.edgeFillet]
+    )
+    let edgeScopeSnapshot = ViewportSpatialOverlaySemanticSnapshot(
+        scene: scene,
+        interaction: .init(
+            selectedFeatureIDs: [],
+            selectedSceneNodeIDs: [],
+            hoveredFeatureIDs: [featureID],
+            hoveredSceneNodeIDs: [nodeID],
+            hoveredTarget: edgeTarget,
+            selectedSketchEntities: [],
+            previewSketchEntities: [],
+            hoveredSketchEntity: nil,
+            selectedSketchRegions: [],
+            previewSketchRegions: [],
+            hoveredSketchRegion: nil
+        ),
+        surfaceTransformSource: edgeScopeInput,
+        editedBodies: [:],
+        world: .init(modelBounds: item.modelBounds),
+        measurement: nil,
+        drawsLegacyBodies: false,
+        drawsDragPreviewBodies: false
+    )
+    let edgeScopeOverlay = try ViewportSpatialOverlayProducer.makeInput(
+        from: edgeScopeSnapshot,
+        renderOrigin: .origin,
+        retainedSurfaceByteCount: 0,
+        topologyRevision: 1
+    )
+    let edgeScopeHighlight = try #require(edgeScopeOverlay.meshes.first {
+        $0.family == .transform && $0.value.positions == points
+    })
+    #expect(edgeScopeHighlight.value.color == ViewportSpatialOverlayProducer.hoverColor)
+}
+
+@Test
 func unsupportedEdgeFilletSelectionProducesNoHandle() throws {
     let nodeID = SceneNodeID()
     let target = SelectionTarget(

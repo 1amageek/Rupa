@@ -1728,9 +1728,13 @@ enum ViewportSpatialOverlayProducer {
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>
     ) throws {
         var emitted = false
-        let topologyTargets = snapshot.interaction.selectedTargets
+        let edgeTreatmentHoverTarget = snapshot.surfaceTransformSource?.edgeTreatmentHoverTarget
+        var topologyTargets = snapshot.interaction.selectedTargets
             + snapshot.interaction.previewTargets
             + (snapshot.interaction.hoveredTarget.map { [$0] } ?? [])
+        if let edgeTreatmentHoverTarget, !topologyTargets.contains(edgeTreatmentHoverTarget) {
+            topologyTargets.append(edgeTreatmentHoverTarget)
+        }
         for target in topologyTargets {
             guard let item = sceneItem(for: target, in: snapshot.scene),
                   case .body(let component) = item.kind,
@@ -1776,19 +1780,25 @@ enum ViewportSpatialOverlayProducer {
                 guard let edge = topology.edges.first(where: { $0.componentID == componentID }) else {
                     throw RealityViewportSpatialBatch.invalid("Selected edge is missing from body topology.")
                 }
-                let points = [
-                    ViewportLayout.transformedPoint(edge.start, by: item.modelTransform),
-                    ViewportLayout.transformedPoint(edge.end, by: item.modelTransform),
-                ]
+                let localPoints = edge.displayPoints.count >= 2
+                    ? edge.displayPoints
+                    : [edge.start, edge.end]
+                let points = localPoints.map {
+                    ViewportLayout.transformedPoint($0, by: item.modelTransform)
+                }
                 guard points.allSatisfy(isFinitePoint) else {
                     throw RealityViewportSpatialBatch.invalid("Selected edge has invalid world points.")
                 }
-                let color = target == snapshot.interaction.hoveredTarget ? hoverColor : selectionColor
+                let isHovered = target == snapshot.interaction.hoveredTarget
+                    || target == edgeTreatmentHoverTarget
+                let color = isHovered ? hoverColor : selectionColor
                 meshes.append(.init(
                     family: .transform,
                     value: try line(points, color: color, depth: .annotation)
                 ))
-                for point in points {
+                for point in [edge.start, edge.end].map({
+                    ViewportLayout.transformedPoint($0, by: item.modelTransform)
+                }) {
                     markers.append(.init(
                         family: .transform,
                         value: marker(anchor: point, diameterPoints: 8, color: color)
