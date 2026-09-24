@@ -130,6 +130,13 @@ the isolated source staging path and returns an immutable result to Core/Project
 7. A new `ProjectStateSnapshot` is published only after source, package,
    projection, evaluation, and publication guards agree. `ProjectWorkspace` may
    then build the exact `ProjectViewSnapshot` through its existing route.
+   Initial evaluation, load and replacement stage a generation-matched Core
+   evaluation before presentation evaluation and seed that exact result into the
+   existing provider. The Core store snapshot and presentation publish together
+   after the same guards. CAD documents therefore expose current topology for
+   picking immediately after opening, without requiring a source edit. Mesh-only
+   documents retain no CAD interaction context. Staging cannot dirty source,
+   change history or selection, or publish partial state on failure/cancellation.
 8. Make Editable preparation is a project-authority operation: it accepts only
    target/identity intent, evaluates the current modeling representation, and
    returns the existing bound Core source command. RupaKit commits that command

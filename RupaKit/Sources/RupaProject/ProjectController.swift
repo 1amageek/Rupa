@@ -290,12 +290,8 @@ public actor ProjectController: ProjectOperating {
         try requireProjectID(expectedProjectID)
         try requireTransactionRevision(expectedTransactionRevision)
         try requirePublicationSequence(expectedPublicationSequence)
-        let stagedEvaluation = try await evaluate(
-            document: session.document,
-            source: evaluationSource,
-            purpose: .presentation,
-            revision: expectedTransactionRevision,
-            reusing: session.currentEvaluation
+        let staged = try await evaluateSession(
+            session.transactionSnapshot(), source: evaluationSource
         )
         try Task.checkCancellation()
         try operationGuard()
@@ -303,7 +299,8 @@ public actor ProjectController: ProjectOperating {
         try requireTransactionRevision(expectedTransactionRevision)
         try requirePublicationSequence(expectedPublicationSequence)
         let nextPublicationSequence = try advancedPublicationSequence()
-        evaluation = stagedEvaluation
+        session.restoreTransactionSnapshot(staged.session)
+        evaluation = staged.presentation
         publicationSequence = nextPublicationSequence
         return try currentState()
     }
@@ -889,12 +886,14 @@ public actor ProjectController: ProjectOperating {
         } catch let error as EditorError {
             throw projectError(for: error)
         }
-        let loadedEvaluation = try await evaluate(
+        let loadedSession = EditorSession(
             document: reconstructed.document,
-            source: reconstructed.evaluationSource,
-            purpose: .presentation,
-            revision: loadedRevision,
-            reusing: nil
+            transactionRevision: loadedRevision,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
+        )
+        let staged = try await evaluateSession(
+            loadedSession.transactionSnapshot(), source: reconstructed.evaluationSource
         )
         try Task.checkCancellation()
         try operationGuard()
@@ -905,15 +904,11 @@ public actor ProjectController: ProjectOperating {
         let nextPublicationSequence = try advancedPublicationSequence()
 
         documentLifetimeID = ProjectDocumentLifetimeID()
-        session = EditorSession(
-            document: reconstructed.document,
-            transactionRevision: loadedRevision,
-            objectRegistry: objectRegistry,
-            commandContextResolver: commandContextResolver
-        )
+        loadedSession.restoreTransactionSnapshot(staged.session)
+        session = loadedSession
         packageDocument = loadedPackage
         evaluationSource = reconstructed.evaluationSource
-        evaluation = loadedEvaluation
+        evaluation = staged.presentation
         publicationSequence = nextPublicationSequence
         retiredObjectProperties = reconstructed.retiredObjectProperties
         return ProjectStateSnapshot(
@@ -932,7 +927,7 @@ public actor ProjectController: ProjectOperating {
             evaluationSnapshot: session.evaluationSnapshot,
             evaluationSource: reconstructed.evaluationSource,
             cadInteraction: session.currentEvaluation,
-            evaluation: loadedEvaluation,
+            evaluation: staged.presentation,
             retiredObjectProperties: retiredObjectProperties
         )
     }
@@ -964,12 +959,14 @@ public actor ProjectController: ProjectOperating {
         } catch let error as EditorError {
             throw projectError(for: error)
         }
-        let replacementEvaluation = try await evaluate(
+        let replacementSession = EditorSession(
             document: document,
-            source: initial.evaluationSource,
-            purpose: .presentation,
-            revision: replacementRevision,
-            reusing: nil
+            transactionRevision: replacementRevision,
+            objectRegistry: objectRegistry,
+            commandContextResolver: commandContextResolver
+        )
+        let staged = try await evaluateSession(
+            replacementSession.transactionSnapshot(), source: initial.evaluationSource
         )
 
         try Task.checkCancellation()
@@ -980,15 +977,11 @@ public actor ProjectController: ProjectOperating {
         let nextPublicationSequence = try advancedPublicationSequence()
 
         documentLifetimeID = ProjectDocumentLifetimeID()
-        session = EditorSession(
-            document: document,
-            transactionRevision: replacementRevision,
-            objectRegistry: objectRegistry,
-            commandContextResolver: commandContextResolver
-        )
+        replacementSession.restoreTransactionSnapshot(staged.session)
+        session = replacementSession
         packageDocument = initial.package
         evaluationSource = initial.evaluationSource
-        evaluation = replacementEvaluation
+        evaluation = staged.presentation
         publicationSequence = nextPublicationSequence
         retiredObjectProperties = []
         return try currentState()
@@ -1737,6 +1730,38 @@ public actor ProjectController: ProjectOperating {
                 message: "Staged project package encoding validation failed: \(error)."
             )
         }
+    }
+
+    /// Stage exact interaction topology and its presentation as one publication.
+    /// The worker owns the mutable store; only immutable snapshots cross isolation.
+    private func evaluateSession(
+        _ snapshot: EditorSessionTransactionSnapshot,
+        source: ProjectSourceModel
+    ) async throws -> (session: EditorSessionTransactionSnapshot, presentation: EvaluatedProjectSnapshot) {
+        let registry = objectRegistry
+        let staged = try await Self.performDetached {
+            try Task.checkCancellation()
+            let store = CADDocumentStore(transactionSnapshot: snapshot.store, objectRegistry: registry)
+            if store.document.hasAuthoritativeCADSource, store.currentEvaluation == nil {
+                store.evaluateCurrentDocument()
+                try Task.checkCancellation()
+                guard store.evaluationStatus == .valid else {
+                    throw ProjectControllerError(code: .evaluationFailed,
+                        message: "CAD interaction evaluation failed: \(store.diagnostics.map(\.message).joined(separator: "; "))")
+                }
+            }
+            var staged = snapshot
+            staged.store = store.transactionSnapshot()
+            return (snapshot: staged, context: store.currentEvaluation)
+        }
+        let presentation = try await evaluate(
+            document: staged.snapshot.store.document.document,
+            source: source,
+            purpose: .presentation,
+            revision: staged.snapshot.transactionRevision,
+            reusing: staged.context
+        )
+        return (staged.snapshot, presentation)
     }
 
     private func evaluate(

@@ -11,6 +11,39 @@ import Synchronization
 import Testing
 @testable import RupaGeometry
 
+@Test(.timeLimit(.minutes(1)))
+func projectLifecyclePublishesExactCADContextWithoutSourceEdits() async throws {
+    let fixture = try extrudedCADDocument(named: "Opened CAD", depth: 1)
+    let probe = CADDocumentEvaluationProbe()
+    let controller = try makeCADProjectController(document: fixture.document,
+        evaluatorPreparer: ProbedCADProjectEvaluatorPreparer(probe: probe))
+    _ = try await controller.evaluateCurrent()
+    let initial = try await controller.currentState()
+    let context = try #require(initial.cadInteraction)
+    #expect(context.matches(document: initial.document, generation: initial.documentGeneration))
+    #expect(initial.evaluationSnapshot.status == .valid)
+    #expect(!initial.isDirty && !initial.canUndo)
+    #expect(initial.transactionRevision == .init(0))
+    #expect(initial.document.cadDocument.designGraph == fixture.document.cadDocument.designGraph)
+    #expect(initial.document.productMetadata == fixture.document.productMetadata)
+    #expect(!context.evaluatedDocument.subshapes.entries.isEmpty)
+    #expect(probe.evaluationCount == 0, "Presentation must reuse the staged exact evaluation.")
+    _ = try await controller.evaluateCurrent()
+    #expect(probe.evaluationCount == 0)
+
+    var changed = fixture.document
+    try changed.setExtrudeDistance(featureID: fixture.bodyFeatureID, distance: .length(2, .meter))
+    let replaced = try await controller.replace(with: changed,
+        expectedProjectID: initial.document.projectID, expectedTransactionRevision: .init(0),
+        expectedPublicationSequence: 2, operationGuard: {})
+    let replacementContext = try #require(replaced.cadInteraction)
+    #expect(replacementContext.matches(document: changed, generation: replaced.documentGeneration))
+    #expect(!replacementContext.matches(document: fixture.document, generation: initial.documentGeneration))
+    #expect(replaced.evaluationSnapshot.status == .valid)
+    #expect(!replaced.isDirty && !replaced.canUndo)
+    #expect(probe.evaluationCount == 0)
+}
+
 @Test(.timeLimit(.minutes(1)), arguments: [false, true])
 func faceEditsRetargetPublishedOccurrenceAndSurviveHistoryAndReload(deleteFace: Bool) async throws {
     var fixture = try extrudedCADDocument(named: "Face edit", depth: 1)
@@ -310,6 +343,11 @@ func projectControllerLoadEvaluatesTheLoadedCADDocument() async throws {
         #expect(loadedDepth > beforeDepth * 2.9)
         #expect(loadedDepth < beforeDepth * 3.1)
         #expect(loaded.transactionRevision == DocumentTransactionRevision(1))
+        let context = try #require(loaded.cadInteraction)
+        #expect(context.matches(document: loaded.document, generation: loaded.documentGeneration))
+        #expect(!context.matches(document: original.document, generation: loaded.documentGeneration))
+        #expect(loaded.evaluationSnapshot.status == .valid)
+        #expect(!loaded.isDirty && !loaded.canUndo)
     }
 }
 
