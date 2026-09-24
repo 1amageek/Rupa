@@ -64,6 +64,30 @@ pass their exact source/B-Rep oracles through the signed `rupa` ->
 
 ## Responsibilities and Boundaries
 
+### Surface Creation
+
+The approved target comprises Extrude, Revolve, Sweep, Pipe, Loft, Constrained
+Surface, Patch, Bridge Surface, XNURBS, Square and PolySplines. The existing
+six-entry menu and G0 fill/ruled bridge are partial implementations, not an
+alternative completion scope. Native Swift-CAD owns geometry; the existing
+workspace owns source publication, history and persistence. There is no new
+modeling engine, project authority or mandatory workspace mode.
+
+Common source admission and exact construction are verified before dependent
+features. Constrained fitting and independent whole-boundary G0/G1/G2
+verification precede constrained consumers. Pipe reuses Sweep with explicit
+precision bounds; Square reuses constrained four-sided construction. Mesh to
+PolySplines is an explicit authored-source conversion, not display-mesh capture
+or implicit synchronization. Each feature must work through both UI and semantic
+API, retain source parameters and pass failure atomicity, reload and reediting.
+
+Approximation requires an explicit allowance and independently verified bounds.
+Private Plasticity algorithms and identical numerical output are not requirements.
+Old document formats may be rejected explicitly; they must never be silently
+reset or overwritten. Existing uncommitted work is preserved. This paragraph
+records the accepted target, not implementation completion; the task's progress
+is owned by `PROGRESS.md` and contracts by the linked package/module designs.
+
 The system owns the cross-module rule that one registered `ProjectWorkspace`
 serves CAD automation, Make Editable, Authored Mesh reads and edits, history,
 presentation evaluation, and application-owned persistence. UI, CLI, and
