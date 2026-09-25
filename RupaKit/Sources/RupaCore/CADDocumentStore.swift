@@ -2349,11 +2349,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .extrudeProfile, .extrudeSection:
+        case let .setExtrusion(featureID, source):
+            var updated = document
+            try updated.setExtrusion(featureID: featureID, source: source, objectRegistry: objectRegistry)
+            document = updated
+            primaryFeatureID = featureID
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createExtrusion, .extrudeProfile, .extrudeSection:
             func run() throws {
                 let name: String
                 let extrusion: ExtrudeFeature
                 switch command {
+                case .createExtrusion(let value, let source):
+                    name = value
+                    extrusion = source
                 case .extrudeProfile(let value, let profile, let distance, let direction, let resultKind):
                     name = value
                     extrusion = ExtrudeFeature(profile: profile, distance: distance,
@@ -2376,6 +2386,7 @@ public final class CADDocumentStore {
                     startDistance: extrusion.startDistance,
                     direction: extrusion.direction,
                     resultKind: extrusion.resultKind,
+                    operation: extrusion.operation, targets: extrusion.targets, keepTools: extrusion.keepTools,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument

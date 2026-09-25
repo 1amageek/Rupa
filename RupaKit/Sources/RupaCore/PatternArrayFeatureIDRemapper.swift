@@ -212,6 +212,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             )
         }
         extrude.section = try remappedSectionReference(extrude.section)
+        extrude.targets = try extrude.targets.map { BooleanTargetReference(featureID: try remappedFeatureID($0.featureID)) }
         return .extrude(extrude)
     }
 

@@ -141,8 +141,8 @@ extension FeatureOperation {
             return []
         case .sketch, .spatialPath:
             return []
-        case .extrude:
-            return []
+        case .extrude(let source):
+            return source.operation == .newBody || source.keepTools ? [] : Set(source.targets.map(\.featureID))
         case .revolve:
             return []
         case .sweep(let feature):

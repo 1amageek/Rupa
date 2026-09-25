@@ -74,11 +74,14 @@ extension DesignDocument {
         startDistance: CADExpression? = nil,
         direction: ExtrudeDirection,
         resultKind: ExtrudeResultKind,
+        operation: SolidOperation = .newBody,
+        targets: [BooleanTargetReference] = [],
+        keepTools: Bool = false,
         typeID: ObjectTypeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let operation = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
-            direction: direction, resultKind: resultKind)
+            direction: direction, operation: operation, targets: targets, keepTools: keepTools, resultKind: resultKind)
         try operation.validate()
         guard let source = cadDocument.designGraph.nodes[section.featureID],
               source.outputs.contains(where: { $0.role == section.inputRole }) else {
@@ -99,7 +102,8 @@ extension DesignDocument {
             id: featureID,
             name: name,
             operation: .extrude(operation),
-            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)],
+            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)]
+                + targets.map { FeatureInput(featureID: $0.featureID, role: .target) },
             outputs: [FeatureOutput(role: resultKind.featureOutputRole)]
         )
 
@@ -141,6 +145,26 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitExtrude = true
         return featureID
+    }
+
+    public mutating func setExtrusion(
+        featureID: FeatureID, source: ExtrudeFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard var feature = cadDocument.designGraph.nodes[featureID],
+              case .extrude(let previous) = feature.operation,
+              previous.section == source.section, previous.resultKind == source.resultKind else {
+            throw EditorError(code: .commandInvalid,
+                message: "Extrusion editing must retain the existing section and output kind.")
+        }
+        try source.validate()
+        feature.operation = .extrude(source)
+        feature.inputs = [FeatureInput(featureID: source.section.featureID, role: source.section.inputRole)]
+            + source.targets.map { FeatureInput(featureID: $0.featureID, role: .target) }
+        var candidate = self
+        try candidate.cadDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
+        _ = try candidate.validate(objectRegistry: objectRegistry)
+        self = candidate
     }
 
     @discardableResult

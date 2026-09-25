@@ -1767,3 +1767,14 @@ independent geometric admission; no generated control net replaces the source.
 UI owns only transient point collection and text; the same EditorCommand route
 serves automation. Failure preserves the previous source and evaluated scene.
 Verification covers source replacement, native package replay and failed commit.
+
+### Authored extrusion options
+
+Full-source extrusion creation/replacement retains native section, signed extents,
+Boolean targets and Keep Tools. Replacement preserves the feature and output IDs,
+section identity and output role. The existing atomic commit admits actual
+geometry before publication; invalid targets leave source and scene unchanged.
+Boolean extrusion measurements use evaluated body results rather than the
+uncombined profile area. Consumed targets leave the visible/measurable set;
+Keep Tools retains the native Boolean result ownership. Legacy extrusion commands
+continue to create new bodies. Pattern remapping remaps target references.

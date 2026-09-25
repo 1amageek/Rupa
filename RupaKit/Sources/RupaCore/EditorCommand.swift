@@ -291,6 +291,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
+    case createExtrusion(name: String, source: ExtrudeFeature)
+    case setExtrusion(featureID: FeatureID, source: ExtrudeFeature)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind = .solid)
     case extrudeSection(name: String, section: SectionReference, distance: CADExpression, startDistance: CADExpression? = nil, direction: ExtrudeDirection, resultKind: ExtrudeResultKind)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
@@ -677,6 +679,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "trimSketchCurveSegment"
         case .cutSketchCurve:
             "cutSketchCurve"
+        case .createExtrusion:
+            "createExtrusion"
+        case .setExtrusion:
+            "setExtrusion"
         case .extrudeProfile:
             "extrudeProfile"
         case .extrudeSection:
@@ -865,6 +871,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .splitSketchCurve,
              .trimSketchCurveSegment,
              .cutSketchCurve,
+             .createExtrusion,
+             .setExtrusion,
              .extrudeProfile,
              .extrudeSection,
              .createRevolve,
