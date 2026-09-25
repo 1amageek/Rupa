@@ -55,8 +55,10 @@ public enum BodySourceSectionReference: Codable, Hashable, Sendable {
         let featureID = try container.decode(FeatureID.self, forKey: .featureID)
         switch kind {
         case .profile:
-            let profileIndex = try container.decodeIfPresent(Int.self, forKey: .profileIndex) ?? 0
-            self = .profile(ProfileReference(featureID: featureID, profileIndex: profileIndex))
+            let profileIndex = try container.decode(Int.self, forKey: .profileIndex)
+            let profile = ProfileReference(featureID: featureID, profileIndex: profileIndex)
+            try profile.validate()
+            self = .profile(profile)
         case .curve:
             if container.contains(.profileIndex) {
                 throw DecodingError.dataCorruptedError(
@@ -73,6 +75,7 @@ public enum BodySourceSectionReference: Codable, Hashable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .profile(let profile):
+            try profile.validate()
             try container.encode(Kind.profile, forKey: .kind)
             try container.encode(profile.featureID, forKey: .featureID)
             try container.encode(profile.profileIndex, forKey: .profileIndex)

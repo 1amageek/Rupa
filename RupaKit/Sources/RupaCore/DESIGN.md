@@ -1,5 +1,11 @@
 # RupaCore Source Authority Design
 
+Body source-section metadata preserves an explicit nonnegative profile index
+across encoding and decoding. Missing profile indexes are invalid payloads,
+not an instruction to select region zero. The native ProfileReference owns
+index validation; metadata applies that contract at both serialization
+boundaries. BodySourceSectionReferenceTests owns round-trip and rejection checks.
+
 ## Purpose and Scope
 
 This module owns Product/CAD/Authored-Mesh source mutation, persistent source
