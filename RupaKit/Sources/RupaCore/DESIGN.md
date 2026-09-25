@@ -510,6 +510,11 @@ overlays must use this same convention. The old column-major UI convention is
 removed by explicit product decision; no decoder guessing or migration fallback
 is provided. Existing user files are not deleted automatically.
 
+The shared scene composition helpers must use this same row-major contract for
+translation, point application, rotation, inverse and parent-times-local composition.
+Explicit matrix-coordinate regression checks are required: composing and reading
+with the same erroneous convention is not sufficient evidence.
+
 The placement inspector accepts finite, non-singular affine matrices, including
 shear produced by world-axis scaling after rotation. Its canonical decomposition
 is `T * Rz * Ry * Rx * H * S`, where H is upper triangular with unit diagonal
