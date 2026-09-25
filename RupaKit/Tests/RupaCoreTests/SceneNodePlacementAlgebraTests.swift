@@ -85,11 +85,48 @@ import Testing
         ))
     }
 
+@Test func axisScaleAndVectorMappingShareTheCheckedSceneTransform() throws {
+        let scale = try Transform3D.scale(
+            Vector3D(x: -2.0, y: 3.0, z: 4.0),
+            about: Point3D(x: 1.0, y: 2.0, z: 3.0)
+        )
+        let mappedPoint = try scale.applied(to: Point3D(x: 2.0, y: 3.0, z: 4.0))
+        let mappedVector = try scale.applyingLinearPart(to: Vector3D(x: 2.0, y: 3.0, z: 4.0))
+        let restoredVector = try scale.inverseApplyingLinearPart(to: mappedVector)
+
+        #expect(mappedPoint.isApproximatelyEqual(to: Point3D(x: -1.0, y: 5.0, z: 7.0), tolerance: tolerance))
+        #expect(mappedVector == Vector3D(x: -4.0, y: 9.0, z: 16.0))
+        #expect((restoredVector - Vector3D(x: 2.0, y: 3.0, z: 4.0)).length < tolerance)
+    }
+
+    @Test func affinePlacementValidationRejectsPerspectiveAndSingularMatrices() throws {
+        let perspective = Transform3D(matrix: try Matrix4x4(values: [
+            1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.1, 0, 0, 1
+        ]))
+        let singular = Transform3D(matrix: try Matrix4x4(values: [
+            1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+        ]))
+
+        #expect(throws: EditorError.self) { try perspective.validateAffinePlacement() }
+        #expect(throws: EditorError.self) { try singular.validateAffinePlacement() }
+    }
+
     @Test func aZeroLengthRotationAxisIsRejected() throws {
         #expect(throws: EditorError.self) {
             try Transform3D.rotation(axis: .zero, angleRadians: .pi)
         }
     }
+}
+
+@Test func planeNormalUsesInverseTransposeUnderNonUniformScale() throws {
+    let scale = try Transform3D.scale(
+        Vector3D(x: 2.0, y: 1.0, z: 0.5),
+        about: .origin
+    )
+    let normal = try scale.applyingNormal(to: Vector3D(x: 1.0, y: 1.0, z: 0.0))
+    let expected = try Vector3D(x: 0.5, y: 1.0, z: 0.0).normalized(tolerance: 1.0e-12)
+
+    #expect((normal - expected).length < 1.0e-12)
 }
 
 /// Covers the tree walk that turns stored local transforms into world placements.
@@ -143,6 +180,31 @@ import Testing
         )
     }
 
+    @Test func componentOccurrencesRetainIndependentPlacementAndRejectRecursion() throws {
+        var fixture = try SceneNodeHierarchyFixture()
+        let definition = ComponentDefinition(name: "Part", rootSceneNodeIDs: [fixture.innerID])
+        let instance = ComponentInstance(
+            definitionID: definition.id, name: "Copy",
+            localTransform: try .translation(Vector3D(x: 0, y: 0, z: 3))
+        )
+        fixture.metadata.componentDefinitions[definition.id] = definition
+        fixture.metadata.componentInstances[instance.id] = instance
+        fixture.metadata.sceneNodes[fixture.siblingID]?.reference = .componentInstance(instance.id)
+        let occurrences = try SceneNodeHierarchy(metadata: fixture.metadata).resolvedOccurrences()
+        let copies = occurrences.filter { $0.sourceSceneNodeID == fixture.innerID }
+        #expect(copies.count == 2)
+        #expect(Set(copies.map(\.id)).count == 2)
+        let copy = try #require(copies.first { $0.componentInstanceID == instance.id })
+        #expect(copy.sceneNodeID == fixture.siblingID)
+        #expect(try copy.worldTransform.applied(to: .origin).isApproximatelyEqual(
+            to: Point3D(x: 0, y: 2, z: 3), tolerance: tolerance
+        ))
+        fixture.metadata.componentDefinitions[definition.id]?.rootSceneNodeIDs = [fixture.siblingID]
+        #expect(throws: EditorError.self) {
+            try SceneNodeHierarchy(metadata: fixture.metadata).resolvedOccurrences()
+        }
+    }
+
     @Test func aNodeClaimedByTwoParentsIsRejected() throws {
         var fixture = try SceneNodeHierarchyFixture()
         fixture.metadata.sceneNodes[fixture.siblingID]?.childIDs = [fixture.innerID]
@@ -152,14 +214,26 @@ import Testing
         }
     }
 
-    @Test func aNodeOutsideTheRootedTreeHasNoWorldPlacement() throws {
+    @Test func aNodeOutsideTheRootedTreeInvalidatesTheHierarchy() throws {
         var fixture = try SceneNodeHierarchyFixture()
         let strandedNode = SceneNode(name: "Stranded")
         fixture.metadata.sceneNodes[strandedNode.id] = strandedNode
-        let hierarchy = try SceneNodeHierarchy(metadata: fixture.metadata)
 
         #expect(throws: EditorError.self) {
-            try hierarchy.worldTransform(of: strandedNode.id)
+            try SceneNodeHierarchy(metadata: fixture.metadata)
+        }
+    }
+
+    @Test func aNonAffineScenePlacementInvalidatesTheHierarchy() throws {
+        var fixture = try SceneNodeHierarchyFixture()
+        var values = Matrix4x4.identity.values
+        values[12] = 0.1
+        fixture.metadata.sceneNodes[fixture.outerID]?.localTransform = Transform3D(
+            matrix: try Matrix4x4(values: values)
+        )
+
+        #expect(throws: EditorError.self) {
+            try SceneNodeHierarchy(metadata: fixture.metadata)
         }
     }
 }

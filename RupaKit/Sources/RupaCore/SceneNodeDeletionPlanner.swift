@@ -151,7 +151,7 @@ public struct SceneNodeDeletionPlanner: Sendable {
                 targeting: removedSceneNodeIDs,
                 metadata: metadata
             ),
-            measurementIDs: measurementIDs(
+            measurementIDs: try measurementIDs(
                 measuring: removedSceneNodeIDs,
                 features: removedFeatureIDs,
                 metadata: metadata
@@ -270,14 +270,28 @@ public struct SceneNodeDeletionPlanner: Sendable {
         measuring sceneNodeIDs: Set<SceneNodeID>,
         features featureIDs: Set<FeatureID>,
         metadata: ProductMetadata
-    ) -> [MeasurementAnnotationID] {
-        metadata.measurements
+    ) throws -> [MeasurementAnnotationID] {
+        // An occurrence-qualified anchor names its selectable owner (for example a component
+        // instance) but measures the source node the occurrence expands; removing that source
+        // node, or any node it hangs below, removes what the anchor measures.
+        let removedOccurrenceIDs = Set(
+            try SceneNodeHierarchy(metadata: metadata).resolvedOccurrences()
+                .filter { sceneNodeIDs.contains($0.sourceSceneNodeID) }
+                .map(\.id)
+        )
+        return metadata.measurements
             .filter { _, measurement in
                 if let sceneNodeID = measurement.sceneNodeID,
                    sceneNodeIDs.contains(sceneNodeID) {
                     return true
                 }
                 return measurement.anchors.contains { anchor in
+                    if let sceneNodeID = anchor.sceneNodeID, sceneNodeIDs.contains(sceneNodeID) {
+                        return true
+                    }
+                    if let occurrenceID = anchor.occurrenceID, removedOccurrenceIDs.contains(occurrenceID) {
+                        return true
+                    }
                     if let featureID = anchor.sketchReference?.featureID,
                        featureIDs.contains(featureID) {
                         return true

@@ -120,12 +120,12 @@ struct ViewportNativePatternAxisTests {
             distanceMode: .spacing,
             state: .normal
         )
-        let transformed = try Transform3D(matrix: Matrix4x4(values: [
+        let transformed = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
             8.0, 0.0, 0.0, 12.0,
             0.0, 8.0, 0.0, -7.0,
             0.0, 0.0, 8.0, 3.0,
             0.0, 0.0, 0.0, 1.0,
-        ]))
+        ])))
         let record = try ViewportSpatialInteractionRecord(
             target: .patternArrayLinearAxis(source),
             modelTransform: transformed

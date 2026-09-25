@@ -26,8 +26,9 @@ occurrence's immutable evaluated world bounds into at most three World X/Y/Z
 native RealityKit rulers. Formatting occurs before camera updates; the layout
 receives the three already formatted axis labels.
 
-It does not own source selection, CAD measurement semantics, persistent
-`MeasurementAnnotation`, document mutation, Undo, camera state, snap policy,
+It does not own source selection, CAD measurement semantics, the persistent
+`MeasurementAnnotation` model or its resolution, document mutation, Undo,
+camera state, snap policy,
 geometry preparation, native Entity/resource lifetime, Agent/MCP operations, or
 application lifecycle. `Viewport` supplies the mounted RealityKit camera
 query, ready presentation data, effective construction plane, snap options,
@@ -103,8 +104,23 @@ any phase --tool exit / Escape / snapshot replacement--> idle
    degenerate completed segment leaves the phase unchanged and publishes a
    visible refusal.
 7. The segment and preview are transient presentation state. They do not select,
-   mutate, dirty, persist, enter Undo, invoke `MeasurementService`, or create a
-   `MeasurementAnnotation`.
+   mutate, dirty, persist, enter Undo, or invoke `MeasurementService` by
+   themselves.
+8. A completed segment can be saved. `ViewportMeasurementState.savedAnchors(in:)`
+   turns each endpoint into a Core `MeasurementAnchor` through
+   `MeasurementAnchor.picked(_:under:in:role:)`: a displayed-surface hit
+   follows its occurrence, a snap follows the single scene node its sources
+   name (Core `SnapCandidate.measurementPickPlacement(in:)`), and a
+   construction-plane point stays in world space. RupaUI wraps the anchors in a
+   distance `MeasurementAnnotation` and submits the undoable
+   `EditorCommand.addMeasurementAnnotation`; this component never mutates the
+   document itself.
+9. Saved annotations are drawn from Core `MeasurementAnnotationResolver`, the
+   same resolution drawing projection uses. Only annotations whose every anchor
+   resolves, and whose annotation node is effectively visible, reach the
+   overlay; an unresolved one is never drawn from a subset of its anchors and
+   is reported by the RupaUI Measure panel, which lists every saved
+   measurement and deletes one through its annotation scene node.
 
 ### Selected-object world-bounds rulers
 
@@ -218,7 +234,9 @@ from native projection without changing labels or native resource identities.
 
 RupaUI tests own Measure activation/status/tool-exit wiring, both bounds
 presentation gates including the superset relation between them, and the
-absence of source/selection/Undo mutations. A signed App test owns two clicks and live hover
+absence of source/selection/Undo mutations until Save is chosen. Core tests own
+anchor placement round trips, annotations following moved occurrences, the
+add/delete/undo command path, and unresolved-anchor reporting. A signed App test owns two clicks and live hover
 preview in empty-space and snapped object cases, selected-object ruler placement,
 camera reprojection, control hit targets, Escape, clean document state, and
 unchanged project bytes. Changes to layout projection, selection occurrence

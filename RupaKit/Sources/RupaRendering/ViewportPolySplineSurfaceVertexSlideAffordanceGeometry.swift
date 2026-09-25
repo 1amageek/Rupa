@@ -14,7 +14,7 @@ struct ViewportPolySplineSurfaceVertexSlideInput: Equatable {
     var target: PolySplineSurfaceVertexTarget
     var selectionTarget: SelectionTarget
     var point: Point3D
-    var modelTransform: Transform3D = .identity
+    var modelTransform: ScenePlacement = .identity
 }
 
 struct ViewportSurfaceControlPointSlideInput: Equatable {
@@ -22,7 +22,7 @@ struct ViewportSurfaceControlPointSlideInput: Equatable {
     var featureID: FeatureID
     var patchID: Int
     var point: Point3D
-    var modelTransform: Transform3D = .identity
+    var modelTransform: ScenePlacement = .identity
 }
 
 struct ViewportPolySplineSurfaceVertexSlidePreviewVertex: Equatable {
@@ -70,14 +70,14 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             ) else {
                 return nil
             }
-            return vertex.modelTransform.viewportTransformedVector(direction)
+            return vertex.modelTransform.vector(direction)
         }
         guard directionVectors.count == selectedVertices.count,
               let averagedDirection = Self.averageVector(directionVectors) else {
             return nil
         }
         let center = Self.averagePoint(selectedVertices.map { vertex in
-            vertex.modelTransform.viewportTransformedPoint(vertex.point)
+            vertex.modelTransform.point(vertex.point)
         })
         guard let projectedUnitLength = Self.projectedLength(
             from: center,
@@ -117,14 +117,14 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             ) else {
                 return nil
             }
-            return controlPoint.modelTransform.viewportTransformedVector(direction)
+            return controlPoint.modelTransform.vector(direction)
         }
         guard directionVectors.count == selectedControlPoints.count,
               let averagedDirection = Self.averageVector(directionVectors) else {
             return nil
         }
         let center = Self.averagePoint(selectedControlPoints.map { controlPoint in
-            controlPoint.modelTransform.viewportTransformedPoint(controlPoint.point)
+            controlPoint.modelTransform.point(controlPoint.point)
         })
         guard let projectedUnitLength = Self.projectedLength(
             from: center,
@@ -187,8 +187,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             let movedPoint = offset(vertex.point, direction: direction, distanceMeters: distanceMeters)
             return ViewportPolySplineSurfaceVertexSlidePreviewVertex(
                 selectionTarget: vertex.selectionTarget,
-                originalPoint: vertex.modelTransform.viewportTransformedPoint(vertex.point),
-                movedPoint: vertex.modelTransform.viewportTransformedPoint(movedPoint)
+                originalPoint: vertex.modelTransform.point(vertex.point),
+                movedPoint: vertex.modelTransform.point(movedPoint)
             )
         }
         guard previewVertices.count == selectedVertices.count else {
@@ -221,8 +221,8 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             let movedPoint = offset(controlPoint.point, direction: direction, distanceMeters: distanceMeters)
             return ViewportSurfaceControlPointSlidePreviewVertex(
                 selectionReference: controlPoint.target,
-                originalPoint: controlPoint.modelTransform.viewportTransformedPoint(controlPoint.point),
-                movedPoint: controlPoint.modelTransform.viewportTransformedPoint(movedPoint)
+                originalPoint: controlPoint.modelTransform.point(controlPoint.point),
+                movedPoint: controlPoint.modelTransform.point(movedPoint)
             )
         }
         guard previewVertices.count == selectedControlPoints.count else {
@@ -246,7 +246,7 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
         let originalPointsByRole = pointsByRole(in: topologyVertices)
         var movedPointsByRole = originalPointsByRole
         var pendingMovedPoints: [PolySplineSurfaceVertexTarget: Point3D] = [:]
-        var transformsByPatch: [PatchKey: Transform3D] = [:]
+        var transformsByPatch: [PatchKey: ScenePlacement] = [:]
         var changedPatches: Set<PatchKey> = []
         let movedVertices = selectedVertices.compactMap { vertex -> MovedVertex? in
             guard let direction = slideDirection(
@@ -704,10 +704,10 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
 
     private static func transformedMesh(
         _ mesh: ViewportBodyMesh,
-        transform: Transform3D
+        transform: ScenePlacement
     ) -> ViewportBodyMesh {
         ViewportBodyMesh(
-            positions: mesh.positions.map { transform.viewportTransformedPoint($0) },
+            positions: mesh.positions.map { transform.point($0) },
             indices: mesh.indices
         )
     }
@@ -726,6 +726,6 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
     private struct MovedVertex {
         var originalPoint: Point3D
         var movedPoint: Point3D
-        var modelTransform: Transform3D
+        var modelTransform: ScenePlacement
     }
 }

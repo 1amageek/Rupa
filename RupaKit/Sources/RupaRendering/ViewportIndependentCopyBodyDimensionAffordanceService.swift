@@ -8,8 +8,8 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
         scene: ViewportScene,
         selection: SelectionModel,
         layout: ViewportLayout
-    ) -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
-        let index = ViewportIndependentCopyOutputSelectionIndex(
+    ) throws -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
+        let index = try ViewportIndependentCopyOutputSelectionIndex(
             metadata: document.productMetadata,
             scene: scene
         )
@@ -152,7 +152,7 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
         default:
             return nil
         }
-        let transformedAxis = output.modelTransform.viewportTransformedVector(descriptor.axisDirection)
+        let transformedAxis = output.modelTransform.vector(descriptor.axisDirection)
         let axisScale = transformedAxis.length
         guard axisScale.isFinite,
               axisScale > 1.0e-12 else {

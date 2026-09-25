@@ -94,6 +94,7 @@ enum ProductionMainViewActionManifest {
     ]
 
     static let sourceCommandNames = [
+        "addMeasurementAnnotation",
         "addSketchConstraint",
         "alignSketchVertex",
         "applySketchCornerTreatment",

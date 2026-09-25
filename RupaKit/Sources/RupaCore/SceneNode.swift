@@ -54,6 +54,6 @@ public struct SceneNode: Codable, Hashable, Identifiable, Sendable {
         }
         try reference?.validate()
         try object?.validate()
-        try localTransform.validate()
+        try localTransform.validateAffinePlacement()
     }
 }

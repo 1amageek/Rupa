@@ -252,6 +252,47 @@ public struct ViewportMeasurementState: Equatable, Sendable {
     var visibleEnd: ViewportMeasurementEndpoint? {
         preview ?? end
     }
+
+    /// Whether a completed two-point measurement is available to save.
+    public var canSave: Bool {
+        phase == .completed && start != nil && end != nil
+    }
+
+    /// The persistent start/end anchors of the completed measurement.
+    ///
+    /// Each endpoint is anchored to the placement it was picked under: a
+    /// displayed-surface hit follows its occurrence, a snap follows the one
+    /// scene node its sources name, and a construction-plane point stays in
+    /// world space. The hierarchy must describe the document the endpoints
+    /// were picked in.
+    public func savedAnchors(in hierarchy: SceneNodeHierarchy) throws -> [MeasurementAnchor] {
+        guard phase == .completed, let start, let end else {
+            throw EditorError(code: .commandInvalid, message: "Complete a two-point measurement before saving it.")
+        }
+        return [
+            try MeasurementAnchor.picked(
+                start.point, under: start.source.pickPlacement(in: hierarchy),
+                in: hierarchy, role: .start
+            ),
+            try MeasurementAnchor.picked(
+                end.point, under: end.source.pickPlacement(in: hierarchy),
+                in: hierarchy, role: .end
+            ),
+        ]
+    }
+}
+
+extension ViewportMeasurementEndpointSource {
+    func pickPlacement(in hierarchy: SceneNodeHierarchy) -> MeasurementPickPlacement {
+        switch self {
+        case .snap(let candidate):
+            candidate.measurementPickPlacement(in: hierarchy)
+        case .presentation(let occurrenceID):
+            .occurrence(occurrenceID)
+        case .constructionPlane:
+            .world
+        }
+    }
 }
 
 struct ViewportMeasurementSession: Equatable, Sendable {

@@ -351,3 +351,25 @@ private func bridgeTriangleMesh() throws -> MeshSource {
     _ = try builder.addFace(vertexIDs: [first, second, third])
     return try builder.build()
 }
+
+@Test(.timeLimit(.minutes(1)))
+func componentOccurrenceReachesNativeEvaluationWithItsPlacement() throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    var document = session.document
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
+    let definitionID = try document.createComponentDefinition(name: "Part", rootSceneNodeIDs: [bodyNode.id])
+    _ = try document.createComponentInstance(
+        name: "Copy", definitionID: definitionID,
+        localTransform: .translation(Vector3D(x: 3, y: 0, z: 0))
+    )
+    let projection = try DesignDocumentProjectBridge().projection(for: document)
+    let evaluator = try DefaultDesignDocumentProjectEvaluatorFactory().makeEvaluator(for: document, reusing: nil)
+    let snapshot = try evaluator.evaluate(
+        project: projection.source, purpose: .presentation, revision: .init(1)
+    )
+    #expect(snapshot.occurrences.count == 2)
+    let copy = try #require(snapshot.occurrences.values.first { $0.worldTransform.values[3] == 3 })
+    #expect(projection.sceneNodeIDByOccurrenceID[copy.occurrenceID] != bodyNode.id)
+    #expect(copy.mesh.faceIDs.count > 0)
+}

@@ -83,6 +83,36 @@ extension Transform3D {
         return try Self.transform(values: inverted)
     }
 
+    /// Validates that this matrix can represent a Product placement.
+    public func validateAffinePlacement() throws {
+        let values = try Self.matrixValues(of: self)
+        guard values[12] == 0.0,
+              values[13] == 0.0,
+              values[14] == 0.0,
+              values[15] == 1.0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "A scene node placement must be affine."
+            )
+        }
+        _ = try inverse()
+    }
+
+    /// Maps source-local coordinates into another placed frame; nil denotes equal frames.
+    public func coordinateMap(to output: Transform3D) throws -> AffineTransform3D? {
+        try validateAffinePlacement()
+        try output.validateAffinePlacement()
+        if self == output { return nil }
+        let transform = try output.inverse().composed(with: self)
+        let m = transform.matrix.values
+        return try AffineTransform3D(
+            basisX: Vector3D(x: m[0], y: m[4], z: m[8]),
+            basisY: Vector3D(x: m[1], y: m[5], z: m[9]),
+            basisZ: Vector3D(x: m[2], y: m[6], z: m[10]),
+            translation: Vector3D(x: m[3], y: m[7], z: m[11])
+        )
+    }
+
     /// The point mapped through this transform.
     public func applied(to point: Point3D) throws -> Point3D {
         let m = try Self.matrixValues(of: self)
@@ -102,12 +132,67 @@ extension Transform3D {
         return mapped
     }
 
+    /// Maps a direction through the linear part of an affine placement.
+    public func applyingLinearPart(to vector: Vector3D) throws -> Vector3D {
+        try validateAffinePlacement()
+        try vector.validate()
+        let values = try Self.matrixValues(of: self)
+        let mapped = Vector3D(
+            x: values[0] * vector.x + values[1] * vector.y + values[2] * vector.z,
+            y: values[4] * vector.x + values[5] * vector.y + values[6] * vector.z,
+            z: values[8] * vector.x + values[9] * vector.y + values[10] * vector.z
+        )
+        try mapped.validate()
+        return mapped
+    }
+
+    /// Maps a direction from world space back into this placement's local frame.
+    public func inverseApplyingLinearPart(to vector: Vector3D) throws -> Vector3D {
+        try inverse().applyingLinearPart(to: vector)
+    }
+
+    /// Maps a plane normal through this affine placement, including non-uniform scale.
+    public func applyingNormal(to normal: Vector3D) throws -> Vector3D {
+        let inverse = try inverse()
+        let values = try Self.matrixValues(of: inverse)
+        try normal.validate()
+        let mapped = Vector3D(
+            x: values[0] * normal.x + values[4] * normal.y + values[8] * normal.z,
+            y: values[1] * normal.x + values[5] * normal.y + values[9] * normal.z,
+            z: values[2] * normal.x + values[6] * normal.y + values[10] * normal.z
+        )
+        try mapped.validate()
+        let length = mapped.length
+        guard length.isFinite, length > Self.singularDeterminantThreshold else {
+            throw EditorError(code: .commandInvalid, message: "A transformed plane normal is degenerate.")
+        }
+        return mapped / length
+    }
+
     public static func translation(_ vector: Vector3D) throws -> Transform3D {
         try vector.validate()
         var values = Matrix4x4.identity.values
         values[3] = vector.x
         values[7] = vector.y
         values[11] = vector.z
+        return try transform(values: values)
+    }
+
+    /// A non-singular axis scale about `pivot`.
+    public static func scale(_ factors: Vector3D, about pivot: Point3D) throws -> Transform3D {
+        try factors.validate()
+        try pivot.validate()
+        guard abs(factors.x) > singularDeterminantThreshold,
+              abs(factors.y) > singularDeterminantThreshold,
+              abs(factors.z) > singularDeterminantThreshold else {
+            throw EditorError(code: .commandInvalid, message: "A scene scale must be invertible.")
+        }
+        let values = [
+            factors.x, 0.0, 0.0, pivot.x * (1.0 - factors.x),
+            0.0, factors.y, 0.0, pivot.y * (1.0 - factors.y),
+            0.0, 0.0, factors.z, pivot.z * (1.0 - factors.z),
+            0.0, 0.0, 0.0, 1.0,
+        ]
         return try transform(values: values)
     }
 
@@ -180,10 +265,10 @@ extension Transform3D {
 
     private static func matrixValues(of transform: Transform3D) throws -> [Double] {
         let values = transform.matrix.values
-        guard values.count == 16 else {
+        guard values.count == 16, values.allSatisfy(\.isFinite) else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "A scene node transform must carry sixteen matrix values."
+                message: "A scene node transform must carry sixteen finite matrix values."
             )
         }
         return values

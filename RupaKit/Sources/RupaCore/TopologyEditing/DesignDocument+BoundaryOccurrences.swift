@@ -47,25 +47,6 @@ extension DesignDocument {
     }
 
     static func boundaryCoordinateMap(from source: Transform3D, to output: Transform3D) throws -> AffineTransform3D? {
-        for frame in [source, output] {
-            try frame.validate()
-            let values = frame.matrix.values
-            guard values[12] == 0, values[13] == 0, values[14] == 0, values[15] == 1 else {
-                throw EditorError(code: .commandInvalid, message: "Boundary placement requires affine source and output frames.")
-            }
-        }
-        // Equal frames retain the native identity representation without inverse roundoff.
-        let transform = try output.inverse().composed(with: source)
-        let m = transform.matrix.values
-        guard m[12] == 0, m[13] == 0, m[14] == 0, m[15] == 1 else {
-            throw EditorError(code: .commandInvalid, message: "Boundary placement requires affine coordinate frames.")
-        }
-        _ = try source.inverse()
-        if source == output { return nil }
-        return try AffineTransform3D(
-            basisX: Vector3D(x: m[0], y: m[4], z: m[8]),
-            basisY: Vector3D(x: m[1], y: m[5], z: m[9]),
-            basisZ: Vector3D(x: m[2], y: m[6], z: m[10]),
-            translation: Vector3D(x: m[3], y: m[7], z: m[11]))
+        try source.coordinateMap(to: output)
     }
 }

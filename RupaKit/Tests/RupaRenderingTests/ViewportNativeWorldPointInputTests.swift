@@ -12,12 +12,12 @@ import Testing
 /// mode, which pinned Y on exactly this projection.
 private let worldPointCanvas = ViewportCanvasPlane.displayed(for: .axisFront(.z))
 
-private let bridgePlacement = Transform3D(matrix: try! Matrix4x4(values: [
+private let bridgePlacement = try! ScenePlacement(Transform3D(matrix: try! Matrix4x4(values: [
     0, 0, -3, 10,
     0, 1, 0, 0,
     2, 0, 0, 20,
     0, 0, 0, 1
-]))
+])))
 
 private func constructionPlaneRecord(
     handle: ViewportConstructionPlaneHandleKind

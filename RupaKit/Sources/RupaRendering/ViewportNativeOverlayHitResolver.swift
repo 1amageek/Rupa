@@ -308,6 +308,7 @@ enum ViewportNativeOverlayHitResolver {
             }
             guard admitsEntities else { continue }
             let points = try ViewportSpatialOverlayProducer.sketchPrimitiveWorldPoints(primitive)
+                .map(item.modelTransform.point)
             guard let first = points.first else { continue }
             if points.count == 1 {
                 guard let distance = try markerDistance(first) else { continue }
@@ -411,6 +412,7 @@ enum ViewportNativeOverlayHitResolver {
             }
             guard admitsEntities else { continue }
             let points = try ViewportSpatialOverlayProducer.sketchPrimitiveWorldPoints(primitive)
+                .map(item.modelTransform.point)
             guard let first = points.first else { continue }
             if points.count == 1 {
                 guard try drawsMarker(first) else { continue }
@@ -457,6 +459,7 @@ enum ViewportNativeOverlayHitResolver {
         for region in item.sketchRegions {
             guard let boundary = try drawnRegionBoundary(
                       region,
+                      placement: item.modelTransform,
                       depthInterval: depthInterval,
                       probe: probe
                   ),
@@ -508,6 +511,7 @@ enum ViewportNativeOverlayHitResolver {
         for region in item.sketchRegions where admitted.contains(region.componentID) == false {
             guard let boundary = try drawnRegionBoundary(
                       region,
+                      placement: item.modelTransform,
                       depthInterval: depthInterval,
                       probe: probe
                   ),
@@ -711,13 +715,14 @@ enum ViewportNativeOverlayHitResolver {
     /// family has.
     private static func drawnRegionBoundary(
         _ region: ViewportSketchRegion,
+        placement: ScenePlacement,
         depthInterval: ClosedRange<Double>,
         probe: some ViewportNativeFrameProbe
     ) throws -> [CGPoint]? {
         guard region.points.count >= 3 else { return nil }
         // The overlay producer maps a region's boundary to world space this
         // way, so the query is asked about the polygon on screen.
-        let worldPoints = region.points.map { ViewportSpatialOverlayProducer.point($0) }
+        let worldPoints = region.points.map { placement.point(ViewportSpatialOverlayProducer.point($0)) }
         var boundary: [ViewportCameraDepthClip.Vertex] = []
         boundary.reserveCapacity(worldPoints.count)
         for worldPoint in worldPoints {

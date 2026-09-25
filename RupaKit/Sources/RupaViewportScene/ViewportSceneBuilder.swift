@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import CoreGraphics
 import RupaCore
 import SwiftCAD
@@ -18,6 +19,22 @@ public struct ViewportSceneBuilder {
         evaluationCache: EvaluatedDocumentCache? = nil,
         evaluationPolicy: ViewportSceneEvaluationPolicy = .evaluateOnDemand
     ) -> ViewportScene {
+        let sceneTransformIndex: ViewportSceneTransformIndex
+        do {
+            sceneTransformIndex = try ViewportSceneTransformIndex(
+                metadata: document.productMetadata
+            )
+        } catch let error as EditorError {
+            return ViewportScene(items: [], failure: error)
+        } catch {
+            return ViewportScene(
+                items: [],
+                failure: EditorError(
+                    code: .commandInvalid,
+                    message: "Viewport scene placement could not be resolved: \(error)."
+                )
+            )
+        }
         let graph = document.cadDocument.designGraph
         let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(
             document: document,
@@ -70,7 +87,6 @@ public struct ViewportSceneBuilder {
             currentEvaluation: currentEvaluation,
             currentGeneration: documentGeneration
         )
-        let effectivelyVisibleSceneNodeIDs = effectivelyVisibleSceneNodeIDs(in: document.productMetadata)
         let baseItems = graph.order.compactMap { featureID -> ViewportSceneItem? in
             guard let feature = graph.nodes[featureID] else {
                 return nil
@@ -92,7 +108,6 @@ public struct ViewportSceneBuilder {
                             resolution: SketchArcDisplayResolution(
                                 object: objectDescriptor(
                                     featureID: featureID,
-                                    kind: .sketch,
                                     document: document
                                 ),
                                 objectRegistry: objectRegistry
@@ -109,7 +124,6 @@ public struct ViewportSceneBuilder {
                 let bounds = viewportBounds(sketchSnapshot.bounds, ruler: ruler)
                 let object = objectDescriptor(
                     featureID: featureID,
-                    kind: .body,
                     document: document
                 )
                 let component = bodyComponent(
@@ -150,7 +164,6 @@ public struct ViewportSceneBuilder {
                     let bounds = viewportBounds(sketchSnapshot.bounds, ruler: ruler)
                     let object = objectDescriptor(
                         featureID: featureID,
-                        kind: .body,
                         document: document
                     )
                     let component = bodyComponent(
@@ -242,7 +255,6 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: objectDescriptor(
                         featureID: featureID,
-                        kind: .body,
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
@@ -259,7 +271,6 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: objectDescriptor(
                         featureID: featureID,
-                        kind: .body,
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
@@ -276,7 +287,6 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: objectDescriptor(
                         featureID: featureID,
-                        kind: .body,
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
@@ -354,284 +364,103 @@ public struct ViewportSceneBuilder {
                 )
             }
         }
-        let resolvedBaseItems = baseItems.flatMap { item in
-            itemsWithSceneNodeIdentity(item, in: document)
+        // Evaluated geometry is placed by the occurrences of its presenting scene node. A feature
+        // without one has no product placement and is drawn once in the world frame, the same
+        // rule section analysis and measurement apply.
+        var unpresentedItems: [ViewportSceneItem] = []
+        var baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem] = [:]
+        var featureOrderBySceneNodeID: [SceneNodeID: Int] = [:]
+        for (order, item) in baseItems.enumerated() {
+            if let sceneNodeID = sceneTransformIndex.presentingSceneNodeID(for: item.featureID) {
+                var presentedItem = item
+                presentedItem.sceneNodeID = sceneNodeID
+                baseItemsBySceneNodeID[sceneNodeID] = presentedItem
+                featureOrderBySceneNodeID[sceneNodeID] = order
+            } else {
+                unpresentedItems.append(item)
+            }
         }
-        let sceneTransformIndex = ViewportSceneTransformIndex(metadata: document.productMetadata)
-        let rootItems = resolvedBaseItems.compactMap { resolvedItem -> ViewportSceneItem? in
-            guard let sceneNodeID = resolvedItem.sceneNodeID else {
-                return resolvedItem
-            }
-            guard effectivelyVisibleSceneNodeIDs.contains(sceneNodeID) else {
-                return nil
-            }
-            return transformedSceneTreeItem(
-                resolvedItem,
-                transform: sceneTransformIndex.transform(for: sceneNodeID)
+        do {
+            let placedItems = try occurrenceItems(
+                baseItemsBySceneNodeID: baseItemsBySceneNodeID,
+                featureOrderBySceneNodeID: featureOrderBySceneNodeID,
+                sceneTransformIndex: sceneTransformIndex
             )
-        }
-        let baseItemsBySceneNodeID = Dictionary(
-            uniqueKeysWithValues: resolvedBaseItems.compactMap { item -> (SceneNodeID, ViewportSceneItem)? in
-                guard let sceneNodeID = item.sceneNodeID else {
-                    return nil
-                }
-                return (sceneNodeID, item)
-            }
-        )
-        let instanceItems = componentInstanceItems(
-            document: document,
-            baseItemsBySceneNodeID: baseItemsBySceneNodeID,
-            sceneTransformIndex: sceneTransformIndex,
-            effectivelyVisibleSceneNodeIDs: effectivelyVisibleSceneNodeIDs
-        )
-        return ViewportScene(items: rootItems + instanceItems)
-    }
-
-    private func effectivelyVisibleSceneNodeIDs(in metadata: ProductMetadata) -> Set<SceneNodeID> {
-        var visibleIDs: Set<SceneNodeID> = []
-        var visitedIDs: Set<SceneNodeID> = []
-        for rootSceneNodeID in metadata.rootSceneNodeIDs {
-            appendEffectivelyVisibleSceneNodeIDs(
-                rootSceneNodeID,
-                metadata: metadata,
-                parentIsVisible: true,
-                visibleIDs: &visibleIDs,
-                visitedIDs: &visitedIDs
-            )
-        }
-        return visibleIDs
-    }
-
-    private func appendEffectivelyVisibleSceneNodeIDs(
-        _ sceneNodeID: SceneNodeID,
-        metadata: ProductMetadata,
-        parentIsVisible: Bool,
-        visibleIDs: inout Set<SceneNodeID>,
-        visitedIDs: inout Set<SceneNodeID>
-    ) {
-        guard visitedIDs.insert(sceneNodeID).inserted,
-              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
-            return
-        }
-        let isVisible = parentIsVisible && sceneNode.isVisible
-        if isVisible {
-            visibleIDs.insert(sceneNodeID)
-        }
-        for childID in sceneNode.childIDs {
-            appendEffectivelyVisibleSceneNodeIDs(
-                childID,
-                metadata: metadata,
-                parentIsVisible: isVisible,
-                visibleIDs: &visibleIDs,
-                visitedIDs: &visitedIDs
+            return ViewportScene(items: unpresentedItems + placedItems)
+        } catch let error as EditorError {
+            return ViewportScene(items: [], failure: error)
+        } catch {
+            return ViewportScene(
+                items: [],
+                failure: EditorError(
+                    code: .commandInvalid,
+                    message: "Viewport scene placement could not be resolved: \(error)."
+                )
             )
         }
     }
 
-    private func itemsWithSceneNodeIdentity(
-        _ item: ViewportSceneItem,
-        in document: DesignDocument
-    ) -> [ViewportSceneItem] {
-        let sceneNodeIDs = sceneNodeIDs(
-            featureID: item.featureID,
-            kind: item.kind.selectableKind,
-            in: document
-        )
-        guard sceneNodeIDs.isEmpty == false else {
-            return [item]
-        }
-        return sceneNodeIDs.map { sceneNodeID in
-            var resolvedItem = item
-            resolvedItem.sceneNodeID = sceneNodeID
-            if sceneNodeIDs.count > 1 {
-                resolvedItem.id = "\(item.id).scene-node.\(sceneNodeID.description)"
-            }
-            return resolvedItem
-        }
-    }
-
-    private func sceneNodeIDs(
-        featureID: FeatureID,
-        kind: ViewportSelectableKind,
-        in document: DesignDocument
-    ) -> [SceneNodeID] {
-        let referenceKind: SceneNodeReference.Kind = switch kind {
-        case .sketch:
-            .sketch
-        case .body:
-            .body
-        case .curve:
-            .feature
-        }
-        let matchingIDs = document.productMetadata.sceneNodes.compactMap { sceneNodeID, node in
-            node.reference?.kind == referenceKind && node.reference?.featureID == featureID
-                ? sceneNodeID
-                : nil
-        }
-        if matchingIDs.isEmpty == false {
-            return matchingIDs.sorted { $0.description < $1.description }
-        }
-        return document.productMetadata.sceneNodes.compactMap { sceneNodeID, node in
-            node.reference?.featureID == featureID ? sceneNodeID : nil
-        }
-        .sorted { $0.description < $1.description }
-    }
-
-    private func componentInstanceItems(
-        document: DesignDocument,
+    /// One placed item per visible occurrence of a presenting scene node.
+    ///
+    /// Visibility is the occurrence's resolved visibility, which already folds in every ancestor
+    /// and component instance, so the builder keeps no second visibility walk. Direct items keep
+    /// the feature graph order; expanded component items follow, ordered by occurrence path.
+    private func occurrenceItems(
         baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem],
-        sceneTransformIndex: ViewportSceneTransformIndex,
-        effectivelyVisibleSceneNodeIDs: Set<SceneNodeID>
-    ) -> [ViewportSceneItem] {
-        var items: [ViewportSceneItem] = []
-        for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard effectivelyVisibleSceneNodeIDs.contains(sceneNodeID),
-                  let componentInstanceID = sceneNode.reference?.componentInstanceID,
-                  let instance = document.productMetadata.componentInstances[componentInstanceID],
-                  instance.isVisible,
-                  let definition = document.productMetadata.componentDefinitions[instance.definitionID] else {
+        featureOrderBySceneNodeID: [SceneNodeID: Int],
+        sceneTransformIndex: ViewportSceneTransformIndex
+    ) throws -> [ViewportSceneItem] {
+        var directItems: [(order: Int, item: ViewportSceneItem)] = []
+        var instanceItems: [ViewportSceneItem] = []
+        for occurrence in try sceneTransformIndex.resolvedOccurrences() {
+            guard occurrence.isVisible,
+                  let baseItem = baseItemsBySceneNodeID[occurrence.sourceSceneNodeID] else {
                 continue
             }
-            let instanceTransform = sceneTransformIndex
-                .transform(for: sceneNodeID)
-                .concatenating(instance.localTransform)
-            for rootSceneNodeID in definition.rootSceneNodeIDs {
-                appendComponentDefinitionItems(
-                    sourceSceneNodeID: rootSceneNodeID,
-                    instanceSceneNodeID: sceneNodeID,
-                    componentInstanceID: componentInstanceID,
-                    transform: instanceTransform,
-                    document: document,
-                    baseItemsBySceneNodeID: baseItemsBySceneNodeID,
-                    visitedSceneNodeIDs: [],
-                    visitedDefinitionIDs: [definition.id],
-                    items: &items
-                )
+            var item = try transformedSceneTreeItem(baseItem, transform: occurrence.worldTransform)
+            item.sceneNodeID = occurrence.sceneNodeID
+            item.occurrenceID = occurrence.id
+            if let instanceID = occurrence.componentInstanceID {
+                item.id = "\(occurrence.id.rawValue):\(baseItem.id)"
+                item.componentInstanceID = instanceID
+                instanceItems.append(item)
+            } else {
+                directItems.append((featureOrderBySceneNodeID[occurrence.sourceSceneNodeID] ?? 0, item))
             }
         }
-        return items.sorted { $0.id < $1.id }
-    }
-
-    private func appendComponentDefinitionItems(
-        sourceSceneNodeID: SceneNodeID,
-        instanceSceneNodeID: SceneNodeID,
-        componentInstanceID: ComponentInstanceID,
-        transform: Transform3D,
-        document: DesignDocument,
-        baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem],
-        visitedSceneNodeIDs: Set<SceneNodeID>,
-        visitedDefinitionIDs: Set<ComponentDefinitionID>,
-        items: inout [ViewportSceneItem]
-    ) {
-        guard !visitedSceneNodeIDs.contains(sourceSceneNodeID),
-              let sourceNode = document.productMetadata.sceneNodes[sourceSceneNodeID],
-              sourceNode.isVisible else {
-            return
-        }
-        var nextVisitedSceneNodeIDs = visitedSceneNodeIDs
-        nextVisitedSceneNodeIDs.insert(sourceSceneNodeID)
-        let nodeTransform = transform.concatenating(sourceNode.localTransform)
-        if let baseItem = baseItemsBySceneNodeID[sourceSceneNodeID] {
-            items.append(
-                transformedComponentInstanceItem(
-                    baseItem,
-                    sourceSceneNodeID: sourceSceneNodeID,
-                    instanceSceneNodeID: instanceSceneNodeID,
-                    componentInstanceID: componentInstanceID,
-                    transform: nodeTransform
-                )
-            )
-        }
-        if sourceNode.reference?.kind == .componentInstance,
-           let nestedComponentInstanceID = sourceNode.reference?.componentInstanceID,
-           let nestedInstance = document.productMetadata.componentInstances[nestedComponentInstanceID],
-           nestedInstance.isVisible,
-           let nestedDefinition = document.productMetadata.componentDefinitions[nestedInstance.definitionID],
-           !visitedDefinitionIDs.contains(nestedDefinition.id) {
-            var nextVisitedDefinitionIDs = visitedDefinitionIDs
-            nextVisitedDefinitionIDs.insert(nestedDefinition.id)
-            let nestedTransform = nodeTransform.concatenating(nestedInstance.localTransform)
-            for nestedRootSceneNodeID in nestedDefinition.rootSceneNodeIDs {
-                appendComponentDefinitionItems(
-                    sourceSceneNodeID: nestedRootSceneNodeID,
-                    instanceSceneNodeID: instanceSceneNodeID,
-                    componentInstanceID: componentInstanceID,
-                    transform: nestedTransform,
-                    document: document,
-                    baseItemsBySceneNodeID: baseItemsBySceneNodeID,
-                    visitedSceneNodeIDs: nextVisitedSceneNodeIDs,
-                    visitedDefinitionIDs: nextVisitedDefinitionIDs,
-                    items: &items
-                )
-            }
-        }
-        for childID in sourceNode.childIDs {
-            appendComponentDefinitionItems(
-                sourceSceneNodeID: childID,
-                instanceSceneNodeID: instanceSceneNodeID,
-                componentInstanceID: componentInstanceID,
-                transform: nodeTransform,
-                document: document,
-                baseItemsBySceneNodeID: baseItemsBySceneNodeID,
-                visitedSceneNodeIDs: nextVisitedSceneNodeIDs,
-                visitedDefinitionIDs: visitedDefinitionIDs,
-                items: &items
-            )
-        }
-    }
-
-    private func transformedComponentInstanceItem(
-        _ baseItem: ViewportSceneItem,
-        sourceSceneNodeID: SceneNodeID,
-        instanceSceneNodeID: SceneNodeID,
-        componentInstanceID: ComponentInstanceID,
-        transform: Transform3D
-    ) -> ViewportSceneItem {
-        var item = transformedSceneTreeItem(baseItem, transform: transform)
-        item.id = "\(instanceSceneNodeID.description):\(sourceSceneNodeID.description):\(baseItem.id)"
-        item.sceneNodeID = instanceSceneNodeID
-        item.componentInstanceID = componentInstanceID
-        return item
+        let orderedDirectItems = directItems.sorted { $0.order < $1.order }.map(\.item)
+        return orderedDirectItems + instanceItems.sorted { $0.id < $1.id }
     }
 
     private func transformedSceneTreeItem(
         _ baseItem: ViewportSceneItem,
         transform: Transform3D
-    ) -> ViewportSceneItem {
+    ) throws -> ViewportSceneItem {
+        let placement = try ScenePlacement(transform)
         var item = baseItem
         item.modelTransform = .identity
 
         switch baseItem.kind {
-        case .sketch(let primitives):
-            item.kind = .sketch(
-                primitives: primitives.map { primitive in
-                    transformedSketchPrimitive(primitive, transform: transform)
-                }
-            )
-            item.sketchRegions = baseItem.sketchRegions.map { region in
-                ViewportSketchRegion(
-                    componentID: region.componentID,
-                    points: region.points.map { transformedSketchPoint($0, transform: transform) }
-                )
-            }
-            item.modelBounds = transformedPlanarBounds(baseItem.modelBounds, transform: transform)
+        case .sketch:
+            item.modelTransform = placement
+            item.modelBounds = try transformedPlanarBounds(baseItem.modelBounds, transform: transform)
         case .body(let component):
-            let transformedBody = transformedBodyComponent(
+            let transformedBody = try transformedBodyComponent(
                 component,
                 modelBounds: baseItem.modelBounds,
                 transform: transform
             )
             item.kind = .body(component: transformedBody.component)
-            item.modelTransform = transform
+            item.modelTransform = placement
             item.modelBounds = transformedBody.modelBounds
         case .curve(let component):
-            let points = component.segments.flatMap(\.points).map {
-                transformedPoint($0, transform: transform)
+            let points = try component.segments.flatMap(\.points).map {
+                try transform.applied(to: $0)
             }
             guard let bounds = pointBounds(points) else {
                 break
             }
-            item.modelTransform = transform
+            item.modelTransform = placement
             item.modelBounds = CGRect(
                 x: bounds.minX,
                 y: bounds.minZ,
@@ -683,159 +512,23 @@ public struct ViewportSceneBuilder {
         )
     }
 
-    private func transformedSketchPrimitive(
-        _ primitive: ViewportSketchPrimitive,
-        transform: Transform3D
-    ) -> ViewportSketchPrimitive {
-        switch primitive {
-        case .point(let entityID, let point):
-            return .point(entityID: entityID, point: transformedSketchPoint(point, transform: transform))
-        case .line(let entityID, let start, let end):
-            return .line(
-                entityID: entityID,
-                start: transformedSketchPoint(start, transform: transform),
-                end: transformedSketchPoint(end, transform: transform)
-            )
-        case .circle(let entityID, let center, let radiusMeters, let segmentCount):
-            return .circle(
-                entityID: entityID,
-                center: transformedSketchPoint(center, transform: transform),
-                radiusMeters: transformedSketchRadius(
-                    center: center,
-                    radiusMeters: radiusMeters,
-                    transform: transform
-                ),
-                segmentCount: segmentCount
-            )
-        case .arc(
-            let entityID,
-            let center,
-            let radiusMeters,
-            let startAngleRadians,
-            let endAngleRadians,
-            let segmentCount
-        ):
-            let transformedArc = transformedSketchArc(
-                center: center,
-                radiusMeters: radiusMeters,
-                startAngleRadians: startAngleRadians,
-                endAngleRadians: endAngleRadians,
-                transform: transform
-            )
-            return .arc(
-                entityID: entityID,
-                center: transformedArc.center,
-                radiusMeters: transformedArc.radiusMeters,
-                startAngleRadians: transformedArc.startAngleRadians,
-                endAngleRadians: transformedArc.endAngleRadians,
-                segmentCount: segmentCount
-            )
-        case .spline(let entityID, let points, let controlPoints, let sketchPlane):
-            return .spline(
-                entityID: entityID,
-                points: points.map { transformedSketchPoint($0, transform: transform) },
-                controlPoints: controlPoints.map { transformedSketchPoint($0, transform: transform) },
-                sketchPlane: sketchPlane
-            )
-        }
-    }
-
     private func transformedSketchPoint(
         _ point: CGPoint,
         transform: Transform3D
-    ) -> CGPoint {
-        let transformedPoint = transformedPoint(
-            Point3D(x: Double(point.x), y: 0.0, z: Double(point.y)),
-            transform: transform
+    ) throws -> CGPoint {
+        let transformedPoint = try transform.applied(
+            to: Point3D(x: Double(point.x), y: 0.0, z: Double(point.y))
         )
         return CGPoint(x: transformedPoint.x, y: transformedPoint.z)
-    }
-
-    private func transformedSketchRadius(
-        center: CGPoint,
-        radiusMeters: Double,
-        transform: Transform3D
-    ) -> Double {
-        let radius = max(radiusMeters, 1.0e-12)
-        let centerPoint = transformedSketchPoint(center, transform: transform)
-        let xPoint = transformedSketchPoint(
-            CGPoint(x: center.x + CGFloat(radius), y: center.y),
-            transform: transform
-        )
-        let zPoint = transformedSketchPoint(
-            CGPoint(x: center.x, y: center.y + CGFloat(radius)),
-            transform: transform
-        )
-        let xScale = planarDistance(from: centerPoint, to: xPoint) / radius
-        let zScale = planarDistance(from: centerPoint, to: zPoint) / radius
-        let scale = (xScale + zScale) * 0.5
-        guard scale.isFinite,
-              scale > 1.0e-12 else {
-            return radius
-        }
-        return radius * scale
-    }
-
-    private func transformedSketchArc(
-        center: CGPoint,
-        radiusMeters: Double,
-        startAngleRadians: Double,
-        endAngleRadians: Double,
-        transform: Transform3D
-    ) -> (center: CGPoint, radiusMeters: Double, startAngleRadians: Double, endAngleRadians: Double) {
-        let radius = max(radiusMeters, 1.0e-12)
-        let transformedCenter = transformedSketchPoint(center, transform: transform)
-        let transformedStart = transformedSketchPoint(
-            sketchArcPoint(center: center, radiusMeters: radius, angleRadians: startAngleRadians),
-            transform: transform
-        )
-        let transformedEnd = transformedSketchPoint(
-            sketchArcPoint(center: center, radiusMeters: radius, angleRadians: endAngleRadians),
-            transform: transform
-        )
-        let startRadius = planarDistance(from: transformedCenter, to: transformedStart)
-        let endRadius = planarDistance(from: transformedCenter, to: transformedEnd)
-        let transformedRadius = max((startRadius + endRadius) * 0.5, 1.0e-12)
-        return (
-            transformedCenter,
-            transformedRadius,
-            sketchAngle(from: transformedCenter, to: transformedStart),
-            sketchAngle(from: transformedCenter, to: transformedEnd)
-        )
-    }
-
-    private func sketchArcPoint(
-        center: CGPoint,
-        radiusMeters: Double,
-        angleRadians: Double
-    ) -> CGPoint {
-        CGPoint(
-            x: center.x + CGFloat(cos(angleRadians) * radiusMeters),
-            y: center.y + CGFloat(sin(angleRadians) * radiusMeters)
-        )
-    }
-
-    private func sketchAngle(
-        from center: CGPoint,
-        to point: CGPoint
-    ) -> Double {
-        Double(atan2(point.y - center.y, point.x - center.x))
-    }
-
-    private func planarDistance(
-        from start: CGPoint,
-        to end: CGPoint
-    ) -> Double {
-        Double(hypot(end.x - start.x, end.y - start.y))
     }
 
     private func transformedBodyComponent(
         _ component: ViewportBodyComponent,
         modelBounds: CGRect,
         transform: Transform3D
-    ) -> (component: ViewportBodyComponent, modelBounds: CGRect) {
+    ) throws -> (component: ViewportBodyComponent, modelBounds: CGRect) {
         var resolvedComponent = component
-        let bounds = transformedPointBounds(
+        let bounds = try transformedPointBounds(
             modelBounds: modelBounds,
             yMinMeters: component.yMinMeters,
             yMaxMeters: component.yMaxMeters,
@@ -860,13 +553,13 @@ public struct ViewportSceneBuilder {
     private func transformedPlanarBounds(
         _ bounds: CGRect,
         transform: Transform3D
-    ) -> CGRect {
-        let points = [
+    ) throws -> CGRect {
+        let points = try [
             CGPoint(x: bounds.minX, y: bounds.minY),
             CGPoint(x: bounds.maxX, y: bounds.minY),
             CGPoint(x: bounds.maxX, y: bounds.maxY),
             CGPoint(x: bounds.minX, y: bounds.maxY),
-        ].map { transformedSketchPoint($0, transform: transform) }
+        ].map { try transformedSketchPoint($0, transform: transform) }
         return planarBounds(points)
     }
 
@@ -891,14 +584,14 @@ public struct ViewportSceneBuilder {
         yMinMeters: Double,
         yMaxMeters: Double,
         transform: Transform3D
-    ) -> [Point3D] {
+    ) throws -> [Point3D] {
         let xValues = [Double(modelBounds.minX), Double(modelBounds.maxX)]
         let yValues = [yMinMeters, yMaxMeters]
         let zValues = [Double(modelBounds.minY), Double(modelBounds.maxY)]
-        return xValues.flatMap { x in
-            yValues.flatMap { y in
-                zValues.map { z in
-                    transformedPoint(Point3D(x: x, y: y, z: z), transform: transform)
+        return try xValues.flatMap { x in
+            try yValues.flatMap { y in
+                try zValues.map { z in
+                    try transform.applied(to: Point3D(x: x, y: y, z: z))
                 }
             }
         }
@@ -909,21 +602,17 @@ public struct ViewportSceneBuilder {
         yMinMeters: Double,
         yMaxMeters: Double,
         transform: Transform3D
-    ) -> (minX: Double, minY: Double, minZ: Double, maxX: Double, maxY: Double, maxZ: Double) {
-        let points = transformedBodyBoundsPoints(
+    ) throws -> (minX: Double, minY: Double, minZ: Double, maxX: Double, maxY: Double, maxZ: Double) {
+        let points = try transformedBodyBoundsPoints(
             modelBounds: modelBounds,
             yMinMeters: yMinMeters,
             yMaxMeters: yMaxMeters,
             transform: transform
         )
-        return pointBounds(points) ?? (
-            minX: Double(modelBounds.minX),
-            minY: yMinMeters,
-            minZ: Double(modelBounds.minY),
-            maxX: Double(modelBounds.maxX),
-            maxY: yMaxMeters,
-            maxZ: Double(modelBounds.maxY)
-        )
+        guard let bounds = pointBounds(points) else {
+            throw EditorError(code: .commandInvalid, message: "Placed body bounds could not be resolved.")
+        }
+        return bounds
     }
 
     private func pointBounds(
@@ -949,13 +638,6 @@ public struct ViewportSceneBuilder {
             bounds.maxZ = max(bounds.maxZ, point.z)
         }
         return bounds
-    }
-
-    private func transformedPoint(
-        _ point: Point3D,
-        transform: Transform3D
-    ) -> Point3D {
-        transform.viewportTransformedPoint(point)
     }
 
     private func visibleSurfaceControlPointDisplaysByFeatureID(
@@ -1712,7 +1394,6 @@ public struct ViewportSceneBuilder {
         }
         let object = objectDescriptor(
             featureID: featureID,
-            kind: .body,
             document: document
         )
         let resolvedTypeID = object?.typeID ?? .cube
@@ -1892,13 +1573,16 @@ public struct ViewportSceneBuilder {
         return ObjectPropertySet(values: values)
     }
 
+    /// The object descriptor of the scene node that presents `featureID`.
+    ///
+    /// Product metadata allows at most one presenting node per feature, so this lookup is
+    /// independent of the node's reference kind.
     private func objectDescriptor(
         featureID: FeatureID,
-        kind: SceneNodeReference.Kind,
         document: DesignDocument
     ) -> ObjectDescriptor? {
         document.productMetadata.sceneNodes.values.first { node in
-            node.reference?.kind == kind && node.reference?.featureID == featureID
+            node.reference?.featureID == featureID
         }?.object
     }
 

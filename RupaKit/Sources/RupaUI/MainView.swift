@@ -3887,6 +3887,19 @@ private struct ProjectMainViewContent: View {
                 .help(boundsSummary)
                 .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
         }
+        if state.canSave {
+            Button {
+                saveMeasurement(state)
+            } label: {
+                Label("Save", systemImage: "square.and.arrow.down")
+                    .font(.caption)
+            }
+            .accessibilityIdentifier("WorkspaceMeasure.save")
+        }
+        WorkspaceSavedMeasurementsControl(
+            resolutions: savedMeasurementResolutions,
+            onDelete: deleteSavedMeasurement
+        )
         Text(state.status ?? "Click a first point, then click a second point.")
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -3894,6 +3907,51 @@ private struct ProjectMainViewContent: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: 280, alignment: .leading)
             .accessibilityIdentifier("WorkspaceMeasure.status")
+    }
+
+    /// The same Core resolution the viewport draws saved measurements from.
+    private var savedMeasurementResolutions: [MeasurementAnnotationResolver.Resolution] {
+        let document = snapshot.document.document
+        return MeasurementAnnotationResolver().resolveAll(in: document) {
+            try TopologySnapshotService().snapshot(
+                document: document,
+                objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction,
+                currentGeneration: snapshot.documentGeneration
+            )
+        }
+    }
+
+    /// Saves the completed measurement as a persistent distance annotation.
+    ///
+    /// Anchors are built against the document the command runs on, so each
+    /// endpoint is stored in the local frame of the placement it was picked
+    /// under and follows that placement afterwards.
+    private func saveMeasurement(_ state: ViewportMeasurementState) {
+        submitSource(name: "addMeasurementAnnotation", commands: { current in
+            let document = current.document.document
+            let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
+            let annotation = MeasurementAnnotation(
+                name: "Distance \(document.productMetadata.measurements.count + 1)",
+                kind: .distance,
+                anchors: try state.savedAnchors(in: hierarchy)
+            )
+            return [.addMeasurementAnnotation(annotation)]
+        }) { _ in
+            reportToolStatus("Measurement saved.")
+        }
+    }
+
+    /// Deletes a saved measurement through its annotation scene node, which
+    /// removes the annotation with it.
+    private func deleteSavedMeasurement(_ id: MeasurementAnnotationID) {
+        guard let sceneNodeID = snapshot.document.document.productMetadata.measurements[id]?.sceneNodeID else {
+            reportToolStatus("The saved measurement has no annotation node to delete.", severity: .warning)
+            return
+        }
+        submitSource(.deleteSceneNodes(ids: [sceneNodeID])) { _ in
+            reportToolStatus("Saved measurement deleted.")
+        }
     }
 
     @ViewBuilder

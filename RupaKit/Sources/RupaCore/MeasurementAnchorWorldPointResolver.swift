@@ -48,10 +48,45 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         in document: DesignDocument,
         topology: TopologySnapshot? = nil
     ) throws -> Point3D? {
+        try anchor.validate()
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
+        // A sketch anchor without an explicit node is placed by the node presenting its sketch;
+        // an unpresented sketch has no product placement and stays in the world frame.
+        let sketchFeatureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID
+        let placementID = anchor.sceneNodeID
+            ?? anchor.topologyReference?.sceneNodeID
+            ?? anchor.topologyEdgeParameter?.sceneNodeID
+            ?? sketchFeatureID.flatMap { hierarchy.presentingSceneNodeID(for: $0) }
+        var transform = Transform3D.identity
+        var sourceSceneNodeID = placementID
+        if let placementID {
+            if let occurrenceID = anchor.occurrenceID {
+                guard let occurrence = try hierarchy.resolvedOccurrences().first(where: { $0.id == occurrenceID }),
+                      occurrence.sceneNodeID == placementID else {
+                    throw EditorError(code: .referenceUnresolved,
+                        message: "Measurement occurrence no longer matches its retained scene node.")
+                }
+                sourceSceneNodeID = occurrence.sourceSceneNodeID
+                transform = occurrence.worldTransform
+            } else {
+                if anchor.kind != .worldPoint,
+                   hierarchy.node(placementID)?.reference?.componentInstanceID != nil {
+                    throw EditorError(code: .referenceUnresolved,
+                        message: "Component geometry measurement requires an explicit occurrence.")
+                }
+                transform = try hierarchy.worldTransform(of: placementID)
+            }
+            if let featureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID,
+               let sourceSceneNodeID,
+               hierarchy.node(sourceSceneNodeID)?.reference?.featureID != featureID {
+                throw EditorError(code: .referenceUnresolved,
+                    message: "Measurement sketch does not match its retained placement source.")
+            }
+        }
         let resolvedWorldPoint: Point3D?
         switch anchor.kind {
         case .worldPoint:
-            resolvedWorldPoint = anchor.worldPoint
+            resolvedWorldPoint = anchor.localPoint ?? anchor.worldPoint
         case .sketchReference:
             guard let sketchReference = anchor.sketchReference else {
                 return nil
@@ -69,30 +104,32 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
                 in: document
             )
         case .topologyReference:
-            guard let topologyReference = anchor.topologyReference,
+            guard var topologyReference = anchor.topologyReference,
                   let topology else {
                 return nil
             }
+            if let sourceSceneNodeID { topologyReference.sceneNodeID = sourceSceneNodeID }
             resolvedWorldPoint = worldPoint(
                 for: topologyReference,
                 role: anchor.role,
                 in: topology
             )
         case .topologyEdgeParameter:
-            guard let topologyEdgeParameter = anchor.topologyEdgeParameter,
+            guard var topologyEdgeParameter = anchor.topologyEdgeParameter,
                   let topology else {
                 return nil
             }
+            if let sourceSceneNodeID { topologyEdgeParameter.sceneNodeID = sourceSceneNodeID }
             resolvedWorldPoint = worldPoint(
                 for: topologyEdgeParameter,
                 in: topology
             )
         }
-        guard let worldPoint = resolvedWorldPoint,
-              isFinite(worldPoint) else {
+        guard let point = resolvedWorldPoint,
+              isFinite(point) else {
             return nil
         }
-        return worldPoint
+        return try transform.applied(to: point)
     }
 
     private func worldPoint(

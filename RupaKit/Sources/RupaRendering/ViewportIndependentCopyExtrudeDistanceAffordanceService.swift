@@ -8,8 +8,8 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
         scene: ViewportScene,
         selection: SelectionModel,
         layout: ViewportLayout
-    ) -> [ViewportIndependentCopyExtrudeDistanceAffordanceCandidate] {
-        let index = ViewportIndependentCopyOutputSelectionIndex(
+    ) throws -> [ViewportIndependentCopyExtrudeDistanceAffordanceCandidate] {
+        let index = try ViewportIndependentCopyOutputSelectionIndex(
             metadata: document.productMetadata,
             scene: scene
         )
@@ -111,7 +111,7 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
         for output: ViewportSelectedIndependentCopyOutput,
         localAxisDirection: Vector3D
     ) -> (axisDirection: Vector3D, axisScale: Double)? {
-        let transformedAxis = output.modelTransform.viewportTransformedVector(localAxisDirection)
+        let transformedAxis = output.modelTransform.vector(localAxisDirection)
         let axisScale = transformedAxis.length
         guard axisScale.isFinite,
               axisScale > 1.0e-12 else {

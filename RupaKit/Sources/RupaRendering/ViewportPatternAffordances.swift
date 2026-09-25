@@ -1028,7 +1028,7 @@ extension ViewportSpatialOverlayProducer {
                           ) else {
                         continue
                     }
-                    let worldAxis = output.modelTransform.viewportTransformedVector(localAxis)
+                    let worldAxis = output.modelTransform.vector(localAxis)
                     let axisScale = worldAxis.length
                     guard axisScale.isFinite, axisScale > 1.0e-12 else {
                         throw RealityViewportSpatialBatch.invalid(
@@ -1085,7 +1085,7 @@ extension ViewportSpatialOverlayProducer {
                         ) else {
                             continue
                         }
-                        let worldAxis = output.modelTransform.viewportTransformedVector(descriptor.axis)
+                        let worldAxis = output.modelTransform.vector(descriptor.axis)
                         let axisScale = worldAxis.length
                         guard axisScale.isFinite, axisScale > 1.0e-12 else {
                             throw RealityViewportSpatialBatch.invalid(
@@ -1192,8 +1192,8 @@ extension ViewportSpatialOverlayProducer {
             throw RealityViewportSpatialBatch.exhausted()
         }
         try checkpoint(0, 0, transforms.count)
-        let outputPoints = transforms.map {
-            ViewportLayout.transformedPoint(basePoint, by: $0)
+        let outputPoints = try transforms.map {
+            ViewportLayout.transformedPoint(basePoint, by: try ScenePlacement($0))
         }
         guard outputPoints.allSatisfy(patternFinitePoint) else {
             throw RealityViewportSpatialBatch.invalid(

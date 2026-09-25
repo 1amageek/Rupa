@@ -66,13 +66,13 @@ struct VertexScopeSelectionFixture {
     let cpuScene: ViewportScene
     let solidSceneNodeID: SceneNodeID
     let solidTopology: ViewportBodyTopology
-    let solidModelTransform: Transform3D
+    let solidModelTransform: ScenePlacement
     let occludedSheetSceneNodeID: SceneNodeID
     let occludedSheetComponent: ViewportBodyComponent
-    let occludedSheetModelTransform: Transform3D
+    let occludedSheetModelTransform: ScenePlacement
     let freeSheetSceneNodeID: SceneNodeID
     let freeSheetComponent: ViewportBodyComponent
-    let freeSheetModelTransform: Transform3D
+    let freeSheetModelTransform: ScenePlacement
     let interactionSceneNodeIDs: Set<SceneNodeID>
 }
 
@@ -109,7 +109,7 @@ private func vertexScopeEditableSheet(
 private func vertexScopeBody(
     sceneNodeID: SceneNodeID,
     in scene: ViewportScene
-) throws -> (component: ViewportBodyComponent, modelTransform: Transform3D) {
+) throws -> (component: ViewportBodyComponent, modelTransform: ScenePlacement) {
     guard let item = scene.items.first(where: { $0.sceneNodeID == sceneNodeID }),
           case .body(let component) = item.kind else {
         throw VertexScopeFixtureError.missingBody
@@ -238,7 +238,7 @@ struct VertexScopeScreenGeometry {
 @MainActor
 private func vertexScopeKnot(
     component: ViewportBodyComponent,
-    modelTransform: Transform3D,
+    modelTransform: ScenePlacement,
     layout: ViewportLayout,
     name: String
 ) throws -> (reference: SelectionReference, world: Point3D, point: CGPoint) {

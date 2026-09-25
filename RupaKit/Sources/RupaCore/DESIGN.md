@@ -568,6 +568,60 @@ translation, point application, rotation, inverse and parent-times-local composi
 Explicit matrix-coordinate regression checks are required: composing and reading
 with the same erroneous convention is not sufficient evidence.
 
+`Transform3D` is the sole owner of checked scene-matrix composition, inversion,
+point/vector mapping, translation, scale and rotation. `SceneNodeHierarchy` is
+the sole owner of the Product scene-tree walk and parent/world placement lookup.
+Consumers may retain a read-only index built from that hierarchy, but they may
+not independently traverse or multiply scene-node transforms. Malformed,
+non-finite, non-affine where affine placement is required, singular, missing,
+unreachable, cyclic or multiply-parented input remains a typed failure; it is
+never replaced with identity, the original point/vector, a partial tree, or a
+partially transformed result.
+
+`ScenePlacement` is the validated form of a placement matrix that presentation
+consumers carry. Its initializer is the failure boundary: it requires a finite,
+affine, invertible matrix and computes the inverse once. After construction,
+point, vector, inverse and normal mapping are plain affine arithmetic with no
+identity, input or projective substitute; a non-finite input maps to a
+non-finite output, which the consuming boundary rejects. Viewport items and
+interaction records hold `ScenePlacement`, never a raw `Transform3D`, so no
+presentation mapping can run on an unvalidated matrix.
+
+`SceneNodeHierarchy` also resolves component expansion. Each resolved occurrence
+retains its source node, selectable outer instance node, parent occurrence, local
+and world transforms, and effective visibility. Direct occurrence IDs remain
+`scene.<node ID>`; expanded IDs include the complete instance/source path, so
+repeated and nested instances cannot alias. Definition roots use their authored
+local transforms, without inheriting their original document parents. Instance
+placement precedes the definition-root transform. Expansion detects recursive
+definitions and missing references and publishes no partial result. Hidden
+occurrences remain available to source evaluation; display consumers filter the
+resolved visibility. This read model owns no mutable document state.
+
+Evaluated feature geometry enters the scene through exactly one presenting scene
+node: the node whose `.feature`, `.body` or `.sketch` reference names that
+feature. `FeaturePresentationIndex` defines that rule once; Product metadata
+validation rejects a second presenting node for the same feature, and
+`SceneNodeHierarchy` builds the same index and exposes
+`presentingSceneNodeID(for:)` and `presentationOccurrences(of:in:)`. Repetition
+is expressed only by component instances, which expand the presenting node into
+distinct occurrences. Viewport, measurement, section analysis, snapping and the
+topology snapshot resolve presentation only through this index and never group
+scene nodes by reference kind themselves. A feature without a presenting node
+has no product placement: its evaluated geometry is drawn, sectioned and
+measured exactly once in the world frame (identity placement, no occurrence),
+and its topology entries carry no scene node, so no scene-qualified selection
+resolves against them. This is the placement rule for documents built directly
+from the feature graph; it is never substituted for a presenting node whose
+placement fails, which remains a typed failure.
+
+Measurement and section analysis use that same hierarchy and the same placement
+of the occurrence being inspected. A persistent reference that is expected to
+follow a moved occurrence stores that occurrence identity and source-local
+coordinates; a world-space point without an occurrence reference remains fixed.
+Analysis distinguishes repeated component/pattern occurrences instead of
+merging their geometry under one source-body identity.
+
 The placement inspector accepts finite, non-singular affine matrices, including
 shear produced by world-axis scaling after rotation. Its canonical decomposition
 is `T * Rz * Ry * Rx * H * S`, where H is upper triangular with unit diagonal
@@ -747,7 +801,7 @@ object candidates. It requests the existing `TopologySnapshotService.snapshot` w
 `metricPolicy: .omit` exactly when:
 
 ```text
-measurementsRequireTopology(in: document)
+MeasurementAnnotationResolver.requiresTopology(document)
 || (searchRadiusMeters > 0
     && document.cadDocument.hasActiveRenderableTopologyFeatures)
 ```
@@ -779,6 +833,20 @@ document the caller did not ask about. `SnapResolver.init` takes the
 evaluator refuses to run and read the difference between a matching context and
 no context as success against failure.
 
+### Snap placement contract
+
+Snap candidates are offered where the geometry is displayed. Each source is
+placed by its feature's presenting scene node (the direct occurrence) through
+`ScenePlacement`; an unpresented source stays in the world frame. Topology,
+surface-trim and region-center points are single points, so any affine
+placement maps them exactly. Sketch snap entities (points, closest-point curves,
+intersections) are computed in the sketch plane, which cannot express an
+in-plane rotation or scale; a sketch presented by a moved node therefore offers
+no entity candidates, a gap marked `FIXME(INCOMPLETE_IMPLEMENTATION)` in
+`SnapResolver`. Snap points on saved measurements come from
+`MeasurementAnnotationResolver`; an unresolved annotation offers none and never
+fails the whole resolution.
+
 ### Evaluated primitive measurement contract
 
 Every solid `PrimitiveDefinition` uses the same output-driven
@@ -801,6 +869,66 @@ flowchart LR
 This contract preserves source feature identity, selection filtering, and
 supersession behavior. It does not add a second measurement model or infer
 solid geometry from source parameters.
+
+### Persistent measurement annotations
+
+`EditorCommand.addMeasurementAnnotation` adds a `MeasurementAnnotation` and its
+annotation scene node through the command store, so saving is undoable; deleting
+the annotation node through `deleteSceneNodes` removes the annotation with it.
+`MeasurementAnchor.picked(_:under:in:role:)` stores a picked world point in the
+local frame of the placement it was picked under (`MeasurementPickPlacement`:
+world, scene node, or occurrence), using `ScenePlacement` so the anchor resolves
+back to the same world point. `SnapCandidate.measurementPickPlacement(in:)`
+names that placement from the snap's sources: exactly one scene node, otherwise
+world space.
+
+`MeasurementAnnotationResolver` resolves an annotation all-or-nothing: every
+anchor resolves, or the annotation is reported with the first failing anchor's
+typed error. Topology is requested only when an anchor needs it, and a topology
+failure is reported for exactly the annotations that need it. Viewport display,
+the workspace Measure panel and drawing projection consume this one result;
+drawing projection reports an unresolved annotation as a warning diagnostic
+instead of dropping anchors or failing the whole drawing.
+
+### Placed measurement aggregation
+
+Persistent anchors with an occurrence ID resolve topology against the occurrence's
+source node, then apply that occurrence's world transform. The selectable owner
+must match the retained scene node and sketch references must match the source
+feature. Component geometry anchors require an occurrence ID; an instance owner
+alone does not identify a definition child. Scene-local free points may remain
+relative to a node frame without identifying geometry. Stale or mismatched
+references fail explicitly before a measurement is published.
+
+`MeasurementService` retains the existing source-space calculators and their
+analytic/B-rep provenance. A final occurrence projection owns placement: source
+features are evaluated once, and their measurements are projected separately for
+each resolved occurrence. Selection includes descendants of selected groups and
+component instances without collapsing repeated instances into a feature set.
+Each profile, solid and sheet result retains its occurrence ID. Legacy decoded
+results may omit that ID.
+
+Volume scales by the absolute affine determinant. Placed surface area and body
+bounds are measured from transformed evaluated triangles/vertices and retain
+`tessellatedMesh` provenance; transformed AABB corners are not a substitute for
+geometry bounds. Profile area uses the transformed sketch basis area factor.
+Sketch bounds transform the authored points/curve samples, with analytic circle
+and arc extrema in the transformed basis. Normal heights use the transformed
+plane separation and sweep lengths use the existing curve arc-length resolver
+on the affine image of the retained path span. Invalid/missing placement or
+required geometry throws instead of publishing source-space values as world
+measurements.
+
+Source counts and dependency profiles retain their existing diagnostic meaning.
+An implicitly included source profile does not enlarge a selected body's world
+bounds. Document summaries still include authored hidden sources; visibility is
+not an instruction to discard source measurements. Section analysis separately
+selects visible occurrences, using the same resolved placements.
+
+Focused checks own translated/grouped selection bounds, independent component
+counts, reflected/nonuniform volume and area, profile bounds, retained IDs and
+stale/singular refusal. Existing source-space fixtures remain regression evidence
+for the unchanged analytic calculators.
 
 ### Body display face-run contract
 

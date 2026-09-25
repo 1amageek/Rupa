@@ -338,7 +338,8 @@ func semanticSnapshotBuilderCanPrepareOffMainActorWithoutChangingWorldGeometry()
             boundsRuler: .init(
                 bounds: rulerBounds,
                 labels: .init(x: "World bounds X: 2 m", y: "World bounds Y: 3 m", z: "World bounds Z: 4 m")
-            )
+            ),
+            saved: []
         ),
         drawsLegacyBodies: true,
         drawsDragPreviewBodies: false
@@ -385,12 +386,12 @@ func semanticSnapshotBuilderBatchesBodyTrianglesIntoOneIndexedDescriptor() throw
         )
     }
     let sourceIndices = (0 ..< positionCount).map { UInt32($0) }
-    let transform = Transform3D(matrix: try Matrix4x4(values: [
+    let transform = try ScenePlacement(Transform3D(matrix: try Matrix4x4(values: [
         2.0, 0.0, 0.0, 10.0,
         0.0, 2.0, 0.0, -3.0,
         0.0, 0.0, 2.0, 0.5,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
     let item = ViewportSceneItem(
         id: "large-body",
         featureID: FeatureID(),
@@ -1232,5 +1233,49 @@ func semanticSnapshotBuilderRefusesMalformedWorldSourceOffMainActor() async {
         #expect(error.code == .invalidSceneItem)
     } catch {
         Issue.record("Unexpected semantic snapshot failure: \(error)")
+    }
+}
+
+@Test
+func savedMeasurementsDrawResolvedAnchorsAndRefuseAPartialAnnotation() throws {
+    func snapshot(_ saved: [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement]) -> ViewportSpatialOverlaySemanticSnapshot {
+        ViewportSpatialOverlaySemanticSnapshot(
+            scene: ViewportScene(items: []),
+            interaction: .init(
+                selectedFeatureIDs: [],
+                selectedSceneNodeIDs: [],
+                hoveredFeatureIDs: [],
+                hoveredSceneNodeIDs: [],
+                selectedSketchEntities: [],
+                previewSketchEntities: [],
+                hoveredSketchEntity: nil,
+                selectedSketchRegions: [],
+                previewSketchRegions: [],
+                hoveredSketchRegion: nil
+            ),
+            editedBodies: [:],
+            world: .init(modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2)),
+            measurement: .init(start: nil, end: nil, label: nil, boundsRuler: nil, saved: saved),
+            drawsLegacyBodies: false,
+            drawsDragPreviewBodies: false
+        )
+    }
+    let saved = ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement(
+        points: [Point3D(x: 0, y: 0, z: 0), Point3D(x: 1, y: 0, z: 0)],
+        label: "Distance 1 1 m"
+    )
+
+    let input = try ViewportSpatialOverlayProducer.makeInput(
+        from: snapshot([saved]), renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1
+    )
+
+    #expect(input.meshes.filter { $0.family == .measurement }.count == 1)
+    #expect(input.markers.filter { $0.family == .measurement }.count == 2)
+    #expect(input.labels.filter { $0.family == .measurement }.count == 1)
+    #expect(throws: (any Error).self) {
+        _ = try ViewportSpatialOverlayProducer.makeInput(
+            from: snapshot([.init(points: [.origin], label: "Partial")]),
+            renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1
+        )
     }
 }

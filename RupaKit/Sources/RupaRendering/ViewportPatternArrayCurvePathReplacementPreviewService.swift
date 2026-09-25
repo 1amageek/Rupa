@@ -30,9 +30,9 @@ struct ViewportPatternArrayCurvePathReplacementPreviewService: Sendable {
                 parameters: document.cadDocument.parameters,
                 cadDocument: document.cadDocument
             )
-            let outputPoints = transforms.prefix(128).compactMap { transform in
+            let outputPoints = try transforms.prefix(128).compactMap { transform in
                 layout.projectedPoint(
-                    ViewportLayout.transformedPoint(basePoint, by: transform)
+                    ViewportLayout.transformedPoint(basePoint, by: try ScenePlacement(transform))
                 )?.point
             }
             guard !outputPoints.isEmpty else {

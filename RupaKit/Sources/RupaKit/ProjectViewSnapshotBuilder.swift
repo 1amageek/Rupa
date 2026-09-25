@@ -1,3 +1,4 @@
+import RupaCore
 import RupaCoreTypes
 import RupaEvaluation
 import RupaProject
@@ -131,7 +132,9 @@ public struct ProjectViewSnapshotBuilder:
         } catch let error as UniversalViewportSceneError {
             throw projectViewError(for: error)
         }
-        let sceneNodeIDByOccurrenceID = bridge.sceneNodeNavigationIndex(for: document)
+        let placements = try SceneNodeHierarchy(metadata: document.productMetadata).resolvedOccurrences()
+        let sceneNodeIDByOccurrenceID = Dictionary(uniqueKeysWithValues:
+            placements.map { ($0.id, $0.sceneNodeID) })
         for item in evaluatedViewport.items {
             guard let sourceOccurrence = evaluationSource.occurrences[item.id],
                   sourceOccurrence.definitionID == item.definitionID,
@@ -151,16 +154,12 @@ public struct ProjectViewSnapshotBuilder:
                 )
             }
         }
-        let effectivelyVisibleSceneNodeIDs = document.productMetadata
-            .effectivelyVisibleSceneNodeIDs()
+        let visibleOccurrenceIDs = Set(placements.lazy.filter(\.isVisible).map(\.id))
         let scene = UniversalViewportScene(
             snapshotID: evaluatedViewport.snapshotID,
             projectID: evaluatedViewport.projectID,
             items: evaluatedViewport.items.filter { item in
-                guard let sceneNodeID = sceneNodeIDByOccurrenceID[item.id] else {
-                    return false
-                }
-                return effectivelyVisibleSceneNodeIDs.contains(sceneNodeID)
+                visibleOccurrenceIDs.contains(item.id)
             },
             copyTelemetry: evaluatedViewport.copyTelemetry
         )

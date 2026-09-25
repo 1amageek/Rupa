@@ -9,11 +9,25 @@ import RupaCoreTypes
 /// commands that move and re-parent nodes never re-derive the tree themselves, and never disagree
 /// with each other about what "world space" means.
 public struct SceneNodeHierarchy: Sendable {
+    public struct Occurrence: Sendable {
+        public let id: SceneOccurrenceID
+        public let parentID: SceneOccurrenceID?
+        public let sourceSceneNodeID: SceneNodeID
+        public let sceneNodeID: SceneNodeID
+        public let componentInstanceID: ComponentInstanceID?
+        public let localTransform: Transform3D
+        public let worldTransform: Transform3D
+        public let isVisible: Bool
+    }
+
+    private let componentDefinitions: [ComponentDefinitionID: ComponentDefinition]
+    private let componentInstances: [ComponentInstanceID: ComponentInstance]
     private let nodesByID: [SceneNodeID: SceneNode]
     private let rootIDs: [SceneNodeID]
     private let parentIDsByChildID: [SceneNodeID: SceneNodeID]
     private let worldTransformsByID: [SceneNodeID: Transform3D]
     private let depthFirstIDs: [SceneNodeID]
+    private let presentingSceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
 
     /// Builds the hierarchy of `metadata`.
     ///
@@ -21,6 +35,9 @@ public struct SceneNodeHierarchy: Sendable {
     /// than skipping the offending node, because a placement computed from a partial tree would put
     /// geometry somewhere the document does not describe.
     public init(metadata: ProductMetadata) throws {
+        guard Set(metadata.rootSceneNodeIDs).count == metadata.rootSceneNodeIDs.count else {
+            throw EditorError(code: .commandInvalid, message: "Scene root IDs must be unique.")
+        }
         var parentIDsByChildID: [SceneNodeID: SceneNodeID] = [:]
         for (parentID, parent) in metadata.sceneNodes {
             for childID in parent.childIDs {
@@ -32,6 +49,13 @@ public struct SceneNodeHierarchy: Sendable {
                 }
                 parentIDsByChildID[childID] = parentID
             }
+        }
+        let presentingSceneNodeIDsByFeatureID = try Self.presentingSceneNodeIDsByFeatureID(in: metadata)
+        guard Set(metadata.rootSceneNodeIDs).isDisjoint(with: parentIDsByChildID.keys) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "A scene root cannot also be a child of another scene node."
+            )
         }
 
         var worldTransformsByID: [SceneNodeID: Transform3D] = [:]
@@ -47,16 +71,134 @@ public struct SceneNodeHierarchy: Sendable {
                 visitedIDs: &visitedIDs
             )
         }
+        guard Set(depthFirstIDs) == Set(metadata.sceneNodes.keys) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Every scene node must be reachable from a document root."
+            )
+        }
 
+        self.componentDefinitions = metadata.componentDefinitions
+        self.componentInstances = metadata.componentInstances
         self.nodesByID = metadata.sceneNodes
         self.rootIDs = metadata.rootSceneNodeIDs
         self.parentIDsByChildID = parentIDsByChildID
         self.worldTransformsByID = worldTransformsByID
         self.depthFirstIDs = depthFirstIDs
+        self.presentingSceneNodeIDsByFeatureID = presentingSceneNodeIDsByFeatureID
+    }
+
+    /// The single scene node that presents `featureID`'s evaluated geometry, if any.
+    ///
+    /// Evaluated geometry reaches the scene only through this node and the occurrences expanded
+    /// from it. A feature without a presenting node is document history, not scene content, so
+    /// viewport, measurement, section and topology consumers all leave it out.
+    public func presentingSceneNodeID(for featureID: FeatureID) -> SceneNodeID? {
+        presentingSceneNodeIDsByFeatureID[featureID]
+    }
+
+    /// The occurrences among `occurrences` that place `featureID`'s evaluated geometry.
+    public func presentationOccurrences(
+        of featureID: FeatureID,
+        in occurrences: [Occurrence]
+    ) -> [Occurrence] {
+        guard let sceneNodeID = presentingSceneNodeIDsByFeatureID[featureID] else {
+            return []
+        }
+        return occurrences.filter { $0.sourceSceneNodeID == sceneNodeID }
+    }
+
+    /// Indexes feature presentations and rejects a feature presented by more than one node.
+    ///
+    /// A second presenting node would give one piece of evaluated geometry two unrelated
+    /// placements, and topology, measurement and section results could not name which one they
+    /// describe. Repetition belongs to component instances, which expand into distinct occurrences.
+    static func presentingSceneNodeIDsByFeatureID(
+        in metadata: ProductMetadata
+    ) throws -> [FeatureID: SceneNodeID] {
+        let index = FeaturePresentationIndex(sceneNodes: metadata.sceneNodes)
+        if let conflict = index.conflict {
+            throw EditorError(code: .commandInvalid, message: conflict.message)
+        }
+        return index.sceneNodeIDsByFeatureID
+    }
+
+    public func resolvedOccurrences() throws -> [Occurrence] {
+        var result: [Occurrence] = []
+        for rootID in rootIDs {
+            try appendOccurrences(
+                rootID, prefix: nil, parentID: nil, parentTransform: .identity,
+                localPrefix: .identity, ownerID: nil, instanceID: nil,
+                isVisible: true, definitionPath: [], result: &result
+            )
+        }
+        return result
+    }
+
+    private func appendOccurrences(
+        _ nodeID: SceneNodeID,
+        prefix: String?,
+        parentID: SceneOccurrenceID?,
+        parentTransform: Transform3D,
+        localPrefix: Transform3D,
+        ownerID: SceneNodeID?,
+        instanceID: ComponentInstanceID?,
+        isVisible: Bool,
+        definitionPath: Set<ComponentDefinitionID>,
+        result: inout [Occurrence]
+    ) throws {
+        try Task.checkCancellation()
+        guard let node = nodesByID[nodeID] else {
+            throw EditorError(code: .referenceUnresolved, message: "Component source scene node is missing.")
+        }
+        let id = SceneOccurrenceID(rawValue: prefix.map { "\($0)/\(nodeID.description)" }
+            ?? "scene.\(nodeID.description)")
+        let local = try localPrefix.composed(with: node.localTransform)
+        let world = try parentTransform.composed(with: local)
+        let visible = isVisible && node.isVisible
+        result.append(Occurrence(
+            id: id, parentID: parentID, sourceSceneNodeID: nodeID,
+            sceneNodeID: ownerID ?? nodeID, componentInstanceID: instanceID,
+            localTransform: local, worldTransform: world, isVisible: visible
+        ))
+        if node.reference?.kind == .componentInstance {
+            guard let childInstanceID = node.reference?.componentInstanceID,
+                  let instance = componentInstances[childInstanceID],
+                  let definition = componentDefinitions[instance.definitionID] else {
+                throw EditorError(code: .referenceUnresolved, message: "Component occurrence requires its instance and definition.")
+            }
+            guard !definitionPath.contains(definition.id) else {
+                throw EditorError(code: .commandInvalid, message: "Component definitions must not contain recursive instances.")
+            }
+            try instance.localTransform.validateAffinePlacement()
+            var path = definitionPath
+            path.insert(definition.id)
+            for rootID in definition.rootSceneNodeIDs {
+                try appendOccurrences(
+                    rootID, prefix: id.rawValue, parentID: id, parentTransform: world,
+                    localPrefix: instance.localTransform, ownerID: ownerID ?? nodeID,
+                    instanceID: instanceID ?? childInstanceID,
+                    isVisible: visible && instance.isVisible, definitionPath: path, result: &result
+                )
+            }
+        }
+        for childID in node.childIDs {
+            try appendOccurrences(
+                childID, prefix: prefix == nil ? nil : id.rawValue,
+                parentID: id, parentTransform: world, localPrefix: .identity,
+                ownerID: ownerID, instanceID: instanceID, isVisible: visible,
+                definitionPath: definitionPath, result: &result
+            )
+        }
     }
 
     public func node(_ id: SceneNodeID) -> SceneNode? {
         nodesByID[id]
+    }
+
+    /// Scene nodes in document depth-first order.
+    public var orderedSceneNodeIDs: [SceneNodeID] {
+        depthFirstIDs
     }
 
     public func parentID(of id: SceneNodeID) -> SceneNodeID? {
@@ -168,6 +310,7 @@ public struct SceneNodeHierarchy: Sendable {
         depthFirstIDs: inout [SceneNodeID],
         visitedIDs: inout Set<SceneNodeID>
     ) throws {
+        try Task.checkCancellation()
         guard visitedIDs.insert(id).inserted else {
             throw EditorError(
                 code: .commandInvalid,
@@ -180,6 +323,7 @@ public struct SceneNodeHierarchy: Sendable {
                 message: "Scene node \(id.description) is referenced but missing."
             )
         }
+        try node.localTransform.validateAffinePlacement()
         let worldTransform = try parentTransform.composed(with: node.localTransform)
         worldTransformsByID[id] = worldTransform
         depthFirstIDs.append(id)

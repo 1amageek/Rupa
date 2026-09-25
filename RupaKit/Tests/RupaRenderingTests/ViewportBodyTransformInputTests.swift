@@ -79,7 +79,7 @@ import Synchronization
             let node = SceneNodeID()
             let local = try ViewportWorldTransformAlgebra.translation(Vector3D(x: Double(index) * 4, y: 0, z: 0))
             return ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember(
-                occurrenceID: "body-\(index)", featureID: feature, sceneNodeID: node, modelTransform: local,
+                occurrenceID: "body-\(index)", featureID: feature, sceneNodeID: node, modelTransform: try ScenePlacement(local),
                 edit: bounds, placement: .init(featureID: feature, sceneNodeID: node,
                                              baseLocalTransform: local, parentWorldTransform: .identity))
         }
@@ -167,13 +167,12 @@ import Synchronization
     func groupPlacementIsOneAtomicUndoableWorkspaceTransaction() async throws {
         let session = EditorSession()
         _ = try #require(session.createDefaultExtrudedRectangle())
-        var document = session.document
-        let first = try #require(document.productMetadata.sceneNodes.values.first {
-            $0.reference?.kind == .body
-        })
-        let second = SceneNode(id: SceneNodeID(), name: "Second occurrence", reference: first.reference)
-        document.productMetadata.sceneNodes[second.id] = second
-        document.productMetadata.rootSceneNodeIDs.append(second.id)
+        let firstFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        _ = try #require(session.createDefaultExtrudedRectangle())
+        let document = session.document
+        let bodies = document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }
+        let first = try #require(bodies.first { $0.reference?.featureID == firstFeatureID })
+        let second = try #require(bodies.first { $0.reference?.featureID != firstFeatureID })
         let controller = try ProjectController(document: document,
             evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
             projector: DesignDocumentProjectBridge())
@@ -215,7 +214,7 @@ import Synchronization
         var other = first
         other.id = "unselected"
         other.sceneNodeID = SceneNodeID()
-        other.modelTransform = try ViewportWorldTransformAlgebra.translation(Vector3D(x: 4, y: 0, z: 0))
+        other.modelTransform = try ScenePlacement(ViewportWorldTransformAlgebra.translation(Vector3D(x: 4, y: 0, z: 0)))
         let mutation = try ViewportWorldTransformAlgebra.translation(.unitY)
         let snapshot = ViewportSpatialOverlaySemanticSnapshot(scene: .init(items: [first, other]),
             interaction: .init(selectedFeatureIDs: [], selectedSceneNodeIDs: [], hoveredFeatureIDs: [],

@@ -135,10 +135,13 @@ func rawSurfaceTransformInputBuildsBodyTransformFromDocumentSceneAndSelection() 
 
 @Test
 func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
+    // Two bodies with their own sources; a feature is presented by one scene node, so a group
+    // selection spans distinct features.
     let featureID = FeatureID()
+    let secondFeatureID = FeatureID()
     let firstNodeID = SceneNodeID()
     let secondNodeID = SceneNodeID()
-    func bodyItem(id: String, nodeID: SceneNodeID, bounds: CGRect) -> ViewportSceneItem {
+    func bodyItem(id: String, featureID: FeatureID, nodeID: SceneNodeID, bounds: CGRect) -> ViewportSceneItem {
         ViewportSceneItem(
             id: id,
             featureID: featureID,
@@ -153,12 +156,14 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
             ))
         )
     }
-    let first = bodyItem(id: "body-occurrence-1", nodeID: firstNodeID, bounds: CGRect(x: -1, y: -1, width: 2, height: 2))
-    let second = bodyItem(id: "body-occurrence-2", nodeID: secondNodeID, bounds: CGRect(x: 3, y: 2, width: 4, height: 5))
+    let first = bodyItem(id: "body-occurrence-1", featureID: featureID, nodeID: firstNodeID,
+        bounds: CGRect(x: -1, y: -1, width: 2, height: 2))
+    let second = bodyItem(id: "body-occurrence-2", featureID: secondFeatureID, nodeID: secondNodeID,
+        bounds: CGRect(x: 3, y: 2, width: 4, height: 5))
     let baseline = ViewportObjectEditState(
         xMin: -4, xMax: 4, yMin: -2, yMax: 2, zMin: -3, zMax: 3
     )
-    var editedBodies: [FeatureID: ViewportObjectEditState] = [featureID: baseline]
+    var editedBodies: [FeatureID: ViewportObjectEditState] = [featureID: baseline, secondFeatureID: baseline]
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
         document: bodyTransformTestDocument([first, second]),
         scene: ViewportScene(items: [first, second]),
@@ -190,10 +195,10 @@ func bodyTransformCapturesOccurrenceScopedBaselinesAndGroupSnapshot() throws {
         Issue.record("Grouped body transform did not retain its occurrence-scoped baseline.")
         return
     }
-    #expect(target.featureID == featureID)
+    #expect(target.featureID == secondFeatureID)
     #expect(bodyRecord.occurrenceID == nil)
     #expect(members.map(\.occurrenceID) == [first.id, second.id])
-    #expect(members.map(\.featureID) == [featureID, featureID])
+    #expect(members.map(\.featureID) == [featureID, secondFeatureID])
     #expect(members[0].sceneNodeID == firstNodeID)
     #expect(members[1].sceneNodeID == secondNodeID)
     #expect(members.map(\.edit) == [ViewportObjectEditState(item: first), ViewportObjectEditState(item: second)])
@@ -359,7 +364,7 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         ))
     )
     let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(componentID))
-    let frame = try ViewportEdgeTreatmentDragFrame(anchor: Point3D(x: 0, y: 0, z: -1), modelTransform: item.modelTransform)
+    let frame = ViewportEdgeTreatmentDragFrame(anchor: Point3D(x: 0, y: 0, z: -1), modelTransform: item.modelTransform)
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
         document: .empty(),
         scene: ViewportScene(items: [item]),

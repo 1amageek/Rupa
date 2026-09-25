@@ -14,10 +14,10 @@ import Testing
         }?.id
     )
     let transform = Transform3D(matrix: try Matrix4x4(values: [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        1.25, -0.5, 0.125, 1,
+        1, 0, 0, 1.25,
+        0, 1, 0, -0.5,
+        0, 0, 1, 0.125,
+        0, 0, 0, 1,
     ]))
     _ = try session.execute(
         .setSceneNodeTransform(id: bodySceneNodeID, localTransform: transform)

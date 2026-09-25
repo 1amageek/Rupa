@@ -630,7 +630,7 @@ private func sketchScreen(_ point: CGPoint) -> CGPoint {
 /// never a projected box.
 private func sketchItem(
     _ primitives: [ViewportSketchPrimitive],
-    modelTransform: Transform3D = .identity
+    modelTransform: ScenePlacement = .identity
 ) -> ViewportSceneItem {
     ViewportSceneItem(
         id: "sketch.native",
@@ -646,7 +646,7 @@ private func sketchAnswer(
     primitives: [ViewportSketchPrimitive],
     selectionHitPolicy: ViewportSelectionHitPolicy = .sketchEntity,
     sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
-    modelTransform: Transform3D = .identity,
+    modelTransform: ScenePlacement = .identity,
     tolerance: CGFloat = 8,
     probe: SketchFrame = SketchFrame()
 ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
@@ -865,9 +865,9 @@ func nativeOverlaySketchControlPointReadsTheControlPointHitPolicy() throws {
 @Test
 func nativeOverlaySketchControlPointFollowsTheItemModelTransform() throws {
     let entityID = SketchEntityID()
-    let transform = try ViewportWorldTransformAlgebra.translation(
+    let transform = try ScenePlacement(ViewportWorldTransformAlgebra.translation(
         Vector3D(x: 0, y: 0, z: 0.5)
-    )
+    ))
     let answer = try #require(try sketchAnswer(
         at: sketchScreen(CGPoint(x: 0.5, y: 0.5)),
         primitives: [sketchSpline(entityID)],
@@ -1318,7 +1318,7 @@ private func curveLine() -> [ViewportCurveSegment] {
 /// projected box.
 private func curveItem(
     _ component: ViewportCurveComponent,
-    modelTransform: Transform3D = .identity
+    modelTransform: ScenePlacement = .identity
 ) -> ViewportSceneItem {
     ViewportSceneItem(
         id: "curve.native",
@@ -1333,7 +1333,7 @@ private func curveAnswer(
     at point: CGPoint,
     outputs: [ViewportCurveSegment],
     selectionHitPolicy: ViewportSelectionHitPolicy = .object,
-    modelTransform: Transform3D = .identity,
+    modelTransform: ScenePlacement = .identity,
     tolerance: CGFloat = 8,
     probe: SketchFrame = SketchFrame()
 ) throws -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
@@ -1473,9 +1473,9 @@ func nativeOverlayCurveAdmitsASegmentInFrontOfTheDrawnSurface() throws {
 /// under and not at the one its model-space points alone would project to.
 @Test
 func nativeOverlayCurveFollowsTheItemModelTransform() throws {
-    let transform = try ViewportWorldTransformAlgebra.translation(
+    let transform = try ScenePlacement(ViewportWorldTransformAlgebra.translation(
         Vector3D(x: 0, y: 0, z: 0.5)
-    )
+    ))
     let answer = try #require(try curveAnswer(
         at: CGPoint(x: 250, y: 153),
         outputs: curveLine(),
@@ -2150,7 +2150,7 @@ private func curveRectangleHits(
     _ outputs: [ViewportCurveSegment],
     rect: CGRect = rectangleRect,
     selectionHitPolicy: ViewportSelectionHitPolicy = .object,
-    modelTransform: Transform3D = .identity,
+    modelTransform: ScenePlacement = .identity,
     depthInterval: ClosedRange<Double> = rectangleDepthInterval,
     probe: RectangleFrame = RectangleFrame()
 ) throws -> [ViewportHit] {
@@ -2197,9 +2197,9 @@ func nativeOverlayRectangleFollowsTheCurveItemModelTransform() throws {
         curveOutput(0, [curvePoint(0, 1), curvePoint(1, 1)]),
     ]
     #expect(try curveRectangleHits(outputs).isEmpty)
-    let transform = try ViewportWorldTransformAlgebra.translation(
+    let transform = try ScenePlacement(ViewportWorldTransformAlgebra.translation(
         Vector3D(x: 0, y: 0, z: -1)
-    )
+    ))
     let hits = try curveRectangleHits(outputs, modelTransform: transform)
     #expect(hits.count == 1)
     #expect(hits.first?.selectionReference == curveReference(0))

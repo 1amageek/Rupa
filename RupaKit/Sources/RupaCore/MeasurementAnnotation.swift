@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import Foundation
 import SwiftCAD
 
@@ -113,6 +114,9 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
 
     public var kind: Kind
     public var role: Role
+    public var sceneNodeID: SceneNodeID?
+    public var occurrenceID: SceneOccurrenceID?
+    public var localPoint: Point3D?
     public var worldPoint: Point3D?
     public var sketchReference: MeasurementSketchAnchor?
     public var topologyReference: MeasurementTopologyAnchor?
@@ -122,6 +126,9 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
     public init(
         kind: Kind = .worldPoint,
         role: Role = .point,
+        sceneNodeID: SceneNodeID? = nil,
+        occurrenceID: SceneOccurrenceID? = nil,
+        localPoint: Point3D? = nil,
         worldPoint: Point3D? = nil,
         sketchReference: MeasurementSketchAnchor? = nil,
         topologyReference: MeasurementTopologyAnchor? = nil,
@@ -130,6 +137,9 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
     ) {
         self.kind = kind
         self.role = role
+        self.sceneNodeID = sceneNodeID
+        self.occurrenceID = occurrenceID
+        self.localPoint = localPoint
         self.worldPoint = worldPoint
         self.sketchReference = sketchReference
         self.topologyReference = topologyReference
@@ -148,14 +158,31 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
         )
     }
 
+    public static func sceneLocalPoint(
+        _ point: Point3D,
+        in sceneNodeID: SceneNodeID,
+        occurrenceID: SceneOccurrenceID? = nil,
+        role: Role = .point
+    ) -> MeasurementAnchor {
+        MeasurementAnchor(
+            kind: .worldPoint,
+            role: role,
+            sceneNodeID: sceneNodeID,
+            occurrenceID: occurrenceID,
+            localPoint: point
+        )
+    }
+
     public static func sketchReference(
         featureID: FeatureID,
         reference: SketchReference,
+        sceneNodeID: SceneNodeID? = nil,
         role: Role = .point
     ) -> MeasurementAnchor {
         MeasurementAnchor(
             kind: .sketchReference,
             role: role,
+            sceneNodeID: sceneNodeID,
             sketchReference: MeasurementSketchAnchor(
                 featureID: featureID,
                 reference: reference
@@ -174,6 +201,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
         MeasurementAnchor(
             kind: .topologyReference,
             role: role,
+            sceneNodeID: sceneNodeID,
             topologyReference: MeasurementTopologyAnchor(
                 sceneNodeID: sceneNodeID,
                 component: component,
@@ -188,11 +216,13 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
         featureID: FeatureID,
         entityID: SketchEntityID,
         parameter: Double,
+        sceneNodeID: SceneNodeID? = nil,
         role: Role = .point
     ) -> MeasurementAnchor {
         MeasurementAnchor(
             kind: .sketchCurveParameter,
             role: role,
+            sceneNodeID: sceneNodeID,
             sketchCurveParameter: MeasurementSketchCurveAnchor(
                 featureID: featureID,
                 entityID: entityID,
@@ -212,6 +242,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
         MeasurementAnchor(
             kind: .topologyEdgeParameter,
             role: role,
+            sceneNodeID: sceneNodeID,
             topologyEdgeParameter: MeasurementTopologyEdgeAnchor(
                 sceneNodeID: sceneNodeID,
                 component: component,
@@ -223,20 +254,36 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
     }
 
     public func validate() throws {
+        let topologyNodeID = topologyReference?.sceneNodeID ?? topologyEdgeParameter?.sceneNodeID
+        if let sceneNodeID, let topologyNodeID, sceneNodeID != topologyNodeID {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Measurement anchor placement must match its topology reference."
+            )
+        }
+        if occurrenceID != nil && sceneNodeID == nil && topologyNodeID == nil {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A measurement occurrence requires its selectable scene node."
+            )
+        }
+        try occurrenceID?.validate()
         switch kind {
         case .worldPoint:
-            guard let worldPoint,
+            guard (worldPoint != nil) != (localPoint != nil),
+                  (localPoint == nil || sceneNodeID != nil),
+                  (worldPoint == nil || sceneNodeID == nil),
                   sketchReference == nil,
                   topologyReference == nil,
                   sketchCurveParameter == nil,
                   topologyEdgeParameter == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "World-point measurement anchors require only a world point."
+                    "World-point measurement anchors require either a fixed world point or a scene-local point with its scene node."
                 )
             }
-            try worldPoint.validate()
+            try worldPoint?.validate()
+            try localPoint?.validate()
         case .sketchReference:
             guard worldPoint == nil,
+                  localPoint == nil,
                   let sketchReference,
                   topologyReference == nil,
                   sketchCurveParameter == nil,
@@ -248,6 +295,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
             try sketchReference.validate()
         case .topologyReference:
             guard worldPoint == nil,
+                  localPoint == nil,
                   sketchReference == nil,
                   let topologyReference,
                   sketchCurveParameter == nil,
@@ -259,6 +307,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
             try topologyReference.validate()
         case .sketchCurveParameter:
             guard worldPoint == nil,
+                  localPoint == nil,
                   sketchReference == nil,
                   topologyReference == nil,
                   let sketchCurveParameter,
@@ -270,6 +319,7 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
             try sketchCurveParameter.validate()
         case .topologyEdgeParameter:
             guard worldPoint == nil,
+                  localPoint == nil,
                   sketchReference == nil,
                   topologyReference == nil,
                   sketchCurveParameter == nil,

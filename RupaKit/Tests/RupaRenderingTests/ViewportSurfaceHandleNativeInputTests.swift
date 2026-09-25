@@ -14,12 +14,12 @@ import Testing
 /// model-space image share no component. The legacy screen-chord geometry read
 /// the canvas plane's second coordinate as world Z under every projection, which
 /// this placement makes visible as a wrong model-space answer.
-private let surfacePlacement = Transform3D(matrix: try! Matrix4x4(values: [
+private let surfacePlacement = try! ScenePlacement(Transform3D(matrix: try! Matrix4x4(values: [
     1, -1, 0, 10,
     1, 1, 0, -5,
     0, 1, 2, 3,
     0, 0, 0, 1
-]))
+])))
 
 /// `surfacePlacement` carries this authored point to `surfaceWorldPoint`.
 private let surfaceLocalPoint = Point3D(x: 1, y: 2, z: 3)

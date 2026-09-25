@@ -57,7 +57,7 @@ enum ViewportNativeCADTopologyResolver {
     static func resolve(
         at point: CGPoint,
         topology: ViewportBodyTopology,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         selectionHitPolicy: ViewportSelectionHitPolicy,
         visibleSurface: (faceID: MeshFaceID, depth: Double)?,
         tolerance: CGFloat = pointTolerance,
@@ -203,7 +203,7 @@ enum ViewportNativeCADTopologyResolver {
     static func resolveRegion(
         in rect: CGRect,
         topology: ViewportBodyTopology,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         selectionHitPolicy: ViewportSelectionHitPolicy,
         depthInterval: ClosedRange<Double>,
         probe: some ViewportNativeFrameProbe
@@ -360,7 +360,7 @@ enum ViewportNativeCADTopologyResolver {
         )
     }
 
-    private static func world(_ point: Point3D, modelTransform: Transform3D) -> Point3D {
+    private static func world(_ point: Point3D, modelTransform: ScenePlacement) -> Point3D {
         ViewportLayout.transformedPoint(point, by: modelTransform)
     }
 
@@ -382,7 +382,7 @@ enum ViewportNativeCADTopologyResolver {
     static func edgeCandidate(
         at point: CGPoint,
         edge: ViewportBodyTopology.Edge,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         tolerance: CGFloat = pointTolerance,
         nearerThan bound: Double = .infinity,
         probe: some ViewportNativeFrameProbe

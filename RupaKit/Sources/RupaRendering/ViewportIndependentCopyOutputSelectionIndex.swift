@@ -5,7 +5,7 @@ struct ViewportSelectedIndependentCopyOutput: Equatable {
     var source: PatternArraySource
     var outputIndex: Int
     var outputSceneNodeID: SceneNodeID
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
 }
 
 struct ViewportIndependentCopyOutputIdentity: Hashable {
@@ -26,24 +26,14 @@ struct ViewportIndependentCopyOutputSelectionIndex {
         let bodyItems: [ViewportSceneItem]
     }
 
-    init(
-        metadata: ProductMetadata,
-        scene: ViewportScene
-    ) {
-        let result = Self.buildStorage(metadata: metadata, scene: scene) { _, _, _ in }
-        guard case .success(let storage) = result else {
-            preconditionFailure("The nonthrowing independent-copy index could not be built.")
-        }
-        self = Self(storage: storage)
-    }
-
-    /// Builds the same index while charging recursive source traversal and
+    /// Builds the index while charging recursive source traversal and
     /// allowing the worker to propagate cancellation or typed admission
-    /// failure before nested subtree materialization.
+    /// failure before nested subtree materialization. An unresolvable output
+    /// placement fails the build instead of publishing a partial index.
     init(
         metadata: ProductMetadata,
         scene: ViewportScene,
-        checkpoint: (Int, Int, Int) throws -> Void
+        checkpoint: (Int, Int, Int) throws -> Void = { _, _, _ in }
     ) throws {
         switch Self.buildStorage(metadata: metadata, scene: scene, checkpoint: checkpoint) {
         case .success(let storage):
@@ -71,7 +61,7 @@ struct ViewportIndependentCopyOutputSelectionIndex {
             let sources = metadata.patternArrays.values.sorted {
                 $0.id.description < $1.id.description
             }
-            let transformIndex = ViewportSceneTransformIndex(metadata: metadata)
+            let transformIndex = try ViewportSceneTransformIndex(metadata: metadata)
             var records: [ViewportSelectedIndependentCopyOutput] = []
             for source in sources where source.outputMode == .independentCopy {
                 try checkpoint(0, 0, source.outputSceneNodeIDs.count)
@@ -81,7 +71,7 @@ struct ViewportIndependentCopyOutputSelectionIndex {
                         source: source,
                         outputIndex: outputIndex,
                         outputSceneNodeID: outputSceneNodeID,
-                        modelTransform: transformIndex.transform(for: outputSceneNodeID)
+                        modelTransform: try ScenePlacement(transformIndex.transform(for: outputSceneNodeID))
                     ))
                 }
             }

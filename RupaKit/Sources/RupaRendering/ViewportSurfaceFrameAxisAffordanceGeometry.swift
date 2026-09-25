@@ -10,16 +10,16 @@ struct ViewportSurfaceFrameAxisAffordanceGeometry: Equatable {
     init?(
         display: ViewportSurfaceFrameDisplay,
         axis: ViewportSurfaceFrameAxis,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         layout: ViewportLayout,
         viewportLength: CGFloat = 36.0
     ) {
         let localDirection = display.direction(for: axis)
-        let transformedDirection = modelTransform.viewportTransformedVector(localDirection)
+        let transformedDirection = modelTransform.vector(localDirection)
         guard transformedDirection.length > 1.0e-12 else {
             return nil
         }
-        let basePoint = modelTransform.viewportTransformedPoint(display.position)
+        let basePoint = modelTransform.point(display.position)
         guard let projectedUnitLength = Self.projectedLength(
             from: basePoint,
             direction: transformedDirection,

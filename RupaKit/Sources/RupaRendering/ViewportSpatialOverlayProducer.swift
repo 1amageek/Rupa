@@ -300,6 +300,15 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let end: Point3D?
         let label: String?
         let boundsRuler: ViewportMeasurementBoundsRulerInput?
+        /// Persistent measurement annotations resolved through their placements.
+        let saved: [SavedMeasurement]
+    }
+
+    /// One saved annotation whose every anchor resolved; unresolved ones are
+    /// reported by the workspace and never reach the overlay partially.
+    struct SavedMeasurement: Sendable {
+        let points: [Point3D]
+        let label: String
     }
 
     /// Raw pattern inputs captured at the MainActor boundary.  Preview
@@ -927,7 +936,8 @@ enum ViewportSpatialOverlayProducer {
                     || hoveredRegionIDs.contains(region.componentID) {
                     let regionColor = selectedRegionIDs.contains(region.componentID)
                         ? selectionColor : hoverColor
-                    let points = region.points.map { point($0) }
+                    // Region vertices stay display-local; the occurrence placement maps them once.
+                    let points = region.points.map { item.modelTransform.point(point($0)) }
                     guard points.count >= 3, points.allSatisfy(isFinitePoint) else {
                         throw RealityViewportSpatialBatch.invalid(
                             "Selected sketch region has fewer than three finite world points."
@@ -948,7 +958,7 @@ enum ViewportSpatialOverlayProducer {
                     activeFamilies.insert(.sketch)
                 }
                 for primitive in primitives {
-                    let points = try sketchPrimitiveWorldPoints(primitive)
+                    let points = try sketchPrimitiveWorldPoints(primitive).map(item.modelTransform.point)
                     guard !points.isEmpty, points.allSatisfy(isFinitePoint) else {
                         throw RealityViewportSpatialBatch.invalid(
                             "Sketch primitive has no finite evaluated world points."
@@ -1524,6 +1534,38 @@ enum ViewportSpatialOverlayProducer {
             activeFamilies.insert(.measurement)
         }
         if measurement.boundsRuler != nil {
+            activeFamilies.insert(.measurement)
+        }
+        for saved in measurement.saved {
+            guard saved.points.count >= 2,
+                  saved.points.allSatisfy(\.isFinite),
+                  !saved.label.isEmpty,
+                  let labelAnchor = midpoint(of: saved.points) else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "A saved measurement needs finite anchors and a label."
+                )
+            }
+            meshes.append(.init(
+                family: .measurement,
+                value: try line(saved.points, color: savedMeasurementColor, depth: .annotation)
+            ))
+            for point in saved.points {
+                markers.append(.init(
+                    family: .measurement,
+                    value: marker(anchor: point, diameterPoints: 6, color: savedMeasurementColor)
+                ))
+            }
+            labels.append(.init(
+                family: .measurement,
+                value: try label(
+                    saved.label,
+                    anchor: labelAnchor,
+                    offset: CGPoint(x: 0, y: -14),
+                    color: savedMeasurementColor,
+                    alignment: .center,
+                    heightPoints: 10
+                )
+            ))
             activeFamilies.insert(.measurement)
         }
     }
@@ -2352,7 +2394,7 @@ extension ViewportSpatialOverlayProducer {
     static func handleIndex(
         for target: ViewportSpatialPreparedInteractionTarget,
         occurrenceID: String? = nil,
-        modelTransform: Transform3D = .identity,
+        modelTransform: ScenePlacement = .identity,
         in table: inout [ViewportSpatialInteractionRecord]
     ) throws -> UInt32 {
         let record = try ViewportSpatialInteractionRecord(
@@ -2408,6 +2450,7 @@ extension ViewportSpatialOverlayProducer {
     static let continuityColor = SIMD4<Float>(0.97, 0.60, 0.16, 0.94)
     static let referenceColor = SIMD4<Float>(0.25, 0.92, 1.0, 0.70)
     static let measurementColor = SIMD4<Float>(0.25, 0.92, 1.0, 1.0)
+    static let savedMeasurementColor = SIMD4<Float>(0.62, 0.86, 1.0, 0.92)
     static let editColor = SIMD4<Float>(1.0, 0.78, 0.28, 1.0)
     static let boundarySurfaceColor = SIMD4<Float>(0.26, 0.82, 0.94, 1.0)
 

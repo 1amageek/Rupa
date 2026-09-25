@@ -214,10 +214,28 @@ plane or the intersection is non-finite. They contain world geometry and
 provenance, never a Canvas `Path` or raster texture.
 
 Scene placement follows the [Core matrix contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention).
-The shared transform utility is the only legacy overlay point/vector/composition
-implementation. Builder and layout call it instead of retaining separate
-column-major formulas. Presentation geometry and CAD selection overlays must
-agree on the same row-major source values.
+The scene builder gets node world transforms from Core's `SceneNodeHierarchy`.
+Its immutable index is only a cache of that read model. Each feature item is
+placed only at the feature's single presenting scene node from that read model
+(see the [Core presentation contract](../RupaCore/DESIGN.md#scene-placement-matrix-convention));
+an item without a presenting node has no product placement and is published
+once in the world frame. A presented item is published once per visible
+occurrence, using the occurrence's resolved visibility; no reference-kind
+fallback or second visibility walk exists. Component-instance
+local transforms compose through Core's checked `Transform3D` operations.
+Missing or malformed placement fails the build; it cannot omit a node or use
+identity. Each item's `modelTransform` is a Core `ScenePlacement`, constructed
+once from the resolved world transform, so presentation geometry and CAD
+selection overlays map points, directions and inverse directions through the
+same validated row-major values and failure contract.
+
+Sketch primitives and region vertices remain in their display-local coordinates.
+The scene item retains the occurrence matrix, which projection and native
+interaction apply exactly once. Nonuniform scaling or shear must not replace a
+circle or arc with an averaged radius, and out-of-plane translation must not be
+discarded by baking transformed points back into two dimensions. Bounds are
+derived separately; a failed placement rejects the scene instead of publishing
+the untransformed bounds.
 
 1. A document with no `.bSplineSurface` feature performs zero
    `TopologySnapshotService` calls for surface knot/span overlay lookup.

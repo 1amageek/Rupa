@@ -255,7 +255,7 @@ private func resolve(
     at point: CGPoint,
     frame: NativeCADFrame = NativeCADFrame(),
     topology: ViewportBodyTopology = bodyTopology(),
-    modelTransform: Transform3D = .identity,
+    modelTransform: ScenePlacement = .identity,
     policy: ViewportSelectionHitPolicy = .all
 ) throws -> SelectionComponent? {
     try ViewportNativeCADTopologyResolver.resolve(
@@ -415,12 +415,12 @@ private func resolve(
 
     @Test(.timeLimit(.minutes(1)))
     func nativeCADTopologyResolverAppliesTheItemModelTransformBeforeProjecting() throws {
-        let shifted = Transform3D(matrix: try Matrix4x4(values: [
+        let shifted = try ScenePlacement(Transform3D(matrix: try Matrix4x4(values: [
             1, 0, 0, 0.5,
             0, 1, 0, 0,
             0, 0, 1, 0,
             0, 0, 0, 1,
-        ]))
+        ])))
         // The origin vertex now projects to x = 250; the untransformed pixel misses it.
         #expect(
             try resolve(at: CGPoint(x: 250, y: 197), modelTransform: shifted, policy: .vertex)

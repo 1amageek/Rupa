@@ -274,10 +274,10 @@ struct ViewportNativeAxisInput: Sendable {
     private static func handleAxis(
         localPoint: Point3D,
         localDirection: Vector3D,
-        modelTransform: Transform3D
+        modelTransform: ScenePlacement
     ) throws -> ViewportSpatialPreparedInteractionTarget.Axis {
-        let origin = modelTransform.viewportTransformedPoint(localPoint)
-        let direction = modelTransform.viewportTransformedVector(localDirection)
+        let origin = try ViewportWorldTransformAlgebra.transformedPoint(localPoint, by: modelTransform)
+        let direction = try ViewportWorldTransformAlgebra.transformedVector(localDirection, by: modelTransform)
         guard origin.isFinite, direction.isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "The surface handle has no finite world axis."
@@ -317,7 +317,7 @@ struct ViewportNativeAxisInput: Sendable {
 
     static func sourceUnitsPerWorldMetre(
         for worldDirection: Vector3D,
-        in modelTransform: Transform3D
+        in modelTransform: ScenePlacement
     ) throws -> Double {
         let worldLength = length(worldDirection)
         guard worldLength.isFinite, worldLength > 1.0e-12 else {
@@ -328,7 +328,8 @@ struct ViewportNativeAxisInput: Sendable {
             y: worldDirection.y / worldLength,
             z: worldDirection.z / worldLength
         )
-        guard let localDirection = modelTransform.viewportInverseTransformedVector(worldUnit) else {
+        let localDirection = modelTransform.inverseVector(worldUnit)
+        guard localDirection.isFinite else {
             throw RealityViewportSpatialBatch.invalid("The model transform cannot invert the world axis.")
         }
         let sourceUnitsPerWorldMetre = length(localDirection)

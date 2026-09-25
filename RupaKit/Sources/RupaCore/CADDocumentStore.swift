@@ -313,6 +313,24 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .addMeasurementAnnotation:
+            func run() throws {
+                guard case .addMeasurementAnnotation(let annotation) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected addMeasurementAnnotation."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.addMeasurementAnnotation(
+                    annotation,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .rebaseWorkspaceOrigin:
             func run() throws {
                 guard case .rebaseWorkspaceOrigin(let translation) = command else {

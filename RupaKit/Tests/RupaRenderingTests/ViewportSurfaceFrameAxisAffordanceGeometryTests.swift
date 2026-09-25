@@ -115,11 +115,11 @@ private func surfaceFrameDisplay() -> ViewportSurfaceFrameDisplay {
 private func surfaceFrameAxisTransform(
     scale: Double,
     translationX: Double
-) throws -> Transform3D {
-    Transform3D(matrix: try Matrix4x4(values: [
+) throws -> ScenePlacement {
+    try ScenePlacement(Transform3D(matrix: try Matrix4x4(values: [
         scale, 0.0, 0.0, translationX,
         0.0, scale, 0.0, 0.0,
         0.0, 0.0, scale, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
 }

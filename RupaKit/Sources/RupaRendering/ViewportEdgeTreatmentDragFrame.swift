@@ -6,11 +6,11 @@ import SwiftCAD
 /// A source-length scrubber, independent of the body's generating feature.
 struct ViewportEdgeTreatmentDragFrame: Equatable, Sendable {
     let anchor: Point3D
-    let worldToSource: Transform3D
+    let worldToSource: ScenePlacement
 
-    init(anchor: Point3D, modelTransform: Transform3D) throws {
+    init(anchor: Point3D, modelTransform: ScenePlacement) {
         self.anchor = anchor
-        worldToSource = try ViewportWorldTransformAlgebra.inverted(modelTransform)
+        worldToSource = modelTransform.inverse
     }
 
     @MainActor

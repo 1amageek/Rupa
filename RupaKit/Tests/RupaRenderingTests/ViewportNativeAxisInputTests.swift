@@ -195,12 +195,12 @@ func nativeAxisInputConvertsWorldDeltaToSourceUnitsUsingRecordTransform() throws
         target: .init(sceneNodeID: .init(), component: .object),
         edgeStart: .origin, edgeEnd: .init(x: 1, y: 0, z: 0), axis: axis
     )
-    let transform = try Transform3D(matrix: Matrix4x4(values: [
+    let transform = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
         2.0, 0.0, 0.0, 0.0,
         0.0, 2.0, 0.0, 0.0,
         0.0, 0.0, 2.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
     let record = try ViewportSpatialInteractionRecord(target: target, modelTransform: transform)
     let input = try #require(try ViewportNativeAxisInput(record: record))
     #expect(abs(input.sourceUnitsPerWorldMetre - 0.5) < 1.0e-12)
@@ -209,18 +209,18 @@ func nativeAxisInputConvertsWorldDeltaToSourceUnitsUsingRecordTransform() throws
 
 @Test
 func nativeAxisInputRejectsIncompatibleGroupedSourceScales() throws {
-    let scale2 = try Transform3D(matrix: Matrix4x4(values: [
+    let scale2 = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
         2.0, 0.0, 0.0, 0.0,
         0.0, 2.0, 0.0, 0.0,
         0.0, 0.0, 2.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
-    let scale3 = try Transform3D(matrix: Matrix4x4(values: [
+    ])))
+    let scale3 = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
         3.0, 0.0, 0.0, 0.0,
         0.0, 3.0, 0.0, 0.0,
         0.0, 0.0, 3.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportNativeAxisInput.commonSourceScale([scale2, scale3].map {
             try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(for: .unitX, in: $0)
@@ -230,15 +230,15 @@ func nativeAxisInputRejectsIncompatibleGroupedSourceScales() throws {
 
 @Test
 func nativeAxisInputPreservesCorrespondingRotatedGroupMetric() throws {
-    let first = try Transform3D(matrix: Matrix4x4(values: [
+    let first = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
         2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
-    ]))
-    let second = try Transform3D(matrix: Matrix4x4(values: [
+    ])))
+    let second = try ScenePlacement(Transform3D(matrix: Matrix4x4(values: [
         0, -1, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
-    ]))
+    ])))
     let factors = try [first, second].map { transform in
         try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(
-            for: transform.viewportTransformedVector(.unitX), in: transform
+            for: transform.vector(.unitX), in: transform
         )
     }
     let factor = try ViewportNativeAxisInput.commonSourceScale(factors)

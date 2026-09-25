@@ -100,6 +100,34 @@ import Testing
     })
 }
 
+@Test func sectionAnalysisUsesThePlacedBodyOccurrence() throws {
+    var document = try sectionAnalysisTestDocument()
+    let bodyFeatureID = try #require(document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(document.productMetadata.sceneNodes.first { _, node in
+        node.reference?.kind == .body && node.reference?.featureID == bodyFeatureID
+    }?.key)
+    try document.setSceneNodeTransform(
+        id: bodySceneNodeID,
+        localTransform: try Transform3D.translation(Vector3D(x: 0.0, y: 0.0, z: 2.0))
+    )
+
+    let result = try SectionAnalysisService().analyze(
+        document: document,
+        query: SectionAnalysisQuery(
+            source: .sketchPlane(.xy),
+            toleranceMeters: 1.0e-8
+        ),
+        activeConstructionPlaneID: nil,
+        displayUnit: .millimeter
+    )
+
+    let body = try #require(result.bodies.first)
+    #expect(result.bodyCount == 1)
+    #expect(body.sceneNodeID == bodySceneNodeID)
+    #expect(body.classification == .inFront)
+    #expect(body.intersectionSegmentCount == 0)
+}
+
 @Test func sectionAnalysisAppliesOffsetAndFlipWithoutMutatingSourcePlane() throws {
     let document = try sectionAnalysisTestDocument()
     let baseResult = try SectionAnalysisService().analyze(
@@ -278,4 +306,22 @@ private func sectionAnalysisSegment(
         start2D: start,
         end2D: end
     )
+}
+
+@Test func sectionAnalysisSeparatesTranslatedComponentOccurrences() throws {
+    var document = try sectionAnalysisTestDocument()
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
+    let definitionID = try document.createComponentDefinition(name: "Section Part", rootSceneNodeIDs: [bodyNode.id])
+    _ = try document.createComponentInstance(
+        name: "Section Copy", definitionID: definitionID,
+        localTransform: .translation(Vector3D(x: 4, y: 0, z: 0))
+    )
+    let result = try SectionAnalysisService().analyze(
+        document: document, query: SectionAnalysisQuery(source: .sketchPlane(.yz)),
+        activeConstructionPlaneID: nil, displayUnit: .millimeter
+    )
+    #expect(result.bodies.count == 2)
+    #expect(Set(result.bodies.compactMap(\.occurrenceID)).count == 2)
+    #expect(result.bodies.contains { $0.classification == .inFront })
+    #expect(result.bodies.contains { $0.classification == .intersects })
 }

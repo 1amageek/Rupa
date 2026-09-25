@@ -121,7 +121,7 @@ enum ProjectMakeEditableSupport {
         }
         guard snapshot.viewport == expectedViewport,
               snapshot.sceneNodeIDByOccurrenceID
-                == DesignDocumentProjectBridge().sceneNodeNavigationIndex(for: state.document) else {
+                == (try DesignDocumentProjectBridge().sceneNodeNavigationIndex(for: state.document)) else {
             throw ProjectMakeEditableError(
                 code: .resultMismatch,
                 message: "The supplied project view contains a forged presentation projection."

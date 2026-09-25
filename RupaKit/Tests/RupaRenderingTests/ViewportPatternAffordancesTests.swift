@@ -263,7 +263,6 @@ func rawPatternInputBuildsIndependentCopyRouteFromEvaluatedDocument() async thro
 @Test
 func independentCopyIndexPropagatesCancellationDuringNestedSubtreeTraversal() {
     let rootID = SceneNodeID()
-    let featureID = FeatureID()
     let sourceID = PatternArraySourceID()
     let childIDs = (0..<64).map { _ in SceneNodeID() }
     var sceneNodes: [SceneNodeID: SceneNode] = [
@@ -277,7 +276,7 @@ func independentCopyIndexPropagatesCancellationDuringNestedSubtreeTraversal() {
         sceneNodes[childID] = SceneNode(
             id: childID,
             name: "Output Child \(index)",
-            reference: .body(featureID)
+            reference: .body(FeatureID())
         )
     }
     let source = PatternArraySource(

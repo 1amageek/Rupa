@@ -193,7 +193,7 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
         let anchor = Point3D(x: (edge.start.x + edge.end.x) * 0.5,
             y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
         let toward = edit.worldPoint(edit.centerPoint)
-        let frame = try ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
+        let frame = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
         let expected: [(ViewportAffordanceAction, CGFloat)] = [
             (.profileEdgeFillet(target, frame), ProfileMetrics.filletOffsetPoints),
             (.profileEdgeChamfer(target, frame), ProfileMetrics.chamferOffsetPoints),
@@ -303,7 +303,7 @@ func selectedBoundaryEdgeShowsSurfaceFillForADeletedFaceOpening() throws {
         $0.route == .boundarySurface && $0.points.count == curvedEdge.displayPoints.count
     })
     #expect(curvedHighlight.points.map(\.anchor) == curvedEdge.displayPoints.map(
-        item.modelTransform.viewportTransformedPoint
+        item.modelTransform.point
     ))
     #expect(source.cameraPaths.count == 1)
     guard case .affordance(let affordance) = try #require(source.cameraPaths.first).identity else {

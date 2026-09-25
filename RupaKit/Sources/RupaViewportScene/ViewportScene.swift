@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import CoreGraphics
 import RupaCore
 import SwiftCAD
@@ -650,9 +651,10 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
     public var id: String
     public var featureID: FeatureID
     public var sceneNodeID: SceneNodeID?
+    public var occurrenceID: SceneOccurrenceID?
     public var componentInstanceID: ComponentInstanceID?
     public var sourceFeatureID: FeatureID?
-    public var modelTransform: Transform3D
+    public var modelTransform: ScenePlacement
     public var modelBounds: CGRect
     public var kind: ViewportSceneItemKind
     public var sketchRegions: [ViewportSketchRegion]
@@ -661,9 +663,10 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
         id: String,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID? = nil,
+        occurrenceID: SceneOccurrenceID? = nil,
         componentInstanceID: ComponentInstanceID? = nil,
         sourceFeatureID: FeatureID? = nil,
-        modelTransform: Transform3D = .identity,
+        modelTransform: ScenePlacement = .identity,
         modelBounds: CGRect,
         kind: ViewportSceneItemKind,
         sketchRegions: [ViewportSketchRegion] = []
@@ -671,6 +674,7 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
         self.id = id
         self.featureID = featureID
         self.sceneNodeID = sceneNodeID
+        self.occurrenceID = occurrenceID
         self.componentInstanceID = componentInstanceID
         self.sourceFeatureID = sourceFeatureID
         self.modelTransform = modelTransform
@@ -682,9 +686,11 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
 
 public struct ViewportScene: Equatable, Sendable {
     public var items: [ViewportSceneItem]
+    public var failure: EditorError?
 
-    public init(items: [ViewportSceneItem]) {
+    public init(items: [ViewportSceneItem], failure: EditorError? = nil) {
         self.items = items
+        self.failure = failure
     }
 
     public var modelBounds: CGRect? {
@@ -2180,9 +2186,9 @@ public struct ViewportLayout: Equatable {
 
     public static func transformedPoint(
         _ point: Point3D,
-        by transform: Transform3D
+        by placement: ScenePlacement
     ) -> Point3D {
-        transform.viewportTransformedPoint(point)
+        placement.point(point)
     }
 
     public func bodyProjection(for item: ViewportSceneItem) -> ViewportBodyProjection? {

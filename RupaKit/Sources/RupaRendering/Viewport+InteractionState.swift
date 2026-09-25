@@ -229,7 +229,7 @@ struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable, Sendable {
     var target: SelectionTarget
     var componentID: SelectionComponentID
     var point: Point3D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
     var dragMode: ViewportPolySplineSurfaceVertexDragMode
 }
 
@@ -237,7 +237,7 @@ struct ViewportSurfaceControlPointHandleTarget: Equatable, Sendable {
     var featureID: FeatureID
     var target: SelectionReference
     var point: Point3D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
     var dragMode: ViewportPolySplineSurfaceVertexDragMode
 
     var identity: ViewportSurfaceControlPointHandleIdentity {
@@ -258,7 +258,7 @@ struct ViewportSurfaceTrimEndpointHandleTarget: Equatable, Sendable {
     var v: Double
     var tangentU: Vector3D
     var tangentV: Vector3D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
 
     var identity: ViewportSurfaceTrimEndpointHandleIdentity {
         ViewportSurfaceTrimEndpointHandleIdentity(target: target, endpoint: endpoint)
@@ -279,7 +279,7 @@ struct ViewportSurfaceTrimControlPointHandleTarget: Equatable, Sendable {
     var v: Double
     var tangentU: Vector3D
     var tangentV: Vector3D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
 
     var identity: ViewportSurfaceTrimControlPointHandleIdentity {
         ViewportSurfaceTrimControlPointHandleIdentity(

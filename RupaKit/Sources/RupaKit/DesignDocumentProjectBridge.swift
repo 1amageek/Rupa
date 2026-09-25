@@ -30,65 +30,39 @@ public struct DesignDocumentProjectBridge: Sendable {
         }
 
         let metadata = document.productMetadata
-        var parentByChild: [SceneNodeID: SceneNodeID] = [:]
-        for parent in metadata.sceneNodes.values {
-            for childID in parent.childIDs {
-                guard metadata.sceneNodes[childID] != nil else {
-                    throw DesignDocumentProjectBridgeError(
-                        code: .unknownChild,
-                        message: "Scene node \(parent.id.description) references unknown child "
-                            + "\(childID.description)."
-                    )
-                }
-                guard parentByChild[childID] == nil else {
-                    throw DesignDocumentProjectBridgeError(
-                        code: .multipleParents,
-                        message: "Scene node \(childID.description) has more than one parent."
-                    )
-                }
-                parentByChild[childID] = parent.id
-            }
-        }
-
+        let placedOccurrences = try SceneNodeHierarchy(metadata: metadata).resolvedOccurrences()
         var definitions: [ObjectDefinitionID: ObjectDefinition] = [:]
         var occurrences: [SceneOccurrenceID: SceneOccurrence] = [:]
-        for nodeID in metadata.sceneNodes.keys.sorted() {
-            guard let node = metadata.sceneNodes[nodeID] else {
-                continue
+        var navigation: [SceneOccurrenceID: SceneNodeID] = [:]
+        for occurrence in placedOccurrences {
+            guard let node = metadata.sceneNodes[occurrence.sourceSceneNodeID] else {
+                throw DesignDocumentProjectBridgeError(
+                    code: .unknownChild, message: "Resolved occurrence source node is missing."
+                )
             }
-            let definitionID = definitionID(for: nodeID)
-            let occurrenceID = occurrenceID(for: nodeID)
+            let definitionID = definitionID(for: node.id)
             let transform: GeometryTransform3D
             do {
-                transform = try GeometryTransform3D(values: node.localTransform.matrix.values)
+                transform = try GeometryTransform3D(values: occurrence.localTransform.matrix.values)
             } catch {
                 throw DesignDocumentProjectBridgeError(
                     code: .invalidTransform,
-                    message: "Scene node \(nodeID.description) has an invalid transform: \(error)."
+                    message: "Scene node \(node.id.description) has an invalid transform: \(error)."
                 )
             }
-            definitions[definitionID] = ObjectDefinition(
-                id: definitionID,
-                name: node.name,
-                representations: evaluationRepresentations(for: node)
-            )
-            occurrences[occurrenceID] = SceneOccurrence(
-                id: occurrenceID,
-                definitionID: definitionID,
-                parentID: parentByChild[nodeID].map(occurrenceID(for:)),
-                localTransform: transform
-            )
-        }
-
-        let roots = try metadata.rootSceneNodeIDs.map { nodeID in
-            guard metadata.sceneNodes[nodeID] != nil else {
-                throw DesignDocumentProjectBridgeError(
-                    code: .unknownChild,
-                    message: "The document root references an unknown scene node \(nodeID.description)."
+            if definitions[definitionID] == nil {
+                definitions[definitionID] = ObjectDefinition(
+                    id: definitionID, name: node.name,
+                    representations: evaluationRepresentations(for: node)
                 )
             }
-            return occurrenceID(for: nodeID)
+            occurrences[occurrence.id] = SceneOccurrence(
+                id: occurrence.id, definitionID: definitionID,
+                parentID: occurrence.parentID, localTransform: transform
+            )
+            navigation[occurrence.id] = occurrence.sceneNodeID
         }
+        let roots = placedOccurrences.filter { $0.parentID == nil }.map(\.id)
 
         let projectName = document.cadDocument.metadata.name ?? "Untitled"
         let source = try ProjectSourceModel(
@@ -101,24 +75,19 @@ public struct DesignDocumentProjectBridge: Sendable {
         )
         return DesignDocumentProjectProjection(
             source: source,
-            sceneNodeIDByOccurrenceID: sceneNodeNavigationIndex(for: document)
+            sceneNodeIDByOccurrenceID: navigation
         )
     }
 
     public func sceneNodeNavigationIndex(
         for document: DesignDocument
-    ) -> [SceneOccurrenceID: SceneNodeID] {
-        Dictionary(uniqueKeysWithValues: document.productMetadata.sceneNodes.keys.map { nodeID in
-            (occurrenceID(for: nodeID), nodeID)
-        })
+    ) throws -> [SceneOccurrenceID: SceneNodeID] {
+        Dictionary(uniqueKeysWithValues: try SceneNodeHierarchy(metadata: document.productMetadata)
+            .resolvedOccurrences().map { ($0.id, $0.sceneNodeID) })
     }
 
     private func definitionID(for nodeID: SceneNodeID) -> ObjectDefinitionID {
         ObjectDefinitionID(rawValue: "object.\(nodeID.description)")
-    }
-
-    private func occurrenceID(for nodeID: SceneNodeID) -> SceneOccurrenceID {
-        SceneOccurrenceID(rawValue: "scene.\(nodeID.description)")
     }
 
     private func evaluationRepresentations(

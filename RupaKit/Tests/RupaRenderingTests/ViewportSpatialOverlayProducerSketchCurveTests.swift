@@ -1106,12 +1106,12 @@ func offsetRoutesPreserveSourceDistancesUnderModelScale() throws {
     let featureID = FeatureID()
     let componentID = SelectionComponentID.profileRegion(featureID: featureID, profileIndex: 0)
     let selectionTarget = SelectionTarget(sceneNodeID: .init(), component: .object)
-    let transform = Transform3D(matrix: try Matrix4x4(values: [
+    let transform = try ScenePlacement(Transform3D(matrix: try Matrix4x4(values: [
         2.0, 0.0, 0.0, 0.0,
         0.0, 2.0, 0.0, 0.0,
         0.0, 0.0, 2.0, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
 
     func tipAnchor(
         _ entry: ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.Entry

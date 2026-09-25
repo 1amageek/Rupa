@@ -18,7 +18,7 @@ public struct SketchEntitySnapshotService: Sendable {
             )
         }
 
-        let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
         let profileExtractor = SketchProfileExtractor(tolerance: document.modelingSettings.tolerance)
         var sketchEntries: [SketchEntitySummaryResult.SketchEntry] = []
@@ -34,7 +34,7 @@ public struct SketchEntitySnapshotService: Sendable {
                 continue
             }
 
-            let sceneNodeID = sceneNodeIDsByFeatureID[featureID]?.description
+            let sceneNodeID = hierarchy.presentingSceneNodeID(for: featureID)?.description
             constraintCount += sketch.constraints.count
             dimensionCount += sketch.dimensions.count
             sketchEntries.append(
@@ -305,17 +305,6 @@ public struct SketchEntitySnapshotService: Sendable {
         }
     }
 
-    private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
-        var mapping: [FeatureID: SceneNodeID] = [:]
-        for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard sceneNode.reference?.kind == .sketch,
-                  let featureID = sceneNode.reference?.featureID else {
-                continue
-            }
-            mapping[featureID] = sceneNodeID
-        }
-        return mapping
-    }
 
     private func resolvedPoint(
         _ point: SketchPoint,

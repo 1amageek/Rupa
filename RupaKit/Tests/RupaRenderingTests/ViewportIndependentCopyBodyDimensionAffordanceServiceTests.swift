@@ -19,7 +19,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -65,7 +65,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -106,7 +106,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -148,7 +148,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -184,14 +184,14 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
+    let outputTransform = try ScenePlacement(try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform))
     let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -202,7 +202,7 @@ import Testing
 
     let sizeX = try #require(candidates.first { $0.target.kind == .sizeX })
     let expectedDirection = projectedDirection(
-        for: outputTransform.viewportTransformedVector(.unitX),
+        for: outputTransform.vector(.unitX),
         layout: layout
     )
     #expect(abs(sizeX.geometry.projectedDirection.dx - expectedDirection.dx) < 1.0e-12)
@@ -235,7 +235,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -285,7 +285,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [

@@ -85,7 +85,7 @@ public struct ViewportSectionClippingPlan: Equatable {
     public func renderedScene(from scene: ViewportScene) -> ViewportScene {
         ViewportScene(items: scene.items.filter { item in
             action(forSceneItemID: item.id) != .hidden
-        })
+        }, failure: scene.failure)
     }
 
     private static func matchingBody(
@@ -93,6 +93,9 @@ public struct ViewportSectionClippingPlan: Equatable {
         component: ViewportBodyComponent,
         bodies: [SectionAnalysisClippingPlan.Body]
     ) -> SectionAnalysisClippingPlan.Body? {
+        let bodies = bodies.filter {
+            $0.occurrenceID == nil || $0.occurrenceID == item.occurrenceID
+        }
         if let subshapeID = component.subshapeID,
            let body = bodies.first(where: { $0.subshapeID == subshapeID }) {
             return body

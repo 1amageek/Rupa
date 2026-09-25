@@ -210,14 +210,15 @@ public struct DrawingProjectionService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
+        let projectedAnnotations = drawingAnnotations(
+            document: document,
+            savedView: savedView,
+            basis: basis,
+            topology: topologySummary,
+            displayUnit: displayUnit
+        )
         let annotations = DrawingAnnotationLayoutService().layout(
-            annotations: try drawingAnnotations(
-                document: document,
-                savedView: savedView,
-                basis: basis,
-                topology: topologySummary,
-                displayUnit: displayUnit
-            ),
+            annotations: projectedAnnotations.annotations,
             viewFrame: viewFrame
         )
 
@@ -242,7 +243,7 @@ public struct DrawingProjectionService: Sendable {
                         severity: .info,
                         message: "Drawing projection completed with no generated body meshes."
                     ),
-                ] + annotationDiagnostics(annotations)
+                ] + annotationDiagnostics(annotations) + projectedAnnotations.unresolved
             )
         }
 
@@ -359,7 +360,7 @@ public struct DrawingProjectionService: Sendable {
                 truncatedStrokes: truncatedStrokes,
                 maximumStrokeCount: maximumStrokeCount,
                 sectionArtifacts: sectionArtifacts
-            ) + sectionArtifacts.diagnostics + annotationDiagnostics(annotations)
+            ) + sectionArtifacts.diagnostics + annotationDiagnostics(annotations) + projectedAnnotations.unresolved
         )
     }
 
@@ -408,7 +409,7 @@ public struct DrawingProjectionService: Sendable {
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> TopologySnapshot? {
-        guard measurementAnnotationsRequireTopology(in: document),
+        guard MeasurementAnnotationResolver.requiresTopology(document),
               document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return nil
         }
@@ -420,44 +421,36 @@ public struct DrawingProjectionService: Sendable {
         )
     }
 
-    private func measurementAnnotationsRequireTopology(
-        in document: DesignDocument
-    ) -> Bool {
-        document.productMetadata.measurements.values.contains { measurement in
-            measurement.anchors.contains { anchor in
-                anchor.kind == .topologyReference || anchor.kind == .topologyEdgeParameter
-            }
-        }
-    }
-
     private func drawingAnnotations(
         document: DesignDocument,
         savedView: SavedView,
         basis: ProjectionBasis,
         topology: TopologySnapshot?,
         displayUnit: LengthDisplayUnit
-    ) throws -> [DrawingProjectionResult.Annotation] {
-        let resolver = MeasurementAnchorWorldPointResolver()
-        let sortedMeasurements = document.productMetadata.measurements.values.sorted {
-            if $0.name != $1.name {
-                return $0.name < $1.name
-            }
-            return $0.id.description < $1.id.description
-        }
-
+    ) -> (annotations: [DrawingProjectionResult.Annotation], unresolved: [EditorDiagnostic]) {
+        let resolutions = MeasurementAnnotationResolver().resolveAll(in: document, topology: { topology })
         var annotations: [DrawingProjectionResult.Annotation] = []
-        annotations.reserveCapacity(sortedMeasurements.count)
-        for measurement in sortedMeasurements {
-            let anchors = try resolvedAnnotationAnchors(
-                measurement.anchors,
-                resolver: resolver,
-                document: document,
-                savedView: savedView,
-                basis: basis,
-                topology: topology
-            )
-            guard anchors.isEmpty == false else {
+        var unresolved: [EditorDiagnostic] = []
+        annotations.reserveCapacity(resolutions.count)
+        for resolution in resolutions {
+            guard let measurement = document.productMetadata.measurements[resolution.measurementID] else {
                 continue
+            }
+            let resolvedAnchors: [MeasurementAnchorWorldPointResolver.ResolvedAnchor]
+            switch resolution.outcome {
+            case .resolved(let value):
+                resolvedAnchors = value
+            case .unresolved(let error):
+                unresolved.append(EditorDiagnostic(severity: .warning, message: error.message))
+                continue
+            }
+            let anchors = resolvedAnchors.map { resolved in
+                DrawingProjectionResult.AnnotationAnchor(
+                    role: resolved.role,
+                    kind: resolved.kind,
+                    worldPoint: resolved.worldPoint,
+                    point2D: project(resolved.worldPoint, savedView: savedView, basis: basis)
+                )
             }
             let metrics = annotationMetrics(
                 measurement: measurement,
@@ -487,35 +480,7 @@ public struct DrawingProjectionService: Sendable {
                 displayText: metrics.displayText
             ))
         }
-        return annotations
-    }
-
-    private func resolvedAnnotationAnchors(
-        _ sourceAnchors: [MeasurementAnchor],
-        resolver: MeasurementAnchorWorldPointResolver,
-        document: DesignDocument,
-        savedView: SavedView,
-        basis: ProjectionBasis,
-        topology: TopologySnapshot?
-    ) throws -> [DrawingProjectionResult.AnnotationAnchor] {
-        var anchors: [DrawingProjectionResult.AnnotationAnchor] = []
-        anchors.reserveCapacity(sourceAnchors.count)
-        for sourceAnchor in sourceAnchors {
-            guard let resolved = try resolver.resolvedAnchor(
-                sourceAnchor,
-                in: document,
-                topology: topology
-            ) else {
-                continue
-            }
-            anchors.append(DrawingProjectionResult.AnnotationAnchor(
-                role: resolved.role,
-                kind: resolved.kind,
-                worldPoint: resolved.worldPoint,
-                point2D: project(resolved.worldPoint, savedView: savedView, basis: basis)
-            ))
-        }
-        return anchors
+        return (annotations, unresolved)
     }
 
     private func annotationMetrics(
@@ -616,6 +581,11 @@ public struct DrawingProjectionService: Sendable {
         }
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Edge-length and face-area annotation values are read
+    // from source-frame topology metrics, so a scaled occurrence placement is not reflected and an
+    // occurrence-qualified anchor does not match its entry. Production path: drawing projection
+    // annotation metrics. Completion (PROGRESS FBS.3) requires placed edge/face metrics from the
+    // kernel's edge and face queries through the anchor's occurrence placement.
     private func topologyFaceAreaSquareMeters(
         for measurement: MeasurementAnnotation,
         topology: TopologySnapshot?

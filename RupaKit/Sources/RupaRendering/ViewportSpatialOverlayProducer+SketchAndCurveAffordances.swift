@@ -346,7 +346,7 @@ extension ViewportSpatialOverlayProducer {
             let primitive: ViewportSketchPrimitive
             let sourcePrimitive: ViewportSketchPrimitive?
             let sketchPlane: SketchPlane
-            let modelTransform: Transform3D
+            let modelTransform: ScenePlacement
             let selectionTarget: SelectionTarget?
             let state: SketchCurveAffordanceState
             let showsPointHandles: Bool
@@ -361,7 +361,7 @@ extension ViewportSpatialOverlayProducer {
                 primitive: ViewportSketchPrimitive,
                 sketchPlane: SketchPlane,
                 sourcePrimitive: ViewportSketchPrimitive? = nil,
-                modelTransform: Transform3D = .identity,
+                modelTransform: ScenePlacement = .identity,
                 selectionTarget: SelectionTarget? = nil,
                 state: SketchCurveAffordanceState = .normal,
                 showsPointHandles: Bool = true,
@@ -400,7 +400,7 @@ extension ViewportSpatialOverlayProducer {
             let family: ViewportSpatialOverlayFamily
             let preparedTarget: ViewportSpatialPreparedInteractionTarget?
             var occurrenceID: String? = nil
-            var modelTransform: Transform3D = .identity
+            var modelTransform: ScenePlacement = .identity
 
             init(
                 route: SketchCurveAffordanceRoute,
@@ -1325,14 +1325,14 @@ extension ViewportSpatialOverlayProducer {
         try append([entry], to: &result, limits: limits)
     }
 
-    private static func world(_ point: CGPoint, by transform: Transform3D) -> Point3D {
+    private static func world(_ point: CGPoint, by transform: ScenePlacement) -> Point3D {
         ViewportLayout.transformedPoint(
             Point3D(x: Double(point.x), y: 0.0, z: Double(point.y)),
             by: transform
         )
     }
 
-    private static func world(_ point: Point3D, by transform: Transform3D) -> Point3D {
+    private static func world(_ point: Point3D, by transform: ScenePlacement) -> Point3D {
         ViewportLayout.transformedPoint(point, by: transform)
     }
 
@@ -1930,7 +1930,7 @@ extension ViewportSpatialOverlayProducer {
 
     private static func slotGeometry(
         for primitive: ViewportSketchPrimitive,
-        modelTransform: Transform3D
+        modelTransform: ScenePlacement
     ) throws -> (base: Point3D, direction: Vector3D)? {
         switch primitive {
         case .line(_, let start, let end):
@@ -1942,7 +1942,7 @@ extension ViewportSpatialOverlayProducer {
             let length = hypot(tangent.x, tangent.y)
             guard length > 1.0e-12 else { return nil }
             let direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
+                .vector(Vector3D(
                     x: -Double(tangent.y / length),
                     y: 0.0,
                     z: Double(tangent.x / length)
@@ -1958,7 +1958,7 @@ extension ViewportSpatialOverlayProducer {
                 y: center.y + CGFloat(sin(angle) * radius)
             )
             let direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
+                .vector(Vector3D(
                     x: cos(angle),
                     y: 0.0,
                     z: sin(angle)
@@ -1978,7 +1978,7 @@ extension ViewportSpatialOverlayProducer {
             )
             guard tangent.length > 1.0e-12 else { return nil }
             let direction = try modelTransform
-                .viewportTransformedVector(tangent.cross(Vector3D.unitY))
+                .vector(tangent.cross(Vector3D.unitY))
                 .normalized(tolerance: 1.0e-12)
             return (world(start, by: modelTransform), direction)
         case .point, .circle:
@@ -1989,12 +1989,12 @@ extension ViewportSpatialOverlayProducer {
     private static func sketchVertexGeometry(
         for primitive: ViewportSketchPrimitive,
         handle: SketchEntityPointHandle,
-        modelTransform: Transform3D
+        modelTransform: ScenePlacement
     ) throws -> (point: CGPoint, direction: Vector3D)? {
         switch primitive {
         case .line(_, let start, let end):
             let direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
+                .vector(Vector3D(
                     x: Double(end.x - start.x),
                     y: 0.0,
                     z: Double(end.y - start.y)
@@ -2017,7 +2017,7 @@ extension ViewportSpatialOverlayProducer {
                     y: center.y + CGFloat(sin(startAngle) * radius)
                 )
                 let direction = try modelTransform
-                    .viewportTransformedVector(Vector3D(
+                    .vector(Vector3D(
                         x: -sin(startAngle), y: 0.0, z: cos(startAngle)
                     ))
                     .normalized(tolerance: 1.0e-12)
@@ -2028,7 +2028,7 @@ extension ViewportSpatialOverlayProducer {
                     y: center.y + CGFloat(sin(endAngle) * radius)
                 )
                 let direction = try modelTransform
-                    .viewportTransformedVector(Vector3D(
+                    .vector(Vector3D(
                         x: sin(endAngle), y: 0.0, z: -cos(endAngle)
                     ))
                     .normalized(tolerance: 1.0e-12)
@@ -2045,7 +2045,7 @@ extension ViewportSpatialOverlayProducer {
         featureID: FeatureID,
         primitive: ViewportSketchPrimitive,
         preparedPrimitive: ViewportSketchPrimitive? = nil,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         selectionTarget: SelectionTarget?,
         ruler: RulerConfiguration,
         defaultWidthMeters: Double,
@@ -2094,7 +2094,7 @@ extension ViewportSpatialOverlayProducer {
         featureID: FeatureID,
         primitive: ViewportSketchPrimitive,
         preparedPrimitive: ViewportSketchPrimitive? = nil,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         selectedEntities: Set<SketchEntityID>,
         selectedControlPoints: [SketchEntityID: [Int]],
         itemSelected: Bool,
@@ -2157,7 +2157,7 @@ extension ViewportSpatialOverlayProducer {
         switch primitive {
         case .line(_, let start, let end):
             let direction = try modelTransform
-                .viewportTransformedVector(Vector3D(
+                .vector(Vector3D(
                     x: Double(end.x - start.x),
                     y: 0.0,
                     z: Double(end.y - start.y)
@@ -2173,10 +2173,10 @@ extension ViewportSpatialOverlayProducer {
             let start = CGPoint(x: center.x + CGFloat(cos(startAngle) * radius), y: center.y + CGFloat(sin(startAngle) * radius))
             let end = CGPoint(x: center.x + CGFloat(cos(endAngle) * radius), y: center.y + CGFloat(sin(endAngle) * radius))
             let startDirection = try modelTransform
-                .viewportTransformedVector(Vector3D(x: -sin(startAngle), y: 0.0, z: cos(startAngle)))
+                .vector(Vector3D(x: -sin(startAngle), y: 0.0, z: cos(startAngle)))
                 .normalized(tolerance: 1.0e-12)
             let endDirection = try modelTransform
-                .viewportTransformedVector(Vector3D(x: sin(endAngle), y: 0.0, z: -cos(endAngle)))
+                .vector(Vector3D(x: sin(endAngle), y: 0.0, z: -cos(endAngle)))
                 .normalized(tolerance: 1.0e-12)
             try appendVertex(handle: .arcStart, point: start, direction: startDirection)
             try appendVertex(handle: .arcEnd, point: end, direction: endDirection)
@@ -2220,7 +2220,7 @@ extension ViewportSpatialOverlayProducer {
 
     private static func preparedSplineControlPoints(
         from primitive: ViewportSketchPrimitive?,
-        transform: Transform3D
+        transform: ScenePlacement
     ) -> [Point3D]? {
         guard let primitive,
               case .spline(_, _, let controlPoints, _) = primitive else {
@@ -2869,7 +2869,7 @@ extension ViewportSpatialOverlayProducer {
         primitive: ViewportSketchPrimitive,
         featureID _: FeatureID,
         sketchPlane: SketchPlane,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         state: SketchCurveAffordanceState,
         scaleFactor: Double
     ) throws -> SketchCurveAffordanceSource.Entry {
@@ -2891,7 +2891,7 @@ extension ViewportSpatialOverlayProducer {
         }
         let samples = try comb.samples.map { sample in
             let normal = try modelTransform
-                .viewportTransformedVector(Vector3D(
+                .vector(Vector3D(
                     x: sample.normal.x,
                     y: 0.0,
                     z: sample.normal.y
@@ -2924,7 +2924,7 @@ extension ViewportSpatialOverlayProducer {
         label: String?,
         state: SketchCurveAffordanceState,
         family: ViewportSpatialOverlayFamily = .sketch,
-        modelTransform: Transform3D = .identity
+        modelTransform: ScenePlacement = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         guard sourceVertices.count >= 3 else {
             throw RealityViewportSpatialBatch.invalid(
@@ -2980,7 +2980,7 @@ extension ViewportSpatialOverlayProducer {
         label: String?,
         state: SketchCurveAffordanceState,
         family: ViewportSpatialOverlayFamily = .body,
-        modelTransform: Transform3D = .identity
+        modelTransform: ScenePlacement = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         let anchor = midpoint(edgeStart, edgeEnd)
         let direction = try normalizedVector(from: anchor, to: inwardToward)
@@ -3027,7 +3027,7 @@ extension ViewportSpatialOverlayProducer {
         selectionTarget: SelectionTarget?,
         label: String?,
         state: SketchCurveAffordanceState,
-        modelTransform: Transform3D = .identity
+        modelTransform: ScenePlacement = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         guard widthMeters.isFinite, widthMeters > 0.0 else {
             throw RealityViewportSpatialBatch.invalid(
@@ -3073,7 +3073,7 @@ extension ViewportSpatialOverlayProducer {
         selectionTarget: SelectionTarget?,
         label: String?,
         state: SketchCurveAffordanceState,
-        modelTransform: Transform3D = .identity
+        modelTransform: ScenePlacement = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         let normalized = try direction.normalized(tolerance: 1.0e-12)
         let preparedOrigin = preparedBase ?? base
@@ -3114,7 +3114,7 @@ extension ViewportSpatialOverlayProducer {
         baseValue: Double,
         label: String?,
         state: SketchCurveAffordanceState,
-        modelTransform: Transform3D = .identity
+        modelTransform: ScenePlacement = .identity
     ) throws -> SketchCurveAffordanceSource.Entry {
         var indexes: [Int] = []
         var seenIndexes: Set<Int> = []
@@ -3179,7 +3179,7 @@ extension ViewportSpatialOverlayProducer {
 
     static func makeBridgeEndpointEntry(
         handle: BridgeCurveEndpointHandle,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         guideLengthMeters: Double,
         state: SketchCurveAffordanceState,
         label: String? = nil
@@ -3197,7 +3197,7 @@ extension ViewportSpatialOverlayProducer {
     private static func bridgeEndpointEntry(
         handle: BridgeCurveEndpointHandle,
         preparedHandle: BridgeCurveEndpointHandle? = nil,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         state: SketchCurveAffordanceState,
         guideLengthMeters: Double,
         label: String? = nil,
@@ -3237,7 +3237,7 @@ extension ViewportSpatialOverlayProducer {
         } else {
             worldPoint = ViewportLayout.transformedPoint(localPoint, by: modelTransform)
             let worldTangent = try modelTransform
-                .viewportTransformedVector(localTangent)
+                .vector(localTangent)
                 .normalized(tolerance: 1.0e-12)
             tangentTip = Point3D(
                 x: worldPoint.x + worldTangent.x * guideLengthMeters,
@@ -3282,7 +3282,7 @@ extension ViewportSpatialOverlayProducer {
         anchor: Point3D,
         direction: Vector3D,
         distanceMeters: Double,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         minimumLengthPoints: Double,
         label: String?,
         state: SketchCurveAffordanceState,

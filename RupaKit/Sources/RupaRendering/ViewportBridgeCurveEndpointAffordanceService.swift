@@ -91,7 +91,7 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
     static func projectedTangentTip(
         point: Point2D,
         outgoingTangent: Point2D,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         layout: ViewportLayout,
         viewportLength: CGFloat = tangentGuideViewportLength
     ) -> CGPoint? {
@@ -122,7 +122,7 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             z: point.y + outgoingTangent.y * fallbackLengthMeters
         )
         return layout.projectedPoint(
-            modelTransform.viewportTransformedPoint(localTip)
+            modelTransform.point(localTip)
         )?.point
     }
 }
@@ -141,7 +141,7 @@ struct ViewportBridgeCurveEndpointHandleTarget: Equatable {
     var endpoint: BridgeCurveEndpoint
     var referenceDescription: String
     var point: Point2D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
     var projectedPoint: CGPoint
     var projectedTangentTip: CGPoint
 

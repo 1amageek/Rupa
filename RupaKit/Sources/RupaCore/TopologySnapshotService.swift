@@ -77,14 +77,16 @@ public struct TopologySnapshotService: Sendable {
             failurePrefix: "Document must evaluate successfully before topology snapshot"
         )
 
-        let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
+        // Entries without a presenting scene node stay in the snapshot as kernel topology, but carry
+        // no scene node, so no scene-qualified selection or placement can resolve against them.
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         let entries = try evaluatedDocument.subshapes.entries
             .map { subshapeID, reference in
                 try topologyEntry(
                     subshapeID: subshapeID,
                     reference: reference,
                     evaluatedDocument: evaluatedDocument,
-                    sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+                    hierarchy: hierarchy,
                     metricPolicy: metricPolicy
                 )
             }
@@ -110,12 +112,12 @@ public struct TopologySnapshotService: Sendable {
         subshapeID: SubshapeID,
         reference: TopologyReference,
         evaluatedDocument: EvaluatedDocument,
-        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        hierarchy: SceneNodeHierarchy,
         metricPolicy: MetricPolicy
     ) throws -> TopologySummaryResult.Entry {
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let stableReference = try evaluatedDocument.stableSubshapeReference(for: subshapeID)
-        let sceneNodeID = sceneNodeIDsByFeatureID[subshapeID.featureID]?.description
+        let sceneNodeID = hierarchy.presentingSceneNodeID(for: subshapeID.featureID)?.description
         switch reference {
         case .body(let bodyID):
             let body = evaluatedDocument.brep.bodies[bodyID]
@@ -227,17 +229,6 @@ public struct TopologySnapshotService: Sendable {
                 start: vertex.map { point($0.point) }
             )
         }
-    }
-
-    private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
-        var mapping: [FeatureID: SceneNodeID] = [:]
-        for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard let featureID = sceneNode.reference?.featureID else {
-                continue
-            }
-            mapping[featureID] = sceneNodeID
-        }
-        return mapping
     }
 
     private func point(_ point: Point3D) -> TopologySummaryResult.Entry.Point {

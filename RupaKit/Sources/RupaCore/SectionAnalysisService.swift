@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 import CADTopology
 import SwiftCAD
 
@@ -48,11 +49,13 @@ public struct SectionAnalysisService: Sendable {
         let tolerance = try resolvedTolerance(query.toleranceMeters, document: document)
         let maximumSegments = try resolvedMaximumSegments(query.maximumIntersectionSegments)
         let offsetMeters = try resolvedOffset(query.offsetMeters)
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         let plane = try resolvedPlane(
             source: query.source,
             offsetMeters: offsetMeters,
             flipsNormal: query.flipsNormal,
             document: document,
+            hierarchy: hierarchy,
             activeConstructionPlaneID: activeConstructionPlaneID
         )
 
@@ -90,21 +93,42 @@ public struct SectionAnalysisService: Sendable {
             in: evaluatedDocument.subshapes
         )
 
+        let occurrences = try hierarchy.resolvedOccurrences()
         for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
             let body = evaluatedDocument.brep.bodies[bodyID]
-            let analysis = analyzeBody(
-                bodyID: bodyID,
-                identity: identitiesByBodyID[bodyID],
-                body: body,
-                mesh: mesh,
-                plane: plane.coordinateSystem,
-                tolerance: tolerance,
-                includesIntersectionSegments: query.includesIntersectionSegments,
-                remainingSegmentCapacity: max(0, maximumSegments - segments.count)
-            )
-            bodies.append(analysis.body)
-            segments.append(contentsOf: analysis.segments)
-            truncatedSegments = truncatedSegments || analysis.truncatedSegments
+            let identity = identitiesByBodyID[bodyID]
+            // A body is sectioned at every visible occurrence of its presenting scene node. A body
+            // with no presenting node has no product placement and is sectioned once in the world
+            // frame, the same rule the viewport and measurement apply.
+            let placements: [(sceneNodeID: SceneNodeID?, occurrenceID: SceneOccurrenceID?, transform: Transform3D)]
+            if let identity, hierarchy.presentingSceneNodeID(for: identity.sourceFeatureID) != nil {
+                placements = hierarchy.presentationOccurrences(of: identity.sourceFeatureID, in: occurrences)
+                    .filter(\.isVisible)
+                    .map { ($0.sceneNodeID, $0.id, $0.worldTransform) }
+            } else {
+                placements = [(nil, nil, .identity)]
+            }
+            for placement in placements {
+                let sceneNodeID = placement.sceneNodeID
+                let occurrenceID = placement.occurrenceID
+                let transform = placement.transform
+                let analysis = try analyzeBody(
+                    bodyID: bodyID,
+                    sceneNodeID: sceneNodeID,
+                    occurrenceID: occurrenceID,
+                    transform: transform,
+                    identity: identity,
+                    body: body,
+                    mesh: mesh,
+                    plane: plane.coordinateSystem,
+                    tolerance: tolerance,
+                    includesIntersectionSegments: query.includesIntersectionSegments,
+                    remainingSegmentCapacity: max(0, maximumSegments - segments.count)
+                )
+                bodies.append(analysis.body)
+                segments.append(contentsOf: analysis.segments)
+                truncatedSegments = truncatedSegments || analysis.truncatedSegments
+            }
         }
 
         let diagnostics = diagnostics(
@@ -166,11 +190,13 @@ public struct SectionAnalysisService: Sendable {
         offsetMeters: Double,
         flipsNormal: Bool,
         document: DesignDocument,
+        hierarchy: SceneNodeHierarchy,
         activeConstructionPlaneID: ConstructionPlaneSourceID?
     ) throws -> ResolvedPlane {
         let basePlane = try resolvePlane(
             source,
             document: document,
+            hierarchy: hierarchy,
             activeConstructionPlaneID: activeConstructionPlaneID
         )
         guard offsetMeters != 0.0 || flipsNormal else {
@@ -186,6 +212,7 @@ public struct SectionAnalysisService: Sendable {
     private func resolvePlane(
         _ source: SectionAnalysisQuery.Source,
         document: DesignDocument,
+        hierarchy: SceneNodeHierarchy,
         activeConstructionPlaneID: ConstructionPlaneSourceID?
     ) throws -> ResolvedPlane {
         switch source {
@@ -203,11 +230,13 @@ public struct SectionAnalysisService: Sendable {
                     message: "Section analysis construction plane \(id.description) was not found."
                 )
             }
-            return try resolvedSketchPlane(
+            return try resolvedConstructionPlane(
                 constructionPlane.plane,
+                id: constructionPlane.id,
+                name: constructionPlane.name,
                 sourceKind: .constructionPlane,
-                sourceID: constructionPlane.id.description,
-                sourceName: constructionPlane.name
+                document: document,
+                hierarchy: hierarchy
             )
         case .activeConstructionPlane:
             guard let activeConstructionPlaneID else {
@@ -224,11 +253,13 @@ public struct SectionAnalysisService: Sendable {
                     message: "The active construction plane no longer exists in the document source."
                 )
             }
-            return try resolvedSketchPlane(
+            return try resolvedConstructionPlane(
                 constructionPlane.plane,
+                id: constructionPlane.id,
+                name: constructionPlane.name,
                 sourceKind: .activeConstructionPlane,
-                sourceID: constructionPlane.id.description,
-                sourceName: constructionPlane.name
+                document: document,
+                hierarchy: hierarchy
             )
         case .sceneNode(let id):
             guard let node = document.productMetadata.sceneNodes[id] else {
@@ -237,8 +268,35 @@ public struct SectionAnalysisService: Sendable {
                     message: "Section analysis scene node \(id.description) was not found."
                 )
             }
-            return try resolvedSceneNodePlane(node)
+            return try resolvedSceneNodePlane(node, document: document, hierarchy: hierarchy)
         }
+    }
+
+    private func resolvedConstructionPlane(
+        _ plane: SketchPlane,
+        id: ConstructionPlaneSourceID,
+        name: String,
+        sourceKind: SectionAnalysisResult.PlaneSourceKind,
+        document: DesignDocument,
+        hierarchy: SceneNodeHierarchy
+    ) throws -> ResolvedPlane {
+        let nodeIDs = document.productMetadata.sceneNodes.compactMap { sceneNodeID, node in
+            node.reference?.constructionPlaneID == id ? sceneNodeID : nil
+        }
+        guard nodeIDs.count <= 1 else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Construction plane \(id.description) has multiple scene placements; select a specific scene node."
+            )
+        }
+        let local = try resolvedSketchPlane(
+            plane,
+            sourceKind: sourceKind,
+            sourceID: id.description,
+            sourceName: name
+        )
+        guard let sceneNodeID = nodeIDs.first else { return local }
+        return try placedPlane(local, by: hierarchy.worldTransform(of: sceneNodeID))
     }
 
     private func transformedPlane(
@@ -291,7 +349,11 @@ public struct SectionAnalysisService: Sendable {
         )
     }
 
-    private func resolvedSceneNodePlane(_ node: SceneNode) throws -> ResolvedPlane {
+    private func resolvedSceneNodePlane(
+        _ node: SceneNode,
+        document: DesignDocument,
+        hierarchy: SceneNodeHierarchy
+    ) throws -> ResolvedPlane {
         let isConstruction = node.reference?.kind == .construction
             || node.object?.category == .construction
         guard isConstruction else {
@@ -301,39 +363,45 @@ public struct SectionAnalysisService: Sendable {
             )
         }
 
-        let values = node.localTransform.matrix.values
-        let origin = Point3D(
-            x: values[3],
-            y: values[7],
-            z: values[11]
-        )
-        let rawNormal = Vector3D(
-            x: values[2],
-            y: values[6],
-            z: values[10]
-        )
-        let normal = try rawNormal.normalized(tolerance: 1.0e-12)
-        let rawU = Vector3D(
-            x: values[0],
-            y: values[4],
-            z: values[8]
-        )
-        let u = resolvedPlaneUAxis(rawU: rawU, normal: normal)
-        let v = normal.cross(u)
-        let plane = SketchPlane.plane(Plane3D(origin: origin, normal: normal))
-
-        return ResolvedPlane(
-            resultPlane: SectionAnalysisResult.Plane(
+        if let constructionPlaneID = node.reference?.constructionPlaneID,
+           let constructionPlane = document.productMetadata.constructionPlanes[constructionPlaneID] {
+            let local = try resolvedSketchPlane(
+                constructionPlane.plane,
                 sourceKind: .sceneNode,
                 sourceID: node.id.description,
-                sourceName: node.name,
-                origin: origin,
-                normal: normal,
-                u: u,
-                v: v
-            ),
+                sourceName: node.name
+            )
+            return try placedPlane(local, by: hierarchy.worldTransform(of: node.id))
+        }
+        let local = try resolvedSketchPlane(
+            .xy,
+            sourceKind: .sceneNode,
+            sourceID: node.id.description,
+            sourceName: node.name
+        )
+        return try placedPlane(local, by: hierarchy.worldTransform(of: node.id))
+    }
+
+    private func placedPlane(_ source: ResolvedPlane, by transform: Transform3D) throws -> ResolvedPlane {
+        let origin = try transform.applied(to: source.coordinateSystem.origin)
+        let normal = try transform.applyingNormal(to: source.coordinateSystem.normal)
+        let rawU = try transform.applyingLinearPart(to: source.coordinateSystem.u)
+        let projectedU = rawU - normal * rawU.dot(normal)
+        let u = try projectedU.normalized(tolerance: 1.0e-12)
+        let v = normal.cross(u)
+        let resultPlane = SectionAnalysisResult.Plane(
+            sourceKind: source.resultPlane.sourceKind,
+            sourceID: source.resultPlane.sourceID,
+            sourceName: source.resultPlane.sourceName,
+            origin: origin,
+            normal: normal,
+            u: u,
+            v: v
+        )
+        return ResolvedPlane(
+            resultPlane: resultPlane,
             coordinateSystem: SketchPlaneCoordinateSystem(
-                plane: plane,
+                plane: .plane(Plane3D(origin: origin, normal: normal)),
                 origin: origin,
                 normal: normal,
                 u: u,
@@ -342,29 +410,11 @@ public struct SectionAnalysisService: Sendable {
         )
     }
 
-    private func resolvedPlaneUAxis(rawU: Vector3D, normal: Vector3D) -> Vector3D {
-        let projected = rawU - normal * rawU.dot(normal)
-        if let normalized = normalizedVector(projected) {
-            return normalized
-        }
-        let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
-        let fallback = helper.cross(normal)
-        if let normalized = normalizedVector(fallback) {
-            return normalized
-        }
-        return Vector3D.unitX
-    }
-
-    private func normalizedVector(_ vector: Vector3D) -> Vector3D? {
-        let length = vector.length
-        guard length.isFinite, length > 1.0e-12 else {
-            return nil
-        }
-        return vector / length
-    }
-
     private func analyzeBody(
         bodyID: BodyID,
+        sceneNodeID: SceneNodeID?,
+        occurrenceID: SceneOccurrenceID?,
+        transform: Transform3D,
         identity: GeneratedBodyIdentityResolver.Identity?,
         body: CADTopology.Body?,
         mesh: Mesh,
@@ -372,11 +422,12 @@ public struct SectionAnalysisService: Sendable {
         tolerance: Double,
         includesIntersectionSegments: Bool,
         remainingSegmentCapacity: Int
-    ) -> BodyAnalysis {
+    ) throws -> BodyAnalysis {
         var frontVertexCount = 0
         var behindVertexCount = 0
         var coplanarVertexCount = 0
-        let distances = mesh.positions.map { point in
+        let positions = try mesh.positions.map { try transform.applied(to: $0) }
+        let distances = positions.map { point in
             let distance = plane.project(point).depth
             switch side(for: distance, tolerance: tolerance) {
             case .front:
@@ -411,9 +462,9 @@ public struct SectionAnalysisService: Sendable {
             }
 
             let trianglePoints = [
-                mesh.positions[firstIndex],
-                mesh.positions[secondIndex],
-                mesh.positions[thirdIndex],
+                positions[firstIndex],
+                positions[secondIndex],
+                positions[thirdIndex],
             ]
             let triangleDistances = [
                 distances[firstIndex],
@@ -441,6 +492,8 @@ public struct SectionAnalysisService: Sendable {
             if classification == .intersects || classification == .touching {
                 let segment = intersectionSegment(
                     bodyID: bodyID,
+                    sceneNodeID: sceneNodeID,
+                    occurrenceID: occurrenceID,
                     points: trianglePoints,
                     distances: triangleDistances,
                     plane: plane,
@@ -470,6 +523,8 @@ public struct SectionAnalysisService: Sendable {
         )
         let resultBody = SectionAnalysisResult.Body(
             bodyID: bodyID.description,
+            sceneNodeID: sceneNodeID,
+            occurrenceID: occurrenceID,
             sourceFeatureID: identity?.sourceFeatureID.description,
             subshapeID: identity.map { GeneratedSubshapeIdentity.string(for: $0.subshapeID) },
             name: body?.name,
@@ -554,6 +609,8 @@ public struct SectionAnalysisService: Sendable {
 
     private func intersectionSegment(
         bodyID: BodyID,
+        sceneNodeID: SceneNodeID?,
+        occurrenceID: SceneOccurrenceID?,
         points: [Point3D],
         distances: [Double],
         plane: SketchPlaneCoordinateSystem,
@@ -595,6 +652,8 @@ public struct SectionAnalysisService: Sendable {
         }
         return SectionAnalysisResult.IntersectionSegment(
             bodyID: bodyID.description,
+            sceneNodeID: sceneNodeID,
+                    occurrenceID: occurrenceID,
             start: start,
             end: end,
             start2D: plane.project(start).point,

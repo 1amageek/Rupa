@@ -151,6 +151,9 @@ public struct SnapMeasurementReference: Codable, Equatable, Sendable {
     public var anchorKind: MeasurementAnchor.Kind
     public var role: MeasurementAnchor.Role
     public var worldPoint: Point3D
+    public var anchorSceneNodeID: SceneNodeID?
+    public var occurrenceID: SceneOccurrenceID?
+    public var localPoint: Point3D?
     public var sketchReference: MeasurementSketchAnchor?
     public var topologyReference: MeasurementTopologyAnchor?
     public var sketchCurveParameter: MeasurementSketchCurveAnchor?
@@ -164,6 +167,9 @@ public struct SnapMeasurementReference: Codable, Equatable, Sendable {
         anchorIndex: Int,
         role: MeasurementAnchor.Role,
         worldPoint: Point3D,
+        anchorSceneNodeID: SceneNodeID? = nil,
+        occurrenceID: SceneOccurrenceID? = nil,
+        localPoint: Point3D? = nil,
         anchorKind: MeasurementAnchor.Kind = .worldPoint,
         sketchReference: MeasurementSketchAnchor? = nil,
         topologyReference: MeasurementTopologyAnchor? = nil,
@@ -178,6 +184,9 @@ public struct SnapMeasurementReference: Codable, Equatable, Sendable {
         self.anchorKind = anchorKind
         self.role = role
         self.worldPoint = worldPoint
+        self.anchorSceneNodeID = anchorSceneNodeID
+        self.occurrenceID = occurrenceID
+        self.localPoint = localPoint
         self.sketchReference = sketchReference
         self.topologyReference = topologyReference
         self.sketchCurveParameter = sketchCurveParameter
@@ -631,7 +640,7 @@ public struct SnapResolver: Sendable {
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> [PrioritizedSnapCandidate] {
-        let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         var snapEntities: [SnapEntity] = []
         var candidates: [PrioritizedSnapCandidate] = []
         for featureID in document.cadDocument.designGraph.order {
@@ -639,7 +648,10 @@ public struct SnapResolver: Sendable {
                   case .sketch(let sketch) = feature.operation else {
                 continue
             }
-            let sceneNodeID = sceneNodeIDsByFeatureID[featureID]
+            let sceneNodeID = hierarchy.presentingSceneNodeID(for: featureID)
+            guard try sketchIsUnplaced(presentedBy: sceneNodeID, in: hierarchy) else {
+                continue
+            }
             for (entityID, entity) in sketch.entities.sorted(by: { first, second in
                 first.key.description < second.key.description
             }) {
@@ -683,7 +695,7 @@ public struct SnapResolver: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        candidates += try measurementCandidates(
+        candidates += measurementCandidates(
             in: document,
             topology: topology,
             constructionPlane: constructionPlane
@@ -695,16 +707,17 @@ public struct SnapResolver: Sendable {
         )
         candidates += try surfaceTrimCandidates(
             in: document,
-            sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+            hierarchy: hierarchy,
             constructionPlane: constructionPlane
         )
         candidates += try regionCandidates(
             in: document,
-            sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+            hierarchy: hierarchy,
             constructionPlane: constructionPlane
         )
-        candidates += topologyCandidates(
+        candidates += try topologyCandidates(
             in: topology,
+            hierarchy: hierarchy,
             constructionPlane: constructionPlane
         )
         return candidates.compactMap { candidate in
@@ -716,7 +729,7 @@ public struct SnapResolver: Sendable {
 
     private func regionCandidates(
         in document: DesignDocument,
-        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        hierarchy: SceneNodeHierarchy,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
@@ -729,6 +742,9 @@ public struct SnapResolver: Sendable {
                   case .sketch(let sketch) = feature.operation else {
                 continue
             }
+            let sceneNodeID = hierarchy.presentingSceneNodeID(for: featureID)
+            let placement = try sceneNodeID.map { try ScenePlacement(hierarchy.worldTransform(of: $0)) }
+                ?? .identity
             let profiles: [Profile]
             do {
                 profiles = try extractor.extractProfiles(
@@ -751,16 +767,24 @@ public struct SnapResolver: Sendable {
                 } catch {
                     continue
                 }
-                let regionPoint = try projectedPoint(
-                    region.center,
-                    from: profile.plane,
-                    onto: constructionPlane
-                )
+                // A region center is one point, so any affine placement maps it exactly.
+                let regionPoint: Point2D
+                if placement == .identity {
+                    regionPoint = try projectedPoint(
+                        region.center,
+                        from: profile.plane,
+                        onto: constructionPlane
+                    )
+                } else {
+                    let sourcePoint = try SketchPlaneCoordinateSystem(plane: profile.plane)
+                        .point(from: region.center)
+                    regionPoint = projectedMeasurementPoint(placement.point(sourcePoint), onto: constructionPlane)
+                }
                 candidates.append(
                     regionCandidate(
                         point: regionPoint,
                         featureID: featureID,
-                        sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                        sceneNodeID: sceneNodeID,
                         profileIndex: profileIndex
                     )
                 )
@@ -799,7 +823,7 @@ public struct SnapResolver: Sendable {
 
     private func surfaceTrimCandidates(
         in document: DesignDocument,
-        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        hierarchy: SceneNodeHierarchy,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
         var candidates: [PrioritizedSnapCandidate] = []
@@ -812,6 +836,11 @@ public struct SnapResolver: Sendable {
                 continue
             }
             let featureID = trim.target.featureID
+            // The trimmed surface is displayed by the trim feature's presenting node, so trim
+            // points are placed by that node; without one they stay in the world frame.
+            let sceneNodeID = hierarchy.presentingSceneNodeID(for: trimFeatureID)
+            let placement = try sceneNodeID.map { try ScenePlacement(hierarchy.worldTransform(of: $0)) }
+                ?? .identity
             let surfaceReference = SurfaceReference(subshape: trim.target.face)
             for (loopIndex, trimLoop) in trim.loops.enumerated() {
                 for (edgeIndex, parameterCurve) in trimLoop.parameterCurves.enumerated() {
@@ -827,7 +856,8 @@ public struct SnapResolver: Sendable {
                         parameter: parameterCurve.startParameter(tolerance: tolerance),
                         surface: surfaceFeature.surface,
                         featureID: featureID,
-                        sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                        sceneNodeID: sceneNodeID,
+                        placement: placement,
                         constructionPlane: constructionPlane,
                         tolerance: tolerance
                     ) {
@@ -839,7 +869,8 @@ public struct SnapResolver: Sendable {
                         parameter: parameterCurve.endParameter(tolerance: tolerance),
                         surface: surfaceFeature.surface,
                         featureID: featureID,
-                        sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                        sceneNodeID: sceneNodeID,
+                        placement: placement,
                         constructionPlane: constructionPlane,
                         tolerance: tolerance
                     ) {
@@ -852,7 +883,8 @@ public struct SnapResolver: Sendable {
                             parameter: controlPoint.parameter,
                             surface: surfaceFeature.surface,
                             featureID: featureID,
-                            sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                            sceneNodeID: sceneNodeID,
+                            placement: placement,
                             constructionPlane: constructionPlane,
                             tolerance: tolerance
                         ) {
@@ -892,28 +924,30 @@ public struct SnapResolver: Sendable {
         }
     }
 
+    /// Snap points on saved measurements, from the shared all-or-nothing resolution.
+    ///
+    /// An annotation that does not resolve offers no snap points; it is reported by the
+    /// measurement panel and drawing projection, and never stops snapping to anything else.
     private func measurementCandidates(
         in document: DesignDocument,
         topology: TopologySnapshot?,
         constructionPlane: SketchPlaneCoordinateSystem?
-    ) throws -> [PrioritizedSnapCandidate] {
-        let measurements = document.productMetadata.measurements.values
-            .sorted { first, second in
-                if first.name != second.name {
-                    return first.name.localizedStandardCompare(second.name) == .orderedAscending
-                }
-                return first.id.description < second.id.description
-            }
-
+    ) -> [PrioritizedSnapCandidate] {
+        let resolutions = MeasurementAnnotationResolver(
+            anchorResolver: MeasurementAnchorWorldPointResolver(curveSampler: curveSampler)
+        ).resolveAll(in: document) { topology }
         var candidates: [PrioritizedSnapCandidate] = []
-        for measurement in measurements {
-            for (index, anchor) in measurement.anchors.enumerated() {
-                if let candidate = try measurementCandidate(
+        for resolution in resolutions {
+            guard case .resolved(let resolvedAnchors) = resolution.outcome,
+                  let measurement = document.productMetadata.measurements[resolution.measurementID] else {
+                continue
+            }
+            for (index, (anchor, resolved)) in zip(measurement.anchors, resolvedAnchors).enumerated() {
+                if let candidate = measurementCandidate(
                     measurement: measurement,
                     anchor: anchor,
                     anchorIndex: index,
-                    document: document,
-                    topology: topology,
+                    worldPoint: resolved.worldPoint,
                     constructionPlane: constructionPlane
                 ) {
                     candidates.append(candidate)
@@ -929,7 +963,7 @@ public struct SnapResolver: Sendable {
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> TopologySnapshot? {
-        guard measurementsRequireTopology(in: document)
+        guard MeasurementAnnotationResolver.requiresTopology(document)
             || (searchRadiusMeters > 0.0
                 && document.cadDocument.hasActiveRenderableTopologyFeatures) else {
             return nil
@@ -942,29 +976,75 @@ public struct SnapResolver: Sendable {
         )
     }
 
-    private func measurementsRequireTopology(in document: DesignDocument) -> Bool {
-        document.productMetadata.measurements.values.contains { measurement in
-            measurement.anchors.contains { anchor in
-                switch anchor.kind {
-                case .topologyReference, .topologyEdgeParameter:
-                    return true
-                case .worldPoint, .sketchReference, .sketchCurveParameter:
-                    return false
-                }
-            }
-        }
-    }
 
+    /// Topology snap points in world space.
+    ///
+    /// Topology snapshot points are in their feature's source frame; each entry is placed by its
+    /// scene node's world transform, and an entry without a scene node belongs to an unpresented
+    /// feature that stays in the world frame.
     private func topologyCandidates(
         in topology: TopologySnapshot?,
+        hierarchy: SceneNodeHierarchy,
         constructionPlane: SketchPlaneCoordinateSystem?
-    ) -> [PrioritizedSnapCandidate] {
+    ) throws -> [PrioritizedSnapCandidate] {
         guard let topology else {
             return []
         }
-        return topology.entries.flatMap { entry in
-            topologyCandidates(from: entry, constructionPlane: constructionPlane)
+        var placementsBySceneNodeID: [SceneNodeID: ScenePlacement] = [:]
+        return try topology.entries.flatMap { entry -> [PrioritizedSnapCandidate] in
+            guard let sceneNodeID = entry.selectionTarget()?.sceneNodeID else {
+                return topologyCandidates(from: entry, constructionPlane: constructionPlane)
+            }
+            let placement: ScenePlacement
+            if let cached = placementsBySceneNodeID[sceneNodeID] {
+                placement = cached
+            } else {
+                placement = try ScenePlacement(hierarchy.worldTransform(of: sceneNodeID))
+                placementsBySceneNodeID[sceneNodeID] = placement
+            }
+            return topologyCandidates(from: placed(entry, by: placement), constructionPlane: constructionPlane)
         }
+    }
+
+    private func placed(
+        _ entry: TopologySummaryResult.Entry,
+        by placement: ScenePlacement
+    ) -> TopologySummaryResult.Entry {
+        guard placement != .identity else {
+            return entry
+        }
+        func place(_ point: TopologySummaryResult.Entry.Point?) -> TopologySummaryResult.Entry.Point? {
+            point.map {
+                let mapped = placement.point(Point3D(x: $0.x, y: $0.y, z: $0.z))
+                return TopologySummaryResult.Entry.Point(x: mapped.x, y: mapped.y, z: mapped.z)
+            }
+        }
+        var placedEntry = entry
+        placedEntry.start = place(entry.start)
+        placedEntry.end = place(entry.end)
+        placedEntry.center = place(entry.center)
+        return placedEntry
+    }
+
+    /// Whether a sketch's snap geometry can be offered in its authored coordinates.
+    ///
+    /// Sketch snap entities, their closest-point curves and their intersections are computed in
+    /// the sketch plane, which has no in-plane rotation or scale, so they are exact only when the
+    /// sketch's presenting occurrence is not moved. An unpresented sketch stays in the world frame.
+    private func sketchIsUnplaced(
+        presentedBy sceneNodeID: SceneNodeID?,
+        in hierarchy: SceneNodeHierarchy
+    ) throws -> Bool {
+        guard let sceneNodeID else {
+            return true
+        }
+        let placement = try ScenePlacement(hierarchy.worldTransform(of: sceneNodeID))
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Sketch entities presented by a moved scene node offer
+        // no snap candidates. Production path: SnapResolver.objectCandidates for every tool.
+        // Completion requires placing each snap entity's points, curves and intersection geometry
+        // through the occurrence placement (including non-uniform scale); until then a moved
+        // sketch must not report snap points at its unplaced source position.
+        return placement == .identity
     }
 
     private func topologyCandidates(
@@ -1246,17 +1326,6 @@ public struct SnapResolver: Sendable {
                 discreteCandidates: discreteCandidates
             )
         }
-    }
-
-    private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
-        var mapping: [FeatureID: SceneNodeID] = [:]
-        for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard let featureID = sceneNode.reference?.featureID else {
-                continue
-            }
-            mapping[featureID] = sceneNodeID
-        }
-        return mapping
     }
 
     private func closestCandidate(
@@ -1641,19 +1710,10 @@ public struct SnapResolver: Sendable {
         measurement: MeasurementAnnotation,
         anchor: MeasurementAnchor,
         anchorIndex: Int,
-        document: DesignDocument,
-        topology: TopologySnapshot?,
+        worldPoint: Point3D,
         constructionPlane: SketchPlaneCoordinateSystem?
-    ) throws -> PrioritizedSnapCandidate? {
-        guard let resolvedAnchor = try resolvedMeasurementAnchor(
-            anchor,
-            in: document,
-            topology: topology,
-            constructionPlane: constructionPlane
-        ) else {
-            return nil
-        }
-        let snapPoint = resolvedAnchor.point
+    ) -> PrioritizedSnapCandidate? {
+        let snapPoint = projectedMeasurementPoint(worldPoint, onto: constructionPlane)
         guard isFinite(snapPoint) else {
             return nil
         }
@@ -1677,7 +1737,12 @@ public struct SnapResolver: Sendable {
                     kind: measurement.kind,
                     anchorIndex: anchorIndex,
                     role: anchor.role,
-                    worldPoint: resolvedAnchor.worldPoint,
+                    worldPoint: worldPoint,
+                    anchorSceneNodeID: anchor.sceneNodeID
+                        ?? anchor.topologyReference?.sceneNodeID
+                        ?? anchor.topologyEdgeParameter?.sceneNodeID,
+                    occurrenceID: anchor.occurrenceID,
+                    localPoint: anchor.localPoint,
                     anchorKind: anchor.kind,
                     sketchReference: anchor.sketchReference,
                     topologyReference: anchor.topologyReference,
@@ -1685,27 +1750,6 @@ public struct SnapResolver: Sendable {
                     topologyEdgeParameter: anchor.topologyEdgeParameter
                 )
             )
-        )
-    }
-
-    private func resolvedMeasurementAnchor(
-        _ anchor: MeasurementAnchor,
-        in document: DesignDocument,
-        topology: TopologySnapshot?,
-        constructionPlane: SketchPlaneCoordinateSystem?
-    ) throws -> (worldPoint: Point3D, point: Point2D)? {
-        guard let worldPoint = try MeasurementAnchorWorldPointResolver(
-            curveSampler: curveSampler
-        ).worldPoint(
-            for: anchor,
-            in: document,
-            topology: topology
-        ) else {
-            return nil
-        }
-        return (
-            worldPoint: worldPoint,
-            point: projectedMeasurementPoint(worldPoint, onto: constructionPlane)
         )
     }
 
@@ -1805,6 +1849,7 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
+        placement: ScenePlacement,
         constructionPlane: SketchPlaneCoordinateSystem?,
         tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
@@ -1819,6 +1864,7 @@ public struct SnapResolver: Sendable {
             surface: surface,
             featureID: featureID,
             sceneNodeID: sceneNodeID,
+            placement: placement,
             constructionPlane: constructionPlane,
             tolerance: tolerance
         )
@@ -1831,6 +1877,7 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
+        placement: ScenePlacement,
         constructionPlane: SketchPlaneCoordinateSystem?,
         tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
@@ -1845,6 +1892,7 @@ public struct SnapResolver: Sendable {
             surface: surface,
             featureID: featureID,
             sceneNodeID: sceneNodeID,
+            placement: placement,
             constructionPlane: constructionPlane,
             tolerance: tolerance
         )
@@ -1861,6 +1909,7 @@ public struct SnapResolver: Sendable {
         surface: BSplineSurface3D,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID?,
+        placement: ScenePlacement,
         constructionPlane: SketchPlaneCoordinateSystem?,
         tolerance: ModelingTolerance
     ) throws -> PrioritizedSnapCandidate? {
@@ -1872,10 +1921,10 @@ public struct SnapResolver: Sendable {
             v: parameter.v,
             tolerance: tolerance
         )
-        let worldPoint = geometry.position
+        let worldPoint = placement.point(geometry.position)
         guard isFinite(worldPoint),
-              let uAxis = normalized(geometry.tangentU),
-              let vAxis = normalized(geometry.tangentV),
+              let uAxis = normalized(placement.vector(geometry.tangentU)),
+              let vAxis = normalized(placement.vector(geometry.tangentV)),
               let normal = normalized(uAxis.cross(vAxis)) else {
             return nil
         }

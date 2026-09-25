@@ -31,7 +31,7 @@ struct RectangleSelectionFixture {
     let meshSceneNodeID: SceneNodeID
     let meshOccurrenceID: SceneOccurrenceID
     let topology: ViewportBodyTopology
-    let modelTransform: Transform3D
+    let modelTransform: ScenePlacement
     let triangleCount: Int
     let interactionSceneNodeIDs: Set<SceneNodeID>
 }

@@ -73,7 +73,7 @@ public struct SurfaceAnalysisService: Sendable {
         )
 
         let persistentNames = persistentTopologyNames(in: evaluatedDocument)
-        let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         var skippedDegenerateCombCount = 0
         var faces: [SurfaceAnalysisResult.FaceAnalysis] = []
         faces.reserveCapacity(evaluatedDocument.brep.faces.count)
@@ -91,7 +91,7 @@ public struct SurfaceAnalysisService: Sendable {
                     surface: surface,
                     model: evaluatedDocument.brep,
                     persistentNames: persistentNames,
-                    sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+                    hierarchy: hierarchy,
                     skippedDegenerateCombCount: &skippedDegenerateCombCount
                 )
             )
@@ -122,7 +122,7 @@ public struct SurfaceAnalysisService: Sendable {
         surface: BSplineSurface3D,
         model: BRepModel,
         persistentNames: PersistentTopologyNames,
-        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        hierarchy: SceneNodeHierarchy,
         skippedDegenerateCombCount: inout Int
     ) throws -> SurfaceAnalysisResult.FaceAnalysis {
         let uBounds = try parameterBounds(surface.uDomain)
@@ -236,7 +236,7 @@ public struct SurfaceAnalysisService: Sendable {
             ),
             trimBoundaries: trimBoundaries,
             sourceFeatureID: sourceFeatureID?.description,
-            sceneNodeID: sourceFeatureID.flatMap { sceneNodeIDsByFeatureID[$0]?.description },
+            sceneNodeID: sourceFeatureID.flatMap { hierarchy.presentingSceneNodeID(for: $0)?.description },
             uDegree: surface.uDegree,
             vDegree: surface.vDegree,
             uControlPointCount: surface.uControlPointCount,
@@ -567,16 +567,6 @@ public struct SurfaceAnalysisService: Sendable {
         )
     }
 
-    private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
-        var mapping: [FeatureID: SceneNodeID] = [:]
-        for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard let featureID = sceneNode.reference?.featureID else {
-                continue
-            }
-            mapping[featureID] = sceneNodeID
-        }
-        return mapping
-    }
 
 
 

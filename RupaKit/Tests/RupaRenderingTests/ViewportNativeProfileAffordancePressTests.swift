@@ -372,8 +372,8 @@ private struct ProfileHandlePressFixture {
                     message: "The fixture body topology does not carry the selected edge."
                 )
             }
-            let start = bodyItem.modelTransform.viewportTransformedPoint(sourceEdge.start)
-            let end = bodyItem.modelTransform.viewportTransformedPoint(sourceEdge.end)
+            let start = bodyItem.modelTransform.point(sourceEdge.start)
+            let end = bodyItem.modelTransform.point(sourceEdge.end)
             anchor = Point3D(
                 x: (start.x + end.x) / 2.0,
                 y: (start.y + end.y) / 2.0,
@@ -392,7 +392,7 @@ private struct ProfileHandlePressFixture {
                     message: "The selected Boundary Surface edge is absent from the opened body topology."
                 )
             }
-            let displayPoints = sourceEdge.displayPoints.map(bodyItem.modelTransform.viewportTransformedPoint)
+            let displayPoints = sourceEdge.displayPoints.map(bodyItem.modelTransform.point)
             guard let midpoint = ViewportSpatialOverlayProducer.midpoint(of: displayPoints) else {
                 throw ProfileAffordancePressFixtureError(
                     message: "The selected Boundary Surface edge has no display midpoint."

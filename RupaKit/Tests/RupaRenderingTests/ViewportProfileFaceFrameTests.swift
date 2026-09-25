@@ -41,7 +41,7 @@ struct ViewportProfileFaceFrameTests {
                 for: node, bodyFace: coreFace, in: document))
             let target = SelectionTarget(sceneNodeID: node, component: .face(componentID))
             var scaledItem = item
-            scaledItem.modelTransform = try ViewportWorldTransformAlgebra.scale(2, about: .origin)
+            scaledItem.modelTransform = try ScenePlacement(ViewportWorldTransformAlgebra.scale(2, about: .origin))
             let scaled = try ViewportProfileFaceFrame.resolve(item: scaledItem, face: face,
                 componentID: componentID, document: document)
             let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: scaled.anchor)

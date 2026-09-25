@@ -38,16 +38,25 @@ struct WorkspaceObjectEditingSSOTTests {
         return try encoder.encode(value)
     }
 
+    /// Two independent bodies: `first` hangs below a sheared, rotated parent and `second` sits
+    /// translated at the root. Sharing one source between placements is a component instance's
+    /// job, so the two objects here own separate sources and the tests read placement isolation
+    /// and the shared command path across them.
     private func fixture(cylinder: Bool = false) async throws -> (ProjectWorkspace, SceneNodeID, SceneNodeID) {
         let session = EditorSession()
         _ = try #require(cylinder ? session.createDefaultExtrudedCircle() : session.createDefaultExtrudedRectangle())
+        let firstFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        _ = try #require(cylinder ? session.createDefaultExtrudedCircle() : session.createDefaultExtrudedRectangle())
+        let secondFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
         var document = session.document
-        var first = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
-        var second = first
-        second.id = SceneNodeID()
-        second.name = "Shared source occurrence"
-        second.childIDs = []
-        second.localTransform = try WorkspaceTransformMatrix.replacing(.translationX, with: 3, in: .identity)
+        var first = try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body && $0.reference?.featureID == firstFeatureID
+        })
+        let second = try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body && $0.reference?.featureID == secondFeatureID
+        })
+        document.productMetadata.sceneNodes[second.id]?.localTransform = try WorkspaceTransformMatrix.replacing(
+            .translationX, with: 3, in: .identity)
         first.localTransform = try WorkspaceTransformMatrix.transform(from: .init(
             translation: .init(x: 0.2, y: 0.3, z: 0.4), rotationDegrees: .init(x: 20, y: 30, z: 40),
             scale: .init(x: -2, y: 3, z: 4), shear: .init(x: 0.3, y: 0.2, z: -0.1)))
@@ -60,9 +69,8 @@ struct WorkspaceObjectEditingSSOTTests {
         }
         document.productMetadata.rootSceneNodeIDs.removeAll { $0 == first.id }
         document.productMetadata.sceneNodes[first.id] = first
-        document.productMetadata.sceneNodes[second.id] = second
         document.productMetadata.sceneNodes[parent.id] = parent
-        document.productMetadata.rootSceneNodeIDs += [parent.id, second.id]
+        document.productMetadata.rootSceneNodeIDs += [parent.id]
         let controller = try ProjectController(document: document,
             evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(), projector: DesignDocumentProjectBridge())
         let workspace = ProjectWorkspace(project: controller)
@@ -148,10 +156,11 @@ struct WorkspaceObjectEditingSSOTTests {
             let meters = (axis == .x ? size.x : axis == .y ? size.y : size.z) * 1.5
             let commands = try WorkspaceObjectShapeInspectorStateBuilder.sizeCommands(axis, meters: meters,
                 nodeIDs: [first, second], in: before.document.document)
-            #expect(commands.count == 1)
             let kind: ObjectDimensionKind = axis == .x ? .sizeX : axis == .y ? .sizeZ : .sizeY
-            #expect(commands == [.setObjectDimension(target: .init(sceneNodeID: first), kind: kind,
-                value: .length(meters, .meter))])
+            // Each selected source receives the one dimension command Canvas input also issues.
+            #expect(commands == [first, second].map {
+                .setObjectDimension(target: .init(sceneNodeID: $0), kind: kind, value: .length(meters, .meter))
+            })
             current = try await perform(commands, in: workspace)
             let result = try #require(try shape(first, in: current).size)
             #expect(abs((axis == .x ? result.x : axis == .y ? result.y : result.z) - meters) < 1e-8)

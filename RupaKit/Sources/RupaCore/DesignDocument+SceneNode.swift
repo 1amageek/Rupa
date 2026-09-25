@@ -128,7 +128,7 @@ extension DesignDocument {
                 message: "Pattern array output scene node transforms are controlled by the pattern source."
             )
         }
-        try localTransform.validate()
+        try localTransform.validateAffinePlacement()
         node.localTransform = localTransform
         productMetadata.sceneNodes[id] = node
         try synchronizeBoundaryOccurrences()

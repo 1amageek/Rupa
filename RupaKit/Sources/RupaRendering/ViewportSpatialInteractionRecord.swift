@@ -6,11 +6,11 @@ import RupaViewportScene
 struct ViewportSpatialInteractionRecord: Sendable {
     let identity: ViewportSpatialHandleIdentity
     let occurrenceID: String?
-    let modelTransform: Transform3D
+    let modelTransform: ScenePlacement
     let target: ViewportSpatialPreparedInteractionTarget
 
     init(target: ViewportSpatialPreparedInteractionTarget,
-         occurrenceID: String? = nil, modelTransform: Transform3D = .identity) throws {
+         occurrenceID: String? = nil, modelTransform: ScenePlacement = .identity) throws {
         if case .objectTransform(let action, let members, _) = target {
             guard !members.isEmpty, members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount,
                   Set(members.map(\.sceneNodeID)).count == members.count,

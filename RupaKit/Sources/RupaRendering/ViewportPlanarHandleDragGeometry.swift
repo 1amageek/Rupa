@@ -4,10 +4,10 @@ import RupaViewportScene
 
 struct ViewportPlanarHandleDragGeometry: Equatable {
     var localPoint: Point3D
-    var modelTransform: Transform3D
+    var modelTransform: ScenePlacement
 
     var displayPoint: Point3D {
-        modelTransform.viewportTransformedPoint(localPoint)
+        modelTransform.point(localPoint)
     }
 
     func projectedPoint(layout: ViewportLayout) -> CGPoint? {
@@ -34,7 +34,7 @@ struct ViewportPlanarHandleDragGeometry: Equatable {
             return nil
         }
         let amount = Double(viewportLength / axisVector.length)
-        let displayDirection = modelTransform.viewportTransformedVector(localDirection)
+        let displayDirection = modelTransform.vector(localDirection)
         return layout.projectedPoint(Point3D(
             x: displayPoint.x + displayDirection.x * amount,
             y: displayPoint.y + displayDirection.y * amount,
@@ -49,7 +49,7 @@ struct ViewportPlanarHandleDragGeometry: Equatable {
         guard let start = layout.projectedPoint(displayPoint)?.point else {
             return nil
         }
-        let displayDirection = modelTransform.viewportTransformedVector(localDirection)
+        let displayDirection = modelTransform.vector(localDirection)
         guard let end = layout.projectedPoint(Point3D(
             x: displayPoint.x + displayDirection.x,
             y: displayPoint.y + displayDirection.y,

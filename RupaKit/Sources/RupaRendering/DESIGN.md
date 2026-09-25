@@ -207,7 +207,7 @@ build geometry, create a second camera, or retain a second presentation scene.
 | [RupaViewportScene](../RupaViewportScene/DESIGN.md) | depends on | `UniversalViewportScene`, `snapshotID`, world transforms, bounds, and provenance | Supplies immutable engine-neutral scene values. | Rendering cannot re-evaluate or retessellate source. |
 | [RupaCore](../RupaCore/DESIGN.md) | depends on | Validated source/evaluation, stable identity contracts, and `DesignDocument.sceneNodeAppearance(id:)` | Supplies the appearance each node carries, plus source-derived navigation metadata. | Presentation resolves no document default of its own and never mutates the document. |
 | [RealityViewport](RealityViewport/DESIGN.md) | child | Native scene/resource/camera/material/input adapter | Owns RealityKit objects and the matching scene-root lifecycle. | No custom render pipeline or spatial Canvas fallback. |
-| [ViewportMeasurement](ViewportMeasurement/DESIGN.md) | child | Transient world endpoints, distance, ruler descriptors | Produces non-authoritative spatial measurement values. | It does not own RealityKit entity lifetime. |
+| [ViewportMeasurement](ViewportMeasurement/DESIGN.md) | child | Transient world endpoints, distance, ruler descriptors, saved-anchor construction | Produces non-authoritative spatial measurement values and the anchors RupaUI saves. | It does not own RealityKit entity lifetime or mutate the document. |
 | [RupaResponsivenessBaseline](../../../RupaBenchmarks/Sources/RupaResponsivenessBaseline/DESIGN.md) | coordinates with | Versioned fixture and pinned MainActor/memory acceptance policy | Owns the threshold and environment against which native preparation is measured. | A new native interval must be measured in the signed App; an offscreen duration does not satisfy this contract. |
 | [RupaUI](../RupaUI/DESIGN.md) | used by | Matching frame state, tool intents, visible errors, and the native gesture refusal callback | Composes `RealityView` and non-spatial SwiftUI chrome, and records the refusals this module reports. | UI never becomes a geometry or camera authority, and never re-derives which refusals are reportable. |
 | [RupaAgentProtocol](../RupaAgentProtocol/DESIGN.md) | used by | Foundation-value viewport operation/state contract | Routes camera/display operations to the mounted session. | Applied state is not proof of a displayed frame. |
@@ -555,20 +555,20 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    materialization consumes this prepared baseline; it may
    not rebuild `baseEdits` or `baseGroupEdit` by traversing the current scene
    or selection.
-   The producer resolves the parent world transform by walking the product
-   metadata's scene-node tree once per pass, from a root down to the
-   occurrence's node, and refuses a missing node, a cycle, a non-finite element,
-   or a singular composition as a typed batch failure. It does not reuse
-   `ViewportSceneTransformIndex`, whose lookup answers a missing node with the
-   identity transform and whose compose returns the receiver unchanged when the
-   product is not representable: either would seat a silent fallback at the
-   origin of the baseline this whole route trusts. The duplication is therefore
-   deliberate, and the index keeps its own non-throwing contract for the
-   non-authoritative scene-tree consumers that already depend on it. One walk
-   of `ViewportSceneNodeParentFrames` answers every transform gizmo the pass
-   draws, and one entry of `ViewportWorldTransformAlgebra` composes
-   `P^-1 * M_w * P * L`, so neither the parent frame nor the composition has a
-   second implementation that could disagree with it.
+   The producer resolves the parent world transform through Core's
+   `SceneNodeHierarchy`, which is also the source of `ViewportSceneTransformIndex`.
+   A frame pass may cache those checked values, but cannot run a second tree
+   walk or substitute identity for a missing, cyclic, multiply-parented,
+   non-finite or singular placement. `ViewportWorldTransformAlgebra` delegates
+   to Core's checked `Transform3D` operations and to Core's validated
+   `ScenePlacement` mappings, rejecting non-finite mapped values; it adds no
+   second matrix implementation. One resolved parent frame composes
+   `P^-1 * M_w * P * L`, and failure prevents the edit baseline or mutation.
+   `ViewportSceneBuilder` consumes the same `SceneNodeHierarchy` for world
+   placements and inherited visibility. An invalid or unresolved placement
+   returns an empty scene carrying its typed `EditorError`; the viewport forwards
+   that failure through its existing presentation-failure callback. The scene
+   contains no geometry at an identity or partially applied transform.
    Commit uses the existing scene-node transform command through the workspace
    callback, preserving its validation, save, and Undo authority as one
    transaction and therefore one Undo entry.
@@ -812,8 +812,8 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    canvas plane through the handle's own world point, for the reason the two
    curve routes above state. Their callbacks take a model-space displacement,
    so the owner carries the queried world displacement back through
-   `record.modelTransform` and refuses a placement it cannot invert rather
-   than committing the unmapped world value. The two trim routes then solve
+   `record.modelTransform`, a validated `ScenePlacement`, and refuses a delta
+   that does not map finitely rather than committing the unmapped world value. The two trim routes then solve
    that model-space displacement against the retained surface tangent pair
    for a parameter delta; the builder states those tangents in the same model
    space, so no second conversion applies. A tangent pair whose Gram

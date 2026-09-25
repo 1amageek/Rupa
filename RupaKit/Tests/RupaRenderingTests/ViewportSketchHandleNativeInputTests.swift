@@ -17,15 +17,15 @@ import Testing
 /// its sketch display image share no component. The legacy selectors
 /// unprojected the pointer through `ViewportLayout` without passing through
 /// this matrix, which the placement makes visible as a wrong display answer.
-private let sketchPlacement = Transform3D(matrix: try! Matrix4x4(values: [
+private let sketchPlacement = try! ScenePlacement(Transform3D(matrix: try! Matrix4x4(values: [
     1, -1, 0, 10,
     1, 1, 0, -5,
     0, 1, 2, 3,
     0, 0, 0, 1
-]))
+])))
 
-/// A placement whose linear part collapses, so no world delta can be carried
-/// back into the sketch display plane.
+/// A matrix whose linear part collapses, so no world delta could be carried
+/// back into the sketch display plane; it cannot become a scene placement.
 private let sketchFlatPlacement = Transform3D(matrix: try! Matrix4x4(values: [
     1, -1, 0, 10,
     1, 1, 0, -5,
@@ -55,7 +55,7 @@ private let sketchRuler = RulerConfiguration.standard(for: .millimeter)
 
 private func sketchRecord(
     _ target: ViewportSpatialPreparedInteractionTarget,
-    modelTransform: Transform3D = sketchPlacement
+    modelTransform: ScenePlacement = sketchPlacement
 ) throws -> ViewportSpatialInteractionRecord {
     // Production prepares the record and the drawn handle from the same
     // placement, and every sketch route reads that placement off the record.
@@ -507,13 +507,10 @@ func sketchHandlesRefuseIncompleteGeometryAtPress() throws {
         }
     }
 
-    // A placement that cannot carry a world delta back into the sketch display
-    // plane is refused at press too, rather than answering the unmapped world
-    // value update by update.
-    #expect(throws: MeshSourcePresentationRenderError.self) {
-        try ViewportNativeWorldPointInput(record: try sketchRecord(
-            .sketchPointHandle(pointHandle()), modelTransform: sketchFlatPlacement
-        ))
+    // A matrix that cannot carry a world delta back into the sketch display
+    // plane never becomes a placement, so no record can carry it to press.
+    #expect(throws: EditorError.self) {
+        _ = try ScenePlacement(sketchFlatPlacement)
     }
 }
 

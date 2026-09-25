@@ -394,7 +394,7 @@ private func polySplineSurfaceVertexSlideInput(
     sceneNodeID: SceneNodeID,
     cornerIndex: Int,
     point: Point3D,
-    modelTransform: Transform3D = .identity
+    modelTransform: ScenePlacement = .identity
 ) throws -> ViewportPolySplineSurfaceVertexSlideInput {
     let componentID = polySplineSurfaceVertexSlideComponentID(
         featureID: featureID,
@@ -417,7 +417,7 @@ private func surfaceControlPointSlideInput(
     uIndex: Int,
     vIndex: Int,
     point: Point3D,
-    modelTransform: Transform3D = .identity
+    modelTransform: ScenePlacement = .identity
 ) -> ViewportSurfaceControlPointSlideInput {
     ViewportSurfaceControlPointSlideInput(
         target: .surface(.controlPoint(SurfaceControlPointReference(
@@ -446,13 +446,13 @@ private func surfaceControlPointSlideInput(
 private func polySplineSurfaceVertexSlideTransform(
     scale: Double,
     translationX: Double
-) throws -> Transform3D {
-    Transform3D(matrix: try Matrix4x4(values: [
+) throws -> ScenePlacement {
+    try ScenePlacement(Transform3D(matrix: try Matrix4x4(values: [
         scale, 0.0, 0.0, translationX,
         0.0, scale, 0.0, 0.0,
         0.0, 0.0, scale, 0.0,
         0.0, 0.0, 0.0, 1.0,
-    ]))
+    ])))
 }
 
 private func polySplineSurfaceVertexSlideTopologyVertices(

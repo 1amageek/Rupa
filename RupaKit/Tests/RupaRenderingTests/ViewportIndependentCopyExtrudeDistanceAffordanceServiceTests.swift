@@ -19,7 +19,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -57,7 +57,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -99,7 +99,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -144,7 +144,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -186,7 +186,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -222,14 +222,14 @@ import Testing
         ))
     )
     let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
-    let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
+    let outputTransform = try ScenePlacement(try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform))
     let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)
     let layout = try #require(ViewportLayout(
         scene: scene,
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -240,7 +240,7 @@ import Testing
 
     let candidate = try #require(candidates.first)
     let expectedDirection = projectedDirection(
-        for: outputTransform.viewportTransformedVector(.unitZ),
+        for: outputTransform.vector(.unitZ),
         layout: layout
     )
     #expect(abs(candidate.geometry.projectedDirection.dx - expectedDirection.dx) < 1.0e-12)
@@ -268,7 +268,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -299,7 +299,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -326,7 +326,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [
@@ -372,7 +372,7 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
 
-    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+    let candidates = try ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
         document: session.document,
         scene: scene,
         selection: SelectionModel(selectedTargets: [

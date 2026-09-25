@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public enum SectionAnalysisRetainedSide: String, Codable, CaseIterable, Sendable {
     case front
@@ -22,6 +23,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
 
     public struct Body: Codable, Equatable, Sendable {
         public var bodyID: String
+        public var occurrenceID: SceneOccurrenceID?
         public var sourceFeatureID: String?
         public var subshapeID: String?
         public var name: String?
@@ -30,6 +32,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
 
         public init(
             bodyID: String,
+            occurrenceID: SceneOccurrenceID? = nil,
             sourceFeatureID: String? = nil,
             subshapeID: String? = nil,
             name: String?,
@@ -37,6 +40,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
             action: BodyAction
         ) {
             self.bodyID = bodyID
+            self.occurrenceID = occurrenceID
             self.sourceFeatureID = sourceFeatureID
             self.subshapeID = subshapeID
             self.name = name
@@ -71,6 +75,7 @@ public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
             bodies: result.bodies.map { body in
                 Body(
                     bodyID: body.bodyID,
+                    occurrenceID: body.occurrenceID,
                     sourceFeatureID: body.sourceFeatureID,
                     subshapeID: body.subshapeID,
                     name: body.name,

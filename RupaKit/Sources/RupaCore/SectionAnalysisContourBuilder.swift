@@ -1,7 +1,14 @@
 import Foundation
+import RupaCoreTypes
 import SwiftCAD
 
 struct SectionAnalysisContourBuilder: Sendable {
+    private struct BodyOccurrence: Hashable, Sendable {
+        var bodyID: String
+        var sceneNodeID: SceneNodeID?
+        var occurrenceID: SceneOccurrenceID?
+    }
+
     private struct PointKey: Hashable, Sendable {
         var x: Int64
         var y: Int64
@@ -9,12 +16,16 @@ struct SectionAnalysisContourBuilder: Sendable {
 
     private struct UndirectedEdgeKey: Hashable, Sendable {
         var bodyID: String
+        var sceneNodeID: SceneNodeID?
+        var occurrenceID: SceneOccurrenceID?
         var first: PointKey
         var second: PointKey
     }
 
     private struct Edge: Sendable {
         var bodyID: String
+        var sceneNodeID: SceneNodeID?
+        var occurrenceID: SceneOccurrenceID?
         var startKey: PointKey
         var endKey: PointKey
         var start: Point3D
@@ -37,9 +48,19 @@ struct SectionAnalysisContourBuilder: Sendable {
             return []
         }
 
-        let groupedEdges = Dictionary(grouping: edges, by: \.bodyID)
-        return groupedEdges.keys.sorted().flatMap { bodyID in
-            contours(for: groupedEdges[bodyID] ?? [], bodyID: bodyID)
+        let groupedEdges = Dictionary(grouping: edges, by: {
+            BodyOccurrence(bodyID: $0.bodyID, sceneNodeID: $0.sceneNodeID, occurrenceID: $0.occurrenceID)
+        })
+        return groupedEdges.keys.sorted {
+            if $0.bodyID != $1.bodyID { return $0.bodyID < $1.bodyID }
+            return ($0.occurrenceID?.rawValue ?? $0.sceneNodeID?.description ?? "") < ($1.occurrenceID?.rawValue ?? $1.sceneNodeID?.description ?? "")
+        }.flatMap { key in
+            contours(
+                for: groupedEdges[key] ?? [],
+                bodyID: key.bodyID,
+                sceneNodeID: key.sceneNodeID,
+                occurrenceID: key.occurrenceID
+            )
         }
     }
 
@@ -58,6 +79,8 @@ struct SectionAnalysisContourBuilder: Sendable {
             }
             let edgeKey = undirectedEdgeKey(
                 bodyID: segment.bodyID,
+                sceneNodeID: segment.sceneNodeID,
+                occurrenceID: segment.occurrenceID,
                 startKey: startKey,
                 endKey: endKey
             )
@@ -66,6 +89,8 @@ struct SectionAnalysisContourBuilder: Sendable {
             }
             edges.append(Edge(
                 bodyID: segment.bodyID,
+                sceneNodeID: segment.sceneNodeID,
+                occurrenceID: segment.occurrenceID,
                 startKey: startKey,
                 endKey: endKey,
                 start: segment.start,
@@ -79,7 +104,9 @@ struct SectionAnalysisContourBuilder: Sendable {
 
     private func contours(
         for edges: [Edge],
-        bodyID: String
+        bodyID: String,
+        sceneNodeID: SceneNodeID?,
+        occurrenceID: SceneOccurrenceID?
     ) -> [SectionAnalysisResult.IntersectionContour] {
         var adjacency: [PointKey: [Int]] = [:]
         for (index, edge) in edges.enumerated() {
@@ -96,6 +123,7 @@ struct SectionAnalysisContourBuilder: Sendable {
                 adjacency: adjacency,
                 usedEdges: &usedEdges,
                 bodyID: bodyID,
+                sceneNodeID: sceneNodeID, occurrenceID: occurrenceID,
                 contourIndex: contours.count
             )
             if let contour {
@@ -111,6 +139,8 @@ struct SectionAnalysisContourBuilder: Sendable {
         adjacency: [PointKey: [Int]],
         usedEdges: inout Set<Int>,
         bodyID: String,
+        sceneNodeID: SceneNodeID?,
+        occurrenceID: SceneOccurrenceID?,
         contourIndex: Int
     ) -> SectionAnalysisResult.IntersectionContour? {
         let firstEdge = edges[startIndex]
@@ -167,8 +197,9 @@ struct SectionAnalysisContourBuilder: Sendable {
         }
 
         return SectionAnalysisResult.IntersectionContour(
-            id: "\(bodyID):contour:\(contourIndex)",
+            id: "\(bodyID):\(occurrenceID?.rawValue ?? sceneNodeID?.description ?? "root"):contour:\(contourIndex)",
             bodyID: bodyID,
+            sceneNodeID: sceneNodeID, occurrenceID: occurrenceID,
             points: points,
             points2D: points2D,
             isClosed: isClosed,
@@ -222,13 +253,15 @@ struct SectionAnalysisContourBuilder: Sendable {
 
     private func undirectedEdgeKey(
         bodyID: String,
+        sceneNodeID: SceneNodeID?,
+        occurrenceID: SceneOccurrenceID?,
         startKey: PointKey,
         endKey: PointKey
     ) -> UndirectedEdgeKey {
         if ordered(startKey, before: endKey) {
-            return UndirectedEdgeKey(bodyID: bodyID, first: startKey, second: endKey)
+            return UndirectedEdgeKey(bodyID: bodyID, sceneNodeID: sceneNodeID, occurrenceID: occurrenceID, first: startKey, second: endKey)
         }
-        return UndirectedEdgeKey(bodyID: bodyID, first: endKey, second: startKey)
+        return UndirectedEdgeKey(bodyID: bodyID, sceneNodeID: sceneNodeID, occurrenceID: occurrenceID, first: endKey, second: startKey)
     }
 
     private func ordered(_ lhs: PointKey, before rhs: PointKey) -> Bool {

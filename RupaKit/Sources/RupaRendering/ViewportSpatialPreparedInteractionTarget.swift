@@ -24,7 +24,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
         let occurrenceID: String
         let featureID: FeatureID
         let sceneNodeID: SceneNodeID?
-        let modelTransform: Transform3D
+        let modelTransform: ScenePlacement
         let edit: ViewportObjectEditState
         var placement: ViewportBodyPlacementBaseline? = nil
     }
@@ -32,7 +32,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case sketchCurveHandle(ViewportSketchCurveHandleTarget)
     case sketchDimension(ViewportSketchDimensionTarget)
     case sketchPointHandle(ViewportSketchPointHandleTarget)
-    case bridgeCurveEndpoint(handle: BridgeCurveEndpointHandle, modelTransform: Transform3D)
+    case bridgeCurveEndpoint(handle: BridgeCurveEndpointHandle, modelTransform: ScenePlacement)
     case splineControlPoint(ViewportSplineControlPointHandleTarget)
     case splineControlPointSlide(featureID: FeatureID, entityID: SketchEntityID, target: SelectionTarget,
                                  controlPointIndexes: [Int], direction: SplineControlPointSlideDirection, axis: Axis)

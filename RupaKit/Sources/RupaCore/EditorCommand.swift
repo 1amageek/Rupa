@@ -6,6 +6,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createSavedView(SavedView)
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
+    case addMeasurementAnnotation(MeasurementAnnotation)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case renameSceneNode(id: SceneNodeID, name: String)
@@ -460,6 +461,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "updateSavedView"
         case .removeSavedView:
             "removeSavedView"
+        case .addMeasurementAnnotation:
+            "addMeasurementAnnotation"
         case .rebaseWorkspaceOrigin:
             "rebaseWorkspaceOrigin"
         case .renameDocument:
@@ -754,6 +757,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         case .createSavedView,
              .updateSavedView,
              .removeSavedView,
+             .addMeasurementAnnotation,
              .rebaseWorkspaceOrigin,
              .renameDocument,
              .renameSceneNode,

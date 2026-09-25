@@ -10,8 +10,8 @@ import Testing
         let anchor = Point3D(x: 1, y: 2, z: 3)
         let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: anchor)
         for scale in [0.5, 1.0, 2.0] {
-            let frame = try ViewportEdgeTreatmentDragFrame(anchor: anchor,
-                modelTransform: ViewportWorldTransformAlgebra.scale(scale, about: .origin))
+            let frame = ViewportEdgeTreatmentDragFrame(anchor: anchor,
+                modelTransform: try ScenePlacement(ViewportWorldTransformAlgebra.scale(scale, about: .origin)))
             let start = CGPoint(x: 400, y: 300)
             for travel in [-40.0, 0.0, 40.0] {
                 let value = try frame.distance(from: start,

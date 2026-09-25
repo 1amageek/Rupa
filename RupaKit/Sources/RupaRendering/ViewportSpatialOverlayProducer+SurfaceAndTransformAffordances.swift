@@ -718,7 +718,7 @@ private extension ViewportSpatialOverlayProducer {
             for display in component.surfaceControlPointDisplays {
                 guard routes.contains(.surfaceControlPoint) else { continue }
                 try checkpoint(0, 0, 1)
-                let world = item.modelTransform.viewportTransformedPoint(display.point)
+                let world = item.modelTransform.point(display.point)
                 let identity = selectedSurfaceControlIdentity(
                     display.selectionReference,
                     input: input,
@@ -765,7 +765,7 @@ private extension ViewportSpatialOverlayProducer {
             for display in component.surfaceTrimEndpointDisplays {
                 guard routes.contains(.surfaceTrimEndpoint) else { continue }
                 try checkpoint(0, 0, 1)
-                let world = item.modelTransform.viewportTransformedPoint(display.point)
+                let world = item.modelTransform.point(display.point)
                 let identity = selectedTrimEndpointIdentity(display.selectionReference, display.endpoint, input: input)
                 if identity != nil {
                     _ = try handleIndex(for: .surfaceTrimEndpoint(.init(
@@ -794,7 +794,7 @@ private extension ViewportSpatialOverlayProducer {
             for display in component.surfaceTrimControlPointDisplays {
                 guard routes.contains(.surfaceTrimControlPoint) else { continue }
                 try checkpoint(0, 0, 1)
-                let world = item.modelTransform.viewportTransformedPoint(display.point)
+                let world = item.modelTransform.point(display.point)
                 let identity = selectedTrimControlIdentity(display.selectionReference, display.controlPointIndex, input: input)
                 if identity != nil {
                     _ = try handleIndex(for: .surfaceTrimControlPoint(.init(
@@ -826,7 +826,7 @@ private extension ViewportSpatialOverlayProducer {
                 try appendMarker(
                     .init(
                         route: .surfaceKnot,
-                        anchor: item.modelTransform.viewportTransformedPoint(display.point),
+                        anchor: item.modelTransform.point(display.point),
                         shape: .box,
                         diameterPoints: 6,
                         color: editColor,
@@ -844,7 +844,7 @@ private extension ViewportSpatialOverlayProducer {
                 try appendMarker(
                     .init(
                         route: .surfaceSpan,
-                        anchor: item.modelTransform.viewportTransformedPoint(display.point),
+                        anchor: item.modelTransform.point(display.point),
                         shape: .sphere,
                         diameterPoints: 6,
                         color: editColor,
@@ -862,7 +862,7 @@ private extension ViewportSpatialOverlayProducer {
                 try appendMarker(
                     .init(
                         route: .surfaceTrimKnot,
-                        anchor: item.modelTransform.viewportTransformedPoint(display.point),
+                        anchor: item.modelTransform.point(display.point),
                         shape: .box,
                         diameterPoints: 6,
                         color: editColor,
@@ -880,7 +880,7 @@ private extension ViewportSpatialOverlayProducer {
                 try appendMarker(
                     .init(
                         route: .surfaceTrimSpan,
-                        anchor: item.modelTransform.viewportTransformedPoint(display.point),
+                        anchor: item.modelTransform.point(display.point),
                         shape: .sphere,
                         diameterPoints: 6,
                         color: editColor,
@@ -1173,12 +1173,12 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath]
     ) throws {
         guard let identity else { return }
-        let origin = item.modelTransform.viewportTransformedPoint(display.point)
-        let normal = normalized(item.modelTransform.viewportTransformedVector(.unitZ)) ?? .unitZ
+        let origin = item.modelTransform.point(display.point)
+        let normal = normalized(item.modelTransform.vector(.unitZ)) ?? .unitZ
         let axes: [(ViewportCoordinateAxis, Vector3D)] = ViewportCoordinateAxis.allCases.map { axis in
             (
                 axis,
-                normalized(item.modelTransform.viewportTransformedVector(axisVector(axis)))
+                normalized(item.modelTransform.vector(axisVector(axis)))
                     ?? axisVector(axis)
             )
         }
@@ -1230,23 +1230,23 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         labels: inout [SurfaceTransformAffordanceSource.Label]
     ) throws {
-        let origin = item.modelTransform.viewportTransformedPoint(display.position)
+        let origin = item.modelTransform.point(display.position)
         let modelAxes: [(ViewportSurfaceFrameAxis, Vector3D, SIMD4<Float>, String)] = [
             (
                 .u,
-                item.modelTransform.viewportTransformedVector(display.uAxis),
+                item.modelTransform.vector(display.uAxis),
                 SIMD4<Float>(0.28, 0.86, 0.64, 0.90),
                 "U"
             ),
             (
                 .v,
-                item.modelTransform.viewportTransformedVector(display.vAxis),
+                item.modelTransform.vector(display.vAxis),
                 SIMD4<Float>(0.95, 0.46, 0.78, 0.90),
                 "V"
             ),
             (
                 .normal,
-                item.modelTransform.viewportTransformedVector(display.normal),
+                item.modelTransform.vector(display.normal),
                 sectionNormalColor,
                 "N"
             ),
@@ -1287,7 +1287,7 @@ private extension ViewportSpatialOverlayProducer {
                 }
                 let factors = try (selectedModelTransforms + [item.modelTransform]).map { transform in
                     try ViewportNativeAxisInput.sourceUnitsPerWorldMetre(
-                        for: transform.viewportTransformedVector(localDirection), in: transform
+                        for: transform.vector(localDirection), in: transform
                     )
                 }
                 let factor = try ViewportNativeAxisInput.commonSourceScale(factors)
@@ -1500,7 +1500,7 @@ private extension ViewportSpatialOverlayProducer {
                 guard parsed.featureID == item.featureID else {
                     throw RealityViewportSpatialBatch.invalid("PolySpline surface vertex identity does not match its scene item.")
                 }
-                let origin = item.modelTransform.viewportTransformedPoint(vertex.point)
+                let origin = item.modelTransform.point(vertex.point)
                 let centerIdentity = ViewportSpatialHandleIdentity.polySplineSurfaceVertex(
                     featureID: parsed.featureID,
                     componentID: componentID,
@@ -1532,7 +1532,7 @@ private extension ViewportSpatialOverlayProducer {
                         componentID: componentID,
                         role: .axis(axis)
                     )
-                    let direction = item.modelTransform.viewportTransformedVector(axisVector(axis))
+                    let direction = item.modelTransform.vector(axisVector(axis))
                     prepared.dragMode = .axis(axis)
                     _ = try handleIndex(for: .polySplineSurfaceVertex(prepared), occurrenceID: item.id, modelTransform: item.modelTransform, in: &interactionRecords)
                     try emitDirectedArrow(
@@ -1558,7 +1558,7 @@ private extension ViewportSpatialOverlayProducer {
                     ) else {
                         continue
                     }
-                    let direction = item.modelTransform.viewportTransformedVector(local)
+                    let direction = item.modelTransform.vector(local)
                     prepared.dragMode = .localAxis(localAxis, direction: local)
                     _ = try handleIndex(for: .polySplineSurfaceVertex(prepared), occurrenceID: item.id, modelTransform: item.modelTransform, in: &interactionRecords)
                     let identity = ViewportSpatialHandleIdentity.polySplineSurfaceVertex(
@@ -1582,7 +1582,7 @@ private extension ViewportSpatialOverlayProducer {
                 }
                 if let active = activeValue(for: centerIdentity, input: input),
                    case .delta(let delta) = active.kind {
-                    let moved = origin + item.modelTransform.viewportTransformedVector(delta)
+                    let moved = origin + item.modelTransform.vector(delta)
                     try appendWorldLine(
                         .init(
                             route: .polySplineSurfaceVertex,
@@ -1648,14 +1648,14 @@ private extension ViewportSpatialOverlayProducer {
                     throw RealityViewportSpatialBatch.invalid("A grouped poly-spline source direction is missing.")
                 }
                 let worldVectors = zip(inputs, localDirections).map {
-                    $0.0.modelTransform.viewportTransformedVector($0.1)
+                    $0.0.modelTransform.vector($0.1)
                 }
                 let vectors = worldVectors.compactMap { normalized($0) }
                 guard vectors.count == inputs.count else {
                     throw RealityViewportSpatialBatch.invalid("A grouped poly-spline world direction is degenerate.")
                 }
                 guard let worldDirection = average(vectors) else { continue }
-                let origin = average(inputs.map { $0.modelTransform.viewportTransformedPoint($0.point) })
+                let origin = average(inputs.map { $0.modelTransform.point($0.point) })
                 let identity = ViewportSpatialHandleIdentity.polySplineSurfaceVertexSlide(
                     .init(targets: inputs.map(\.selectionTarget), direction: direction)
                 )
@@ -1919,7 +1919,7 @@ private extension ViewportSpatialOverlayProducer {
                     route: route,
                     points: [original, moved],
                     closed: false,
-                    color: editColor,
+                    color: Self.color(for: .preview, fallback: editColor),
                     family: .transform,
                     identity: identity,
                     state: .preview
@@ -2001,14 +2001,14 @@ private extension ViewportSpatialOverlayProducer {
                           let display = component.surfaceControlPointDisplays.first(where: {
                               $0.selectionReference == reference
                           }) else { continue }
-                    let origin = item.modelTransform.viewportTransformedPoint(display.point)
+                    let origin = item.modelTransform.point(display.point)
                     let identity = ViewportSpatialHandleIdentity.surfaceControlPoint(
                         .init(reference),
                         role: .planar
                     )
                     if let active = activeValue(for: identity, input: input),
                        case .delta(let delta) = active.kind {
-                        let moved = origin + item.modelTransform.viewportTransformedVector(delta)
+                        let moved = origin + item.modelTransform.vector(delta)
                         try appendWorldLine(
                             .init(
                                 route: .surfaceControlPoint,
@@ -2079,7 +2079,7 @@ private extension ViewportSpatialOverlayProducer {
                         direction: direction,
                         topologyVertices: topologyVertices,
                         patches: patchValues
-                    ).map { controlPoint.modelTransform.viewportTransformedVector($0) }
+                    ).map { controlPoint.modelTransform.vector($0) }
                 }
                 guard worldVectors.count == slideInputs.count else {
                     throw RealityViewportSpatialBatch.invalid("A grouped surface source direction is missing.")
@@ -2090,7 +2090,7 @@ private extension ViewportSpatialOverlayProducer {
                 }
                 guard let worldDirection = average(vectors) else { continue }
                 let origin = average(slideInputs.map {
-                    $0.modelTransform.viewportTransformedPoint($0.point)
+                    $0.modelTransform.point($0.point)
                 })
                 let identity = ViewportSpatialHandleIdentity.surfaceControlPointSlide(
                     addresses,
@@ -2188,13 +2188,13 @@ private extension ViewportSpatialOverlayProducer {
                 if input.interactiveRoutes.contains(.surfaceTrimEndpoint) {
                     for display in component.surfaceTrimEndpointDisplays
                     where display.selectionReference == reference {
-                        let origin = item.modelTransform.viewportTransformedPoint(display.point)
+                        let origin = item.modelTransform.point(display.point)
                         let identity = ViewportSpatialHandleIdentity.surfaceTrimEndpoint(
                             .init(reference), endpoint: display.endpoint
                         )
                         if let active = activeValue(for: identity, input: input),
                            case .delta(let delta) = active.kind {
-                            let moved = origin + item.modelTransform.viewportTransformedVector(delta)
+                            let moved = origin + item.modelTransform.vector(delta)
                             try appendWorldLine(
                                 .init(
                                     route: .surfaceTrimEndpoint,
@@ -2230,13 +2230,13 @@ private extension ViewportSpatialOverlayProducer {
                 if input.interactiveRoutes.contains(.surfaceTrimControlPoint) {
                     for display in component.surfaceTrimControlPointDisplays
                     where display.selectionReference == reference {
-                        let origin = item.modelTransform.viewportTransformedPoint(display.point)
+                        let origin = item.modelTransform.point(display.point)
                         let identity = ViewportSpatialHandleIdentity.surfaceTrimControlPoint(
                             .init(reference), index: display.controlPointIndex
                         )
                         if let active = activeValue(for: identity, input: input),
                            case .delta(let delta) = active.kind {
-                            let moved = origin + item.modelTransform.viewportTransformedVector(delta)
+                            let moved = origin + item.modelTransform.vector(delta)
                             try appendWorldLine(
                                 .init(
                                     route: .surfaceTrimControlPoint,
@@ -2441,7 +2441,7 @@ private extension ViewportSpatialOverlayProducer {
         guard let face = component.topology?.faces.first(where: { $0.componentID == componentID }) else {
             throw RealityViewportSpatialBatch.invalid("Construction-face highlight has no matching body topology.")
         }
-        let points = face.points.map { item.modelTransform.viewportTransformedPoint($0) }
+        let points = face.points.map { item.modelTransform.point($0) }
         guard points.count >= 3, points.allSatisfy(isFinitePoint) else {
             throw RealityViewportSpatialBatch.invalid("Construction-face highlight has invalid world points.")
         }
@@ -2665,13 +2665,12 @@ private extension ViewportSpatialOverlayProducer {
             // nothing, exactly as an unaddressable body item does.
             guard let frame = try sceneNodeCommitFrames(item: item, parentFrames: parentFrames, input: input),
                   let reference = input.document.productMetadata.sceneNodes[frame.sceneNodeID]?.reference else { continue }
-            let rect = item.modelBounds
-            let points = [Point3D(x: rect.minX, y: 0, z: rect.minY),
-                          Point3D(x: rect.maxX, y: 0, z: rect.minY),
-                          Point3D(x: rect.minX, y: 0, z: rect.maxY),
-                          Point3D(x: rect.maxX, y: 0, z: rect.maxY)]
-                .map { item.modelTransform.viewportTransformedPoint($0) }
-            guard points.allSatisfy(isFinitePoint) else {
+            // `modelBounds` is already the placed footprint, so the gizmo is measured from the
+            // display-local primitives mapped once through the occurrence placement.
+            guard case .sketch(let primitives) = item.kind else { continue }
+            let points = try primitives.flatMap { try sketchPrimitiveWorldPoints($0) }
+                .map(item.modelTransform.point)
+            guard !points.isEmpty, points.allSatisfy(isFinitePoint) else {
                 throw RealityViewportSpatialBatch.invalid("Object bounds are not finite.")
             }
             let bounds = ViewportObjectEditState(
@@ -2693,7 +2692,7 @@ private extension ViewportSpatialOverlayProducer {
         featureID: FeatureID?,
         selectionTarget: SelectionTarget?,
         occurrenceID: String?,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         edit: ViewportObjectEditState,
         bodyMembers: [ViewportSpatialPreparedInteractionTarget.AffordanceBodyMember],
         groupEdit: ViewportObjectEditState?,
@@ -3076,8 +3075,8 @@ private extension ViewportSpatialOverlayProducer {
                     )
                 }
                 guard let localAnchor = midpoint(of: sourceEdge.displayPoints) else { continue }
-                let anchor = item.modelTransform.viewportTransformedPoint(localAnchor)
-                let edge = try ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
+                let anchor = item.modelTransform.point(localAnchor)
+                let edge = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
                 if wantsBoundarySurface, let loopID = sourceEdge.openBoundaryLoopID {
                     let hasCompleteDisplayLoop = topology.edges.allSatisfy { boundaryEdge in
@@ -3087,7 +3086,7 @@ private extension ViewportSpatialOverlayProducer {
                        let localAnchor = midpoint(of: sourceEdge.displayPoints) {
                         for boundaryEdge in topology.edges where boundaryEdge.openBoundaryLoopID == loopID {
                             let points = boundaryEdge.displayPoints.map(
-                                item.modelTransform.viewportTransformedPoint
+                                item.modelTransform.point
                             )
                             try appendCameraLine(
                                 .init(
@@ -3112,7 +3111,7 @@ private extension ViewportSpatialOverlayProducer {
                             target: target,
                             item: item,
                             edit: edit,
-                            anchor: item.modelTransform.viewportTransformedPoint(localAnchor),
+                            anchor: item.modelTransform.point(localAnchor),
                             offsetPoints: ProfileAffordanceMetrics.boundarySurfaceOffsetPoints,
                             path: plusPath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                             input: input,

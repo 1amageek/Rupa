@@ -107,10 +107,10 @@ func projectAgentSceneGraphReadUsesPublishedWorkspaceAndRejectsStaleGeneration()
         }?.id
     )
     let transform = Transform3D(matrix: try Matrix4x4(values: [
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        -0.7, 0.4, 0.02, 1,
+        1, 0, 0, -0.7,
+        0, 1, 0, 0.4,
+        0, 0, 1, 0.02,
+        0, 0, 0, 1,
     ]))
     _ = try session.execute(
         .setSceneNodeTransform(id: bodySceneNodeID, localTransform: transform)

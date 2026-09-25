@@ -261,7 +261,11 @@ flowchart LR
     and presentation evaluation retain hidden occurrences, while the exact
     snapshot and preview scene projections filter items using Core's
     hierarchy-aware effective visibility and preserve the complete
-    occurrence-to-scene navigation index.
+    occurrence-to-scene navigation index. The bridge consumes Core's
+    `SceneNodeHierarchy.resolvedOccurrences()` for direct and nested component
+    placements; it preserves source definitions and maps expanded occurrences
+    to their selectable outer instance. Visibility uses the same resolved
+    occurrence, including nested definition and instance visibility.
 17. A CADAPI-D action accepts only a fully validated, source-only compiled plan
     from the shared semantic compiler. It never accepts a wire DTO, raw
     `FeatureGraphTransaction`, or caller-owned persistent identifiers. Each

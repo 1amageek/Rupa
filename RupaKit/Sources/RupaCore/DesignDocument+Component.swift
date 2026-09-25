@@ -137,13 +137,16 @@ extension DesignDocument {
             name: trimmedName,
             localTransform: localTransform
         )
-        productMetadata.componentInstances[instance.id] = instance
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
+        try localTransform.validateAffinePlacement()
+        var updatedMetadata = productMetadata
+        updatedMetadata.componentInstances[instance.id] = instance
+        _ = try updatedMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .componentInstance(instance.id),
             object: .componentInstance(instance.id)
         )
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
         return instance.id
     }
 
@@ -217,9 +220,11 @@ extension DesignDocument {
                 message: "Pattern array output instance transforms are controlled by the pattern source."
             )
         }
-        try localTransform.validate()
+        try localTransform.validateAffinePlacement()
         instance.localTransform = localTransform
-        productMetadata.componentInstances[id] = instance
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        var updatedMetadata = productMetadata
+        updatedMetadata.componentInstances[id] = instance
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
     }
 }

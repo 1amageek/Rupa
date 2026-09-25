@@ -26,7 +26,7 @@ public struct MeasurementService {
         try measure(
             document: document,
             ruler: ruler,
-            selectedFeatureIDs: nil,
+            selectedSceneNodeIDs: nil,
             scope: .document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
@@ -51,13 +51,10 @@ public struct MeasurementService {
                 currentGeneration: currentGeneration
             )
         }
-        let selectedFeatureIDs = Set(
-            selection.selectedSceneNodeReferences(in: document).compactMap(\.featureID)
-        )
         return try measure(
             document: document,
             ruler: ruler,
-            selectedFeatureIDs: selectedFeatureIDs,
+            selectedSceneNodeIDs: Set(selection.selectedSceneNodeIDs),
             scope: .selection,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
@@ -68,18 +65,45 @@ public struct MeasurementService {
     private func measure(
         document: DesignDocument,
         ruler: RulerConfiguration,
-        selectedFeatureIDs: Set<FeatureID>?,
+        selectedSceneNodeIDs: Set<SceneNodeID>?,
         scope: MeasurementResult.Scope,
         objectRegistry: ObjectTypeRegistry,
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> MeasurementResult {
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
+        let occurrences = try hierarchy.resolvedOccurrences()
+        var selectedNodeClosure: Set<SceneNodeID>?
+        if let selectedSceneNodeIDs {
+            var closure: Set<SceneNodeID> = []
+            for id in selectedSceneNodeIDs {
+                guard hierarchy.node(id) != nil else {
+                    throw EditorError(code: .referenceUnresolved, message: "Measurement selection contains a missing scene node.")
+                }
+                closure.formUnion(hierarchy.subtreeIDs(of: id))
+            }
+            selectedNodeClosure = closure
+        }
+        let selectedOccurrences = occurrences.filter {
+            selectedNodeClosure?.contains($0.sceneNodeID) ?? true
+        }
+        let selectedFeatureIDs: Set<FeatureID>? = selectedSceneNodeIDs.map { _ in
+            Set(selectedOccurrences.compactMap {
+                document.productMetadata.sceneNodes[$0.sourceSceneNodeID]?.reference?.featureID
+            })
+        }
         var counts = MeasurementResult.Counts()
         var profiles: [MeasurementResult.Profile] = []
         var solids: [MeasurementResult.Solid] = []
         var sheets: [MeasurementResult.Sheet] = []
         var bounds = MeasurementBoundsAccumulator()
         var profileCache: [FeatureID: MeasuredProfile] = [:]
+        // Source-space points of features that contribute bounds but no measured solid, sheet or
+        // profile; the placement projection maps them like every other measured geometry.
+        var boundsOnlySources: [(featureID: FeatureID, points: [Point3D])] = []
+        // Source-space bounds of measured sketches and curves; placed occurrences re-derive their
+        // own bounds, and an unpresented source contributes these in the world frame.
+        var sketchCurveSourceBounds: [FeatureID: MeasurementResult.Bounds] = [:]
         var includedProfileFeatureIDs: Set<FeatureID> = []
         var includedSketchFeatureIDs: Set<FeatureID> = []
         var includedSourceFeatureIDs: Set<FeatureID> = []
@@ -153,6 +177,7 @@ public struct MeasurementService {
             counts.sketchPrimitives += sketch.entities.count
             if let sketchBounds {
                 bounds.include(sketchBounds)
+                sketchCurveSourceBounds[featureID] = sketchBounds
             }
             if let profile {
                 includeProfile(profile, featureID: featureID)
@@ -180,6 +205,7 @@ public struct MeasurementService {
             }
             if let curveBounds = boundsForEvaluatedCurves(evaluatedDocument()?.curves[featureID]) {
                 bounds.include(curveBounds)
+                sketchCurveSourceBounds[featureID] = curveBounds
             }
         }
 
@@ -236,6 +262,18 @@ public struct MeasurementService {
             includedSourceFeatureIDs.insert(featureID)
             if extrude.resultKind == .sheet {
                 try appendEvaluatedSheet(sourceFeatureID: extrude.section.featureID, node: node, featureID: featureID)
+                return
+            }
+            if extrude.operation != .newBody {
+                var reason: String?
+                guard let values = try measureEvaluatedBodySolids(featureID: featureID,
+                    featureName: node.name, sourceFeatureID: extrude.section.featureID,
+                    sourceFeatureName: document.cadDocument.designGraph.nodes[extrude.section.featureID]?.name,
+                    evaluatedDocument: evaluatedDocument(), unsupportedReason: &reason) else {
+                    throw EditorError(code: .commandInvalid,
+                        message: "Extrusion Boolean measurement failed: \(reason ?? "Missing evaluated geometry").")
+                }
+                for solid in values { solids.append(solid); bounds.include(solid.bounds) }
                 return
             }
             guard let sourceNode = document.cadDocument.designGraph.nodes[extrude.section.featureID],
@@ -676,9 +714,7 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            for point in polySpline.sourceMesh.positions {
-                bounds.include(point)
-            }
+            boundsOnlySources.append((featureID, polySpline.sourceMesh.positions))
             diagnostics.append(
                 EditorDiagnostic(
                     severity: .info,
@@ -695,11 +731,7 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            for row in surfaceFeature.surface.controlPoints {
-                for point in row {
-                    bounds.include(point)
-                }
-            }
+            boundsOnlySources.append((featureID, surfaceFeature.surface.controlPoints.flatMap { $0 }))
             diagnostics.append(
                 EditorDiagnostic(
                     severity: .info,
@@ -1092,6 +1124,15 @@ public struct MeasurementService {
             }
         }
 
+        try projectMeasurements(
+            profiles: &profiles, solids: &solids, sheets: &sheets, bounds: &bounds,
+            boundsOnlySources: boundsOnlySources,
+            sketchCurveSourceBounds: sketchCurveSourceBounds,
+            hierarchy: hierarchy, occurrences: occurrences, selectedOccurrences: selectedOccurrences,
+            isSelection: selectedSceneNodeIDs != nil, document: document,
+            evaluatedDocument: evaluatedDocument
+        )
+
         counts.profiles = profiles.count
         counts.solids = solids.count
         counts.sheets = sheets.count
@@ -1165,6 +1206,299 @@ public struct MeasurementService {
             workspacePrecision: workspacePrecision,
             workspaceScaleRecommendation: workspaceScaleRecommendation
         )
+    }
+
+    private func projectMeasurements(
+        profiles: inout [MeasurementResult.Profile],
+        solids: inout [MeasurementResult.Solid],
+        sheets: inout [MeasurementResult.Sheet],
+        bounds: inout MeasurementBoundsAccumulator,
+        boundsOnlySources: [(featureID: FeatureID, points: [Point3D])],
+        sketchCurveSourceBounds: [FeatureID: MeasurementResult.Bounds],
+        hierarchy: SceneNodeHierarchy,
+        occurrences: [SceneNodeHierarchy.Occurrence],
+        selectedOccurrences: [SceneNodeHierarchy.Occurrence],
+        isSelection: Bool,
+        document: DesignDocument,
+        evaluatedDocument: () -> EvaluatedDocument?
+    ) throws {
+        let nodes = document.productMetadata.sceneNodes
+        let features = Dictionary(uniqueKeysWithValues: document.cadDocument.designGraph.nodes.map {
+            ($0.key.description, $0.value)
+        })
+        // Measured geometry is placed by the occurrences of its presenting scene node. A feature
+        // without one has no product placement and is measured once in the world frame, the same
+        // rule the viewport and section analysis apply.
+        func isUnpresented(_ featureID: String) -> Bool {
+            guard let feature = features[featureID] else {
+                return false
+            }
+            return hierarchy.presentingSceneNodeID(for: feature.id) == nil
+        }
+        func presentationOccurrences(
+            of featureID: String,
+            in candidates: [SceneNodeHierarchy.Occurrence]
+        ) -> [SceneNodeHierarchy.Occurrence] {
+            guard let feature = features[featureID] else {
+                return []
+            }
+            return hierarchy.presentationOccurrences(of: feature.id, in: candidates)
+        }
+        var placedBounds = MeasurementBoundsAccumulator()
+        var placedProfiles: [MeasurementResult.Profile] = []
+        for profile in profiles {
+            guard let feature = features[profile.featureID], case .sketch(let sketch) = feature.operation else {
+                throw EditorError(code: .referenceUnresolved, message: "A measured profile requires its sketch source.")
+            }
+            if isUnpresented(profile.featureID) {
+                placedProfiles.append(profile)
+                if !isSelection {
+                    placedBounds.include(profile.bounds)
+                }
+                continue
+            }
+            // Dependency profiles remain source information when the selection names only a body.
+            let selectedPlacements = presentationOccurrences(of: profile.featureID, in: selectedOccurrences)
+            let placements = selectedPlacements.isEmpty
+                ? presentationOccurrences(of: profile.featureID, in: occurrences).filter {
+                    $0.componentInstanceID == nil
+                }
+                : selectedPlacements
+            for occurrence in placements {
+                var result = profile
+                result.occurrenceID = occurrence.id
+                if occurrence.worldTransform != .identity {
+                    let frame = try placedFrame(for: sketch.plane, transform: occurrence.worldTransform)
+                    result.area = .init(value: result.area.value * frame.u.cross(frame.v).length, method: result.area.method)
+                    guard result.area.value.isFinite else {
+                        throw EditorError(code: .commandFailed, message: "Placed profile area is not representable.")
+                    }
+                    guard let sketchBounds = try boundsForSketch(
+                        sketch, parameters: document.cadDocument.parameters,
+                        transform: occurrence.worldTransform
+                    ) else {
+                        throw EditorError(code: .commandFailed, message: "A placed profile has no measurable bounds.")
+                    }
+                    result.measuredBounds = .init(value: sketchBounds, method: result.measuredBounds.method)
+                }
+                placedProfiles.append(result)
+                if !isSelection || !selectedPlacements.isEmpty {
+                    placedBounds.include(result.bounds)
+                }
+            }
+        }
+        var placedSolids: [MeasurementResult.Solid] = []
+        var solidOrdinals: [String: Int] = [:]
+        for solid in solids {
+            let ordinal = solidOrdinals[solid.featureID, default: 0]
+            solidOrdinals[solid.featureID] = ordinal + 1
+            if !isSelection && isUnpresented(solid.featureID) {
+                placedSolids.append(solid)
+                placedBounds.include(solid.bounds)
+                continue
+            }
+            for occurrence in presentationOccurrences(of: solid.featureID, in: selectedOccurrences) {
+                var result = solid
+                result.occurrenceID = occurrence.id
+                let transform = occurrence.worldTransform
+                if transform != .identity {
+                    guard let feature = features[solid.featureID], let evaluated = evaluatedDocument() else {
+                        throw EditorError(code: .evaluationFailed, message: "Placed solid measurement requires evaluated geometry.")
+                    }
+                    let references = evaluatedBodyReferences(for: feature.id, in: evaluated)
+                    guard references.indices.contains(ordinal), let mesh = evaluated.meshes[references[ordinal].bodyID] else {
+                        throw EditorError(code: .referenceUnresolved, message: "Placed solid measurement cannot resolve its body output.")
+                    }
+                    let measurement = try evaluatedMeshMeasurement(mesh, transform: transform)
+                    let determinant = try volumeScale(of: transform)
+                    result.volume = .init(value: result.volume.value * determinant, method: result.volume.method)
+                    guard result.volume.value.isFinite else {
+                        throw EditorError(code: .commandFailed, message: "Placed solid volume is not representable.")
+                    }
+                    result.surfaceArea = .init(value: measurement.surfaceAreaSquareMeters, method: .tessellatedMesh)
+                    result.measuredBounds = .init(value: measurement.bounds, method: .tessellatedMesh)
+                    for index in result.linearDimensions.indices {
+                        let dimension = result.linearDimensions[index]
+                        switch dimension.kind {
+                        case .extrusionHeight, .sweepNormalHeight:
+                            guard let source = features[solid.sourceFeatureID], case .sketch(let sketch) = source.operation else {
+                                throw EditorError(code: .referenceUnresolved, message: "Placed height requires its source plane.")
+                            }
+                            let frame = try placedFrame(for: sketch.plane, transform: transform)
+                            result.linearDimensions[index].meters *= determinant / frame.u.cross(frame.v).length
+                        case .sweepPathLength:
+                            result.linearDimensions[index].meters = try placedSweepLength(
+                                dimension.meters, feature: feature, document: document,
+                                evaluated: evaluated, transform: transform
+                            )
+                        }
+                    }
+                }
+                placedSolids.append(result)
+                placedBounds.include(result.bounds)
+            }
+        }
+        var placedSheets: [MeasurementResult.Sheet] = []
+        for sheet in sheets {
+            if !isSelection && isUnpresented(sheet.featureID) {
+                placedSheets.append(sheet)
+                placedBounds.include(sheet.bounds)
+                continue
+            }
+            for occurrence in presentationOccurrences(of: sheet.featureID, in: selectedOccurrences) {
+                var result = sheet
+                result.occurrenceID = occurrence.id
+                let transform = occurrence.worldTransform
+                if transform != .identity {
+                    guard let feature = features[sheet.featureID], let evaluated = evaluatedDocument(),
+                          let reference = evaluatedBodyReferences(for: feature.id, in: evaluated).first,
+                          let mesh = evaluated.meshes[reference.bodyID] else {
+                        throw EditorError(code: .referenceUnresolved, message: "Placed sheet measurement requires its evaluated body.")
+                    }
+                    let measurement = try evaluatedMeshMeasurement(mesh, transform: transform)
+                    result.surfaceArea = .init(value: measurement.surfaceAreaSquareMeters, method: .tessellatedMesh)
+                    result.measuredBounds = .init(value: measurement.bounds, method: .tessellatedMesh)
+                    for index in result.linearDimensions.indices {
+                        result.linearDimensions[index].meters = try placedSweepLength(
+                            result.linearDimensions[index].meters, feature: feature, document: document,
+                            evaluated: evaluated, transform: transform
+                        )
+                    }
+                }
+                placedSheets.append(result)
+                placedBounds.include(result.bounds)
+            }
+        }
+        for source in boundsOnlySources {
+            if hierarchy.presentingSceneNodeID(for: source.featureID) == nil {
+                guard !isSelection else { continue }
+                for point in source.points {
+                    placedBounds.include(point)
+                }
+                continue
+            }
+            for occurrence in hierarchy.presentationOccurrences(of: source.featureID, in: selectedOccurrences) {
+                let placement = try ScenePlacement(occurrence.worldTransform)
+                for point in source.points {
+                    placedBounds.include(placement.point(point))
+                }
+            }
+        }
+        if !isSelection {
+            for (featureID, sourceBounds) in sketchCurveSourceBounds
+            where hierarchy.presentingSceneNodeID(for: featureID) == nil {
+                placedBounds.include(sourceBounds)
+            }
+        }
+        // Open sketches and curves contribute bounds even when they have no closed profile.
+        for occurrence in selectedOccurrences {
+            guard let featureID = nodes[occurrence.sourceSceneNodeID]?.reference?.featureID,
+                  let feature = document.cadDocument.designGraph.nodes[featureID],
+                  !feature.isSuppressed else { continue }
+            if case .sketch(let sketch) = feature.operation {
+                if let sketchBounds = try boundsForSketch(
+                    sketch, parameters: document.cadDocument.parameters, transform: occurrence.worldTransform
+                ) { placedBounds.include(sketchBounds) }
+            } else if nodes[occurrence.sourceSceneNodeID]?.reference?.kind == .feature,
+                      let curves = evaluatedDocument()?.curves[featureID] {
+                for curve in curves {
+                    for point in curve.points {
+                        placedBounds.include(try occurrence.worldTransform.applied(to: point))
+                    }
+                }
+            }
+        }
+        profiles = placedProfiles
+        solids = placedSolids
+        sheets = placedSheets
+        bounds = placedBounds
+    }
+
+    private func volumeScale(of transform: Transform3D) throws -> Double {
+        let x = try transform.applyingLinearPart(to: .unitX)
+        let y = try transform.applyingLinearPart(to: .unitY)
+        let z = try transform.applyingLinearPart(to: .unitZ)
+        let scale = abs(x.dot(y.cross(z)))
+        guard scale.isFinite, scale > 0 else {
+            throw EditorError(code: .commandFailed, message: "Placement volume scale is not representable.")
+        }
+        return scale
+    }
+
+    private func placedFrame(for plane: SketchPlane, transform: Transform3D) throws -> PlaneFrame {
+        let frame = try planeFrame(for: plane)
+        if transform == .identity { return frame }
+        return PlaneFrame(
+            origin: try transform.applied(to: frame.origin),
+            normal: try transform.applyingNormal(to: frame.normal),
+            u: try transform.applyingLinearPart(to: frame.u),
+            v: try transform.applyingLinearPart(to: frame.v)
+        )
+    }
+
+    private func placedSweepLength(
+        _ sourceLength: Double, feature: FeatureNode, document: DesignDocument,
+        evaluated: EvaluatedDocument, transform: Transform3D
+    ) throws -> Double {
+        guard case .sweep(let sweep) = feature.operation else {
+            throw EditorError(code: .referenceUnresolved, message: "Placed sweep length requires its path source.")
+        }
+        let segments = try SweepEvaluationPlanService().orderedPathSegments(
+            for: sweep, document: document.cadDocument,
+            evaluatedDocument: evaluated, tolerance: tolerance
+        )
+        let affine = try transform.coordinateMap(to: .identity)
+        guard let affine else { return sourceLength }
+        let resolver = DefaultCurveArcLengthResolver()
+        var remaining = sourceLength
+        var length = 0.0
+        for segment in segments where remaining > tolerance.distance {
+            let curve = segment.curve
+            if let exact = curve.exactCurve {
+                let interval: ScalarInterval
+                switch curve.parameterDomain {
+                case .closed(let lower, let upper): interval = try ScalarInterval(lower: lower, upper: upper)
+                case .periodic(let period): interval = try ScalarInterval(lower: 0, upper: period)
+                case .unbounded:
+                    throw EditorError(code: .commandInvalid, message: "A measured sweep path must be bounded.")
+                }
+                let parameterization = try resolver.parameterization(of: exact, over: interval, tolerance: tolerance)
+                let available = parameterization.lengthEnclosure.midpoint
+                guard available.isFinite, available > 0 else {
+                    throw EditorError(code: .commandInvalid, message: "A measured path contains a degenerate span.")
+                }
+                let consumed = min(remaining, available)
+                let fraction = consumed / available
+                let end = try parameterization.parameterEnclosure(
+                    atArcLengthFraction: segment.isReversed ? 1 - fraction : fraction
+                ).parameter
+                let span = try ScalarInterval(
+                    lower: segment.isReversed ? end : interval.lower,
+                    upper: segment.isReversed ? interval.upper : end
+                )
+                let image = try Curve3D.affineImage(AffineImageCurve3D(source: exact, transform: affine, tolerance: tolerance))
+                length += try resolver.enclosure(
+                    of: image, over: span, tolerance: tolerance
+                ).midpoint
+                remaining -= consumed
+            } else {
+                let points = segment.isReversed ? Array(curve.points.reversed()) : curve.points
+                for index in points.indices.dropFirst() where remaining > tolerance.distance {
+                    let delta = points[index] - points[index - 1]
+                    let available = delta.length
+                    guard available > 0, available.isFinite else {
+                        throw EditorError(code: .commandInvalid, message: "A measured path contains a degenerate span.")
+                    }
+                    let consumed = min(remaining, available)
+                    length += try transform.applyingLinearPart(to: delta * (consumed / available)).length
+                    remaining -= consumed
+                }
+            }
+        }
+        guard remaining <= tolerance.distance, length.isFinite else {
+            throw EditorError(code: .commandFailed, message: "Placed sweep length could not resolve the retained path span.")
+        }
+        return length
     }
 
     private func bodyFeatureIDsSupersededByDirectEdits(in document: CADDocument) -> Set<FeatureID> {
@@ -1754,7 +2088,7 @@ public struct MeasurementService {
     }
 
 
-    private func evaluatedMeshMeasurement(_ mesh: Mesh) throws -> EvaluatedMeshMeasurement {
+    private func evaluatedMeshMeasurement(_ mesh: Mesh, transform: Transform3D = .identity) throws -> EvaluatedMeshMeasurement {
         guard !mesh.positions.isEmpty,
               !mesh.indices.isEmpty,
               mesh.indices.count.isMultiple(of: 3) else {
@@ -1765,20 +2099,10 @@ public struct MeasurementService {
         }
         var bounds = MeasurementBoundsAccumulator()
         for point in mesh.positions {
-            bounds.include(point)
+            bounds.include(try transform.applied(to: point))
         }
         guard let measuredBounds = bounds.bounds else {
-            return EvaluatedMeshMeasurement(
-                surfaceAreaSquareMeters: 0.0,
-                bounds: MeasurementResult.Bounds(
-                    minX: 0.0,
-                    minY: 0.0,
-                    minZ: 0.0,
-                    maxX: 0.0,
-                    maxY: 0.0,
-                    maxZ: 0.0
-                )
-            )
+            throw EditorError(code: .commandFailed, message: "Measurement could not resolve finite mesh bounds.")
         }
 
         var surfaceArea = 0.0
@@ -1795,14 +2119,17 @@ public struct MeasurementService {
                     message: "Measurement encountered a mesh index outside the position table."
                 )
             }
-            let first = mesh.positions[firstIndex]
-            let second = mesh.positions[secondIndex]
-            let third = mesh.positions[thirdIndex]
+            let first = try transform.applied(to: mesh.positions[firstIndex])
+            let second = try transform.applied(to: mesh.positions[secondIndex])
+            let third = try transform.applied(to: mesh.positions[thirdIndex])
             let triangleNormal = (second - first).cross(third - first)
             surfaceArea += triangleNormal.length * 0.5
             index += 3
         }
 
+        guard surfaceArea.isFinite else {
+            throw EditorError(code: .commandFailed, message: "Placed mesh area is not representable.")
+        }
         return EvaluatedMeshMeasurement(
             surfaceAreaSquareMeters: surfaceArea,
             bounds: measuredBounds
@@ -1824,9 +2151,10 @@ public struct MeasurementService {
 
     private func boundsForSketch(
         _ sketch: Sketch,
-        parameters: ParameterTable
+        parameters: ParameterTable,
+        transform: Transform3D = .identity
     ) throws -> MeasurementResult.Bounds? {
-        let frame = try planeFrame(for: sketch.plane)
+        let frame = try placedFrame(for: sketch.plane, transform: transform)
         var bounds = MeasurementBoundsAccumulator()
         for entity in sketch.entities.values {
             switch entity {
@@ -1840,7 +2168,7 @@ public struct MeasurementService {
                 let radius = try resolvedLength(circle.radius, parameters: parameters)
                 bounds.include(circleBounds(center: center, radius: radius, frame: frame))
             case .arc(let arc):
-                for point in try arcBoundsPoints(arc, parameters: parameters) {
+                for point in try arcBoundsPoints(arc, parameters: parameters, frame: frame) {
                     bounds.include(frame.map(point))
                 }
             case .spline(let spline):
@@ -2102,7 +2430,8 @@ public struct MeasurementService {
 
     private func arcBoundsPoints(
         _ arc: SketchArc,
-        parameters: ParameterTable
+        parameters: ParameterTable,
+        frame: PlaneFrame
     ) throws -> [MeasurementPoint2D] {
         let center = try resolvedPoint(arc.center, parameters: parameters)
         let radius = try resolvedLength(arc.radius, parameters: parameters)
@@ -2111,7 +2440,15 @@ public struct MeasurementService {
             startAngle: startAngle,
             endAngle: try resolvedAngle(arc.endAngle, parameters: parameters)
         )
-        let angles = arcSamplingAngles(startAngle: startAngle, span: span)
+        var angles = [startAngle, startAngle + span]
+        for (u, v) in [(frame.u.x, frame.v.x), (frame.u.y, frame.v.y), (frame.u.z, frame.v.z)] {
+            let angle = atan2(v, u)
+            for extremum in [angle, angle + Double.pi] {
+                var offset = (extremum - startAngle).truncatingRemainder(dividingBy: 2 * Double.pi)
+                if offset < 0 { offset += 2 * Double.pi }
+                if offset <= span { angles.append(startAngle + offset) }
+            }
+        }
         return angles.map { angle in
             MeasurementPoint2D(
                 x: center.x + cos(angle) * radius,

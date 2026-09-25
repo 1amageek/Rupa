@@ -101,8 +101,9 @@ import Testing
     let featureID = FeatureID()
     let entityID = SketchEntityID()
     let nodes = (0..<4).map { _ in SceneNodeID() }
-    var translated = Transform3D.identity
-    translated.matrix.values[3] = 4
+    var translatedMatrix = Transform3D.identity
+    translatedMatrix.matrix.values[3] = 4
+    let translated = try ScenePlacement(translatedMatrix)
     let sketch = ViewportSceneItem(
         id: "sketch.first", featureID: featureID, sceneNodeID: nodes[0],
         modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),

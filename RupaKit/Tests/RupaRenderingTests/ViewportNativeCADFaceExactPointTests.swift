@@ -149,7 +149,7 @@ private struct NativeCADFaceFixture {
     let cpuScene: ViewportScene
     let bodySceneNodeID: SceneNodeID
     let topology: ViewportBodyTopology
-    let modelTransform: Transform3D
+    let modelTransform: ScenePlacement
 }
 
 private enum NativeCADFaceFixtureError: Error {
@@ -312,7 +312,7 @@ private func probeNativeCADFace(
 
 private func nativeCADFaceWorldPolygon(
     _ face: ViewportBodyTopology.Face,
-    transform: Transform3D
+    transform: ScenePlacement
 ) -> [Point3D] {
     face.points.map { ViewportLayout.transformedPoint($0, by: transform) }
 }

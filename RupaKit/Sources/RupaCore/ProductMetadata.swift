@@ -559,6 +559,9 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 objectRegistry: objectRegistry
             )
         }
+        if let conflict = FeaturePresentationIndex(sceneNodes: sceneNodes).conflict {
+            throw DocumentValidationError.invalidProductMetadata(conflict.message)
+        }
 
         try validateSceneHierarchy()
     }

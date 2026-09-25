@@ -304,6 +304,7 @@ public extension MeasurementResult {
         }
 
         public var featureID: String
+        public var occurrenceID: SceneOccurrenceID?
         public var featureName: String?
         public var kind: Kind
         public var area: Measured<Double>
@@ -327,12 +328,14 @@ public extension MeasurementResult {
 
         public init(
             featureID: String,
+            occurrenceID: SceneOccurrenceID? = nil,
             featureName: String?,
             kind: Kind,
             area: Measured<Double>,
             bounds: Measured<Bounds>
         ) {
             self.featureID = featureID
+            self.occurrenceID = occurrenceID
             self.featureName = featureName
             self.kind = kind
             self.area = area
@@ -341,6 +344,7 @@ public extension MeasurementResult {
 
         private enum CodingKeys: String, CodingKey {
             case featureID
+            case occurrenceID
             case featureName
             case kind
             case area
@@ -352,7 +356,7 @@ public extension MeasurementResult {
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             try container.validateOnlyExpectedKeys(
-                [.featureID, .featureName, .kind, .area, .measuredBounds, .areaSquareMeters, .bounds],
+                [.occurrenceID, .featureID, .featureName, .kind, .area, .measuredBounds, .areaSquareMeters, .bounds],
                 in: decoder
             )
             let usesCanonicalMeasurements = container.contains(.area)
@@ -368,6 +372,7 @@ public extension MeasurementResult {
                 )
             }
             featureID = try container.decode(String.self, forKey: .featureID)
+            occurrenceID = try container.decodeIfPresent(SceneOccurrenceID.self, forKey: .occurrenceID)
             featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
             kind = try container.decode(Kind.self, forKey: .kind)
             if usesCanonicalMeasurements {
@@ -388,6 +393,7 @@ public extension MeasurementResult {
         public func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(occurrenceID, forKey: .occurrenceID)
             try container.encodeIfPresent(featureName, forKey: .featureName)
             try container.encode(kind, forKey: .kind)
             try container.encode(area, forKey: .area)
@@ -413,6 +419,7 @@ public extension MeasurementResult {
         }
 
         public var featureID: String
+        public var occurrenceID: SceneOccurrenceID?
         public var featureName: String?
         public var sourceFeatureID: String
         public var sourceFeatureName: String?
@@ -447,6 +454,7 @@ public extension MeasurementResult {
 
         public init(
             featureID: String,
+            occurrenceID: SceneOccurrenceID? = nil,
             featureName: String?,
             sourceFeatureID: String,
             sourceFeatureName: String?,
@@ -456,6 +464,7 @@ public extension MeasurementResult {
             bounds: Measured<Bounds>
         ) {
             self.featureID = featureID
+            self.occurrenceID = occurrenceID
             self.featureName = featureName
             self.sourceFeatureID = sourceFeatureID
             self.sourceFeatureName = sourceFeatureName
@@ -467,6 +476,7 @@ public extension MeasurementResult {
 
         private enum CodingKeys: String, CodingKey {
             case featureID
+            case occurrenceID
             case featureName
             case sourceFeatureID
             case sourceFeatureName
@@ -486,6 +496,7 @@ public extension MeasurementResult {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             try container.validateOnlyExpectedKeys(
                 [
+                    .occurrenceID,
                     .featureID,
                     .featureName,
                     .sourceFeatureID,
@@ -521,6 +532,7 @@ public extension MeasurementResult {
                 )
             }
             featureID = try container.decode(String.self, forKey: .featureID)
+            occurrenceID = try container.decodeIfPresent(SceneOccurrenceID.self, forKey: .occurrenceID)
             featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
             sourceFeatureID = try container.decode(String.self, forKey: .sourceFeatureID)
             sourceFeatureName = try container.decodeIfPresent(String.self, forKey: .sourceFeatureName)
@@ -574,6 +586,7 @@ public extension MeasurementResult {
         public func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(occurrenceID, forKey: .occurrenceID)
             try container.encodeIfPresent(featureName, forKey: .featureName)
             try container.encode(sourceFeatureID, forKey: .sourceFeatureID)
             try container.encodeIfPresent(sourceFeatureName, forKey: .sourceFeatureName)
@@ -600,6 +613,7 @@ public extension MeasurementResult {
         }
 
         public var featureID: String
+        public var occurrenceID: SceneOccurrenceID?
         public var featureName: String?
         public var sourceFeatureID: String
         public var sourceFeatureName: String?
@@ -625,6 +639,7 @@ public extension MeasurementResult {
 
         public init(
             featureID: String,
+            occurrenceID: SceneOccurrenceID? = nil,
             featureName: String?,
             sourceFeatureID: String,
             sourceFeatureName: String?,
@@ -633,6 +648,7 @@ public extension MeasurementResult {
             bounds: Measured<Bounds>
         ) {
             self.featureID = featureID
+            self.occurrenceID = occurrenceID
             self.featureName = featureName
             self.sourceFeatureID = sourceFeatureID
             self.sourceFeatureName = sourceFeatureName
@@ -643,6 +659,7 @@ public extension MeasurementResult {
 
         private enum CodingKeys: String, CodingKey {
             case featureID
+            case occurrenceID
             case featureName
             case sourceFeatureID
             case sourceFeatureName
@@ -657,6 +674,7 @@ public extension MeasurementResult {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             try container.validateOnlyExpectedKeys(
                 [
+                    .occurrenceID,
                     .featureID,
                     .featureName,
                     .sourceFeatureID,
@@ -682,6 +700,7 @@ public extension MeasurementResult {
                 )
             }
             featureID = try container.decode(String.self, forKey: .featureID)
+            occurrenceID = try container.decodeIfPresent(SceneOccurrenceID.self, forKey: .occurrenceID)
             featureName = try container.decodeIfPresent(String.self, forKey: .featureName)
             sourceFeatureID = try container.decode(String.self, forKey: .sourceFeatureID)
             sourceFeatureName = try container.decodeIfPresent(String.self, forKey: .sourceFeatureName)
@@ -704,6 +723,7 @@ public extension MeasurementResult {
         public func encode(to encoder: any Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(featureID, forKey: .featureID)
+            try container.encodeIfPresent(occurrenceID, forKey: .occurrenceID)
             try container.encodeIfPresent(featureName, forKey: .featureName)
             try container.encode(sourceFeatureID, forKey: .sourceFeatureID)
             try container.encodeIfPresent(sourceFeatureName, forKey: .sourceFeatureName)

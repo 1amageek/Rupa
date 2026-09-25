@@ -84,6 +84,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
     public struct Body: Codable, Equatable, Sendable {
         public var bodyID: String
+        public var sceneNodeID: SceneNodeID?
+        public var occurrenceID: SceneOccurrenceID?
         public var sourceFeatureID: String?
         public var subshapeID: String?
         public var name: String?
@@ -104,6 +106,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
         public init(
             bodyID: String,
+            sceneNodeID: SceneNodeID? = nil,
+            occurrenceID: SceneOccurrenceID? = nil,
             sourceFeatureID: String? = nil,
             subshapeID: String? = nil,
             name: String?,
@@ -123,6 +127,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
             intersectionSegmentCount: Int
         ) {
             self.bodyID = bodyID
+            self.sceneNodeID = sceneNodeID
+            self.occurrenceID = occurrenceID
             self.sourceFeatureID = sourceFeatureID
             self.subshapeID = subshapeID
             self.name = name
@@ -145,6 +151,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
     public struct IntersectionSegment: Codable, Equatable, Sendable {
         public var bodyID: String
+        public var sceneNodeID: SceneNodeID?
+        public var occurrenceID: SceneOccurrenceID?
         public var start: Point3D
         public var end: Point3D
         public var start2D: Point2D
@@ -152,12 +160,16 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
         public init(
             bodyID: String,
+            sceneNodeID: SceneNodeID? = nil,
+            occurrenceID: SceneOccurrenceID? = nil,
             start: Point3D,
             end: Point3D,
             start2D: Point2D,
             end2D: Point2D
         ) {
             self.bodyID = bodyID
+            self.sceneNodeID = sceneNodeID
+            self.occurrenceID = occurrenceID
             self.start = start
             self.end = end
             self.start2D = start2D
@@ -168,6 +180,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
     public struct IntersectionContour: Codable, Equatable, Sendable {
         public var id: String
         public var bodyID: String
+        public var sceneNodeID: SceneNodeID?
+        public var occurrenceID: SceneOccurrenceID?
         public var points: [Point3D]
         public var points2D: [Point2D]
         public var isClosed: Bool
@@ -178,6 +192,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         public init(
             id: String,
             bodyID: String,
+            sceneNodeID: SceneNodeID? = nil,
+            occurrenceID: SceneOccurrenceID? = nil,
             points: [Point3D],
             points2D: [Point2D],
             isClosed: Bool,
@@ -187,6 +203,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         ) {
             self.id = id
             self.bodyID = bodyID
+            self.sceneNodeID = sceneNodeID
+            self.occurrenceID = occurrenceID
             self.points = points
             self.points2D = points2D
             self.isClosed = isClosed

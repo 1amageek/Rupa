@@ -32,7 +32,7 @@ public struct ComponentInstance: Codable, Hashable, Identifiable, Sendable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw DocumentValidationError.invalidProductMetadata("Component instance names must not be empty.")
         }
-        try localTransform.validate()
+        try localTransform.validateAffinePlacement()
         try validateProperties(properties, owner: "component instance")
     }
 }

@@ -75,10 +75,10 @@ struct SketchScopeSelectionFixture {
     let solidFeatureID: FeatureID
     let solidSceneNodeID: SceneNodeID
     let solidTopology: ViewportBodyTopology
-    let solidModelTransform: Transform3D
+    let solidModelTransform: ScenePlacement
     let lineFeatureID: FeatureID
     let lineSceneNodeID: SceneNodeID?
-    let lineModelTransform: Transform3D
+    let lineModelTransform: ScenePlacement
     let lineEntityID: SketchEntityID
     let linePrimitive: ViewportSketchPrimitive
     let interactionSceneNodeIDs: Set<SceneNodeID>

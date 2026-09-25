@@ -165,7 +165,7 @@ struct ViewportNativeWorldPointInput: Sendable {
             )
         case .bridgeCurveEndpoint(let handle, let modelTransform):
             return .worldPlane(
-                origin: Self.worldPoint(of: handle, modelTransform: modelTransform),
+                origin: try Self.worldPoint(of: handle, modelTransform: modelTransform),
                 normal: try Self.canvasNormal(displayedCanvas)
             )
         case .polySplineSurfaceVertex(let handle):
@@ -301,10 +301,10 @@ struct ViewportNativeWorldPointInput: Sendable {
 
         case .bridgeCurveEndpoint(let handle, let modelTransform):
             // The bridge curve lives in its sketch plane, so the world delta is
-            // carried back through the placement before it is applied to the
-            // authored 2D point. A placement that cannot be inverted is refused
-            // rather than answered with the unmapped world delta.
-            guard let localDelta = modelTransform.viewportInverseTransformedVector(delta) else {
+            // carried back through the validated placement before it is applied
+            // to the authored 2D point.
+            let localDelta = modelTransform.inverseVector(delta)
+            guard localDelta.isFinite else {
                 throw RealityViewportSpatialBatch.invalid(
                     "A bridge curve placement cannot map the world delta into its sketch plane."
                 )
@@ -542,7 +542,7 @@ struct ViewportNativeWorldPointInput: Sendable {
 
     private static func validate(
         _ target: ViewportSpatialPreparedInteractionTarget,
-        modelTransform: Transform3D
+        modelTransform: ScenePlacement
     ) throws {
         switch target {
         case .constructionPlane(_, let origin, let normal, let normalEnd, let corners):
@@ -566,7 +566,7 @@ struct ViewportNativeWorldPointInput: Sendable {
                     "A bridge curve endpoint point is not finite."
                 )
             }
-            guard worldPoint(of: handle, modelTransform: modelTransform).isFinite else {
+            guard try worldPoint(of: handle, modelTransform: modelTransform).isFinite else {
                 throw RealityViewportSpatialBatch.invalid(
                     "A bridge curve endpoint placement is not finite."
                 )
@@ -642,21 +642,19 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// display space, so a placement that cannot be inverted is refused at
     /// press rather than answered with the unmapped world value.
     private static func validateSketchHandle(
-        point: CGPoint, modelTransform: Transform3D
+        point: CGPoint, modelTransform: ScenePlacement
     ) throws {
         guard point.x.isFinite, point.y.isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "A sketch handle point is not finite."
             )
         }
-        guard modelTransform.viewportTransformedPoint(
-            sketchModelPoint(point)
-        ).isFinite else {
+        guard try ViewportWorldTransformAlgebra.transformedPoint(sketchModelPoint(point), by: modelTransform).isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "A sketch handle placement is not finite."
             )
         }
-        guard modelTransform.viewportInverseTransformedVector(
+        guard modelTransform.inverseVector(
             Vector3D(x: 1.0, y: 0.0, z: 0.0)
         ) != nil else {
             throw RealityViewportSpatialBatch.invalid(
@@ -728,10 +726,10 @@ struct ViewportNativeWorldPointInput: Sendable {
     }
 
     private static func worldPoint(
-        of handle: BridgeCurveEndpointHandle, modelTransform: Transform3D
-    ) -> Point3D {
-        modelTransform.viewportTransformedPoint(
-            Point3D(x: handle.point.x, y: 0.0, z: handle.point.y)
+        of handle: BridgeCurveEndpointHandle, modelTransform: ScenePlacement
+    ) throws -> Point3D {
+        try ViewportWorldTransformAlgebra.transformedPoint(
+            Point3D(x: handle.point.x, y: 0.0, z: handle.point.y), by: modelTransform
         )
     }
 
@@ -741,15 +739,15 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// commits a model-space displacement. Whether it inverts depends only on
     /// the transform's linear part, so the probe direction is arbitrary.
     private static func validateHandle(
-        localPoint: Point3D, modelTransform: Transform3D
+        localPoint: Point3D, modelTransform: ScenePlacement
     ) throws {
         guard localPoint.isFinite,
-              modelTransform.viewportTransformedPoint(localPoint).isFinite else {
+              try ViewportWorldTransformAlgebra.transformedPoint(localPoint, by: modelTransform).isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "A surface handle placement is not finite."
             )
         }
-        guard modelTransform.viewportInverseTransformedVector(
+        guard modelTransform.inverseVector(
             Vector3D(x: 1.0, y: 0.0, z: 0.0)
         ) != nil else {
             throw RealityViewportSpatialBatch.invalid(
@@ -828,28 +826,23 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// stays under the pointer in perspective as well as in orthographic.
     private static func handlePlane(
         localPoint: Point3D,
-        modelTransform: Transform3D,
+        modelTransform: ScenePlacement,
         displayedCanvas: ViewportCanvasPlane
     ) throws -> Query {
         .worldPlane(
-            origin: modelTransform.viewportTransformedPoint(localPoint),
+            origin: try ViewportWorldTransformAlgebra.transformedPoint(localPoint, by: modelTransform),
             normal: try canvasNormal(displayedCanvas)
         )
     }
 
     /// Carries a world displacement back into the record's model space.
     ///
-    /// Every surface handle callback is authored in that space, so a
-    /// placement that cannot be inverted is refused rather than answered with
-    /// the unmapped world value.
+    /// Every surface handle callback is authored in that space; a delta that
+    /// the validated placement cannot map finitely is refused.
     private static func modelDelta(
-        _ delta: Vector3D, in modelTransform: Transform3D
+        _ delta: Vector3D, in modelTransform: ScenePlacement
     ) throws -> Vector3D {
-        guard let localDelta = modelTransform.viewportInverseTransformedVector(delta) else {
-            throw RealityViewportSpatialBatch.invalid(
-                "A surface handle placement cannot map the world delta into model space."
-            )
-        }
+        let localDelta = modelTransform.inverseVector(delta)
         guard localDelta.isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "A surface handle model-space delta is not finite."
@@ -901,13 +894,9 @@ struct ViewportNativeWorldPointInput: Sendable {
     /// Carries a world displacement back into the sketch display space the
     /// record's placement mapped the drawn handle from.
     private static func sketchDisplayDelta(
-        _ delta: Vector3D, in modelTransform: Transform3D
+        _ delta: Vector3D, in modelTransform: ScenePlacement
     ) throws -> CGPoint {
-        guard let localDelta = modelTransform.viewportInverseTransformedVector(delta) else {
-            throw RealityViewportSpatialBatch.invalid(
-                "A sketch handle placement cannot map the world delta into its display plane."
-            )
-        }
+        let localDelta = modelTransform.inverseVector(delta)
         guard localDelta.isFinite else {
             throw RealityViewportSpatialBatch.invalid(
                 "A sketch handle display delta is not finite."

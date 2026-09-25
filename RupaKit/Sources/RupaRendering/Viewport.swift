@@ -707,6 +707,7 @@ public struct Viewport: View {
                 .background {
                     presentationFailureReporter(
                         error: presentationFailure,
+                        sceneFailure: sceneContext.scene.failure,
                         previewFailureMessage: previewEvaluationCache.failureMessage(for: dragPreviewRevision)
                     )
                 }
@@ -2336,9 +2337,12 @@ public struct Viewport: View {
 
     func presentationFailureReporter(
         error: MeshSourcePresentationRenderError?,
+        sceneFailure: EditorError? = nil,
         previewFailureMessage: String?
     ) -> some View {
-        let failure = error ?? previewFailureMessage.map {
+        let failure = sceneFailure.map {
+            MeshSourcePresentationRenderError(code: .failed, message: $0.message)
+        } ?? error ?? previewFailureMessage.map {
             MeshSourcePresentationRenderError(code: .failed, message: $0)
         }
         return Color.clear
@@ -2706,6 +2710,64 @@ public struct Viewport: View {
         case .negativeV:
             return "V-"
         }
+    }
+
+    /// Saved measurement annotations whose anchors all resolve through the
+    /// current placements and whose annotation node is effectively visible.
+    ///
+    /// An annotation that does not resolve is left out here and reported by
+    /// the workspace measurement panel, which reads the same Core resolution;
+    /// it is never drawn from a subset of its anchors.
+    private func savedMeasurementOverlays() throws -> [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] {
+        guard !document.productMetadata.measurements.isEmpty else {
+            return []
+        }
+        let occurrences = try SceneNodeHierarchy(metadata: document.productMetadata).resolvedOccurrences()
+        let resolutions = MeasurementAnnotationResolver().resolveAll(in: document) {
+            try TopologySnapshotService().snapshot(
+                document: document,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: sceneDocumentGeneration
+            )
+        }
+        var result: [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] = []
+        for resolution in resolutions {
+            guard case .resolved(let anchors) = resolution.outcome,
+                  let annotation = document.productMetadata.measurements[resolution.measurementID],
+                  isEffectivelyVisible(annotation.sceneNodeID, in: occurrences) else {
+                continue
+            }
+            result.append(.init(
+                points: anchors.map(\.worldPoint),
+                label: savedMeasurementLabel(annotation, anchors: anchors)
+            ))
+        }
+        return result
+    }
+
+    /// An annotation node's resolved visibility, from the same occurrence
+    /// expansion that decides every other item's visibility.
+    private func isEffectivelyVisible(_ sceneNodeID: SceneNodeID?, in occurrences: [SceneNodeHierarchy.Occurrence]) -> Bool {
+        guard let sceneNodeID else {
+            return true
+        }
+        return occurrences.contains {
+            $0.componentInstanceID == nil && $0.sourceSceneNodeID == sceneNodeID && $0.isVisible
+        }
+    }
+
+    private func savedMeasurementLabel(
+        _ annotation: MeasurementAnnotation,
+        anchors: [MeasurementAnchorWorldPointResolver.ResolvedAnchor]
+    ) -> String {
+        guard annotation.kind == .distance,
+              let first = anchors.first(where: { $0.role == .start }) ?? anchors.first,
+              let second = anchors.last(where: { $0.role == .end }) ?? anchors.last,
+              let distance = measurementDistanceMeters(start: first.worldPoint, end: second.worldPoint) else {
+            return annotation.name
+        }
+        return "\(annotation.name) \(formattedViewportLength(distance))"
     }
 
     private func formattedViewportLength(_ meters: Double) -> String {
@@ -5372,6 +5434,7 @@ extension Viewport {
             throw RealityViewportSpatialBatch.invalid("Spatial overlay world bounds are invalid.")
         }
 
+        let savedMeasurements = try savedMeasurementOverlays()
         var measurement: ViewportSpatialOverlaySemanticSnapshot.Measurement?
         if measurementToolActive,
            let start = measurementSession.state.start,
@@ -5385,7 +5448,16 @@ extension Viewport {
                 start: start.point,
                 end: end.point,
                 label: formattedViewportLength(distance),
-                boundsRuler: nil
+                boundsRuler: nil,
+                saved: savedMeasurements
+            )
+        } else if !savedMeasurements.isEmpty {
+            measurement = .init(
+                start: nil,
+                end: nil,
+                label: nil,
+                boundsRuler: nil,
+                saved: savedMeasurements
             )
         }
 
@@ -5406,7 +5478,8 @@ extension Viewport {
                     start: current.start,
                     end: current.end,
                     label: current.label,
-                    boundsRuler: input
+                    boundsRuler: input,
+                    saved: current.saved
                 )
             } else {
                 // The ruler is a native resource group even when no two-point
@@ -5415,7 +5488,8 @@ extension Viewport {
                     start: nil,
                     end: nil,
                     label: nil,
-                    boundsRuler: input
+                    boundsRuler: input,
+                    saved: []
                 )
             }
         }
