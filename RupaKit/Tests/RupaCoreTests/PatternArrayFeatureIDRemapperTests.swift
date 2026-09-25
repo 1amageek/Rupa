@@ -2,6 +2,39 @@ import SwiftCAD
 import Testing
 @testable import RupaCore
 
+@Test func patternArrayRemapsBothBridgeBoundarySources() throws {
+    let first = FeatureID()
+    let second = FeatureID()
+    let copiedFirst = FeatureID()
+    let copiedSecond = FeatureID()
+    let signature = try SubshapeGeometrySignature.lineEdge(
+        startPoint: .origin, endPoint: Point3D(x: 1, y: 0, z: 0)
+    )
+    let bridge = BridgeSurfaceFeature(
+        startBoundary: StableSubshapeReference(
+            subshapeID: SubshapeID(featureID: first, role: "edge", ordinal: 2), geometrySignature: signature
+        ),
+        endBoundary: StableSubshapeReference(
+            subshapeID: SubshapeID(featureID: second, role: "edge", ordinal: 3), geometrySignature: signature
+        ),
+        endOrientation: .reversed
+    )
+    let remapper = PatternArrayFeatureIDRemapper(featureIDMap: [first: copiedFirst, second: copiedSecond])
+    guard case let .bridgeSurface(result) = try remapper.remappedOperation(.bridgeSurface(bridge)) else {
+        Issue.record("Expected the source-linked Bridge operation.")
+        return
+    }
+    #expect(result.startBoundary.subshapeID == SubshapeID(featureID: copiedFirst, role: "edge", ordinal: 2))
+    #expect(result.endBoundary.subshapeID == SubshapeID(featureID: copiedSecond, role: "edge", ordinal: 3))
+    #expect(result.startBoundary.geometrySignature == signature)
+    #expect(result.endBoundary.geometrySignature == signature)
+    #expect(result.endOrientation == .reversed)
+    #expect(throws: EditorError.self) {
+        _ = try PatternArrayFeatureIDRemapper(featureIDMap: [first: copiedFirst])
+            .remappedOperation(.bridgeSurface(bridge))
+    }
+}
+
 @Test func patternArrayFeatureIDRemapperPreservesLoftSectionTangentControls() throws {
     let originalFirstProfileID = FeatureID()
     let originalSecondProfileID = FeatureID()

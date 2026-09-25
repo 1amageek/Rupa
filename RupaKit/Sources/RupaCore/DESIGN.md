@@ -1,5 +1,10 @@
 # RupaCore Source Authority Design
 
+Pattern cloning remaps both Bridge boundary references through the cloned
+dependency map, preserving their signatures and orientation. Missing cloned
+dependencies fail explicitly instead of retaining references to original bodies.
+`PatternArrayFeatureIDRemapperTests` verifies both-source remapping and refusal.
+
 Body source-section metadata preserves an explicit nonnegative profile index
 across encoding and decoding. Missing profile indexes are invalid payloads,
 not an instruction to select region zero. The native ProfileReference owns
