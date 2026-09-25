@@ -45,7 +45,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return try remappedBooleanOperation(operation)
         case .polySpline:
             return operation
-        case .bSplineSurface:
+        case .constrainedSurface, .bSplineSurface:
             return operation
         case .faceLoopOffset:
             return try remappedFaceLoopOffsetOperation(operation)

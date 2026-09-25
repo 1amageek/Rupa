@@ -117,6 +117,7 @@ public struct ParameterSourceUsageService: Sendable {
              .loft,
              .boolean,
              .polySpline,
+             .constrainedSurface,
              .bSplineSurface,
              .patchSurface,
              .primitive,
@@ -280,6 +281,8 @@ public struct ParameterSourceUsageService: Sendable {
             "boolean"
         case .polySpline:
             "polySpline"
+        case .constrainedSurface:
+            "constrainedSurface"
         case .bSplineSurface:
             "bSplineSurface"
         case .faceLoopOffset:

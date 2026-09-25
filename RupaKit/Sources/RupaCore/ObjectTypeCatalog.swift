@@ -109,6 +109,15 @@ public enum ObjectTypeCatalog {
             properties: polySplineProperties
         ),
         definition(
+            id: .constrainedSurface,
+            title: "Constrained Surface",
+            systemImage: "point.3.connected.trianglepath.dotted",
+            representation: .threeDimensional,
+            category: .body,
+            geometryRole: .surface,
+            properties: []
+        ),
+        definition(
             id: .bSplineSurface,
             title: "B-spline Surface",
             systemImage: "rectangle.grid.3x2",

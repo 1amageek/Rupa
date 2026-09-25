@@ -123,6 +123,8 @@ enum PreparedAutomationSourceCommandValidation {
              .createLoft,
              .setLoft,
              .createBoolean,
+             .createConstrainedSurface,
+             .setConstrainedSurface,
              .createBSplineSurface,
              .createPolySplineSurface,
              .movePolySplineSurfaceVertex,

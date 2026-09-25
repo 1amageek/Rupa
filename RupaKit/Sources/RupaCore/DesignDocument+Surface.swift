@@ -4,6 +4,44 @@ import RupaCoreTypes
 
 extension DesignDocument {
     @discardableResult
+    public mutating func createConstrainedSurface(
+        name: String,
+        source: ConstrainedSurfaceFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let name = try normalizedMetadataName(name, owner: "Constrained Surface")
+        var candidate = self
+        let feature = try FeatureNodeFactory.make(operation: .constrainedSurface(source),
+            name: name, in: cadDocument, tolerance: modelingSettings.tolerance)
+        try candidate.appendFeature(feature)
+        _ = try candidate.productMetadata.appendSceneNodeToFirstRoot(
+            name: name, reference: .body(feature.id),
+            object: .body(featureID: feature.id, documentID: cadDocument.id,
+                sourceSection: nil, typeID: .constrainedSurface, geometryRole: .surface,
+                properties: ObjectPropertySet(), objectRegistry: objectRegistry))
+        _ = try candidate.validate(objectRegistry: objectRegistry)
+        self = candidate
+        return feature.id
+    }
+
+    public mutating func setConstrainedSurface(
+        featureID: FeatureID,
+        source: ConstrainedSurfaceFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard var feature = cadDocument.designGraph.nodes[featureID],
+              case .constrainedSurface = feature.operation else {
+            throw EditorError(code: .referenceUnresolved, message: "Constrained Surface source no longer exists.")
+        }
+        try source.validate(tolerance: modelingSettings.tolerance)
+        feature.operation = .constrainedSurface(source)
+        var candidate = self
+        try candidate.cadDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
+        _ = try candidate.validate(objectRegistry: objectRegistry)
+        self = candidate
+    }
+
+    @discardableResult
     public mutating func createBSplineSurface(
         name: String,
         surface: BSplineSurface3D,

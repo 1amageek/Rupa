@@ -8,6 +8,42 @@ import SwiftCAD
 @testable import RupaCADDomain
 
 @MainActor
+@Test(.timeLimit(.minutes(1)))
+func constrainedSurfaceCreationAndReplacementExecuteThroughSemanticAPI() throws {
+  let node = ProgramNodeSymbol("surface")
+  var arguments: [String: SemanticArgument] = [
+    "name": .literal(.text("Constrained")),
+    "points": .array([meterPoint(0, 0, 0), meterPoint(0.1, 0, 0),
+      meterPoint(0, 0.1, 0), meterPoint(0.04, 0.04, 0.01)].map { point in
+        .object([SemanticArgumentObjectEntry(key: "position", value: .literal(.point(point)))])
+      }),
+    "tolerance": .literal(.number(1e-7, unit: .meter)),
+    "angularTolerance": .literal(.number(1, unit: .degree)),
+    "optimization": .literal(.text("performance")),
+  ]
+  let create = invocation(RupaCADSemanticOperationID.surfaceConstrained, arguments: arguments)
+  arguments.removeValue(forKey: "name")
+  arguments["body"] = .local(SemanticOutputReference(node: node, output: SemanticOutputID("body"), kind: .sourceBody(role: .sheet)))
+  arguments["optimization"] = .literal(.text("smoothness"))
+  let execution = try execute(SemanticProgram(schemaVersion: .current, nodes: [
+    SemanticProgramNode(symbol: node, invocation: create),
+    SemanticProgramNode(symbol: ProgramNodeSymbol("edit"), invocation:
+      invocation(RupaCADSemanticOperationID.surfaceConstrainedReplace, arguments: arguments)),
+  ]))
+  let document = execution.session.document
+  #expect(document.cadDocument.designGraph.order.count == 1)
+  let id = try #require(document.cadDocument.designGraph.order.first)
+  guard case .constrainedSurface(let source) = document.cadDocument.designGraph.nodes[id]?.operation else {
+    Issue.record("Expected retained constrained source"); return
+  }
+  #expect(source.optimization == .smoothness)
+  #expect(source.points.count == 4)
+  let evaluation = try DocumentEvaluator.modelingDefault(for: document).evaluateExact(document.cadDocument)
+  #expect(evaluation.brep.bodies.values.first?.kind == .sheet)
+  try verifyPersistentBindings(execution.receipt, in: document)
+}
+
+@MainActor
 @Test(.timeLimit(.minutes(1)), arguments: [0.0, -0.02, 0.2])
 func profileToExtrudeLocalChainExecutesWithCoreGeneratedIdentities(start: Double) throws {
   let profileNode = ProgramNodeSymbol("profile")

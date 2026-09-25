@@ -316,6 +316,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         operation: BooleanOperation,
         keepTools: Bool
     )
+    case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
+    case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)
     case createBSplineSurface(
         name: String,
         surface: BSplineSurface3D
@@ -688,6 +690,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setLoft"
         case .createBoolean:
             "createBoolean"
+        case .createConstrainedSurface:
+            "createConstrainedSurface"
+        case .setConstrainedSurface:
+            "setConstrainedSurface"
         case .createBSplineSurface:
             "createBSplineSurface"
         case .createPolySplineSurface:
@@ -863,6 +869,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createLoft,
              .setLoft,
              .createBoolean,
+             .createConstrainedSurface,
+             .setConstrainedSurface,
              .createBSplineSurface,
              .createPolySplineSurface,
              .movePolySplineSurfaceVertex,

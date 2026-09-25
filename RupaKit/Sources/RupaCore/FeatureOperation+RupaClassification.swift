@@ -31,6 +31,7 @@ extension FeatureOperation {
              .shell,
              .thicken,
              .polySpline,
+             .constrainedSurface,
              .bSplineSurface,
              .patchSurface,
              .faceLoopOffset,
@@ -79,7 +80,7 @@ extension FeatureOperation {
             return true
         case .polySpline:
             return true
-        case .bSplineSurface:
+        case .constrainedSurface, .bSplineSurface:
             return true
         case .faceLoopOffset:
             return true
@@ -163,7 +164,7 @@ extension FeatureOperation {
             return Set(feature.targets.map(\.featureID) + [feature.tool.featureID])
         case .polySpline:
             return []
-        case .bSplineSurface:
+        case .constrainedSurface, .bSplineSurface:
             return []
         case .faceLoopOffset(let feature):
             return [feature.target.featureID]

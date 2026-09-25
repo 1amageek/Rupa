@@ -965,6 +965,19 @@ public struct MeasurementService {
                 try measureBooleanCase(boolean, node: node, featureID: featureID)
             case .polySpline(let polySpline):
                 try measurePolySplineCase(polySpline, node: node, featureID: featureID)
+            case .constrainedSurface:
+                guard !isSupersededInDocumentScope(featureID), shouldMeasure(featureID) else { continue }
+                includedSourceFeatureIDs.insert(featureID)
+                var skipReason: String?
+                if let sheet = try measureEvaluatedSheet(featureID: featureID, featureName: node.name,
+                    sourceFeatureID: featureID, sourceFeatureName: node.name,
+                    evaluatedDocument: evaluatedDocument(), unsupportedReason: &skipReason) {
+                    sheets.append(sheet)
+                    bounds.include(sheet.bounds)
+                } else {
+                    diagnostics.append(EditorDiagnostic(severity: .info,
+                        message: "Measurement skipped Constrained Surface. \(skipReason ?? "No evaluated sheet.")"))
+                }
             case .bSplineSurface(let surfaceFeature):
                 try measureBSplineSurfaceCase(surfaceFeature, node: node, featureID: featureID)
             case .faceLoopOffset:

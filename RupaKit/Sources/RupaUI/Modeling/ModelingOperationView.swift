@@ -2,6 +2,7 @@ import SwiftUI
 import RupaCore
 
 struct ModelingOperationView: View {
+    @State private var pointEntryError: String?
     @Binding var draft: ModelingOperationDraft
     let document: DesignDocument
     let isBusy: Bool
@@ -51,8 +52,8 @@ struct ModelingOperationView: View {
                 .foregroundStyle(.secondary)
                 .accessibilityIdentifier("Modeling.instructions")
             Form {
-                TextField("Name", text: $draft.name)
-                if ![.box, .cylinder, .sphere, .surfacePatch].contains(draft.kind) {
+                TextField("Name", text: $draft.name).disabled(draft.constrainedFeatureID != nil)
+                if ![.box, .cylinder, .sphere, .surfacePatch, .constrainedSurface].contains(draft.kind) {
                     Section("Operands (source coordinates)") {
                         ForEach(draft.targets.indices, id: \.self) { index in
                             HStack {
@@ -127,6 +128,9 @@ struct ModelingOperationView: View {
         if hasMatchingPreview {
             return "Preview ready. Choose Apply to add the result to the document."
         }
+        if draft.kind == .constrainedSurface {
+            return "Click points in the viewport or enter coordinates. Control-Z removes the last point. Preview validates the fitted surface before Apply."
+        }
         if draft.kind == .patch {
             return "Select one edge of a hole, then Use Current Selection. Preview fills its complete boundary as a separate sheet; the source remains unchanged. A sheet's outer perimeter is not a hole."
         }
@@ -156,6 +160,34 @@ struct ModelingOperationView: View {
             lengthField("Width X", text: $draft.width)
             lengthField("Width Y", text: $draft.height)
             lengthField("Depth Z", text: $draft.distance)
+        case .constrainedSurface:
+            Section("Points") {
+                ForEach(draft.constrainedPoints.indices, id: \.self) { index in
+                    let point = draft.constrainedPoints[index].position
+                    HStack {
+                        Text("\(index + 1): \(point.x), \(point.y), \(point.z) m")
+                        Spacer()
+                        Button("Remove", systemImage: "minus.circle") {
+                            draft.constrainedPoints.remove(at: index)
+                        }.labelStyle(.iconOnly).contentShape(Rectangle())
+                    }
+                }
+                Button("Undo Last Point") { draft.undoConstrainedPoint() }
+                    .disabled(draft.constrainedPoints.isEmpty)
+                    .keyboardShortcut("z", modifiers: .control).contentShape(Rectangle())
+                vectorFields("New Point", values: $draft.origin, unit: draft.unit.symbol)
+                Button("Add Point") {
+                    do { try draft.appendCoordinatePoint(); pointEntryError = nil }
+                    catch { pointEntryError = error.localizedDescription }
+                }.contentShape(Rectangle())
+                if let pointEntryError { Text(pointEntryError).foregroundStyle(.red) }
+            }
+            lengthField("Tolerance", text: $draft.pointTolerance)
+            TextField("Angular tolerance (degrees)", text: $draft.angularTolerance)
+            Picker("Optimize", selection: $draft.pointOptimization) {
+                Text("Performance").tag(ConstrainedSurfaceFeature.Optimization.performance)
+                Text("Smoothness").tag(ConstrainedSurfaceFeature.Optimization.smoothness)
+            }.contentShape(Rectangle())
         case .surfacePatch:
             vectorFields("Origin", values: $draft.origin, unit: draft.unit.symbol)
             lengthField("Width X", text: $draft.width)

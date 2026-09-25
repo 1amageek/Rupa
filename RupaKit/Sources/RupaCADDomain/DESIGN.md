@@ -272,3 +272,9 @@ Changing an operation ID/version, argument/output kind, estimate, Core command,
 or availability requires rechecking Foundation compilation, Automation binding,
 Protocol golden fixtures, Runtime discovery, Project publication, and the full
 100-case exact-oracle replay.
+
+Constrained Surface creation and replacement accept ordered point objects in
+meters, positional tolerance in meters, angular
+tolerance in degrees and Performance/Smoothness selection. Replacement takes
+a sheet source handle and preserves identity. The lowerer validates units and
+shape, then delegates geometric admission and atomic publication to Core.

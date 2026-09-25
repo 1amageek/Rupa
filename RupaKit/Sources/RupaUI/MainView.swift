@@ -438,6 +438,21 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    private func beginConstrainedSurfaceEditing(_ feature: FeatureNode) {
+        guard case .constrainedSurface(let source) = feature.operation else { return }
+        beginModelingOperation(.constrainedSurface)
+        modelingDraft?.name = feature.name ?? "Constrained Surface"
+        modelingDraft?.constrainedFeatureID = feature.id
+        modelingDraft?.constrainedPoints = source.points
+        modelingDraft?.pointTolerance = "\(source.positionTolerance) m"
+        modelingDraft?.angularTolerance = "\(source.angularTolerance * 180 / .pi)"
+        modelingDraft?.pointOptimization = source.optimization
+        let occurrences = snapshot.document.document.productMetadata.sceneNodes.values
+            .filter { $0.reference == .body(feature.id) }
+        let selected = occurrences.first { snapshot.selection.wholeSceneNodeIDs.contains($0.id) }
+        modelingDraft?.constrainedSceneNodeID = selected?.id ?? (occurrences.count == 1 ? occurrences.first?.id : nil)
+    }
+
     private func previewModelingOperation() {
         guard let draft = modelingDraft else { return }
         let command: EditorCommand
@@ -1423,6 +1438,7 @@ private struct ProjectMainViewContent: View {
                             _ = selectSceneNodes([node.id])
                         }
                     },
+                    onEditConstrainedSurface: { beginConstrainedSurfaceEditing($0) },
                     onPreview: { command, title in previewHistoryOperation(command, title: title) }
                 )
             }
@@ -4790,6 +4806,20 @@ private struct ProjectMainViewContent: View {
             return
         }
 
+        if modelingDraft?.kind == .constrainedSurface {
+            let plane = effectiveSketchPlane(fallback: target.sketchPlane)
+            guard let input = mappedCanvasInput(modelPoint: target.modelPoint,
+                modelWorldPoint: target.modelWorldPoint,
+                viewRayAnchorWorldPoint: target.viewRayAnchorWorldPoint, sketchPlane: plane) else { return }
+            let snapped = snappedModelInput(input.point, modifierFlags: target.modifierFlags)
+            guard let point = resolvedCanvasWorldPoint(for: snapped.point,
+                snappedWorldPoint: snapped.worldPoint, fallbackWorldPoint: input.worldPoint,
+                sketchPlane: plane) else { return }
+            do { try modelingDraft?.appendWorldPoint(point, in: snapshot.document.document) }
+            catch { reportToolStatus(error.localizedDescription, severity: .warning) }
+            return
+        }
+
         if selectedTool == .select {
             applyViewportSelection(hit: target.hit, intent: target.selectionIntent)
             return
@@ -4974,6 +5004,11 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleWorkspaceKeyboardInput(_ input: WorkspaceKeyboardInput) -> KeyPress.Result {
+        if modelingDraft?.kind == .constrainedSurface, input.characters.lowercased() == "z",
+           input.modifiers == .control, input.phases.contains(.down) {
+            modelingDraft?.undoConstrainedPoint()
+            return .handled
+        }
         guard let action = WorkspaceKeyboardRouter().action(
             for: input,
             context: workspaceKeyboardContext(for: input)

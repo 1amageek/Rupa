@@ -11,6 +11,7 @@ public typealias SubshapeGeometrySignature = SwiftCAD.SubshapeGeometrySignature
 public typealias ParameterResolver = CADModeling.ParameterResolver
 public typealias SweepEvaluationCapabilities = CADModeling.SweepEvaluationCapabilities
 public typealias EvaluatedCurve = CADModeling.EvaluatedCurve
+public typealias ConstrainedSurfaceFeature = SwiftCAD.ConstrainedSurfaceFeature
 public typealias CADExpression = SwiftCAD.CADExpression
 public typealias CADAgentMeasurementQuery = SwiftCAD.MeasurementQuery
 public typealias CADAgentMeasurementQueryResult = SwiftCAD.MeasurementQueryResult

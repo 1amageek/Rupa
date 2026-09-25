@@ -209,7 +209,7 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
-            case .polySpline:
+            case .constrainedSurface, .polySpline:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
                     sourceFeatureID: nil,

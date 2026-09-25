@@ -2469,6 +2469,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .createConstrainedSurface(name, source):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.createConstrainedSurface(
+                name: name, source: source, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .setConstrainedSurface(featureID, source):
+            var updatedDocument = document
+            try updatedDocument.setConstrainedSurface(featureID: featureID,
+                source: source, objectRegistry: objectRegistry)
+            document = updatedDocument
+            primaryFeatureID = featureID
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createBSplineSurface:
             func run() throws {
                 guard case .createBSplineSurface(let name, let surface) = command else {

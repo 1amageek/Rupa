@@ -59,6 +59,7 @@ struct FeatureHistoryView: View {
     let featureNamesByID: [FeatureID: String]
     let isBusy: Bool
     let onSelect: (FeatureID) -> Void
+    let onEditConstrainedSurface: (FeatureNode) -> Void
     let onPreview: (EditorCommand, String) -> Void
 
     init(
@@ -69,6 +70,7 @@ struct FeatureHistoryView: View {
         namesByID: [FeatureID: String] = [:],
         isBusy: Bool,
         onSelect: @escaping (FeatureID) -> Void,
+        onEditConstrainedSurface: @escaping (FeatureNode) -> Void = { _ in },
         onPreview: @escaping (EditorCommand, String) -> Void
     ) {
         self.orderedFeatures = orderedFeatures
@@ -78,6 +80,7 @@ struct FeatureHistoryView: View {
         self.featureNamesByID = namesByID
         self.isBusy = isBusy
         self.onSelect = onSelect
+        self.onEditConstrainedSurface = onEditConstrainedSurface
         self.onPreview = onPreview
     }
 
@@ -134,6 +137,10 @@ struct FeatureHistoryView: View {
                     .foregroundStyle(feature.isSuppressed ? .secondary : .tertiary)
                     .accessibilityIdentifier("FeatureHistory.\(feature.id).status")
                 Menu {
+                    if case .constrainedSurface = feature.operation {
+                        Button("Edit Constrained Surface…") { onEditConstrainedSurface(feature) }
+                            .contentShape(Rectangle())
+                    }
                     if case .loft = feature.operation {
                         Button("Edit Loft…") { loftDraft = LoftFeatureDraft(feature: feature) }
                             .contentShape(Rectangle())

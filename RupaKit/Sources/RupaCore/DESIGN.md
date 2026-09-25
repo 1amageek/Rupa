@@ -1628,3 +1628,14 @@ editing changes span while retaining the authored start and direction. History
 edits, parameter usage and native replay retain both expressions. Zero-span edits
 fail before publication. Existing one-sided face-offset placement behavior remains
 compatible; explicitly positioned extrusions move their source endpoints directly.
+
+### Constrained Surface source ownership
+
+Core retains `ConstrainedSurfaceFeature` point constraints and options in the
+feature graph. Creation publishes a sheet occurrence; replacement preserves the
+feature/output/occurrence IDs and placements. Both use the existing atomic
+command evaluation and Undo transaction. Native CADModeling owns fitting and
+independent geometric admission; no generated control net replaces the source.
+UI owns only transient point collection and text; the same EditorCommand route
+serves automation. Failure preserves the previous source and evaluated scene.
+Verification covers source replacement, native package replay and failed commit.

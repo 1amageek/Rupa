@@ -191,6 +191,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
 
     private func operationRows(for operation: FeatureOperation) -> [WorkspaceInspectorTextRow] {
         switch operation {
+        case .constrainedSurface(let source):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Constrained Surface"),
+                WorkspaceInspectorTextRow(title: "Points", value: "\(source.points.count)"),
+                WorkspaceInspectorTextRow(title: "Optimization", value: source.optimization.rawValue),
+            ]
         case .importedBRep(let source):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Imported CAD"),

@@ -6,16 +6,16 @@ import Testing
 @testable import RupaCADDomain
 
 @Test(.timeLimit(.minutes(1)))
-func registryContainsExactlyTwentyOneVersionOneCADOperations() throws {
+func registryContainsExactlyTwentyThreeVersionOneCADOperations() throws {
   let registrations = RupaCADDomain.registrations()
   let expectedIDs = Set(RupaCADSemanticOperationID.all)
 
-  #expect(registrations.count == 21)
+  #expect(registrations.count == 23)
   #expect(Set(registrations.map(\.descriptor.operationID)) == expectedIDs)
   #expect(Set(registrations.map(\.descriptor.version)) == [RupaCADDomain.operationVersion])
   #expect(registrations.allSatisfy { $0.descriptor.route == .source })
   #expect(registrations.allSatisfy { $0.descriptor.effect == .sourceMutation })
-  #expect(try RupaCADDomain.registry().count == 21)
+  #expect(try RupaCADDomain.registry().count == 23)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -545,6 +545,16 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
     loftDescriptor(RupaCADSemanticOperationID.surfaceLoft, role: .sheet),
     loftDescriptor(RupaCADSemanticOperationID.solidLoftReplace, role: .body, replacing: true),
     loftDescriptor(RupaCADSemanticOperationID.surfaceLoftReplace, role: .sheet, replacing: true),
+    descriptor(RupaCADSemanticOperationID.surfaceConstrained,
+      inputs: [input("name", .text), input("points", .array(element: .object)),
+        input("tolerance", .number(unit: .meter)), input("angularTolerance", .number(unit: .degree)),
+        input("optimization", .text)],
+      outputs: [output("body", .sourceBody(role: .sheet), .sourceBody(role: .sheet, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0))], work: 1),
+    descriptor(RupaCADSemanticOperationID.surfaceConstrainedReplace,
+      inputs: [input("body", .sourceBody(role: .sheet)), input("points", .array(element: .object)),
+        input("tolerance", .number(unit: .meter)), input("angularTolerance", .number(unit: .degree)),
+        input("optimization", .text)], outputs: [], work: 1),
     descriptor(
       RupaCADSemanticOperationID.sceneTransform,
       inputs: [

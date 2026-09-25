@@ -68,7 +68,7 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
         case .sweep:
             "Create Sweep from selected profile, selected guides, and clicked path"
         case .surface:
-            "Create sheets with Plane, Extrude, Sweep, Loft, Patch or Boundary Bridge"
+            "Create sheets with Plane, Constrained Surface, Extrude, Sweep, Loft, Patch or Boundary Bridge"
         case .mesh:
             "Edit Authored Mesh elements or make selected CAD editable"
         case .measure:

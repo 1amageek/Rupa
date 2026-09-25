@@ -15,6 +15,7 @@ struct ModelingOperationDraft: Equatable {
         case fillet = "Fillet"
         case chamfer = "Chamfer"
         case g2Blend = "G2 Blend"
+        case constrainedSurface = "Constrained Surface"
         case surfacePatch = "Plane Surface"
         case patch = "Patch"
         case bridge = "Boundary Bridge (G0)"
@@ -30,7 +31,7 @@ struct ModelingOperationDraft: Equatable {
             allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge].contains($0) }
         }
 
-        static let surfaceCreationOperations: [Self] = [.surfacePatch, .extrude, .revolve, .sweep, .loft, .patch, .bridge]
+        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge]
 
         var systemImage: String {
             switch self {
@@ -45,6 +46,7 @@ struct ModelingOperationDraft: Equatable {
             case .fillet: "square.on.circle"
             case .chamfer: "cube.transparent"
             case .g2Blend: "point.topleft.down.to.point.bottomright.curvepath"
+            case .constrainedSurface: "point.3.connected.trianglepath.dotted"
             case .surfacePatch: "square.dashed"
             case .patch: "square.dashed.inset.filled"
             case .bridge: "rectangle.split.2x1"
@@ -54,6 +56,37 @@ struct ModelingOperationDraft: Equatable {
             case .thicken: "square.stack.3d.up.fill"
             }
         }
+    }
+
+    var constrainedPoints: [ConstrainedSurfaceFeature.PointConstraint] = []
+    var constrainedFeatureID: FeatureID?
+    var constrainedSceneNodeID: SceneNodeID?
+    var pointTolerance = "0.0001 m"
+    var angularTolerance = "1"
+    var pointOptimization = ConstrainedSurfaceFeature.Optimization.smoothness
+
+    mutating func appendCoordinatePoint() throws {
+        constrainedPoints.append(.init(position: Point3D(
+            x: try length(origin[0], label: "Point X"),
+            y: try length(origin[1], label: "Point Y"),
+            z: try length(origin[2], label: "Point Z"))))
+    }
+
+    mutating func appendWorldPoint(_ point: Point3D, in document: DesignDocument) throws {
+        var local = point
+        if constrainedFeatureID != nil {
+            guard let id = constrainedSceneNodeID else {
+                throw invalid("Select the surface occurrence before adding viewport points to its source.")
+            }
+            local = try SceneNodeHierarchy(metadata: document.productMetadata)
+                .worldTransform(of: id).inverse().applied(to: point)
+        }
+        try local.validate()
+        constrainedPoints.append(.init(position: local))
+    }
+
+    mutating func undoConstrainedPoint() {
+        if !constrainedPoints.isEmpty { constrainedPoints.removeLast() }
     }
 
     var kind: Kind
@@ -135,7 +168,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .surfacePatch, .patch, .bridge, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -146,6 +179,18 @@ struct ModelingOperationDraft: Equatable {
         }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw invalid("Enter an operation name.")
+        }
+        if kind == .constrainedSurface {
+            guard constrainedPoints.count >= 3 else {
+                throw invalid("Add at least three non-collinear points to create a surface.")
+            }
+            let source = ConstrainedSurfaceFeature(points: constrainedPoints,
+                positionTolerance: try length(pointTolerance, label: "Tolerance"),
+                angularTolerance: try number(angularTolerance, label: "Angular tolerance") * .pi / 180,
+                optimization: pointOptimization)
+            try source.validate(tolerance: document.modelingSettings.tolerance)
+            if let id = constrainedFeatureID { return .setConstrainedSurface(featureID: id, source: source) }
+            return .createConstrainedSurface(name: name, source: source)
         }
         if [.box, .cylinder, .sphere, .surfacePatch].contains(kind) {
             let x = try length(origin[0], label: "Origin X")
@@ -193,7 +238,7 @@ struct ModelingOperationDraft: Equatable {
             return featureID
         }
         switch kind {
-        case .box, .cylinder, .sphere, .surfacePatch:
+        case .box, .cylinder, .sphere, .surfacePatch, .constrainedSurface:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
             guard features.count == 1, let node = nodes.first else {

@@ -18,6 +18,8 @@ public enum RupaCADSemanticOperationID {
   public static let surfaceLoft: DomainCapabilityID = "cad.surface.loft"
   public static let solidLoftReplace: DomainCapabilityID = "cad.solid.loft.replace"
   public static let surfaceLoftReplace: DomainCapabilityID = "cad.surface.loft.replace"
+  public static let surfaceConstrained: DomainCapabilityID = "cad.surface.constrained"
+  public static let surfaceConstrainedReplace: DomainCapabilityID = "cad.surface.constrained.replace"
   public static let sceneTransform: DomainCapabilityID = "cad.scene.transform"
   public static let componentDefine: DomainCapabilityID = "cad.component.define"
   public static let componentInstantiate: DomainCapabilityID = "cad.component.instantiate"
@@ -41,6 +43,8 @@ public enum RupaCADSemanticOperationID {
     surfaceLoft,
     solidLoftReplace,
     surfaceLoftReplace,
+    surfaceConstrained,
+    surfaceConstrainedReplace,
     sceneTransform,
     componentDefine,
     componentInstantiate,

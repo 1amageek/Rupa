@@ -26,6 +26,8 @@ public enum RupaCADDomain {
       LoftLowerer.registration(.sheet),
       LoftLowerer.registration(.replaceSolid),
       LoftLowerer.registration(.replaceSheet),
+      ConstrainedSurfaceLowerer.registration(replacing: false),
+      ConstrainedSurfaceLowerer.registration(replacing: true),
       SceneTransformLowerer.registration,
       ComponentDefineLowerer.registration,
       ComponentInstantiateLowerer.registration,
