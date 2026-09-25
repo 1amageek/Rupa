@@ -136,11 +136,18 @@ struct FeatureHistoryView: View {
                     .font(.caption2)
                     .foregroundStyle(feature.isSuppressed ? .secondary : .tertiary)
                     .accessibilityIdentifier("FeatureHistory.\(feature.id).status")
-                Menu {
-                    if case .constrainedSurface = feature.operation {
-                        Button("Edit Constrained Surface…") { onEditConstrainedSurface(feature) }
-                            .contentShape(Rectangle())
+                if case .constrainedSurface = feature.operation {
+                    Button { onEditConstrainedSurface(feature) } label: {
+                        Image(systemName: "pencil").contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .disabled(isBusy)
+                    .help("Edit Constrained Surface")
+                    .accessibilityLabel("Edit Constrained Surface")
+                    .accessibilityIdentifier("FeatureHistory.\(feature.id).editConstrainedSurface")
+                }
+                Menu {
                     if case .loft = feature.operation {
                         Button("Edit Loft…") { loftDraft = LoftFeatureDraft(feature: feature) }
                             .contentShape(Rectangle())
