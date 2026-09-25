@@ -26,6 +26,108 @@ extension DesignDocument {
             currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
     }
 
+    public func prepareSurfaceFill(
+        name: String,
+        target: SelectionTarget,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureGraphTransaction {
+        let selection = try topologyEditSelection(
+            target,
+            kind: .edge,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        let operation = FeatureOperation.surfaceFill(SurfaceFillFeature(
+            targetFeatureID: selection.sourceID,
+            boundarySeed: selection.reference
+        ))
+        let feature = try FeatureNodeFactory.make(
+            operation: operation,
+            name: normalizedMetadataName(name, owner: "Surface fill"),
+            in: cadDocument,
+            tolerance: modelingSettings.tolerance
+        )
+        return FeatureGraphTransaction(
+            features: [feature],
+            presentations: [FeaturePresentation(
+                featureID: feature.id,
+                sceneNodeID: SceneNodeID(),
+                parentSceneNodeID: target.sceneNodeID,
+                name: feature.name ?? name,
+                kind: .body(
+                    sourceSection: nil,
+                    typeID: .bSplineSurface,
+                    geometryRole: .surface,
+                    properties: objectRegistry.defaultProperties(for: .bSplineSurface)
+                )
+            )],
+            primaryFeatureID: feature.id
+        )
+    }
+
+    public func prepareBoundaryBridge(
+        name: String,
+        first firstTarget: SelectionTarget,
+        second secondTarget: SelectionTarget,
+        reverseSecondBoundary: Bool,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureGraphTransaction {
+        let first = try topologyEditSelection(
+            firstTarget, kind: .edge,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        let second = try topologyEditSelection(
+            secondTarget, kind: .edge,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        guard first.reference.subshapeID != second.reference.subshapeID else {
+            throw EditorError(code: .commandInvalid,
+                message: "Boundary Bridge requires distinct CAD edges.")
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        guard try hierarchy.worldTransform(of: firstTarget.sceneNodeID)
+            == hierarchy.worldTransform(of: secondTarget.sceneNodeID) else {
+            throw EditorError(code: .commandInvalid,
+                message: "Boundary Bridge sources must share the same occurrence coordinate frame.")
+        }
+        let bridge = BridgeSurfaceFeature(
+            startBoundary: first.reference,
+            endBoundary: second.reference,
+            endOrientation: reverseSecondBoundary ? .reversed : .forward
+        )
+        let feature = try FeatureNodeFactory.make(
+            operation: .bridgeSurface(bridge),
+            name: normalizedMetadataName(name, owner: "Boundary Bridge"),
+            in: cadDocument,
+            tolerance: modelingSettings.tolerance
+        )
+        return FeatureGraphTransaction(
+            features: [feature],
+            presentations: [FeaturePresentation(
+                featureID: feature.id,
+                sceneNodeID: SceneNodeID(),
+                parentSceneNodeID: firstTarget.sceneNodeID,
+                name: feature.name ?? name,
+                kind: .body(
+                    sourceSection: nil,
+                    typeID: .bSplineSurface,
+                    geometryRole: .surface,
+                    properties: objectRegistry.defaultProperties(for: .bSplineSurface)
+                )
+            )],
+            primaryFeatureID: feature.id
+        )
+    }
+
     public func prepareBodyShell(
         name: String, target: SelectionTarget, thickness: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn,

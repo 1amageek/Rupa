@@ -52,7 +52,8 @@ extension FeatureOperation {
              .surfaceOffset,
              .surfaceTrim,
              .surfaceExtend,
-             .surfaceMatch:
+             .surfaceMatch,
+             .surfaceFill:
             return false
         }
     }
@@ -116,6 +117,7 @@ extension FeatureOperation {
              .surfaceTrim,
              .surfaceExtend,
              .surfaceMatch,
+             .surfaceFill,
              .mirror,
              .joinBodies,
              .unjoinBody:
@@ -223,6 +225,7 @@ extension FeatureOperation {
              .radialPattern,
              .gridPattern,
              .curveDrivenPattern,
+             .surfaceFill,
              .curveExtend,
              .curveMatch,
              .projectCurve:

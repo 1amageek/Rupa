@@ -124,6 +124,7 @@ public struct ParameterSourceUsageService: Sendable {
              .surfaceTrim,
              .surfaceExtend,
              .surfaceMatch,
+             .surfaceFill,
              .mirror,
              .joinBodies,
              .unjoinBody,
@@ -336,6 +337,8 @@ public struct ParameterSourceUsageService: Sendable {
             "surfaceExtend"
         case .surfaceMatch:
             "surfaceMatch"
+        case .surfaceFill:
+            "surfaceFill"
         case .mirror:
             "mirror"
         case .joinBodies:

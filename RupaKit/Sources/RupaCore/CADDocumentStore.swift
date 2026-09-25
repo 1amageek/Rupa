@@ -601,6 +601,40 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createSurfaceFill, .createBoundaryBridge:
+            func run() throws {
+                let transaction: FeatureGraphTransaction
+                switch command {
+                case .createSurfaceFill(let name, let target):
+                    transaction = try document.prepareSurfaceFill(
+                        name: name, target: target, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation)
+                case .createBoundaryBridge(let name, let first, let second, let reverseSecondBoundary):
+                    transaction = try document.prepareBoundaryBridge(
+                        name: name, first: first, second: second,
+                        reverseSecondBoundary: reverseSecondBoundary, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation)
+                default:
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected a boundary surface operation."
+                    )
+                }
+                var updatedDocument = document
+                let sourceValidation = try validatedSource
+                    ?? document.validate(objectRegistry: objectRegistry)
+                let updatedValidation = try updatedDocument.appendFeatureGraph(
+                    transaction,
+                    validatedDocument: sourceValidation,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                primaryFeatureID = transaction.primaryFeatureID
+                try commitMutation()
+                validatedSource = updatedValidation
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createComponentDefinition:
             func run() throws {
                 guard case .createComponentDefinition(let name, let rootSceneNodeIDs) = command else {

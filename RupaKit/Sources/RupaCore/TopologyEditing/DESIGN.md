@@ -8,6 +8,14 @@ selected sheet faces into native offset and trim-domain extension features.
 It also translates a selected solid face and thickness into native Shell.
 Selected sheet faces may identify their entire sheet body for native Thicken.
 It owns in-place length-expression edits of the native operations it exposes.
+It also lowers a current open boundary loop into a source-referenced G0
+surface-fill feature that creates a separate editable sheet, and two current
+boundary edges into a source-referenced G0 ruled bridge sheet.
+
+Surface Fill and Boundary Bridge have distinct commands and preparation methods.
+There is no XNURBS command alias or boundary-count dispatch: those constructions
+do not satisfy the XNURBS contract. Boundary Bridge takes two named operands;
+Surface Fill takes one loop seed. Both keep the existing atomic append lifecycle.
 
 ## Responsibilities and Boundaries
 
@@ -112,6 +120,27 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   Generated-edge drag handles and numeric drafts share this native command.
   [Rendering](../../RupaRendering/DESIGN.md) owns pointer-to-source-length
   measurement; neither route reinterprets the edge as a profile corner.
+- Surface Fill uses a selected edge as the seed for one complete, current,
+  unlocked, fillable CAD boundary loop. A lone face's outer perimeter is not
+  fillable; an inner loop on a one-face sheet or an opening in a multi-face
+  shell is. Core appends a dependent `.sheet` feature and a
+  child presentation under the selected occurrence, preserving source geometry
+  and inherited placement. Candidate evaluation creates an exact planar face
+  for coplanar loops or a G0 Coons sheet for non-planar loops; otherwise it
+  refuses. Preview failure publishes neither feature nor presentation. Undo
+  removes the sheet and operation atomically. G1/G2 continuity, flow,
+  flatness/tension/quality controls and profile guides are not implemented. The
+  viewport's boundary-loop affordance requires a sampled display polyline for
+  every edge in the loop; a sampling failure suppresses the affordance rather
+  than substituting endpoint chords for curved geometry.
+- Open-boundary display metadata includes lone-sheet outer perimeters: these
+  permit bridging, not hole filling. Fillability remains the fill evaluator's contract.
+- Bridge Surface requires two distinct current open-boundary edges on unlocked
+  CAD occurrences with equal accumulated transforms. Core captures both stable references and appends a
+  dependent `.sheet` child without retargeting or modifying the source. The
+  kernel derives exact trimmed curves from the evaluated B-rep; copied display
+  curves are never operation inputs. Different coordinate frames, stale references,
+  internal edges and unsupported exact curve kinds fail before publication.
 
 ## State, Ownership, and Lifecycle
 
@@ -133,3 +162,6 @@ actual geometry, retained identities, persistence, Undo, parameter rebinding,
 atomic refusal and incremental reuse. `RupaUIPackageTests/FeatureLengthDraftTests`
 verifies expression forwarding; the signed App owns history form/preview/apply
 and visible Undo verification.
+Surface-fill Core tests own boundary-loop ordering, stale/foreign edge refusal,
+child-presentation placement, unchanged source representation, source
+reevaluation, exact generated sheet output and atomic failed-preview/Undo behavior.

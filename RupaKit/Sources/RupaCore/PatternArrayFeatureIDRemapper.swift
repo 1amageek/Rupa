@@ -113,6 +113,8 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return try remappedSurfaceExtendOperation(operation)
         case .surfaceMatch:
             return try remappedSurfaceMatchOperation(operation)
+        case .surfaceFill:
+            return try remappedSurfaceFillOperation(operation)
         case .mirror:
             return try remappedMirrorOperation(operation)
         case .joinBodies:
@@ -801,6 +803,21 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             targetParameter: feature.targetParameter,
             normalAlignment: feature.normalAlignment,
             continuity: feature.continuity
+        ))
+    }
+
+    private func remappedSurfaceFillOperation(
+        _ operation: FeatureOperation
+    ) throws -> FeatureOperation {
+        guard case let .surfaceFill(feature) = operation else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array remapping dispatch expected a surfaceFill operation."
+            )
+        }
+        return .surfaceFill(SurfaceFillFeature(
+            targetFeatureID: try remappedFeatureID(feature.targetFeatureID),
+            boundarySeed: try remappedStableSubshapeReference(feature.boundarySeed)
         ))
     }
 

@@ -5,6 +5,7 @@ import RupaCoreTypes
 public struct BodyDisplaySnapshotService: Sendable {
     private let pipelineOverride: CADPipeline?
     private let identityResolver = GeneratedBodyIdentityResolver()
+    private let boundaryLoopResolver = OpenBoundaryLoopResolver()
 
     public init(pipeline: CADPipeline? = nil) {
         self.pipelineOverride = pipeline
@@ -68,6 +69,7 @@ public struct BodyDisplaySnapshotService: Sendable {
             ),
             topology: topology(
                 for: featureID,
+                bodyID: identity.bodyID,
                 mesh: mesh,
                 in: evaluatedDocument
             )
@@ -76,6 +78,7 @@ public struct BodyDisplaySnapshotService: Sendable {
 
     private func topology(
         for featureID: FeatureID,
+        bodyID: BodyID,
         mesh: SwiftCAD.Mesh,
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyDisplaySnapshot.Topology {
@@ -83,15 +86,58 @@ public struct BodyDisplaySnapshotService: Sendable {
         var faces: [BodyDisplaySnapshot.Topology.Face] = []
         var edges: [BodyDisplaySnapshot.Topology.Edge] = []
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []
+        let generatedEntries = evaluatedDocument.subshapes.entries.sorted(by: {
+            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
+        })
+        var edgeSubshapeIDs: [EdgeID: SubshapeID] = [:]
+        var edgeDisplayPointsByID: [EdgeID: [Point3D]] = [:]
+        for (subshapeID, reference) in generatedEntries where subshapeID.featureID == featureID {
+            guard case .edge(let edgeID) = reference else { continue }
+            if edgeSubshapeIDs[edgeID] == nil {
+                edgeSubshapeIDs[edgeID] = subshapeID
+                if let edge = model.edges[edgeID] {
+                    edgeDisplayPointsByID[edgeID] = edgeDisplayPoints(
+                        edge, model: model,
+                        tolerance: evaluatedDocument.configuration.tolerance,
+                        tessellationOptions: evaluatedDocument.configuration.tessellationOptions
+                            .featureOverrides[featureID]
+                            ?? evaluatedDocument.configuration.tessellationOptions
+                    )
+                }
+            }
+        }
+        var openBoundaryLoopIDByEdgeID: [EdgeID: String] = [:]
+        if let body = model.bodies[bodyID] {
+            for loop in boundaryLoopResolver.loops(in: body, model: model)
+            where loop.traversals.isEmpty == false {
+                let stableSubshapeIDs = loop.traversals.compactMap { edgeSubshapeIDs[$0.edgeID] }
+                guard stableSubshapeIDs.count == loop.traversals.count,
+                      let canonicalID = stableSubshapeIDs.min(by: GeneratedSubshapeIdentity.areInIncreasingOrder) else {
+                    continue
+                }
+                var loopDisplayPoints: [EdgeID: [Point3D]] = [:]
+                for traversal in loop.traversals {
+                    guard let points = edgeDisplayPointsByID[traversal.edgeID] else {
+                        loopDisplayPoints.removeAll(keepingCapacity: false)
+                        break
+                    }
+                    loopDisplayPoints[traversal.edgeID] = points
+                }
+                guard loopDisplayPoints.count == loop.traversals.count else { continue }
+                let loopID = GeneratedSubshapeIdentity.string(for: canonicalID)
+                for traversal in loop.traversals {
+                    openBoundaryLoopIDByEdgeID[traversal.edgeID] = loopID
+                    edgeDisplayPointsByID[traversal.edgeID] = loopDisplayPoints[traversal.edgeID]
+                }
+            }
+        }
         // Every generated face of this feature, whether or not it also has the
         // outer-loop polygon `faces` requires, so that mesh provenance is
         // resolved from the kernel's own record rather than from what a polygon
         // hit test happened to be able to represent.
         var faceComponentIDs: [FaceID: SelectionComponentID] = [:]
 
-        for (subshapeID, reference) in evaluatedDocument.subshapes.entries.sorted(by: {
-            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
-        }) {
+        for (subshapeID, reference) in generatedEntries {
             guard subshapeID.featureID == featureID else {
                 continue
             }
@@ -119,7 +165,9 @@ public struct BodyDisplaySnapshotService: Sendable {
                 edges.append(BodyDisplaySnapshot.Topology.Edge(
                     componentID: componentID,
                     start: start,
-                    end: end
+                    end: end,
+                    displayPoints: edgeDisplayPointsByID[edgeID] ?? [],
+                    openBoundaryLoopID: openBoundaryLoopIDByEdgeID[edgeID]
                 ))
             case .vertex(let vertexID):
                 guard let vertex = model.vertices[vertexID] else {
@@ -138,6 +186,166 @@ public struct BodyDisplaySnapshotService: Sendable {
             vertices: vertices,
             meshFaceRuns: meshFaceRuns(for: mesh, componentIDs: faceComponentIDs)
         )
+    }
+
+    private func edgeDisplayPoints(
+        _ edge: Edge,
+        model: BRepModel,
+        tolerance: ModelingTolerance,
+        tessellationOptions: TessellationOptions
+    ) -> [Point3D]? {
+        guard let curve = model.geometry.curves[edge.curveID],
+              let start = model.vertices[edge.startVertexID]?.point,
+              let end = model.vertices[edge.endVertexID]?.point else {
+            return nil
+        }
+        do {
+            let validatedCurve = try ValidatedCurve3D(curve, tolerance: tolerance)
+            let startParameter = try edge.trim?.startParameter
+                ?? validatedCurve.parameterProjection(of: start).parameter
+            let endParameter = try edge.trim?.endParameter
+                ?? validatedCurve.parameterProjection(of: end).parameter
+            guard startParameter.isFinite, endParameter.isFinite,
+                  startParameter != endParameter else {
+                return nil
+            }
+            let curveStart = try validatedCurve.point(at: startParameter)
+            let curveEnd = try validatedCurve.point(at: endParameter)
+            guard (curveStart - start).length <= tolerance.distance,
+                  (curveEnd - end).length <= tolerance.distance else {
+                return nil
+            }
+            let initialSegmentCount = displayCurveInitialSegmentCount(
+                for: curve,
+                from: startParameter,
+                to: endParameter
+            )
+            let maximumSegmentCount = 4_096
+            guard initialSegmentCount <= maximumSegmentCount else { return nil }
+
+            var points: [Point3D] = []
+            points.reserveCapacity(initialSegmentCount + 1)
+            var processedSegmentCount = 0
+
+            func append(
+                from lowerParameter: Double,
+                lowerPoint: Point3D,
+                to upperParameter: Double,
+                upperPoint: Point3D,
+                depth: Int
+            ) throws -> Bool {
+                processedSegmentCount += 1
+                guard processedSegmentCount <= maximumSegmentCount * 2 - 1 else {
+                    return false
+                }
+                let middleParameter = lowerParameter + (upperParameter - lowerParameter) * 0.5
+                guard middleParameter > min(lowerParameter, upperParameter),
+                      middleParameter < max(lowerParameter, upperParameter) else {
+                    return false
+                }
+                let middlePoint = try validatedCurve.point(at: middleParameter)
+                let chord = upperPoint - lowerPoint
+                let chordLength = chord.length
+                guard chordLength.isFinite, chordLength > tolerance.distance else {
+                    return false
+                }
+                let chordDirection = try chord.normalized(tolerance: tolerance.distance)
+                let differential = try validatedCurve.differentialGeometry(at: middleParameter)
+                let tangent = try differential.firstDerivative.normalized(tolerance: tolerance.distance)
+                let orientedTangent = upperParameter > lowerParameter ? tangent : -tangent
+                let tangentDot = min(max(chordDirection.dot(orientedTangent), -1), 1)
+                let tangentDeviation = acos(tangentDot)
+                let deviation = pointToSegmentDistance(
+                    middlePoint,
+                    start: lowerPoint,
+                    end: upperPoint
+                )
+                let satisfiesEdgeLength = tessellationOptions.maxEdgeLength.map {
+                    chordLength <= $0
+                } ?? true
+                if deviation <= tessellationOptions.linearTolerance,
+                   tangentDeviation <= tessellationOptions.angularTolerance,
+                   satisfiesEdgeLength {
+                    points.append(upperPoint)
+                    return points.count <= maximumSegmentCount + 1
+                }
+                guard depth < 24 else { return false }
+                return try append(
+                    from: lowerParameter,
+                    lowerPoint: lowerPoint,
+                    to: middleParameter,
+                    upperPoint: middlePoint,
+                    depth: depth + 1
+                ) && append(
+                    from: middleParameter,
+                    lowerPoint: middlePoint,
+                    to: upperParameter,
+                    upperPoint: upperPoint,
+                    depth: depth + 1
+                )
+            }
+
+            var lowerParameter = startParameter
+            var lowerPoint = start
+            points.append(start)
+            for index in 1...initialSegmentCount {
+                let fraction = Double(index) / Double(initialSegmentCount)
+                let upperParameter = startParameter + (endParameter - startParameter) * fraction
+                let upperPoint = index == initialSegmentCount
+                    ? end
+                    : try validatedCurve.point(at: upperParameter)
+                guard try append(
+                    from: lowerParameter,
+                    lowerPoint: lowerPoint,
+                    to: upperParameter,
+                    upperPoint: upperPoint,
+                    depth: 0
+                ) else {
+                    return nil
+                }
+                lowerParameter = upperParameter
+                lowerPoint = upperPoint
+            }
+            return points.count >= 2 ? points : nil
+        } catch {
+            return nil
+        }
+    }
+
+    private func displayCurveInitialSegmentCount(
+        for curve: Curve3D,
+        from start: Double,
+        to end: Double
+    ) -> Int {
+        let minimumSegmentCount = 32
+        switch curve {
+        case .line:
+            return 1
+        case .bSpline(let spline):
+            let lower = min(start, end)
+            let upper = max(start, end)
+            let spanCount = spline.knots.indices.dropFirst().reduce(into: 0) { count, index in
+                guard spline.knots[index] > lower,
+                      spline.knots[index - 1] < upper,
+                      spline.knots[index] > spline.knots[index - 1] else { return }
+                count += 1
+            }
+            return max(minimumSegmentCount, min(spanCount * 8, 1_024))
+        default:
+            return minimumSegmentCount
+        }
+    }
+
+    private func pointToSegmentDistance(
+        _ point: Point3D,
+        start: Point3D,
+        end: Point3D
+    ) -> Double {
+        let direction = end - start
+        let lengthSquared = direction.dot(direction)
+        guard lengthSquared > 0 else { return (point - start).length }
+        let fraction = min(max((point - start).dot(direction) / lengthSquared, 0), 1)
+        return (point - (start + direction * fraction)).length
     }
 
     /// Converts the kernel's per-face triangle counts into triangle ranges.

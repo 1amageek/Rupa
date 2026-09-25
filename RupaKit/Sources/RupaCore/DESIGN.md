@@ -769,6 +769,16 @@ rather than answered with a neighbouring face. A run always carries the prepared
 `SelectionComponentID`: Core never substitutes a mesh identifier for a CAD
 identifier.
 
+Each generated edge carries its bounded B-rep curve's display
+polyline in stored edge direction. Failed sampling supplies an empty polyline,
+not an endpoint chord. Complete open loops additionally carry loop identity.
+The viewport may draw and hit-test that polyline,
+but may not reconstruct a curved edge from its endpoints. Boundary-loop
+affordance membership is published only when every edge in the loop has a valid
+display polyline; a failed sample omits the action rather than showing a false
+chord. These points are presentation data only and never replace exact B-rep
+geometry or topology identity.
+
 ### Object property effect contract
 
 Every object property declares the one effect its edit has, so a control the

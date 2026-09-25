@@ -220,6 +220,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case createBodyEdgeTreatment(name: String, target: SelectionTarget, treatment: BodyEdgeTreatment)
     case createSheetSurfaceEdit(name: String, target: SelectionTarget, edit: SheetSurfaceEdit)
+    case createSurfaceFill(name: String, target: SelectionTarget)
+    case createBoundaryBridge(
+        name: String,
+        first: SelectionTarget,
+        second: SelectionTarget,
+        reverseSecondBoundary: Bool
+    )
     case createBodyShell(name: String, target: SelectionTarget, thickness: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
@@ -611,6 +618,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createBodyEdgeTreatment"
         case .createSheetSurfaceEdit:
             "createSheetSurfaceEdit"
+        case .createSurfaceFill:
+            "createSurfaceFill"
+        case .createBoundaryBridge:
+            "createBoundaryBridge"
         case .createBodyShell:
             "createBodyShell"
         case .filletBodyEdges:
@@ -807,6 +818,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .chamferBodyEdges,
              .createBodyEdgeTreatment,
              .createSheetSurfaceEdit,
+             .createSurfaceFill,
+             .createBoundaryBridge,
              .createBodyShell,
              .filletBodyEdges,
              .moveBodyEdge,
