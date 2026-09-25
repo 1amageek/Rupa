@@ -148,7 +148,6 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
                 featureTokenByID: featureTokenByID
             )
         }
-        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDTokenByID)
         features = try orderedFeatureIDs.map { featureID in
             guard let feature = cadDocument.designGraph.nodes[featureID] else {
                 throw EditorError(
@@ -159,7 +158,7 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
             return try PatternArrayDefinitionFeatureIdentity(
                 feature: feature,
                 featureToken: try Self.featureToken(for: featureID, featureTokenByID: featureTokenByID),
-                remapper: remapper
+                featureIDTokenByID: featureIDTokenByID
             )
         }
     }
@@ -349,13 +348,14 @@ private struct PatternArrayDefinitionFeatureIdentity: Encodable {
     init(
         feature: FeatureNode,
         featureToken: String,
-        remapper: PatternArrayFeatureIDRemapper
+        featureIDTokenByID: [FeatureID: FeatureID]
     ) throws {
+        let tokenized = try feature.remappingFeatureReferences(featureIDTokenByID)
         self.featureToken = featureToken
         name = feature.name
-        operation = try remapper.remappedOperation(feature.operation)
-        inputs = try feature.inputs.map(remapper.remappedInput).map(PatternArrayDefinitionFeatureInputIdentity.init)
-        outputs = try feature.outputs.map(remapper.remappedOutput).map(PatternArrayDefinitionFeatureOutputIdentity.init)
+        operation = tokenized.operation
+        inputs = tokenized.inputs.map(PatternArrayDefinitionFeatureInputIdentity.init)
+        outputs = tokenized.outputs.map(PatternArrayDefinitionFeatureOutputIdentity.init)
         isSuppressed = feature.isSuppressed
     }
 }

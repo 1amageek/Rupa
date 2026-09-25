@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public enum BodySourceSectionReference: Codable, Hashable, Sendable {
     case profile(ProfileReference)
@@ -26,6 +27,23 @@ public enum BodySourceSectionReference: Codable, Hashable, Sendable {
             return .profile
         case .curve:
             return .curve
+        }
+    }
+
+    /// The reference with its source feature replaced through `featureIDs`.
+    func remappingFeatureIDs(_ featureIDs: [FeatureID: FeatureID]) throws -> BodySourceSectionReference {
+        guard let replacement = featureIDs[featureID] else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "A body source section can only name a cloned source feature."
+            )
+        }
+        switch self {
+        case .profile(var profile):
+            profile.featureID = replacement
+            return .profile(profile)
+        case .curve:
+            return .curve(replacement)
         }
     }
 

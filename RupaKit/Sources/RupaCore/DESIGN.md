@@ -1,9 +1,12 @@
 # RupaCore Source Authority Design
 
-Pattern cloning remaps both Bridge boundary references through the cloned
-dependency map, preserving their signatures and orientation. Missing cloned
-dependencies fail explicitly instead of retaining references to original bodies.
-`PatternArrayFeatureIDRemapperTests` verifies both-source remapping and refusal.
+Pattern cloning, definition identity and structure fingerprints remap feature
+references only through Swift-CAD's `FeatureNode.remappingFeatureReferences`,
+which owns every reference an operation carries (see the
+[CADIR feature reference contract](../../../swift-CAD/Sources/CADIR/DESIGN.md#feature-references)).
+Rupa remaps only its own product metadata: scene node references and
+`BodySourceSectionReference`. Missing cloned dependencies fail explicitly
+instead of retaining references to original features.
 
 Body source-section metadata preserves an explicit nonnegative profile index
 across encoding and decoding. Missing profile indexes are invalid payloads,

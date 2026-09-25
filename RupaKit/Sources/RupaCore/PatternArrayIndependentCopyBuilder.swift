@@ -216,22 +216,20 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         cadDocument: CADDocument,
         outputIndex: Int
     ) throws -> [FeatureNode] {
-        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
         return try sourceFeatureIDs.map { sourceFeatureID in
-            guard var feature = cadDocument.designGraph.nodes[sourceFeatureID],
+            guard let source = cadDocument.designGraph.nodes[sourceFeatureID],
                   let clonedFeatureID = featureIDMap[sourceFeatureID] else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Independent-copy pattern array feature closure contains a missing CAD feature."
                 )
             }
+            // Swift-CAD owns which operation fields name other features.
+            var feature = try source.remappingFeatureReferences(featureIDMap)
             feature.id = clonedFeatureID
             if let name = feature.name {
                 feature.name = "\(name) Copy \(outputIndex + 1)"
             }
-            feature.inputs = try feature.inputs.map(remapper.remappedInput)
-            feature.outputs = try feature.outputs.map(remapper.remappedOutput)
-            feature.operation = try remapper.remappedOperation(feature.operation)
             return feature
         }
     }
@@ -306,23 +304,31 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         _ reference: SceneNodeReference,
         using featureIDMap: [FeatureID: FeatureID]
     ) throws -> SceneNodeReference {
-        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
+        func remappedFeatureID(_ featureID: FeatureID) throws -> FeatureID {
+            guard let remapped = featureIDMap[featureID] else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Pattern array scene references can only name cloned source features."
+                )
+            }
+            return remapped
+        }
         switch reference.kind {
         case .feature:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Feature scene references require a feature ID.")
             }
-            return .feature(try remapper.remappedFeatureID(featureID))
+            return .feature(try remappedFeatureID(featureID))
         case .body:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Body scene references require a feature ID.")
             }
-            return .body(try remapper.remappedFeatureID(featureID))
+            return .body(try remappedFeatureID(featureID))
         case .sketch:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Sketch scene references require a feature ID.")
             }
-            return .sketch(try remapper.remappedFeatureID(featureID))
+            return .sketch(try remappedFeatureID(featureID))
         case .componentInstance:
             throw EditorError(
                 code: .commandInvalid,
@@ -339,7 +345,6 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         _ object: ObjectDescriptor,
         using featureIDMap: [FeatureID: FeatureID]
     ) throws -> ObjectDescriptor {
-        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
         guard object.category != .componentInstance else {
             throw EditorError(
                 code: .commandInvalid,
@@ -349,7 +354,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         var clonedObject = object
         try clonedObject.remapCADRepresentations(using: featureIDMap)
         if let sourceSection = object.sourceSection {
-            clonedObject.sourceSection = try remapper.remappedBodySourceSectionReference(sourceSection)
+            clonedObject.sourceSection = try sourceSection.remappingFeatureIDs(featureIDMap)
         }
         return clonedObject
     }

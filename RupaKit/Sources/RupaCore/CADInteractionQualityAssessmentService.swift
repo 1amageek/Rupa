@@ -412,7 +412,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/PatternArrayDefinitionIdentity.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayDefinitionIdentityService.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayFeatureIDTokenMapService.swift",
-                        "RupaKit/Sources/RupaCore/PatternArrayFeatureIDRemapper.swift",
+                        "swift-CAD/Sources/CADIR/FeatureOperation+FeatureReferences.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayFeatureStructureFingerprintService.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayStableDigest.swift",
                         "RupaKit/Sources/RupaCore/PatternArraySummary.swift",

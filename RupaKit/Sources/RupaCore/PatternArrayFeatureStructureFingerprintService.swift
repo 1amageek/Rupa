@@ -14,9 +14,7 @@ struct PatternArrayFeatureStructureFingerprintService: Sendable {
         featureIDs: [FeatureID],
         cadDocument: CADDocument
     ) throws -> [PatternArrayFeatureStructureFingerprint] {
-        let remapper = PatternArrayFeatureIDRemapper(
-            featureIDMap: try PatternArrayFeatureIDTokenMapService().tokenMap(for: featureIDs)
-        )
+        let tokenMap = try PatternArrayFeatureIDTokenMapService().tokenMap(for: featureIDs)
         return try featureIDs.map { featureID in
             guard let feature = cadDocument.designGraph.nodes[featureID] else {
                 throw EditorError(
@@ -24,10 +22,11 @@ struct PatternArrayFeatureStructureFingerprintService: Sendable {
                     message: "Pattern array feature fingerprint requires existing CAD features."
                 )
             }
+            let tokenized = try feature.remappingFeatureReferences(tokenMap)
             let payload = PatternArrayFeatureStructurePayload(
-                operation: try remapper.remappedOperation(feature.operation),
-                inputs: try feature.inputs.map(remapper.remappedInput),
-                outputs: try feature.outputs.map(remapper.remappedOutput),
+                operation: tokenized.operation,
+                inputs: tokenized.inputs,
+                outputs: tokenized.outputs,
                 isSuppressed: feature.isSuppressed
             )
             let encoder = JSONEncoder()
