@@ -12,7 +12,7 @@ public func agentCylinderRadius(
 ) throws -> Double {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .extrude(extrude) = feature.operation,
-          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case let .sketch(sketch) = profileFeature.operation else {
         throw EditorError(
             code: .referenceUnresolved,

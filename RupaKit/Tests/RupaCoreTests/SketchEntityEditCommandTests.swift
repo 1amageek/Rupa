@@ -1202,7 +1202,7 @@ import Testing
 
     let after = try SketchEntitySnapshotService().snapshot(document: session.document)
     let lines = after.entries.filter {
-        $0.sourceFeatureID == extrude.profile.featureID.description &&
+        $0.sourceFeatureID == extrude.section.featureID.description &&
             $0.entityKind == "line"
     }
     #expect(result.commandName == "offsetCurve")

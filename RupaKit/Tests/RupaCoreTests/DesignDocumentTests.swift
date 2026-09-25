@@ -2300,7 +2300,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
         Issue.record("Expected an extrude feature.")
         return
     }
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case let .sketch(sketch) = profileFeature.operation else {
         Issue.record("Expected a sketch profile.")
         return
@@ -2347,7 +2347,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     }
     let depth = try resolvedLength(extrude.distance, parameters: document.cadDocument.parameters)
     #expect(abs(depth - 0.75) < 0.000_000_000_001)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case let .sketch(sketch) = profileFeature.operation else {
         Issue.record("Expected a sketch profile.")
         return
@@ -2398,7 +2398,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     }
     let depth = try resolvedLength(extrude.distance, parameters: document.cadDocument.parameters)
     #expect(abs(depth - 2.5) < 0.000_000_000_001)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case let .sketch(sketch) = profileFeature.operation else {
         Issue.record("Expected a sketch profile.")
         return

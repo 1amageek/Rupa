@@ -29,6 +29,42 @@ Parent: [RupaKit package design](../../DESIGN.md). Children include
 
 ## Responsibilities and Boundaries
 
+Revolve source creation consumes the shared section reference and explicit body
+kind. Its transaction preserves the source and commits the feature, section
+provenance and matching Solid/Surface object metadata together. Curve sections
+cannot request Solid output. Sheet measurement uses evaluated BRep geometry,
+not a closed-profile area or solid-volume approximation. Profile authoring
+conveniences delegate to this one transaction path.
+
+Loft preserves an ordered array of shared section references with per-section
+controls. Core admits each declared profile or curve output and records the same
+role in graph inputs and Product provenance. Curve input requires Sheet output;
+the native evaluator owns exact span correspondence and geometric refusal.
+`setLoft` replaces an existing Loft source through the same EditorCommand/store
+authority, preserving its feature ID, output kind, suppression, scene identities
+and appearance. Native replacement updates input dependencies; product provenance
+tracks the new first section. Source validation occurs on a candidate document
+before assignment. EditorSession/workspace staging owns geometric admission and
+Undo/Redo. Switching Sheet/Solid during replacement is refused because it changes
+the published output role; creation owns the output-kind choice.
+Curve section parameter domains belong to the native feature reference and are
+preserved during pattern source remapping. Product `BodySourceSectionReference`
+is source identity provenance only, not the authority for reconstructing the
+feature's trim controls.
+
+`DesignDocument.modelingSectionReference(for:)` classifies a whole source for
+section operations. `explicitModelingSectionReference` owns explicit selected
+region/curve interpretation for all consumers, verifies component provenance,
+and rejects conflicting references from the same scene source. Explicit input
+precedes whole-source classification, including Sweep's section/path planning.
+The resolver returns nil only when no explicit section component was selected.
+Whole-source classification supports
+Extrude, Revolve, Loft and Sweep selection. A valid closed sketch region is a profile; an open
+sketch or explicit curve output is a curve. Only an open-profile result permits
+that distinction; unit, constraint and geometry errors propagate. Explicit curve
+element selections retain curve intent. Exact section evaluation remains the
+authority for ambiguity, bounds and output validity.
+
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on
 every construction plane. Cylinder wall offsets retain the center and change the
@@ -308,6 +344,23 @@ retained references observe the same replacement. Core never silently makes a
 unique copy to satisfy a single scene selection.
 
 ## Contracts and Invariants
+
+Extrude section authoring routes profile and curve inputs through the same
+transaction in `DesignDocument+Solid`. The source reference determines the input
+port and retained object provenance. Curve sheets never enter primitive profile
+dimension/corner adapters or closed-profile display shortcuts. Sheet measurements
+come from evaluated BRep, before any sketch profile recognition. Source and
+product publication remain atomic on failure.
+
+Surface Creation uses the existing EditorCommand and document transaction
+boundary. `extrudeProfile.resultKind` is retained in the native Extrude feature:
+solid outputs declare `.body`/`.solid`, sheet outputs declare `.sheet`/`.surface`.
+Both consume the same referenced closed profile. Sheet generation removes caps
+in the native B-rep builder, not in presentation. Invalid amounts or profiles
+retain the existing evaluation failure/rollback contract. See the operation
+inventory in [Modeling](../RupaUI/Modeling/DESIGN.md#surface-creation-foundation).
+Sweep selection admits one distinct profile section; multiple profiles are a
+typed refusal rather than silently choosing the first. Loft owns that input.
 
 ### Product object naming contract
 

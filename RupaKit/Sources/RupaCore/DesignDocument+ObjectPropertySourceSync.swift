@@ -822,7 +822,8 @@ extension DesignDocument {
         for bodyFeatureID in cadDocument.designGraph.order {
             guard let feature = cadDocument.designGraph.nodes[bodyFeatureID],
                   case let .extrude(extrude) = feature.operation,
-                  extrude.profile.featureID == featureID else {
+                  extrude.section.isProfile,
+                  extrude.section.featureID == featureID else {
                 continue
             }
             try synchronizeObjectPropertiesFromSource(
@@ -851,11 +852,12 @@ extension DesignDocument {
             Self.setLengthProperty(.cornerRadius, to: radius, object: &object, definition: definition)
         }
         guard case let .extrude(extrude) = cadDocument.designGraph
-            .nodes[boxExtrusionFeatureID(featureID)]?.operation else {
+            .nodes[boxExtrusionFeatureID(featureID)]?.operation,
+              extrude.section.isProfile else {
             return
         }
         try updateTypedObjectProperties(
-            featureID: extrude.profile.featureID,
+            featureID: extrude.section.featureID,
             category: .sketch,
             objectRegistry: objectRegistry
         ) { object, definition in

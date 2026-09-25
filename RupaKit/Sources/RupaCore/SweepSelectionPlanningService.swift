@@ -104,7 +104,12 @@ public struct SweepSelectionPlanningService: Sendable {
                 candidates.append(candidate)
             }
         }
-        let profileReference = candidates.compactMap(\.profileReference).first
+        let profileReferences = Set(candidates.compactMap(\.profileReference))
+        guard profileReferences.count <= 1 else {
+            throw EditorError(code: .commandInvalid,
+                message: "Sweep requires one section profile. Use Loft for multiple profile sections.")
+        }
+        let profileReference = profileReferences.first
         let allCurveFeatureIDs = uniqueFeatureIDs(candidates.compactMap(\.curveFeatureID))
         let targetCurveFeatureID = candidates.last { $0.isTarget }?.curveFeatureID
         let section: SectionReference?
@@ -165,6 +170,19 @@ public struct SweepSelectionPlanningService: Sendable {
             return nil
         }
         let referencedFeatureID = sceneNode.reference?.featureID
+        if let referencedFeatureID,
+           let section = try document.explicitModelingSectionReference(
+               for: referencedFeatureID, sceneNodeID: sceneNode.id, selectedTargets: selection.selectedTargets) {
+            switch section {
+            case .profile(let reference):
+                return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: reference, curveFeatureID: nil)
+            case .curve(let reference):
+                guard isCurveFeature(reference.featureID) else {
+                    throw EditorError(code: .commandInvalid, message: "Selected source does not produce a curve.")
+                }
+                return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: nil, curveFeatureID: reference.featureID)
+            }
+        }
         let sketchFeatureID = sceneNode.reference?.kind == .sketch ? referencedFeatureID : nil
         var profileReference: ProfileReference?
         for candidateReference in [
@@ -197,25 +215,10 @@ public struct SweepSelectionPlanningService: Sendable {
     private func isSupportedProfile(_ featureID: FeatureID) throws -> Bool {
         guard let feature = document.cadDocument.designGraph.nodes[featureID],
               feature.outputs.contains(where: { $0.role == .profile }),
-              case .sketch(let sketch) = feature.operation else {
+              case .sketch = feature.operation else {
             return false
         }
-        do {
-            let parameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-            let profiles = try SketchProfileExtractor(
-                tolerance: document.modelingSettings.tolerance
-            ).extractProfiles(
-                from: sketch,
-                sourceFeatureID: featureID,
-                parameters: parameters
-            )
-            return profiles.isEmpty == false
-        } catch {
-            if error is SketchError || error is GeometryError || error is UnitError {
-                return false
-            }
-            throw error
-        }
+        return try document.modelingSectionReference(for: featureID).isProfile
     }
 
     private func isCurveFeature(_ featureID: FeatureID) -> Bool {

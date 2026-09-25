@@ -37,7 +37,7 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
         case .sweep:
             "Sweep"
         case .surface:
-            "Surface"
+            "Surface Creation"
         case .mesh:
             "Mesh"
         case .measure:
@@ -68,7 +68,7 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
         case .sweep:
             "Create Sweep from selected profile, selected guides, and clicked path"
         case .surface:
-            "Open sheet Loft draft"
+            "Create sheets with Plane, Extrude, Sweep, Loft, Patch or Boundary Bridge"
         case .mesh:
             "Edit Authored Mesh elements or make selected CAD editable"
         case .measure:
@@ -103,7 +103,7 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
         case .sweep:
             "Select the ordered profile and guides, then click the path."
         case .surface:
-            "Select at least two ordered profiles, then Preview."
+            "Choose a surface operation and its inputs, then Preview and Apply."
         case .mesh:
             "Select Authored Mesh elements, or make the selected CAD editable."
         case .measure:

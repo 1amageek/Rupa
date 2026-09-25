@@ -40,7 +40,7 @@ import Testing
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(sceneNodeID(for: bodyFeatureID, in: session.document))
     let beforeDepth = try extrudeDepth(for: bodyFeatureID, in: session.document)
-    let beforeTranslationY = translationY(for: bodyNodeID, in: session.document)
+    let beforeTranslationZ = translationZ(for: bodyNodeID, in: session.document)
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceFront))
 
     let result = try session.execute(
@@ -51,14 +51,16 @@ import Testing
     )
 
     let afterDepth = try extrudeDepth(for: bodyFeatureID, in: session.document)
-    let afterTranslationY = translationY(for: bodyNodeID, in: session.document)
+    let afterTranslationZ = translationZ(for: bodyNodeID, in: session.document)
     #expect(result.commandName == "offsetBodyFace")
     #expect(nearlyEqual(afterDepth, beforeDepth + 0.0015))
-    #expect(nearlyEqual(afterTranslationY, beforeTranslationY - 0.0015))
+    // The default XY sketch extrudes along Z; its opposite face stays at the same world depth.
+    #expect(nearlyEqual(afterTranslationZ, beforeTranslationZ - 0.0015))
+    #expect(nearlyEqual(afterTranslationZ + afterDepth, beforeTranslationZ + beforeDepth))
 
     _ = try session.undo()
     #expect(nearlyEqual(try extrudeDepth(for: bodyFeatureID, in: session.document), beforeDepth))
-    #expect(nearlyEqual(translationY(for: bodyNodeID, in: session.document), beforeTranslationY))
+    #expect(nearlyEqual(translationZ(for: bodyNodeID, in: session.document), beforeTranslationZ))
 }
 
 @MainActor
@@ -240,7 +242,7 @@ private func rectangleBounds(
     in document: DesignDocument
 ) throws -> (minX: Double, minY: Double, maxX: Double, maxY: Double) {
     let extrude = try extrudeFeature(for: featureID, in: document)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case .sketch(let sketch) = profileFeature.operation else {
         Issue.record("Body profile must be a sketch.")
         return (0.0, 0.0, 0.0, 0.0)
@@ -290,7 +292,7 @@ private func cylinderRadius(
     in document: DesignDocument
 ) throws -> Double {
     let extrude = try extrudeFeature(for: featureID, in: document)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case .sketch(let sketch) = profileFeature.operation else {
         Issue.record("Cylinder profile must be a sketch.")
         return 0.0
@@ -314,7 +316,7 @@ private func length(
     return quantity.value
 }
 
-private func translationY(
+private func translationZ(
     for sceneNodeID: SceneNodeID,
     in document: DesignDocument
 ) -> Double {
@@ -322,7 +324,7 @@ private func translationY(
           node.localTransform.matrix.values.count == 16 else {
         return 0.0
     }
-    return node.localTransform.matrix.values[7]
+    return node.localTransform.matrix.values[11]
 }
 
 private func nearlyEqual(

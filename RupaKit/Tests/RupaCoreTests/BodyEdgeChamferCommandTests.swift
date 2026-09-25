@@ -852,7 +852,7 @@ private func chamferProfileLines(
     in document: DesignDocument
 ) throws -> [(start: (x: Double, y: Double), end: (x: Double, y: Double))] {
     let extrude = try chamferExtrudeFeature(for: featureID, in: document)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case .sketch(let sketch) = profileFeature.operation else {
         Issue.record("Body profile must be a sketch.")
         return []
@@ -883,7 +883,7 @@ private func appendDistanceDimensionToFirstProfileLine(
     in document: inout DesignDocument
 ) throws {
     let extrude = try chamferExtrudeFeature(for: featureID, in: document)
-    guard var profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+    guard var profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case var .sketch(sketch) = profileFeature.operation,
           let (lineID, line) = sketch.entities.compactMap({ id, entity -> (SketchEntityID, SketchLine)? in
               if case .line(let line) = entity {
@@ -914,7 +914,7 @@ private func appendDistanceDimensionToFirstProfileLine(
         )
     )
     profileFeature.operation = .sketch(sketch)
-    document.cadDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
+    document.cadDocument.designGraph.nodes[extrude.section.featureID] = profileFeature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 }
 
@@ -924,7 +924,7 @@ private func replaceFirstProfilePointX(
     in document: inout DesignDocument
 ) throws {
     let extrude = try chamferExtrudeFeature(for: featureID, in: document)
-    guard var profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+    guard var profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case var .sketch(sketch) = profileFeature.operation,
           let lineID = sketch.entities.first(where: { _, entity in
               if case .line = entity {
@@ -939,7 +939,7 @@ private func replaceFirstProfilePointX(
     line.start.x = expression
     sketch.entities[lineID] = .line(line)
     profileFeature.operation = .sketch(sketch)
-    document.cadDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
+    document.cadDocument.designGraph.nodes[extrude.section.featureID] = profileFeature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
 }
 
@@ -948,7 +948,7 @@ private func chamferProfileArcs(
     in document: DesignDocument
 ) throws -> [(center: (x: Double, y: Double), radius: Double, startAngle: Double, endAngle: Double)] {
     let extrude = try chamferExtrudeFeature(for: featureID, in: document)
-    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.section.featureID])
     guard case .sketch(let sketch) = profileFeature.operation else {
         Issue.record("Body profile must be a sketch.")
         return []

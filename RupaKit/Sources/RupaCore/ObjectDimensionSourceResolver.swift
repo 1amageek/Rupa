@@ -42,7 +42,8 @@ package struct ObjectDimensionSourceResolver: Sendable {
         }
         guard let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
               case let .extrude(extrude) = feature.operation,
-              let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+              extrude.section.isProfile,
+              let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,

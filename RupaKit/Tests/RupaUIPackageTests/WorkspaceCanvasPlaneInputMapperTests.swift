@@ -307,7 +307,7 @@ import Testing
     #expect(result.commandName == "createExtrudedRectangleFromCorners")
     #expect(result.didMutate)
     #expect(sourceSketch.plane == activePlane)
-    #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
+    #expect(extrude.section.featureID == session.document.cadDocument.designGraph.order.first)
 }
 
 @MainActor
@@ -364,7 +364,7 @@ import Testing
     #expect(result.commandName == "createExtrudedRectangleFromCorners")
     #expect(result.didMutate)
     #expect(sourceSketch.plane == activePlane)
-    #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
+    #expect(extrude.section.featureID == session.document.cadDocument.designGraph.order.first)
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
 }

@@ -209,6 +209,23 @@ public struct MeasurementService {
             }
         }
 
+        func appendEvaluatedSheet(sourceFeatureID: FeatureID, node: FeatureNode, featureID: FeatureID) throws {
+            var skipReason: String?
+            let sheet = try measureEvaluatedSheet(
+                featureID: featureID, featureName: node.name,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: document.cadDocument.designGraph.nodes[sourceFeatureID]?.name,
+                evaluatedDocument: evaluatedDocument(), unsupportedReason: &skipReason)
+            guard let sheet else {
+                let detail = skipReason.map { " \($0)" } ?? ""
+                diagnostics.append(EditorDiagnostic(severity: .info,
+                    message: "Measurement skipped a sheet outside the supported evaluation subset.\(detail)"))
+                return
+            }
+            sheets.append(sheet)
+            bounds.include(sheet.bounds)
+        }
+
         func measureExtrudeCase(_ extrude: ExtrudeFeature, node: FeatureNode, featureID: FeatureID) throws {
             guard !isSupersededInDocumentScope(featureID) else {
                 return
@@ -217,7 +234,11 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            guard let sourceNode = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+            if extrude.resultKind == .sheet {
+                try appendEvaluatedSheet(sourceFeatureID: extrude.section.featureID, node: node, featureID: featureID)
+                return
+            }
+            guard let sourceNode = document.cadDocument.designGraph.nodes[extrude.section.featureID],
                   case .sketch(let sourceSketch) = sourceNode.operation else {
                 diagnostics.append(
                     EditorDiagnostic(
@@ -231,8 +252,8 @@ public struct MeasurementService {
                 sourceSketch,
                 parameters: document.cadDocument.parameters
             )
-            let profile = try profileCache[extrude.profile.featureID] ?? measureProfile(
-                featureID: extrude.profile.featureID,
+            let profile = try profileCache[extrude.section.featureID] ?? measureProfile(
+                featureID: extrude.section.featureID,
                 featureName: sourceNode.name,
                 sketch: sourceSketch,
                 parameters: document.cadDocument.parameters
@@ -246,46 +267,20 @@ public struct MeasurementService {
                 )
                 return
             }
-            profileCache[extrude.profile.featureID] = profile
+            profileCache[extrude.section.featureID] = profile
             includeSketch(
-                featureID: extrude.profile.featureID,
+                featureID: extrude.section.featureID,
                 sketch: sourceSketch,
                 sketchBounds: sourceSketchBounds,
                 profile: profile
             )
-            if extrude.resultKind == .sheet {
-                // An uncapped extrusion bounds no volume, so it is measured as the sheet it is
-                // rather than as the solid its profile and distance would enclose.
-                var evaluatedSheetSkipReason: String?
-                let sheet = try measureEvaluatedSheet(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: extrude.profile.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSheetSkipReason
-                )
-                guard let sheet else {
-                    let detail = evaluatedSheetSkipReason.map { " \($0)" } ?? ""
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .info,
-                            message: "Measurement skipped an extrude sheet outside the supported evaluation subset.\(detail)"
-                        )
-                    )
-                    return
-                }
-                sheets.append(sheet)
-                bounds.include(sheet.bounds)
-                return
-            }
             var evaluatedSkipReason: String?
             let solid: MeasurementResult.Solid?
             if profile.result.kind == .curveLoop {
                 solid = try measureEvaluatedSolid(
                     featureID: featureID,
                     featureName: node.name,
-                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureID: extrude.section.featureID,
                     sourceFeatureName: sourceNode.name,
                     evaluatedDocument: evaluatedDocument(),
                     unsupportedReason: &evaluatedSkipReason
@@ -294,7 +289,7 @@ public struct MeasurementService {
                 solid = try measureSolid(
                     featureID: featureID,
                     featureName: node.name,
-                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureID: extrude.section.featureID,
                     sourceFeatureName: sourceNode.name,
                     profile: profile,
                     extrude: extrude,
@@ -323,7 +318,11 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.profile.featureID],
+            if revolve.resultKind == .sheet {
+                try appendEvaluatedSheet(sourceFeatureID: revolve.section.featureID, node: node, featureID: featureID)
+                return
+            }
+            guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.section.featureID],
                   case .sketch(let sourceSketch) = sourceNode.operation else {
                 diagnostics.append(
                     EditorDiagnostic(
@@ -337,8 +336,8 @@ public struct MeasurementService {
                 sourceSketch,
                 parameters: document.cadDocument.parameters
             )
-            let profile = try profileCache[revolve.profile.featureID] ?? measureProfile(
-                featureID: revolve.profile.featureID,
+            let profile = try profileCache[revolve.section.featureID] ?? measureProfile(
+                featureID: revolve.section.featureID,
                 featureName: sourceNode.name,
                 sketch: sourceSketch,
                 parameters: document.cadDocument.parameters
@@ -352,9 +351,9 @@ public struct MeasurementService {
                 )
                 return
             }
-            profileCache[revolve.profile.featureID] = profile
+            profileCache[revolve.section.featureID] = profile
             includeSketch(
-                featureID: revolve.profile.featureID,
+                featureID: revolve.section.featureID,
                 sketch: sourceSketch,
                 sketchBounds: sourceSketchBounds,
                 profile: profile
@@ -363,7 +362,7 @@ public struct MeasurementService {
             let solid = try measureEvaluatedSolid(
                 featureID: featureID,
                 featureName: node.name,
-                sourceFeatureID: revolve.profile.featureID,
+                sourceFeatureID: revolve.section.featureID,
                 sourceFeatureName: sourceNode.name,
                 evaluatedDocument: evaluatedDocument(),
                 unsupportedReason: &evaluatedSkipReason
@@ -875,6 +874,35 @@ public struct MeasurementService {
             bounds.include(sheet.bounds)
         }
 
+        func measureSurfaceFillCase(_ surfaceFill: SurfaceFillFeature, node: FeatureNode, featureID: FeatureID) throws {
+            guard !isSupersededInDocumentScope(featureID), shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            let sourceNode = document.cadDocument.designGraph.nodes[surfaceFill.targetFeatureID]
+            var evaluatedSkipReason: String?
+            let sheet = try measureEvaluatedSheet(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: surfaceFill.targetFeatureID,
+                sourceFeatureName: sourceNode?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let sheet else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped Surface Fill sheet.\(detail)"
+                    )
+                )
+                return
+            }
+            sheets.append(sheet)
+            bounds.include(sheet.bounds)
+        }
+
         func measureEvaluatedBodyOperationCase(
             node: FeatureNode,
             featureID: FeatureID,
@@ -949,6 +977,8 @@ public struct MeasurementService {
                 try measureFaceDraftCase(faceDraft, node: node, featureID: featureID)
             case .faceDelete(let faceDelete):
                 try measureFaceDeleteCase(faceDelete, node: node, featureID: featureID)
+            case .surfaceFill(let surfaceFill):
+                try measureSurfaceFillCase(surfaceFill, node: node, featureID: featureID)
             case .mirror(let mirror):
                 try measureEvaluatedBodyOperationCase(
                     node: node,
@@ -983,6 +1013,9 @@ public struct MeasurementService {
                     sourceFeatureID: featureID,
                     operationName: "Imported CAD"
                 )
+            case .involuteGear:
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID,
+                    sourceFeatureID: featureID, operationName: "Involute Gear")
             case .primitive:
                 try measureEvaluatedBodyOperationCase(
                     node: node,

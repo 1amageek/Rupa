@@ -703,7 +703,7 @@ struct SketchProfileSourcePropertyTests {
             Issue.record("A cube nests its rectangle profile under an extrude feature.")
             throw EditorError(code: .referenceUnresolved, message: "Not an extrude.")
         }
-        let profileFeatureID = extrude.profile.featureID
+        let profileFeatureID = extrude.section.featureID
         let nodeID = try #require(document.productMetadata.sceneNodes.values.first {
             $0.reference?.featureID == profileFeatureID
         }).id

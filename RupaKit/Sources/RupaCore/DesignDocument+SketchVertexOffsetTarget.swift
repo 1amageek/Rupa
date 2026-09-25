@@ -28,7 +28,8 @@ extension DesignDocument {
         let bodyFeatureID = resolvedTarget.featureID
         guard let bodyFeature = cadDocument.designGraph.nodes[bodyFeatureID],
               case let .extrude(extrude) = bodyFeature.operation,
-              let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
+              extrude.section.isProfile,
+              let profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -75,16 +76,16 @@ extension DesignDocument {
             operationName: operationName
         )
         let sketchSceneNodeID = try sketchSceneNodeID(
-            for: extrude.profile.featureID,
+            for: extrude.section.featureID,
             operationName: operationName
         )
         return GeneratedSketchVertexOffsetTarget(
-            featureID: extrude.profile.featureID,
+            featureID: extrude.section.featureID,
             target: SelectionTarget(
                 sceneNodeID: sketchSceneNodeID,
                 component: .sketchEntity(
                     SelectionComponentID.sketchEntity(
-                        featureID: extrude.profile.featureID,
+                        featureID: extrude.section.featureID,
                         entityID: endpoint.entityID
                     )
                 )

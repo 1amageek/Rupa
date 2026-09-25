@@ -143,7 +143,8 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
         -> [(label: String, kind: ObjectDimensionKind)] {
         guard let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
               case .extrude(let extrusion) = feature.operation,
-              let profile = document.cadDocument.designGraph.nodes[extrusion.profile.featureID],
+              extrusion.section.isProfile,
+              let profile = document.cadDocument.designGraph.nodes[extrusion.section.featureID],
               case .sketch(let sketch) = profile.operation else {
             throw EditorError(code: .referenceUnresolved, message: "Size controls require the source sketch frame.")
         }

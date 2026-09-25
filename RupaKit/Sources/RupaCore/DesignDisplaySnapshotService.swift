@@ -53,7 +53,8 @@ public struct DesignDisplaySnapshotService: Sendable {
             }
             switch feature.operation {
             case .extrude(let extrude):
-                guard let depthMeters = sketchService.resolvedLength(
+                guard extrude.section.isProfile,
+                      let depthMeters = sketchService.resolvedLength(
                     extrude.distance,
                     parameters: parameters
                 ) else {
@@ -61,7 +62,7 @@ public struct DesignDisplaySnapshotService: Sendable {
                 }
                 extrudes[featureID] = ExtrudeDisplaySnapshot(
                     featureID: featureID,
-                    profileFeatureID: extrude.profile.featureID,
+                    profileFeatureID: extrude.section.featureID,
                     depthMeters: depthMeters,
                     direction: extrude.direction
                 )

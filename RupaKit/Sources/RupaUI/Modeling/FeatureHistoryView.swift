@@ -51,6 +51,7 @@ func featureHistoryReorderCommand(
 
 struct FeatureHistoryView: View {
     @State private var lengthDraft: FeatureLengthDraft?
+    @State private var loftDraft: LoftFeatureDraft?
     let orderedFeatures: [FeatureNode]
     let parameters: ParameterTable
     let displayUnit: LengthDisplayUnit
@@ -133,6 +134,10 @@ struct FeatureHistoryView: View {
                     .foregroundStyle(feature.isSuppressed ? .secondary : .tertiary)
                     .accessibilityIdentifier("FeatureHistory.\(feature.id).status")
                 Menu {
+                    if case .loft = feature.operation {
+                        Button("Edit Loft…") { loftDraft = LoftFeatureDraft(feature: feature) }
+                            .contentShape(Rectangle())
+                    }
                     if let draft = FeatureLengthDraft(feature: feature, parameters: parameters, unit: displayUnit) {
                         Button("Edit Dimension…") { lengthDraft = draft }
                             .contentShape(Rectangle())
@@ -177,7 +182,20 @@ struct FeatureHistoryView: View {
                     onPreview(command, "Edit \(draft.title)")
                 })
         }
-        .onChange(of: orderedFeatures) { _, _ in lengthDraft = nil }
+        .sheet(item: $loftDraft) { draft in
+            LoftFeatureEditorView(draft: draft, namesByID: namesByID,
+                inputCandidates: Array(orderedFeatures.prefix { $0.id != draft.id }
+                    .filter { !$0.isSuppressed && $0.outputs.contains { $0.role == .curve || $0.role == .profile } }),
+                onCancel: { loftDraft = nil },
+                onPreview: { command in
+                    loftDraft = nil
+                    onPreview(command, "Edit \(draft.title)")
+                })
+        }
+        .onChange(of: orderedFeatures) { _, _ in
+            lengthDraft = nil
+            loftDraft = nil
+        }
     }
 
     private func reorder(_ featureID: FeatureID, offset: Int) {

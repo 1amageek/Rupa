@@ -128,8 +128,8 @@ enum CADCylinderOracle {
                   return false
               }),
               case .extrude(let extrude) = bodyFeature.operation,
-              extrude.profile.featureID == sketchFeatureID,
-              extrude.profile.profileIndex == 0,
+              extrude.section.featureID == sketchFeatureID,
+              extrude.section.profile?.profileIndex == 0,
               extrude.direction == .normal,
               extrude.operation == .newBody else {
             throw CADCylinderOracleError.mismatch(

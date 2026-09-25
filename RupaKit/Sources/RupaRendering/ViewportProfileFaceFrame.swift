@@ -14,7 +14,8 @@ struct ViewportProfileFaceFrame: Equatable, Sendable {
                         document: DesignDocument) throws -> Self {
         guard let feature = document.cadDocument.designGraph.nodes[item.featureID],
               case .extrude(let extrusion) = feature.operation,
-              let profile = document.cadDocument.designGraph.nodes[extrusion.profile.featureID],
+              extrusion.section.isProfile,
+              let profile = document.cadDocument.designGraph.nodes[extrusion.section.featureID],
               case .sketch(let sketch) = profile.operation,
               case .body(let body) = item.kind, let mesh = body.mesh,
               let first = mesh.positions.first else {

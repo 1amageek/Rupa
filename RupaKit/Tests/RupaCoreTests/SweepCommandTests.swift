@@ -2,6 +2,34 @@ import Testing
 import RupaCore
 import SwiftCAD
 
+@Test(.timeLimit(.minutes(1))) func explicitSectionSelectionPreservesIntentAndRejectsStaleComponents() throws {
+    var document = DesignDocument.empty()
+    let source = try document.createCircleSketch(name: "Section", plane: .xy,
+        center: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)), radius: .length(2, .millimeter))
+    let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(source) })
+    guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[source]?.operation else {
+        Issue.record("Expected sketch."); return
+    }
+    let entity = try #require(sketch.entityOrder.first)
+    let curve = SelectionTarget(sceneNodeID: node.id, component: .sketchEntity(.sketchEntity(featureID: source, entityID: entity)))
+    let region = SelectionTarget(sceneNodeID: node.id, component: .region(.profileRegion(featureID: source, profileIndex: 0)))
+    #expect(try document.explicitModelingSectionReference(for: source, sceneNodeID: node.id,
+        selectedTargets: [curve]) == .curve(CurveSectionReference(featureID: source)))
+    #expect(try document.explicitModelingSectionReference(for: source, sceneNodeID: node.id,
+        selectedTargets: [region]) == .profile(ProfileReference(featureID: source)))
+    #expect(try document.explicitModelingSectionReference(for: source, sceneNodeID: node.id,
+        selectedTargets: [SelectionTarget(sceneNodeID: node.id)]) == nil)
+    let stale = SelectionTarget(sceneNodeID: node.id,
+        component: .sketchEntity(.sketchEntity(featureID: source, entityID: SketchEntityID())))
+    let foreign = SelectionTarget(sceneNodeID: node.id,
+        component: .region(.profileRegion(featureID: FeatureID(), profileIndex: 0)))
+    for targets in [[curve, region], [stale], [foreign]] {
+        #expect(throws: EditorError.self) {
+            try document.explicitModelingSectionReference(for: source, sceneNodeID: node.id, selectedTargets: targets)
+        }
+    }
+}
+
 @Test func createSweepAddsSourceFeatureWithProfileAndPathReferences() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

@@ -15,7 +15,9 @@ struct ModelingOperationDraft: Equatable {
         case fillet = "Fillet"
         case chamfer = "Chamfer"
         case g2Blend = "G2 Blend"
-        case surfacePatch = "Surface Patch"
+        case surfacePatch = "Plane Surface"
+        case patch = "Patch"
+        case bridge = "Boundary Bridge (G0)"
         case surfaceOffset = "Sheet Offset"
         case surfaceExtend = "Extend Trim"
         case shell = "Shell"
@@ -25,8 +27,10 @@ struct ModelingOperationDraft: Equatable {
 
         /// Operations not already represented by a canvas placement tool.
         static var paletteOperations: [Self] {
-            allCases.filter { ![.box, .sphere, .cylinder, .sweep].contains($0) }
+            allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge].contains($0) }
         }
+
+        static let surfaceCreationOperations: [Self] = [.surfacePatch, .extrude, .revolve, .sweep, .loft, .patch, .bridge]
 
         var systemImage: String {
             switch self {
@@ -42,6 +46,8 @@ struct ModelingOperationDraft: Equatable {
             case .chamfer: "cube.transparent"
             case .g2Blend: "point.topleft.down.to.point.bottomright.curvepath"
             case .surfacePatch: "square.dashed"
+            case .patch: "square.dashed.inset.filled"
+            case .bridge: "rectangle.split.2x1"
             case .surfaceOffset: "square.3.layers.3d"
             case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
             case .shell: "shippingbox"
@@ -60,11 +66,19 @@ struct ModelingOperationDraft: Equatable {
     var origin = ["0", "0", "0"]
     var axis = ["0", "1", "0"]
     var angle = "360"
-    var symmetric = false
+    enum ExtrusionDirectionChoice: String, CaseIterable, Identifiable {
+        case normal = "Source normal"
+        case symmetric = "Symmetric normal"
+        case vector = "Vector"
+        var id: Self { self }
+    }
+    var extrusionDirection = ExtrusionDirectionChoice.normal
     var keepTools = false
     var booleanOperation = BooleanOperation.difference
     var sheet = false
+    var isSurfaceCreation = false
     var smooth = false
+    var loftDefaultTension = "1"
     var closesSectionLoop = false
     var uBounds = ["0", "1"]
     var vBounds = ["0", "1"]
@@ -72,6 +86,19 @@ struct ModelingOperationDraft: Equatable {
     var doubleHelical = false
     var approximationTolerance = ""
     var thickenSide = ThickenSide.positive
+    var reverseSecondBoundary = false
+    var loftSectionControls: [SceneNodeID: LoftSectionDraft] = [:]
+    var loftGuideNodeIDs: Set<SceneNodeID> = []
+
+    var createsSheet: Bool { sheet || isSurfaceCreation }
+
+    mutating func selectSurfaceOperation(_ operation: Kind) {
+        precondition(Kind.surfaceCreationOperations.contains(operation))
+        if name == kind.rawValue { name = operation.rawValue }
+        kind = operation
+        isSurfaceCreation = true
+        reverseSecondBoundary = false
+    }
 
     /// Opens a draft at the default the workspace scale publishes for what
     /// the kind is about to author.
@@ -107,12 +134,15 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .surfacePatch, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .surfacePatch, .patch, .bridge, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
 
     func command(in document: DesignDocument) throws -> EditorCommand {
+        guard !isSurfaceCreation || Kind.surfaceCreationOperations.contains(kind) else {
+            throw invalid("This operation does not provide Surface Creation output.")
+        }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw invalid("Enter an operation name.")
         }
@@ -165,15 +195,28 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .surfacePatch:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
-            guard features.count == 1, let feature = features.first else {
-                throw invalid("Select exactly one sketch profile.")
+            guard features.count == 1, let node = nodes.first else {
+                throw invalid("Select exactly one section source.")
             }
-            try requireProfileOutput(feature, in: document)
+            let section = try sectionReference(for: node.id, in: document)
+            guard createsSheet || section.isProfile else {
+                throw invalid("A selected curve requires Sheet output.")
+            }
             if kind == .extrude {
-                return .extrudeProfile(
-                    name: name, profile: ProfileReference(featureID: feature),
+                let direction: ExtrudeDirection
+                switch extrusionDirection {
+                case .normal: direction = .normal
+                case .symmetric: direction = .symmetric
+                case .vector:
+                    let vector = Vector3D(x: try number(axis[0], label: "Direction X"),
+                        y: try number(axis[1], label: "Direction Y"), z: try number(axis[2], label: "Direction Z"))
+                    direction = .vector(try vector.normalized(tolerance: document.modelingSettings.tolerance.distance))
+                }
+                return .extrudeSection(
+                    name: name, section: section,
                     distance: .length(try modelableLength(distance, label: "Distance", in: document), .meter),
-                    direction: symmetric ? .symmetric : .normal
+                    direction: direction,
+                    resultKind: createsSheet ? .sheet : .solid
                 )
             }
             let degrees = try number(angle, label: "Angle")
@@ -193,10 +236,12 @@ struct ModelingOperationDraft: Equatable {
                 ), direction: direction
             )
             try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
-            return .createRevolve(name: name, profile: ProfileReference(featureID: feature), axis: revolveAxis, angle: .angle(degrees, .degree))
+            return .revolveSection(name: name, section: section, axis: revolveAxis,
+                angle: .angle(degrees, .degree), resultKind: createsSheet ? .sheet : .solid)
         case .sweep:
             let degrees = try number(twistAngle, label: "Twist angle")
             var options = SweepOptions()
+            options.resultKind = createsSheet ? .sheet : .solid
             if degrees != 0 || doubleHelical {
                 let allowance = try length(approximationTolerance, label: "Positional approximation allowance")
                 guard allowance > 0 else { throw invalid("Positional approximation allowance must be positive.") }
@@ -215,15 +260,24 @@ struct ModelingOperationDraft: Equatable {
                 document: document, selection: SelectionModel(selectedTargets: targets)
             ).command(name: name, options: options)
         case .loft:
-            guard features.count >= 2 else { throw invalid("Select at least two ordered sketch profiles.") }
-            for feature in features {
-                try requireProfileOutput(feature, in: document)
+            let sectionNodes = nodes.filter { !loftGuideNodeIDs.contains($0.id) }
+            guard sectionNodes.count >= 2 else { throw invalid("Select at least two ordered sections, separate from guides.") }
+            let guides = zip(nodes, features).compactMap { node, feature in
+                loftGuideNodeIDs.contains(node.id) ? LoftGuideReference(featureID: feature) : nil
             }
-            return .createLoft(
-                name: name,
-                sections: features.map { LoftSectionReference(profile: ProfileReference(featureID: $0)) },
-                options: LoftOptions(resultKind: sheet ? .sheet : .solid, closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled)
-            )
+            let sections = try sectionNodes.map { node in
+                let reference = try sectionReference(for: node.id, in: document)
+                let controls = loftSectionControls[node.id] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
+                return try controls.applying(to: LoftSectionReference(section: reference))
+            }
+            guard createsSheet || sections.allSatisfy({ $0.section.isProfile }) else {
+                throw invalid("A selected curve requires Sheet output.")
+            }
+            let options = LoftOptions(resultKind: createsSheet ? .sheet : .solid,
+                closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
+                smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"))
+            try LoftFeature(sections: sections, guides: guides, options: options).validate()
+            return .createLoft(name: name, sections: sections, guides: guides, options: options)
         case .boolean:
             guard features.count >= 2, let tool = features.last,
                   nodes.allSatisfy({ $0.reference?.kind == .body }) else {
@@ -238,6 +292,31 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBodyShell(name: name, target: targets[0],
                 thickness: try topologyLength(distance, label: "Wall thickness", in: document))
+        case .patch, .bridge:
+            guard kind != .patch || targets.count == 1 else {
+                throw invalid("Patch requires exactly one edge of the opening to fill.")
+            }
+            guard kind != .bridge || targets.count == 2 else {
+                throw invalid("Boundary Bridge requires exactly two open edges, in boundary order.")
+            }
+            guard (targets.count == 1 || targets.count == 2),
+                  targets.allSatisfy({ target in
+                      guard case .edge(let component) = target.component else { return false }
+                      return component.generatedTopologySubshapeID != nil
+                  }),
+                  !nodes.isEmpty,
+                  nodes.allSatisfy({ $0.reference?.kind == .body }) else {
+                throw invalid("Select one open-boundary edge to close an opening, or two distinct boundary edges to bridge them.")
+            }
+            guard targets.count == 1 || targets[0] != targets[1] else {
+                throw invalid("Select two different boundary edges.")
+            }
+            guard targets.count == 2 || !reverseSecondBoundary else {
+                throw invalid("Reverse boundary is available only when two edges are selected.")
+            }
+            if kind == .patch { return .createSurfaceFill(name: name, target: targets[0]) }
+            return .createBoundaryBridge(name: name, first: targets[0], second: targets[1],
+                                         reverseSecondBoundary: reverseSecondBoundary)
         case .surfaceOffset, .surfaceExtend, .thicken:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,
@@ -283,18 +362,34 @@ struct ModelingOperationDraft: Equatable {
         let role: String
         switch kind {
         case .boolean: role = index == targets.count - 1 ? "Tool" : "Target"
-        case .loft: role = "Section \(index + 1)"
+        case .loft:
+            let isGuide = loftGuideNodeIDs.contains(targets[index].sceneNodeID)
+            let ordinal = targets.prefix(index + 1).filter { loftGuideNodeIDs.contains($0.sceneNodeID) == isGuide }.count
+            role = "\(isGuide ? "Guide" : "Section") \(ordinal)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
         case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
         case .surfaceOffset, .surfaceExtend, .thicken: role = "Sheet face"
         case .shell: role = "Opening face"
+        case .patch, .bridge: role = targets.count == 2 ? "Boundary \(index == 0 ? "A" : "B")" : "Opening boundary"
         default: role = "Profile"
         }
         return "\(role): \(name)"
     }
 
+    func sectionReference(for id: SceneNodeID, in document: DesignDocument) throws -> SectionReference {
+        guard let node = document.productMetadata.sceneNodes[id],
+              let feature = node.object?.sourceFeatureID,
+              node.reference?.featureID == feature,
+              document.cadDocument.designGraph.nodes[feature] != nil else {
+            throw invalid("Section source is missing.")
+        }
+        if let reference = try document.explicitModelingSectionReference(
+            for: feature, sceneNodeID: id, selectedTargets: targets) { return reference }
+        return try document.modelingSectionReference(for: feature)
+    }
+
     private func operandNodes(in document: DesignDocument) throws -> [SceneNode] {
-        let preservesOccurrence = [.fillet, .chamfer, .g2Blend, .surfaceOffset, .surfaceExtend, .shell, .thicken].contains(kind)
+        let preservesOccurrence = [.fillet, .chamfer, .g2Blend, .surfaceOffset, .surfaceExtend, .patch, .bridge, .shell, .thicken].contains(kind)
         var seen = Set<SceneNodeID>()
         var nodes: [SceneNode] = []
         for target in targets where seen.insert(target.sceneNodeID).inserted {
@@ -356,24 +451,6 @@ struct ModelingOperationDraft: Equatable {
             )
         }
         return value
-    }
-
-    /// Refuses an operand that produces no profile.
-    ///
-    /// Core resolves an Extrude, Revolve or Loft profile reference against the
-    /// source feature's declared outputs and refuses one carrying no `.profile`
-    /// role, so reading the same role here turns that refusal into one the
-    /// panel can show before the press. Core's remaining geometric
-    /// requirements are deliberately not restated: whether the sketch yields a
-    /// supported closed profile stays a typed failure from the actual preview.
-    private func requireProfileOutput(
-        _ featureID: FeatureID,
-        in document: DesignDocument
-    ) throws {
-        guard let node = document.cadDocument.designGraph.nodes[featureID],
-              node.outputs.contains(where: { $0.role == .profile }) else {
-            throw invalid("Select a sketch profile. That feature produces none.")
-        }
     }
 
     private func number(_ text: String, label: String) throws -> Double {

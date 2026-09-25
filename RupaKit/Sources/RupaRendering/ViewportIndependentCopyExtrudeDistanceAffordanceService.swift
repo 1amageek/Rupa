@@ -144,7 +144,7 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
         switch extrude.direction {
         case .normal, .symmetric:
             return profileNormal(
-                featureID: extrude.profile.featureID,
+                featureID: extrude.section.featureID,
                 document: document
             )
         case .vector(let vector):

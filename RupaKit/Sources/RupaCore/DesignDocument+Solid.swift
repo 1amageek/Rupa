@@ -3,24 +3,90 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    public func explicitModelingSectionReference(
+        for featureID: FeatureID, sceneNodeID: SceneNodeID, selectedTargets: [SelectionTarget]
+    ) throws -> SectionReference? {
+        var sections: Set<SectionReference> = []
+        for target in selectedTargets where target.sceneNodeID == sceneNodeID {
+            switch target.component {
+            case .region(let component):
+                guard let region = component.profileRegionReference, region.featureID == featureID else {
+                    throw EditorError(code: .commandInvalid, message: "Region selection does not belong to its source.")
+                }
+                sections.insert(.profile(ProfileReference(featureID: featureID, profileIndex: region.profileIndex)))
+            case .sketchEntity(let component):
+                guard let entity = component.sketchEntityReference, entity.featureID == featureID,
+                      case .sketch(let sketch) = cadDocument.designGraph.nodes[featureID]?.operation,
+                      sketch.entities[entity.entityID] != nil else {
+                    throw EditorError(code: .commandInvalid, message: "Curve selection does not belong to its source.")
+                }
+                sections.insert(.curve(CurveSectionReference(featureID: featureID)))
+            default: break
+            }
+        }
+        guard sections.count <= 1 else {
+            throw EditorError(code: .commandInvalid, message: "Select only one section from each source feature.")
+        }
+        if let section = sections.first { try section.validate() }
+        return sections.first
+    }
+
+    public func modelingSectionReference(for featureID: FeatureID) throws -> SectionReference {
+        guard let source = cadDocument.designGraph.nodes[featureID] else {
+            throw EditorError(code: .referenceUnresolved, message: "Section source no longer exists.")
+        }
+        if source.outputs.contains(where: { $0.role == .profile }),
+           case .sketch(let sketch) = source.operation {
+            let parameters = try ParameterResolver().resolve(cadDocument.parameters)
+            do {
+                let profiles = try SketchProfileExtractor(tolerance: modelingSettings.tolerance)
+                    .extractProfiles(from: sketch, sourceFeatureID: featureID, parameters: parameters)
+                if !profiles.isEmpty { return .profile(ProfileReference(featureID: featureID)) }
+            } catch SketchError.openProfile {
+                // An open sketch is a curve section, not a failed closed-region extrusion.
+            }
+        }
+        guard source.outputs.contains(where: { $0.role == .curve }) else {
+            throw EditorError(code: .referenceUnresolved, message: "Source has no profile or curve section output.")
+        }
+        return .curve(CurveSectionReference(featureID: featureID))
+    }
+
     @discardableResult
     public mutating func extrudeProfile(
         name: String,
         profile: ProfileReference,
         distance: CADExpression,
         direction: ExtrudeDirection,
+        resultKind: ExtrudeResultKind = .solid,
         typeID: ObjectTypeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
-        try profile.validate()
-        guard let source = cadDocument.designGraph.nodes[profile.featureID],
-              source.outputs.contains(where: { $0.role == .profile }) else {
+        try extrudeSection(name: name, section: .profile(profile), distance: distance,
+            direction: direction, resultKind: resultKind, typeID: typeID, objectRegistry: objectRegistry)
+    }
+
+    @discardableResult
+    public mutating func extrudeSection(
+        name: String,
+        section: SectionReference,
+        distance: CADExpression,
+        direction: ExtrudeDirection,
+        resultKind: ExtrudeResultKind,
+        typeID: ObjectTypeID? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let operation = ExtrudeFeature(section: section, distance: distance,
+            direction: direction, resultKind: resultKind)
+        try operation.validate()
+        guard let source = cadDocument.designGraph.nodes[section.featureID],
+              source.outputs.contains(where: { $0.role == section.inputRole }) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Extrude profile must reference an existing sketch profile feature."
+                message: "Extrude section must reference an existing output of the selected kind."
             )
         }
-        guard try containsSupportedExtrudeProfile(source) else {
+        if section.isProfile, try containsSupportedExtrudeProfile(source) == false {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Extrude profile must reference a supported closed sketch profile."
@@ -31,16 +97,9 @@ extension DesignDocument {
         let feature = FeatureNode(
             id: featureID,
             name: name,
-            operation: .extrude(
-                ExtrudeFeature(
-                    profile: profile,
-                    distance: distance,
-                    direction: direction,
-                    operation: .newBody
-                )
-            ),
-            inputs: [FeatureInput(featureID: profile.featureID, role: .profile)],
-            outputs: [FeatureOutput(role: .body)]
+            operation: .extrude(operation),
+            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)],
+            outputs: [FeatureOutput(role: resultKind.featureOutputRole)]
         )
 
         let previousCADDocument = cadDocument
@@ -60,15 +119,25 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: .profile(profile),
+                sourceSection: BodySourceSectionReference(section: section),
                 typeID: typeID,
+                geometryRole: resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry
             )
         )
-        try synchronizeObjectPropertiesFromSource(
-            featureID: featureID,
-            objectRegistry: objectRegistry
-        )
+        if section.isProfile {
+            try synchronizeObjectPropertiesFromSource(
+                featureID: featureID,
+                objectRegistry: objectRegistry
+            )
+            try synchronizeCylinderCapsObjectProperty(
+                featureID: featureID,
+                resultKind: resultKind,
+                objectRegistry: objectRegistry
+            )
+        }
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitExtrude = true
         return featureID
     }
@@ -81,22 +150,33 @@ extension DesignDocument {
         angle: CADExpression = .constant(.angle(360.0, unit: .degree)),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
+        try revolveSection(name: name, section: .profile(profile), axis: axis, angle: angle,
+            resultKind: .solid, objectRegistry: objectRegistry)
+    }
+
+    @discardableResult
+    public mutating func revolveSection(
+        name: String, section: SectionReference, axis: RevolveAxis,
+        angle: CADExpression, resultKind: BodyKind,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Revolve")
         let revolve = RevolveFeature(
-            profile: profile,
+            section: section,
             axis: axis,
             angle: angle,
-            operation: .newBody
+            operation: .newBody,
+            resultKind: resultKind
         )
         try revolve.validate(tolerance: modelingSettings.tolerance)
-        guard let source = cadDocument.designGraph.nodes[profile.featureID],
-              source.outputs.contains(where: { $0.role == .profile }) else {
+        guard let source = cadDocument.designGraph.nodes[section.featureID],
+              source.outputs.contains(where: { $0.role == section.inputRole }) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Revolve profile must reference an existing sketch profile feature."
+                message: "Revolve section must reference an output of the selected kind."
             )
         }
-        guard try containsSupportedExtrudeProfile(source) else {
+        if section.isProfile, try !containsSupportedExtrudeProfile(source) {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Revolve profile must reference a supported closed sketch profile."
@@ -108,8 +188,8 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .revolve(revolve),
-            inputs: [FeatureInput(featureID: profile.featureID, role: .profile)],
-            outputs: [FeatureOutput(role: .body)]
+            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)],
+            outputs: [FeatureOutput(role: resultKind == .solid ? .body : .sheet)]
         )
 
         let previousCADDocument = cadDocument
@@ -129,8 +209,9 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: .profile(profile),
+                sourceSection: BodySourceSectionReference(section: section),
                 typeID: nil,
+                geometryRole: resultKind == .solid ? .solid : .surface,
                 objectRegistry: objectRegistry
             )
         )
@@ -218,7 +299,7 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: sections.first.map(BodySourceSectionReference.init(sweepSection:)),
+                sourceSection: sections.first.map(BodySourceSectionReference.init(section:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry
@@ -249,7 +330,12 @@ extension DesignDocument {
             )
         }
         for section in sections {
-            try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
+            switch section.section {
+            case .profile:
+                try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
+            case .curve:
+                try requireSweepSourceCurveFeature(section.featureID, owner: "Loft curve")
+            }
         }
         for guide in guides {
             try requireSweepSourceCurveFeature(guide.featureID, owner: "Loft guide")
@@ -261,7 +347,7 @@ extension DesignDocument {
             name: trimmedName,
             operation: .loft(loft),
             inputs: sections.map { section in
-                FeatureInput(featureID: section.featureID, role: .profile)
+                FeatureInput(featureID: section.featureID, role: section.section.inputRole)
             } + guides.map { guide in
                 FeatureInput(featureID: guide.featureID, role: .guide)
             },
@@ -285,7 +371,7 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: sections.first.map { .profile($0.profile) },
+                sourceSection: sections.first.map { BodySourceSectionReference(section: $0.section) },
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry
@@ -295,6 +381,31 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitLoft = true
         return featureID
+    }
+
+    public mutating func setLoft(
+        featureID: FeatureID,
+        loft: LoftFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard let previous = cadDocument.designGraph.nodes[featureID],
+              case .loft(let original) = previous.operation else {
+            throw EditorError(code: .referenceUnresolved, message: "Loft source no longer exists.")
+        }
+        guard loft.options.resultKind == original.options.resultKind else {
+            throw EditorError(code: .commandInvalid, message: "Loft editing must preserve its published Sheet or Solid output kind.")
+        }
+        var replacement = try FeatureNodeFactory.make(operation: .loft(loft), id: featureID,
+            name: previous.name, in: cadDocument, tolerance: modelingSettings.tolerance)
+        replacement.isSuppressed = previous.isSuppressed
+        var candidate = self
+        try candidate.cadDocument.replaceFeature(replacement, tolerance: modelingSettings.tolerance)
+        for (id, var node) in candidate.productMetadata.sceneNodes where node.object?.sourceFeatureID == featureID {
+            node.object?.sourceSection = loft.sections.first.map { BodySourceSectionReference(section: $0.section) }
+            candidate.productMetadata.sceneNodes[id] = node
+        }
+        _ = try candidate.validate(objectRegistry: objectRegistry)
+        self = candidate
     }
 
     @discardableResult

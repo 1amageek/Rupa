@@ -207,8 +207,8 @@ enum CADCompoundOracle {
                 )
             }
             guard sketch.plane == sourcePlane,
-                  extrude.profile.featureID == sketchFeatureID,
-                  extrude.profile.profileIndex == 0,
+                  extrude.section.featureID == sketchFeatureID,
+                  extrude.section.profile?.profileIndex == 0,
                   extrude.direction == .normal,
                   extrude.operation == .newBody else {
                 throw CADCompoundOracleError.mismatch(

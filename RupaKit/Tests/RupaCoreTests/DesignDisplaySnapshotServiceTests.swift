@@ -356,7 +356,7 @@ import Testing
     #expect(componentDefinition.bodySceneNodeIDs == [bodySceneNodeID])
     #expect(componentDefinition.bodyFeatureIDs == [bodyFeatureID])
     #expect(componentDefinition.featureIDs.contains(bodyFeatureID))
-    #expect(componentDefinition.featureIDs.contains(extrude.profile.featureID))
+    #expect(componentDefinition.featureIDs.contains(extrude.section.featureID))
     #expect(componentDefinition.isRenderable)
     #expect(rootSceneNode.sceneNodeID == bodySceneNodeID)
     #expect(rootSceneNode.referenceKind == .body)

@@ -275,7 +275,12 @@ import SwiftCAD
     let body = try #require(evaluated.brep.bodies.values.first)
     let nonlinearRails = try (8..<12).compactMap { ordinal -> BSplineCurve3D? in
         let curve = try loftConnectorCurve(ordinal: ordinal, loftID: loftID, in: evaluated)
-        return curve.degree > 1 ? curve : nil
+        // Common-basis elevation preserves straight connectors at the guides' degree.
+        let start = try curve.point(at: 0, tolerance: document.modelingSettings.tolerance)
+        let end = try curve.point(at: 1, tolerance: document.modelingSettings.tolerance)
+        let middle = try curve.point(at: 0.5, tolerance: document.modelingSettings.tolerance)
+        return middle.isApproximatelyEqual(to: start + (end - start) * 0.5,
+            tolerance: document.modelingSettings.tolerance.distance) ? nil : curve
     }
     let railMiddlePoints = try nonlinearRails.map {
         try $0.point(at: 0.5, tolerance: document.modelingSettings.tolerance)

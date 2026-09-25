@@ -1214,7 +1214,7 @@ extension ViewportSpatialOverlayProducer {
     ) -> Vector3D? {
         switch feature.direction {
         case .normal, .symmetric:
-            guard let node = document.cadDocument.designGraph.nodes[feature.profile.featureID],
+            guard let node = document.cadDocument.designGraph.nodes[feature.section.featureID],
                   case .sketch(let sketch) = node.operation else {
                 return nil
             }

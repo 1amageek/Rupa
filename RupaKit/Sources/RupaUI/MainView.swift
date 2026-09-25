@@ -2098,6 +2098,7 @@ private struct ProjectMainViewContent: View {
             onFaceDrag: viewportFaceDragHandler,
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
             onEdgeFilletDrag: viewportEdgeFilletDragHandler,
+            onBoundarySurface: viewportBoundarySurfaceHandler,
             onRegionOffsetDrag: viewportRegionOffsetDragHandler,
             onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
             onSlotWidthDrag: viewportSlotWidthDragHandler,
@@ -2296,6 +2297,28 @@ private struct ProjectMainViewContent: View {
         }
         return { target in
             handleViewportEdgeFilletDrag(target)
+        }
+    }
+
+    private var viewportBoundarySurfaceHandler: ((SelectionTarget) -> Void)? {
+        guard selectedTool == .select,
+              selectionScope == .edge || selectionScope == .object,
+              selectedPresentationHasExactCADAffordanceContext else {
+            return nil
+        }
+        return { target in
+            if var draft = modelingDraft,
+               draft.isSurfaceCreation, draft.kind == .bridge,
+               draft.targets.count == 1 {
+                if draft.targets[0] != target {
+                    draft.targets.append(target)
+                    modelingDraft = draft
+                }
+            } else {
+                beginSurfaceModelingOperation()
+                modelingDraft?.selectSurfaceOperation(.bridge)
+                modelingDraft?.targets = [target]
+            }
         }
     }
 
@@ -4745,11 +4768,11 @@ private struct ProjectMainViewContent: View {
     private func beginSurfaceModelingOperation() {
         cancelModelingOperation()
         var draft = ModelingOperationDraft(
-            kind: .loft,
+            kind: .surfacePatch,
             selection: snapshot.selection,
             ruler: snapshot.workspaceState.ruler
         )
-        draft.sheet = true
+        draft.isSurfaceCreation = true
         modelingDraft = draft
         selectedTool = .select
         reportToolStatus(

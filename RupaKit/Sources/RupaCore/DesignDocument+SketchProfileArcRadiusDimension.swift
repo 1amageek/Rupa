@@ -286,7 +286,8 @@ extension DesignDocument {
     private func featureIsProfileOfNormalExtrude(_ featureID: FeatureID) -> Bool {
         cadDocument.designGraph.nodes.values.contains { feature in
             guard case let .extrude(extrude) = feature.operation,
-                  extrude.profile.featureID == featureID,
+                  extrude.section.isProfile,
+                  extrude.section.featureID == featureID,
                   case .normal = extrude.direction else {
                 return false
             }

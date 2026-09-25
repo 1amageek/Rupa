@@ -35,12 +35,12 @@ import Testing
         ))
     }
 
-    @Test func translationLandsInTheColumnMajorTranslationSlots() throws {
+    @Test func translationLandsInTheRowMajorTranslationSlots() throws {
         let translation = try Transform3D.translation(Vector3D(x: 3.0, y: 5.0, z: 7.0))
 
-        #expect(translation.matrix.values[12] == 3.0)
-        #expect(translation.matrix.values[13] == 5.0)
-        #expect(translation.matrix.values[14] == 7.0)
+        #expect(translation.matrix.values[3] == 3.0)
+        #expect(translation.matrix.values[7] == 5.0)
+        #expect(translation.matrix.values[11] == 7.0)
     }
 
     @Test func inverseUndoesTheTransform() throws {

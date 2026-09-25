@@ -202,16 +202,16 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Extrude"),
                 WorkspaceInspectorTextRow(
-                    title: "Profile Source",
-                    value: WorkspaceInspectorNumberText.shortID(extrude.profile.featureID)
+                    title: "Section Source",
+                    value: WorkspaceInspectorNumberText.shortID(extrude.section.featureID)
                 ),
             ]
         case .revolve(let revolve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Revolve"),
                 WorkspaceInspectorTextRow(
-                    title: "Profile Source",
-                    value: WorkspaceInspectorNumberText.shortID(revolve.profile.featureID)
+                    title: "Section Source",
+                    value: WorkspaceInspectorNumberText.shortID(revolve.section.featureID)
                 ),
                 WorkspaceInspectorTextRow(title: "Axis Origin", value: pointSummary(revolve.axis.origin)),
                 WorkspaceInspectorTextRow(title: "Axis Direction", value: vectorSummary(revolve.axis.direction)),
@@ -274,6 +274,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     title: "Keep Tools",
                     value: boolean.keepTools ? "Yes" : "No"
                 ),
+            ]
+        case .involuteGear(let gear):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Involute Gear"),
+                WorkspaceInspectorTextRow(title: "Teeth", value: "\(gear.toothCount)"),
+                WorkspaceInspectorTextRow(title: "Double Helical", value: gear.doubleHelical ? "Yes" : "No"),
             ]
         case .spatialPath(let path):
             return [
@@ -495,8 +501,22 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: String(describing: thicken.side).capitalized
                 ),
             ]
-        case .bridgeSurface:
-            return [WorkspaceInspectorTextRow(title: "Operation", value: "Bridge Surface")]
+        case .bridgeSurface(let bridgeSurface):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Boundary Bridge (G0)"),
+                WorkspaceInspectorTextRow(
+                    title: "Sources",
+                    value: bridgeSurface.sourceInputs.map {
+                        WorkspaceInspectorNumberText.shortID($0.featureID)
+                    }.joined(separator: ", ")
+                ),
+                WorkspaceInspectorTextRow(title: "Boundary A", value: bridgeSurface.startBoundary.subshapeID.role),
+                WorkspaceInspectorTextRow(title: "Boundary B", value: bridgeSurface.endBoundary.subshapeID.role),
+                WorkspaceInspectorTextRow(
+                    title: "Boundary B Direction",
+                    value: String(describing: bridgeSurface.endOrientation).capitalized
+                ),
+            ]
         case .curveExtend(let curveExtend):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Curve Extend"),
@@ -522,6 +542,18 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(
                     title: "Target",
                     value: WorkspaceInspectorNumberText.shortID(surfaceOffset.target.featureID)
+                ),
+            ]
+        case .surfaceFill(let surfaceFill):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Surface Fill (G0)"),
+                WorkspaceInspectorTextRow(
+                    title: "Target",
+                    value: WorkspaceInspectorNumberText.shortID(surfaceFill.targetFeatureID)
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Boundary Seed",
+                    value: surfaceFill.boundarySeed.subshapeID.role
                 ),
             ]
         case .surfaceTrim(let surfaceTrim):

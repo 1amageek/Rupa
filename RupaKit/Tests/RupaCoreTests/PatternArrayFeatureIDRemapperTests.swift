@@ -51,16 +51,18 @@ import Testing
         sections: [
             LoftSectionReference(
                 profile: ProfileReference(featureID: originalFirstProfileID),
+                profileDirection: .reversed,
                 startSampleIndex: 2,
                 smoothTangentScale: 0.5,
                 smoothTangentMode: .zero
             ),
             LoftSectionReference(
-                profile: ProfileReference(featureID: originalSecondProfileID),
+                section: .curve(CurveSectionReference(featureID: originalSecondProfileID,
+                    parameterDomain: .closed(0.2, 0.8), isReversed: true)),
                 smoothTangentMode: .automatic
             ),
         ],
-        options: LoftOptions(surfaceMode: .smooth)
+        options: LoftOptions(resultKind: .sheet, surfaceMode: .smooth)
     ))
 
     guard case .loft(let remappedLoft) = try remapper.remappedOperation(operation) else {
@@ -68,10 +70,13 @@ import Testing
         return
     }
 
-    #expect(remappedLoft.sections[0].profile.featureID == remappedFirstProfileID)
+    #expect(remappedLoft.sections[0].section == .profile(ProfileReference(featureID: remappedFirstProfileID)))
     #expect(remappedLoft.sections[0].startSampleIndex == 2)
+    #expect(remappedLoft.sections[0].profileDirection == .reversed)
     #expect(remappedLoft.sections[0].smoothTangentScale == 0.5)
     #expect(remappedLoft.sections[0].smoothTangentMode == .zero)
-    #expect(remappedLoft.sections[1].profile.featureID == remappedSecondProfileID)
+    #expect(remappedLoft.sections[1].section == .curve(CurveSectionReference(featureID: remappedSecondProfileID,
+        parameterDomain: .closed(0.2, 0.8), isReversed: true)))
     #expect(remappedLoft.sections[1].smoothTangentMode == .automatic)
+    try remappedLoft.validate()
 }

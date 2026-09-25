@@ -12,6 +12,62 @@ Parent: [RupaKit package design](../../DESIGN.md). Children: none.
 
 ## Responsibilities and Boundaries
 
+Solid profile extrusion, profile sheet extrusion and curve sheet extrusion share
+`ExtrudeLowerer` and the Core section transaction. Their descriptors declare the
+actual source-body output role, so sheet receipts cannot be relabeled as solids.
+`cad.surface.extrude` consumes `profile`; `cad.surface.extrudeCurve` consumes
+`curve`. Both use the same length and direction contracts as `cad.solid.extrude`.
+
+Revolution uses `RevolveLowerer` and Core's `revolveSection` transaction for
+solid profiles, sheet profiles and sheet curves. Inputs specify an axis origin
+in meters, a nonzero axis direction and a signed angle in degrees. The accepted
+angle is nonzero and at most one turn. Geometric admission remains owned by the
+native evaluator; lowering never substitutes a mesh or another operation.
+
+Profile Loft sections optionally accept `profileIndex`, a nonnegative unitless
+integer selecting the exact extracted region; omission selects region zero.
+Curve sections reject this field. The native resolver rejects indexes outside
+the evaluated profile collection; the lowerer never clamps or substitutes one.
+Loft sections optionally accept `startSampleIndex`, a nonnegative unitless integer
+in the native Int range. It addresses the original source samples before curve
+restriction/reversal; omission selects automatic correspondence. Native evaluation
+owns source bounds and exact seam admission for both create and replace.
+Loft uses one lowerer with solid and sheet result descriptors. `sections` is an
+ordered array of objects requiring `kind` (`profile` or `curve`) and
+`source` (a typed feature reference), with optional `tangentScale` (finite,
+positive, unitless) and `tangentMode` (`automatic` or `zero`).
+Curve sections additionally accept `parameterRange`, a two-element
+array of finite unitless values in the source curve's native parameterization,
+with increasing endpoints. Profile ranges are rejected; source containment is
+validated by shared native section resolution. Unknown fields are
+rejected. Omitted tension inherits the operation tension; omitted mode is
+automatic. These controls set native smooth interpolation derivatives, not
+support-surface G1/G2 constraints. Sheet sections may mix profiles and curves;
+Curve-only `reversed` is an optional boolean, defaulting to false.
+Profile-only `profileDirection` accepts `automatic`, `forward` or `reversed`,
+defaulting to automatic. Curve inputs reject this field even when its value is
+automatic, keeping the two direction authorities distinct. Both creation and
+replacement forward the native profile correspondence policy unchanged.
+Native section resolution trims the original parameter domain before reversing
+exact traversal. Solid sections require profiles. `guides` is an ordered feature-reference array.
+Repeated or overlapping references fail before execution. `surfaceMode` is `ruled` or
+`smooth`, `tangentScale` is positive and unitless, and `closed` requires at
+least three sections and Sheet output. Lowering preserves order and forwards
+one `createLoft` command, without reconstructing geometry. The source evaluator
+owns geometric rejection, including currently incomplete curve guide support.
+Feature-only section arrays and the old curve-only operation ID are rejected;
+there is no compatibility interpretation. Profile trim and continuity controls remain unfinished and
+must not be inferred from this registration.
+
+`cad.solid.loft.replace` and `cad.surface.loft.replace` share Loft's section
+parser. They require a typed existing/local `body` instead of `name`, and replace
+the full supplied section/guide/options payload through Core `setLoft`. They do
+not rename, allocate source identities, or change the published body role.
+Their output list is empty: callers retain the original source-body identity.
+The compiler validates the role; Core additionally requires an actual Loft and
+atomically rejects invalid geometry. These are replacement operations, not
+partial patches: omitted optional section controls use the documented defaults.
+
 This module owns:
 
 - the qualified `cad.*` operation IDs and version `1` schemas listed here;
@@ -69,8 +125,17 @@ and work limits.
 | `cad.sketch.constrained` | `name`, `plane`, ordered ID-free `entities`, index-based `relations` | `sketch:.feature`, `scene:.scene` | Core `createSemanticSketch` | 1 / 2 |
 | `cad.solid.box` | `name`, lower-corner `origin`, positive `width`, `depth`, `height` | `profile:.feature`, `body:.body`, `profileScene:.scene`, `bodyScene:.scene` | one `createExtrudedRectangle` family command retaining sketch plus extrude source | 1 / 5 |
 | `cad.solid.cylinder` | `name`, `baseCenter`, nonzero `axis`, positive `radius`, positive `height` | `profile:.feature`, `body:.body`, `profileScene:.scene`, `bodyScene:.scene` | one `createExtrudedCircle` command retaining sketch plus extrude source | 1 / 5 |
-| `cad.solid.extrude` | `name`, `profile:.feature`, nonzero `distance`, `direction` | `body:.body`, `scene:.scene` | `extrudeProfile` | 1 / 3 |
+| `cad.solid.extrude` | `name`, `profile:.feature`, nonzero `distance`, `direction` | `body:.body`, `scene:.scene` | `extrudeSection` | 1 / 3 |
+| `cad.surface.extrude` | `name`, `profile:.feature`, nonzero `distance`, `direction` | `body:.sheet`, `scene:.scene` | `extrudeSection` | 1 / 3 |
+| `cad.surface.extrudeCurve` | `name`, `curve:.feature`, nonzero `distance`, `direction` | `body:.sheet`, `scene:.scene` | `extrudeSection` | 1 / 3 |
+| `cad.solid.revolve` | `name`, `profile:.feature`, `axisOrigin`, `axisDirection`, `angle` | `body:.body`, `scene:.scene` | `revolveSection` | 1 / 3 |
+| `cad.surface.revolve` | `name`, `profile:.feature`, `axisOrigin`, `axisDirection`, `angle` | `body:.sheet`, `scene:.scene` | `revolveSection` | 1 / 3 |
+| `cad.surface.revolveCurve` | `name`, `curve:.feature`, `axisOrigin`, `axisDirection`, `angle` | `body:.sheet`, `scene:.scene` | `revolveSection` | 1 / 3 |
 | `cad.solid.sphere` | `name`, finite `center`, positive `radius` | `body:.body`, `scene:.scene` | Core `createAnalyticSphere` | 1 / 3 |
+| `cad.solid.loft` | `name`, `sections:[{kind,source}]`, `guides:[.feature]`, `surfaceMode`, `tangentScale`, `closed` | `body:.body`, `scene:.scene` | `createLoft` with profile sections | 1 / 3 |
+| `cad.surface.loft` | same Loft inputs | `body:.sheet`, `scene:.scene` | `createLoft` with ordered profile/curve sections | 1 / 3 |
+| `cad.solid.loft.replace` | `body:.body`, remaining Loft inputs except `name` | none; retains target identity | `setLoft` | 1 / 0 |
+| `cad.surface.loft.replace` | `body:.sheet`, remaining Loft inputs except `name` | none; retains target identity | `setLoft` | 1 / 0 |
 | `cad.scene.transform` | `scene:.scene`, finite `translation`, `axisPoint`, nonzero `rotationAxis`, `rotation` | none; callers retain the source node output | `setSceneNodeTransform` | 1 / 0 |
 | `cad.component.define` | `name`, nonempty ordered `rootScenes:[.scene]` | `definition:.componentDefinition` | `createComponentDefinition` | 1 / 1 |
 | `cad.component.instantiate` | `name`, `definition:.componentDefinition`, finite `transform` | `instance:.componentInstance`, `scene:.scene` | `createComponentInstance` | 1 / 2 |
@@ -143,7 +208,7 @@ fixed benchmark without adding a third public form.
    accepted typed input and registry version, and available only when their
    required Core command exists. Registration never reports placeholder,
    benchmark-derived, or partial availability.
-9. Product composition validates exact set equality with the twelve IDs in the
+9. Product composition validates exact set equality with the IDs in the
    version-1 table. Duplicate, missing, unexpected, or independently projected
    registrations fail before Agent discovery is exposed.
 
@@ -186,7 +251,7 @@ CADAPI-C must provide the following falsifiable evidence:
 
 | Invariant | Required counterexample/evidence |
 |---|---|
-| Registry completeness | Exact set equality for the twelve version-1 IDs; duplicate/missing descriptor, lowerer, output, or version fails composition. |
+| Registry completeness | Exact set equality for the version-1 IDs; duplicate/missing descriptor, lowerer, output, or version fails composition. |
 | Direct/program identity | Every operation's direct form and equivalent one-node form compile to the same prepared command meaning and outputs. |
 | Identity ownership | Caller-minted Feature/Scene/Component/Pattern/SketchEntity/Body IDs are structurally absent or rejected; successful receipts contain only Core-generated values. |
 | Sketch constraints | Eight accepted relation families plus wrong entity kind, missing/negative/out-of-range/self/duplicate index, ambiguous coincident endpoint, and degenerate entity failures. |

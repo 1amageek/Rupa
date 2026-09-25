@@ -89,6 +89,12 @@ public struct ParameterSourceUsageService: Sendable {
         }
 
         switch node.operation {
+        case .involuteGear(let gear):
+            for dimension in InvoluteGearFeature.Dimension.allCases {
+                if let expression = gear.dimensions[dimension] {
+                    record(expression, path: "involuteGear.\(dimension.rawValue)")
+                }
+            }
         case .sketch(let sketch):
             collectSketchUsages(sketch, record: record)
         case .extrude(let feature):
@@ -253,6 +259,8 @@ public struct ParameterSourceUsageService: Sendable {
 
     private func operationName(_ operation: FeatureOperation) -> String {
         switch operation {
+        case .involuteGear:
+            "involuteGear"
         case .spatialPath:
             "spatialPath"
         case .importedBRep:

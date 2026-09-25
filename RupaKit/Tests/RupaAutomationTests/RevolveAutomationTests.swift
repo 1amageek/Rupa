@@ -41,7 +41,7 @@ import SwiftCAD
     #expect(result.commandName == "createRevolve")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(revolve.profile == ProfileReference(featureID: profileID))
+    #expect(revolve.section == .profile(ProfileReference(featureID: profileID)))
     #expect(revolve.axis.direction == .unitY)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)

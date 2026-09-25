@@ -139,7 +139,8 @@ extension DesignDocument {
         }
         guard let feature = cadDocument.designGraph.nodes[boxExtrusionFeatureID(featureID)],
               case let .extrude(extrude) = feature.operation,
-              let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
+              extrude.section.isProfile,
+              let profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             return nil
         }

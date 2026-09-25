@@ -470,7 +470,8 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         }
         guard let feature = document.cadDocument.designGraph.nodes[featureID],
               case let .extrude(extrude) = feature.operation,
-              let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+              extrude.section.isProfile,
+              let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation,
               let bounds = try resolvedSketchBounds2D(sketch, in: document),
               try isAxisAlignedRectangle(sketch, bounds: bounds, in: document) else {

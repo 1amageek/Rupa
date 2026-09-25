@@ -52,8 +52,9 @@ struct ViewportBodyResizeBaseline: Sendable {
               let featureID = node.reference?.featureID,
               let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
               case .extrude(let extrude) = feature.operation,
+              extrude.section.isProfile,
               extrude.direction == .normal,
-              let profile = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+              let profile = document.cadDocument.designGraph.nodes[extrude.section.featureID],
               case .sketch(let sketch) = profile.operation,
               sketch.entities.count == 4,
               sketch.entities.values.allSatisfy({ if case .line = $0 { true } else { false } }) else { return nil }

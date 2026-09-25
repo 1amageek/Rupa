@@ -14,6 +14,59 @@ mutation entry point. Invalid text remains editable and produces a visible
 typed error, never a default successful command. MainView owns task sequencing
 and passes preview/apply/cancel callbacks; this component owns no task or cache.
 
+Loft section text controls are keyed by scene-node identity, not operand position.
+Creation assigns selected operands to sections or guides by scene-node identity.
+Both lists preserve selection order after filtering; reordering cannot change an
+operand's role. Section controls remain retained when its role changes, but are
+not applied to guides. The existing source-coordinate/lock checks cover both roles.
+One createLoft command carries the complete references to the existing preview
+transaction. Native evaluation owns exact guide contacts and rejects invalid curves.
+History guide selection lists earlier, active features with a declared curve
+output, excluding section sources and already-selected guides. Existing guides
+remain visible even if no longer eligible, so they can be removed. Reordering,
+adding and removing guides modifies the same complete setLoft payload; it does
+not create a second evaluation or persistence route.
+Reordering operands preserves their tension and curve interval. Blank tension
+inherits the native operation default. An enabled interval uses finite increasing
+native curve parameters and is refused for profile inputs. Draft planning writes
+the existing CurveSectionReference and LoftSectionReference; only native evaluation
+decides source-domain containment. Curve reversal uses the same identity-keyed
+controls and native reference, after interval selection. Profile correspondence
+uses the separate native traversal policy. The form never evaluates geometry on hover.
+Creation and history editing expose an optional zero-based source start sample
+index. Blank selects automatic correspondence; nonnegative integer text is
+required otherwise. The native evaluator owns source bounds and exact seam
+admission, including reversal/restriction. Clearing a history value removes it.
+Creation and history editing share `LoftSectionDraft` parsing and
+the native profile traversal policy. Profile inputs expose automatic/forward/
+reversed correspondence; curve inputs expose curve reversal and interval instead.
+Creation uses the same section resolver for field eligibility and command input.
+Invalid source classification is displayed, not converted to a default kind.
+Profile section controls expose the zero-based extracted region index. Creation
+and history retain the selected index through the same ProfileReference;
+nonnegative integer parsing precedes native range and geometry validation.
+Extrude, Revolve and Loft share the selected section resolver, preserving explicit
+region indexes and rejecting conflicting region/curve choices from one source.
+
+Creation and history editing share `LoftSectionEditorFields` and expose the
+Loft default tension as editable dimensionless text. Both creation and history
+validate it through `LoftOptions.validate`; section overrides remain independent
+and blank section tension inherits this default. Ruled mode retains the value
+without applying smooth interpolation. Invalid text never publishes a command.
+`LoftFeatureDraft` retains the complete existing native Loft value,
+changing only exposed controls and section order; guides,
+tangent modes and unexposed options survive unchanged. History editing is keyed by
+source FeatureID and does not require a visible scene occurrence for each input.
+The history sheet emits `setLoft` into the existing preview/apply owner and closes
+when source history changes. It owns text only, not evaluation or document state.
+History section insertion and removal edit that same complete source replacement.
+Candidates are preceding active features with the requested profile/curve output,
+excluding existing sections and guides. The user explicitly chooses the output
+kind; exact profile existence and geometry remain native evaluation decisions.
+Solid history offers profile sections only. Removing a section removes its text
+controls; adding a section initializes controls from its new reference. Invalid
+section counts remain editable but cannot produce a preview command.
+
 Feature history uses the parent's [sidebar symbol adapter](../DESIGN.md#sidebar-symbols)
 for its status and action icons. Active/suppressed meaning, selection, preview
 commands, and busy-state admission remain owned by the existing history view.
@@ -93,6 +146,46 @@ path; the row is not a second source graph or a dynamic definition editor.
 
 ## Contracts and Invariants
 
+### Surface Creation foundation
+
+Surface Creation is an operation family in the existing modeling draft, not a
+new workspace mode or document owner. Its operation picker uses the same
+planning, cancellable preview, Apply, Undo and persistence paths as solid edits.
+Switching the operation invalidates the previous preview. Sheet creation must
+declare a sheet feature output and a surface object role; it must never merely
+hide solid caps in the renderer.
+
+The first foundation exposes Plane Surface, sheet Extrude, sheet Sweep, sheet
+Loft, hole Patch and Boundary Bridge (G0). Plane Surface is a primitive and is
+not the requested boundary Patch or Square. Patch takes one opening seed;
+Bridge takes exactly two distinct open edges and retains their orientation and
+source dependencies. Both reuse Core's existing boundary-surface transaction.
+No operation replaces its input objects. Unsupported geometry fails during
+native preview and cannot be applied.
+
+| Requested operation | Native path and present foundation | Missing contract, not an alias |
+| --- | --- | --- |
+| Bridge Surface | Stable two-edge G0 ruled bridge | Wall blending, G2/tension/width, Both/Short/Long/None wall trims |
+| Constrained Surface | No point-fitting authoring path | Interpolation through supplied points, tolerance and smoothness objective |
+| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves | Wall thickness, draft and remaining extent controls |
+| Loft | Ordered profile/curve sections, mixed single-loop Sheet input, exact guide connectors and discrete spatial contacts, source-sample seams, shared ruled/smooth connectors | General coincident/tangent guide contacts, whole-surface embedding admission and boundary G1/G2 controls |
+| Patch | Exact planar hole or admissible nonplanar Coons opening | General N-sided constrained fill, guides and G1/G2 |
+| Pipe | Sweep is a reusable native dependency, not a Pipe implementation | Path-aligned section authoring, radius/thickness and persistent references |
+| PolySplines | Native inline-mesh reconstruction exists | Authored-Mesh conversion/provenance UI; arbitrary mesh and global G2 claims are unsupported |
+| Revolve | Profile or planar-curve revolution, explicit Sheet/Solid output | Spatial generators, thickness and remaining axis/Boolean controls |
+| Square | Native inline four-boundary Coons builder exists | Referenced boundary authoring, UV degree/span and derivative constraints |
+| Sweep | Curve/profile section and independent path, explicit sheet result | Unsupported path/guide combinations retain native refusal |
+| XNURBS | No authoring entry or substitute Fill/Bridge dispatch | General constrained N-sided solver, G1/G2, guides, UV flow and quality guarantees |
+
+Specification references: [Plasticity Surface Creation](https://doc.plasticity.xyz/solid/bridge-surface)
+and the corresponding operation pages. This inventory is a scope boundary,
+not a claim of feature parity. Geometry algorithms remain owned by Swift-CAD;
+source edits remain owned by Core and publication by ProjectWorkspace.
+
+Verification owns sheet B-rep topology (open boundaries/no caps), declared
+output/metadata agreement, source preservation, Undo/Redo and JSON round-trip;
+UI tests cover family switching, exact operand counts and unsupported routes.
+
 Selected-edge Fillet, Chamfer and G2 Blend use the
 [Core topology editing](../../RupaCore/TopologyEditing/DESIGN.md) contract,
 not extrusion-profile corner rewriting. They require one generated CAD edge
@@ -106,8 +199,14 @@ placement contract. Offset accepts signed physical length; Extend Trim accepts
 ordered U/V parameter bounds, not physical lengths or unsupported extrapolation.
 The kernel verifies the selected face belongs to a single-face sheet. Existing
 control-point and boundary-continuity editors remain the editing authority for
-their source surfaces. A Surface Patch draft creates an exact bilinear patch
+their source surfaces. A Plane Surface draft creates an exact bilinear patch
 through the existing Core creation command, supplying an editable starting sheet.
+Patch and Boundary Bridge submit distinct Core operations; operand count never
+selects a different surface algorithm. The boundary affordance opens this same
+Surface Creation panel with Boundary Bridge selected; its operation picker also
+offers Patch explicitly. The obsolete XNURBS draft has been removed. Its future solver
+must own G1/G2, boundary flow, guides, quality and precision before admission.
+Preview/Apply/Cancel retain the ordinary Workspace path without a global mode.
 
 Shell uses the same topology-edit and Workspace lifecycle: one selected generated
 solid face is the opening and the entered source-coordinate length is thickness.
@@ -133,12 +232,15 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   through the existing draft entry point; Sweep retains its canvas route. One
   button renderer owns metrics, colors, selection, accessibility and hover hints.
   Draft forms explain Preview-before-Apply and retain typed operand validation.
+  Extrude and Revolve resolve whole-object sections through Core's shared section admission;
+  explicit curve selections retain curve intent. Curve sections require Sheet
+  output. Revolve's axis and angle are retained by the same source transaction
+  used for closed-profile creation. Surface Creation exposes this Sheet operation.
 
 - The parent [canvas tool route](../DESIGN.md#canvas-side-tool-routing) launches
-  Surface as the existing Loft draft with sheet output enabled. It consumes the
-  current ordered profile selection and retains the same preview, Apply, typed
-  validation and Cancel lifecycle as other modeling drafts. A Circle Sketch is
-  a sketch result and is not exposed under the Surface name.
+  Surface Creation as the operation family defined above. It retains the
+  current ordered selection and the existing preview, Apply, typed validation
+  and Cancel lifecycle. A Circle Sketch is a sketch result, not a surface.
 - Box, Cylinder, Sphere, Extrude, Revolve, Sweep, Loft, Boolean, Fillet and Chamfer use existing
   Core commands. Source IDs are allocated by Core, never by this UI component.
 - Length text accepts explicit units and otherwise uses the displayed unit;
@@ -161,10 +263,14 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   increments applied to an existing edge and keep the step.
   [RupaCore](../../RupaCore/DESIGN.md) owns both defaults; this component only
   chooses which one a kind opens at.
-- Extrude, Revolve and Loft operands must be features that output a profile.
-  Core resolves those references itself and refuses one that does not, so
-  `command(in:)` reads the same output role and refuses first; a press whose
-  only outcome is that refusal is then never offered.
+- Extrude, Revolve and Loft use Core's shared section classification. Explicit
+  curve selections retain curve intent; whole source selections resolve closed
+  profiles or exact curves. Curve input requires Sheet output. Native geometric
+  limitations are reported by preview and do not authorize a different shape.
+- Extrude direction is one choice: source normal, symmetric source normal, or
+  explicit vector. The form shows vector components only for the vector choice;
+  it never asks a spatial curve to fabricate a plane normal. UI and semantic API
+  use the same native direction value and exact construction.
 - The form shows ordered operands and their roles. Loft section order can be
   changed explicitly; Boolean's last operand is the tool. Selection replacement
   is explicit. Authored Mesh cannot masquerade as a CAD feature.
@@ -217,5 +323,9 @@ integration tests own preview cancellation, stale completion and
 exactly-once Apply. Signed App tests own actual controls and
 geometry display. The layout reuses native SwiftUI controls and existing
 Workspace spacing/semantic colors; no separate web-style design system is added.
+Surface-fill UI tests verify Preview/Apply/Cancel, complete labels and absence of
+any persistent tool-mode mutation. The signed App must show the hover affordance
+and generated editable sheet while preserving the source object and supporting
+Undo/save/reopen.
 Validation includes keyboard labels, disabled/busy/error states, light/dark
 appearance and increased contrast at the App boundary.

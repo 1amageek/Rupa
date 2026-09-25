@@ -6,8 +6,8 @@ import Testing
 @MainActor
 @Suite("Native sheet surface edits", .timeLimit(.minutes(1)))
 struct SheetSurfaceEditTests {
-    @Test(arguments: [ThickenSide.positive, .negative, .symmetric])
-    func thickenRetainsOccurrenceAndReevaluatesParameters(side: ThickenSide) throws {
+    @Test(arguments: [SwiftCAD.ThickenSide.positive, .negative, .symmetric])
+    func thickenRetainsOccurrenceAndReevaluatesParameters(side: SwiftCAD.ThickenSide) throws {
         let session = EditorSession()
         _ = try session.execute(.createBSplineSurface(name: "Patch", surface: patch))
         _ = try session.execute(.upsertParameter(name: "thickness", expression: .length(0.002, .meter), kind: .length))

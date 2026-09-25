@@ -289,8 +289,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
-    case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
+    case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind = .solid)
+    case extrudeSection(name: String, section: SectionReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
+    case revolveSection(name: String, section: SectionReference, axis: RevolveAxis, angle: CADExpression, resultKind: BodyKind)
     case createSweep(
         name: String,
         sections: [SectionReference],
@@ -305,6 +307,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         guides: [LoftGuideReference] = [],
         options: LoftOptions
     )
+    case setLoft(featureID: FeatureID, loft: LoftFeature)
     case createBoolean(
         name: String,
         targets: [BooleanTargetReference],
@@ -668,12 +671,18 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "cutSketchCurve"
         case .extrudeProfile:
             "extrudeProfile"
+        case .extrudeSection:
+            "extrudeSection"
         case .createRevolve:
             "createRevolve"
+        case .revolveSection:
+            "revolveSection"
         case .createSweep:
             "createSweep"
         case .createLoft:
             "createLoft"
+        case .setLoft:
+            "setLoft"
         case .createBoolean:
             "createBoolean"
         case .createBSplineSurface:
@@ -843,9 +852,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .trimSketchCurveSegment,
              .cutSketchCurve,
              .extrudeProfile,
+             .extrudeSection,
              .createRevolve,
+             .revolveSection,
              .createSweep,
              .createLoft,
+             .setLoft,
              .createBoolean,
              .createBSplineSurface,
              .createPolySplineSurface,

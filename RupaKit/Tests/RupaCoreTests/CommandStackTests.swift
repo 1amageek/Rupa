@@ -287,7 +287,7 @@ import Testing
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(order.count == 2)
-    #expect(extrude.profile.featureID == sketchFeatureID)
+    #expect(extrude.section.featureID == sketchFeatureID)
     #expect(bodyFeature.name == "Box")
     #expect(session.evaluatedBodyCount == 1)
     #expect(session.commandStack.canUndo)
@@ -1522,7 +1522,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
     #expect(result.commandName == "extrudeProfile")
     #expect(result.generation == DocumentGeneration(2))
-    #expect(extrude.profile.featureID == sketchFeatureID)
+    #expect(extrude.section.featureID == sketchFeatureID)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
 }
@@ -3108,7 +3108,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(session.document.cadDocument.designGraph.dependencies == [
         DependencyEdge(source: sketchFeatureID, target: extrudeFeatureID),
     ])
-    #expect(extrude.profile.featureID == sketchFeatureID)
+    #expect(extrude.section.featureID == sketchFeatureID)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
     #expect(references.contains(.sketch(sketchFeatureID)))
@@ -4024,7 +4024,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(session.document.productMetadata.sceneNodes[outputSceneNodeID] != nil)
     #expect(session.document.cadDocument.designGraph.order.count == originalFeatureCount + 2)
     #expect(clonedBodyFeatureID != bodyFeatureID)
-    #expect(clonedExtrude.profile.featureID != originalExtrude.profile.featureID)
+    #expect(clonedExtrude.section.featureID != originalExtrude.section.featureID)
 
     _ = try session.undo()
     #expect(session.document.productMetadata.patternArrays[source.id] != nil)
@@ -4102,11 +4102,11 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(source.outputSceneNodeIDs.count == 2)
     #expect(source.outputFeatureIDs.count == 4)
     #expect(!source.outputFeatureIDs.contains(bodyFeatureID))
-    #expect(!source.outputFeatureIDs.contains(originalExtrude.profile.featureID))
+    #expect(!source.outputFeatureIDs.contains(originalExtrude.section.featureID))
     #expect(source.outputFeatureIDs.contains(firstCloneBodyFeatureID))
-    #expect(source.outputFeatureIDs.contains(firstCloneExtrude.profile.featureID))
+    #expect(source.outputFeatureIDs.contains(firstCloneExtrude.section.featureID))
     #expect(firstCloneBodyFeatureID != bodyFeatureID)
-    #expect(firstCloneExtrude.profile.featureID != originalExtrude.profile.featureID)
+    #expect(firstCloneExtrude.section.featureID != originalExtrude.section.featureID)
 
     let editedDistance = CADExpression.length(7.0, .millimeter)
     let editResult = try session.execute(
@@ -5120,7 +5120,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         Issue.record("Default body should be produced by an extrude.")
         return
     }
-    let originalProfileFeatureID = extrude.profile.featureID
+    let originalProfileFeatureID = extrude.section.featureID
     let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
     _ = try session.execute(
         .createComponentDefinition(

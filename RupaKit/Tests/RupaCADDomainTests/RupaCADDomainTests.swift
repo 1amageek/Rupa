@@ -6,16 +6,16 @@ import Testing
 @testable import RupaCADDomain
 
 @Test(.timeLimit(.minutes(1)))
-func registryContainsExactlyTwelveVersionOneCADOperations() throws {
+func registryContainsExactlyTwentyOneVersionOneCADOperations() throws {
   let registrations = RupaCADDomain.registrations()
   let expectedIDs = Set(RupaCADSemanticOperationID.all)
 
-  #expect(registrations.count == 12)
+  #expect(registrations.count == 21)
   #expect(Set(registrations.map(\.descriptor.operationID)) == expectedIDs)
   #expect(Set(registrations.map(\.descriptor.version)) == [RupaCADDomain.operationVersion])
   #expect(registrations.allSatisfy { $0.descriptor.route == .source })
   #expect(registrations.allSatisfy { $0.descriptor.effect == .sourceMutation })
-  #expect(try RupaCADDomain.registry().count == 12)
+  #expect(try RupaCADDomain.registry().count == 21)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -103,6 +103,33 @@ func everyCADOperationCompilesIdenticallyAsDirectAndOneNodeProgram() throws {
   }
 }
 
+@Test(.timeLimit(.minutes(1)), arguments: [0.0, 361.0, -361.0])
+func revolveRejectsInvalidAnglesBeforePreparedMutation(angle: Double) throws {
+  let source = SemanticSourceReference.feature(FeatureID())
+  let compiler = DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
+  let invocation = SemanticOperationInvocation(
+    operationID: RupaCADSemanticOperationID.surfaceRevolveCurve,
+    operationVersion: RupaCADDomain.operationVersion,
+    arguments: semanticArguments([
+      "name": .literal(.text("Invalid Revolution")), "curve": .existing(source),
+      "axisOrigin": .literal(.point(point(0, 0, 0))),
+      "axisDirection": .literal(.direction(direction(0, 1, 0))),
+      "angle": .literal(.number(angle, unit: .degree)),
+    ]))
+  do {
+    _ = try compiler.compile(SemanticDirectRequest(schemaVersion: .current, invocation: invocation),
+      context: SemanticCompilationContext(existingSourceReferences: [source]),
+      limits: semanticCADLimits())
+    Issue.record("Invalid revolution must fail before command preparation.")
+  } catch let error as SemanticCompilationError {
+    guard case .loweringFailed(_, RupaCADSemanticOperationID.surfaceRevolveCurve,
+      RupaCADDomainError.degenerateGeometryCode, _) = error else {
+      Issue.record("Unexpected failure: \(error)")
+      return
+    }
+  }
+}
+
 @Test(.timeLimit(.minutes(1)))
 func constrainedSketchLowersAllEightRelationFamiliesWithoutPersistentEntityIDs() throws {
   let fixture = try #require(
@@ -132,6 +159,37 @@ func constrainedSketchLowersAllEightRelationFamiliesWithoutPersistentEntityIDs()
   #expect(plan.constraints.contains { if case .equalLength = $0 { true } else { false } })
   #expect(plan.constraints.contains { if case .concentric = $0 { true } else { false } })
   #expect(plan.constraints.contains { if case .equalRadius = $0 { true } else { false } })
+}
+
+@Test(.timeLimit(.minutes(1)), arguments: ["missingSection", "duplicate", "overlap", "tension", "mode", "closure"])
+func loftRejectsInvalidInputsBeforePreparedMutation(fault: String) throws {
+  let first = SemanticSourceReference.feature(FeatureID())
+  let second = SemanticSourceReference.feature(FeatureID())
+  var args: [String: SemanticArgument] = [
+    "name": .literal(.text("Invalid Loft")), "sections": .array([
+      semanticLoftSection("curve", .existing(first)), semanticLoftSection("curve", .existing(second))]),
+    "guides": .array([]), "surfaceMode": .literal(.text("ruled")),
+    "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))]
+  switch fault {
+  case "missingSection": args["sections"] = .array([semanticLoftSection("curve", .existing(first))])
+  case "duplicate": args["sections"] = .array([
+    semanticLoftSection("curve", .existing(first)), semanticLoftSection("profile", .existing(first))])
+  case "overlap": args["guides"] = .array([.existing(first)])
+  case "tension": args["tangentScale"] = .literal(.number(0, unit: .unitless))
+  case "mode": args["surfaceMode"] = .literal(.text("unknown"))
+  default: args["closed"] = .literal(.boolean(true))
+  }
+  let compiler = DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
+  do {
+    _ = try compiler.compile(SemanticDirectRequest(schemaVersion: .current,
+      invocation: SemanticOperationInvocation(operationID: RupaCADSemanticOperationID.surfaceLoft,
+        operationVersion: RupaCADDomain.operationVersion, arguments: semanticArguments(args))),
+      context: SemanticCompilationContext(existingSourceReferences: [first, second]), limits: semanticCADLimits())
+    Issue.record("Invalid Loft must fail before command preparation.")
+  } catch let error as SemanticCompilationError {
+    guard case .loweringFailed(_, RupaCADSemanticOperationID.surfaceLoft,
+      RupaCADDomainError.invalidArgumentCode, _) = error else { Issue.record("Unexpected failure: \(error)"); return }
+  }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -173,6 +231,92 @@ func linearPatternUsesCheckedArgumentDependentWorkAtBothBounds() throws {
     else {
       Issue.record("Unexpected failure: \(error)")
       return
+    }
+  }
+}
+
+@Test(.timeLimit(.minutes(1)), arguments: ["legacyArray", "legacyOperation", "unknownKind", "extraField", "sceneSource", "solidCurve", "zeroTension", "wrongUnit", "wrongMode", "profileRange", "badRange", "rangeUnit", "reverseProfile", "reverseText", "curveProfileDirection", "invalidProfileDirection", "negativeStart", "fractionalStart", "overflowStart", "startUnit"])
+func loftTypedSectionsRejectWrongMeaning(fault: String) throws {
+  let first = SemanticSourceReference.feature(FeatureID())
+  let second = SemanticSourceReference.feature(FeatureID())
+  let scene = SemanticSourceReference.sceneNode(SceneNodeID())
+  var firstSection = semanticLoftSection("curve", .existing(first))
+  if ["negativeStart", "fractionalStart", "overflowStart", "startUnit"].contains(fault) {
+    firstSection = semanticLoftSection("curve", .existing(first), controls: ["startSampleIndex":
+      .literal(.number(fault == "negativeStart" ? -1 : fault == "fractionalStart" ? 0.5 : fault == "overflowStart" ? 1e100 : 0,
+        unit: fault == "startUnit" ? .meter : .unitless))])
+  }
+  if fault == "unknownKind" { firstSection = semanticLoftSection("mesh", .existing(first)) }
+  if fault == "extraField" {
+    firstSection = object(["kind": .literal(.text("curve")), "source": .existing(first), "ignored": .literal(.boolean(true))])
+  }
+  if fault == "sceneSource" { firstSection = semanticLoftSection("curve", .existing(scene)) }
+  if fault == "curveProfileDirection" || fault == "invalidProfileDirection" {
+    firstSection = semanticLoftSection(fault == "curveProfileDirection" ? "curve" : "profile", .existing(first),
+      controls: ["profileDirection": .literal(.text(fault == "curveProfileDirection" ? "automatic" : "backwards"))])
+  }
+  if fault == "reverseProfile" || fault == "reverseText" {
+    firstSection = semanticLoftSection(fault == "reverseProfile" ? "profile" : "curve", .existing(first),
+      controls: ["reversed": fault == "reverseText" ? .literal(.text("true")) : .literal(.boolean(true))])
+  }
+  if fault == "profileRange" || fault == "badRange" || fault == "rangeUnit" {
+    firstSection = semanticLoftSection(fault == "profileRange" ? "profile" : "curve", .existing(first),
+      controls: ["parameterRange": .array([
+        .literal(.number(fault == "badRange" ? 1 : 0, unit: .unitless)),
+        .literal(.number(0.5, unit: fault == "rangeUnit" ? .meter : .unitless))])])
+  }
+  if fault == "zeroTension" || fault == "wrongUnit" || fault == "wrongMode" {
+    firstSection = semanticLoftSection("curve", .existing(first), controls: fault == "wrongMode"
+      ? ["tangentMode": .literal(.text("G2"))]
+      : ["tangentScale": .literal(.number(fault == "zeroTension" ? 0 : 1,
+        unit: fault == "wrongUnit" ? .meter : .unitless))])
+  }
+  let sections: SemanticArgument = fault == "legacyArray" ? .array([.existing(first), .existing(second)])
+    : .array([firstSection, semanticLoftSection("profile", .existing(second))])
+  let operation: DomainCapabilityID = fault == "legacyOperation" ? "cad.surface.loftCurves"
+    : fault == "solidCurve" ? RupaCADSemanticOperationID.solidLoft : RupaCADSemanticOperationID.surfaceLoft
+  let request = SemanticDirectRequest(schemaVersion: .current,
+    invocation: SemanticOperationInvocation(operationID: operation, operationVersion: RupaCADDomain.operationVersion,
+      arguments: semanticArguments(["name": .literal(.text("Rejected Loft")), "sections": sections,
+        "guides": .array([]), "surfaceMode": .literal(.text("ruled")),
+        "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))])))
+  let compiler = DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
+  #expect(throws: SemanticCompilationError.self) {
+    try compiler.compile(request, context: SemanticCompilationContext(existingSourceReferences: [first, second, scene]),
+      limits: semanticCADLimits())
+  }
+}
+
+@Test(.timeLimit(.minutes(1)))
+func loftProfileRegionIndexIsPreservedBySemanticLowering() throws {
+  let first = SemanticSourceReference.feature(FeatureID())
+  let second = SemanticSourceReference.feature(FeatureID())
+  let compiler = DefaultSemanticProgramCompiler(registry: try RupaCADDomain.registry())
+  for (kind, value, unit) in [("profile", 2.0, SemanticUnit.unitless),
+    ("profile", -1.0, .unitless), ("profile", 0.5, .unitless),
+    ("profile", 1e100, .unitless), ("profile", 0.0, .meter), ("curve", 0.0, .unitless)] {
+    let request = SemanticDirectRequest(schemaVersion: .current, invocation: SemanticOperationInvocation(
+      operationID: RupaCADSemanticOperationID.surfaceLoft, operationVersion: RupaCADDomain.operationVersion,
+      arguments: semanticArguments(["name": .literal(.text("Indexed Loft")),
+        "sections": .array([
+          semanticLoftSection(kind, .existing(first), controls: ["profileIndex": .literal(.number(value, unit: unit))]),
+          semanticLoftSection("profile", .existing(second))]),
+        "guides": .array([]), "surfaceMode": .literal(.text("ruled")),
+        "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))])))
+    if value == 2 {
+      let compiled = try compiler.compile(request,
+        context: SemanticCompilationContext(existingSourceReferences: [first, second]), limits: semanticCADLimits())
+      let command = try buildCommand(from: #require(compiled.preparedProgram.steps.first))
+      guard case .createLoft(_, let sections, _, _) = command.command,
+            case .profile(let profile) = sections[0].section else {
+        Issue.record("Expected an indexed profile Loft."); return
+      }
+      #expect(profile.profileIndex == 2)
+    } else {
+      #expect(throws: SemanticCompilationError.self) {
+        try compiler.compile(request,
+          context: SemanticCompilationContext(existingSourceReferences: [first, second]), limits: semanticCADLimits())
+      }
     }
   }
 }
@@ -320,6 +464,61 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
       work: 3
     ),
     descriptor(
+      RupaCADSemanticOperationID.surfaceExtrude,
+      inputs: [
+        input("name", .text),
+        input("profile", .feature),
+        input("distance", .number(unit: .meter)),
+        input("direction", .direction),
+      ],
+      outputs: [
+        output("body", .sourceBody(role: .sheet), .sourceBody(role: .sheet, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0)),
+      ],
+      work: 3
+    ),
+    descriptor(
+      RupaCADSemanticOperationID.surfaceExtrudeCurve,
+      inputs: [
+        input("name", .text),
+        input("curve", .feature),
+        input("distance", .number(unit: .meter)),
+        input("direction", .direction),
+      ],
+      outputs: [
+        output("body", .sourceBody(role: .sheet), .sourceBody(role: .sheet, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0)),
+      ],
+      work: 3
+    ),
+    descriptor(
+      RupaCADSemanticOperationID.solidRevolve,
+      inputs: [input("name", .text), input("profile", .feature),
+        input("axisOrigin", .point), input("axisDirection", .direction),
+        input("angle", .number(unit: .degree))],
+      outputs: [output("body", .sourceBody(role: .body), .sourceBody(role: .body, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0))],
+      work: 3
+    ),
+    descriptor(
+      RupaCADSemanticOperationID.surfaceRevolve,
+      inputs: [input("name", .text), input("profile", .feature),
+        input("axisOrigin", .point), input("axisDirection", .direction),
+        input("angle", .number(unit: .degree))],
+      outputs: [output("body", .sourceBody(role: .sheet), .sourceBody(role: .sheet, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0))],
+      work: 3
+    ),
+    descriptor(
+      RupaCADSemanticOperationID.surfaceRevolveCurve,
+      inputs: [input("name", .text), input("curve", .feature),
+        input("axisOrigin", .point), input("axisDirection", .direction),
+        input("angle", .number(unit: .degree))],
+      outputs: [output("body", .sourceBody(role: .sheet), .sourceBody(role: .sheet, index: 0)),
+        output("scene", .sceneNode, .sceneNode(index: 0))],
+      work: 3
+    ),
+    descriptor(
       RupaCADSemanticOperationID.solidSphere,
       inputs: [
         input("name", .text),
@@ -336,6 +535,10 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
       ],
       work: 3
     ),
+    loftDescriptor(RupaCADSemanticOperationID.solidLoft, role: .body),
+    loftDescriptor(RupaCADSemanticOperationID.surfaceLoft, role: .sheet),
+    loftDescriptor(RupaCADSemanticOperationID.solidLoftReplace, role: .body, replacing: true),
+    loftDescriptor(RupaCADSemanticOperationID.surfaceLoftReplace, role: .sheet, replacing: true),
     descriptor(
       RupaCADSemanticOperationID.sceneTransform,
       inputs: [
@@ -392,6 +595,14 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
       work: 5
     ),
   ]
+}
+
+private func loftDescriptor(_ id: DomainCapabilityID, role: SourceBodyOutputRole, replacing: Bool = false) -> SemanticOperationDescriptor {
+  descriptor(id, inputs: [replacing ? input("body", .sourceBody(role: role)) : input("name", .text), input("sections", .array(element: .object)),
+    input("guides", .array(element: .feature)), input("surfaceMode", .text),
+    input("tangentScale", .number(unit: .unitless)), input("closed", .boolean)],
+    outputs: replacing ? [] : [output("body", .sourceBody(role: role), .sourceBody(role: role, index: 0)),
+      output("scene", .sceneNode, .sceneNode(index: 0))], work: replacing ? 0 : 3)
 }
 
 private var solidPrimitiveOutputs: [SemanticOperationOutputDescriptor] {
@@ -458,13 +669,16 @@ private func output(
 private func semanticCADFixtures() -> [SemanticCADFixture] {
   let planeValue = plane()
   let profileID = FeatureID()
+  let secondProfile = SemanticSourceReference.feature(FeatureID())
   let sceneID = SceneNodeID()
   let definitionID = ComponentDefinitionID()
   let profile = SemanticSourceReference.feature(profileID)
   let scene = SemanticSourceReference.sceneNode(sceneID)
   let definition = SemanticSourceReference.componentDefinition(definitionID)
+  let solid = SemanticSourceReference.sourceBody(featureID: FeatureID(), role: .body)
+  let sheet = SemanticSourceReference.sourceBody(featureID: FeatureID(), role: .sheet)
   let commonContext = SemanticCompilationContext(
-    existingSourceReferences: [profile, scene, definition]
+    existingSourceReferences: [profile, secondProfile, scene, definition, solid, sheet]
   )
   let identityTransform = SemanticTransform(
     translation: point(0, 0, 0),
@@ -474,6 +688,31 @@ private func semanticCADFixtures() -> [SemanticCADFixture] {
   )
 
   return [
+    fixture("cad.solid.loft.replace", "setLoft", [
+      "body": .existing(solid), "sections": .array([
+        semanticLoftSection("profile", .existing(profile)), semanticLoftSection("profile", .existing(secondProfile))]),
+      "guides": .array([]), "surfaceMode": .literal(.text("ruled")),
+      "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))], context: commonContext),
+    fixture("cad.surface.loft.replace", "setLoft", [
+      "body": .existing(sheet), "sections": .array([
+        semanticLoftSection("curve", .existing(profile)), semanticLoftSection("curve", .existing(secondProfile))]),
+      "guides": .array([]), "surfaceMode": .literal(.text("smooth")),
+      "tangentScale": .literal(.number(0.7, unit: .unitless)), "closed": .literal(.boolean(false))], context: commonContext),
+    fixture("cad.solid.loft", "createLoft", [
+      "name": .literal(.text("Solid Loft")), "sections": .array([
+        semanticLoftSection("profile", .existing(profile)), semanticLoftSection("profile", .existing(secondProfile))]),
+      "guides": .array([]), "surfaceMode": .literal(.text("ruled")),
+      "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))], context: commonContext),
+    fixture("cad.surface.loft", "createLoft", [
+      "name": .literal(.text("Sheet Loft")), "sections": .array([
+        semanticLoftSection("profile", .existing(profile)), semanticLoftSection("curve", .existing(secondProfile))]),
+      "guides": .array([]), "surfaceMode": .literal(.text("smooth")),
+      "tangentScale": .literal(.number(0.7, unit: .unitless)), "closed": .literal(.boolean(false))], context: commonContext),
+    fixture("cad.surface.loft", "createLoft", [
+      "name": .literal(.text("Curve Loft")), "sections": .array([
+        semanticLoftSection("curve", .existing(profile)), semanticLoftSection("curve", .existing(secondProfile))]),
+      "guides": .array([]), "surfaceMode": .literal(.text("smooth")),
+      "tangentScale": .literal(.number(1, unit: .unitless)), "closed": .literal(.boolean(false))], context: commonContext),
     fixture(
       "cad.sketch.line", "createLineSketch",
       [
@@ -524,13 +763,47 @@ private func semanticCADFixtures() -> [SemanticCADFixture] {
         "height": .literal(.number(2, unit: .meter)),
       ]),
     fixture(
-      "cad.solid.extrude", "extrudeProfile",
+      "cad.solid.extrude", "extrudeSection",
       [
         "name": .literal(.text("Extrude")),
         "profile": .existing(profile),
         "distance": .literal(.number(1, unit: .meter)),
         "direction": .literal(.direction(direction(0, 0, 1))),
       ], context: commonContext),
+    fixture(
+      "cad.surface.extrude", "extrudeSection",
+      [
+        "name": .literal(.text("Sheet")),
+        "profile": .existing(profile),
+        "distance": .literal(.number(1, unit: .meter)),
+        "direction": .literal(.direction(direction(0, 0, 1))),
+      ], context: commonContext),
+    fixture(
+      "cad.surface.extrudeCurve", "extrudeSection",
+      [
+        "name": .literal(.text("Curve Sheet")),
+        "curve": .existing(profile),
+        "distance": .literal(.number(1, unit: .meter)),
+        "direction": .literal(.direction(direction(0, 0, 1))),
+      ], context: commonContext),
+    fixture(
+      "cad.solid.revolve", "revolveSection",
+      ["name": .literal(.text("Revolve")), "profile": .existing(profile),
+       "axisOrigin": .literal(.point(point(0, 0, 0))),
+       "axisDirection": .literal(.direction(direction(0, 1, 0))),
+       "angle": .literal(.number(180, unit: .degree))], context: commonContext),
+    fixture(
+      "cad.surface.revolve", "revolveSection",
+      ["name": .literal(.text("Revolve Sheet")), "profile": .existing(profile),
+       "axisOrigin": .literal(.point(point(0, 0, 0))),
+       "axisDirection": .literal(.direction(direction(0, 1, 0))),
+       "angle": .literal(.number(-180, unit: .degree))], context: commonContext),
+    fixture(
+      "cad.surface.revolveCurve", "revolveSection",
+      ["name": .literal(.text("Revolve Curve")), "curve": .existing(profile),
+       "axisOrigin": .literal(.point(point(0, 0, 0))),
+       "axisDirection": .literal(.direction(direction(0, 1, 0))),
+       "angle": .literal(.number(360, unit: .degree))], context: commonContext),
     fixture(
       "cad.solid.sphere", "createAnalyticSphere",
       [
@@ -668,6 +941,12 @@ private func relation(
   _ values: [String: SemanticArgument]
 ) -> SemanticArgument {
   object(["kind": .literal(.text(kind))].merging(values) { _, new in new })
+}
+
+func semanticLoftSection(_ kind: String, _ source: SemanticArgument,
+  controls: [String: SemanticArgument] = [:]
+) -> SemanticArgument {
+  object(["kind": .literal(.text(kind)), "source": source].merging(controls) { _, new in new })
 }
 
 private func object(_ values: [String: SemanticArgument]) -> SemanticArgument {

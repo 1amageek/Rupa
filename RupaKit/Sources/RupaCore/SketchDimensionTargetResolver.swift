@@ -114,7 +114,8 @@ public struct SketchDimensionTargetResolver: Sendable {
               edgeEntry.sourceFeatureID == bodyFeatureID.description,
               let bodyFeature = document.cadDocument.designGraph.nodes[bodyFeatureID],
               case let .extrude(extrude) = bodyFeature.operation,
-              let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+              extrude.section.isProfile,
+              let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
               case .sketch = profileFeature.operation else {
             throw EditorError(
                 code: .commandInvalid,
@@ -122,7 +123,7 @@ public struct SketchDimensionTargetResolver: Sendable {
             )
         }
         guard let sketchSceneNodeID = sketchSceneNodeID(
-            for: extrude.profile.featureID,
+            for: extrude.section.featureID,
             document: document
         ) else {
             throw EditorError(
@@ -132,7 +133,7 @@ public struct SketchDimensionTargetResolver: Sendable {
         }
 
         let candidates = try sketchEntries.filter {
-            guard $0.sourceFeatureID == extrude.profile.featureID.description else {
+            guard $0.sourceFeatureID == extrude.section.featureID.description else {
                 return false
             }
             return try matchesGeneratedEdge(edgeEntry, sketchEntity: $0, sketch: profileFeature)
@@ -163,7 +164,7 @@ public struct SketchDimensionTargetResolver: Sendable {
             sceneNodeID: sketchSceneNodeID,
             component: .sketchEntity(
                 SelectionComponentID.sketchEntity(
-                    featureID: extrude.profile.featureID,
+                    featureID: extrude.section.featureID,
                     entityID: SketchEntityID(entityUUID)
                 )
             )

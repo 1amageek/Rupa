@@ -62,7 +62,8 @@ extension DesignDocument {
             )
         }
         _ = try resolvedPositiveLengthValue(extrude.distance, owner: "Extrude distance")
-        guard var profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
+        guard extrude.section.isProfile,
+              var profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -191,7 +192,8 @@ extension DesignDocument {
             )
         }
         _ = try resolvedPositiveLengthValue(extrude.distance, owner: "Extrude distance")
-        guard var profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
+        guard extrude.section.isProfile,
+              var profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,

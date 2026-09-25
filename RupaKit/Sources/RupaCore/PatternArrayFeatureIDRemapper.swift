@@ -31,7 +31,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
 
     func remappedOperation(_ operation: FeatureOperation) throws -> FeatureOperation {
         switch operation {
-        case .sketch, .spatialPath:
+        case .involuteGear, .sketch, .spatialPath:
             return operation
         case .extrude:
             return try remappedExtrudeOperation(operation)
@@ -211,7 +211,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                 message: "Pattern array remapping dispatch expected a extrude operation."
             )
         }
-        extrude.profile = try remappedProfileReference(extrude.profile)
+        extrude.section = try remappedSectionReference(extrude.section)
         return .extrude(extrude)
     }
 
@@ -225,7 +225,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                 message: "Pattern array remapping dispatch expected a revolve operation."
             )
         }
-        revolve.profile = try remappedProfileReference(revolve.profile)
+        revolve.section = try remappedSectionReference(revolve.section)
         return .revolve(revolve)
     }
 
@@ -264,7 +264,8 @@ struct PatternArrayFeatureIDRemapper: Sendable {
         }
         loft.sections = try loft.sections.map { section in
             LoftSectionReference(
-                profile: try remappedProfileReference(section.profile),
+                section: try remappedSectionReference(section.section),
+                profileDirection: section.profileDirection,
                 startSampleIndex: section.startSampleIndex,
                 smoothTangentScale: section.smoothTangentScale,
                 smoothTangentMode: section.smoothTangentMode
@@ -870,7 +871,9 @@ struct PatternArrayFeatureIDRemapper: Sendable {
         case .profile(let profile):
             return .profile(try remappedProfileReference(profile))
         case .curve(let curve):
-            return .curve(CurveSectionReference(featureID: try remappedFeatureID(curve.featureID)))
+            var remapped = curve
+            remapped.featureID = try remappedFeatureID(curve.featureID)
+            return .curve(remapped)
         }
     }
 

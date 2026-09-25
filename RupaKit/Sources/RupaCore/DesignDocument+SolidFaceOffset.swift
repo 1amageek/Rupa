@@ -31,7 +31,8 @@ extension DesignDocument {
                 message: "Face offset requires an editable extrude body."
             )
         }
-        guard var profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
+        guard extrude.section.isProfile,
+              var profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case var .sketch(sketch) = profileFeature.operation else {
             throw EditorError(
                 code: .referenceUnresolved,

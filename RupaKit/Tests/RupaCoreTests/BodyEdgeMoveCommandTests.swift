@@ -139,7 +139,7 @@ private func edgeMoveRectangleBounds(
 ) throws -> EdgeMoveRectangleBounds {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .extrude(extrude) = feature.operation,
-          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case let .sketch(sketch) = profileFeature.operation else {
         throw EditorError(code: .referenceUnresolved, message: "Expected an extruded sketch body.")
     }
@@ -169,7 +169,7 @@ private func edgeMoveCircleProfile(
 ) throws -> EdgeMoveCircleProfile {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .extrude(extrude) = feature.operation,
-          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case let .sketch(sketch) = profileFeature.operation,
           let entity = sketch.entities.values.first,
           case let .circle(circle) = entity else {
@@ -186,7 +186,7 @@ private func edgeMoveArcProfile(
 ) throws -> EdgeMoveArcProfile {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .extrude(extrude) = feature.operation,
-          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.section.featureID],
           case let .sketch(sketch) = profileFeature.operation,
           let entity = sketch.entities.values.first(where: { entity in
               if case .arc = entity {

@@ -131,7 +131,7 @@ public struct ViewportSceneBuilder {
             case .revolve(let revolve):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
-                    sourceFeatureID: revolve.profile.featureID,
+                    sourceFeatureID: revolve.section.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
@@ -340,7 +340,7 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
-            case .importedBRep, .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
+            case .involuteGear, .importedBRep, .primitive, .patchSurface, .faceOffset, .faceMove, .edgeMove, .vertexMove,
                  .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
                  .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
                  .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch,

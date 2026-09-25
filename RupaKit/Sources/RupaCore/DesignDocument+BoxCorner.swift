@@ -34,7 +34,8 @@ extension DesignDocument {
     package func extrudedBodyFeatureIDs(forProfile featureID: FeatureID) -> [FeatureID] {
         cadDocument.designGraph.order.compactMap { candidate in
             guard case let .extrude(extrude) = cadDocument.designGraph.nodes[candidate]?.operation,
-                  extrude.profile.featureID == featureID else { return nil }
+                  extrude.section.isProfile,
+                  extrude.section.featureID == featureID else { return nil }
             return visibleBoxFeatureID(candidate)
         }
     }
@@ -65,8 +66,9 @@ extension DesignDocument {
     ) throws -> AllEdgeFilletTarget? {
         guard case let .extrude(extrude) = cadDocument.designGraph
                 .nodes[boxExtrusionFeatureID(featureID)]?.operation,
+              extrude.section.isProfile,
               case let .sketch(sketch) = cadDocument.designGraph
-                .nodes[extrude.profile.featureID]?.operation else {
+                .nodes[extrude.section.featureID]?.operation else {
             return nil
         }
         // An uncapped extrusion keeps the profile a capped one has, so the recognizer still names
@@ -132,7 +134,7 @@ extension DesignDocument {
     func validateBoxCornerTarget(_ featureID: FeatureID) throws {
         guard case let .extrude(extrude) = cadDocument.designGraph.nodes[featureID]?.operation,
               extrude.resultKind == .solid,
-              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.profile.featureID]?.operation,
+              case let .sketch(sketch) = cadDocument.designGraph.nodes[extrude.section.featureID]?.operation,
               let profile = try recognizedAllEdgeFilletProfile(in: sketch) else {
             throw unroundableAllEdgeTarget()
         }

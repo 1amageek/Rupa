@@ -2322,20 +2322,32 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .extrudeProfile:
+        case .extrudeProfile, .extrudeSection:
             func run() throws {
-                guard case .extrudeProfile(let name, let profile, let distance, let direction) = command else {
+                let name: String
+                let extrusion: ExtrudeFeature
+                switch command {
+                case .extrudeProfile(let value, let profile, let distance, let direction, let resultKind):
+                    name = value
+                    extrusion = ExtrudeFeature(profile: profile, distance: distance,
+                        direction: direction, resultKind: resultKind)
+                case .extrudeSection(let value, let section, let distance, let direction, let resultKind):
+                    name = value
+                    extrusion = ExtrudeFeature(section: section, distance: distance,
+                        direction: direction, resultKind: resultKind)
+                default:
                     throw EditorError(
                         code: .commandInvalid,
-                        message: "Command dispatch expected extrudeProfile."
+                        message: "Command dispatch expected an extrusion."
                     )
                 }
                 var updatedDocument = document
-                primaryFeatureID = try updatedDocument.extrudeProfile(
+                primaryFeatureID = try updatedDocument.extrudeSection(
                     name: name,
-                    profile: profile,
-                    distance: distance,
-                    direction: direction,
+                    section: extrusion.section,
+                    distance: extrusion.distance,
+                    direction: extrusion.direction,
+                    resultKind: extrusion.resultKind,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument
@@ -2343,20 +2355,30 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .createRevolve:
+        case .createRevolve, .revolveSection:
             func run() throws {
-                guard case .createRevolve(let name, let profile, let axis, let angle) = command else {
+                let name: String
+                let revolution: RevolveFeature
+                switch command {
+                case .createRevolve(let value, let profile, let axis, let angle):
+                    name = value
+                    revolution = RevolveFeature(profile: profile, axis: axis, angle: angle)
+                case .revolveSection(let value, let section, let axis, let angle, let resultKind):
+                    name = value
+                    revolution = RevolveFeature(section: section, axis: axis, angle: angle, resultKind: resultKind)
+                default:
                     throw EditorError(
                         code: .commandInvalid,
-                        message: "Command dispatch expected createRevolve."
+                        message: "Command dispatch expected a revolution."
                     )
                 }
                 var updatedDocument = document
-                primaryFeatureID = try updatedDocument.createRevolve(
+                primaryFeatureID = try updatedDocument.revolveSection(
                     name: name,
-                    profile: profile,
-                    axis: axis,
-                    angle: angle,
+                    section: revolution.section,
+                    axis: revolution.axis,
+                    angle: revolution.angle,
+                    resultKind: revolution.resultKind,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument
@@ -2408,6 +2430,13 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .setLoft(featureID, loft):
+            var updatedDocument = document
+            try updatedDocument.setLoft(featureID: featureID, loft: loft, objectRegistry: objectRegistry)
+            document = updatedDocument
+            primaryFeatureID = featureID
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createBoolean:
             func run() throws {
                 guard case .createBoolean(let name, let targets, let tool, let operation, let keepTools) = command else {

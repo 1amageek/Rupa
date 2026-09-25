@@ -69,12 +69,12 @@ enum CADTransformInitialSourceOracle {
             sketch = sourceSketch
         case .body:
             guard case .extrude(let extrude) = sourceFeature.operation,
-                  extrude.profile.profileIndex == 0,
+                  extrude.section.profile?.profileIndex == 0,
                   extrude.direction == .normal,
                   extrude.operation == .newBody,
                   document.cadDocument.designGraph.order.last == sourceFeatureID,
                   document.cadDocument.designGraph.nodes.count == 2,
-                  let sourceSketch = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+                  let sourceSketch = document.cadDocument.designGraph.nodes[extrude.section.featureID],
                   case .sketch(let bodySketch) = sourceSketch.operation else {
                 throw CADTransformOracleError.mismatch(
                     "The initial solid transform source is not one normal extrude of one sketch."
@@ -85,7 +85,7 @@ enum CADTransformInitialSourceOracle {
                     "The initial solid transform source has no body output."
                 )
             }
-            sketchFeatureID = extrude.profile.featureID
+            sketchFeatureID = extrude.section.featureID
             bodyFeatureID = sourceFeatureID
             sketch = bodySketch
         }

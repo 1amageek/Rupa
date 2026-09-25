@@ -40,7 +40,7 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.dependencies.contains(
         DependencyEdge(source: profileID, target: revolveID)
     ))
-    #expect(revolve.profile == ProfileReference(featureID: profileID))
+    #expect(revolve.section == .profile(ProfileReference(featureID: profileID)))
     #expect(revolve.axis == axis)
     #expect(revolve.angle == .angle(180.0, .degree))
     #expect(sceneNode.object?.category == .body)

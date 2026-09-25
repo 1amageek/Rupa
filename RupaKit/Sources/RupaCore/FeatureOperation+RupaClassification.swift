@@ -15,7 +15,8 @@ extension FeatureOperation {
              .curveExtend,
              .curveMatch:
             return true
-        case .importedBRep,
+        case .involuteGear,
+             .importedBRep,
              .sketch,
              .primitive,
              .extrude,
@@ -60,6 +61,8 @@ extension FeatureOperation {
 
     var producesRenderableTopology: Bool {
         switch self {
+        case .involuteGear:
+            return true
         case .importedBRep:
             return true
         case .sketch, .spatialPath:
@@ -131,6 +134,8 @@ extension FeatureOperation {
 
     var supersededBodyFeatureIDs: Set<FeatureID> {
         switch self {
+        case .involuteGear:
+            return []
         case .importedBRep:
             return []
         case .sketch, .spatialPath:
