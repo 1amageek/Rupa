@@ -94,10 +94,10 @@ enum ViewportNativeCADTopologyResolver {
         if selectionHitPolicy.allowsEdgeHits {
             var best: (component: SelectionComponent, candidate: ViewportNativeHitCandidate)?
             for edge in topology.edges {
-                guard let distance = try segmentCandidate(
+                guard let distance = try edgeCandidate(
                     at: point,
-                    worldStart: world(edge.start, modelTransform: modelTransform),
-                    worldEnd: world(edge.end, modelTransform: modelTransform),
+                    edge: edge,
+                    modelTransform: modelTransform,
                     tolerance: tolerance,
                     nearerThan: best?.candidate.metric ?? .infinity,
                     probe: probe
@@ -245,15 +245,19 @@ enum ViewportNativeCADTopologyResolver {
 
         guard selectionHitPolicy.allowsEdgeHits else { return components }
         for edge in topology.edges where admitted.contains(edge.componentID) == false {
-            guard try regionSegmentAdmits(
-                worldStart: world(edge.start, modelTransform: modelTransform),
-                worldEnd: world(edge.end, modelTransform: modelTransform),
-                in: rect,
-                depthInterval: depthInterval,
-                probe: probe
-            ) else { continue }
-            admitted.insert(edge.componentID)
-            components.append(.edge(edge.componentID))
+            guard edge.displayPoints.count >= 2 else { continue }
+            for index in 1..<edge.displayPoints.count {
+                guard try regionSegmentAdmits(
+                    worldStart: world(edge.displayPoints[index - 1], modelTransform: modelTransform),
+                    worldEnd: world(edge.displayPoints[index], modelTransform: modelTransform),
+                    in: rect,
+                    depthInterval: depthInterval,
+                    probe: probe
+                ) else { continue }
+                admitted.insert(edge.componentID)
+                components.append(.edge(edge.componentID))
+                break
+            }
         }
         return components
     }
@@ -375,6 +379,29 @@ enum ViewportNativeCADTopologyResolver {
     /// that cannot beat it costs two projections and no visibility query, which
     /// is what keeps a polyline sampled into many segments from asking the frame
     /// once per segment.
+    static func edgeCandidate(
+        at point: CGPoint,
+        edge: ViewportBodyTopology.Edge,
+        modelTransform: Transform3D,
+        tolerance: CGFloat = pointTolerance,
+        nearerThan bound: Double = .infinity,
+        probe: some ViewportNativeFrameProbe
+    ) throws -> Double? {
+        var best: Double?
+        guard edge.displayPoints.count >= 2 else { return nil }
+        for index in 1..<edge.displayPoints.count {
+            if let distance = try segmentCandidate(
+                at: point,
+                worldStart: world(edge.displayPoints[index - 1], modelTransform: modelTransform),
+                worldEnd: world(edge.displayPoints[index], modelTransform: modelTransform),
+                tolerance: tolerance, nearerThan: best ?? bound, probe: probe
+            ) {
+                best = distance
+            }
+        }
+        return best
+    }
+
     static func segmentCandidate(
         at point: CGPoint,
         worldStart: Point3D,

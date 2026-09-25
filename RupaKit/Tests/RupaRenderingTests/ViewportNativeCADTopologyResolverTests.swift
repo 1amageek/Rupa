@@ -272,6 +272,24 @@ private func resolve(
 
 @Suite struct ViewportNativeCADTopologyResolverTests {
     @Test(.timeLimit(.minutes(1)))
+    func curvedEdgePickingUsesDisplayedSegmentsNotTheEndpointChord() throws {
+        let edge = ViewportBodyTopology.Edge(
+            componentID: bottomEdgeComponentID,
+            start: Point3D(x: 0, y: 0, z: 0),
+            end: Point3D(x: 1, y: 0, z: 0),
+            displayPoints: [Point3D(x: 0, y: 0, z: 0),
+                            Point3D(x: 0.5, y: 0, z: 1),
+                            Point3D(x: 1, y: 0, z: 0)]
+        )
+        #expect(try ViewportNativeCADTopologyResolver.edgeCandidate(
+            at: CGPoint(x: 250, y: 100), edge: edge,
+            modelTransform: .identity, probe: NativeCADFrame()) != nil)
+        #expect(try ViewportNativeCADTopologyResolver.edgeCandidate(
+            at: CGPoint(x: 250, y: 200), edge: edge,
+            modelTransform: .identity, probe: NativeCADFrame()) == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func nativeCADTopologyResolverReturnsPreparedFaceIdentityAtTheSurfacePoint() throws {
         let component = try #require(try resolve(at: CGPoint(x: 250, y: 150)))
         #expect(component == .face(frontFaceComponentID))

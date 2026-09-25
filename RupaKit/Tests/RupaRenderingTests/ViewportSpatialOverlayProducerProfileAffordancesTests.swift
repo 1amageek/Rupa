@@ -245,6 +245,143 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
     }
 }
 
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func selectedBoundaryEdgeShowsSurfaceFillForADeletedFaceOpening() throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedCircle())
+    let solidFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let solidNodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
+        node.reference?.featureID == solidFeatureID
+    }?.key)
+    let solidTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let lateralFace = try #require(solidTopology.entries.first {
+        $0.kind == .face
+            && $0.sceneNodeID == solidNodeID.description
+            && $0.generatedRole == "sideFace"
+    }?.selectionTarget())
+    _ = try session.execute(.deleteBodyFaces(targets: [lateralFace]))
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: .standard(for: .meter)
+    )
+    let item = try #require(scene.items.first { $0.featureID == featureID })
+    let nodeID = try #require(item.sceneNodeID)
+    guard case .body(let body) = item.kind else {
+        Issue.record("The open shell was not projected as a CAD body.")
+        return
+    }
+    let loopEdges = try #require(body.topology?.edges.filter { $0.openBoundaryLoopID != nil })
+    #expect(loopEdges.count == 4)
+    let loopID = try #require(loopEdges.first?.openBoundaryLoopID)
+    #expect(loopEdges.allSatisfy { $0.openBoundaryLoopID == loopID })
+    let curvedEdge = try #require(loopEdges.first { $0.displayPoints.count > 2 })
+
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(loopEdges[0].componentID))
+    var raw = ProfileRawInput(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [edgeTarget]),
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.boundarySurface, .edgeFillet, .profileEdgeChamfer],
+        interactiveRoutes: [.boundarySurface, .edgeFillet, .profileEdgeChamfer]
+    )
+    raw.edgeTreatmentHoverTarget = edgeTarget
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
+    let source = try #require(
+        try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw,
+            interactionRecords: &interactionRecords,
+            checkpoint: { _, _, _ in }
+        )
+    )
+
+    #expect(source.cameraLines.filter { $0.route == .boundarySurface }.count == loopEdges.count + 1)
+    let curvedHighlight = try #require(source.cameraLines.first {
+        $0.route == .boundarySurface && $0.points.count == curvedEdge.displayPoints.count
+    })
+    #expect(curvedHighlight.points.map(\.anchor) == curvedEdge.displayPoints.map(
+        item.modelTransform.viewportTransformedPoint
+    ))
+    #expect(source.cameraPaths.count == 1)
+    guard case .affordance(let affordance) = try #require(source.cameraPaths.first).identity else {
+        Issue.record("The fill glyph must be an addressable affordance.")
+        return
+    }
+    #expect(affordance.selectionTarget == edgeTarget)
+    #expect(affordance.action == .boundarySurface(edgeTarget))
+    #expect(interactionRecords.count == 1)
+    #expect(interactionRecords.first?.identity == .affordance(affordance))
+    #expect(raw.selection.selectedTargets == [edgeTarget])
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func selectedBoundaryEdgeOffersBoundarySurfaceBridgeForASingleFaceOuterPerimeter() throws {
+    let session = EditorSession()
+    let surface = BSplineSurface3D.bilinearPatch(
+        bottomLeft: .origin,
+        bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+        topRight: Point3D(x: 0.1, y: 0.1, z: 0),
+        topLeft: Point3D(x: 0, y: 0.1, z: 0)
+    )
+    _ = try session.execute(.createBSplineSurface(name: "Open surface", surface: surface))
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let scene = ViewportSceneBuilder().build(
+        document: session.document,
+        ruler: .standard(for: .meter)
+    )
+    let item = try #require(scene.items.first { $0.featureID == featureID })
+    let nodeID = try #require(item.sceneNodeID)
+    guard case .body(let body) = item.kind,
+          let edge = body.topology?.edges.first else {
+        Issue.record("The source surface edge was not projected.")
+        return
+    }
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(edge.componentID))
+    var raw = ProfileRawInput(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [edgeTarget]),
+        ruler: .standard(for: .meter),
+        enabledRoutes: [.boundarySurface],
+        interactiveRoutes: [.boundarySurface]
+    )
+    raw.edgeTreatmentHoverTarget = edgeTarget
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
+    let source = try #require(
+        try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw,
+            interactionRecords: &interactionRecords,
+            checkpoint: { _, _, _ in }
+        )
+    )
+
+    #expect(source.cameraPaths.contains { $0.route == .boundarySurface })
+    #expect(source.cameraLines.filter { $0.route == .boundarySurface }.count == 5)
+    #expect(source.cameraPaths.allSatisfy { $0.route == .boundarySurface })
+    #expect(interactionRecords.contains {
+        guard case .affordance(let affordance) = $0.identity else { return false }
+        return affordance.action == .boundarySurface(edgeTarget)
+    })
+}
+
+@Test
+func viewportBoundaryLoopIdentityRequiresExplicitCurveSamples() {
+    let start = Point3D(x: 0, y: 0, z: 0)
+    let end = Point3D(x: 1, y: 0, z: 0)
+    let edge = ViewportBodyTopology.Edge(
+        componentID: .bodyEdgeLeftBottom,
+        start: start,
+        end: end,
+        openBoundaryLoopID: "loop"
+    )
+
+    #expect(edge.openBoundaryLoopID == nil)
+}
+
 @Test
 func profileRoutesEmitNothingWhenTheirRouteIsNotInteractive() throws {
     let featureID = FeatureID()
@@ -335,8 +472,19 @@ private func profileRawInput(
     targets: [SelectionTarget],
     routes: Set<ProfileRoute>
 ) -> ProfileRawInput {
-    ProfileRawInput(
-        document: .empty(),
+    var document = DesignDocument.empty()
+    document.cadDocument.designGraph = DesignGraph(
+        nodes: [item.featureID: FeatureNode(
+            id: item.featureID,
+            operation: .primitive(PrimitiveFeature(definition: .box(BoxPrimitive(
+                width: .constant(.length(2, unit: .meter)),
+                depth: .constant(.length(2, unit: .meter)),
+                height: .constant(.length(1, unit: .meter))
+            )))), outputs: [FeatureOutput(role: .body)]
+        )], order: [item.featureID]
+    )
+    return ProfileRawInput(
+        document: document,
         scene: ViewportScene(items: [item]),
         selection: SelectionModel(selectedTargets: targets),
         ruler: .standard(for: .meter),

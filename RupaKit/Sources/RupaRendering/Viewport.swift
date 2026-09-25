@@ -209,6 +209,7 @@ public struct Viewport: View {
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
     private let onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)?
+    private let onBoundarySurface: ((SelectionTarget) -> Void)?
     private let onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)?
     private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
@@ -397,6 +398,7 @@ public struct Viewport: View {
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
         onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)? = nil,
+        onBoundarySurface: ((SelectionTarget) -> Void)? = nil,
         onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)? = nil,
         onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
@@ -522,6 +524,7 @@ public struct Viewport: View {
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
         self.onEdgeFilletDrag = onEdgeFilletDrag
+        self.onBoundarySurface = onBoundarySurface
         self.onRegionOffsetDrag = onRegionOffsetDrag
         self.onEdgeOffsetDrag = onEdgeOffsetDrag
         self.onSlotWidthDrag = onSlotWidthDrag
@@ -932,6 +935,7 @@ public struct Viewport: View {
                 }
             }
             .onChange(of: presentationScene?.snapshotID) { _, _ in
+                edgeTreatmentHoverTarget = nil
                 cancelNativeInputGesture()
                 resetMeasurement()
             }
@@ -1591,6 +1595,7 @@ public struct Viewport: View {
         if onEdgeChamferDrag != nil { key.availableRoutes |= 1 << 25 }
         if onBodyPlacementCommit != nil { key.availableRoutes |= 1 << 26 }
         if onBodyResizeCommit != nil { key.availableRoutes |= 1 << 27 }
+        if onBoundarySurface != nil { key.availableRoutes |= 1 << 28 }
         return key
     }
 
@@ -4581,7 +4586,8 @@ public struct Viewport: View {
                     at: point,
                     visibleSurface: presentationSurface,
                     in: sceneContext.scene,
-                    includesSelectedObjectEdges: onEdgeFilletDrag != nil || onEdgeChamferDrag != nil
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil
+                        || onEdgeChamferDrag != nil || onBoundarySurface != nil
                 )
             } catch {
                 // An unavailable frame cannot authorize selection or an edit.
@@ -4650,9 +4656,13 @@ public struct Viewport: View {
     private func finishPendingInteractionClick(_ target: ViewportInteractionTarget) {
         pendingInteractionTarget = nil
         switch target {
-        case .affordance:
+        case .affordance(let affordance):
             clearAffordanceGhostEdits()
             activeAffordanceDrag = nil
+            pendingNativeAffordance = nil
+            if let selectionTarget = affordance.action.directClickSelectionTarget {
+                onBoundarySurface?(selectionTarget)
+            }
         }
     }
 
@@ -5052,14 +5062,12 @@ public struct Viewport: View {
             clearCanvasHover()
             return
         }
-        hoveredNativeHandleIdentity = nil
         let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
         let scene = sceneContext.scene
-        clearHoverInteractionTargets()
         let presentationOccurrenceID: SceneOccurrenceID?
         var nativeCADHit: ViewportHit?
         var exactWorldPoint: Point3D?
@@ -5074,7 +5082,9 @@ public struct Viewport: View {
                     at: point,
                     visibleSurface: presentationSurface,
                     in: scene,
-                    includesSelectedObjectEdges: onEdgeFilletDrag != nil || onEdgeChamferDrag != nil
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil
+                        || onEdgeChamferDrag != nil
+                        || onBoundarySurface != nil
                 )
             }
             if selectedPresentationHasExactCADContext,
@@ -5085,9 +5095,11 @@ public struct Viewport: View {
                 )
             }
         } catch {
+            if ViewportNativeQueryFailure.isTransient(error) { return }
             clearCanvasHover()
             return
         }
+        clearHoverInteractionTargets()
         let hit = nativeCADHit
         if let hit, let nodeID = hit.sceneNodeID,
            let component = hit.selectionComponent, case .edge = component,
@@ -5687,6 +5699,7 @@ extension Viewport {
         if onConstructionPlaneHandleDrag != nil { interactive.insert(.constructionPlane) }
         if bodyTransformRouteEnabled { interactive.insert(.bodyTransform) }
         if onEdgeFilletDrag != nil { interactive.insert(.edgeFillet) }
+        if onBoundarySurface != nil { interactive.insert(.boundarySurface) }
         if onVertexDrag != nil { interactive.insert(.profileCorner) }
         if onFaceDrag != nil { interactive.insert(.profileFace) }
         if onEdgeChamferDrag != nil { interactive.insert(.profileEdgeChamfer) }

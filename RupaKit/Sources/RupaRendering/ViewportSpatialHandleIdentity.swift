@@ -114,7 +114,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                 if let selectionTarget = value.selectionTarget { try target(selectionTarget) }
                 switch value.action {
                 case .profileCornerMove(let value, _), .profileFaceMove(let value, _),
-                     .profileEdgeChamfer(let value, _), .profileEdgeFillet(let value, _): try target(value)
+                     .profileEdgeChamfer(let value, _), .profileEdgeFillet(let value, _),
+                     .boundarySurface(let value): try target(value)
                 case .translate, .oneSidedScale, .centerScale, .rotate, .vertexMove, .faceMove: break
                 }
             case .sketchCurveHandle, .sketchDimension, .sketchPointHandle, .bridgeCurveEndpoint,

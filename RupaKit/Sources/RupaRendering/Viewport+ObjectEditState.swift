@@ -192,7 +192,7 @@ struct ViewportObjectEditState: Equatable, Sendable {
             try next.moveProfileCorner(vertex, start: start, current: current, measure: measure)
         case .profileFaceMove(_, let face):
             try next.moveFace(face, start: start, current: current, measure: measure)
-        case .profileEdgeChamfer, .profileEdgeFillet:
+        case .profileEdgeChamfer, .profileEdgeFillet, .boundarySurface:
             break
         case .faceMove(let face):
             try next.moveFace(face, start: start, current: current, measure: measure)

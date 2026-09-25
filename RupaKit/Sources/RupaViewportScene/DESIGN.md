@@ -28,6 +28,10 @@ The module owns:
 
 - immutable viewport scene values and identity-bearing scene items;
 - source/evaluation-aware scene construction and overlay projection;
+- immutable open-boundary loop identities used by contextual surface-creation
+  affordances;
+- immutable display polylines for generated CAD edges, preserving curved edge
+  shape from Core snapshots through overlay construction;
 - stable B-spline patch-face references used by knot and span overlays;
 - camera lens values, homogeneous world-to-clip projection, visible-point
   projection, and viewport-ray/plane unprojection;
@@ -68,6 +72,8 @@ flowchart LR
     Preview["Staged preview document + source + evaluation"] --> Builder
     Builder --> Scene["Immutable ViewportScene"]
     Builder --> Overlay["Knot/span surface overlays"]
+  Builder --> BoundaryLoops["Open boundary loops\nedge IDs + curved display polylines"]
+    BoundaryLoops --> Overlay
     Overlay --> Identity["One identity-only topology snapshot\nonly for B-spline surfaces"]
     Scene --> Frame["Engine-neutral frame values\nsnapshotID + spatial descriptors"]
     Frame --> Rendering["RupaRendering / RealityViewport"]
@@ -90,6 +96,13 @@ For an authored B-spline trim, the presented body uses the trim feature while
 CV, knot and span overlays use Core's `surfaceControlSourceFeatureID`.
 Frame and trim boundary overlays retain their evaluated feature IDs. Source edit
 references are not rewritten to the derived body merely for display.
+
+The scene forwards Core's sampled curves and open-boundary loop identities;
+it neither resolves topology again nor decides fillability. A lone sheet's outer
+perimeter remains eligible for bridging. Fill rejects that perimeter through
+the native operation contract. Rendering derives handle anchors from the
+forwarded polyline; hover does not evaluate CAD or rebuild topology.
+Source/evaluation replacement rebuilds these values with the new snapshot.
 
 ### World-space navigation focus
 
@@ -389,6 +402,7 @@ parallel projection, or a fabricated canvas point.
 | CAD sub-shape identity on every evaluated body | A scene built from a document whose body is an extrude carries the evaluated snapshot's mesh and a non-empty `meshFaceRuns` whose component IDs are generated-topology names, and a triangle index inside a run resolves to that face; a feature with no evaluated snapshot carries neither mesh nor topology, proving the two are written together. |
 | Declared sketch display resolution | A scene built from a circle sketch whose object declares a side-segment count carries that count on the built primitive, a slot declaring a full-turn count carries the half-turn share of it on each cap arc, and a sketch declaring no count for an arc it holds carries the undeclared resolution's counts. |
 | Agent responsiveness | Focused test timing and the restored signed-App `sessions`/`attach`/viewport read path provide runtime evidence. |
+| Boundary-loop affordance input | Core SurfaceFillCommandTests verify sampled-curve publication and loop eligibility; Rendering ViewportSpatialOverlayProducerProfileAffordancesTests verify those values survive scene projection and drive the selected boundary handle. |
 
 Changes to source/evaluation identity or overlay reference contracts require
 rechecking the Core, Evaluation, Rendering, and package designs. Changes to

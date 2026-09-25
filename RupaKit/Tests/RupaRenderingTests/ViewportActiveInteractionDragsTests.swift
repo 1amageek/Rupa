@@ -76,6 +76,16 @@ import Testing
     #expect(ViewportInteractionTarget.affordance(target).activeDragKind == .affordance)
 }
 
+@Test func boundarySurfaceAffordanceRoutesClickWithoutTreatingOtherHandlesAsClickActions() {
+    let selectionTarget = SelectionTarget(
+        sceneNodeID: SceneNodeID(),
+        component: .edge(SelectionComponentID(rawValue: "generatedTopology:edge"))
+    )
+
+    #expect(ViewportAffordanceAction.boundarySurface(selectionTarget).directClickSelectionTarget == selectionTarget)
+    #expect(ViewportAffordanceAction.translate(.x).directClickSelectionTarget == nil)
+}
+
 @Test func viewportInteractionDragFinishResolverReturnsNoneWithoutPendingOrActiveDrag() {
     let request = ViewportInteractionDragFinishResolver.request(
         pendingTarget: nil,

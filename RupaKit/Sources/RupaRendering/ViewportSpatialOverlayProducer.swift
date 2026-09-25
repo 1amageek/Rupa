@@ -1780,10 +1780,8 @@ enum ViewportSpatialOverlayProducer {
                 guard let edge = topology.edges.first(where: { $0.componentID == componentID }) else {
                     throw RealityViewportSpatialBatch.invalid("Selected edge is missing from body topology.")
                 }
-                let localPoints = edge.displayPoints.count >= 2
-                    ? edge.displayPoints
-                    : [edge.start, edge.end]
-                let points = localPoints.map {
+                guard edge.displayPoints.count >= 2 else { continue }
+                let points = edge.displayPoints.map {
                     ViewportLayout.transformedPoint($0, by: item.modelTransform)
                 }
                 guard points.allSatisfy(isFinitePoint) else {
@@ -2164,6 +2162,27 @@ enum ViewportSpatialOverlayProducer {
         )
     }
 
+    static func midpoint(of points: [Point3D]) -> Point3D? {
+        guard points.count >= 2 else { return nil }
+        var totalLength = 0.0
+        for (first, second) in zip(points, points.dropFirst()) {
+            let length = (second - first).length
+            guard length.isFinite else { return nil }
+            totalLength += length
+        }
+        guard totalLength.isFinite, totalLength > 0 else { return nil }
+        var remainingLength = totalLength * 0.5
+        for index in 0..<(points.count - 1) {
+            let length = (points[index + 1] - points[index]).length
+            guard length.isFinite else { return nil }
+            if remainingLength <= length, length > 0 {
+                return points[index] + ((points[index + 1] - points[index]) * (remainingLength / length))
+            }
+            remainingLength -= length
+        }
+        return points.last
+    }
+
     static func isFinitePoint(_ point: Point3D) -> Bool {
         point.x.isFinite && point.y.isFinite && point.z.isFinite
     }
@@ -2390,6 +2409,7 @@ extension ViewportSpatialOverlayProducer {
     static let referenceColor = SIMD4<Float>(0.25, 0.92, 1.0, 0.70)
     static let measurementColor = SIMD4<Float>(0.25, 0.92, 1.0, 1.0)
     static let editColor = SIMD4<Float>(1.0, 0.78, 0.28, 1.0)
+    static let boundarySurfaceColor = SIMD4<Float>(0.26, 0.82, 0.94, 1.0)
 
     static func point(_ point: CGPoint, y: Double = 0.0) -> Point3D {
         Point3D(x: Double(point.x), y: y, z: Double(point.y))
@@ -2452,6 +2472,22 @@ extension ViewportSpatialOverlayProducer {
         path.move(to: CGPoint(x: 0, y: -radius))
         path.addLine(to: CGPoint(x: radius, y: radius))
         path.addLine(to: CGPoint(x: -radius, y: radius))
+        path.closeSubpath()
+        return path
+    }
+
+    static func plusPath(radius: CGFloat) -> Path {
+        let arm = radius * 0.32
+        let points = [
+            CGPoint(x: -arm, y: -radius), CGPoint(x: arm, y: -radius),
+            CGPoint(x: arm, y: -arm), CGPoint(x: radius, y: -arm),
+            CGPoint(x: radius, y: arm), CGPoint(x: arm, y: arm),
+            CGPoint(x: arm, y: radius), CGPoint(x: -arm, y: radius),
+            CGPoint(x: -arm, y: arm), CGPoint(x: -radius, y: arm),
+            CGPoint(x: -radius, y: -arm), CGPoint(x: -arm, y: -arm),
+        ]
+        var path = Path()
+        path.addLines(points)
         path.closeSubpath()
         return path
     }

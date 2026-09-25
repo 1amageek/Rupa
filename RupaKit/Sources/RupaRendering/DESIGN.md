@@ -1,21 +1,62 @@
 # RupaRendering
 
+## Edge Hover Ownership
+
+Hover owns only a yellow edge highlight; explicit selection owns operation
+affordances. MainActor native queries complete before hover state changes.
+`frameNotReady` preserves the previous highlight; source/selection changes and
+canvas exit clear it. There is no edge-to-handle hover retention region.
+Moving away from a selected edge never removes its operation handles.
+
+Every generated edge carries its sampled trimmed curve. Picking, highlighting
+and handle anchoring consume that polyline; failed sampling produces no edge
+interaction, never a fabricated endpoint chord. Source feature output roles
+gate solid-only edge treatments before handle emission.
+Non-interactive boundary polylines fixed in world space use the native batched
+line resource. Sampling density consumes position/byte budgets, not one
+camera-dependent entity per sample; directed handle leaders retain their
+screen-space width and native collision geometry.
+
+Overlay-only completions superseded by a newer overlay request are discarded;
+the already mounted frame remains authoritative until the latest replacement
+is ready. Source-frame progress retains its existing publication contract.
+Checks must cover curved versus chord hits, hover/click/exit,
+transient query failures, source invalidation and obsolete overlay completions.
+
 ## Selected-Object Edge Hover
 
 Object-mode hover and click query exact edges of selected, unlocked CAD
 occurrences using the same mounted topology resolver. An exact edge hit takes
 priority over the occurrence selection callback, without changing global scope.
-The existing SelectionModel owns the selected edge. Hover draws only a yellow
-sampled-edge highlight; selected edges own operation handles independently of
-pointer position. Clearing selection removes those handles. No hover transfer
-region, new selection authority, geometry engine or commit route is introduced.
-Native queries must succeed before hover state changes. The MainActor owns
-interaction state and workers consume immutable values. Source replacement and
-canvas exit clear hover without clearing explicit selection. Verification covers
-hover without handles, exact click admission before occurrence callbacks, handle
-persistence on exit, locked-owner refusal and native operation commits. UI
-selection conversion must preserve the exact edge in object scope. App
+The existing SelectionModel owns the selected edge; selecting another edge or
+clearing selection updates handles through the same publication path.
+Hover draws the sampled edge yellow but emits no operation handles. Selected
+edges emit eligible Fillet/Chamfer/boundary-surface handles, independently of hover.
+Edge-scope hover uses the same sampled path. Overlay invalidation
+follows edge identity, not pointer coordinates. Fillet and Chamfer keep their
+existing operation routes. Surface Creation reuses this picking and selection authority;
+its source operation and transaction remain owned by Core/Workspace, with no
+new picking backend.
+Native tests must cover object-mode hover without handles, exact edge click,
+handle persistence after exit, operation commits and locked-owner refusal. Edge-mode hover
+uses the same sampled path; occlusion tests retain their contracts. App
 verification includes restart.
+
+The boundary-surface action extends the mounted exact-edge hover path for a boundary edge of a
+selected open shell. Selection highlights the complete loop using sampled edge
+polylines carried by the body snapshot and places one glyph at the selected
+edge's arc-length midpoint; it never substitutes endpoint chords. The action is
+absent for closed-solid edges, unselected/locked owners, missing curve samples,
+and stale snapshots. Clicking starts the existing cancellable preview flow
+without changing the global canvas tool or selection scope; dragging the action
+does not launch it. The UI opens Surface Creation with Boundary Bridge selected;
+the user explicitly chooses Patch for hole filling. Adding a second edge to a
+Bridge draft retains the first operand; selection count never chooses a different
+algorithm. A Patch requires a fillable opening, not a lone sheet's outer perimeter.
+Hover invalidation uses loop/edge
+identity, not pointer coordinates. Surface solving runs only on explicit
+Preview, never on hover. Native tests cover loop highlighting, eligibility,
+click routing, cancellation and stale completion.
 
 ## Continuous CAD Preview Progress
 

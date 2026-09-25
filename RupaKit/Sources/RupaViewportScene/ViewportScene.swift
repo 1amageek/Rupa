@@ -527,11 +527,27 @@ public struct ViewportBodyTopology: Equatable, Sendable {
         public var componentID: SelectionComponentID
         public var start: Point3D
         public var end: Point3D
+        public var displayPoints: [Point3D]
+        public var openBoundaryLoopID: String?
 
-        public init(componentID: SelectionComponentID, start: Point3D, end: Point3D) {
+        public init(
+            componentID: SelectionComponentID,
+            start: Point3D,
+            end: Point3D,
+            displayPoints: [Point3D]? = nil,
+            openBoundaryLoopID: String? = nil
+        ) {
             self.componentID = componentID
             self.start = start
             self.end = end
+            let resolvedDisplayPoints = displayPoints ?? [start, end]
+            self.displayPoints = resolvedDisplayPoints
+            self.openBoundaryLoopID = displayPoints != nil
+                && resolvedDisplayPoints.count >= 2
+                && resolvedDisplayPoints.first == start
+                && resolvedDisplayPoints.last == end
+                ? openBoundaryLoopID
+                : nil
         }
     }
 
@@ -575,7 +591,9 @@ extension ViewportBodyTopology {
                 ViewportBodyTopology.Edge(
                     componentID: edge.componentID,
                     start: edge.start,
-                    end: edge.end
+                    end: edge.end,
+                    displayPoints: edge.displayPoints,
+                    openBoundaryLoopID: edge.openBoundaryLoopID
                 )
             },
             vertices: topology.vertices.map { vertex in

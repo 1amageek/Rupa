@@ -451,5 +451,11 @@ enum ViewportAffordanceAction: Equatable, Sendable {
     case profileFaceMove(SelectionTarget, ViewportBodyFace)
     case profileEdgeChamfer(SelectionTarget, ViewportEdgeTreatmentDragFrame)
     case profileEdgeFillet(SelectionTarget, ViewportEdgeTreatmentDragFrame)
+    case boundarySurface(SelectionTarget)
     case faceMove(ViewportBodyFace)
+
+    var directClickSelectionTarget: SelectionTarget? {
+        guard case .boundarySurface(let target) = self else { return nil }
+        return target
+    }
 }

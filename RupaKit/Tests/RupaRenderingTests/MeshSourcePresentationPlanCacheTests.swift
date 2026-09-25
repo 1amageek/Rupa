@@ -469,6 +469,33 @@ func nativeMountedInteractionRecordsResolveOrthoAndPerspectiveHits(
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func supersededHoverFrameIsNotPublishedWhenLatestOverlayFails() async throws {
+    let scene = try planCacheScene(suffix: "superseded-hover")
+    let gate = PlanBuildGate()
+    let cache = MeshSourcePresentationPlanCache { scene in
+        await gate.arrive("source")
+        return try MeshSourcePresentationRenderPlan(scene: scene)
+    }
+    let first = planCacheIdentity(scene, overlayRevision: 1)
+    let latest = planCacheIdentity(scene, overlayRevision: 2)
+    cache.prepare(.init(identity: first, scene: scene, fallbackOrigin: .origin,
+        spatialOverlay: { origin, charge in
+            (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [])
+        }))
+    await gate.waitForArrival("source")
+    cache.prepare(.init(identity: latest, scene: scene, fallbackOrigin: .origin,
+        spatialOverlay: { _, _ in
+            throw MeshSourcePresentationRenderError(code: .failed, message: "Latest overlay rejected.")
+        }))
+    await gate.open("source")
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: latest) != nil)
+    #expect(cache.displaySurface(for: latest) == nil,
+            "A superseded hover must never become a displayed fallback.")
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func nativeFrameCacheCoalescesOverlayIdentityAndMountsWithoutSurface() async throws {
     let scene = try planCacheScene(suffix: "overlay-revision")
     let gate = PlanBuildGate()

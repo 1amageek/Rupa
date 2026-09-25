@@ -11,6 +11,15 @@ func bodyTransformTestDocument(_ items: [ViewportSceneItem]) -> DesignDocument {
         guard let id = item.sceneNodeID else { continue }
         document.productMetadata.sceneNodes[id] = SceneNode(id: id, name: item.id, reference: .body(item.featureID))
         document.productMetadata.rootSceneNodeIDs.append(id)
+        document.cadDocument.designGraph.nodes[item.featureID] = FeatureNode(
+            id: item.featureID,
+            operation: .primitive(PrimitiveFeature(definition: .box(BoxPrimitive(
+                width: .constant(.length(2, unit: .meter)),
+                depth: .constant(.length(2, unit: .meter)),
+                height: .constant(.length(1, unit: .meter))
+            )))), outputs: [FeatureOutput(role: .body)]
+        )
+        document.cadDocument.designGraph.order.append(item.featureID)
     }
     return document
 }

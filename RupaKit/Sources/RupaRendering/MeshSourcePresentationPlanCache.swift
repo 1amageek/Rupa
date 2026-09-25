@@ -487,10 +487,10 @@ final class MeshSourcePresentationPlanCache {
         }
     }
 
-    private func start(_ request: RealityViewportPreparationRequest, requestID: UUID) {
+    private func start(_ request: RealityViewportPreparationRequest, requestID: UUID, reusing prepared: Prepared? = nil) {
         self.requestID = requestID
         let builder = self.builder
-        let reusable = current
+        let reusable = prepared ?? current
         // The construction runs inside this detached task, so cancelling the
         // stored handle is what the plan's own cancellation checks observe.
         buildTask = Task.detached(priority: .userInitiated) { [weak self] in
@@ -586,10 +586,11 @@ final class MeshSourcePresentationPlanCache {
         requestID: UUID
     ) {
         buildTask = nil
+        var reusable: Prepared?
         defer {
             if let next = pendingRequest {
                 pendingRequest = nil
-                start(next.request, requestID: next.id)
+                start(next.request, requestID: next.id, reusing: reusable)
             }
         }
         guard let result, case let .preparing(requested) = state,
@@ -602,6 +603,12 @@ final class MeshSourcePresentationPlanCache {
         ViewportResponsivenessSignposts.withPlanPublicationInterval {
             switch result {
             case let .success(prepared):
+                reusable = prepared
+                // A superseded hover must never reappear while its replacement
+                // is pending. Keep the mounted frame, not this obsolete overlay.
+                if requested.scene == identity.scene,
+                   requested.snapshotID == identity.snapshotID,
+                   requested.overlayRevision != identity.overlayRevision { return }
                 if let current, current.surface.root.scene != nil {
                     precedingMountedFrame = current
                 }

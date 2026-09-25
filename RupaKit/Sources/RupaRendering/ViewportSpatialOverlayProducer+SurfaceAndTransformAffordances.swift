@@ -33,6 +33,7 @@ extension ViewportSpatialOverlayProducer {
         case profileFace
         case edgeFillet
         case profileEdgeChamfer
+        case boundarySurface
     }
 
     enum SurfaceTransformAffordanceState: String, CaseIterable, Hashable, Sendable {
@@ -532,10 +533,15 @@ extension ViewportSpatialOverlayProducer {
             guard points.count >= 2 else {
                 throw RealityViewportSpatialBatch.invalid("Surface/transform camera line requires two points.")
             }
+            let isStaticWorldLine = index == nil && points.allSatisfy {
+                if case .fixed(let offset) = $0.offset { return offset == .zero }
+                return false
+            }
             var line = RealityViewportSpatialBatch.CameraLine(
                 points: points,
                 color: color(for: value.state, fallback: value.color),
-                widthPoints: value.family == .transform && !(value.route == .bodyTransform && value.identity == nil) ? 2 : nil,
+                widthPoints: value.family == .transform && !isStaticWorldLine
+                    && !(value.route == .bodyTransform && value.identity == nil) ? 2 : nil,
                 depth: .annotation
             )
             line.handleIndex = index
@@ -651,22 +657,20 @@ extension ViewportSpatialOverlayProducer {
         )
     }
 
-    /// Screen-fixed extents of the four profile affordances.
+    /// Screen-fixed extents of body topology affordances.
     ///
     /// A profile handle is reachable at the same screen size whatever the body
     /// measures and however far the camera is, so its extent is a point length
-    /// owned here rather than a fraction of the body's projected span. The two
-    /// edge treatments share one anchor, so only the offsets along the inward
-    /// ray separate them, and the values satisfy
-    /// `chamferOffsetPoints - filletOffsetPoints >= 2 * hitTolerancePoints`
-    /// together with `2 * markRadiusPoints < chamferOffsetPoints -
-    /// filletOffsetPoints`: neither the reach nor the drawn mark of one crosses
-    /// the other. Changing one offset re-derives the other from those rules.
+    /// owned here rather than a fraction of the body's projected span. The
+    /// three edge actions share one anchor and are separated along its inward
+    /// ray. The fill mark follows chamfer by two hit tolerances, so adjacent
+    /// hit regions only touch.
     enum ProfileAffordanceMetrics {
         static let markRadiusPoints: CGFloat = 8
         static let hitTolerancePoints: CGFloat = 10
         static let filletOffsetPoints: CGFloat = 18
         static let chamferOffsetPoints: CGFloat = 38
+        static let boundarySurfaceOffsetPoints: CGFloat = chamferOffsetPoints + 2 * hitTolerancePoints
     }
 
     /// Screen-fixed extents of the body transform affordance.
@@ -3059,7 +3063,8 @@ private extension ViewportSpatialOverlayProducer {
                 guard input.document.productMetadata.sceneNodes[target.sceneNodeID]?.isLocked == false else { continue }
                 let wantsFillet = input.interactiveRoutes.contains(.edgeFillet)
                 let wantsChamfer = input.interactiveRoutes.contains(.profileEdgeChamfer)
-                guard wantsFillet || wantsChamfer else { continue }
+                let wantsBoundarySurface = input.interactiveRoutes.contains(.boundarySurface)
+                guard wantsFillet || wantsChamfer || wantsBoundarySurface else { continue }
                 guard componentID.generatedTopologySubshapeID != nil else { continue }
                 guard
                       let item = sceneItem(for: target, input: input),
@@ -3070,12 +3075,59 @@ private extension ViewportSpatialOverlayProducer {
                         "Edge treatment selection is not backed by body topology."
                     )
                 }
-                let start = item.modelTransform.viewportTransformedPoint(sourceEdge.start)
-                let end = item.modelTransform.viewportTransformedPoint(sourceEdge.end)
-                let anchor = midpoint(start, end)
+                guard let localAnchor = midpoint(of: sourceEdge.displayPoints) else { continue }
+                let anchor = item.modelTransform.viewportTransformedPoint(localAnchor)
                 let edge = try ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
-                if wantsFillet {
+                if wantsBoundarySurface, let loopID = sourceEdge.openBoundaryLoopID {
+                    let hasCompleteDisplayLoop = topology.edges.allSatisfy { boundaryEdge in
+                        boundaryEdge.openBoundaryLoopID != loopID || boundaryEdge.displayPoints.count >= 2
+                    }
+                    if hasCompleteDisplayLoop,
+                       let localAnchor = midpoint(of: sourceEdge.displayPoints) {
+                        for boundaryEdge in topology.edges where boundaryEdge.openBoundaryLoopID == loopID {
+                            let points = boundaryEdge.displayPoints.map(
+                                item.modelTransform.viewportTransformedPoint
+                            )
+                            try appendCameraLine(
+                                .init(
+                                    route: .boundarySurface,
+                                    points: points.map {
+                                        .init(anchor: $0, toward: $0, usesFixedOffset: true)
+                                    },
+                                    color: boundarySurfaceColor,
+                                    family: .transform,
+                                    identity: nil,
+                                    state: .normal,
+                                    hitTolerancePoints: nil,
+                                    occurrenceID: item.id
+                                ),
+                                to: &cameraLines,
+                                checkpoint: checkpoint
+                            )
+                        }
+                        try emitProfileHandle(
+                            route: .boundarySurface,
+                            action: .boundarySurface(target),
+                            target: target,
+                            item: item,
+                            edit: edit,
+                            anchor: item.modelTransform.viewportTransformedPoint(localAnchor),
+                            offsetPoints: ProfileAffordanceMetrics.boundarySurfaceOffsetPoints,
+                            path: plusPath(radius: ProfileAffordanceMetrics.markRadiusPoints),
+                            input: input,
+                            interactionRecords: &interactionRecords,
+                            checkpoint: checkpoint,
+                            cameraLines: &cameraLines,
+                            cameraPaths: &cameraPaths,
+                            markers: &markers,
+                            color: boundarySurfaceColor
+                        )
+                    }
+                }
+                let supportsSolidTreatment = input.document.cadDocument.designGraph.nodes[item.featureID]?
+                    .outputs.contains(where: { $0.role == .body }) == true
+                if wantsFillet && supportsSolidTreatment {
                     try emitProfileHandle(
                         route: .edgeFillet,
                         action: .profileEdgeFillet(target, edge),
@@ -3093,7 +3145,7 @@ private extension ViewportSpatialOverlayProducer {
                         markers: &markers
                     )
                 }
-                if wantsChamfer {
+                if wantsChamfer && supportsSolidTreatment {
                     try emitProfileHandle(
                         route: .profileEdgeChamfer,
                         action: .profileEdgeChamfer(target, edge),
@@ -3139,7 +3191,8 @@ private extension ViewportSpatialOverlayProducer {
         checkpoint: (Int, Int, Int) throws -> Void,
         cameraLines: inout [SurfaceTransformAffordanceSource.CameraLine],
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
-        markers: inout [SurfaceTransformAffordanceSource.Marker]
+        markers: inout [SurfaceTransformAffordanceSource.Marker],
+        color: SIMD4<Float> = editColor
     ) throws {
         var affordanceTarget = ViewportAffordanceTarget(
             featureID: item.featureID,
@@ -3184,7 +3237,7 @@ private extension ViewportSpatialOverlayProducer {
                         .init(anchor: anchor, toward: anchor, usesFixedOffset: true),
                         placement,
                     ],
-                    color: editColor,
+                    color: color,
                     family: .transform,
                     identity: nil,
                     state: state,
@@ -3201,7 +3254,7 @@ private extension ViewportSpatialOverlayProducer {
                 route: route,
                 path: path,
                 placement: placement,
-                color: editColor,
+                color: color,
                 family: .transform,
                 identity: identity,
                 state: state,
@@ -3218,7 +3271,7 @@ private extension ViewportSpatialOverlayProducer {
                     anchor: anchor,
                     shape: .sphere,
                     diameterPoints: Float(ProfileAffordanceMetrics.markRadiusPoints),
-                    color: editColor,
+                    color: color,
                     family: .transform,
                     identity: nil,
                     state: .active

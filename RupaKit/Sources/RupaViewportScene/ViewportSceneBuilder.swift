@@ -311,6 +311,14 @@ public struct ViewportSceneBuilder {
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .surfaceFill(let surfaceFill):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: surfaceFill.targetFeatureID,
+                    document: document,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .spatialPath, .bridgeCurve, .curveEdit, .curveOffset, .curveTrim,
                  .curveExtend, .curveMatch, .projectCurve:
                 return evaluatedCurveItem(

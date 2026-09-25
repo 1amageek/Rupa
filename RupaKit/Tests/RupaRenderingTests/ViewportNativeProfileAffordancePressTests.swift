@@ -1,6 +1,9 @@
 import AppKit
 import CoreGraphics
 import RupaCore
+import RupaEvaluation
+import RupaKit
+import RupaProject
 import SwiftCAD
 import RupaViewportScene
 import SwiftUI
@@ -46,12 +49,13 @@ enum ViewportProfileHandlePressCamera: String, CaseIterable {
     }
 }
 
-/// The four profile handles, each naming the commit route it owns.
+/// The profile handles, each naming the commit route it owns.
 enum ViewportProfileHandleKind: String {
     case face
     case corner
     case fillet
     case chamfer
+    case boundarySurface
 }
 
 /// The handle and camera pairs the mounted gesture is proven on.
@@ -70,6 +74,11 @@ enum ViewportProfileHandlePressCase: String, CaseIterable {
     case filletIsometricPerspective
     case chamferIsometricParallel
     case chamferIsometricPerspective
+    case boundarySurfaceClick
+
+    static var gestureCases: [Self] {
+        allCases.filter { $0.handle != .boundarySurface }
+    }
 
     var handle: ViewportProfileHandleKind {
         switch self {
@@ -81,6 +90,8 @@ enum ViewportProfileHandlePressCase: String, CaseIterable {
             return .fillet
         case .chamferIsometricParallel, .chamferIsometricPerspective:
             return .chamfer
+        case .boundarySurfaceClick:
+            return .boundarySurface
         }
     }
 
@@ -94,6 +105,8 @@ enum ViewportProfileHandlePressCase: String, CaseIterable {
             return .isometricPerspective
         case .faceAxisFrontParallel:
             return .axisFrontParallel
+        case .boundarySurfaceClick:
+            return .isometricParallel
         }
     }
 }
@@ -114,6 +127,9 @@ private struct ProfileHandlePressFixture {
     static let dragMeters = 0.001
 
     let document: DesignDocument
+    let presentationScene: UniversalViewportScene?
+    let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
+    let currentEvaluation: DocumentEvaluationContext?
     let ruler: RulerConfiguration
     let scene: ViewportScene
     let target: SelectionTarget
@@ -121,6 +137,8 @@ private struct ProfileHandlePressFixture {
     let control: ViewportControlSession
     let size: CGSize
     let press: CGPoint
+    let worldAnchor: Point3D
+    let worldCenter: Point3D
     let dragEnd: CGPoint
     let emptyPoint: CGPoint
     /// The release point of a gesture on empty space. It lies on the same
@@ -131,14 +149,40 @@ private struct ProfileHandlePressFixture {
     /// empty point can be proven clear of all of them.
     let handlePoints: [CGPoint]
 
-    init(pressCase: ViewportProfileHandlePressCase) throws {
+    init(pressCase: ViewportProfileHandlePressCase, objectHover: Bool = false) async throws {
         let camera = pressCase.camera
         let basis = camera.basis
         let session = EditorSession()
-        guard session.createDefaultExtrudedRectangle() != nil else {
+        if pressCase.handle == .boundarySurface && objectHover {
+            _ = try session.execute(.createBSplineSurface(name: "Hover sheet", surface: .bilinearPatch(
+                bottomLeft: .origin, bottomRight: Point3D(x: 0.01, y: 0, z: 0),
+                topRight: Point3D(x: 0.01, y: 0.01, z: 0), topLeft: Point3D(x: 0, y: 0.01, z: 0)
+            )))
+        } else if session.createDefaultExtrudedRectangle() == nil {
             throw ProfileAffordancePressFixtureError(
                 message: "The fixture document did not create the default body."
             )
+        }
+        if pressCase.handle == .boundarySurface && !objectHover {
+            guard let solidFeatureID = session.document.cadDocument.designGraph.order.last,
+                  let solidSceneNodeID = session.document.productMetadata.sceneNodes.first(where: {
+                      $0.value.reference?.featureID == solidFeatureID
+                  })?.key else {
+                throw ProfileAffordancePressFixtureError(
+                    message: "The fixture solid has no scene occurrence to open."
+                )
+            }
+            let solidTopology = try TopologySnapshotService().snapshot(document: session.document)
+            guard let openingFace = solidTopology.entries.first(where: {
+                $0.kind == .face
+                    && $0.sceneNodeID == solidSceneNodeID.description
+                    && $0.generatedRole == "startFace"
+            })?.selectionTarget() else {
+                throw ProfileAffordancePressFixtureError(
+                    message: "The fixture solid has no selectable cap to remove."
+                )
+            }
+            _ = try session.execute(.deleteBodyFaces(targets: [openingFace]))
         }
         guard let bodyFeatureID = session.document.cadDocument.designGraph.order.last else {
             throw ProfileAffordancePressFixtureError(
@@ -146,6 +190,29 @@ private struct ProfileHandlePressFixture {
             )
         }
         document = session.document
+        if objectHover || pressCase.handle == .boundarySurface {
+            let project = try ProjectController(document: document,
+                evaluatorPreparer: DefaultDesignDocumentProjectEvaluatorFactory(),
+                projector: DesignDocumentProjectBridge())
+            _ = try await project.evaluateCurrent()
+            let view = try ProjectViewSnapshotBuilder().build(from: await project.currentState())
+            currentEvaluation = try #require(view.cadInteraction)
+            presentationScene = view.viewport
+            sceneNodeIDByOccurrenceID = view.sceneNodeIDByOccurrenceID
+            for item in view.viewport.items {
+                let nodeID = try #require(view.sceneNodeID(for: item.occurrenceID))
+                guard case .available = MeshSourcePresentationCADAffordanceResolver().resolve(
+                    item: item, sceneNodeID: nodeID, document: document,
+                    generation: view.documentGeneration, cadInteraction: view.cadInteraction
+                ) else {
+                    throw ProfileAffordancePressFixtureError(message: "Published CAD context cannot enable edge affordances.")
+                }
+            }
+        } else {
+            currentEvaluation = session.currentEvaluation
+            presentationScene = nil
+            sceneNodeIDByOccurrenceID = [:]
+        }
         ruler = session.workspaceState.ruler
         scene = ViewportSceneBuilder().build(document: document, ruler: ruler)
         guard let bodyItem = scene.items.first(where: { item in
@@ -199,8 +266,18 @@ private struct ProfileHandlePressFixture {
             }
             componentID = resolved
             target = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(resolved))
+        case .boundarySurface:
+            guard case .body(let component) = bodyItem.kind,
+                  let edge = component.topology?.edges.first(where: { $0.openBoundaryLoopID != nil }) else {
+                throw ProfileAffordancePressFixtureError(
+                    message: "The fixture body has no open-boundary edge for Boundary Surface."
+                )
+            }
+            componentID = edge.componentID
+            target = SelectionTarget(sceneNodeID: sceneNodeID, component: .edge(componentID))
         }
-        selection = SelectionModel(selectedTargets: [target])
+        selection = SelectionModel(selectedTargets: [objectHover
+            ? SelectionTarget(sceneNodeID: target.sceneNodeID) : target])
         size = CGSize(width: 900.0, height: 700.0)
         control = ViewportControlSession(
             camera: .init(projection: camera.projection), basis: basis
@@ -306,6 +383,25 @@ private struct ProfileHandlePressFixture {
             dragDirection = Vector3D(x: basis.xDirection.dx,
                                      y: basis.yDirection.dx,
                                      z: basis.zDirection.dx)
+        case .boundarySurface:
+            guard case .body(let component) = bodyItem.kind,
+                  let sourceEdge = component.topology?.edges.first(where: {
+                      $0.componentID == componentID && $0.openBoundaryLoopID != nil
+                  }) else {
+                throw ProfileAffordancePressFixtureError(
+                    message: "The selected Boundary Surface edge is absent from the opened body topology."
+                )
+            }
+            let displayPoints = sourceEdge.displayPoints.map(bodyItem.modelTransform.viewportTransformedPoint)
+            guard let midpoint = ViewportSpatialOverlayProducer.midpoint(of: displayPoints) else {
+                throw ProfileAffordancePressFixtureError(
+                    message: "The selected Boundary Surface edge has no display midpoint."
+                )
+            }
+            anchor = midpoint
+            dragDirection = Vector3D(x: basis.xDirection.dx,
+                                     y: basis.yDirection.dx,
+                                     z: basis.zDirection.dx)
         }
 
         guard let projectedAnchor = layout.projectedPoint(anchor)?.point else {
@@ -319,6 +415,8 @@ private struct ProfileHandlePressFixture {
                 message: "The body centre does not project into the fixture viewport."
             )
         }
+        worldAnchor = anchor
+        worldCenter = edit.worldPoint(edit.centerPoint)
         switch pressCase.handle {
         case .face, .corner:
             press = projectedAnchor
@@ -336,6 +434,14 @@ private struct ProfileHandlePressFixture {
             )
             press = pressCase.handle == .fillet ? filletPoint : chamferPoint
             handlePoints = [filletPoint, chamferPoint]
+        case .boundarySurface:
+            let point = try Self.directedPoint(
+                anchor: projectedAnchor,
+                toward: projectedCenter,
+                points: ProfileMetrics.boundarySurfaceOffsetPoints
+            )
+            press = point
+            handlePoints = [point]
         }
         guard let projectedDragEnd = layout.projectedPoint(
             anchor + dragDirection * Self.dragMeters
@@ -497,7 +603,7 @@ private struct ProfileHandlePressFixture {
     /// `points` along the screen direction toward the body centre, which is the
     /// offset the spatial resources resolve for a directed placement with no
     /// perpendicular component.
-    private static func directedPoint(
+    static func directedPoint(
         anchor: CGPoint, toward center: CGPoint, points: CGFloat
     ) throws -> CGPoint {
         let dx = center.x - anchor.x
@@ -520,9 +626,28 @@ private struct ProfileHandlePressFixture {
 /// Mounts the viewport the same way the input owner does, so a press resolves
 /// against a real prepared frame rather than a rebuilt projection.
 @MainActor
+private struct ProfileHandleSelectionHost: View {
+    @State var selection: SelectionModel
+    let selectsEdges: Bool
+    let makeViewport: (SelectionModel, @escaping (ViewportCanvasTarget) -> Void) -> Viewport
+    let onPick: (ViewportCanvasTarget) -> Void
+
+    var body: some View {
+        makeViewport(selection) { target in
+            if selectsEdges, let hit = target.hit, let nodeID = hit.sceneNodeID,
+               let component = hit.selectionComponent {
+                selection = SelectionModel(selectedTargets: [.init(sceneNodeID: nodeID, component: component)])
+            }
+            onPick(target)
+        }
+    }
+}
+
+@MainActor
 private struct MountedProfileHandleViewport {
     let window: NSWindow
     let controller: NSViewController
+    let cache = MeshSourcePresentationPlanCache()
 
     /// Every profile commit callback is supplied, whichever handle the case
     /// presses. The interactive routes are derived from which callbacks exist,
@@ -536,27 +661,45 @@ private struct MountedProfileHandleViewport {
         onVertexDrag: @escaping (ViewportVertexDragTarget) -> Void,
         onFaceDrag: @escaping (ViewportFaceDragTarget) -> Void,
         onEdgeChamferDrag: @escaping (ViewportEdgeChamferDragTarget) -> Void,
-        onEdgeFilletDrag: @escaping (ViewportEdgeFilletDragTarget) -> Void
+        onEdgeFilletDrag: @escaping (ViewportEdgeFilletDragTarget) -> Void,
+        onBoundarySurface: ((SelectionTarget) -> Void)? = nil,
+        onOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)? = nil,
+        selectsEdges: Bool = false
     ) async throws {
         _ = NSApplication.shared
+        let generation = try #require(fixture.currentEvaluation).generation
+        let cache = self.cache
+        let host = ProfileHandleSelectionHost(selection: fixture.selection, selectsEdges: selectsEdges,
+            makeViewport: { selection, pick in
         let viewport = Viewport(
             document: fixture.document,
-            sourceIdentity: .document(id: fixture.document.id, generation: DocumentGeneration(1)),
+            sourceIdentity: .document(id: fixture.document.id,
+                generation: generation),
             controlSession: fixture.control,
+            presentationScene: fixture.presentationScene,
+            presentationSceneNodeIDByOccurrenceID: fixture.sceneNodeIDByOccurrenceID,
             workspaceRenderState: .init(revision: WorkspaceRevision(), ruler: fixture.ruler),
-            selection: fixture.selection,
-            objectSelectionIndex: .init(document: fixture.document, selection: fixture.selection),
+            currentEvaluation: fixture.currentEvaluation,
+            selection: selection,
+            objectSelectionIndex: .init(document: fixture.document, selection: selection),
             canvasDragSketchPlaneOverride: ProfileHandlePressFixture.canvasSketchPlane,
+            selectionHitPolicy: .object,
             allowsObjectAffordances: false,
+            presentationCADInteractionSceneNodeIDs: [fixture.target.sceneNodeID],
             selectedPresentationHasExactCADContext: true,
-            onPick: onPick,
+            onPresentationOccurrencePick: onOccurrencePick,
+            onPick: pick,
             onCanvasDrag: onCanvasDrag,
             onVertexDrag: onVertexDrag,
             onFaceDrag: onFaceDrag,
             onEdgeChamferDrag: onEdgeChamferDrag,
-            onEdgeFilletDrag: onEdgeFilletDrag
-        ).frame(width: fixture.size.width, height: fixture.size.height)
-        let controller = NSHostingController(rootView: viewport)
+            onEdgeFilletDrag: onEdgeFilletDrag,
+            onBoundarySurface: onBoundarySurface
+        )
+        return Viewport(viewport, presentationPlanCache: cache)
+        }, onPick: onPick)
+        let controller = NSHostingController(rootView: host
+            .frame(width: fixture.size.width, height: fixture.size.height))
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: fixture.size),
             styleMask: [.titled],
@@ -621,6 +764,20 @@ private struct MountedProfileHandleViewport {
         try resolvedInput().onPick?(point, size, .replace)
     }
 
+    func tap(at point: CGPoint, size: CGSize) throws {
+        let input = try resolvedInput()
+        input.onPress?(point, size, .replace)
+        input.onPick?(point, size, .replace)
+    }
+
+    func hover(at point: CGPoint?, size: CGSize) throws {
+        try resolvedInput().onHover?(point, size)
+    }
+
+    func project(_ point: Point3D, revision: UInt64) throws -> CGPoint {
+        try cache.project(point, for: #require(cache.state.identity), revision: revision)
+    }
+
     /// One whole gesture: the press that claims a handle, the mid-drag preview
     /// that gives the claimed drag its baseline, and the release that commits.
     ///
@@ -650,11 +807,11 @@ private struct MountedProfileHandleViewport {
 @Suite(.serialized)
 @MainActor
 struct ViewportNativeProfileAffordancePressTests {
-    @Test(.timeLimit(.minutes(2)), arguments: ViewportProfileHandlePressCase.allCases)
+    @Test(.timeLimit(.minutes(2)), arguments: ViewportProfileHandlePressCase.gestureCases)
     func profileHandleGestureCommitsAndAnEmptyPointDoesNot(
         pressCase: ViewportProfileHandlePressCase
     ) async throws {
-        let fixture = try ProfileHandlePressFixture(pressCase: pressCase)
+        let fixture = try await ProfileHandlePressFixture(pressCase: pressCase)
         #expect(
             fixture.emptyPointDistance
                 > ProfileMetrics.hitTolerancePoints + ProfileMetrics.markRadiusPoints,
@@ -683,6 +840,7 @@ struct ViewportNativeProfileAffordancePressTests {
             case .corner: vertexDrags.count
             case .fillet: filletDrags.count
             case .chamfer: chamferDrags.count
+            case .boundarySurface: 0
             }
         }
         func otherCount() -> Int {
@@ -759,6 +917,8 @@ struct ViewportNativeProfileAffordancePressTests {
             let commit = try #require(chamferDrags.first, failure)
             #expect(commit.target == fixture.target)
             #expect(commit.distance > 1.0e-12)
+        case .boundarySurface:
+            Issue.record("Boundary Surface is verified by a click, not by a drag.")
         }
         #expect(
             otherCount() == 0,
@@ -793,6 +953,105 @@ struct ViewportNativeProfileAffordancePressTests {
         )
     }
 
+    @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+    func boundarySurfaceOpenBoundaryAffordanceIsClickOnly(objectHover: Bool) async throws {
+        let fixture = try await ProfileHandlePressFixture(pressCase: .boundarySurfaceClick, objectHover: objectHover)
+        var picks = 0
+        var canvasDrags = 0
+        var boundarySurfaceTargets: [SelectionTarget] = []
+        let mounted = try await MountedProfileHandleViewport(
+            fixture: fixture,
+            onPick: { target in
+                if objectHover, picks == 0 {
+                    #expect(target.hit?.sceneNodeID == fixture.target.sceneNodeID)
+                    #expect(target.hit?.selectionComponent == fixture.target.component)
+                }
+                picks += 1
+            },
+            onCanvasDrag: { _ in canvasDrags += 1 },
+            onVertexDrag: { _ in Issue.record("Boundary Surface click moved a vertex.") },
+            onFaceDrag: { _ in Issue.record("Boundary Surface click moved a face.") },
+            onEdgeChamferDrag: { _ in Issue.record("Boundary Surface click committed a chamfer.") },
+            onEdgeFilletDrag: { _ in Issue.record("Boundary Surface click committed a fillet.") },
+            onBoundarySurface: { boundarySurfaceTargets.append($0) },
+            onOccurrencePick: { _, _ in Issue.record("Edge click was intercepted by object selection.") },
+            selectsEdges: objectHover
+        )
+        defer { mounted.close() }
+
+        let readyDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while ContinuousClock.now < readyDeadline {
+            if let identity = mounted.cache.state.identity {
+                try #require(mounted.cache.failure(for: identity) == nil,
+                    "The opened-boundary frame failed: \(String(describing: mounted.cache.failure(for: identity)))")
+                if mounted.cache.hasReadyCamera(for: identity, revision: fixture.control.revision) { break }
+            }
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        let readyIdentity = try #require(mounted.cache.state.identity)
+        try #require(mounted.cache.hasReadyCamera(for: readyIdentity, revision: fixture.control.revision),
+            "The opened-boundary viewport never published an interactive frame.")
+        canvasDrags = 0
+        picks = 0
+
+        var press = fixture.press
+        if fixture.presentationScene != nil {
+            let anchor = try mounted.project(fixture.worldAnchor, revision: fixture.control.revision)
+            let center = try mounted.project(fixture.worldCenter, revision: fixture.control.revision)
+            press = try ProfileHandlePressFixture.directedPoint(
+                anchor: anchor, toward: center, points: ProfileMetrics.boundarySurfaceOffsetPoints
+            )
+        }
+        if objectHover {
+            let initialIdentity = try #require(mounted.cache.state.identity)
+            try #require(mounted.cache.failure(for: initialIdentity) == nil, "Frame failed before edge hover.")
+            let anchor = try mounted.project(fixture.worldAnchor, revision: fixture.control.revision)
+            let center = try mounted.project(fixture.worldCenter, revision: fixture.control.revision)
+            press = try ProfileHandlePressFixture.directedPoint(
+                anchor: anchor, toward: center, points: ProfileMetrics.boundarySurfaceOffsetPoints
+            )
+            try mounted.hover(at: anchor, size: fixture.size)
+            try await Task.sleep(for: .milliseconds(500))
+            let identity = try #require(mounted.cache.state.identity)
+            try #require(mounted.cache.failure(for: identity) == nil, "Frame failed after edge hover.")
+            #expect(try !mounted.cache.interactionRecords(for: identity).contains {
+                guard case .affordance(let target, _, _, _) = $0.target else { return false }
+                return target.action == .boundarySurface(fixture.target)
+            }, "Hover alone must not create an operation handle.")
+            try mounted.tap(at: anchor, size: fixture.size)
+            try await Task.sleep(for: .milliseconds(500))
+            #expect(picks == 1)
+            picks = 0
+            try mounted.hover(at: nil, size: fixture.size)
+            try await Task.sleep(for: .milliseconds(500))
+            let retainedIdentity = try #require(mounted.cache.state.identity)
+            try #require(try mounted.cache.interactionRecords(for: retainedIdentity).contains {
+                guard case .affordance(let target, _, _, _) = $0.target else { return false }
+                return target.action == .boundarySurface(fixture.target)
+            }, "Leaving the canvas removed the selected edge handle.")
+        }
+
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while boundarySurfaceTargets.isEmpty, ContinuousClock.now < deadline {
+            try mounted.tap(at: press, size: fixture.size)
+            try await Task.sleep(for: .milliseconds(30))
+        }
+
+        #expect(boundarySurfaceTargets == [fixture.target])
+        #expect(canvasDrags == 0)
+        #expect(picks == 0)
+
+        boundarySurfaceTargets.removeAll()
+        try await mounted.gesture(
+            from: press,
+            to: fixture.dragEnd,
+            size: fixture.size
+        )
+        #expect(boundarySurfaceTargets.isEmpty)
+        #expect(canvasDrags == 0)
+        #expect(picks == 0)
+    }
+
     /// A commit measures against the camera revision it names, and the mounted
     /// frame answers only for the revision it actually applied. A camera change
     /// between the claimed drag's baseline and its release therefore makes the
@@ -806,7 +1065,7 @@ struct ViewportNativeProfileAffordancePressTests {
     /// dropping the claim rather than holding it.
     @Test(.timeLimit(.minutes(2)))
     func profileHandleCommitRefusesAStaleCameraRevision() async throws {
-        let fixture = try ProfileHandlePressFixture(pressCase: .faceIsometricParallel)
+        let fixture = try await ProfileHandlePressFixture(pressCase: .faceIsometricParallel)
         var picks = 0
         var canvasDrags = 0
         var vertexDrags: [ViewportVertexDragTarget] = []
