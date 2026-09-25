@@ -4,8 +4,8 @@ import RupaCoreTypes
 
 /// Composition for the placement transforms carried by scene nodes.
 ///
-/// `Transform3D.matrix` stores its sixteen values column-major: element (row, column) lives at
-/// `values[column * 4 + row]`, which puts the translation at indices 12, 13 and 14. Every operation
+/// `Transform3D.matrix` stores its sixteen values row-major: element (row, column) lives at
+/// `values[row * 4 + column]`, which puts the translation at indices 3, 7 and 11. Every operation
 /// here reads and writes that layout, and every one of them fails loudly rather than returning an
 /// approximation, because the results decide where geometry is placed in the document.
 extension Transform3D {
@@ -21,9 +21,9 @@ extension Transform3D {
             for row in 0 ..< 4 {
                 var value = 0.0
                 for index in 0 ..< 4 {
-                    value += left[index * 4 + row] * right[column * 4 + index]
+                    value += left[row * 4 + index] * right[index * 4 + column]
                 }
-                values[column * 4 + row] = value
+                values[row * 4 + column] = value
             }
         }
         return try Self.transform(values: values)
@@ -86,7 +86,7 @@ extension Transform3D {
     /// The point mapped through this transform.
     public func applied(to point: Point3D) throws -> Point3D {
         let m = try Self.matrixValues(of: self)
-        let w = m[3] * point.x + m[7] * point.y + m[11] * point.z + m[15]
+        let w = m[12] * point.x + m[13] * point.y + m[14] * point.z + m[15]
         guard w.isFinite, abs(w) > Self.singularDeterminantThreshold else {
             throw EditorError(
                 code: .commandInvalid,
@@ -94,9 +94,9 @@ extension Transform3D {
             )
         }
         let mapped = Point3D(
-            x: (m[0] * point.x + m[4] * point.y + m[8] * point.z + m[12]) / w,
-            y: (m[1] * point.x + m[5] * point.y + m[9] * point.z + m[13]) / w,
-            z: (m[2] * point.x + m[6] * point.y + m[10] * point.z + m[14]) / w
+            x: (m[0] * point.x + m[1] * point.y + m[2] * point.z + m[3]) / w,
+            y: (m[4] * point.x + m[5] * point.y + m[6] * point.z + m[7]) / w,
+            z: (m[8] * point.x + m[9] * point.y + m[10] * point.z + m[11]) / w
         )
         try mapped.validate()
         return mapped
@@ -105,9 +105,9 @@ extension Transform3D {
     public static func translation(_ vector: Vector3D) throws -> Transform3D {
         try vector.validate()
         var values = Matrix4x4.identity.values
-        values[12] = vector.x
-        values[13] = vector.y
-        values[14] = vector.z
+        values[3] = vector.x
+        values[7] = vector.y
+        values[11] = vector.z
         return try transform(values: values)
     }
 
@@ -139,13 +139,13 @@ extension Transform3D {
 
         var values = Matrix4x4.identity.values
         values[0] = cosine + x * x * complement
-        values[1] = y * x * complement + z * sine
-        values[2] = z * x * complement - y * sine
-        values[4] = x * y * complement - z * sine
+        values[4] = y * x * complement + z * sine
+        values[8] = z * x * complement - y * sine
+        values[1] = x * y * complement - z * sine
         values[5] = cosine + y * y * complement
-        values[6] = z * y * complement + x * sine
-        values[8] = x * z * complement + y * sine
-        values[9] = y * z * complement - x * sine
+        values[9] = z * y * complement + x * sine
+        values[2] = x * z * complement + y * sine
+        values[6] = y * z * complement - x * sine
         values[10] = cosine + z * z * complement
         return try transform(values: values)
     }
