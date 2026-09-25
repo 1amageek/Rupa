@@ -2,7 +2,11 @@ import Foundation
 import SwiftCAD
 import RupaCoreTypes
 
+/// Cut Curve locates its cuts from Swift-CAD's certified sketch curve intersections; this file
+/// only resolves the authored entities, chooses the cutter reach and turns each intersection's
+/// natural parameter into the fraction or angle the source edit consumes.
 extension DesignDocument {
+    /// Sorted interior fractions of a line, arc or open spline target where the cutter crosses it.
     func cutSketchCurveFractions(
         targetSelection: EditableSketchEntitySelection,
         cutterSelection: EditableSketchEntitySelection,
@@ -13,169 +17,59 @@ extension DesignDocument {
             cutterSelection: cutterSelection,
             options: options
         )
-        let fractions: [Double]
-        switch targetSelection.entity {
-        case .line(let targetLine):
-            let target = try resolvedCutCurveLineSegment(targetLine, owner: "Cut Curve target")
-            fractions = try cutFractionsForLineTarget(
-                target: target,
-                cutterSelection: cutterSelection,
-                extendsCutter: options.extendsCutter
-            )
-        case .arc(let targetArc):
-            let target = try resolvedCutCurveArc(targetArc, owner: "Cut Curve target")
-            fractions = try cutFractionsForArcTarget(
-                target: target,
-                cutterSelection: cutterSelection,
-                extendsCutter: options.extendsCutter
-            )
-        case .spline(let targetSpline):
-            let samples = try resolvedCutCurveSplineSamples(
-                targetSpline,
-                owner: "Cut Curve target"
-            )
-            fractions = try cutFractionsForSplineTarget(
-                samples: samples,
-                cutterSelection: cutterSelection,
-                extendsCutter: options.extendsCutter
-            )
-        case .point, .circle:
+        let target = try cutCurveGeometry(targetSelection.entity, role: .target)
+        if case .circle = target {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Cut Curve source subset requires a line, arc, or open spline target curve."
             )
         }
-        let uniqueFractions = uniqueInteriorCutFractions(fractions)
-        guard uniqueFractions.isEmpty == false else {
+        let cutter = try cutCurveGeometry(cutterSelection.entity, role: .cutter)
+        let fractions = try cutInteriorFractions(
+            target: target,
+            cutter: cutter,
+            extendsCutter: options.extendsCutter
+        )
+        guard fractions.isEmpty == false else {
+            if options.extendsCutter == false,
+               cutCurveCanExtend(cutter),
+               try cutInteriorFractions(target: target, cutter: cutter, extendsCutter: true).isEmpty == false {
+                throw cutterDoesNotReach
+            }
             throw EditorError(
                 code: .commandInvalid,
                 message: "Cut Curve cutter does not intersect the target curve inside the supported target segment."
             )
         }
-        return uniqueFractions
+        return fractions
     }
 
-    func cutFractionsForLineTarget(
-        target: CutCurveLineSegment,
-        cutterSelection: (
-            featureID: FeatureID,
-            entityID: SketchEntityID,
-            feature: FeatureNode,
-            sketch: Sketch,
-            entity: SketchEntity
-        ),
-        extendsCutter: Bool
-    ) throws -> [Double] {
-        switch cutterSelection.entity {
-        case .line(let cutterLine):
-            let cutter = try resolvedCutCurveLineSegment(cutterLine, owner: "Cut Curve cutter")
-            return try cutFractionsForLineLineIntersection(
-                target: target,
-                cutter: cutter,
-                extendsCutter: extendsCutter
-            )
-        case .circle(let circle):
-            let cutter = try resolvedCutCurveCircle(circle, owner: "Cut Curve cutter")
-            return cutFractionsForLineCircleIntersection(
-                target: target,
-                circle: cutter,
-                restrictToArc: nil
-            )
-        case .arc(let arc):
-            let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
-            return cutFractionsForLineCircleIntersection(
-                target: target,
-                circle: cutter.circle,
-                restrictToArc: extendsCutter ? nil : cutter
-            )
-        case .spline(let spline):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve spline cutter extension is not represented in the current source subset."
-                )
-            }
-            let cutterSamples = try resolvedCutCurveSplineSamples(
-                spline,
-                owner: "Cut Curve cutter"
-            )
-            return cutFractionsForLineSplineIntersection(
-                target: target,
-                cutterSamples: cutterSamples
-            )
-        case .point:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Cut Curve source subset requires a line, circle, arc, or open spline cutter curve."
-            )
-        }
-    }
-
-    func cutFractionsForSplineTarget(
-        samples: [CurveEvaluationSample],
+    /// The two distinct polar angles where the cutter crosses a circle target.
+    func cutAnglesForCircleTarget(
+        target: SketchCircle,
         cutterSelection: EditableSketchEntitySelection,
         extendsCutter: Bool
     ) throws -> [Double] {
-        switch cutterSelection.entity {
-        case .line(let cutterLine):
-            let cutter = try resolvedCutCurveLineSegment(cutterLine, owner: "Cut Curve cutter")
-            var rejectedByCutterReach = false
-            var fractions: [Double] = []
-            for segment in cutCurveSplineSampleSegments(samples) {
-                let result = cutFractionsForSplineSegmentLineIntersection(
-                    segment: segment,
-                    cutter: cutter,
-                    extendsCutter: extendsCutter
-                )
-                rejectedByCutterReach = rejectedByCutterReach || result.rejectedByCutterReach
-                fractions.append(contentsOf: result.fractions)
-            }
-            if fractions.isEmpty && rejectedByCutterReach {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve cutter does not reach the target curve; enable cutter extension for this case."
-                )
-            }
-            return fractions
-        case .circle(let circle):
-            let cutter = try resolvedCutCurveCircle(circle, owner: "Cut Curve cutter")
-            return cutCurveSplineSampleSegments(samples).flatMap { segment in
-                cutFractionsForSplineSegmentCircleIntersection(
-                    segment: segment,
-                    circle: cutter,
-                    restrictToArc: nil
-                )
-            }
-        case .arc(let arc):
-            let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
-            return cutCurveSplineSampleSegments(samples).flatMap { segment in
-                cutFractionsForSplineSegmentCircleIntersection(
-                    segment: segment,
-                    circle: cutter.circle,
-                    restrictToArc: extendsCutter ? nil : cutter
-                )
-            }
-        case .spline(let spline):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve spline cutter extension is not represented in the current source subset."
-                )
-            }
-            let cutterSamples = try resolvedCutCurveSplineSamples(
-                spline,
-                owner: "Cut Curve cutter"
-            )
-            return cutFractionsForSplineSplineIntersection(
-                targetSamples: samples,
-                cutterSamples: cutterSamples
-            )
-        case .point:
+        let targetGeometry = try cutCurveGeometry(.circle(target), role: .target)
+        let cutter = try cutCurveGeometry(cutterSelection.entity, role: .cutter)
+        let angles = uniqueCutAngles(try cutCurveIntersections(
+            target: targetGeometry,
+            cutter: cutter,
+            extendsCutter: extendsCutter
+        ).map(\.firstParameter))
+        if angles.isEmpty,
+           extendsCutter == false,
+           cutCurveCanExtend(cutter),
+           try cutCurveIntersections(target: targetGeometry, cutter: cutter, extendsCutter: true).isEmpty == false {
+            throw cutterDoesNotReach
+        }
+        guard angles.count == 2 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Cut Curve source subset requires a line, circle, arc, or open spline cutter curve."
+                message: "Cut Curve circle target requires two distinct cutter intersections to create two arc segments."
             )
         }
+        return angles
     }
 
     func validateCutSketchCurveSelections(
@@ -204,118 +98,133 @@ extension DesignDocument {
         }
     }
 
-    func cutAnglesForCircleTarget(
-        target: CutCurveCircle,
-        cutterSelection: EditableSketchEntitySelection,
-        extendsCutter: Bool
-    ) throws -> [Double] {
-        let angles: [Double]
-        switch cutterSelection.entity {
-        case .line(let cutterLine):
-            let cutter = try resolvedCutCurveLineSegment(cutterLine, owner: "Cut Curve cutter")
-            angles = try cutAnglesForCircleLineIntersection(
-                target: target,
-                cutter: cutter,
-                extendsCutter: extendsCutter
-            )
-        case .circle(let circle):
-            let cutter = try resolvedCutCurveCircle(circle, owner: "Cut Curve cutter")
-            angles = try cutAnglesForCircleCircleIntersection(
-                target: target,
-                circle: cutter,
-                restrictToArc: nil
-            )
-        case .arc(let arc):
-            let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
-            angles = try cutAnglesForCircleCircleIntersection(
-                target: target,
-                circle: cutter.circle,
-                restrictToArc: extendsCutter ? nil : cutter
-            )
-        case .spline(let spline):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve spline cutter extension is not represented in the current source subset."
-                )
+    private enum CutCurveRole {
+        case target
+        case cutter
+
+        var owner: String {
+            switch self {
+            case .target: "Cut Curve target"
+            case .cutter: "Cut Curve cutter"
             }
-            let cutterSamples = try resolvedCutCurveSplineSamples(
-                spline,
-                owner: "Cut Curve cutter"
-            )
-            angles = cutAnglesForCircleSplineIntersection(
-                target: target,
-                cutterSamples: cutterSamples
-            )
-        case .point:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Cut Curve source subset requires a line, circle, arc, or open spline cutter curve."
-            )
         }
-        let uniqueAngles = uniqueCutAngles(angles)
-        guard uniqueAngles.count == 2 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Cut Curve circle target requires two distinct cutter intersections to create two arc segments."
-            )
-        }
-        return uniqueAngles
     }
 
-    func cutFractionsForArcTarget(
-        target: CutCurveArc,
-        cutterSelection: (
-            featureID: FeatureID,
-            entityID: SketchEntityID,
-            feature: FeatureNode,
-            sketch: Sketch,
-            entity: SketchEntity
-        ),
+    private var cutterDoesNotReach: EditorError {
+        EditorError(
+            code: .commandInvalid,
+            message: "Cut Curve cutter does not reach the target curve; enable cutter extension for this case."
+        )
+    }
+
+    private func cutCurveCanExtend(_ cutter: SketchCurveGeometry2D) -> Bool {
+        switch cutter {
+        case .line, .arc: true
+        case .circle, .cubicBezierChain: false
+        }
+    }
+
+    /// Target fractions strictly inside the target, in the parameter `splitSketchCurve` takes.
+    private func cutInteriorFractions(
+        target: SketchCurveGeometry2D,
+        cutter: SketchCurveGeometry2D,
         extendsCutter: Bool
     ) throws -> [Double] {
-        switch cutterSelection.entity {
-        case .line(let cutterLine):
-            let cutter = try resolvedCutCurveLineSegment(cutterLine, owner: "Cut Curve cutter")
-            return try cutFractionsForArcLineIntersection(
-                target: target,
-                cutter: cutter,
-                extendsCutter: extendsCutter
+        let intersections = try cutCurveIntersections(target: target, cutter: cutter, extendsCutter: extendsCutter)
+        return uniqueInteriorCutFractions(intersections.map { intersection in
+            switch target {
+            case .line:
+                return intersection.firstParameter
+            case let .arc(_, _, startAngle, endAngle):
+                return normalizedAngleDelta(from: startAngle, to: intersection.firstParameter) /
+                    positiveArcSpan(startAngle: startAngle, endAngle: endAngle)
+            case let .cubicBezierChain(controlPoints):
+                return intersection.firstParameter / Double((controlPoints.count - 1) / 3)
+            case .circle:
+                return intersection.firstParameter
+            }
+        })
+    }
+
+    private func cutCurveIntersections(
+        target: SketchCurveGeometry2D,
+        cutter: SketchCurveGeometry2D,
+        extendsCutter: Bool
+    ) throws -> [SketchCurveIntersection2D] {
+        if extendsCutter, case .cubicBezierChain = cutter {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Cut Curve spline cutter extension is not represented in the current source subset."
+            )
+        }
+        do {
+            return try SketchCurveIntersector(tolerance: .standard).intersections(
+                of: target,
+                with: cutter,
+                secondReach: extendsCutter ? .extended : .authored
+            )
+        } catch let error as KernelError where error.code == .resourceLimitExceeded {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Cut Curve cannot certify where the cutter crosses the target (tangent or overlapping curves have no discrete cut): \(error.message)"
+            )
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "Cut Curve geometry is invalid: \(error.message)")
+        }
+    }
+
+    /// The authored entity as exact planar geometry in its sketch plane.
+    private func cutCurveGeometry(
+        _ entity: SketchEntity,
+        role: CutCurveRole
+    ) throws -> SketchCurveGeometry2D {
+        let owner = role.owner
+        switch entity {
+        case .line(let line):
+            return .line(
+                start: try resolvedCutCurvePoint(line.start, owner: "\(owner) start"),
+                end: try resolvedCutCurvePoint(line.end, owner: "\(owner) end")
             )
         case .circle(let circle):
-            let cutter = try resolvedCutCurveCircle(circle, owner: "Cut Curve cutter")
-            return try cutFractionsForArcCircleIntersection(
-                target: target,
-                circle: cutter,
-                restrictToArc: nil
+            return .circle(
+                center: try resolvedCutCurvePoint(circle.center, owner: "\(owner) center"),
+                radius: try resolvedPositiveLengthValue(circle.radius, owner: "\(owner) radius")
             )
         case .arc(let arc):
-            let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
-            return try cutFractionsForArcCircleIntersection(
-                target: target,
-                circle: cutter.circle,
-                restrictToArc: extendsCutter ? nil : cutter
+            return .arc(
+                center: try resolvedCutCurvePoint(arc.center, owner: "\(owner) center"),
+                radius: try resolvedPositiveLengthValue(arc.radius, owner: "\(owner) radius"),
+                startAngle: try resolvedAngleValue(arc.startAngle, owner: "\(owner) start angle"),
+                endAngle: try resolvedAngleValue(arc.endAngle, owner: "\(owner) end angle")
             )
         case .spline(let spline):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve spline cutter extension is not represented in the current source subset."
-                )
+            guard spline.isClosed == false else {
+                throw EditorError(code: .commandInvalid, message: "\(owner) requires an open spline curve.")
             }
-            let cutterSamples = try resolvedCutCurveSplineSamples(
-                spline,
-                owner: "Cut Curve cutter"
-            )
-            return cutFractionsForArcSplineIntersection(
-                target: target,
-                cutterSamples: cutterSamples
-            )
+            guard spline.controlPoints.count >= 4,
+                  (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+                throw EditorError(code: .commandInvalid, message: "\(owner) requires a cubic Bezier spline.")
+            }
+            return .cubicBezierChain(controlPoints: try spline.controlPoints.map { point in
+                try resolvedCutCurvePoint(point, owner: owner)
+            })
         case .point:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Cut Curve source subset requires a line, circle, arc, or open spline cutter curve."
+                message: role == .target
+                    ? "Cut Curve source subset requires a line, arc, or open spline target curve."
+                    : "Cut Curve source subset requires a line, circle, arc, or open spline cutter curve."
             )
         }
+    }
+
+    private func resolvedCutCurvePoint(
+        _ point: SketchPoint,
+        owner: String
+    ) throws -> Point2D {
+        Point2D(
+            x: try resolvedLengthValue(point.x, owner: "\(owner) x"),
+            y: try resolvedLengthValue(point.y, owner: "\(owner) y")
+        )
     }
 }

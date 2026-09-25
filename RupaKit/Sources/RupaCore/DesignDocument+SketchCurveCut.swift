@@ -182,12 +182,8 @@ extension DesignDocument {
             )
         }
         try validateSketchCircleCanCut(selection: targetSelection)
-        let targetCircle = try resolvedCutCurveCircle(
-            targetCircleEntity,
-            owner: "Cut Curve target"
-        )
         let angles = try cutAnglesForCircleTarget(
-            target: targetCircle,
+            target: targetCircleEntity,
             cutterSelection: cutterSelection,
             extendsCutter: options.extendsCutter
         )

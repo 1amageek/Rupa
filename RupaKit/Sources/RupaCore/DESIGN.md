@@ -855,6 +855,19 @@ no entity candidates, a gap marked `FIXME(INCOMPLETE_IMPLEMENTATION)` in
 `MeasurementAnnotationResolver`; an unresolved annotation offers none and never
 fails the whole resolution.
 
+### Cut Curve intersection contract
+
+Cut Curve locates cuts only from Swift-CAD's `SketchCurveIntersector`: Core
+resolves the authored line, circle, arc or cubic spline to
+`SketchCurveGeometry2D`, chooses the cutter reach (`extended` when the option is
+set) and converts each intersection's natural parameter to the fraction
+`splitSketchCurve` takes (line fraction, arc sweep fraction, chain parameter over
+span count) or, for a circle target, to its two cut angles. Core computes no
+intersection itself. When an authored cutter misses but its extension would cut,
+the command says the cutter does not reach; a root the kernel cannot certify
+(tangent or overlapping curves) and invalid geometry are command-invalid errors
+carrying the kernel message, and the document is unchanged.
+
 ### Evaluated primitive measurement contract
 
 Every solid `PrimitiveDefinition` uses the same output-driven

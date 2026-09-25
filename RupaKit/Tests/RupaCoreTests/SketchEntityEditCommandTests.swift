@@ -8937,8 +8937,9 @@ import Testing
         )
         Issue.record("Cut Curve must reject a tangent circle target cut.")
     } catch let error as EditorError {
+        // A tangency is a double root the kernel cannot certify as a discrete cut point.
         #expect(error.code == .commandInvalid)
-        #expect(error.message == "Cut Curve circle target requires two distinct cutter intersections to create two arc segments.")
+        #expect(error.message.hasPrefix("Cut Curve cannot certify where the cutter crosses the target"))
     } catch {
         Issue.record("Cut Curve must throw EditorError.")
     }

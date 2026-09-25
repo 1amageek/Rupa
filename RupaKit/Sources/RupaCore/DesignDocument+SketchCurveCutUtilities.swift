@@ -53,23 +53,6 @@ extension DesignDocument {
         return normalized
     }
 
-    func cutCurveAngleIsOnArc(
-        _ angle: Double,
-        startAngle: Double,
-        endAngle: Double
-    ) -> Bool {
-        normalizedAngleDelta(from: startAngle, to: angle) <=
-            positiveArcSpan(startAngle: startAngle, endAngle: endAngle) + 1.0e-10
-    }
-
-    func cutCurveArcFraction(
-        for angle: Double,
-        on arc: CutCurveArc
-    ) -> Double {
-        normalizedAngleDelta(from: arc.startAngle, to: angle) /
-            positiveArcSpan(startAngle: arc.startAngle, endAngle: arc.endAngle)
-    }
-
     func normalizedAngleDelta(
         from startAngle: Double,
         to angle: Double
