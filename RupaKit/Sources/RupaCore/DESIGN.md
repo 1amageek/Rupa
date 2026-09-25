@@ -898,6 +898,21 @@ the workspace Measure panel and drawing projection consume this one result;
 drawing projection reports an unresolved annotation as a warning diagnostic
 instead of dropping anchors or failing the whole drawing.
 
+Edge points come from Swift-CAD's edge query on the evaluation the topology
+summarizes: `TopologySnapshot` retains that `EvaluatedDocument` (derived data,
+outside equality). An edge entry's `midpoint` is `EdgeQueryEvaluator.midpoint`
+on the exact edge curve; when the query fails the entry has none, so no Edge
+Middle snap or edge-center anchor is offered, never a chord midpoint. An
+edge-parameter anchor maps its normalized parameter onto the resolved edge range
+and evaluates `EdgeQueryEvaluator.frame`. Drawing edge-length and face-area
+annotations take their placement from
+`MeasurementAnchorWorldPointResolver.placedTopologyEntry` (occurrence included):
+the placed edge length is the kernel arc length of the edge curve's affine
+image, and a planar face area scales by the placed face plane's area ratio; a
+placement failure is a warning diagnostic and no value. Face area itself and
+face centers stay Rupa computations marked `FIXME(INCOMPLETE_IMPLEMENTATION)`
+until Swift-CAD publishes exact face measurement.
+
 ### Placed measurement aggregation
 
 Persistent anchors with an occurrence ID resolve topology against the occurrence's
@@ -940,7 +955,10 @@ selects visible occurrences, using the same resolved placements.
 Focused checks own translated/grouped selection bounds, independent component
 counts, reflected/nonuniform volume and area, profile bounds, retained IDs and
 stale/singular refusal. Extrusion, straight-sweep and far-from-origin fixtures
-prove solid volume follows the kernel's evaluated body.
+prove solid volume follows the kernel's evaluated body. Closed-circle edge anchors
+prove midpoints and edge-parameter points lie on the evaluated curve; scaled
+occurrence and non-uniform placement fixtures prove placed edge lengths and face
+areas.
 
 ### Body display face-run contract
 

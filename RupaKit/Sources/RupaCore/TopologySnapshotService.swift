@@ -104,8 +104,28 @@ public struct TopologySnapshotService: Sendable {
                 edgeCount: evaluatedDocument.brep.edges.count,
                 vertexCount: evaluatedDocument.brep.vertices.count
             ),
-            entries: entries
+            entries: entries,
+            evaluatedDocument: evaluatedDocument
         )
+    }
+
+    /// The exact point halfway along an edge, answered by Swift-CAD's edge query on the curve.
+    ///
+    /// An edge the query cannot place has no midpoint, so no midpoint snap or anchor is offered
+    /// for it rather than a chord midpoint that lies off a curved edge.
+    private func edgeMidpoint(
+        _ reference: StableSubshapeReference,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> TopologySummaryResult.Entry.Point? {
+        do {
+            let frame = try EdgeQueryEvaluator(tolerance: .standard).midpoint(
+                of: EdgeReference(subshape: reference),
+                in: evaluatedDocument
+            )
+            return point(frame.point)
+        } catch {
+            return nil
+        }
     }
 
     private func topologyEntry(
@@ -212,7 +232,8 @@ public struct TopologySnapshotService: Sendable {
                     ? edge.flatMap { edgeLengthMeters($0, in: evaluatedDocument.brep) }
                     : nil,
                 start: start,
-                end: end
+                end: end,
+                midpoint: edgeMidpoint(stableReference, in: evaluatedDocument)
             )
         case .vertex(let vertexID):
             let vertex = evaluatedDocument.brep.vertices[vertexID]

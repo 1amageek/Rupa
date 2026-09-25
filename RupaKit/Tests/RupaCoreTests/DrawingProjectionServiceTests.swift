@@ -996,3 +996,61 @@ private func generatedTopologyTestSubshapeID(_ role: String) -> SubshapeID {
         ordinal: 0
     )
 }
+
+/// Edge-length and face-area annotations report the geometry as placed, not in the source frame.
+@MainActor
+@Test func drawingProjectionTopologyMetricsFollowANonUniformPlacement() throws {
+    let session = EditorSession()
+    _ = try session.execute(.createExtrudedRectangle(
+        name: "Scaled Metric Box", plane: .xy,
+        width: .length(2.0, .meter), height: .length(3.0, .meter),
+        depth: .length(4.0, .meter), direction: .normal
+    ))
+    var document = session.document
+    let topology = try TopologySnapshotService().snapshot(document: document)
+    let faceEntry = try #require(topology.entries.first {
+        $0.kind == .face && abs(($0.areaSquareMeters ?? -1.0) - 6.0) <= 1.0e-9
+    })
+    let edgeEntry = try #require(topology.entries.first {
+        $0.kind == .edge && abs(($0.lengthMeters ?? -1.0) - 4.0) <= 1.0e-9
+    })
+    let faceTarget = try #require(faceEntry.selectionTarget())
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+    for (name, kind, target, entry) in [
+        ("Placed Face Area", MeasurementAnnotation.Kind.area, faceTarget, faceEntry),
+        ("Placed Edge Length", MeasurementAnnotation.Kind.edgeLength, edgeTarget, edgeEntry),
+    ] {
+        _ = try document.addMeasurementAnnotation(
+            MeasurementAnnotation(name: name, kind: kind, anchors: [
+                .topologyReference(sceneNodeID: target.sceneNodeID, component: target.component,
+                    kind: entry.kind, subshapeID: entry.subshapeID, referenceID: entry.referenceID),
+            ]),
+            objectRegistry: session.objectRegistry
+        )
+    }
+    // Stretch x by 2 and z by 3: the 2 x 3 cap becomes 4 x 3 and the 4 m depth edge 12 m.
+    try document.setSceneNodeTransform(id: edgeTarget.sceneNodeID, localTransform: Transform3D(matrix: try Matrix4x4(values: [
+        2, 0, 0, 0.5,
+        0, 1, 0, 0,
+        0, 0, 3, 0,
+        0, 0, 0, 1,
+    ])))
+    let savedView = SavedView(
+        name: "Placed Metric View",
+        camera: SavedViewCamera(target: .origin, distanceMeters: 8.0, yawRadians: .pi / 4.0, pitchRadians: 0.45),
+        projection: .orthographic(heightMeters: 8.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry
+    )
+
+    let area = try #require(result.annotations.first { $0.kind == .area })
+    let edge = try #require(result.annotations.first { $0.kind == .edgeLength })
+    #expect(abs((area.measurementSquareMeters ?? -1.0) - 12.0) <= 1.0e-9)
+    #expect(abs((edge.measurementMeters ?? -1.0) - 12.0) <= 1.0e-9)
+}

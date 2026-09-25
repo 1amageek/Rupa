@@ -452,13 +452,28 @@ public struct DrawingProjectionService: Sendable {
                     point2D: project(resolved.worldPoint, savedView: savedView, basis: basis)
                 )
             }
-            let metrics = annotationMetrics(
-                measurement: measurement,
-                anchors: anchors,
-                topology: topology,
-                displayUnit: displayUnit,
-                fallbackName: measurement.name
+            let metrics: (
+                measurementMeters: Double?,
+                measurementSquareMeters: Double?,
+                measurementDegrees: Double?,
+                displayText: String
             )
+            do {
+                metrics = try annotationMetrics(
+                    measurement: measurement,
+                    anchors: anchors,
+                    document: document,
+                    topology: topology,
+                    displayUnit: displayUnit,
+                    fallbackName: measurement.name
+                )
+            } catch {
+                unresolved.append(EditorDiagnostic(
+                    severity: .warning,
+                    message: "Measurement \(measurement.name) has no placed value: \((error as? EditorError)?.message ?? String(describing: error))"
+                ))
+                metrics = (nil, nil, nil, measurement.name)
+            }
             let label = annotationLabelPoint(
                 measurement: measurement,
                 anchors: anchors,
@@ -486,10 +501,11 @@ public struct DrawingProjectionService: Sendable {
     private func annotationMetrics(
         measurement: MeasurementAnnotation,
         anchors: [DrawingProjectionResult.AnnotationAnchor],
+        document: DesignDocument,
         topology: TopologySnapshot?,
         displayUnit: LengthDisplayUnit,
         fallbackName: String
-    ) -> (
+    ) throws -> (
         measurementMeters: Double?,
         measurementSquareMeters: Double?,
         measurementDegrees: Double?,
@@ -523,10 +539,20 @@ public struct DrawingProjectionService: Sendable {
                 "Perim \(LengthDisplayText.readableLengthString(fromMeters: length, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .area:
-            guard let area = topologyFaceAreaSquareMeters(
-                for: measurement,
-                topology: topology
-            ) ?? areaSquareMeters(from: anchors) else {
+            // A face-anchored area is the face's own placed area; only point-anchored areas
+            // are measured as the polygon through their anchors.
+            let faceAnchor = topologyAnchor(of: measurement, kind: .face)
+            let resolvedArea: Double?
+            if let faceAnchor {
+                resolvedArea = try topology.flatMap {
+                    try MeasurementAnchorWorldPointResolver().placedFaceAreaSquareMeters(
+                        for: faceAnchor, in: document, topology: $0
+                    )
+                }
+            } else {
+                resolvedArea = areaSquareMeters(from: anchors)
+            }
+            guard let area = resolvedArea else {
                 return (nil, nil, nil, fallbackName)
             }
             return (
@@ -536,10 +562,11 @@ public struct DrawingProjectionService: Sendable {
                 "Area \(LengthDisplayText.readableAreaString(fromSquareMeters: area, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .edgeLength:
-            guard let length = topologyEdgeLengthMeters(
-                for: measurement,
-                topology: topology
-            ) else {
+            guard let edgeAnchor = topologyAnchor(of: measurement, kind: .edge),
+                  let topology,
+                  let length = try MeasurementAnchorWorldPointResolver().placedEdgeLengthMeters(
+                      for: edgeAnchor, in: document, topology: topology
+                  ) else {
                 return (nil, nil, nil, fallbackName)
             }
             return (
@@ -581,60 +608,14 @@ public struct DrawingProjectionService: Sendable {
         }
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Edge-length and face-area annotation values are read
-    // from source-frame topology metrics, so a scaled occurrence placement is not reflected and an
-    // occurrence-qualified anchor does not match its entry. Production path: drawing projection
-    // annotation metrics. Completion (PROGRESS FBS.3) requires placed edge/face metrics from the
-    // kernel's edge and face queries through the anchor's occurrence placement.
-    private func topologyFaceAreaSquareMeters(
-        for measurement: MeasurementAnnotation,
-        topology: TopologySnapshot?
-    ) -> Double? {
-        topologyEntry(
-            for: measurement,
-            topologyKind: .face,
-            topology: topology
-        )?.areaSquareMeters
-    }
-
-    private func topologyEdgeLengthMeters(
-        for measurement: MeasurementAnnotation,
-        topology: TopologySnapshot?
-    ) -> Double? {
-        topologyEntry(
-            for: measurement,
-            topologyKind: .edge,
-            topology: topology
-        )?.lengthMeters
-    }
-
-    private func topologyEntry(
-        for measurement: MeasurementAnnotation,
-        topologyKind: TopologySummaryResult.Entry.Kind,
-        topology: TopologySnapshot?
-    ) -> TopologySummaryResult.Entry? {
-        guard let topology else {
-            return nil
+    /// The measurement's first anchor naming topology of the given kind.
+    private func topologyAnchor(
+        of measurement: MeasurementAnnotation,
+        kind topologyKind: TopologySummaryResult.Entry.Kind
+    ) -> MeasurementAnchor? {
+        measurement.anchors.first { anchor in
+            anchor.kind == .topologyReference && anchor.topologyReference?.kind == topologyKind
         }
-        for anchor in measurement.anchors {
-            guard anchor.kind == .topologyReference,
-                  let topologyReference = anchor.topologyReference,
-                  topologyReference.kind == topologyKind else {
-                continue
-            }
-            if let entry = topology.entries.first(where: { entry in
-                guard entry.kind == topologyKind,
-                      entry.subshapeID == topologyReference.subshapeID,
-                      let target = entry.selectionTarget() else {
-                    return false
-                }
-                return target.sceneNodeID == topologyReference.sceneNodeID
-                    && target.component == topologyReference.component
-            }) {
-                return entry
-            }
-        }
-        return nil
     }
 
     private func preferredMeasurementEndpoints(

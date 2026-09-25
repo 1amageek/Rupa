@@ -87,6 +87,8 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
         public var normal: Point?
         public var start: Point?
         public var end: Point?
+        /// The point halfway along an edge's curve parameter range, from Swift-CAD's edge query.
+        public var midpoint: Point?
         public var loopCount: Int?
         public var edgeCount: Int?
         public var shellCount: Int?
@@ -128,6 +130,7 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             normal: Point? = nil,
             start: Point? = nil,
             end: Point? = nil,
+            midpoint: Point? = nil,
             loopCount: Int? = nil,
             edgeCount: Int? = nil,
             shellCount: Int? = nil
@@ -168,6 +171,7 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             self.normal = normal
             self.start = start
             self.end = end
+            self.midpoint = midpoint
             self.loopCount = loopCount
             self.edgeCount = edgeCount
             self.shellCount = shellCount

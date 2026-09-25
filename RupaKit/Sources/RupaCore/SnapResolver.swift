@@ -1023,6 +1023,7 @@ public struct SnapResolver: Sendable {
         placedEntry.start = place(entry.start)
         placedEntry.end = place(entry.end)
         placedEntry.center = place(entry.center)
+        placedEntry.midpoint = place(entry.midpoint)
         return placedEntry
     }
 
@@ -1074,12 +1075,7 @@ public struct SnapResolver: Sendable {
                   let end = entry.end else {
                 return []
             }
-            let midpoint = TopologySummaryResult.Entry.Point(
-                x: (start.x + end.x) * 0.5,
-                y: (start.y + end.y) * 0.5,
-                z: (start.z + end.z) * 0.5
-            )
-            return [
+            var candidates = [
                 topologyCandidate(
                     kind: .edgeStart,
                     point: start,
@@ -1098,7 +1094,10 @@ public struct SnapResolver: Sendable {
                     priority: 0,
                     sortSuffix: "end"
                 ),
-                topologyCandidate(
+            ]
+            // The middle is the kernel's point on the edge curve; an edge without one offers none.
+            if let midpoint = entry.midpoint {
+                candidates.append(topologyCandidate(
                     kind: .edgeMidpoint,
                     point: midpoint,
                     projectedPoint: projectedTopologyPoint(midpoint, onto: constructionPlane),
@@ -1106,8 +1105,9 @@ public struct SnapResolver: Sendable {
                     label: "Edge Middle",
                     priority: 0,
                     sortSuffix: "middle"
-                ),
-            ].compactMap { $0 }
+                ))
+            }
+            return candidates.compactMap { $0 }
         case .vertex:
             guard let point = entry.start else {
                 return []

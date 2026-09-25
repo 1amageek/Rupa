@@ -49,40 +49,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         topology: TopologySnapshot? = nil
     ) throws -> Point3D? {
         try anchor.validate()
-        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
-        // A sketch anchor without an explicit node is placed by the node presenting its sketch;
-        // an unpresented sketch has no product placement and stays in the world frame.
-        let sketchFeatureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID
-        let placementID = anchor.sceneNodeID
-            ?? anchor.topologyReference?.sceneNodeID
-            ?? anchor.topologyEdgeParameter?.sceneNodeID
-            ?? sketchFeatureID.flatMap { hierarchy.presentingSceneNodeID(for: $0) }
-        var transform = Transform3D.identity
-        var sourceSceneNodeID = placementID
-        if let placementID {
-            if let occurrenceID = anchor.occurrenceID {
-                guard let occurrence = try hierarchy.resolvedOccurrences().first(where: { $0.id == occurrenceID }),
-                      occurrence.sceneNodeID == placementID else {
-                    throw EditorError(code: .referenceUnresolved,
-                        message: "Measurement occurrence no longer matches its retained scene node.")
-                }
-                sourceSceneNodeID = occurrence.sourceSceneNodeID
-                transform = occurrence.worldTransform
-            } else {
-                if anchor.kind != .worldPoint,
-                   hierarchy.node(placementID)?.reference?.componentInstanceID != nil {
-                    throw EditorError(code: .referenceUnresolved,
-                        message: "Component geometry measurement requires an explicit occurrence.")
-                }
-                transform = try hierarchy.worldTransform(of: placementID)
-            }
-            if let featureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID,
-               let sourceSceneNodeID,
-               hierarchy.node(sourceSceneNodeID)?.reference?.featureID != featureID {
-                throw EditorError(code: .referenceUnresolved,
-                    message: "Measurement sketch does not match its retained placement source.")
-            }
-        }
+        let (sourceSceneNodeID, transform) = try placement(for: anchor, in: document)
         let resolvedWorldPoint: Point3D?
         switch anchor.kind {
         case .worldPoint:
@@ -120,7 +87,7 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
                 return nil
             }
             if let sourceSceneNodeID { topologyEdgeParameter.sceneNodeID = sourceSceneNodeID }
-            resolvedWorldPoint = worldPoint(
+            resolvedWorldPoint = try worldPoint(
                 for: topologyEdgeParameter,
                 in: topology
             )
@@ -130,6 +97,136 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
             return nil
         }
         return try transform.applied(to: point)
+    }
+
+    /// The anchor's placement: the scene node whose source geometry it names and the world
+    /// transform of the node or occurrence that places that geometry.
+    private func placement(
+        for anchor: MeasurementAnchor,
+        in document: DesignDocument
+    ) throws -> (sourceSceneNodeID: SceneNodeID?, transform: Transform3D) {
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
+        // A sketch anchor without an explicit node is placed by the node presenting its sketch;
+        // an unpresented sketch has no product placement and stays in the world frame.
+        let sketchFeatureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID
+        let placementID = anchor.sceneNodeID
+            ?? anchor.topologyReference?.sceneNodeID
+            ?? anchor.topologyEdgeParameter?.sceneNodeID
+            ?? sketchFeatureID.flatMap { hierarchy.presentingSceneNodeID(for: $0) }
+        var transform = Transform3D.identity
+        var sourceSceneNodeID = placementID
+        if let placementID {
+            if let occurrenceID = anchor.occurrenceID {
+                guard let occurrence = try hierarchy.resolvedOccurrences().first(where: { $0.id == occurrenceID }),
+                      occurrence.sceneNodeID == placementID else {
+                    throw EditorError(code: .referenceUnresolved,
+                        message: "Measurement occurrence no longer matches its retained scene node.")
+                }
+                sourceSceneNodeID = occurrence.sourceSceneNodeID
+                transform = occurrence.worldTransform
+            } else {
+                if anchor.kind != .worldPoint,
+                   hierarchy.node(placementID)?.reference?.componentInstanceID != nil {
+                    throw EditorError(code: .referenceUnresolved,
+                        message: "Component geometry measurement requires an explicit occurrence.")
+                }
+                transform = try hierarchy.worldTransform(of: placementID)
+            }
+            if let featureID = anchor.sketchReference?.featureID ?? anchor.sketchCurveParameter?.featureID,
+               let sourceSceneNodeID,
+               hierarchy.node(sourceSceneNodeID)?.reference?.featureID != featureID {
+                throw EditorError(code: .referenceUnresolved,
+                    message: "Measurement sketch does not match its retained placement source.")
+            }
+        }
+        return (sourceSceneNodeID, transform)
+    }
+
+    /// The topology entry a topology anchor names together with the world transform placing it.
+    public func placedTopologyEntry(
+        for anchor: MeasurementAnchor,
+        in document: DesignDocument,
+        topology: TopologySnapshot
+    ) throws -> (entry: TopologySummaryResult.Entry, transform: Transform3D)? {
+        try anchor.validate()
+        guard var topologyReference = anchor.topologyReference else {
+            return nil
+        }
+        let (sourceSceneNodeID, transform) = try placement(for: anchor, in: document)
+        if let sourceSceneNodeID { topologyReference.sceneNodeID = sourceSceneNodeID }
+        return topologyEntry(for: topologyReference, in: topology).map { ($0, transform) }
+    }
+
+    /// The length of a topology edge as placed in the world: the kernel's arc length of the
+    /// edge curve's affine image under the anchor placement.
+    public func placedEdgeLengthMeters(
+        for anchor: MeasurementAnchor,
+        in document: DesignDocument,
+        topology: TopologySnapshot
+    ) throws -> Double? {
+        guard let placed = try placedTopologyEntry(for: anchor, in: document, topology: topology),
+              placed.entry.kind == .edge else {
+            return nil
+        }
+        guard let affine = try placed.transform.coordinateMap(to: .identity) else {
+            return placed.entry.lengthMeters
+        }
+        guard let stableReference = placed.entry.stableReference,
+              let evaluatedDocument = topology.evaluatedDocument else {
+            throw EditorError(code: .referenceUnresolved,
+                message: "Placed edge length requires the evaluated edge.")
+        }
+        let tolerance = ModelingTolerance.standard
+        let resolved = try EdgeQueryEvaluator(tolerance: tolerance).resolve(
+            EdgeReference(subshape: stableReference), in: evaluatedDocument
+        )
+        let image = try Curve3D.affineImage(AffineImageCurve3D(
+            source: resolved.curve, transform: affine, tolerance: tolerance
+        ))
+        let span = try ScalarInterval(
+            lower: min(resolved.startParameter, resolved.endParameter),
+            upper: max(resolved.startParameter, resolved.endParameter)
+        )
+        let length = try DefaultCurveArcLengthResolver().enclosure(
+            of: image, over: span, tolerance: tolerance
+        ).midpoint
+        guard length.isFinite, length > tolerance.distance else {
+            throw EditorError(code: .commandFailed, message: "Placed edge length is not representable.")
+        }
+        return length
+    }
+
+    /// The area of a planar topology face as placed in the world. The summary area exists only
+    /// for planar faces, whose placed area scales by the area ratio of the placed face plane.
+    public func placedFaceAreaSquareMeters(
+        for anchor: MeasurementAnchor,
+        in document: DesignDocument,
+        topology: TopologySnapshot
+    ) throws -> Double? {
+        guard let placed = try placedTopologyEntry(for: anchor, in: document, topology: topology),
+              placed.entry.kind == .face,
+              let area = placed.entry.areaSquareMeters else {
+            return nil
+        }
+        if placed.transform == .identity {
+            return area
+        }
+        guard let normal = placed.entry.normal else {
+            throw EditorError(code: .referenceUnresolved,
+                message: "Placed face area requires the planar face normal.")
+        }
+        let tolerance = ModelingTolerance.standard.distance
+        let n = try Vector3D(x: normal.x, y: normal.y, z: normal.z).normalized(tolerance: tolerance)
+        let seed: Vector3D = abs(n.x) < 0.9 ? .unitX : .unitY
+        let u = try n.cross(seed).normalized(tolerance: tolerance)
+        let v = n.cross(u)
+        let scale = try placed.transform.applyingLinearPart(to: u)
+            .cross(placed.transform.applyingLinearPart(to: v)).length
+        let placedArea = area * scale
+        guard placedArea.isFinite, placedArea > 0 else {
+            throw EditorError(code: .commandFailed, message: "Placed face area is not representable.")
+        }
+        return placedArea
     }
 
     private func worldPoint(
@@ -390,91 +487,35 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
             case .end:
                 return point3D(end)
             case .point, .center:
-                return Point3D(
-                    x: (start.x + end.x) * 0.5,
-                    y: (start.y + end.y) * 0.5,
-                    z: (start.z + end.z) * 0.5
-                )
+                // The kernel's point halfway along the edge curve, not the chord midpoint.
+                return entry.midpoint.map { point3D($0) }
             }
         case .vertex:
             return (entry.start ?? entry.center).map { point3D($0) }
         }
     }
 
+    /// The exact point at a normalized edge parameter, evaluated by Swift-CAD's edge query on the
+    /// same evaluation the topology snapshot summarizes.
     private func worldPoint(
         for anchor: MeasurementTopologyEdgeAnchor,
         in topology: TopologySnapshot
-    ) -> Point3D? {
+    ) throws -> Point3D? {
         guard let parameter = normalizedParameter(anchor.parameter),
-              let entry = topologyEdgeEntry(for: anchor, in: topology) else {
+              let entry = topologyEdgeEntry(for: anchor, in: topology),
+              let stableReference = entry.stableReference,
+              let evaluatedDocument = topology.evaluatedDocument else {
             return nil
         }
-        switch entry.curveKind {
-        case "line":
-            return lineEdgeWorldPoint(for: entry, parameter: parameter)
-        case "circle":
-            return circleEdgeWorldPoint(for: entry, parameter: parameter)
-        default:
-            return nil
-        }
-    }
-
-    private func lineEdgeWorldPoint(
-        for entry: TopologySummaryResult.Entry,
-        parameter: Double
-    ) -> Point3D? {
-        guard let origin = entry.curveOrigin,
-              let direction = entry.curveDirection,
-              let range = entry.edgeParameterRange,
-              range.start.isFinite,
-              range.end.isFinite else {
-            return nil
-        }
-        let curveParameter = range.start + (range.end - range.start) * parameter
-        guard curveParameter.isFinite else {
-            return nil
-        }
-        let point = Point3D(
-            x: origin.x + direction.x * curveParameter,
-            y: origin.y + direction.y * curveParameter,
-            z: origin.z + direction.z * curveParameter
+        let evaluator = EdgeQueryEvaluator(tolerance: .standard)
+        let edge = EdgeReference(subshape: stableReference)
+        let resolved = try evaluator.resolve(edge, in: evaluatedDocument)
+        let curveParameter = resolved.startParameter + (resolved.endParameter - resolved.startParameter) * parameter
+        let frame = try evaluator.frame(
+            at: EdgeParameterReference(edge: edge, parameter: curveParameter),
+            in: evaluatedDocument
         )
-        guard isFinite(point) else {
-            return nil
-        }
-        return point
-    }
-
-    private func circleEdgeWorldPoint(
-        for entry: TopologySummaryResult.Entry,
-        parameter: Double
-    ) -> Point3D? {
-        guard let center = entry.curveCenter,
-              let xAxis = entry.curveParameterXAxis,
-              let yAxis = entry.curveParameterYAxis,
-              let radius = entry.curveRadius,
-              let range = entry.edgeParameterRange,
-              radius.isFinite,
-              radius > 1.0e-12,
-              range.start.isFinite,
-              range.end.isFinite else {
-            return nil
-        }
-        let curveParameter = range.start + (range.end - range.start) * parameter
-        guard curveParameter.isFinite else {
-            return nil
-        }
-        let cosine = cos(curveParameter)
-        let sine = sin(curveParameter)
-        let point = Point3D(
-            x: center.x + (xAxis.x * cosine + yAxis.x * sine) * radius,
-            y: center.y + (xAxis.y * cosine + yAxis.y * sine) * radius,
-            z: center.z + (xAxis.z * cosine + yAxis.z * sine) * radius
-        )
-        guard isFinite(point) else {
-            return nil
-        }
-        return point
+        return isFinite(frame.point) ? frame.point : nil
     }
 
     private func topologyEntry(
