@@ -29,6 +29,11 @@ Parent: [RupaKit package design](../../DESIGN.md). Children include
 
 ## Responsibilities and Boundaries
 
+RupaCore composes Swift-CAD results and places them in the Product scene; it
+does not re-derive or approximate kernel geometry. The owner of each geometric
+capability and the migrations still in progress are recorded in the
+[system kernel/application boundary](../../../DESIGN.md#kernel-and-application-boundary).
+
 Revolve source creation consumes the shared section reference and explicit body
 kind. Its transaction preserves the source and commits the feature, section
 provenance and matching Solid/Surface object metadata together. Curve sections

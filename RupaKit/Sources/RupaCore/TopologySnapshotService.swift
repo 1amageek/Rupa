@@ -247,6 +247,10 @@ public struct TopologySnapshotService: Sendable {
         )
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The face center is an average of boundary vertices, not
+    // the exact face centroid; Swift-CAD publishes no face-centroid query yet. Production path:
+    // topology snapshot face centers used by Face Center snapping. Completion requires an exact
+    // Swift-CAD face measurement and deleting this Rupa computation.
     private func faceCenter(
         _ face: Face,
         in model: BRepModel
@@ -334,6 +338,11 @@ public struct TopologySnapshotService: Sendable {
         return nil
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Face area is computed here only for planar line-loop
+    // faces and is nil otherwise; Swift-CAD publishes no exact face-area query yet. Production
+    // path: topology snapshot metrics consumed by drawing face-area annotations and inspectors.
+    // Completion requires an exact Swift-CAD face measurement (see the system kernel/application
+    // boundary) and deleting this Rupa computation.
     private func faceAreaSquareMeters(
         _ face: Face,
         in model: BRepModel

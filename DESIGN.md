@@ -132,6 +132,33 @@ mutate only fresh isolated project authorities through
 `ProjectAgentCommandController`; its oracle alone is read-only and may inspect
 the final immutable source/B-Rep snapshot.
 
+### Kernel and application boundary
+
+Swift-CAD owns geometric truth: source and feature-operation semantics
+(including every feature reference an operation carries), exact construction,
+geometric predicates and intersections, curve/surface/edge/face evaluation,
+B-rep measurement, tolerances and topology identity. Rupa owns intent and
+product structure: scene placement and occurrences, which kernel query to run
+for a command, candidate ranking and labels, budgets, persistence of Rupa
+metadata and presentation. Rupa composes kernel results and may place them in a
+scene; it does not re-derive, approximate or re-implement kernel geometry, and
+a kernel capability it needs but cannot reach is added to Swift-CAD's public API
+rather than rebuilt in Rupa. Mesh-derived or sampled values are presentation and
+carry that provenance; they never stand in for an exact kernel result.
+
+Correctness-critical migrations back to that boundary:
+
+| Item | Kernel owner and public contract | Rupa change | Verification |
+|---|---|---|---|
+| Feature references | [CADIR](swift-CAD/Sources/CADIR/DESIGN.md): `FeatureOperation` enumerates and remaps every feature reference it carries, exhaustively per operation | Delete `PatternArrayFeatureIDRemapper`; cloning calls the kernel remap | Kernel remap covers every operation case, including Bridge Curve endpoints and Boolean targets; cloned outputs reference only cloned features |
+| Edge points | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `EdgeQueryEvaluator` midpoint, frame and closest point on the exact edge curve | Snap edge-middle candidates, edge-parameter measurement anchors and drawing edge lengths use the kernel query; delete chord midpoints and string curve-kind re-evaluation | Arc and closed-circle edges snap on the curve; anchors match kernel frames |
+| Solid volume | [CADTopology](swift-CAD/Sources/CADTopology/DESIGN.md): exact B-rep volume of the evaluated body | `MeasurementService` measures every solid from its evaluated body; delete the area x height prism paths | Extrude and straight-sweep volumes report `exactBRep` and match kernel volume |
+| Sketch curve intersection | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): public sketch curve intersection returning each entity's natural parameter from the certified 2D intersector | Sketch Cut/Split consume the kernel intersections; delete Rupa closed-form and sampled intersection code | Line/arc/circle/spline pairs cut at certified points; tangency and no-intersection are typed |
+
+Face area and face-center points have no exact kernel query yet; Rupa's
+planar-only face area and vertex-average face center remain marked incomplete
+until Swift-CAD publishes exact face measurement.
+
 ## Related Designs
 
 | Design | Relationship | Contract Used | Summary | Cautions |
