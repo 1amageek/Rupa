@@ -17,7 +17,9 @@ import Testing
         endBoundary: StableSubshapeReference(
             subshapeID: SubshapeID(featureID: second, role: "edge", ordinal: 3), geometrySignature: signature
         ),
-        endOrientation: .reversed
+        endOrientation: .reversed,
+        endTransform: try AffineTransform3D(basisX: .unitX, basisY: .unitY, basisZ: .unitZ,
+            translation: Vector3D(x: 1, y: 2, z: 3))
     )
     let remapper = PatternArrayFeatureIDRemapper(featureIDMap: [first: copiedFirst, second: copiedSecond])
     guard case let .bridgeSurface(result) = try remapper.remappedOperation(.bridgeSurface(bridge)) else {
@@ -29,6 +31,7 @@ import Testing
     #expect(result.startBoundary.geometrySignature == signature)
     #expect(result.endBoundary.geometrySignature == signature)
     #expect(result.endOrientation == .reversed)
+    #expect(result.endTransform == bridge.endTransform)
     #expect(throws: EditorError.self) {
         _ = try PatternArrayFeatureIDRemapper(featureIDMap: [first: copiedFirst])
             .remappedOperation(.bridgeSurface(bridge))

@@ -3046,6 +3046,7 @@ public final class CADDocumentStore {
     }
 
     private func commitMutation() throws {
+        try document.synchronizeBoundaryOccurrences()
         generation = try generation.advanced()
         isDirty = true
         validatedSource = nil

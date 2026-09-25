@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import SwiftCAD
 @testable import RupaCore
@@ -327,10 +328,9 @@ struct SurfaceFillCommandTests {
                 0, 0, 1, 0,
                 0, 0, 0, 1,
             ]))
-        #expect(throws: EditorError.self) {
-            _ = try moved.prepareBoundaryBridge(name: "Misplaced bridge", first: boundaries[0], second: boundaries[1],
-                reverseSecondBoundary: true)
-        }
+        let movedPlan = try moved.prepareBoundaryBridge(name: "Placed bridge", first: boundaries[0], second: boundaries[1],
+            reverseSecondBoundary: true)
+        #expect(movedPlan.presentations.first?.boundaryOccurrences?.second == boundaries[1].sceneNodeID)
         #expect(throws: (any Error).self) {
             _ = try session.execute(.createBoundaryBridge(name: "Twisted bridge", first: boundaries[0], second: boundaries[1],
                 reverseSecondBoundary: false))
@@ -352,6 +352,68 @@ struct SurfaceFillCommandTests {
         #expect(session.document.cadDocument.designGraph == original.cadDocument.designGraph)
         _ = try session.redo()
         #expect(session.document.cadDocument.designGraph.nodes[bridgeID] == feature)
+        _ = try session.execute(.setSceneNodeTransform(id: boundaries[1].sceneNodeID,
+            localTransform: .translation(Vector3D(x: 0.1, y: 0, z: 0))))
+        let movedFeature = try #require(session.document.cadDocument.designGraph.nodes[bridgeID])
+        guard case let .bridgeSurface(movedBridge) = movedFeature.operation else {
+            Issue.record("A placement edit must retain the boundary feature.")
+            return
+        }
+        #expect(movedBridge.endTransform?.translation.x == 0.1)
+        let updated = try #require(session.currentEvaluationCache?.evaluatedDocument)
+        let bridgeVertices = updated.subshapes.entries.compactMap { key, value -> Point3D? in
+            guard key.featureID == bridgeID, case let .vertex(id) = value else { return nil }
+            return updated.brep.vertices[id]?.point
+        }
+        #expect(bridgeVertices.contains { abs($0.x - 0.3) < 1e-8 })
+        #expect(bridgeVertices.contains { abs($0.x - 0.1) < 1e-8 })
+        var restored = session.document
+        restored.productMetadata = try JSONDecoder().decode(ProductMetadata.self,
+            from: JSONEncoder().encode(session.document.productMetadata))
+        restored.cadDocument = try JSONDecoder().decode(CADDocument.self,
+            from: JSONEncoder().encode(session.document.cadDocument))
+        _ = try restored.validate()
+        #expect(restored.productMetadata == session.document.productMetadata)
+        _ = try session.undo()
+        #expect(session.document.cadDocument.designGraph.nodes[bridgeID] == feature)
+        _ = try session.redo()
+        #expect(session.document.cadDocument.designGraph.nodes[bridgeID] == movedFeature)
+        let beforeFailure = session.document
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.setSceneNodeTransform(id: boundaries[1].sceneNodeID,
+                localTransform: .translation(Vector3D(x: -0.1, y: 0, z: 0))))
+        }
+        #expect(session.document.cadDocument.designGraph == beforeFailure.cadDocument.designGraph)
+        #expect(session.document.productMetadata == beforeFailure.productMetadata)
+        var direct = session.document
+        #expect(throws: (any Error).self) {
+            try direct.setSceneNodeTransform(id: boundaries[1].sceneNodeID,
+                localTransform: Transform3D(matrix: Matrix4x4(values: Array(repeating: 0, count: 16))))
+        }
+        #expect(direct.productMetadata == beforeFailure.productMetadata)
+        #expect(direct.cadDocument.designGraph == beforeFailure.cadDocument.designGraph)
+        var copied = session.document
+        let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
+            definition: ComponentDefinition(name: "Sources", rootSceneNodeIDs: boundaries.map(\.sceneNodeID)),
+            transforms: [.translation(Vector3D(x: 1, y: 0, z: 0))],
+            metadata: &copied.productMetadata, cadDocument: &copied.cadDocument,
+            tolerance: copied.modelingSettings.tolerance)
+        let root = try #require(copied.productMetadata.rootSceneNodeIDs.first)
+        copied.productMetadata.sceneNodes[root]?.childIDs += clone.outputSceneNodeIDs
+        try copied.synchronizeBoundaryOccurrences()
+        _ = try copied.validate()
+        let clonedOwner = try #require(copied.productMetadata.sceneNodes.values.first {
+            $0.boundaryOccurrences != nil && $0.object?.sourceFeatureID != bridgeID
+        })
+        let clonedBinding = try #require(clonedOwner.boundaryOccurrences)
+        #expect(clonedBinding.first != boundaries[0].sceneNodeID)
+        #expect(clonedBinding.second != boundaries[1].sceneNodeID)
+        let cloneResult = try DocumentEvaluator.modelingDefault(for: copied).evaluateExact(copied.cadDocument)
+        #expect(cloneResult.brep.bodies.count == 6)
+        try copied.setSceneNodeTransform(id: clonedBinding.second,
+            localTransform: .translation(Vector3D(x: 0.2, y: 0, z: 0)))
+        _ = try copied.validate()
+        #expect(copied.cadDocument.designGraph.nodes[bridgeID] == movedFeature)
     }
 
     @Test

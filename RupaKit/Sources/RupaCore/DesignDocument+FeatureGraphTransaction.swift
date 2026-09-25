@@ -51,6 +51,7 @@ extension DesignDocument {
             against: cadDocument,
             objectRegistry: objectRegistry
         )
+        try validateBoundaryOccurrences()
         return ValidatedDesignDocument(
             document: self,
             validatedCADDocument: updatedCADDocument
@@ -140,7 +141,8 @@ extension DesignDocument {
                 isVisible: presentation.isVisible,
                 isLocked: presentation.isLocked,
                 localTransform: presentation.localTransform,
-                materialID: presentation.materialID
+                materialID: presentation.materialID,
+                boundaryOccurrences: presentation.boundaryOccurrences
             )
         }
 

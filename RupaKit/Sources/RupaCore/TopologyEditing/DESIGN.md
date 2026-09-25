@@ -135,12 +135,18 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   than substituting endpoint chords for curved geometry.
 - Open-boundary display metadata includes lone-sheet outer perimeters: these
   permit bridging, not hole filling. Fillability remains the fill evaluator's contract.
-- Bridge Surface requires two distinct current open-boundary edges on unlocked
-  CAD occurrences with equal accumulated transforms. Core captures both stable references and appends a
-  dependent `.sheet` child without retargeting or modifying the source. The
-  kernel derives exact trimmed curves from the evaluated B-rep; copied display
-  curves are never operation inputs. Different coordinate frames, stale references,
-  internal edges and unsupported exact curve kinds fail before publication.
+- Boundary Bridge retains both stable boundaries and a `BoundaryOccurrenceBinding`
+  on its output scene node. The binding owns the two source occurrence IDs; the
+  native feature owns source-to-output affine maps, computed as inverse(output
+  world) times source world. Source motion, including ancestor motion, refreshes
+  maps before committed evaluation. Save/reload validates the same relationship.
+  Native source edits still follow the existing feature graph. Missing occurrences,
+  stale source-feature identities, singular maps and unsupported exact curves fail
+  atomically. The generated sheet remains a child of the first selected occurrence.
+  An output feature has one binding owner; scene duplication must remap bindings
+  together with cloned feature identities. No copied display curves define geometry.
+  Frame synchronization uses a candidate CAD document and publishes only after
+  every binding resolves, retaining the original document on failure.
 
 ## State, Ownership, and Lifecycle
 

@@ -89,20 +89,19 @@ extension DesignDocument {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        guard first.reference.subshapeID != second.reference.subshapeID else {
+        guard first.reference.subshapeID != second.reference.subshapeID
+            || firstTarget.sceneNodeID != secondTarget.sceneNodeID else {
             throw EditorError(code: .commandInvalid,
                 message: "Boundary Bridge requires distinct CAD edges.")
         }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        guard try hierarchy.worldTransform(of: firstTarget.sceneNodeID)
-            == hierarchy.worldTransform(of: secondTarget.sceneNodeID) else {
-            throw EditorError(code: .commandInvalid,
-                message: "Boundary Bridge sources must share the same occurrence coordinate frame.")
-        }
+        let firstWorld = try hierarchy.worldTransform(of: firstTarget.sceneNodeID)
+        let secondWorld = try hierarchy.worldTransform(of: secondTarget.sceneNodeID)
         let bridge = BridgeSurfaceFeature(
             startBoundary: first.reference,
             endBoundary: second.reference,
-            endOrientation: reverseSecondBoundary ? .reversed : .forward
+            endOrientation: reverseSecondBoundary ? .reversed : .forward,
+            endTransform: try Self.boundaryCoordinateMap(from: secondWorld, to: firstWorld)
         )
         let feature = try FeatureNodeFactory.make(
             operation: .bridgeSurface(bridge),
@@ -122,7 +121,8 @@ extension DesignDocument {
                     typeID: .bSplineSurface,
                     geometryRole: .surface,
                     properties: objectRegistry.defaultProperties(for: .bSplineSurface)
-                )
+                ),
+                boundaryOccurrences: BoundaryOccurrenceBinding(first: firstTarget.sceneNodeID, second: secondTarget.sceneNodeID)
             )],
             primaryFeatureID: feature.id
         )

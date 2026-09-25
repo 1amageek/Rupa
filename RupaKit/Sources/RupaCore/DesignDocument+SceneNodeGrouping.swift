@@ -98,6 +98,10 @@ extension DesignDocument {
         worldDelta: Transform3D,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SceneNodeID] {
+        let previous = self
+        var committed = false
+        defer { if !committed { self = previous } }
+
         let plan = try SceneNodeRelativeTransformPlanner().plan(
             hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
             ids: ids,
@@ -114,6 +118,8 @@ extension DesignDocument {
         }
 
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try synchronizeBoundaryOccurrences()
+        committed = true
         return plan.transformedIDs
     }
 

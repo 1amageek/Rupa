@@ -25,5 +25,11 @@ struct SceneCompositionMatrixTests {
         #expect(try (affine.inverse().applied(to: affine.applied(to: point)) - point).length < 1e-12)
         let singular = Transform3D(matrix: try Matrix4x4(values: Array(repeating: 0, count: 16)))
         #expect(throws: EditorError.self) { try singular.inverse() }
+        let perspective = Transform3D(matrix: try Matrix4x4(values: [
+            1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.1, 0, 0, 1
+        ]))
+        #expect(throws: EditorError.self) {
+            try DesignDocument.boundaryCoordinateMap(from: perspective, to: perspective)
+        }
     }
 }

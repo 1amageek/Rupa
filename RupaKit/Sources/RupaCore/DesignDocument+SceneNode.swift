@@ -109,6 +109,10 @@ extension DesignDocument {
         localTransform: Transform3D,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        let previous = self
+        var committed = false
+        defer { if !committed { self = previous } }
+
         guard var node = productMetadata.sceneNodes[id] else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -127,7 +131,9 @@ extension DesignDocument {
         try localTransform.validate()
         node.localTransform = localTransform
         productMetadata.sceneNodes[id] = node
+        try synchronizeBoundaryOccurrences()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        committed = true
     }
 
     public mutating func setSceneNodeMaterial(

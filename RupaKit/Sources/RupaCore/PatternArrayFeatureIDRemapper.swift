@@ -69,7 +69,9 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return .bridgeSurface(BridgeSurfaceFeature(
                 startBoundary: try remappedStableSubshapeReference(bridge.startBoundary),
                 endBoundary: try remappedStableSubshapeReference(bridge.endBoundary),
-                endOrientation: bridge.endOrientation
+                endOrientation: bridge.endOrientation,
+                startTransform: bridge.startTransform,
+                endTransform: bridge.endTransform
             ))
         case .importedBRep, .primitive, .patchSurface:
             return operation

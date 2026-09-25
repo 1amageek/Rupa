@@ -49,13 +49,22 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
                 object: .group(),
                 localTransform: transform
             )
+            var sceneIDMap: [SceneNodeID: SceneNodeID] = [:]
             let clonedRootIDs = try definition.rootSceneNodeIDs.map { rootSceneNodeID in
                 try cloneSceneTree(
                     rootSceneNodeID,
                     namePrefix: outputNode.name,
                     featureIDMap: featureIDMap,
+                    sceneIDMap: &sceneIDMap,
                     metadata: &metadata
                 )
+            }
+            for clonedID in sceneIDMap.values {
+                guard let binding = metadata.sceneNodes[clonedID]?.boundaryOccurrences else { continue }
+                guard let first = sceneIDMap[binding.first], let second = sceneIDMap[binding.second] else {
+                    throw EditorError(code: .commandInvalid, message: "Copy a boundary-dependent sheet together with both source occurrences.")
+                }
+                metadata.sceneNodes[clonedID]?.boundaryOccurrences = .init(first: first, second: second)
             }
             outputNode.childIDs = clonedRootIDs
             metadata.sceneNodes[outputNode.id] = outputNode
@@ -260,6 +269,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         _ sceneNodeID: SceneNodeID,
         namePrefix: String,
         featureIDMap: [FeatureID: FeatureID],
+        sceneIDMap: inout [SceneNodeID: SceneNodeID],
         metadata: inout ProductMetadata
     ) throws -> SceneNodeID {
         guard var sceneNode = metadata.sceneNodes[sceneNodeID] else {
@@ -269,6 +279,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             )
         }
         let clonedSceneNodeID = SceneNodeID()
+        sceneIDMap[sceneNodeID] = clonedSceneNodeID
         let childIDs = sceneNode.childIDs
         sceneNode.id = clonedSceneNodeID
         sceneNode.name = "\(namePrefix) \(sceneNode.name)"
@@ -283,6 +294,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
                 childID,
                 namePrefix: namePrefix,
                 featureIDMap: featureIDMap,
+                sceneIDMap: &sceneIDMap,
                 metadata: &metadata
             )
         }

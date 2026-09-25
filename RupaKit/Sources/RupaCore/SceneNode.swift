@@ -11,6 +11,7 @@ public struct SceneNode: Codable, Hashable, Identifiable, Sendable {
     public var isLocked: Bool
     public var localTransform: Transform3D
     public var materialID: MaterialID?
+    public var boundaryOccurrences: BoundaryOccurrenceBinding?
 
     public init(
         id: SceneNodeID = SceneNodeID(),
@@ -21,7 +22,8 @@ public struct SceneNode: Codable, Hashable, Identifiable, Sendable {
         isVisible: Bool = true,
         isLocked: Bool = false,
         localTransform: Transform3D = .identity,
-        materialID: MaterialID? = nil
+        materialID: MaterialID? = nil,
+        boundaryOccurrences: BoundaryOccurrenceBinding? = nil
     ) {
         self.id = id
         self.name = name
@@ -32,6 +34,7 @@ public struct SceneNode: Codable, Hashable, Identifiable, Sendable {
         self.isLocked = isLocked
         self.localTransform = localTransform
         self.materialID = materialID
+        self.boundaryOccurrences = boundaryOccurrences
     }
 
     /// Whether this node exists only to place and collect other nodes.

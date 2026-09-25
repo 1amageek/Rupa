@@ -18,6 +18,7 @@ public struct ValidatedDesignDocument: Sendable {
             against: document.cadDocument,
             objectRegistry: objectRegistry
         )
+        try document.validateBoundaryOccurrences()
         try Self.validateAuthoredMeshAuthority(in: document)
         self.document = document
         self.validatedCADDocument = validatedCADDocument
