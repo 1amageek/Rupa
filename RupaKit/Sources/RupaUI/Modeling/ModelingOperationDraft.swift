@@ -60,6 +60,7 @@ struct ModelingOperationDraft: Equatable {
     var name: String
     var targets: [SelectionTarget]
     var unit: LengthDisplayUnit
+    var startDistance: String = "0"
     var distance: String
     var width: String
     var height: String
@@ -212,12 +213,16 @@ struct ModelingOperationDraft: Equatable {
                         y: try number(axis[1], label: "Direction Y"), z: try number(axis[2], label: "Direction Z"))
                     direction = .vector(try vector.normalized(tolerance: document.modelingSettings.tolerance.distance))
                 }
-                return .extrudeSection(
-                    name: name, section: section,
-                    distance: .length(try modelableLength(distance, label: "Distance", in: document), .meter),
-                    direction: direction,
-                    resultKind: createsSheet ? .sheet : .solid
-                )
+                let extrusion = ExtrudeFeature(section: section,
+                    distance: .length(try length(distance, label: "End position"), .meter),
+                    startDistance: extrusionDirection == .symmetric ? nil
+                        : .length(try length(startDistance, label: "Start position"), .meter),
+                    direction: direction, resultKind: createsSheet ? .sheet : .solid)
+                _ = try extrusion.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
+                    try document.cadDocument.parameters.resolvedValue(for: $0)
+                }
+                return .extrudeSection(name: name, section: section, distance: extrusion.distance,
+                    startDistance: extrusion.startDistance, direction: direction, resultKind: extrusion.resultKind)
             }
             let degrees = try number(angle, label: "Angle")
             guard degrees != 0, abs(degrees) <= 360 else {

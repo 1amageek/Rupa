@@ -71,12 +71,13 @@ extension DesignDocument {
         name: String,
         section: SectionReference,
         distance: CADExpression,
+        startDistance: CADExpression? = nil,
         direction: ExtrudeDirection,
         resultKind: ExtrudeResultKind,
         typeID: ObjectTypeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
-        let operation = ExtrudeFeature(section: section, distance: distance,
+        let operation = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
             direction: direction, resultKind: resultKind)
         try operation.validate()
         guard let source = cadDocument.designGraph.nodes[section.featureID],

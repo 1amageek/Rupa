@@ -110,7 +110,7 @@ extension DesignDocument {
                 face: face,
                 offsetMeters: offsetMeters
             )
-            if face == .front {
+            if face == .front && extrude.startDistance == nil {
                 translationYDelta = -offsetMeters
             }
             extrude.distance = .length(nextDepth, .meter)
@@ -188,6 +188,20 @@ extension DesignDocument {
             )
         }
         let depthMeters = try resolvedLengthValue(extrude.distance, owner: "Extrude distance")
+        if extrude.startDistance != nil || depthMeters <= 0 {
+            let range = try extrude.resolvedAxialRange(tolerance: modelingSettings.tolerance) {
+                try cadDocument.parameters.resolvedValue(for: $0)
+            }
+            let lower = range.lowerBound - (face == .front ? offsetMeters : 0)
+            let upper = range.upperBound + (face == .back ? offsetMeters : 0)
+            guard upper - lower > modelingSettings.tolerance.distance else {
+                throw EditorError(code: .commandInvalid, message: "Face offset would collapse the extrusion.")
+            }
+            let start = try resolvedLengthValue(extrude.startDistance ?? .length(0, .meter), owner: "Extrude start")
+            let forward = depthMeters > start
+            extrude.startDistance = .length(forward ? lower : upper, .meter)
+            return forward ? upper : lower
+        }
         guard depthMeters > 0.0 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -245,7 +259,7 @@ extension DesignDocument {
                 face: face,
                 offsetMeters: offsetMeters
             )
-            if face == .front {
+            if face == .front && extrude.startDistance == nil {
                 translationYDelta = -offsetMeters
             }
             extrude.distance = .length(nextDepth, .meter)
@@ -276,7 +290,10 @@ extension DesignDocument {
             try translateSceneNode(sceneNodeID,
                 along: SketchPlaneCoordinateSystem(plane: sketch.plane).normal * translationYDelta)
         }
-        let sizeY = abs(try resolvedLengthValue(extrude.distance, owner: "Extrude distance"))
+        let range = try extrude.resolvedAxialRange(tolerance: modelingSettings.tolerance) {
+            try cadDocument.parameters.resolvedValue(for: $0)
+        }
+        let sizeY = range.upperBound - range.lowerBound
         try synchronizeCylinderObjectProperties(
             featureID: featureID,
             radius: radiusMeters,

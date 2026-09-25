@@ -53,19 +53,19 @@ public struct DesignDisplaySnapshotService: Sendable {
             }
             switch feature.operation {
             case .extrude(let extrude):
-                guard extrude.section.isProfile,
-                      let depthMeters = sketchService.resolvedLength(
-                    extrude.distance,
-                    parameters: parameters
-                ) else {
+                guard extrude.section.isProfile else { continue }
+                do {
+                    let range = try extrude.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
+                        try parameters.resolvedValue(for: $0)
+                    }
+                    extrudes[featureID] = ExtrudeDisplaySnapshot(
+                        featureID: featureID, profileFeatureID: extrude.section.featureID,
+                        depthMeters: range.upperBound - range.lowerBound, direction: extrude.direction,
+                        startMeters: range.lowerBound, endMeters: range.upperBound)
+                } catch {
+                    // Invalid source has no display snapshot; evaluation owns its diagnostic.
                     continue
                 }
-                extrudes[featureID] = ExtrudeDisplaySnapshot(
-                    featureID: featureID,
-                    profileFeatureID: extrude.section.featureID,
-                    depthMeters: depthMeters,
-                    direction: extrude.direction
-                )
             case .sweep(let sweep):
                 guard let snapshot = straightPrismSweepSnapshot(
                     featureID: featureID,

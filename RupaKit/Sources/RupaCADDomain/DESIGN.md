@@ -17,6 +17,12 @@ Solid profile extrusion, profile sheet extrusion and curve sheet extrusion share
 actual source-body output role, so sheet receipts cannot be relabeled as solids.
 `cad.surface.extrude` consumes `profile`; `cad.surface.extrudeCurve` consumes
 `curve`. Both use the same length and direction contracts as `cad.solid.extrude`.
+The optional `start_distance` and required `distance` are finite signed axial
+positions in meters; omission starts at zero. Equal endpoints are rejected before
+preparation; the native range contract additionally enforces modeling tolerance.
+The additive optional field preserves existing version-one invocations.
+Semantic execution tests check both sides and same-side reversed endpoints
+against the generated BRep, not only command construction.
 
 Revolution uses `RevolveLowerer` and Core's `revolveSection` transaction for
 solid profiles, sheet profiles and sheet curves. Inputs specify an axis origin

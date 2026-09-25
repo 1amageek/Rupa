@@ -8,8 +8,8 @@ import SwiftCAD
 @testable import RupaCADDomain
 
 @MainActor
-@Test(.timeLimit(.minutes(1)))
-func profileToExtrudeLocalChainExecutesWithCoreGeneratedIdentities() throws {
+@Test(.timeLimit(.minutes(1)), arguments: [0.0, -0.02, 0.2])
+func profileToExtrudeLocalChainExecutesWithCoreGeneratedIdentities(start: Double) throws {
   let profileNode = ProgramNodeSymbol("profile")
   let extrudeNode = ProgramNodeSymbol("extrude")
   let program = SemanticProgram(
@@ -41,6 +41,7 @@ func profileToExtrudeLocalChainExecutesWithCoreGeneratedIdentities() throws {
                 kind: .feature
               )),
             "distance": .literal(.number(0.1, unit: .meter)),
+            "start_distance": .literal(.number(start, unit: .meter)),
             "direction": .literal(.direction(unitZ())),
           ]
         )
@@ -58,6 +59,10 @@ func profileToExtrudeLocalChainExecutesWithCoreGeneratedIdentities() throws {
   #expect(execution.receipt.outputBindings.count == 4)
   try verifyPersistentBindings(execution.receipt, in: execution.session.document)
   #expect(execution.session.document.cadDocument.designGraph.order.count == 2)
+  let document = execution.session.document
+  let result = try DocumentEvaluator.modelingDefault(for: document).evaluateExact(document.cadDocument)
+  #expect(abs(try #require(result.brep.vertices.values.map(\.point.z).min()) - min(start, 0.1)) < 1e-8)
+  #expect(abs(try #require(result.brep.vertices.values.map(\.point.z).max()) - max(start, 0.1)) < 1e-8)
 }
 
 @MainActor

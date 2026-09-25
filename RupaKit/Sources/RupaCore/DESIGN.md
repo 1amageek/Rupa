@@ -1618,3 +1618,13 @@ CADAPI-C must additionally prove:
 Changes to CAD creation, target identity, asset replacement, provenance, or
 Core command decoding require rechecking `RupaAutomation`, `RupaCADDomain`,
 `RupaProject` staging, and the system source-authority invariants.
+
+### Signed extrusion endpoint adoption
+
+Extrude creation retains signed start/end expressions. CADIR's `resolvedAxialRange`
+is the sole endpoint admission rule used by construction, measurement, topology
+selection and object dimensions. Editing an end retains the start; dimension
+editing changes span while retaining the authored start and direction. History
+edits, parameter usage and native replay retain both expressions. Zero-span edits
+fail before publication. Existing one-sided face-offset placement behavior remains
+compatible; explicitly positioned extrusions move their source endpoints directly.

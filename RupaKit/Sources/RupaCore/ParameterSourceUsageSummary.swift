@@ -99,6 +99,7 @@ public struct ParameterSourceUsageService: Sendable {
             collectSketchUsages(sketch, record: record)
         case .extrude(let feature):
             record(feature.distance, path: "extrude.distance")
+            if let start = feature.startDistance { record(start, path: "extrude.startDistance") }
         case .revolve(let feature):
             record(feature.angle, path: "revolve.angle")
         case .sweep(let feature):

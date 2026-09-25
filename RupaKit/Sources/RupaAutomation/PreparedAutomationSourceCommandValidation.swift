@@ -75,6 +75,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createBridgeCurve,
              .setBridgeCurveParameters,
              .createRectangleSketchFromCorners,
+             .setExtrudeExtents,
              .setExtrudeDistance,
              .setFeatureLength,
              .setCubeDimensions,

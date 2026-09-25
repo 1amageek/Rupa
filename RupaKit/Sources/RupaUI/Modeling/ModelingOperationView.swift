@@ -190,7 +190,10 @@ struct ModelingOperationView: View {
             lengthField("Radius", text: $draft.width)
             if draft.kind == .cylinder { lengthField("Depth", text: $draft.distance) }
         case .extrude:
-            lengthField("Distance", text: $draft.distance)
+            if draft.extrusionDirection != .symmetric {
+                lengthField("Start position", text: $draft.startDistance)
+            }
+            lengthField(draft.extrusionDirection == .symmetric ? "Total distance" : "End position", text: $draft.distance)
             Picker("Direction", selection: $draft.extrusionDirection) {
                 ForEach(ModelingOperationDraft.ExtrusionDirectionChoice.allCases) { direction in
                     Text(direction.rawValue).tag(direction)

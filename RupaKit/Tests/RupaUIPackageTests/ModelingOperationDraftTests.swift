@@ -367,7 +367,7 @@ struct ModelingOperationDraftTests {
             let sibling = makeDraft(kind, targets: [targets[0]])
             let reference: SectionReference
             switch try sibling.command(in: document) {
-            case .extrudeSection(_, let section, _, _, _), .revolveSection(_, let section, _, _, _): reference = section
+            case .extrudeSection(_, let section, _, _, _, _), .revolveSection(_, let section, _, _, _): reference = section
             default: Issue.record("Expected a section operation."); return
             }
             #expect(reference == sections[0].section)

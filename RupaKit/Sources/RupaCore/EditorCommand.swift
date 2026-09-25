@@ -163,6 +163,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint
     )
+    case setExtrudeExtents(featureID: FeatureID, start: CADExpression, end: CADExpression)
     case setExtrudeDistance(featureID: FeatureID, distance: CADExpression)
     case setFeatureLength(featureID: FeatureID, expression: CADExpression)
     case setCubeDimensions(
@@ -290,7 +291,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind = .solid)
-    case extrudeSection(name: String, section: SectionReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind)
+    case extrudeSection(name: String, section: SectionReference, distance: CADExpression, startDistance: CADExpression? = nil, direction: ExtrudeDirection, resultKind: ExtrudeResultKind)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case revolveSection(name: String, section: SectionReference, axis: RevolveAxis, angle: CADExpression, resultKind: BodyKind)
     case createSweep(
@@ -581,6 +582,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setBridgeCurveParameters"
         case .createRectangleSketchFromCorners:
             "createRectangleSketchFromCorners"
+        case .setExtrudeExtents:
+            "setExtrudeExtents"
         case .setExtrudeDistance:
             "setExtrudeDistance"
         case .setFeatureLength:
@@ -807,6 +810,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createBridgeCurve,
              .setBridgeCurveParameters,
              .createRectangleSketchFromCorners,
+             .setExtrudeExtents,
              .setExtrudeDistance,
              .setFeatureLength,
              .setCubeDimensions,

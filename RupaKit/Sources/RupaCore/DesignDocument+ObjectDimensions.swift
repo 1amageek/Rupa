@@ -20,6 +20,7 @@ extension DesignDocument {
     package mutating func setExtrudeDistance(
         featureID: FeatureID,
         distance: CADExpression,
+        startDistance: CADExpression? = nil,
         validatedDocument: ValidatedDesignDocument
     ) throws -> ValidatedDesignDocument {
         guard validatedDocument.document.modelingSettings == modelingSettings,
@@ -46,6 +47,7 @@ extension DesignDocument {
         }
 
         extrude.distance = distance
+        if let startDistance { extrude.startDistance = startDistance }
         feature.operation = .extrude(extrude)
 
         let updatedCADDocument: ValidatedCADDocument
@@ -133,7 +135,11 @@ extension DesignDocument {
             oppositeCorner: oppositeCorner
         )
         profileFeature.operation = .sketch(updatedSketch)
-        extrude.distance = sizeY
+        let start = extrude.startDistance ?? .length(0, .meter)
+        let endValue = try resolvedLengthValue(extrude.distance, owner: "Extrude end")
+        let startValue = try resolvedLengthValue(start, owner: "Extrude start")
+        extrude.distance = extrude.direction == .symmetric ? sizeY
+            : (endValue >= startValue ? .add(start, sizeY) : .subtract(start, sizeY))
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
@@ -215,7 +221,11 @@ extension DesignDocument {
             turn: turn
         )
         profileFeature.operation = .sketch(sketch)
-        extrude.distance = sizeY
+        let start = extrude.startDistance ?? .length(0, .meter)
+        let endValue = try resolvedLengthValue(extrude.distance, owner: "Extrude end")
+        let startValue = try resolvedLengthValue(start, owner: "Extrude start")
+        extrude.distance = extrude.direction == .symmetric ? sizeY
+            : (endValue >= startValue ? .add(start, sizeY) : .subtract(start, sizeY))
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
@@ -338,7 +348,10 @@ extension DesignDocument {
                 message: "Object dimensions require an extruded sketch body."
             )
         }
-        let depth = try resolvedLengthValue(extrude.distance, owner: "Extrude distance")
+        let range = try extrude.resolvedAxialRange(tolerance: modelingSettings.tolerance) {
+            try cadDocument.parameters.resolvedValue(for: $0)
+        }
+        let depth = range.upperBound - range.lowerBound
         if let profile = try recognizedCylinderProfile(in: sketch) {
             let radius = try resolvedPositiveLengthValue(
                 profile.outer.radiusExpression,

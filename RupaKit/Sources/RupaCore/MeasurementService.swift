@@ -1248,7 +1248,10 @@ public struct MeasurementService {
         extrude: ExtrudeFeature,
         parameters: ParameterTable
     ) throws -> MeasurementResult.Solid {
-        let distance = try resolvedLength(extrude.distance, parameters: parameters)
+        let range = try extrude.resolvedAxialRange(tolerance: tolerance) {
+            try parameters.resolvedValue(for: $0)
+        }
+        let distance = range.upperBound - range.lowerBound
         let extrusionDirection = try directionVector(
             for: extrude.direction,
             frame: profile.frame
@@ -1261,16 +1264,8 @@ public struct MeasurementService {
             )
         }
 
-        let bottomOffset: Vector3D
-        let topOffset: Vector3D
-        switch extrude.direction {
-        case .symmetric:
-            bottomOffset = extrusionDirection * (-distance / 2.0)
-            topOffset = extrusionDirection * (distance / 2.0)
-        case .normal, .vector:
-            bottomOffset = .zero
-            topOffset = extrusionDirection * distance
-        }
+        let bottomOffset = extrusionDirection * range.lowerBound
+        let topOffset = extrusionDirection * range.upperBound
 
         var bounds = MeasurementBoundsAccumulator()
         bounds.include(profile.baseBounds.translated(by: bottomOffset))

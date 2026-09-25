@@ -480,16 +480,14 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) generated topology target requires an editable rectangle extrude body."
             )
         }
-        let depthMeters = try resolvedLengthValue(
-            extrude.distance,
-            in: document,
-            owner: "Extrude distance"
-        )
-        let depthRange = try rectangleDepthRange(
-            depthMeters: depthMeters,
-            direction: extrude.direction,
-            operationName: operationName
-        )
+        if case .vector = extrude.direction {
+            throw EditorError(code: .commandInvalid,
+                message: "\(operationName) generated topology selection requires a normal or symmetric extrude.")
+        }
+        let range = try extrude.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
+            try document.cadDocument.parameters.resolvedValue(for: $0)
+        }
+        let depthRange = RectangleDepthRange(min: range.lowerBound, max: range.upperBound)
         return RectangleExtrudeContext(
             sketchPlane: sketch.plane,
             bounds: bounds,
@@ -638,28 +636,6 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             return .side
         }
         return nil
-    }
-
-    private func rectangleDepthRange(
-        depthMeters: Double,
-        direction: ExtrudeDirection,
-        operationName: String
-    ) throws -> RectangleDepthRange {
-        let size = abs(depthMeters)
-        switch direction {
-        case .normal:
-            if depthMeters >= 0.0 {
-                return RectangleDepthRange(min: 0.0, max: size)
-            }
-            return RectangleDepthRange(min: -size, max: 0.0)
-        case .symmetric:
-            return RectangleDepthRange(min: -size / 2.0, max: size / 2.0)
-        case .vector:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) generated topology selection currently requires a normal or symmetric extrude."
-            )
-        }
     }
 
     private func isAxisAlignedRectangle(

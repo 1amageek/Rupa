@@ -5,6 +5,22 @@ import Testing
 
 @Suite("Feature dimension drafts", .timeLimit(.minutes(1)))
 struct FeatureLengthDraftTests {
+    @Test func extrusionHistoryEditsBothSignedEndpoints() throws {
+        let document = DesignDocument.empty()
+        let feature = FeatureNode(operation: .extrude(ExtrudeFeature(
+            profile: .init(featureID: FeatureID()), distance: .length(0.03, .meter),
+            startDistance: .length(-0.01, .meter))))
+        var draft = try #require(FeatureLengthDraft(feature: feature,
+            parameters: document.cadDocument.parameters, unit: .millimeter))
+        #expect(draft.startText != nil)
+        draft.startText = "-20"
+        draft.text = "40"
+        #expect(try draft.command(parameters: document.cadDocument.parameters) == .setExtrudeExtents(
+            featureID: feature.id, start: .length(-0.02, .meter), end: .length(0.04, .meter)))
+        draft.startText = "2 deg"
+        #expect(throws: (any Error).self) { try draft.command(parameters: document.cadDocument.parameters) }
+    }
+
     @Test func retainsIdentityAndExpressionReferences() throws {
         var document = DesignDocument.empty()
         try document.upsertParameter(name: "wall_thickness", expression: .length(0.002, .meter), kind: .length)

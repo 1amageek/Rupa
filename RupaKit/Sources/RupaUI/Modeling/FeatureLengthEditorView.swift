@@ -13,7 +13,13 @@ struct FeatureLengthEditorView: View {
             Text("Edit Dimension").font(.headline)
             Text("\(draft.title) (\(draft.unit.symbol))")
                 .fixedSize(horizontal: false, vertical: true)
-            TextField("Length expression", text: $draft.text)
+            if draft.startText != nil {
+                TextField("Start position", text: Binding(
+                    get: { draft.startText ?? "" }, set: { draft.startText = $0 }))
+                    .contentShape(Rectangle()).textFieldStyle(.roundedBorder)
+                    .accessibilityIdentifier("FeatureLength.start")
+            }
+            TextField(draft.startText == nil ? "Length expression" : "End position", text: $draft.text)
                 .contentShape(Rectangle())
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("FeatureLength.expression")

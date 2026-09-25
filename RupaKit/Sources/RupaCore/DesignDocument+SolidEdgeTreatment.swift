@@ -61,7 +61,9 @@ extension DesignDocument {
                 message: "Edge chamfer currently requires a normal extrude."
             )
         }
-        _ = try resolvedPositiveLengthValue(extrude.distance, owner: "Extrude distance")
+        _ = try extrude.resolvedAxialRange(tolerance: modelingSettings.tolerance) {
+            try cadDocument.parameters.resolvedValue(for: $0)
+        }
         guard extrude.section.isProfile,
               var profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {
@@ -191,7 +193,9 @@ extension DesignDocument {
                 message: "Edge fillet currently requires a normal extrude."
             )
         }
-        _ = try resolvedPositiveLengthValue(extrude.distance, owner: "Extrude distance")
+        _ = try extrude.resolvedAxialRange(tolerance: modelingSettings.tolerance) {
+            try cadDocument.parameters.resolvedValue(for: $0)
+        }
         guard extrude.section.isProfile,
               var profileFeature = cadDocument.designGraph.nodes[extrude.section.featureID],
               case let .sketch(sketch) = profileFeature.operation else {

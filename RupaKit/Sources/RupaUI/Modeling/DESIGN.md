@@ -165,26 +165,59 @@ native preview and cannot be applied.
 
 | Requested operation | Native path and present foundation | Missing contract, not an alias |
 | --- | --- | --- |
-| Bridge Surface | Stable two-edge G0 ruled bridge | Wall blending, G2/tension/width, Both/Short/Long/None wall trims |
+| Bridge Surface | Stable two-edge G0 ruled bridge | Separated/intersecting sheet walls, width/tension, G2/Chamfer, Both/Short/Long/None trims, Sense 1/2 and additional wall pairs |
 | Constrained Surface | No point-fitting authoring path | Interpolation through supplied points, tolerance and smoothness objective |
-| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves | Wall thickness, draft and remaining extent controls |
+| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves | Face/edge operands, angle/wall thickness, Direct/Individual directions, Boolean targets and Keep Tools |
 | Loft | Ordered profile/curve sections, mixed single-loop Sheet input, exact guide connectors and discrete spatial contacts, source-sample seams, shared ruled/smooth connectors | General coincident/tangent guide contacts, whole-surface embedding admission and boundary G1/G2 controls |
 | Patch | Exact planar hole or admissible nonplanar Coons opening | General N-sided constrained fill, guides and G1/G2 |
-| Pipe | Sweep is a reusable native dependency, not a Pipe implementation | Path-aligned section authoring, radius/thickness and persistent references |
+| Pipe | Sweep is a reusable native dependency, not a Pipe implementation | Curve/edge paths, circle/polygon/custom sections, diameter/thickness/rotation, end scale, start/end limits, Boolean targets and retained source references |
 | PolySplines | Native inline-mesh reconstruction exists | Authored-Mesh conversion/provenance UI; arbitrary mesh and global G2 claims are unsupported |
-| Revolve | Profile or planar-curve revolution, explicit Sheet/Solid output | Spatial generators, thickness and remaining axis/Boolean controls |
+| Revolve | Profile and certified spatial-curve revolution, explicit Sheet/Solid output | Thickness, curve-to-solid admission, two-point and Normal/Binormal/Tangent axis controls, Boolean targets and Keep Tools |
 | Square | Native inline four-boundary Coons builder exists | Referenced boundary authoring, UV degree/span and derivative constraints |
-| Sweep | Curve/profile section and independent path, explicit sheet result | Unsupported path/guide combinations retain native refusal |
+| Sweep | Curve/profile section and independent path, explicit sheet result | Face operands, remaining path-normal/twist/scale combinations, ordered multiple guides with Point/Chord/Curve behavior, Round corners and Simplify; retained options require actual geometry |
 | XNURBS | No authoring entry or substitute Fill/Bridge dispatch | General constrained N-sided solver, G1/G2, guides, UV flow and quality guarantees |
 
-Specification references: [Plasticity Surface Creation](https://doc.plasticity.xyz/solid/bridge-surface)
-and the corresponding operation pages. This inventory is a scope boundary,
-not a claim of feature parity. Geometry algorithms remain owned by Swift-CAD;
-source edits remain owned by Core and publication by ProjectWorkspace.
+Specification references: [Bridge Surface](https://doc.plasticity.xyz/solid/bridge-surface),
+[Extrude](https://doc.plasticity.xyz/solid/extrude),
+[Revolve](https://doc.plasticity.xyz/solid/revolve),
+[Sweep](https://doc.plasticity.xyz/solid/sweep) and
+[Pipe](https://doc.plasticity.xyz/solid/pipe), checked on 2026-09-25.
+The existing single-section or two-edge UI is not the full input contract.
+Sweep guide selection order is retained; Point keeps initial contacts while
+rotating/scaling, Chord rotates without scaling, and Curve permits one contact
+to slide along the section while retaining the other. A control is complete only
+when its geometric behavior, source representation and editing route agree.
+The reference manual describes Pipe as an approximate visual tool. Rupa still
+requires an explicit approximation allowance and independently verified bounds,
+as defined by the system master. No dimensional-accuracy claim follows from the
+Pipe name.
 
-Verification owns sheet B-rep topology (open boundaries/no caps), declared
-output/metadata agreement, source preservation, Undo/Redo and JSON round-trip;
-UI tests cover family switching, exact operand counts and unsupported routes.
+Extrude extent and draft interpretation is resolved by the manual together with
+Scott Benson's firsthand [Plasticity 2024.2.4 walkthrough](https://www.behance.net/gallery/212202791/Plasticity-from-Scratch-04-3D-Basic-Concepts)
+(section Extrude, November 2024). The two distance controls are signed axial
+endpoint positions: opposite signs straddle the source section; equal signs
+place both ends on the same side. A single draft angle preserves the same wall
+slope through both directions, so the form tapers continuously through the
+source section. It does not independently flare away from that section on both
+sides. This resolves the previously raised user choice; no user decision is
+pending. The walkthrough establishes this behavior for its stated version,
+not an independent runtime verification of the latest Plasticity release.
+
+Extrude now retains a signed `startDistance` and signed end `distance`. Creation
+and history fields expose both endpoints; symmetric mode exposes total distance.
+Both UI and semantic API feed CADIR's range validation, and Core measurement,
+face offset and dimension/viewport resizing use the same signed interval.
+Acceptance distinguishes a continuous drafted wall across the source from two
+mirrored tapers. Signed endpoint acceptance covers straddling, same-side,
+reverse-only and zero-span endpoints, persistence and source reediting; it does
+not establish draft or wall-thickness completion.
+
+This inventory is a scope boundary, not a claim of feature parity. Geometry
+algorithms remain owned by Swift-CAD; source edits remain owned by Core and
+publication by ProjectWorkspace. Verification owns sheet/solid BRep topology,
+parameter effects, declared output/metadata agreement, source preservation,
+Undo/Redo and JSON round-trip. UI tests cover family switching, operand selection
+and unsupported routes.
 
 Selected-edge Fillet, Chamfer and G2 Blend use the
 [Core topology editing](../../RupaCore/TopologyEditing/DESIGN.md) contract,

@@ -32,6 +32,7 @@ struct ExtrudeLowerer: SemanticOperationLowerer {
       .init(id: "name", type: .text),
       .init(id: variant.inputID, type: .feature),
       .init(id: "distance", type: .number(unit: .meter)),
+      .init(id: "start_distance", type: .number(unit: .meter), isRequired: false),
       .init(id: "direction", type: .direction),
     ],
     outputs: [
@@ -55,7 +56,12 @@ struct ExtrudeLowerer: SemanticOperationLowerer {
   func lower(_ request: SemanticLoweringRequest) throws -> SemanticLoweredOperation {
     let name = try CADSemanticLoweringSupport.text("name", in: request)
     let sectionSlot = try CADSemanticLoweringSupport.preparedSlot(variant.inputID, in: request)
-    let distance = try CADSemanticLoweringSupport.nonzeroLength("distance", in: request)
+    let distance = try CADSemanticLoweringSupport.number("distance", unit: .meter, in: request)
+    let startDistance: Double? = request.arguments[SemanticArgumentID("start_distance")] == nil ? nil
+      : try CADSemanticLoweringSupport.number("start_distance", unit: .meter, in: request)
+    guard distance != (startDistance ?? 0) else {
+      throw CADSemanticLoweringSupport.degenerateGeometry("Extrude endpoints must be distinct.")
+    }
     let direction = try CADSemanticLoweringSupport.normalizedVector(
       CADSemanticLoweringSupport.direction("direction", in: request)
     )
@@ -81,6 +87,7 @@ struct ExtrudeLowerer: SemanticOperationLowerer {
                 ? .curve(CurveSectionReference(featureID: sectionID))
                 : .profile(ProfileReference(featureID: sectionID)),
               distance: .length(distance, .meter),
+              startDistance: startDistance.map { .length($0, .meter) },
               direction: .vector(direction),
               resultKind: variant.resultKind
             ))

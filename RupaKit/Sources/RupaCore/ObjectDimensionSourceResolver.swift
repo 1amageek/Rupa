@@ -51,11 +51,16 @@ package struct ObjectDimensionSourceResolver: Sendable {
             )
         }
 
-        let depth = try resolvedLengthValue(
-            extrude.distance,
-            owner: "Extrude distance",
-            document: document
-        )
+        let range = try extrude.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
+            try document.cadDocument.parameters.resolvedValue(for: $0)
+        }
+        let depth = range.upperBound - range.lowerBound
+        let start = extrude.startDistance ?? .length(0, .meter)
+        let signedSpan = CADExpression.subtract(extrude.distance, start)
+        let endValue = try document.cadDocument.parameters.resolvedValue(for: extrude.distance).value
+        let startValue = try document.cadDocument.parameters.resolvedValue(for: start).value
+        let depthExpression: CADExpression = extrude.direction == .symmetric ? extrude.distance
+            : (endValue >= startValue ? signedSpan : .subtract(start, extrude.distance))
         try validateGeneratedExtrusionDepthEdgeIfNeeded(
             target: target,
             featureID: featureID,
@@ -81,7 +86,7 @@ package struct ObjectDimensionSourceResolver: Sendable {
                 sizeZ: radius * 2.0,
                 radius: radius,
                 radiusExpression: profile.outer.radiusExpression,
-                depthExpression: extrude.distance
+                depthExpression: depthExpression
             )
         }
 
@@ -107,7 +112,7 @@ package struct ObjectDimensionSourceResolver: Sendable {
             sizeZ: max(bounds.maxY - bounds.minY, 1.0e-9),
             radius: nil,
             radiusExpression: nil,
-            depthExpression: extrude.distance
+            depthExpression: depthExpression
         )
     }
 

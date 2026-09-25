@@ -1536,6 +1536,15 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .setExtrudeExtents(let featureID, let start, let end):
+            var updated = document
+            let validation = try validatedSource ?? document.validate(objectRegistry: objectRegistry)
+            let updatedValidation = try updated.setExtrudeDistance(featureID: featureID,
+                distance: end, startDistance: start, validatedDocument: validation)
+            document = updated
+            try commitMutation()
+            validatedSource = updatedValidation
+            evaluateCurrentDocument()
         case .setExtrudeDistance:
             func run() throws {
                 guard case .setExtrudeDistance(let featureID, let distance) = command else {
@@ -2331,9 +2340,9 @@ public final class CADDocumentStore {
                     name = value
                     extrusion = ExtrudeFeature(profile: profile, distance: distance,
                         direction: direction, resultKind: resultKind)
-                case .extrudeSection(let value, let section, let distance, let direction, let resultKind):
+                case .extrudeSection(let value, let section, let distance, let startDistance, let direction, let resultKind):
                     name = value
-                    extrusion = ExtrudeFeature(section: section, distance: distance,
+                    extrusion = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
                         direction: direction, resultKind: resultKind)
                 default:
                     throw EditorError(
@@ -2346,6 +2355,7 @@ public final class CADDocumentStore {
                     name: name,
                     section: extrusion.section,
                     distance: extrusion.distance,
+                    startDistance: extrusion.startDistance,
                     direction: extrusion.direction,
                     resultKind: extrusion.resultKind,
                     objectRegistry: objectRegistry

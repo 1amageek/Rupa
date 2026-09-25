@@ -451,6 +451,8 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
         input("name", .text),
         input("profile", .feature),
         input("distance", .number(unit: .meter)),
+        SemanticOperationInputDescriptor(id: SemanticArgumentID("start_distance"),
+            type: .number(unit: .meter), isRequired: false),
         input("direction", .direction),
       ],
       outputs: [
@@ -469,6 +471,8 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
         input("name", .text),
         input("profile", .feature),
         input("distance", .number(unit: .meter)),
+        SemanticOperationInputDescriptor(id: SemanticArgumentID("start_distance"),
+            type: .number(unit: .meter), isRequired: false),
         input("direction", .direction),
       ],
       outputs: [
@@ -483,6 +487,8 @@ private func expectedCADDescriptors() -> [SemanticOperationDescriptor] {
         input("name", .text),
         input("curve", .feature),
         input("distance", .number(unit: .meter)),
+        SemanticOperationInputDescriptor(id: SemanticArgumentID("start_distance"),
+            type: .number(unit: .meter), isRequired: false),
         input("direction", .direction),
       ],
       outputs: [

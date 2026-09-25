@@ -11,9 +11,15 @@ import Testing
 @MainActor
 @Suite(.serialized, .timeLimit(.minutes(1)))
 struct WorkspaceBodyResizeTests {
-    @Test func facesAndCornersPreserveOppositeBoundsAndCommitSourceDimensions() async throws {
+    @Test(arguments: [0, 1, -1])
+    func facesAndCornersPreserveOppositeBoundsAndCommitSourceDimensions(extentDirection: Int) async throws {
         let session = EditorSession()
         _ = try #require(session.createDefaultExtrudedRectangle())
+        if extentDirection != 0 {
+            let id = try #require(session.document.cadDocument.designGraph.order.last)
+            _ = try session.execute(.setExtrudeExtents(featureID: id,
+                start: .length(0.004, .meter), end: .length(extentDirection > 0 ? 0.012 : -0.008, .meter)))
+        }
         var document = session.document
         let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body })
         let local = try WorkspaceTransformMatrix.transform(from: .init(

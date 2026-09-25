@@ -9,6 +9,8 @@ struct ViewportBodyResizeBaseline: Sendable {
     let minimum: Point3D
     let maximum: Point3D
     let size: Vector3D
+    let sourceStartDepth: Double
+    let extrudesForward: Bool
     let documentID: DocumentID
     let designRevision: DocumentRevision
     let parameterRevision: DocumentRevision
@@ -19,6 +21,7 @@ struct ViewportBodyResizeBaseline: Sendable {
               maximum: .init(x: bounds.xMax, y: bounds.yMax, z: bounds.zMax),
               size: .init(x: bounds.xMax - bounds.xMin, y: bounds.yMax - bounds.yMin,
                           z: bounds.zMax - bounds.zMin),
+              sourceStartDepth: 0, extrudesForward: true,
               documentID: document.cadDocument.id,
               designRevision: document.cadDocument.designGraph.revision,
               parameterRevision: document.cadDocument.parameters.revision)
@@ -60,8 +63,11 @@ struct ViewportBodyResizeBaseline: Sendable {
               sketch.entities.values.allSatisfy({ if case .line = $0 { true } else { false } }) else { return nil }
         let source = try ObjectDimensionSourceResolver().resolve(
             target: .init(sceneNodeID: nodeID, component: .object), in: document)
-        let depth = try document.cadDocument.parameters.resolvedValue(for: extrude.distance).value
-        guard depth > 0 else { return nil }
+        let range = try extrude.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
+            try document.cadDocument.parameters.resolvedValue(for: $0)
+        }
+        let end = try document.cadDocument.parameters.resolvedValue(for: extrude.distance).value
+        let start = try document.cadDocument.parameters.resolvedValue(for: extrude.startDistance ?? .length(0, .meter)).value
         var points: [Point2D] = []
         for entity in sketch.entities.values {
             guard case .line(let line) = entity else { return nil }
@@ -82,9 +88,10 @@ struct ViewportBodyResizeBaseline: Sendable {
         ]))
         let world = try ViewportWorldTransformAlgebra.multiplied(worldTransform, box)
         _ = try ViewportWorldTransformAlgebra.inverted(world)
-        return .init(worldFromBox: world, minimum: .init(x: xMin, y: 0, z: zMin),
-                     maximum: .init(x: xMax, y: depth, z: zMax),
+        return .init(worldFromBox: world, minimum: .init(x: xMin, y: range.lowerBound, z: zMin),
+                     maximum: .init(x: xMax, y: range.upperBound, z: zMax),
                      size: .init(x: source.sizeX, y: source.sizeY, z: source.sizeZ),
+                     sourceStartDepth: start, extrudesForward: end > start,
                      documentID: document.cadDocument.id,
                      designRevision: document.cadDocument.designGraph.revision,
                      parameterRevision: document.cadDocument.parameters.revision)
@@ -172,12 +179,12 @@ struct ViewportBodyResizeBaseline: Sendable {
         guard nextSize.isFinite, min(nextSize.x, nextSize.y, nextSize.z) > 0 else {
             throw RealityViewportSpatialBatch.invalid("A box resize has invalid source dimensions.")
         }
-        // Core keeps the profile center fixed and extrudes from depth zero.
+        // Core keeps the profile center and authored extrusion start fixed.
         // Remove that source-center motion before translating the occurrence.
-        let center = Point3D(x: (minimum.x + maximum.x) / 2, y: size.y / 2,
+        let center = Point3D(x: (minimum.x + maximum.x) / 2, y: (minimum.y + maximum.y) / 2,
                              z: (minimum.z + maximum.z) / 2)
         let desired = try ViewportWorldTransformAlgebra.transformedPoint(center, by: local)
-        let sourceCenter = Point3D(x: center.x, y: nextSize.y / 2, z: center.z)
+        let sourceCenter = Point3D(x: center.x, y: sourceStartDepth + (extrudesForward ? 1 : -1) * nextSize.y / 2, z: center.z)
         let shift = try ViewportWorldTransformAlgebra.transformedVector(desired - sourceCenter, by: worldFromBox)
         let placement = try ViewportWorldTransformAlgebra.localTransform(
             applying: ViewportWorldTransformAlgebra.translation(shift), within: member.parentWorldTransform,
