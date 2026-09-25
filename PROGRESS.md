@@ -6,7 +6,7 @@
     - [x] FBS.1 Boundary rule and per-item migration contract recorded in /DESIGN.md, swift-CAD/DESIGN.md and RupaCore/DESIGN.md (owner, public kernel API, Rupa deletion, verification). `depends:FBS.0` `parallel:none`
     - [x] FBS.2 Feature operation reference enumeration and remapping owned by swift-CAD; Rupa PatternArrayFeatureIDRemapper deleted; cloned Bridge Curve operations reference their cloned inputs. `depends:FBS.0,FBS.1` `parallel:none`
     - [ ] FBS.3 Edge/face snap and measurement anchor points and drawing edge-length/face-area metrics come from kernel edge/face queries through the occurrence placement; chord midpoints, string curve-kind re-evaluation and source-frame drawing metrics in Rupa deleted. `depends:FBS.1` `parallel:none`
-    - [ ] FBS.4 Solid volume measured only from the evaluated B-rep; the Rupa analytic prism volume path deleted. `depends:FBS.1` `parallel:none`
+    - [x] FBS.4 Solid volume measured only from the evaluated B-rep; the Rupa analytic prism volume path deleted. `depends:FBS.1` `parallel:none`
     - [ ] FBS.5 Sketch Cut/Split intersections use a public swift-CAD 2D curve intersection API; Rupa analytic and sampled intersection code deleted. `depends:FBS.1` `parallel:none`
     - [ ] FBS.6 Cross-repository review, focused swift-CAD and RupaKit verification, rebuilt app restart, commits in both repositories. `depends:FBS.2,FBS.3,FBS.4,FBS.5` `parallel:none`
   - [ ] FB2 Wire Duplicate, all three arrays, Copy/Paste with Placement and Place using existing ownership, clone/remap and transform paths with persistent editable sources. `depends:FBS` `parallel:none`

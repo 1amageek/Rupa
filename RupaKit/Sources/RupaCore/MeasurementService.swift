@@ -312,28 +312,27 @@ public struct MeasurementService {
                 sketchBounds: sourceSketchBounds,
                 profile: profile
             )
+            // Volume and bounds come from the evaluated B-rep for every profile; only the authored
+            // extrusion height is read from source parameters.
             var evaluatedSkipReason: String?
-            let solid: MeasurementResult.Solid?
-            if profile.result.kind == .curveLoop {
-                solid = try measureEvaluatedSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: extrude.section.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSkipReason
-                )
-            } else {
-                solid = try measureSolid(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: extrude.section.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    profile: profile,
-                    extrude: extrude,
-                    parameters: document.cadDocument.parameters
-                )
-            }
+            var solid = try measureEvaluatedSolid(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: extrude.section.featureID,
+                sourceFeatureName: sourceNode.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            solid?.linearDimensions = [
+                MeasurementResult.Solid.LinearDimension(
+                    kind: .extrusionHeight,
+                    meters: try extrusionHeightMeters(
+                        profile: profile,
+                        extrude: extrude,
+                        parameters: document.cadDocument.parameters
+                    )
+                ),
+            ]
             guard let solid else {
                 let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
                 diagnostics.append(
@@ -550,28 +549,28 @@ public struct MeasurementService {
                 )
                 return
             }
-            let straightSolid = try measureStraightSweepSolid(
+            var evaluatedSweepSkipReason: String?
+            var measuredSolids = try measureEvaluatedSweepSolids(
                 featureID: featureID,
                 featureName: node.name,
                 sourceFeatureID: sectionReference.featureID,
                 sourceFeatureName: sourceNode.name,
+                sweep: sweep,
+                pathLengthMeters: pathLengthMeters,
+                parameters: document.cadDocument.parameters,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSweepSkipReason
+            )
+            // A straight sweep also reports its authored normal height and path length; its
+            // volume and bounds remain the evaluated B-rep's.
+            if let dimensions = try straightSweepDimensions(
                 profile: profile,
                 sweep: sweep,
                 pathSketch: pathSketch,
                 parameters: document.cadDocument.parameters
-            )
-            var evaluatedSweepSkipReason: String?
-            let measuredSolids = try straightSolid.map { [$0] } ?? measureEvaluatedSweepSolids(
-                    featureID: featureID,
-                    featureName: node.name,
-                    sourceFeatureID: sectionReference.featureID,
-                    sourceFeatureName: sourceNode.name,
-                    sweep: sweep,
-                    pathLengthMeters: pathLengthMeters,
-                    parameters: document.cadDocument.parameters,
-                    evaluatedDocument: evaluatedDocument(),
-                    unsupportedReason: &evaluatedSweepSkipReason
-                )
+            ), measuredSolids?.count == 1 {
+                measuredSolids?[0].linearDimensions = dimensions
+            }
             guard let measuredSolids, !measuredSolids.isEmpty else {
                 let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
                 diagnostics.append(
@@ -1171,7 +1170,7 @@ public struct MeasurementService {
             diagnostics.append(EditorDiagnostic(
                 severity: .info,
                 code: .measurementTessellatedSolidApproximation,
-                message: "Solid volume uses analytic or exact B-rep evaluation; reported solid surface area and bounds marked tessellatedMesh are approximations derived from the display mesh."
+                message: "Solid volume uses exact B-rep evaluation; reported solid surface area and bounds marked tessellatedMesh are approximations derived from the display mesh."
             ))
         }
         let workspacePrecisionService = WorkspacePrecisionDiagnosticService()
@@ -1586,15 +1585,12 @@ public struct MeasurementService {
         )
     }
 
-    private func measureSolid(
-        featureID: FeatureID,
-        featureName: String?,
-        sourceFeatureID: FeatureID,
-        sourceFeatureName: String?,
+    /// The authored extrusion height measured along the profile normal.
+    private func extrusionHeightMeters(
         profile: MeasuredProfile,
         extrude: ExtrudeFeature,
         parameters: ParameterTable
-    ) throws -> MeasurementResult.Solid {
+    ) throws -> Double {
         let range = try extrude.resolvedAxialRange(tolerance: tolerance) {
             try parameters.resolvedValue(for: $0)
         }
@@ -1607,53 +1603,19 @@ public struct MeasurementService {
         guard abs(normalComponent) > tolerance.angle else {
             throw EditorError(
                 code: .commandFailed,
-                message: "Measurement cannot compute volume for an extrude direction parallel to the profile plane."
+                message: "Measurement cannot compute the height of an extrude direction parallel to the profile plane."
             )
         }
-
-        let bottomOffset = extrusionDirection * range.lowerBound
-        let topOffset = extrusionDirection * range.upperBound
-
-        var bounds = MeasurementBoundsAccumulator()
-        bounds.include(profile.baseBounds.translated(by: bottomOffset))
-        bounds.include(profile.baseBounds.translated(by: topOffset))
-        guard let solidBounds = bounds.bounds else {
-            throw EditorError(
-                code: .commandFailed,
-                message: "Measurement could not compute solid bounds."
-            )
-        }
-
-        let height = abs(distance * normalComponent)
-        return MeasurementResult.Solid(
-            featureID: featureID.description,
-            featureName: featureName,
-            sourceFeatureID: sourceFeatureID.description,
-            sourceFeatureName: sourceFeatureName,
-            linearDimensions: [
-                MeasurementResult.Solid.LinearDimension(
-                    kind: .extrusionHeight,
-                    meters: height
-                ),
-            ],
-            volume: .init(
-                value: profile.result.areaSquareMeters * height,
-                method: .analytic
-            ),
-            bounds: .init(value: solidBounds, method: .analytic)
-        )
+        return abs(distance * normalComponent)
     }
 
-    private func measureStraightSweepSolid(
-        featureID: FeatureID,
-        featureName: String?,
-        sourceFeatureID: FeatureID,
-        sourceFeatureName: String?,
+    /// The authored normal height and path length of a straight, untwisted, unscaled sweep.
+    private func straightSweepDimensions(
         profile: MeasuredProfile,
         sweep: SweepFeature,
         pathSketch: Sketch?,
         parameters: ParameterTable
-    ) throws -> MeasurementResult.Solid? {
+    ) throws -> [MeasurementResult.Solid.LinearDimension]? {
         guard sweep.sections.count == 1,
               sweep.guides.isEmpty,
               sweep.options.resultKind == .solid,
@@ -1693,36 +1655,10 @@ public struct MeasurementService {
             return nil
         }
 
-        var bounds = MeasurementBoundsAccumulator()
-        bounds.include(profile.baseBounds)
-        bounds.include(profile.baseBounds.translated(by: sweepVector))
-        guard let solidBounds = bounds.bounds else {
-            throw EditorError(
-                code: .commandFailed,
-                message: "Measurement could not compute sweep solid bounds."
-            )
-        }
-        return MeasurementResult.Solid(
-            featureID: featureID.description,
-            featureName: featureName,
-            sourceFeatureID: sourceFeatureID.description,
-            sourceFeatureName: sourceFeatureName,
-            linearDimensions: [
-                MeasurementResult.Solid.LinearDimension(
-                    kind: .sweepNormalHeight,
-                    meters: height
-                ),
-                MeasurementResult.Solid.LinearDimension(
-                    kind: .sweepPathLength,
-                    meters: sweepDistance
-                ),
-            ],
-            volume: .init(
-                value: profile.result.areaSquareMeters * height,
-                method: .analytic
-            ),
-            bounds: .init(value: solidBounds, method: .analytic)
-        )
+        return [
+            MeasurementResult.Solid.LinearDimension(kind: .sweepNormalHeight, meters: height),
+            MeasurementResult.Solid.LinearDimension(kind: .sweepPathLength, meters: sweepDistance),
+        ]
     }
 
     private func measureEvaluatedSweepSolids(

@@ -81,18 +81,20 @@ func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
-func farFromOriginLoopStitchingAcceptsCoordinateResolutionGap() throws {
+func farFromOriginAlmostClosedProfileMeasuresWhatTheKernelEvaluates() throws {
     let document = try farFromOriginAlmostClosedRectangleDocument()
     let measurement = try MeasurementService().measure(
         document: document,
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
 
-    #expect(measurement.diagnostics.allSatisfy { !$0.message.contains("unsupported profile") })
-    #expect(measurement.counts.solids == 1)
-    // The intentionally retained one-ULP endpoint gap may contribute to area
-    // depending on dictionary iteration order, but the profile must not be skipped.
-    #expect(abs(measurement.totals.solidVolumeCubicMeters - 1000.0) < 1.0e-2)
+    // At 1e12 coordinates the retained one-ULP endpoint gap exceeds the modeling distance
+    // tolerance, so Swift-CAD rejects the profile as open and builds no body. Solid volume is
+    // the evaluated B-rep's, so measurement reports that failure instead of a volume derived
+    // from Rupa's own loop stitching.
+    #expect(measurement.counts.solids == 0)
+    #expect(measurement.totals.solidVolumeCubicMeters == 0)
+    #expect(measurement.diagnostics.contains { $0.message.contains("openProfile") })
 }
 
 private func farFromOriginRectangleDocument() throws -> DesignDocument {

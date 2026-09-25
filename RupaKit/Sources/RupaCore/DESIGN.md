@@ -908,8 +908,12 @@ alone does not identify a definition child. Scene-local free points may remain
 relative to a node frame without identifying geometry. Stale or mismatched
 references fail explicitly before a measurement is published.
 
-`MeasurementService` retains the existing source-space calculators and their
-analytic/B-rep provenance. A final occurrence projection owns placement: source
+`MeasurementService` measures every solid volume from the evaluated B-rep
+(`exactBRep`) with Mesh-derived surface area and bounds (`tessellatedMesh`);
+extrusion heights and straight-sweep normal heights and path lengths are
+authored dimensions read from source parameters, never a volume factor. A
+profile the kernel does not close yields no solid and reports the kernel's
+evaluation failure. A final occurrence projection owns placement: source
 features are evaluated once, and their measurements are projected separately for
 each resolved occurrence. Selection includes descendants of selected groups and
 component instances without collapsing repeated instances into a feature set.
@@ -935,8 +939,8 @@ selects visible occurrences, using the same resolved placements.
 
 Focused checks own translated/grouped selection bounds, independent component
 counts, reflected/nonuniform volume and area, profile bounds, retained IDs and
-stale/singular refusal. Existing source-space fixtures remain regression evidence
-for the unchanged analytic calculators.
+stale/singular refusal. Extrusion, straight-sweep and far-from-origin fixtures
+prove solid volume follows the kernel's evaluated body.
 
 ### Body display face-run contract
 

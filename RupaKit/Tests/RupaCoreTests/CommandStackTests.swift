@@ -513,8 +513,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(result.counts.sketches == 1)
     #expect(result.counts.profiles == 1)
     #expect(result.counts.solids == 1)
-    #expect(result.solids.first?.volumeMethod == .analytic)
-    #expect(result.solids.first?.boundsMethod == .analytic)
+    #expect(result.solids.first?.volumeMethod == .exactBRep)
+    #expect(result.solids.first?.boundsMethod == .tessellatedMesh)
     #expect(abs(result.totals.profileAreaSquareMeters - 0.0008) < 0.000_000_000_001)
     #expect(abs(result.totals.solidVolumeCubicMeters - 0.000008) < 0.000_000_000_001)
     #expect(abs(bounds.sizeX - 0.04) < 0.000_000_000_001)
@@ -962,8 +962,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
     #expect(result.profiles.first?.kind == .circle)
     #expect(result.counts.solids == 1)
-    #expect(result.solids.first?.volumeMethod == .analytic)
-    #expect(result.solids.first?.boundsMethod == .analytic)
+    #expect(result.solids.first?.volumeMethod == .exactBRep)
+    #expect(result.solids.first?.boundsMethod == .tessellatedMesh)
     #expect(abs(result.totals.profileAreaSquareMeters - Double.pi * 0.0001) < 0.000_000_000_001)
     #expect(abs(result.totals.solidVolumeCubicMeters - Double.pi * 0.000002) < 0.000_000_000_001)
     #expect(abs(bounds.sizeX - 0.02) < 0.000_000_000_001)
@@ -1063,7 +1063,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(abs(bounds.sizeX - 0.004) < 1.0e-12)
     #expect(abs(bounds.sizeY - 0.002) < 1.0e-12)
     #expect(abs(bounds.sizeZ - 0.02) < 1.0e-12)
-    #expect(result.diagnostics.isEmpty)
+    // The volume is the evaluated B-rep's; the only diagnostic states that surface area and
+    // bounds come from the display mesh.
+    #expect(solid.volumeMethod == .exactBRep)
+    #expect(result.diagnostics.allSatisfy { $0.code == .measurementTessellatedSolidApproximation })
 }
 
 @MainActor
