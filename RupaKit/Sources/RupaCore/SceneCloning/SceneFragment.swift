@@ -1,10 +1,11 @@
 import SwiftCAD
+import RupaProjectModel
 
 /// Scene subtrees together with everything their geometry needs, independent of any document.
 ///
 /// A fragment is extracted from one document and can be inserted into the same or another
 /// document any number of times; every identity it carries is replaced on insertion.
-public struct SceneFragment: Codable, Hashable, Sendable {
+public struct SceneFragment: Codable, Equatable, Sendable {
     /// A node inserted as a copy root, with its placement in the fragment's reference frame.
     public struct Root: Codable, Hashable, Sendable {
         public var sceneNodeID: SceneNodeID
@@ -33,6 +34,10 @@ public struct SceneFragment: Codable, Hashable, Sendable {
     public var bridgeCurveSources: [BridgeCurveSource]
     public var joinedCurveSources: [JoinedCurveSource]
     public var joinedCurveGroupSources: [JoinedCurveGroupSource]
+    /// The authored meshes the copied nodes present or carry as representations.
+    public var authoredMeshes: [GeometrySourceID: AuthoredMeshAsset]
+    /// The component instances the copied nodes present.
+    public var componentInstances: [ComponentInstanceID: ComponentInstance]
 
     public init(
         roots: [Root],
@@ -44,7 +49,9 @@ public struct SceneFragment: Codable, Hashable, Sendable {
         faceMaterialBindings: [TopologyMaterialBinding] = [],
         bridgeCurveSources: [BridgeCurveSource] = [],
         joinedCurveSources: [JoinedCurveSource] = [],
-        joinedCurveGroupSources: [JoinedCurveGroupSource] = []
+        joinedCurveGroupSources: [JoinedCurveGroupSource] = [],
+        authoredMeshes: [GeometrySourceID: AuthoredMeshAsset] = [:],
+        componentInstances: [ComponentInstanceID: ComponentInstance] = [:]
     ) {
         self.roots = roots
         self.carriedPresenters = carriedPresenters
@@ -56,5 +63,31 @@ public struct SceneFragment: Codable, Hashable, Sendable {
         self.bridgeCurveSources = bridgeCurveSources
         self.joinedCurveSources = joinedCurveSources
         self.joinedCurveGroupSources = joinedCurveGroupSources
+        self.authoredMeshes = authoredMeshes
+        self.componentInstances = componentInstances
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case roots, carriedPresenters, sceneNodes, features, parameters, materials, faceMaterialBindings
+        case bridgeCurveSources, joinedCurveSources, joinedCurveGroupSources, authoredMeshes, componentInstances
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roots = try container.decode([Root].self, forKey: .roots)
+        carriedPresenters = try container.decode([Root].self, forKey: .carriedPresenters)
+        sceneNodes = try container.decode([SceneNodeID: SceneNode].self, forKey: .sceneNodes)
+        features = try container.decode([FeatureNode].self, forKey: .features)
+        parameters = try container.decode([Parameter].self, forKey: .parameters)
+        materials = try container.decode([MaterialID: Material].self, forKey: .materials)
+        faceMaterialBindings = try container.decode([TopologyMaterialBinding].self, forKey: .faceMaterialBindings)
+        bridgeCurveSources = try container.decode([BridgeCurveSource].self, forKey: .bridgeCurveSources)
+        joinedCurveSources = try container.decode([JoinedCurveSource].self, forKey: .joinedCurveSources)
+        joinedCurveGroupSources = try container.decode([JoinedCurveGroupSource].self, forKey: .joinedCurveGroupSources)
+        // Fragments copied before meshes and instances could be copied carry neither.
+        authoredMeshes = try container.decodeIfPresent([GeometrySourceID: AuthoredMeshAsset].self, forKey: .authoredMeshes) ?? [:]
+        componentInstances = try container.decodeIfPresent(
+            [ComponentInstanceID: ComponentInstance].self, forKey: .componentInstances
+        ) ?? [:]
     }
 }

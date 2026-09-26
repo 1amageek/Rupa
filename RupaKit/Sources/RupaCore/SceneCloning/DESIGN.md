@@ -59,11 +59,18 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   carried as a hidden node under the first copied root, keeping its placement
   relative to the copy, so every copied feature keeps one presenting node and
   no copy is drawn unplaced.
-- Component instances, pattern array roots and outputs, authored meshes,
-  construction references and document roots are refused with a typed error;
-  their sharing semantics are not copies. `ProductMetadata.sceneCopyRefusal`
-  is the one statement of these refusals: extraction throws it and every UI
-  control that offers copying reads it.
+- A copied component instance is a new instance of the same definition with
+  the same instance transform; its definition must exist in the destination
+  document, so an instance pasted into another document is a typed failure.
+  A copied authored mesh (a mesh object or a mesh representation of any copied
+  object) is a new asset with the same mesh under a new source identity, and
+  the copy's representations and selection name the new asset and fresh
+  representation IDs, so no copy shares a mesh with its source.
+- Pattern array roots and outputs, construction references and document roots
+  are refused with a typed error; their sharing semantics are not copies.
+  `ProductMetadata.sceneCopyRefusal` is the one statement of these refusals:
+  extraction throws it and every UI control that offers copying reads it.
+  Independent-copy pattern outputs do not yet copy authored meshes.
 - Insertion never reuses an identity: each copy gets new FeatureIDs (remapped
   by the kernel), SceneNodeIDs and side-table IDs. Face material bindings follow
   their node and face subshape; edit sources follow their sketch feature.
@@ -106,6 +113,7 @@ the same world placement under a transformed parent; copies are independent
 (editing the copy's source leaves the original unchanged); carried presenters
 are hidden and placed; face material bindings and edit sources are copied with
 remapped identities; cross-document insertion adds parameters and materials and
-refuses a conflicting parameter without mutation; refused selections throw.
+refuses a conflicting parameter without mutation; refused selections throw;
+copied instances and authored meshes get new identities and share nothing.
 Pattern array tests continue to own independent-copy outputs. A change here
 re-checks pattern arrays, Duplicate, Place and Paste.

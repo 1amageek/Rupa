@@ -59,7 +59,7 @@ struct WorkspacePlaceSession: Equatable, Sendable {
         case .source:
             "Place: click the reference point on the objects. Esc cancels."
         case .destination:
-            "Place: click where the reference point goes. F flips, I toggles instances, X/Y/Z sets the up axis, D adds a copy, Q/W/Shift-E union/difference/intersect with the body clicked, B places a new body."
+            "Place: click where the reference point goes. S scale, A angle, F flips, I toggles instances, X/Y/Z sets the up axis, D adds a copy, Q/W/Shift-E/Shift-Q union/difference/intersect/slice with the body clicked, B places a new body."
         }
     }
 

@@ -1,5 +1,7 @@
+import Foundation
 import SwiftCAD
 import RupaCoreTypes
+import RupaProjectModel
 
 /// Inserts one copy of a ``SceneFragment`` into a document with fresh identities.
 struct SceneFragmentInserter: Sendable {
@@ -30,7 +32,8 @@ struct SceneFragmentInserter: Sendable {
         attachment: Attachment,
         naming: Naming,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset]
     ) throws -> SceneFragmentInsertion {
         guard let firstRoot = fragment.roots.first else {
             throw EditorError(code: .commandInvalid, message: "A scene fragment must contain at least one root.")
@@ -71,6 +74,42 @@ struct SceneFragmentInserter: Sendable {
             updatedDocument.designGraph.revision = updatedDocument.designGraph.revision.advanced()
         }
 
+        // Every copied mesh and instance gets a new identity, so no copy shares either with its source.
+        var updatedMeshAssets = authoredMeshAssets
+        var meshIDMap: [GeometrySourceID: GeometrySourceID] = [:]
+        for id in fragment.authoredMeshes.keys.sorted(by: { $0.description < $1.description }) {
+            var copiedID = GeometrySourceID()
+            while updatedMeshAssets[copiedID] != nil || meshIDMap.values.contains(copiedID) {
+                copiedID = GeometrySourceID()
+            }
+            meshIDMap[id] = copiedID
+        }
+        var instanceIDMap: [ComponentInstanceID: ComponentInstanceID] = [:]
+        for (id, instance) in fragment.componentInstances.sorted(by: { $0.key.description < $1.key.description }) {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): An instance copies as a new instance of its own
+            // definition, which only the document holding that definition has. Production path:
+            // Paste with Placement into another document. Completion requires carrying the
+            // definition with the fragment and inserting it once per destination document.
+            guard updatedMetadata.componentDefinitions[instance.definitionID] != nil else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "An instance can be pasted only into the document that holds its definition."
+                )
+            }
+            var copied = instance
+            copied.id = ComponentInstanceID()
+            let taken = Set(updatedMetadata.componentInstances.values.map(\.name))
+            var ordinal = 2
+            copied.name = "\(instance.name) Copy"
+            while taken.contains(copied.name) {
+                copied.name = "\(instance.name) Copy \(ordinal)"
+                ordinal += 1
+            }
+            updatedMetadata.componentInstances[copied.id] = copied
+            instanceIDMap[id] = copied.id
+        }
+        var cadRepresentationIDMap: [GeometryRepresentationID: GeometryRepresentationID] = [:]
+
         let sceneIDMap = Dictionary(uniqueKeysWithValues: fragment.sceneNodes.keys.map { ($0, SceneNodeID()) })
         func copiedSceneNodeID(_ id: SceneNodeID) throws -> SceneNodeID {
             guard let copied = sceneIDMap[id] else {
@@ -85,12 +124,31 @@ struct SceneFragmentInserter: Sendable {
             }
             node.id = try copiedSceneNodeID(id)
             node.childIDs = try node.childIDs.map(copiedSceneNodeID)
-            node.reference = try node.reference.map { try remapped($0, featureIDMap: featureIDMap) }
+            node.reference = try node.reference.map {
+                try remapped($0, featureIDMap: featureIDMap, meshIDMap: meshIDMap, instanceIDMap: instanceIDMap)
+            }
             node.object = try node.object.map { object in
                 var copied = object
                 try copied.remapCADRepresentations(using: featureIDMap, documentID: updatedDocument.id)
+                for (id, representation) in object.geometryRepresentations.representations {
+                    guard case .cad(_, let outputID) = representation.source,
+                          let sourceFeature = UUID(uuidString: outputID).map(FeatureID.init),
+                          let copiedFeature = featureIDMap[sourceFeature],
+                          let copiedRepresentation = copied.geometryRepresentations.representations.values.first(where: {
+                              if case .cad(_, let output) = $0.source { return output == copiedFeature.description }
+                              return false
+                          }) else { continue }
+                    cadRepresentationIDMap[id] = copiedRepresentation.id
+                }
+                try remapMeshRepresentations(of: &copied, meshIDMap: meshIDMap)
                 if let section = object.sourceSection {
                     copied.sourceSection = try section.remappingFeatureIDs(featureIDMap)
+                }
+                if let instanceID = object.componentInstanceID {
+                    guard let copiedInstance = instanceIDMap[instanceID] else {
+                        throw EditorError(code: .commandInvalid, message: "A copied instance object names an instance outside the copy.")
+                    }
+                    copied.componentInstanceID = copiedInstance
                 }
                 return copied
             }
@@ -155,6 +213,24 @@ struct SceneFragmentInserter: Sendable {
             break
         }
 
+        for (id, asset) in fragment.authoredMeshes {
+            guard let copiedID = meshIDMap[id] else { continue }
+            var provenance = asset.provenance
+            if case .derivedFromCAD(let representationID, let sourceIdentity) = provenance {
+                guard let copiedRepresentation = cadRepresentationIDMap[representationID] else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "A copied mesh derived from CAD names a representation outside the copy."
+                    )
+                }
+                provenance = .derivedFromCAD(representationID: copiedRepresentation, sourceIdentity: sourceIdentity)
+            }
+            updatedMeshAssets[copiedID] = try AuthoredMeshAsset(
+                source: try asset.source.reidentified(as: copiedID),
+                provenance: provenance
+            )
+        }
+
         for binding in fragment.faceMaterialBindings {
             guard case .face(let componentID) = binding.target.component,
                   let subshapeID = componentID.generatedTopologySubshapeID,
@@ -202,6 +278,7 @@ struct SceneFragmentInserter: Sendable {
 
         metadata = updatedMetadata
         cadDocument = updatedDocument
+        authoredMeshAssets = updatedMeshAssets
         return SceneFragmentInsertion(
             rootSceneNodeIDs: copiedRootIDs,
             sceneNodeIDs: copiedNodeIDs,
@@ -252,9 +329,36 @@ struct SceneFragmentInserter: Sendable {
         return materialIDMap
     }
 
+    /// Mesh representations name the copied meshes under fresh representation IDs.
+    private func remapMeshRepresentations(
+        of object: inout ObjectDescriptor,
+        meshIDMap: [GeometrySourceID: GeometrySourceID]
+    ) throws {
+        var representations = object.geometryRepresentations.representations
+        var idMap: [GeometryRepresentationID: GeometryRepresentationID] = [:]
+        for (id, representation) in object.geometryRepresentations.representations {
+            guard case .authoredMesh(let meshID) = representation.source else { continue }
+            guard let copiedMesh = meshIDMap[meshID] else {
+                throw EditorError(code: .commandInvalid, message: "A copied object names a mesh outside the copy.")
+            }
+            let copiedID = GeometryRepresentationID()
+            representations.removeValue(forKey: id)
+            representations[copiedID] = GeometryRepresentation(id: copiedID, source: .authoredMesh(copiedMesh))
+            idMap[id] = copiedID
+        }
+        object.geometryRepresentations.representations = representations
+        if var selection = object.geometryRepresentations.selection {
+            selection.modeling = idMap[selection.modeling] ?? selection.modeling
+            selection.presentation = idMap[selection.presentation] ?? selection.presentation
+            object.geometryRepresentations.selection = selection
+        }
+    }
+
     private func remapped(
         _ reference: SceneNodeReference,
-        featureIDMap: [FeatureID: FeatureID]
+        featureIDMap: [FeatureID: FeatureID],
+        meshIDMap: [GeometrySourceID: GeometrySourceID],
+        instanceIDMap: [ComponentInstanceID: ComponentInstanceID]
     ) throws -> SceneNodeReference {
         func copied(_ featureID: FeatureID?) throws -> FeatureID {
             guard let featureID, let copied = featureIDMap[featureID] else {
@@ -269,8 +373,18 @@ struct SceneFragmentInserter: Sendable {
             return .body(try copied(reference.featureID))
         case .sketch:
             return .sketch(try copied(reference.featureID))
-        case .componentInstance, .construction, .authoredMesh:
-            throw EditorError(code: .commandInvalid, message: "Only feature, body and sketch nodes are copied.")
+        case .authoredMesh:
+            guard let id = reference.geometrySourceID, let copied = meshIDMap[id] else {
+                throw EditorError(code: .commandInvalid, message: "A copied mesh node names a mesh outside the copy.")
+            }
+            return .authoredMesh(copied)
+        case .componentInstance:
+            guard let id = reference.componentInstanceID, let copied = instanceIDMap[id] else {
+                throw EditorError(code: .commandInvalid, message: "A copied instance node names an instance outside the copy.")
+            }
+            return .componentInstance(copied)
+        case .construction:
+            throw EditorError(code: .commandInvalid, message: "Construction geometry is not copied.")
         }
     }
 }

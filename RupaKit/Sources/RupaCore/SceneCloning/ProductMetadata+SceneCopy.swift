@@ -35,19 +35,14 @@ extension ProductMetadata {
         if PatternArrayOwnershipResolver().sourceID(containingOutputSceneNode: id, in: self) != nil {
             return EditorError(code: .commandInvalid, message: "Pattern array outputs are copied by exploding the array first.")
         }
-        if node.reference?.kind == .componentInstance || node.object?.category == .componentInstance {
-            return EditorError(code: .commandInvalid, message: "Component instances are placed as new instances, not copied.")
-        }
         switch node.reference?.kind {
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Authored meshes and construction geometry are refused
-        // because copying would share their source instead of duplicating it. Production path:
-        // Duplicate, Place, Copy with Placement and independent-copy pattern arrays. Completion
-        // requires cloning the authored mesh or construction source under a new identity.
-        case .authoredMesh:
-            return EditorError(code: .commandInvalid, message: "Copying authored meshes is not supported yet.")
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Construction geometry is refused because copying would
+        // share its source instead of duplicating it. Production path: Duplicate, Place, Copy with
+        // Placement and independent-copy pattern arrays. Completion requires cloning the
+        // construction source under a new identity.
         case .construction:
             return EditorError(code: .commandInvalid, message: "Copying construction geometry is not supported yet.")
-        case .feature, .body, .sketch, .componentInstance, nil:
+        case .feature, .body, .sketch, .componentInstance, .authoredMesh, nil:
             return nil
         }
     }

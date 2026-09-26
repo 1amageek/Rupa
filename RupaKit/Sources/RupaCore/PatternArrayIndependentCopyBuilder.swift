@@ -1,5 +1,6 @@
 import SwiftCAD
 import RupaCoreTypes
+import RupaProjectModel
 
 struct PatternArrayIndependentCopyBuilder: Sendable {
     /// Inserts one copy of the definition per transform, each under a new output group whose
@@ -17,7 +18,13 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             rootSceneNodeIDs: definition.rootSceneNodeIDs,
             frame: .parentOfFirstRoot,
             metadata: metadata,
-            cadDocument: cadDocument
+            cadDocument: cadDocument,
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Independent-copy pattern outputs are built where
+            // only metadata and the CAD document are in reach, so a definition presenting an
+            // authored mesh fails extraction as a missing mesh. Production path: independent-copy
+            // Rectangular, Radial and Curve arrays. Completion requires the pattern synchronizer to
+            // carry the document's authored mesh assets through to insertion.
+            authoredMeshAssets: [:]
         )
         guard !fragment.features.isEmpty else {
             throw EditorError(
@@ -30,6 +37,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         var updatedCADDocument = cadDocument
         var outputSceneNodeIDs: [SceneNodeID] = []
         var outputFeatureIDs: [FeatureID] = []
+        var unusedMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
         for (relativeOutputIndex, transform) in transforms.enumerated() {
             let outputIndex = startingOutputIndex + relativeOutputIndex
             var outputNode = SceneNode(
@@ -44,7 +52,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
                 attachment: .detached,
                 naming: .patternOutput(prefix: outputNode.name, outputIndex: outputIndex),
                 metadata: &updatedMetadata,
-                cadDocument: &updatedCADDocument
+                cadDocument: &updatedCADDocument,
+                authoredMeshAssets: &unusedMeshAssets
             )
             outputNode.childIDs = insertion.rootSceneNodeIDs
             updatedMetadata.sceneNodes[outputNode.id] = outputNode

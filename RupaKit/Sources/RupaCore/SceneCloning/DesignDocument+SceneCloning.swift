@@ -8,7 +8,8 @@ extension DesignDocument {
             rootSceneNodeIDs: ids,
             frame: .world,
             metadata: productMetadata,
-            cadDocument: cadDocument
+            cadDocument: cadDocument,
+            authoredMeshAssets: authoredMeshAssets
         )
     }
 
@@ -175,6 +176,7 @@ extension DesignDocument {
         }
         var metadata = productMetadata
         var document = cadDocument
+        var meshAssets = authoredMeshAssets
         var copiedRootIDs: [SceneNodeID] = []
         var copiesByPlacement: [[SceneNodeID]] = []
         var nextDestination = destination
@@ -187,7 +189,8 @@ extension DesignDocument {
                 attachment: nextDestination,
                 naming: .copy,
                 metadata: &metadata,
-                cadDocument: &document
+                cadDocument: &document,
+                authoredMeshAssets: &meshAssets
             )
             copiedRootIDs.append(contentsOf: insertion.rootSceneNodeIDs)
             copiesByPlacement.append(insertion.sceneNodeIDs)
@@ -201,6 +204,7 @@ extension DesignDocument {
         var updated = self
         updated.cadDocument = document
         updated.productMetadata = metadata
+        updated.authoredMeshAssets = meshAssets
         if let boolean {
             try updated.combinePlacedCopies(copiesByPlacement, rootIDs: copiedRootIDs, with: boolean, objectRegistry: objectRegistry)
         }

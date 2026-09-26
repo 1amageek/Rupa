@@ -150,6 +150,7 @@ private struct ProjectMainViewContent: View {
     @State private var placeSession: WorkspacePlaceSession?
     @State private var transformSession: WorkspaceTransformSession?
     @State private var mirrorSession: WorkspaceMirrorSession?
+    @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
@@ -215,6 +216,7 @@ private struct ProjectMainViewContent: View {
     @State private var viewportHoverClearSignal: Int
     private let operationSequencer: ProjectWorkspaceOperationSequencer
     @FocusState private var isWorkspaceFocused: Bool
+    @FocusState private var focusedPlaceOption: WorkspacePlaceOptionField?
 
     private let objectRegistry: ObjectTypeRegistry
     private let viewportObjectSelectionIndex: ViewportObjectSelectionIndex
@@ -2117,7 +2119,8 @@ private struct ProjectMainViewContent: View {
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             measurementToolActive: selectedTool == .measure,
             pointPickActive: pointPickRequest != nil || placeSession != nil
-                || transformSession?.pendingPoint != nil || mirrorSession != nil,
+                || transformSession?.pendingPoint != nil || mirrorSession != nil
+                || arraySession?.pickingSlot != nil,
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
@@ -3026,7 +3029,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportShiftScrollHandler: ((ViewportScrollDirection) -> Bool)? {
-        guard selectedTool == .polygon else {
+        guard selectedTool == .polygon || arraySession != nil else {
             return nil
         }
         return { direction in
@@ -4100,10 +4103,10 @@ private struct ProjectMainViewContent: View {
             place.phase == .source ? "Pick Source" : "Pick Destination",
             accessibilityIdentifier: "WorkspacePlace.phase"
         )
-        placeOptionField("Angle", value: place.angleDegrees, unit: "deg") { value in
+        placeOptionField("Angle", field: .angle, value: place.angleDegrees, unit: "deg") { value in
             placeSession?.angleDegrees = value
         }
-        placeOptionField("Scale", value: place.scale, unit: "x") { value in
+        placeOptionField("Scale", field: .scale, value: place.scale, unit: "x") { value in
             guard value > 0 else {
                 reportToolStatus("Place scale must be greater than zero.", severity: .warning)
                 return
@@ -4125,6 +4128,7 @@ private struct ProjectMainViewContent: View {
 
     private func placeOptionField(
         _ title: String,
+        field: WorkspacePlaceOptionField,
         value: Double,
         unit: String,
         onCommit: @escaping (Double) -> Void
@@ -4134,6 +4138,7 @@ private struct ProjectMainViewContent: View {
             TextField(title, value: Binding(get: { value }, set: onCommit), format: .number)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 56)
+                .focused($focusedPlaceOption, equals: field)
                 .accessibilityIdentifier("WorkspacePlace.\(title.lowercased())")
             Text(unit).foregroundStyle(.secondary)
         }
@@ -5156,6 +5161,7 @@ private struct ProjectMainViewContent: View {
             placeSession = nil
             transformSession = nil
             mirrorSession = nil
+            arraySession = nil
         }
         setActiveTool(tool)
         reportToolStatus(tool == .solid ? solidShape.activationPrompt : tool.activationPrompt)
@@ -5420,6 +5426,7 @@ private struct ProjectMainViewContent: View {
             isPlaceSessionActive: placeSession != nil,
             isTransformSessionActive: transformSession != nil,
             isMirrorSessionActive: mirrorSession != nil,
+            isArrayCreationSessionActive: arraySession != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty
         )
     }
@@ -5441,6 +5448,9 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             deleteSceneNodes(ids)
+            return .handled
+        case .focusPlaceOption(let field):
+            focusedPlaceOption = field
             return .handled
         case .togglePlaceFlip:
             placeSession?.flipsOrientation.toggle()
@@ -5523,6 +5533,28 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .applyMirror:
             applyMirror()
+            return .handled
+        case .setArrayAxis(let axis):
+            updateArrayInSession { shaping, source, frame in
+                try shaping.distribution(of: source, alongWorldAxis: axis, patternFrame: frame)
+            }
+            return .handled
+        case .toggleArrayInstances:
+            guard let arraySession,
+                  let source = snapshot.document.document.productMetadata.patternArrays[arraySession.sourceID] else {
+                return .handled
+            }
+            let mode: PatternArrayOutputMode = source.outputMode == .componentInstance ? .independentCopy : .componentInstance
+            submitSource(.updatePatternArray(id: source.id, name: nil, definitionID: nil, distribution: nil, outputMode: mode))
+            reportToolStatus(mode == .componentInstance ? "Array: instances." : "Array: independent copies.")
+            return .handled
+        case .pickArraySecondDirection:
+            arraySession?.pickSecondDirection()
+            reportToolStatus(arraySession?.prompt ?? "")
+            return .handled
+        case .finishArrayCreation:
+            arraySession = nil
+            reportToolStatus("Array finished.")
             return .handled
         case .setPlaceBoolean(let operation):
             placeSession?.booleanOperation = operation
@@ -5707,6 +5739,11 @@ private struct ProjectMainViewContent: View {
         if placeSession != nil {
             placeSession = nil
             reportToolStatus("Place finished.")
+            return .handled
+        }
+        if arraySession != nil {
+            arraySession = nil
+            reportToolStatus("Array finished.")
             return .handled
         }
         if mirrorSession?.freestylePoints != nil {
@@ -6474,6 +6511,13 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportShiftScroll(_ direction: ViewportScrollDirection) -> Bool {
+        if arraySession != nil {
+            let delta = direction == .up ? 1 : -1
+            updateArrayInSession { shaping, source, _ in
+                try shaping.distribution(of: source, addingCopies: delta)
+            }
+            return true
+        }
         guard selectedTool == .polygon else {
             return false
         }
@@ -7787,7 +7831,12 @@ private struct ProjectMainViewContent: View {
                 }
                 submitPatternArrayCreation(
                     try WorkspacePatternArrayCreationPlanner(metadata: document.productMetadata)
-                        .rectangular(rootSceneNodeIDs: ids, selectionBounds: bounds)
+                        .rectangular(rootSceneNodeIDs: ids, selectionBounds: bounds),
+                    originWorld: Point3D(
+                        x: (bounds.minX + bounds.maxX) / 2,
+                        y: (bounds.minY + bounds.maxY) / 2,
+                        z: (bounds.minZ + bounds.maxZ) / 2
+                    )
                 )
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
@@ -7802,14 +7851,62 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Submits the array and selects it, so the array inspector opens on it.
-    private func submitPatternArrayCreation(_ command: EditorCommand) {
+    /// Submits the array, selects it so the array inspector opens on it, and starts shaping it;
+    /// rectangular directions are measured from `originWorld`.
+    private func submitPatternArrayCreation(_ command: EditorCommand, originWorld: Point3D = .origin) {
         submitSource(command) { result in
             guard let sourceID = result?.generatedIdentities.patternArraySourceIDs.first,
-                  let rootID = workspace.view?.document.document.productMetadata.patternArrays[sourceID]?.rootSceneNodeID else {
+                  let source = workspace.view?.document.document.productMetadata.patternArrays[sourceID] else {
                 return
             }
-            selectSceneNodes([rootID])
+            selectSceneNodes([source.rootSceneNodeID])
+            var isRectangular = false
+            if case .rectangular = source.distribution { isRectangular = true }
+            let shaping = WorkspaceArrayCreationSession(
+                sourceID: sourceID, originWorld: originWorld, isRectangular: isRectangular
+            )
+            arraySession = shaping
+            reportToolStatus(shaping.prompt)
+        }
+    }
+
+    /// Submits the array update `change` makes of the session's array in its own frame.
+    private func updateArrayInSession(
+        _ change: (inout WorkspaceArrayCreationSession, PatternArraySource, Transform3D) throws -> PatternArrayDistribution
+    ) {
+        guard var arrayCreation = arraySession else { return }
+        let metadata = snapshot.document.document.productMetadata
+        guard let source = metadata.patternArrays[arrayCreation.sourceID] else {
+            arraySession = nil
+            return
+        }
+        do {
+            let frame = try SceneNodeHierarchy(metadata: metadata).parentWorldTransform(of: source.rootSceneNodeID)
+            let distribution = try change(&arrayCreation, source, frame)
+            arraySession = arrayCreation
+            submitSource(.updatePatternArray(
+                id: source.id, name: nil, definitionID: nil, distribution: distribution, outputMode: nil
+            ))
+            reportToolStatus(arrayCreation.prompt)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    /// A click sets the rectangular direction being picked to point at it, as far as it is.
+    private func handleArrayDirectionPick(_ pick: ViewportPointPick) {
+        switch pick {
+        case .refused(let message):
+            reportToolStatus(message, severity: .warning)
+        case .point(let picked):
+            do {
+                let point = try exactPick(picked).point
+                updateArrayInSession { shaping, source, frame in
+                    try shaping.distribution(of: source, toward: point, patternFrame: frame)
+                }
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         }
     }
 
@@ -7824,6 +7921,10 @@ private struct ProjectMainViewContent: View {
         }
         if mirrorSession != nil {
             handleMirrorPointPick(pick)
+            return
+        }
+        if arraySession?.pickingSlot != nil {
+            handleArrayDirectionPick(pick)
             return
         }
         guard let request = pointPickRequest else {

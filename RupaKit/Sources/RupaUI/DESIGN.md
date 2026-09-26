@@ -456,7 +456,14 @@ copies along the parent's X axis spaced one and a half measured selection
 widths apart; Radial sets a `WorkspacePointPickRequest` and turns about the
 picked center and the active construction plane normal, both expressed in the
 parent frame; Curve reuses the Curve Array path pick with a new-array target.
-The new array is selected so the array inspector and viewport handles edit it.
+The new array is selected so the array inspector and viewport handles edit it,
+and a `WorkspaceArrayCreationSession` shapes it at once: for a rectangular
+array the next click sets the first direction and distance from the selection
+center (X/Y/Z point it along a world axis instead), 2 picks the second
+direction, Shift-wheel adds or removes copies along the active direction,
+around the ring or along the curve, and I switches between instances and
+independent copies. Each change is one `updatePatternArray` in the array's own
+frame; Return or Escape ends the session.
 Escape withdraws a pending point or path pick.
 
 Place (Edit menu, Control-D) runs a `WorkspacePlaceSession` on the selection:
@@ -465,10 +472,10 @@ places the objects at that destination as one `placeSceneNodes` source command
 while the session keeps waiting for more destinations until Escape. Surface
 picks take their exact normal from `PlacedSurfaceNormalResolver`; a destination
 on the construction plane takes the plane normal; a source off the objects has
-none. F flips, I toggles instances, X/Y/Z choose the up axis and D adds a
-consecutive copy (each copy repeats the placement from the previous one); Q, W
-and Shift-E union, subtract or intersect each copy with the body the
-destination lies on and B returns to a new body; the viewport context panel
+none. S and A move the keyboard to the scale and angle values, F flips, I toggles instances, X/Y/Z choose the up axis and D adds a
+consecutive copy (each copy repeats the placement from the previous one); Q, W,
+Shift-E and Shift-Q union, subtract, intersect or slice each copy with the body
+the destination lies on and B returns to a new body; the viewport context panel
 shows the phase and edits angle and scale.
 
 Copy with Placement (Shift-Command-C) waits for a reference point on the

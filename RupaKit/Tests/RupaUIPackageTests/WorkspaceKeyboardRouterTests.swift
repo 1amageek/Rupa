@@ -163,6 +163,9 @@ import Testing
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: placing) == .setPlaceBoolean(.union))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "w"), context: placing) == .setPlaceBoolean(.difference))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "E", modifiers: [.shift]), context: placing) == .setPlaceBoolean(.intersect))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "Q", modifiers: [.shift]), context: placing) == .setPlaceBoolean(.slice))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: placing) == .focusPlaceOption(.scale))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "a"), context: placing) == .focusPlaceOption(.angle))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "b"), context: placing) == .setPlaceBoolean(nil))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "f"), context: keyboardContext()) != .togglePlaceFlip)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: keyboardContext()) != .addPlaceCopy)
@@ -403,4 +406,14 @@ private func keyboardContext(
     #expect(action("f") == .beginMirrorFreestyle)
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .applyMirror)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
+}
+
+@Test func workspaceKeyboardRouterShapesANewArray() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isArrayCreationSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "y"), context: context) == .setArrayAxis(.y))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: context) == .toggleArrayInstances)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "2"), context: context) == .pickArraySecondDirection)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .finishArrayCreation)
 }

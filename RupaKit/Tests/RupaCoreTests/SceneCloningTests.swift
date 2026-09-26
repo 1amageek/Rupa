@@ -185,7 +185,7 @@ import Testing
     }
 
     @MainActor
-    @Test func componentInstancesAndPatternOutputsAreRefused() throws {
+    @Test func componentInstancesDuplicateAsNewInstancesOfTheirDefinition() throws {
         let (session, box, _) = try boxUnderMovedParent()
         let definition = try session.execute(.createComponentDefinition(name: "Part", rootSceneNodeIDs: [box]))
         let definitionID = try #require(definition.generatedIdentities.componentDefinitionIDs.first)
@@ -193,12 +193,11 @@ import Testing
             name: "Instance", definitionID: definitionID, localTransform: .identity
         ))
         let instanceNode = try #require(instance.generatedIdentities.sceneNodeIDs.first)
-        let before = session.document
+        let instancesBefore = session.document.productMetadata.componentInstances.count
 
-        #expect(throws: (any Error).self) {
-            _ = try session.execute(.duplicateSceneNodes(ids: [instanceNode]))
-        }
-        #expect(session.document.productMetadata == before.productMetadata)
+        _ = try session.execute(.duplicateSceneNodes(ids: [instanceNode]))
+        #expect(session.document.productMetadata.componentInstances.count == instancesBefore + 1)
+        #expect(session.document.productMetadata.componentInstances.values.allSatisfy { $0.definitionID == definitionID })
     }
 }
 

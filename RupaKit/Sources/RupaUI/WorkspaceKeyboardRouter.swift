@@ -96,6 +96,12 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
     }
 }
 
+/// A Place option value the keyboard can move to.
+enum WorkspacePlaceOptionField: Hashable, Sendable {
+    case angle
+    case scale
+}
+
 enum WorkspaceKeyboardAction: Equatable, Sendable {
     case deleteSelection
     /// Copy the selected objects in place and select the copies for moving.
@@ -110,6 +116,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case addPlaceCopy
     /// Place: combine each copy with the body under the destination, or `nil` for a new body.
     case setPlaceBoolean(BooleanOperation?)
+    /// Place: S and A move the keyboard to the scale or angle value.
+    case focusPlaceOption(WorkspacePlaceOptionField)
     /// G/R/S: start Move, Rotate or Scale, or, in that mode already, toggle its screen or uniform constraint.
     case transformMode(ViewportTransformGizmoConfiguration.Mode)
     /// X/Y/Z constrain the transform to an axis; with Shift, to the plane perpendicular to it.
@@ -136,6 +144,14 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginMirrorFreestyle
     /// Return: apply the mirror.
     case applyMirror
+    /// X/Y/Z: point the array's active direction along that world axis.
+    case setArrayAxis(SceneTransformAxis)
+    /// I: switch the new array between instances and independent copies.
+    case toggleArrayInstances
+    /// 2: pick the rectangular array's second direction.
+    case pickArraySecondDirection
+    /// Return: finish shaping the new array.
+    case finishArrayCreation
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -184,6 +200,7 @@ struct WorkspaceKeyboardContext: Sendable {
     var isPlaceSessionActive: Bool = false
     var isTransformSessionActive: Bool = false
     var isMirrorSessionActive: Bool = false
+    var isArrayCreationSessionActive: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
 
@@ -216,6 +233,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isMirrorSessionActive, let mirrorAction = mirrorSessionAction(for: input) {
             return mirrorAction
+        }
+        if context.isArrayCreationSessionActive, let arrayAction = arrayCreationAction(for: input) {
+            return arrayAction
         }
         if input.phases.contains(.down),
            input.modifiers == [.option],
@@ -272,6 +292,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             }
             if input.modifiers == [.shift], key == "e" {
                 return .setPlaceBoolean(.intersect)
+            }
+            if input.modifiers == [.shift], key == "q" {
+                return .setPlaceBoolean(.slice)
             }
         }
         if input.isTab,
@@ -470,10 +493,26 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
     }
 
+    /// The keys a new array takes while it is being shaped, which Plasticity's arrays use too.
+    private func arrayCreationAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
+        if input.isReturn { return .finishArrayCreation }
+        switch input.characters.lowercased() {
+        case "x": return .setArrayAxis(.x)
+        case "y": return .setArrayAxis(.y)
+        case "z": return .setArrayAxis(.z)
+        case "i": return .toggleArrayInstances
+        case "2": return .pickArraySecondDirection
+        default: return nil
+        }
+    }
+
     /// Place's option keys, which Plasticity's Place uses as well.
     private func placeAction(for key: String) -> WorkspaceKeyboardAction? {
         switch key {
         case "f": .togglePlaceFlip
+        case "s": .focusPlaceOption(.scale)
+        case "a": .focusPlaceOption(.angle)
         case "i": .togglePlaceOutput
         case "x": .setPlaceUpAxis(.x)
         case "y": .setPlaceUpAxis(.y)

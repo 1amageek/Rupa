@@ -1,5 +1,6 @@
 import SwiftCAD
 import RupaCoreTypes
+import RupaProjectModel
 
 /// Reads selected scene subtrees and everything their geometry needs into a ``SceneFragment``.
 struct SceneFragmentExtractor: Sendable {
@@ -16,7 +17,8 @@ struct SceneFragmentExtractor: Sendable {
         rootSceneNodeIDs requestedRootIDs: [SceneNodeID],
         frame: ReferenceFrame,
         metadata: ProductMetadata,
-        cadDocument: CADDocument
+        cadDocument: CADDocument,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
     ) throws -> SceneFragment {
         guard !requestedRootIDs.isEmpty else {
             throw EditorError(code: .commandInvalid, message: "Copying requires at least one scene node.")
@@ -101,6 +103,31 @@ struct SceneFragmentExtractor: Sendable {
             materials[materialID] = material
         }
 
+        // Meshes a copied node presents or carries as a representation, and the instances it presents.
+        var authoredMeshes: [GeometrySourceID: AuthoredMeshAsset] = [:]
+        var componentInstances: [ComponentInstanceID: ComponentInstance] = [:]
+        for node in sceneNodes.values {
+            var meshIDs = node.object?.geometryRepresentations.representations.values.compactMap { representation -> GeometrySourceID? in
+                if case .authoredMesh(let id) = representation.source { return id }
+                return nil
+            } ?? []
+            if node.reference?.kind == .authoredMesh, let id = node.reference?.geometrySourceID {
+                meshIDs.append(id)
+            }
+            for id in meshIDs {
+                guard let asset = authoredMeshAssets[id] else {
+                    throw EditorError(code: .referenceUnresolved, message: "A copied object refers to a missing authored mesh.")
+                }
+                authoredMeshes[id] = asset
+            }
+            if node.reference?.kind == .componentInstance {
+                guard let id = node.reference?.componentInstanceID, let instance = metadata.componentInstances[id] else {
+                    throw EditorError(code: .referenceUnresolved, message: "A copied instance refers to a missing component instance.")
+                }
+                componentInstances[id] = instance
+            }
+        }
+
         return SceneFragment(
             roots: try rootIDs.map { SceneFragment.Root(sceneNodeID: $0, placement: try placement(of: $0)) },
             carriedPresenters: carriedPresenters,
@@ -117,7 +144,9 @@ struct SceneFragmentExtractor: Sendable {
                 .sorted { $0.id.description < $1.id.description },
             joinedCurveGroupSources: metadata.joinedCurveGroupSources.values
                 .filter { featureIDs.contains($0.featureID) }
-                .sorted { $0.id.description < $1.id.description }
+                .sorted { $0.id.description < $1.id.description },
+            authoredMeshes: authoredMeshes,
+            componentInstances: componentInstances
         )
     }
 
