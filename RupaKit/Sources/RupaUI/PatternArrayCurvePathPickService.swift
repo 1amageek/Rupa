@@ -12,14 +12,15 @@ struct PatternArrayCurvePathPickService {
     let submit: (EditorCommand) -> Void
     let submitPath: ((PatternArrayCurvePath) -> Void)?
     let report: (String, EditorDiagnostic.Severity) -> Void
-    let sourceID: PatternArraySourceID
+    /// The array whose path is replaced; unused when `submitPath` receives the path instead.
+    let sourceID: PatternArraySourceID?
 
     init(
         document: DesignDocument,
         submit: @escaping (EditorCommand) -> Void,
         submitPath: ((PatternArrayCurvePath) -> Void)? = nil,
         report: @escaping (String, EditorDiagnostic.Severity) -> Void,
-        sourceID: PatternArraySourceID
+        sourceID: PatternArraySourceID?
     ) {
         self.document = document
         self.submit = submit
@@ -47,7 +48,8 @@ struct PatternArrayCurvePathPickService {
             submitPath(candidate.path)
             return .submitted(candidate)
         }
-        guard let source = document.productMetadata.patternArrays[sourceID],
+        guard let sourceID,
+              let source = document.productMetadata.patternArrays[sourceID],
               case .curve(var curve) = source.distribution else {
             let message = "Curve Array path pick requires an existing Pattern Array source."
             report(message, .warning)

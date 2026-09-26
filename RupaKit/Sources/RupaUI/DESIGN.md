@@ -449,6 +449,16 @@ command, so the copy is one undo step, then selects the copied roots so the
 existing Move gizmo moves them; Core's [SceneCloning](../RupaCore/SceneCloning/DESIGN.md)
 owns what a copy contains.
 
+The Edit menu's Array submenu makes Rectangular, Radial and Curve arrays of the
+same selection through `WorkspacePatternArrayCreationPlanner`, which builds one
+`createPatternArrayFromSceneNodes` command. Rectangular starts at once with
+copies along the parent's X axis spaced one and a half measured selection
+widths apart; Radial sets a `WorkspacePointPickRequest` and turns about the
+picked center and the active construction plane normal, both expressed in the
+parent frame; Curve reuses the Curve Array path pick with a new-array target.
+The new array is selected so the array inspector and viewport handles edit it.
+Escape withdraws a pending point or path pick.
+
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection

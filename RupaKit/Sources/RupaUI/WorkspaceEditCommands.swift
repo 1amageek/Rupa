@@ -9,9 +9,23 @@ import SwiftUI
 public struct WorkspaceEditCommands {
     /// Copies the selected objects in place and selects the copies for moving.
     public var duplicate: (@MainActor () -> Void)?
+    /// Arrays the selected objects along the parent's X axis.
+    public var rectangularArray: (@MainActor () -> Void)?
+    /// Arrays the selected objects around a center the user picks next.
+    public var radialArray: (@MainActor () -> Void)?
+    /// Arrays the selected objects along a path curve the user picks next.
+    public var curveArray: (@MainActor () -> Void)?
 
-    public init(duplicate: (@MainActor () -> Void)?) {
+    public init(
+        duplicate: (@MainActor () -> Void)?,
+        rectangularArray: (@MainActor () -> Void)? = nil,
+        radialArray: (@MainActor () -> Void)? = nil,
+        curveArray: (@MainActor () -> Void)? = nil
+    ) {
         self.duplicate = duplicate
+        self.rectangularArray = rectangularArray
+        self.radialArray = radialArray
+        self.curveArray = curveArray
     }
 }
 

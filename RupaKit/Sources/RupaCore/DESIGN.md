@@ -75,6 +75,11 @@ authority for ambiguity, bounds and output validity.
 
 [SceneCloning](SceneCloning/DESIGN.md) owns copying product objects: scene fragments,
 their insertion at placements, and the independent-copy pattern outputs built on them.
+`createPatternArrayFromSceneNodes` arrays selected objects in one command: the
+objects become the array's component definition and the pattern group is placed
+under the first object's parent, so the distribution is read in that frame and
+every output lands where the objects are displayed. It refuses the same
+selections copying refuses.
 
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on

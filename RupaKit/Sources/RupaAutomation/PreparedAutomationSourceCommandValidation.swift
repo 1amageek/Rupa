@@ -34,6 +34,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createPatternArray,
              .updatePatternArray,
              .explodePatternArray,
+             .createPatternArrayFromSceneNodes,
              .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,

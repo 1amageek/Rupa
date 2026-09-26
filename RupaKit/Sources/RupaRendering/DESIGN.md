@@ -2649,6 +2649,15 @@ counts plus measured peak memory and explicit native failure because their
 allocator byte sizes are opaque. A policy change requires updated boundary
 tests and native GPU measurements.
 
+### Point pick requests
+
+While `pointPickActive` is set the viewport takes no drags and resolves each
+click with the Measure endpoint resolution (snap, displayed surface,
+construction plane) and hands the result to `onPointPick` as
+`ViewportPointPick.point` or, when nothing resolves, `.refused` with the
+reason. It selects nothing and edits nothing; the requesting command owns what
+the point means.
+
 ## Verification and Change Impact
 
 ### Non-interfering native verification

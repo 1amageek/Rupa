@@ -74,6 +74,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/PatternArrayCurvePathPickService.swift",
         "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
         "Sources/RupaCore/SweepSelectionPlanningService.swift",
+        "Sources/RupaUI/WorkspacePatternArrayCreationPlanner.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -108,6 +109,7 @@ enum ProductionMainViewActionManifest {
         "createBoolean",
         "createExtrudedCircle",
         "createExtrudedRectangle",
+        "createPatternArrayFromSceneNodes",
         "createLoft",
         "createRevolve",
         "createSavedView",

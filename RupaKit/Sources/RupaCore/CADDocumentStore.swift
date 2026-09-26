@@ -713,6 +713,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createPatternArrayFromSceneNodes(let name, let rootSceneNodeIDs, let distribution, let outputMode):
+            var updatedDocument = document
+            try updatedDocument.createPatternArray(
+                name: name,
+                copying: rootSceneNodeIDs,
+                distribution: distribution,
+                outputMode: outputMode,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .updatePatternArray:
             func run() throws {
                 guard case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode) = command else {

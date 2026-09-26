@@ -9,6 +9,7 @@ extension DesignDocument {
         definitionID: ComponentDefinitionID,
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode = .componentInstance,
+        parentSceneNodeID: SceneNodeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> PatternArraySourceID {
         let trimmedName = try normalizedMetadataName(
@@ -37,7 +38,9 @@ extension DesignDocument {
 
         var updatedCADDocument = cadDocument
         var updatedMetadata = productMetadata
-        guard let rootSceneNodeID = updatedMetadata.rootSceneNodeIDs.first,
+        // The pattern group sits where its outputs are placed from: a given parent, otherwise the
+        // first document root.
+        guard let rootSceneNodeID = parentSceneNodeID ?? updatedMetadata.rootSceneNodeIDs.first,
               updatedMetadata.sceneNodes[rootSceneNodeID] != nil else {
             throw EditorError(
                 code: .commandInvalid,
@@ -71,6 +74,46 @@ extension DesignDocument {
         cadDocument = updatedCADDocument
         productMetadata = updatedMetadata
         return source.id
+    }
+
+    /// Arrays the objects `rootSceneNodeIDs` in one step: they become a component definition and
+    /// the array is placed beside them, so its distribution is read in their parent's frame.
+    @discardableResult
+    public mutating func createPatternArray(
+        name: String,
+        copying rootSceneNodeIDs: [SceneNodeID],
+        distribution: PatternArrayDistribution,
+        outputMode: PatternArrayOutputMode,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> PatternArraySourceID {
+        if let refusal = productMetadata.sceneCopyRefusal(for: rootSceneNodeIDs) {
+            throw refusal
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let roots = hierarchy.outermostSceneNodeIDs(among: rootSceneNodeIDs)
+        let takenNames = Set(productMetadata.componentDefinitions.values.map(\.name))
+        var definitionName = "\(name) Source"
+        var ordinal = 2
+        while takenNames.contains(definitionName) {
+            definitionName = "\(name) Source \(ordinal)"
+            ordinal += 1
+        }
+        var updated = self
+        let definitionID = try updated.createComponentDefinition(
+            name: definitionName,
+            rootSceneNodeIDs: roots,
+            objectRegistry: objectRegistry
+        )
+        let sourceID = try updated.createPatternArray(
+            name: name,
+            definitionID: definitionID,
+            distribution: distribution,
+            outputMode: outputMode,
+            parentSceneNodeID: hierarchy.parentID(of: roots[0]),
+            objectRegistry: objectRegistry
+        )
+        self = updated
+        return sourceID
     }
 
     public mutating func updatePatternArray(

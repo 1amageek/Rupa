@@ -48,6 +48,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         outputMode: PatternArrayOutputMode?
     )
     case explodePatternArray(id: PatternArraySourceID)
+    /// Arrays the objects `rootSceneNodeIDs` in one step, reading the distribution in their
+    /// parent's frame; the objects become the array's component definition.
+    case createPatternArrayFromSceneNodes(
+        name: String,
+        rootSceneNodeIDs: [SceneNodeID],
+        distribution: PatternArrayDistribution,
+        outputMode: PatternArrayOutputMode
+    )
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
@@ -509,6 +517,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "updatePatternArray"
         case .explodePatternArray:
             "explodePatternArray"
+        case .createPatternArrayFromSceneNodes:
+            "createPatternArrayFromSceneNodes"
         case .setSceneNodeVisibility:
             "setSceneNodeVisibility"
         case .setSceneNodeLock:
@@ -795,6 +805,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createPatternArray,
              .updatePatternArray,
              .explodePatternArray,
+             .createPatternArrayFromSceneNodes,
              .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,

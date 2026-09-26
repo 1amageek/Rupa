@@ -183,6 +183,8 @@ public struct Viewport: View {
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
     private let measurementToolActive: Bool
+    /// A command is waiting for a picked point; clicks resolve points instead of selecting.
+    private let pointPickActive: Bool
     private let showsAutomaticMeasurement: Bool
     private let showsBoundsReadout: Bool
     private let measurementConstructionPlane: SketchPlane?
@@ -245,6 +247,7 @@ public struct Viewport: View {
     private let onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)?
     private let onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)?
     private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
+    private let onPointPick: ((ViewportPointPick) -> Void)?
     private let onNativeGestureRefusal: ((any Error) -> Void)?
     private let onPresentationFailure: ((any Error) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
@@ -371,6 +374,7 @@ public struct Viewport: View {
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
         measurementToolActive: Bool = false,
+        pointPickActive: Bool = false,
         showsAutomaticMeasurement: Bool = false,
         showsBoundsReadout: Bool = false,
         measurementConstructionPlane: SketchPlane? = nil,
@@ -434,6 +438,7 @@ public struct Viewport: View {
         onCameraFrameRequestResult: ((UUID, Result<Void, Error>) -> Void)? = nil,
         onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)? = nil,
         onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
+        onPointPick: ((ViewportPointPick) -> Void)? = nil,
         onNativeGestureRefusal: ((any Error) -> Void)? = nil,
         onPresentationFailure: ((any Error) -> Void)? = nil
         ) {
@@ -495,6 +500,7 @@ public struct Viewport: View {
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.measurementToolActive = measurementToolActive
+        self.pointPickActive = pointPickActive
         self.showsAutomaticMeasurement = showsAutomaticMeasurement
         self.showsBoundsReadout = showsBoundsReadout
         self.measurementConstructionPlane = measurementConstructionPlane
@@ -560,6 +566,7 @@ public struct Viewport: View {
         self.onCameraFrameRequestResult = onCameraFrameRequestResult
         self.onProjectedGridStepChange = onProjectedGridStepChange
         self.onMeasurementStateChange = onMeasurementStateChange
+        self.onPointPick = onPointPick
         self.onNativeGestureRefusal = onNativeGestureRefusal
         self.onPresentationFailure = onPresentationFailure
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
@@ -4288,7 +4295,7 @@ public struct Viewport: View {
             nativeInputGesture = .cancelled
             return
         }
-        if measurementToolActive {
+        if measurementToolActive || pointPickActive {
             clearPendingCanvasInteractionTargets()
             activeCanvasDrag = nil
             return
@@ -4602,6 +4609,15 @@ public struct Viewport: View {
             handleMeasurementClick(at: point)
             return
         }
+        if pointPickActive {
+            let resolution = measurementEndpoint(at: point)
+            if let endpoint = resolution.endpoint {
+                onPointPick?(.point(endpoint.point))
+            } else {
+                onPointPick?(.refused((resolution.failure ?? .viewRayUnavailable).message))
+            }
+            return
+        }
         if let pendingInteractionTarget {
             finishPendingInteractionClick(pendingInteractionTarget)
             return
@@ -4738,7 +4754,7 @@ public struct Viewport: View {
             finishNativeInputGesture(at: end)
             return
         }
-        if measurementToolActive {
+        if measurementToolActive || pointPickActive {
             activeCanvasDrag = nil
             return
         }

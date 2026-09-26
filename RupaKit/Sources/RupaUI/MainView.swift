@@ -146,6 +146,7 @@ private struct ProjectMainViewContent: View {
     @State private var selectionDragPreviewSceneNodeIDs: Set<SceneNodeID>
     @State private var patternArrayCurvePathPickState: PatternArrayCurvePathPickState
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
+    @State private var pointPickRequest: WorkspacePointPickRequest?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
@@ -2095,6 +2096,7 @@ private struct ProjectMainViewContent: View {
             hoverClearSignal: viewportHoverClearSignal,
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             measurementToolActive: selectedTool == .measure,
+            pointPickActive: pointPickRequest != nil,
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
@@ -2177,6 +2179,7 @@ private struct ProjectMainViewContent: View {
             onMeasurementStateChange: { state in
                 viewportMeasurementState = state
             },
+            onPointPick: handleViewportPointPick,
             onNativeGestureRefusal: { error in
                 // The viewport decides which native gesture refusals are
                 // reportable and filters frame readiness before this point, so
@@ -5292,6 +5295,11 @@ private struct ProjectMainViewContent: View {
             patternArrayCurvePathPickState = .inactive
             return .handled
         }
+        if pointPickRequest != nil {
+            pointPickRequest = nil
+            reportToolStatus("Point pick canceled.")
+            return .handled
+        }
         if viewAlignedConstructionPlaneRequest != nil {
             viewAlignedConstructionPlaneRequest = nil
             return .handled
@@ -7019,15 +7027,29 @@ private struct ProjectMainViewContent: View {
     }
 
     private func applyPatternArrayCurvePathPick(targets: [SelectionTarget]) -> Bool {
-        guard let sourceID = patternArrayCurvePathPickState.sourceID else {
+        guard let target = patternArrayCurvePathPickState.target else {
             return false
+        }
+        let submitPath: (PatternArrayCurvePath) -> Void
+        switch target {
+        case .existing(let sourceID):
+            submitPath = { submitPatternArrayCurvePath(sourceID: sourceID, path: $0) }
+        case .newArray(let rootSceneNodeIDs):
+            submitPath = { path in
+                patternArrayCurvePathPreviewCandidate = nil
+                patternArrayCurvePathPickState.cancel()
+                submitPatternArrayCreation(
+                    WorkspacePatternArrayCreationPlanner(metadata: snapshot.document.document.productMetadata)
+                        .curve(rootSceneNodeIDs: rootSceneNodeIDs, path: path)
+                )
+            }
         }
         let outcome = PatternArrayCurvePathPickService(
             document: snapshot.document.document,
             submit: { submitSource($0) },
-            submitPath: { submitPatternArrayCurvePath(sourceID: sourceID, path: $0) },
+            submitPath: submitPath,
             report: { reportToolStatus($0, severity: $1) },
-            sourceID: sourceID
+            sourceID: patternArrayCurvePathPickState.sourceID
         ).apply(targets: targets)
         switch outcome {
         case .waitingForCurve:
@@ -7245,7 +7267,100 @@ private struct ProjectMainViewContent: View {
         } else {
             duplicate = nil
         }
-        return WorkspaceEditCommands(duplicate: duplicate)
+        let arrayIDs = duplicableSelectionIDs
+        func arrayAction(_ kind: WorkspacePatternArrayCreationPlanner.Kind) -> (@MainActor () -> Void)? {
+            guard let arrayIDs else { return nil }
+            return { beginPatternArrayCreation(kind, rootSceneNodeIDs: arrayIDs) }
+        }
+        return WorkspaceEditCommands(
+            duplicate: duplicate,
+            rectangularArray: arrayAction(.rectangular),
+            radialArray: arrayAction(.radial),
+            curveArray: arrayAction(.curve)
+        )
+    }
+
+    /// Starts making an array of `ids`: a rectangular array is made at once, a radial array waits
+    /// for its center and a curve array for its path.
+    private func beginPatternArrayCreation(
+        _ kind: WorkspacePatternArrayCreationPlanner.Kind,
+        rootSceneNodeIDs ids: [SceneNodeID]
+    ) {
+        let document = snapshot.document.document
+        if let refusal = document.productMetadata.sceneCopyRefusal(for: ids) {
+            reportToolStatus(refusal.message, severity: .warning)
+            return
+        }
+        switch kind {
+        case .rectangular:
+            do {
+                let measurement = try MeasurementService().measure(
+                    document: document,
+                    selection: snapshot.selection,
+                    ruler: snapshot.workspaceState.ruler,
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: snapshot.cadInteraction,
+                    currentGeneration: snapshot.documentGeneration
+                )
+                guard let bounds = measurement.bounds else {
+                    reportToolStatus("A rectangular array needs a selection with measurable bounds.", severity: .warning)
+                    return
+                }
+                submitPatternArrayCreation(
+                    try WorkspacePatternArrayCreationPlanner(metadata: document.productMetadata)
+                        .rectangular(rootSceneNodeIDs: ids, selectionBounds: bounds)
+                )
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        case .radial:
+            let request = WorkspacePointPickRequest.radialArrayCenter(rootSceneNodeIDs: ids)
+            pointPickRequest = request
+            reportToolStatus(request.prompt)
+        case .curve:
+            patternArrayCurvePathPickState.startNewArray(rootSceneNodeIDs: ids)
+            reportToolStatus("Pick a sketch line, circle, arc or spline for the Curve Array path. Esc cancels.")
+        }
+    }
+
+    /// Submits the array and selects it, so the array inspector opens on it.
+    private func submitPatternArrayCreation(_ command: EditorCommand) {
+        submitSource(command) { result in
+            guard let sourceID = result?.generatedIdentities.patternArraySourceIDs.first,
+                  let rootID = workspace.view?.document.document.productMetadata.patternArrays[sourceID]?.rootSceneNodeID else {
+                return
+            }
+            selectSceneNodes([rootID])
+        }
+    }
+
+    private func handleViewportPointPick(_ pick: ViewportPointPick) {
+        guard let request = pointPickRequest else {
+            return
+        }
+        switch pick {
+        case .refused(let message):
+            reportToolStatus(message, severity: .warning)
+        case .point(let point):
+            pointPickRequest = nil
+            switch request {
+            case .radialArrayCenter(let ids):
+                do {
+                    let axis: Vector3D
+                    if let plane = workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane {
+                        axis = try SketchPlaneCoordinateSystem(plane: plane).normal
+                    } else {
+                        axis = .unitZ
+                    }
+                    submitPatternArrayCreation(
+                        try WorkspacePatternArrayCreationPlanner(metadata: snapshot.document.document.productMetadata)
+                            .radial(rootSceneNodeIDs: ids, centerWorld: point, axisWorld: axis)
+                    )
+                } catch {
+                    reportToolStatus(error.localizedDescription, severity: .warning)
+                }
+            }
+        }
     }
 
     /// The whole-object selection when Duplicate accepts it, otherwise `nil`.
