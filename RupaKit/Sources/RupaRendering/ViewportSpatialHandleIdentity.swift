@@ -116,7 +116,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                 case .profileCornerMove(let value, _), .profileFaceMove(let value, _),
                      .profileEdgeChamfer(let value, _), .profileEdgeFillet(let value, _),
                      .boundarySurface(let value): try target(value)
-                case .translate, .oneSidedScale, .centerScale, .rotate, .vertexMove, .faceMove: break
+                case .translate, .oneSidedScale, .centerScale, .rotate, .translatePlane, .translateScreen,
+                     .uniformScale, .rotateScreen, .scalePlane, .vertexMove, .faceMove: break
                 }
             case .sketchCurveHandle, .sketchDimension, .sketchPointHandle, .bridgeCurveEndpoint,
                  .splineControlPoint, .edgeOffset, .slotWidth, .sketchVertexOffset,

@@ -76,6 +76,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaCore/SweepSelectionPlanningService.swift",
         "Sources/RupaUI/WorkspacePatternArrayCreationPlanner.swift",
         "Sources/RupaUI/WorkspacePlaceSession.swift",
+        "Sources/RupaUI/WorkspaceTransformSession.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -183,6 +184,7 @@ enum ProductionMainViewActionManifest {
         "slideSurfaceControlPoints",
         "splitSketchCurve",
         "splitSurfaceSpan",
+        "transformSceneNodes",
         "trimSketchCurveSegment",
         "unjoinSketchCurve",
         "updatePatternArray",

@@ -141,6 +141,8 @@ extension ViewportSpatialOverlayProducer {
             let editedBodies: [FeatureID: ViewportObjectEditState]
             var bodyPreviewTransforms: [String: Transform3D] = [:]
             var allowsBodyResize = false
+            /// The Move, Rotate or Scale mode and frame the object gizmo is drawn in, `nil` for the combined gizmo.
+            var transformGizmo: ViewportTransformGizmoConfiguration?
             var presentationScene: UniversalViewportScene?
             var presentationNodeIDs: [SceneOccurrenceID: SceneNodeID] = [:]
             let ruler: RulerConfiguration
@@ -685,6 +687,7 @@ extension ViewportSpatialOverlayProducer {
     enum BodyTransformMetrics {
         static let rotationRadiusPoints: CGFloat = 72
         static let centerScalePoints: CGFloat = 95
+        static let planeHandlePoints: CGFloat = 38
         static let axisLengthPoints: CGFloat = 132
         /// Twelve segments bound the quarter-arc sagitta at
         /// `72 * (1 - cos 3.75 degrees)` = 0.154 pt, below the ring's own line
@@ -2708,6 +2711,26 @@ private extension ViewportSpatialOverlayProducer {
     ) throws {
         let firstCameraLine = cameraLines.count
         let firstMarker = markers.count
+        let gizmo = input.transformGizmo
+        // The drag measures in the frame the gizmo is drawn in, so the frame travels with the bounds
+        // each interaction record keeps.
+        var edit = edit
+        edit.transformGizmo = gizmo
+        var bodyMembers = bodyMembers
+        var groupEdit = groupEdit
+        if groupEdit != nil {
+            groupEdit?.transformGizmo = gizmo
+        } else if bodyMembers.count == 1 {
+            bodyMembers[0].edit.transformGizmo = gizmo
+        }
+        /// Whether the gizmo draws `action`: every combined handle without a mode, the mode's own otherwise.
+        func offers(_ action: ViewportAffordanceAction) -> Bool {
+            if let gizmo { return gizmo.shows(action) }
+            switch action {
+            case .translatePlane, .translateScreen, .uniformScale, .rotateScreen, .scalePlane: return false
+            default: return true
+            }
+        }
         var corners = edit.worldBoxCorners
         if let member = objectMembers?.first,
            objectMembers?.count == 1, let resize = member.handleResize {
@@ -2779,7 +2802,8 @@ private extension ViewportSpatialOverlayProducer {
         }
 
         guard bodyMembers.allSatisfy({ $0.placement != nil }) else { return }
-        let center = edit.worldPoint(edit.centerPoint)
+        let boundsCenter = edit.worldPoint(edit.centerPoint)
+        let center = gizmo?.frame.origin ?? boundsCenter
         let maxSpan = max(
             Double(edit.xMax - edit.xMin),
             max(Double(edit.yMax - edit.yMin), Double(edit.zMax - edit.zMin))
@@ -2792,13 +2816,7 @@ private extension ViewportSpatialOverlayProducer {
         // extent below is a point length from `BodyTransformMetrics`.
         let axisLength = max(maxSpan * 0.32, input.ruler.majorTickMeters * 0.5)
         for axis in ViewportCoordinateAxis.allCases {
-            let modelDirection: ViewportModelVector3D
-            switch axis {
-            case .x: modelDirection = edit.orientation.xAxis
-            case .y: modelDirection = edit.orientation.yAxis
-            case .z: modelDirection = edit.orientation.zAxis
-            }
-            let direction = normalized(worldVector(modelDirection)) ?? modelAxis(axis)
+            let direction = gizmoAxisDirection(axis, edit: edit, frame: gizmo?.frame)
             // The two axis markers sit on the arrow this loop draws, so they
             // resolve the way the arrow does: along the projected axis, at the
             // point distance each one owns. Advancing them in scene space
@@ -2806,6 +2824,7 @@ private extension ViewportSpatialOverlayProducer {
             // "arrow tip" marker mid-shaft on any axis tilted out of the camera
             // plane and collapsing the separation between the two markers.
             let tip = offset(center, direction: direction, distance: axisLength)
+            if offers(.translate(axis)) {
             let translateIdentity = try affordance(.translate(axis))
             try emitDirectedArrow(
                 route: .bodyTransform,
@@ -2842,13 +2861,11 @@ private extension ViewportSpatialOverlayProducer {
                 to: &markers,
                 checkpoint: checkpoint
             )
-            let extent: CGFloat
-            switch axis {
-            case .x: extent = edit.xMax - edit.xMin
-            case .y: extent = edit.yMax - edit.yMin
-            case .z: extent = edit.zMax - edit.zMin
             }
-            guard extent > 0 else { continue }
+            // The scale handle needs a nonzero extent of the bounds along its axis.
+            let offsets = corners.map { ($0 - boundsCenter).dot(direction) }
+            let extent = (offsets.max() ?? 0) - (offsets.min() ?? 0)
+            guard extent > ModelingTolerance.standard.distance, offers(.centerScale(axis)) else { continue }
             let centerIdentity = try affordance(.centerScale(axis))
             try appendMarker(
                 .init(
@@ -2873,7 +2890,7 @@ private extension ViewportSpatialOverlayProducer {
             )
         }
 
-        if let member = objectMembers?.first,
+        if gizmo == nil, let member = objectMembers?.first,
            objectMembers?.count == 1, let resize = member.handleResize {
             let frame = resize.worldFromBox.matrix.values
             let boxAxes = simd_double3x3(SIMD3(frame[0], frame[4], frame[8]),
@@ -2893,31 +2910,62 @@ private extension ViewportSpatialOverlayProducer {
             }
         }
 
+        let orientedAxes = ViewportCoordinateAxis.allCases.map {
+            gizmoAxisDirection($0, edit: edit, frame: gizmo?.frame)
+        }
+        // Plane handles sit between their two in-plane axes and move in that plane.
+        let planes: [(ViewportCoordinateAxis, Vector3D, Vector3D)] = [
+            (.x, orientedAxes[1], orientedAxes[2]),
+            (.y, orientedAxes[2], orientedAxes[0]),
+            (.z, orientedAxes[0], orientedAxes[1]),
+        ]
+        for (normal, first, second) in planes {
+            let action: ViewportAffordanceAction
+            if offers(.translatePlane(normal)) { action = .translatePlane(normal) }
+            else if offers(.scalePlane(normal)) { action = .scalePlane(normal) }
+            else { continue }
+            let identity = try affordance(action)
+            guard let diagonal = normalized(first + second) else { continue }
+            let third = first.cross(second)
+            let boxAxes = simd_double3x3(SIMD3(first.x, first.y, first.z),
+                                       SIMD3(second.x, second.y, second.z),
+                                       SIMD3(third.x, third.y, third.z))
+            try appendMarker(
+                .init(route: .bodyTransform, anchor: center, shape: .box, diameterPoints: 12,
+                      color: axisColor(normal), family: .transform, identity: identity,
+                      state: state(for: identity, input: input), hitTolerancePoints: 8,
+                      occurrenceID: occurrenceID,
+                      offset: .directed(toward: offset(center, direction: diagonal, distance: axisLength),
+                                        parallel: BodyTransformMetrics.planeHandlePoints, perpendicular: 0),
+                      boxAxes: boxAxes),
+                to: &markers, checkpoint: checkpoint)
+        }
+        // The center box moves in the view plane in Move, turns about the view direction in
+        // Rotate's screen constraint and scales uniformly in Scale.
+        let centerAction = [ViewportAffordanceAction.translateScreen, .rotateScreen, .uniformScale].first(where: offers)
+        let centerIdentity = try centerAction.map { try affordance($0) }
         try appendMarker(
             .init(
                 route: .bodyTransform,
                 anchor: center,
                 shape: .box,
-                diameterPoints: 10,
+                diameterPoints: centerIdentity == nil ? 10 : 14,
                 color: selectionColor,
                 family: .transform,
-                identity: nil,
-                state: .normal
+                identity: centerIdentity,
+                state: centerIdentity.map { state(for: $0, input: input) } ?? .normal,
+                hitTolerancePoints: centerIdentity == nil ? nil : 8,
+                occurrenceID: centerIdentity == nil ? nil : occurrenceID
             ),
             to: &markers,
             checkpoint: checkpoint
         )
-        let orientedAxes = [
-            normalized(worldVector(edit.orientation.xAxis)) ?? Vector3D.unitX,
-            normalized(worldVector(edit.orientation.yAxis)) ?? Vector3D.unitY,
-            normalized(worldVector(edit.orientation.zAxis)) ?? Vector3D.unitZ,
-        ]
         let rotationPlanes: [(ViewportCoordinateAxis, Vector3D, Vector3D)] = [
             (.x, orientedAxes[1], orientedAxes[2]),
             (.y, orientedAxes[2], orientedAxes[0]),
             (.z, orientedAxes[0], orientedAxes[1]),
         ]
-        for (axis, planeStart, planeEnd) in rotationPlanes {
+        for (axis, planeStart, planeEnd) in rotationPlanes where offers(.rotate(axis)) {
             let identity = try affordance(.rotate(axis))
             // Each sample is placed by its own world direction, so the ring
             // keeps a fixed screen radius and still foreshortens into the plane
@@ -2953,6 +3001,20 @@ private extension ViewportSpatialOverlayProducer {
             for index in firstCameraLine..<cameraLines.count { cameraLines[index].objectPreviewOccurrenceID = occurrence }
             for index in firstMarker..<markers.count { markers[index].objectPreviewOccurrenceID = occurrence }
         }
+    }
+
+    /// The world direction a gizmo axis is drawn along: the transform frame's, else the bounds' own.
+    static func gizmoAxisDirection(
+        _ axis: ViewportCoordinateAxis, edit: ViewportObjectEditState, frame: SceneTransformFrame?
+    ) -> Vector3D {
+        if let frame { return frame.axis(ViewportTransformGizmoConfiguration.axis(axis)) }
+        let modelDirection: ViewportModelVector3D
+        switch axis {
+        case .x: modelDirection = edit.orientation.xAxis
+        case .y: modelDirection = edit.orientation.yAxis
+        case .z: modelDirection = edit.orientation.zAxis
+        }
+        return normalized(worldVector(modelDirection)) ?? modelAxis(axis)
     }
 
     /// World-aligned handle bounds follow this occurrence's preview mutation.

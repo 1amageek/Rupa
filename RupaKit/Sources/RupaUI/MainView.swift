@@ -148,6 +148,7 @@ private struct ProjectMainViewContent: View {
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
     @State private var pointPickRequest: WorkspacePointPickRequest?
     @State private var placeSession: WorkspacePlaceSession?
+    @State private var transformSession: WorkspaceTransformSession?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
@@ -2047,6 +2048,18 @@ private struct ProjectMainViewContent: View {
             if newScope != .sketchEntity {
                 slideCommandState.deactivate()
             }
+            if newScope != .object {
+                transformSession = nil
+            }
+        }
+        // A transform follows the objects it moves, and ends when the selection is something else.
+        .onChange(of: snapshot.documentGeneration) { _, _ in
+            refreshTransformFrame()
+        }
+        .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
+            if let transformSession, transformSession.sceneNodeIDs != ids {
+                self.transformSession = nil
+            }
         }
     }
 
@@ -2097,7 +2110,8 @@ private struct ProjectMainViewContent: View {
             hoverClearSignal: viewportHoverClearSignal,
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             measurementToolActive: selectedTool == .measure,
-            pointPickActive: pointPickRequest != nil || placeSession != nil,
+            pointPickActive: pointPickRequest != nil || placeSession != nil
+                || transformSession?.pendingPoint != nil,
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
@@ -2109,6 +2123,10 @@ private struct ProjectMainViewContent: View {
             slotWidthMeters: slotProfileWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            transformGizmo: transformSession?.gizmo(
+                distanceStepMeters: WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
+                    .operationStepMeters
+            ),
             presentationCADInteractionSceneNodeIDs: exactPresentationCADSceneNodeIDs,
             selectedPresentationHasExactCADContext: selectedPresentationHasExactCADAffordanceContext,
             onPresentationOccurrencePick: presentationOccurrencePickHandler,
@@ -3875,9 +3893,82 @@ private struct ProjectMainViewContent: View {
                 workspaceContextDivider
                 placeSessionContextPanelContent(placeSession)
             }
+            if let transformSession {
+                workspaceContextDivider
+                transformSessionContextPanelContent(transformSession)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
+    }
+
+    /// The transform's mode, frame options and typed values; each typed value applies one motion.
+    @ViewBuilder
+    private func transformSessionContextPanelContent(_ transform: WorkspaceTransformSession) -> some View {
+        workspaceValuePill(transform.title, transform.constraintName, accessibilityIdentifier: "WorkspaceTransform.mode")
+        workspaceValuePill(
+            "Orientation",
+            transform.orientation.rawValue,
+            accessibilityIdentifier: "WorkspaceTransform.orientation"
+        )
+        workspaceValuePill(
+            "Pivot",
+            transform.pickedPivot == nil ? transform.pivotMode.rawValue : "picked",
+            accessibilityIdentifier: "WorkspaceTransform.pivot"
+        )
+        let unit = snapshot.workspaceState.ruler.displayUnit
+        switch transform.mode {
+        case .move:
+            ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
+                transformOptionField(axis.rawValue.uppercased(), unit: unit.symbol) { value in
+                    var components = Vector3D(x: 0, y: 0, z: 0)
+                    switch axis {
+                    case .x: components.x = unit.meters(from: value)
+                    case .y: components.y = unit.meters(from: value)
+                    case .z: components.z = unit.meters(from: value)
+                    }
+                    return try transform.typedMove(components)
+                }
+            }
+        case .rotate:
+            ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
+                transformOptionField(axis.rawValue.uppercased(), unit: "deg") { value in
+                    return try transform.typedRotation(axis: axis, degrees: value)
+                }
+            }
+        case .scale:
+            ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
+                transformOptionField(axis.rawValue.uppercased(), unit: "x") { value in
+                    var factors = Vector3D(x: 1, y: 1, z: 1)
+                    switch axis {
+                    case .x: factors.x = value
+                    case .y: factors.y = value
+                    case .z: factors.z = value
+                    }
+                    return try transform.typedScale(factors)
+                }
+            }
+        }
+    }
+
+    /// A typed value field: submitting it applies the motion `motion` makes of it and clears it.
+    private func transformOptionField(
+        _ title: String,
+        unit: String,
+        motion: @escaping (Double) throws -> Transform3D
+    ) -> some View {
+        HStack(spacing: 4) {
+            Text(title).foregroundStyle(.secondary)
+            TextField(title, value: Binding<Double?>(get: { nil }, set: { value in
+                guard let value else { return }
+                applyTransformMotion { try motion(value) }
+            }), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceTransform.\(title.lowercased())")
+            Text(unit).foregroundStyle(.secondary)
+        }
+        .font(.caption)
     }
 
     /// Place's phase and the options every placement of the session uses.
@@ -4901,6 +4992,7 @@ private struct ProjectMainViewContent: View {
             // A point pick belongs to the select tool; another tool's clicks are its own.
             pointPickRequest = nil
             placeSession = nil
+            transformSession = nil
         }
         setActiveTool(tool)
         reportToolStatus(tool == .solid ? solidShape.activationPrompt : tool.activationPrompt)
@@ -5162,7 +5254,9 @@ private struct ProjectMainViewContent: View {
                 && slideCommandState.isSurfaceControlVerticesActive
                 && (!selectedPolySplineSurfaceVertexTargets.isEmpty
                     || !selectedSurfaceControlPointReferences.isEmpty),
-            isPlaceSessionActive: placeSession != nil
+            isPlaceSessionActive: placeSession != nil,
+            isTransformSessionActive: transformSession != nil,
+            hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty
         )
     }
 
@@ -5206,6 +5300,39 @@ private struct ProjectMainViewContent: View {
         case .addPlaceCopy:
             placeSession?.copyCount += 1
             reportPlaceOptions()
+            return .handled
+        case .transformMode(let mode):
+            if transformSession == nil {
+                beginTransformSession(mode, sceneNodeIDs: snapshot.selection.wholeSceneNodeIDs)
+            } else {
+                transformSession?.press(mode: mode)
+                reportTransformOptions()
+            }
+            return .handled
+        case .constrainTransform(let axis, let plane):
+            transformSession?.press(axis: axis, plane: plane)
+            reportTransformOptions()
+            return .handled
+        case .cycleTransformOrientation:
+            transformSession?.cycleOrientation()
+            refreshTransformFrame()
+            reportTransformOptions()
+            return .handled
+        case .pickTransformPivot:
+            transformSession?.pendingPoint = .pivot
+            reportToolStatus(transformSession?.prompt ?? "")
+            return .handled
+        case .removeTransformPivot:
+            transformSession?.removePivot()
+            refreshTransformFrame()
+            reportTransformOptions()
+            return .handled
+        case .beginTransformFreestyle:
+            transformSession?.beginFreestyle()
+            reportToolStatus(transformSession?.prompt ?? "")
+            return .handled
+        case .finishTransform:
+            finishTransformSession()
             return .handled
         case .setPlaceBoolean(let operation):
             placeSession?.booleanOperation = operation
@@ -5390,6 +5517,17 @@ private struct ProjectMainViewContent: View {
         if placeSession != nil {
             placeSession = nil
             reportToolStatus("Place finished.")
+            return .handled
+        }
+        if transformSession?.pendingPoint != nil {
+            // Escape backs out of the pivot or freestyle pick first, keeping the transform.
+            transformSession?.pendingPoint = nil
+            transformSession?.freestylePoints = []
+            reportToolStatus(transformSession?.prompt ?? "")
+            return .handled
+        }
+        if transformSession != nil {
+            finishTransformSession()
             return .handled
         }
         if viewAlignedConstructionPlaneRequest != nil {
@@ -6202,9 +6340,15 @@ private struct ProjectMainViewContent: View {
                 message: "Body transforms commit only with the Select tool in object scope."
             )
         }
+        // A running Move, Rotate or Scale commits its drag as the session's transform, so the
+        // instance-inverse option applies to drags as it does to typed and freestyle motions.
+        let transform = transformSession
         return try await runWorkspaceOperation {
             _ = try await executeSource(name: "transformBodyPlacements") { current in
-                try WorkspaceTransformMatrix.commands(placements: targets, in: current.document.document)
+                if let transform {
+                    return [try transform.dragCommand(targets)]
+                }
+                return try WorkspaceTransformMatrix.commands(placements: targets, in: current.document.document)
             }
             guard let published = workspace.view else {
                 throw ProjectWorkspaceActionError(code: .snapshotUnavailable,
@@ -7451,6 +7595,10 @@ private struct ProjectMainViewContent: View {
             handlePlacePointPick(pick)
             return
         }
+        if transformSession?.pendingPoint != nil {
+            handleTransformPointPick(pick)
+            return
+        }
         guard let request = pointPickRequest else {
             return
         }
@@ -7524,6 +7672,107 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(place.prompt)
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    /// Starts Move, Rotate or Scale on whole objects.
+    private func beginTransformSession(
+        _ mode: WorkspaceTransformSession.Mode,
+        sceneNodeIDs ids: [SceneNodeID]
+    ) {
+        guard !ids.isEmpty else { return }
+        pointPickRequest = nil
+        placeSession = nil
+        transformSession = WorkspaceTransformSession(sceneNodeIDs: ids, mode: mode)
+        refreshTransformFrame()
+        if let transformSession { reportToolStatus(transformSession.prompt) }
+    }
+
+    /// Resolves the transform frame for the current document; a frame that cannot be resolved
+    /// ends the transform with the reason.
+    private func refreshTransformFrame() {
+        guard var transform = transformSession else { return }
+        do {
+            let document = snapshot.document.document
+            let bounds: MeasurementResult.Bounds?
+            if transform.pickedPivot == nil, transform.pivotMode == .boundingBox {
+                bounds = try MeasurementService().measure(
+                    document: document,
+                    selection: snapshot.selection,
+                    ruler: snapshot.workspaceState.ruler,
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: snapshot.cadInteraction,
+                    currentGeneration: snapshot.documentGeneration
+                ).bounds
+            } else {
+                bounds = nil
+            }
+            try transform.resolveFrame(
+                metadata: document.productMetadata,
+                constructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
+                selectionBounds: bounds
+            )
+            transformSession = transform
+        } catch {
+            transformSession = nil
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    private func finishTransformSession() {
+        guard let transformSession else { return }
+        self.transformSession = nil
+        reportToolStatus("\(transformSession.title) finished.")
+    }
+
+    private func reportTransformOptions() {
+        guard let transformSession else { return }
+        reportToolStatus(
+            "\(transformSession.title): \(transformSession.constraintName), orientation "
+                + transformSession.orientation.rawValue
+                + ", pivot " + (transformSession.pickedPivot == nil ? transformSession.pivotMode.rawValue : "picked")
+                + (transformSession.compensatesInstances ? ", instances held in place." : ".")
+        )
+    }
+
+    /// Submits one motion of the running transform.
+    private func applyTransformMotion(_ motion: () throws -> Transform3D) {
+        guard let transformSession else { return }
+        do {
+            submitSource(transformSession.command(worldDelta: try motion()))
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    /// V places the pivot; F's picks are the freestyle points, the last of which applies the motion.
+    private func handleTransformPointPick(_ pick: ViewportPointPick) {
+        guard var transform = transformSession, let role = transform.pendingPoint else { return }
+        switch pick {
+        case .refused(let message):
+            reportToolStatus(message, severity: .warning)
+        case .point(let picked):
+            do {
+                let exact = try exactPick(picked)
+                switch role {
+                case .pivot:
+                    try transform.pickPivot(at: exact.point, normal: exact.normal)
+                    transformSession = transform
+                    refreshTransformFrame()
+                    reportTransformOptions()
+                case .freestyle:
+                    let motion = try transform.addFreestylePoint(exact.point)
+                    transformSession = transform
+                    if let motion {
+                        submitSource(transform.command(worldDelta: motion))
+                    }
+                    reportToolStatus(transform.prompt)
+                }
+            } catch {
+                transformSession?.freestylePoints = []
+                transformSession?.pendingPoint = nil
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         }
     }
 
@@ -7635,6 +7884,7 @@ private struct ProjectMainViewContent: View {
             let childIDs = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
             let copiedRootIDs = generated.filter { generatedIDs.contains($0) && !childIDs.contains($0) }
             selectSceneNodes(copiedRootIDs)
+            beginTransformSession(.move, sceneNodeIDs: copiedRootIDs)
         }
     }
 

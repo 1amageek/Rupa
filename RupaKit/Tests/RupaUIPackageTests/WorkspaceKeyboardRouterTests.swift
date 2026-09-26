@@ -341,3 +341,45 @@ private func keyboardContext(
         hasSurfaceControlVertexSlideTargets: hasSurfaceControlVertexSlideTargets
     )
 }
+
+@Test func workspaceKeyboardRouterStartsTransformsOnlyForWholeObjects() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.hasWholeObjectSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == .transformMode(.move))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: context) == .transformMode(.rotate))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) == .transformMode(.scale))
+
+    context.hasWholeObjectSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
+    context.hasWholeObjectSelection = true
+    context.isPlaceSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
+    context.isPlaceSessionActive = false
+    context.isEdgeOffsetCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) == .toggleEdgeOffsetLockedDistance)
+}
+
+@Test func workspaceKeyboardRouterGivesARunningTransformItsKeys() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isTransformSessionActive = true
+    context.hasWholeObjectSelection = true
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    #expect(action("x") == .constrainTransform(.x, plane: false))
+    // Shift-X is the plane constraint while a transform runs, not the snap bypass.
+    #expect(action("X", [.shift]) == .constrainTransform(.x, plane: true))
+    #expect(action("z") == .constrainTransform(.z, plane: false))
+    #expect(action("g") == .transformMode(.move))
+    #expect(action("s") == .transformMode(.scale))
+    #expect(action("w") == .cycleTransformOrientation)
+    #expect(action("v") == .pickTransformPivot)
+    #expect(action("v", [.option]) == .removeTransformPivot)
+    #expect(action("√", [.option]) == .removeTransformPivot)
+    #expect(action("f") == .beginTransformFreestyle)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .finishTransform)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
+    #expect(action("d", [.command]) == nil)
+}

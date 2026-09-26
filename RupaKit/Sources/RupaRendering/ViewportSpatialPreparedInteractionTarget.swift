@@ -25,7 +25,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
         let featureID: FeatureID
         let sceneNodeID: SceneNodeID?
         let modelTransform: ScenePlacement
-        let edit: ViewportObjectEditState
+        var edit: ViewportObjectEditState
         var placement: ViewportBodyPlacementBaseline? = nil
     }
 

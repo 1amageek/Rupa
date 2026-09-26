@@ -445,8 +445,8 @@ current whole-object selection is one Core would refuse
 (`ProductMetadata.sceneCopyRefusal`), and the App's `ApplicationEditCommands`
 adds them after the pasteboard group. Duplicate (⌘D in the menu, Shift-D in the
 select tool, Outliner context menu) submits one `duplicateSceneNodes` source
-command, so the copy is one undo step, then selects the copied roots so the
-existing Move gizmo moves them; Core's [SceneCloning](../RupaCore/SceneCloning/DESIGN.md)
+command, so the copy is one undo step, then selects the copied roots and starts
+a Move of them; Core's [SceneCloning](../RupaCore/SceneCloning/DESIGN.md)
 owns what a copy contains.
 
 The Edit menu's Array submenu makes Rectangular, Radial and Curve arrays of the
@@ -480,6 +480,25 @@ Paste with Placement (Shift-Command-V) reads it and starts a
 `WorkspacePlaceSession` whose source is the copied reference, so each
 destination pick submits one `pasteSceneFragment` with the Place options.
 Pasted objects are always independent copies.
+
+Move (G), Rotate (R) and Scale (S) run a `WorkspaceTransformSession` on the
+whole-object selection. The session holds the mode, pivot mode, orientation,
+a picked pivot, the constraint, the instance-inverse option, increment
+snapping and freestyle picks; it resolves its frame through Core's
+[SceneTransform](../RupaCore/SceneTransform/DESIGN.md) resolver from the
+selection's measured bounds and hands the viewport a
+`ViewportTransformGizmoConfiguration`, refreshed whenever the document
+changes. X/Y/Z constrain to an axis and Shift-X/Y/Z to a plane (Move, Scale);
+G in Move and Rotate constrains to the screen and S in Scale to uniform; the
+same key again clears it. W cycles the orientation, V picks a pivot (its
+surface normal gives the pivot axes) and Option-V removes it. F collects
+freestyle points through the viewport point pick: Move takes a start and end,
+Rotate an axis start and end, a reference and a target, Scale an axis start
+and end and a ratio point. Typed values in the context panel apply one motion
+in the frame. Every drag, freestyle and typed motion commits one
+`transformSceneNodes` command with the session's instance-inverse option, so
+each is one undo step. Return or Escape ends the session; leaving the select
+tool or changing the selection ends it too.
 
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the

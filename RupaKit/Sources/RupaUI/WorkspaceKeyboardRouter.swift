@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import SwiftUI
 
 struct WorkspaceKeyboardPhase: OptionSet, Equatable, Sendable {
@@ -109,6 +110,20 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case addPlaceCopy
     /// Place: combine each copy with the body under the destination, or `nil` for a new body.
     case setPlaceBoolean(BooleanOperation?)
+    /// G/R/S: start Move, Rotate or Scale, or, in that mode already, toggle its screen or uniform constraint.
+    case transformMode(ViewportTransformGizmoConfiguration.Mode)
+    /// X/Y/Z constrain the transform to an axis; with Shift, to the plane perpendicular to it.
+    case constrainTransform(SceneTransformAxis, plane: Bool)
+    /// W: the next transform orientation.
+    case cycleTransformOrientation
+    /// V: pick the transform pivot.
+    case pickTransformPivot
+    /// Option-V: remove the picked pivot.
+    case removeTransformPivot
+    /// F: start a freestyle transform.
+    case beginTransformFreestyle
+    /// Return: finish the transform.
+    case finishTransform
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -155,6 +170,9 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasCurveControlVertexSlideInput: Bool
     var hasSurfaceControlVertexSlideTargets: Bool
     var isPlaceSessionActive: Bool = false
+    var isTransformSessionActive: Bool = false
+    /// Whether the selection holds whole objects a transform can move.
+    var hasWholeObjectSelection: Bool = false
 
     /// Whether a command is currently taking typed input.
     ///
@@ -180,6 +198,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         for input: WorkspaceKeyboardInput,
         context: WorkspaceKeyboardContext
     ) -> WorkspaceKeyboardAction? {
+        if context.isTransformSessionActive, let transformAction = transformSessionAction(for: input) {
+            return transformAction
+        }
         if let snapOverrideAction = snapOverrideAction(for: input) {
             return snapOverrideAction
         }
@@ -245,6 +266,14 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if let polygonSideAction = polygonSideAction(for: input, context: context) {
             return polygonSideAction
+        }
+        if input.modifiers.isEmpty,
+           context.isSelectToolActive,
+           context.hasWholeObjectSelection,
+           !context.isPlaceSessionActive,
+           !context.ownsTextEditingKeys,
+           let mode = transformMode(for: key) {
+            return .transformMode(mode)
         }
         if context.usesSketchAxisConstraint,
            let axisConstraint = SketchAxisConstraint(rawValue: key) {
@@ -348,6 +377,51 @@ struct WorkspaceKeyboardRouter: Sendable {
             return nil
         }
         return .activateDimensionCommand
+    }
+
+    private func transformMode(for key: String) -> ViewportTransformGizmoConfiguration.Mode? {
+        switch key {
+        case "g": .move
+        case "r": .rotate
+        case "s": .scale
+        default: nil
+        }
+    }
+
+    /// The keys Move, Rotate and Scale take while one is running, which Plasticity's gizmos use too.
+    private func transformSessionAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down),
+              !input.modifiers.contains(.command),
+              !input.modifiers.contains(.control) else {
+            return nil
+        }
+        let key = input.characters.lowercased()
+        if input.modifiers == [.option] {
+            // Option-V can arrive as a composed character, so the key is matched on either form.
+            return key == "v" || key == "√" ? .removeTransformPivot : nil
+        }
+        guard !input.modifiers.contains(.option) else { return nil }
+        if input.isReturn {
+            return .finishTransform
+        }
+        let shifted = input.modifiers == [.shift]
+        guard input.modifiers.isEmpty || shifted else { return nil }
+        switch key {
+        case "x": return .constrainTransform(.x, plane: shifted)
+        case "y": return .constrainTransform(.y, plane: shifted)
+        case "z": return .constrainTransform(.z, plane: shifted)
+        default: break
+        }
+        guard !shifted else { return nil }
+        if let mode = transformMode(for: key) {
+            return .transformMode(mode)
+        }
+        switch key {
+        case "w": return .cycleTransformOrientation
+        case "v": return .pickTransformPivot
+        case "f": return .beginTransformFreestyle
+        default: return nil
+        }
     }
 
     /// Place's option keys, which Plasticity's Place uses as well.

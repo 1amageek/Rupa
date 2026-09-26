@@ -19,7 +19,8 @@ struct ViewportSpatialInteractionRecord: Sendable {
                 throw RealityViewportSpatialBatch.invalid("Object placement requires distinct, addressed occurrences.")
             }
             switch action {
-            case .translate, .rotate, .centerScale, .oneSidedScale: break
+            case .translate, .rotate, .centerScale, .oneSidedScale,
+                 .translatePlane, .translateScreen, .uniformScale, .rotateScreen, .scalePlane: break
             case .faceMove, .vertexMove:
                 guard members.count == 1, members[0].handleResize != nil else {
                     throw RealityViewportSpatialBatch.invalid("Box resize requires one editable source occurrence.")

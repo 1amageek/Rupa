@@ -193,6 +193,7 @@ public struct Viewport: View {
     private let slotWidthMeters: Double
     private let sketchVertexOffsetDistanceMeters: Double
     private let edgeOffsetDistanceMeters: Double
+    private let transformGizmo: ViewportTransformGizmoConfiguration?
     private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
     private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
     private let meshSelectionDomain: GeometryAttributeDomain
@@ -386,6 +387,7 @@ public struct Viewport: View {
         slotWidthMeters: Double? = nil,
         sketchVertexOffsetDistanceMeters: Double? = nil,
         edgeOffsetDistanceMeters: Double? = nil,
+        transformGizmo: ViewportTransformGizmoConfiguration? = nil,
         presentationCADInteractionSceneNodeIDs: Set<SceneNodeID> = [],
         selectedPresentationHasExactCADContext: Bool,
         onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)? = nil,
@@ -515,6 +517,7 @@ public struct Viewport: View {
             ?? interactionScaleDefaults.operationStepMeters
         self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
+        self.transformGizmo = transformGizmo
         self.presentationCADInteractionSceneNodeIDs = presentationCADInteractionSceneNodeIDs
         self.onPresentationOccurrencePick = onPresentationOccurrencePick
         self.onPresentationOccurrenceHover = onPresentationOccurrenceHover
@@ -1575,6 +1578,7 @@ public struct Viewport: View {
         key.slotWidthMeters = slotWidthMeters
         key.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
         key.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
+        key.transformGizmo = transformGizmo
         // Fixed route bits avoid an array allocation on every camera frame.
         if onRegionOffsetDrag != nil { key.availableRoutes |= 1 << 0 }
         if onEdgeOffsetDrag != nil { key.availableRoutes |= 1 << 1 }
@@ -5902,6 +5906,7 @@ extension Viewport {
         result.bodyPreviewTransforms = presentationScene == nil ? bodyPreviewTransforms : [:]
         result.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         result.allowsBodyResize = onBodyResizeCommit != nil
+        result.transformGizmo = transformGizmo
         result.presentationScene = presentationScene
         result.presentationNodeIDs = presentationSceneNodeIDByOccurrenceID
         return result

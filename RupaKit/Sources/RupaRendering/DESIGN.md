@@ -941,6 +941,18 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    and group bounds. Preview and commit use those immutable baselines, not a
    live feature-keyed edit table. Current source and selection are checked only
    to cancel stale input; they never replace the captured operands.
+   A Move, Rotate or Scale mode passes a `ViewportTransformGizmoConfiguration`
+   (mode, resolved `SceneTransformFrame`, constraint, increments). The producer
+   then draws that mode's handles only, at the frame origin along the frame
+   axes: Move adds plane squares (`translatePlane`) and makes the center box
+   `translateScreen`; Rotate's screen constraint makes it `rotateScreen`; Scale
+   makes it `uniformScale`; box resize handles are withheld. An axis, plane,
+   screen or uniform constraint narrows the handles to that one. The
+   configuration travels with the bounds each record keeps, so
+   `ViewportBodyTransformInput` measures the drag in the same frame and pivot
+   the handles were drawn in, rounds it to the configured distance, angle and
+   factor increments, and commits through the same placement batch. Without a
+   configuration the gizmo keeps its combined world-aligned form unchanged.
    A body scene item carrying no scene-node address matches no selected target
    in the producer and therefore draws no transform gizmo; with the legacy
    selector gone it also receives no transform input, so this route no longer

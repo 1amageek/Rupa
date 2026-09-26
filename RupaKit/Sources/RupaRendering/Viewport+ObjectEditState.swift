@@ -103,6 +103,8 @@ struct ViewportObjectEditState: Equatable, Sendable {
     var zMin: CGFloat
     var zMax: CGFloat
     var orientation: ViewportObjectOrientation
+    /// The Move, Rotate or Scale mode the placement gizmo is drawn and measured in, if one is active.
+    var transformGizmo: ViewportTransformGizmoConfiguration?
 
     private static let minimumSize: CGFloat = 1.0e-6
 
@@ -194,6 +196,9 @@ struct ViewportObjectEditState: Equatable, Sendable {
             try next.moveFace(face, start: start, current: current, measure: measure)
         case .profileEdgeChamfer, .profileEdgeFillet, .boundarySurface:
             break
+        case .translatePlane, .translateScreen, .uniformScale, .rotateScreen, .scalePlane:
+            // These handles belong to the placement gizmo, which measures them in its frame.
+            return nil
         case .faceMove(let face):
             try next.moveFace(face, start: start, current: current, measure: measure)
         }

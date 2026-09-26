@@ -446,6 +446,16 @@ enum ViewportAffordanceAction: Equatable, Sendable {
     case oneSidedScale(ViewportCoordinateAxis)
     case centerScale(ViewportCoordinateAxis)
     case rotate(ViewportCoordinateAxis)
+    /// Move in the plane perpendicular to the frame axis.
+    case translatePlane(ViewportCoordinateAxis)
+    /// Move in the camera plane through the pivot.
+    case translateScreen
+    /// Scale all frame axes by one factor about the pivot.
+    case uniformScale
+    /// Turn about the view direction through the pivot.
+    case rotateScreen
+    /// Scale the two frame axes spanning the plane perpendicular to this axis by one factor.
+    case scalePlane(ViewportCoordinateAxis)
     case vertexMove(ViewportBodyVertex)
     case profileCornerMove(SelectionTarget, ViewportBodyVertex)
     case profileFaceMove(SelectionTarget, ViewportBodyFace)
