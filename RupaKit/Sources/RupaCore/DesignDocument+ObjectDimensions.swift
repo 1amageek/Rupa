@@ -254,6 +254,9 @@ extension DesignDocument {
         value: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        if try setFeatureDimension(target: target, kind: kind, value: value, objectRegistry: objectRegistry) {
+            return
+        }
         let source = try ObjectDimensionSourceResolver().resolve(target: target, in: self)
         let dimensions = (
             sizeX: source.sizeX,

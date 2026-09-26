@@ -47,6 +47,10 @@ struct DimensionCommandEntry: Equatable {
             "Box"
         case .cylinder:
             "Cylinder"
+        case .sphere:
+            "Sphere"
+        case .fillet:
+            "Fillet"
         }
         self.resolvedValue = entry.resolvedMeters
         self.valueKind = .length
@@ -69,6 +73,9 @@ struct DimensionCommandState: Equatable {
     var activeIndex: Int
     var draftValue: Double?
     var isInputModeActive: Bool
+    /// Values typed into entries Tab has since left, by entry index; Enter commits them with the
+    /// active entry's value.
+    var editedValues: [Int: Double] = [:]
 
     init(
         entries: [DimensionCommandEntry] = [],
@@ -175,6 +182,7 @@ struct DimensionCommandState: Equatable {
             activateInputMode()
             return
         }
+        keepDraft()
         activeIndex = entries.index(after: activeIndex)
         if activeIndex == entries.endIndex {
             activeIndex = entries.startIndex
@@ -187,6 +195,7 @@ struct DimensionCommandState: Equatable {
             activateInputMode()
             return
         }
+        keepDraft()
         if activeIndex == entries.startIndex {
             activeIndex = entries.index(before: entries.endIndex)
         } else {
@@ -236,6 +245,29 @@ struct DimensionCommandState: Equatable {
         activeIndex = 0
         draftValue = nil
         isInputModeActive = false
+        editedValues = [:]
+    }
+
+    /// Every entry whose value was changed, in entry order, with the value to commit.
+    var pendingValues: [(entry: DimensionCommandEntry, value: Double)] {
+        var values = editedValues
+        if let draftValue, let activeEntry, draftValue != activeEntry.resolvedValue {
+            values[activeIndex] = draftValue
+        }
+        return values.keys.sorted().compactMap { index in
+            guard entries.indices.contains(index), let value = values[index] else { return nil }
+            return (entries[index], value)
+        }
+    }
+
+    /// Keeps the active entry's typed value when Tab moves on.
+    private mutating func keepDraft() {
+        guard let draftValue, let activeEntry else { return }
+        if draftValue != activeEntry.resolvedValue {
+            editedValues[activeIndex] = draftValue
+        } else {
+            editedValues.removeValue(forKey: activeIndex)
+        }
     }
 
     private mutating func resetDraftForActiveEntry() {
@@ -243,7 +275,7 @@ struct DimensionCommandState: Equatable {
             deactivate()
             return
         }
-        draftValue = activeEntry.resolvedValue
+        draftValue = editedValues[activeIndex] ?? activeEntry.resolvedValue
         isInputModeActive = true
     }
 

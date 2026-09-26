@@ -40,6 +40,11 @@ public struct ObjectDimensionSnapshotService: Sendable {
         } else {
             let faceResolver = ObjectFaceDimensionResolver()
             summaryEntries = try dimensionTargets.flatMap { target in
+                if let featureDimension = try ObjectFeatureDimension.resolve(target: target, in: document, topology: {
+                    try topology ?? TopologySnapshotService().snapshot(document: document, objectRegistry: objectRegistry)
+                }) {
+                    return featureDimension.entries(for: target)
+                }
                 let source = try resolver.resolve(target: target, in: document)
                 let faceDimension = try faceResolver.resolveSingleIfPresent(
                     target: target,

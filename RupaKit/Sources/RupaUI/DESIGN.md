@@ -798,6 +798,10 @@ Its edit uses the same `setObjectDimension` command as Canvas dimension input;
 it preserves source profile origin/plane, not a UI-only center-pinning rule.
 Shared source edits affect every occurrence; placement edits affect only the
 addressed node. Unsupported source dimensions are not inferred from pixels.
+
+The Dimension command lists every dimension Core offers for the selection. Tab
+moves between them and keeps the value typed into each; Return commits every
+edited value together as one source change, and Escape discards them all.
 Missing evaluated occurrences are explicitly unavailable for Center editing;
 source properties remain usable. Invalid dimensions surface errors, not values
 that could overwrite source. Center reads the published universal viewport's

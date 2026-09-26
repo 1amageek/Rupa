@@ -6,6 +6,8 @@ public struct ObjectDimensionSummaryResult: Codable, Equatable, Sendable {
     public enum SourceKind: String, Codable, Equatable, Sendable {
         case box
         case cylinder
+        case sphere
+        case fillet
     }
 
     public struct Counts: Codable, Equatable, Sendable {

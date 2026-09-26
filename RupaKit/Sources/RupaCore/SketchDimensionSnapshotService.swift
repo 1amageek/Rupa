@@ -16,7 +16,7 @@ public struct SketchDimensionSnapshotService: Sendable {
             objectRegistry: objectRegistry
         )
         let entries = try resolvedTargets.flatMap { target in
-            try dimensionEntries(for: target)
+            try rectangleEntries(for: target, in: document) ?? dimensionEntries(for: target)
         }
 
         return SketchDimensionSnapshot(
@@ -97,6 +97,48 @@ public struct SketchDimensionSnapshotService: Sendable {
         default:
             return []
         }
+    }
+
+    /// A selected side of a rectangle sketch offers the rectangle's width and height, each edited
+    /// through the side that runs along it. An edge a body generated from the rectangle keeps its
+    /// line entries; the body's own size is the object dimension's.
+    private func rectangleEntries(
+        for target: SketchDimensionTargetResolver.ResolvedTarget,
+        in document: DesignDocument
+    ) throws -> [SketchDimensionSummaryResult.Entry]? {
+        guard target.entity.entityKind == "line",
+              case .sketchEntity = target.requestedTarget.component,
+              case .sketchEntity(let componentID) = target.editTarget.component,
+              let reference = componentID.sketchEntityReference,
+              let feature = document.cadDocument.designGraph.nodes[reference.featureID],
+              case .sketch(let sketch) = feature.operation,
+              let lines = try document.rectangleLineIDs(in: sketch),
+              let axis = try document.rectangleSideDimensionAxis(in: sketch, entityID: reference.entityID),
+              let bounds = try document.resolvedSketchBounds2D(sketch) else {
+            return nil
+        }
+        func side(_ entityID: SketchEntityID, label: String, meters: Double, primary: Bool) -> SketchDimensionSummaryResult.Entry {
+            SketchDimensionSummaryResult.Entry(
+                requestedTarget: target.requestedTarget,
+                target: SelectionTarget(
+                    sceneNodeID: target.editTarget.sceneNodeID,
+                    component: .sketchEntity(.sketchEntity(featureID: reference.featureID, entityID: entityID))
+                ),
+                sceneNodeID: target.entity.sceneNodeID ?? "",
+                sourceFeatureID: target.entity.sourceFeatureID,
+                entityID: entityID.description,
+                entityKind: "line",
+                kind: .length,
+                label: label,
+                inputExpression: .length(meters, .meter),
+                resolvedValue: meters,
+                isPrimaryForTarget: primary
+            )
+        }
+        return [
+            side(lines.bottom, label: "Width", meters: bounds.maxX - bounds.minX, primary: axis == .width),
+            side(lines.left, label: "Height", meters: bounds.maxY - bounds.minY, primary: axis == .height),
+        ]
     }
 
     private func circularEntries(

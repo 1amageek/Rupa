@@ -173,6 +173,18 @@ render bounds or copied object-property defaults for source dimensions. Its
 read-only query throws for unsupported or unresolved source. This widens no
 external API and changes no persistence or mutation authority.
 
+Before that resolver, `ObjectFeatureDimension` answers for dimensions a body's
+own feature carries: a sphere object or face offers Diameter (primary) and
+Radius from its primitive, and a face a fillet made offers Fillet Radius. The
+kernel lineage names the fillet face: it is `merged` from the faces beside the
+rounded edge (or `generated`), while every other face of the filleted body is
+`preserved` or `split` from one parent and so offers no fillet entry.
+`setObjectDimension` writes these through the same feature (the sphere radius,
+kept in step with the object's `radius` property, or the fillet radius). A
+selected rectangle sketch side offers the rectangle's Width and Height, each
+edited through the side that runs along it; an edge a body generated from that
+rectangle keeps its line Length and Angle.
+
 #### What the kernel's all-edge fillet accepts
 
 `AllEdgeFilletBuilder` routes on surface kind, because a box and a circular

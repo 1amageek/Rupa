@@ -5953,54 +5953,42 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// Enter commits every value typed into the dimension entries, as one undoable change.
     private func commitDimensionCommand() {
-        guard let entry = dimensionCommandState.activeEntry,
-              let value = dimensionCommandState.currentValue,
-              value.isFinite else {
-            reportToolStatus(
-                "Dimension value must be finite.",
-                severity: .warning
-            )
+        let pending = dimensionCommandState.pendingValues
+        guard !pending.isEmpty else {
+            dimensionCommandState.deactivate()
             return
         }
-
-        let command: EditorCommand
-        switch entry.source {
-        case .object(let kind):
-            guard value > 0.0 else {
-                reportToolStatus(
-                    "Dimension value must be a positive length.",
-                    severity: .warning
-                )
+        var commands: [EditorCommand] = []
+        for (entry, value) in pending {
+            guard value.isFinite else {
+                reportToolStatus("Dimension value must be finite.", severity: .warning)
                 return
             }
-            command = .setObjectDimension(
-                target: entry.target,
-                kind: kind,
-                value: .length(value, .meter)
-            )
-        case .sketch(let kind):
-            let expression: CADExpression
-            switch entry.valueKind {
-            case .length:
+            switch entry.source {
+            case .object(let kind):
                 guard value > 0.0 else {
-                    reportToolStatus(
-                        "Dimension value must be a positive length.",
-                        severity: .warning
-                    )
+                    reportToolStatus("Dimension value must be a positive length.", severity: .warning)
                     return
                 }
-                expression = .length(value, .meter)
-            case .angle:
-                expression = .angle(value, .radian)
+                commands.append(.setObjectDimension(target: entry.target, kind: kind, value: .length(value, .meter)))
+            case .sketch(let kind):
+                let expression: CADExpression
+                switch entry.valueKind {
+                case .length:
+                    guard value > 0.0 else {
+                        reportToolStatus("Dimension value must be a positive length.", severity: .warning)
+                        return
+                    }
+                    expression = .length(value, .meter)
+                case .angle:
+                    expression = .angle(value, .radian)
+                }
+                commands.append(.setSketchEntityDimension(target: entry.target, kind: kind, value: expression))
             }
-            command = .setSketchEntityDimension(
-                target: entry.target,
-                kind: kind,
-                value: expression
-            )
         }
-        submitSource(command)
+        submitSource(commands, name: "Set Dimensions")
         dimensionCommandState.deactivate()
     }
 
