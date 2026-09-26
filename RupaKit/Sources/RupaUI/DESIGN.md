@@ -466,8 +466,10 @@ while the session keeps waiting for more destinations until Escape. Surface
 picks take their exact normal from `PlacedSurfaceNormalResolver`; a destination
 on the construction plane takes the plane normal; a source off the objects has
 none. F flips, I toggles instances, X/Y/Z choose the up axis and D adds a
-consecutive copy (each copy repeats the placement from the previous one); the
-viewport context panel shows the phase and edits angle and scale.
+consecutive copy (each copy repeats the placement from the previous one); Q, W
+and Shift-E union, subtract or intersect each copy with the body the
+destination lies on and B returns to a new body; the viewport context panel
+shows the phase and edits angle and scale.
 
 Copy with Placement (Shift-Command-C) waits for a reference point on the
 selection, then writes the selection's `SceneFragment`, that point and its

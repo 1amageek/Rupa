@@ -81,6 +81,14 @@ under the first object's parent, so the distribution is read in that frame and
 every output lands where the objects are displayed. It refuses the same
 selections copying refuses.
 
+Booleans combine bodies where they are displayed: `createBoolean` hands
+Swift-CAD the tool's rigid placement relative to the targets
+(`BooleanFeature.toolPlacement`), requires the targets to share one placement,
+refuses a relative placement that scales, shears or mirrors, and refuses Keep
+Tools for a tool displayed elsewhere. The result node is inserted beside the
+first target with the target's local transform, so it appears where the target
+was.
+
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on
 every construction plane. Cylinder wall offsets retain the center and change the

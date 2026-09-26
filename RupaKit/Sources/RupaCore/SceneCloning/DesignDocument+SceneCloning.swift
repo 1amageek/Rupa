@@ -18,7 +18,7 @@ extension DesignDocument {
         ids: [SceneNodeID],
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SceneNodeID] {
-        try placeSceneNodes(ids: ids, placements: [.identity], objectRegistry: objectRegistry)
+        try placeSceneNodes(ids: ids, placements: [.identity], boolean: nil, objectRegistry: objectRegistry)
     }
 
     /// Places `ids` once per world-space placement of the selection and returns the new roots:
@@ -29,9 +29,13 @@ extension DesignDocument {
         ids: [SceneNodeID],
         placements: [Transform3D],
         output: SceneNodePlacementOutput = .independentCopy,
+        boolean: SceneNodePlacementBoolean? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SceneNodeID] {
         if output == .componentInstance {
+            guard boolean == nil else {
+                throw EditorError(code: .commandInvalid, message: "Only independent copies can be combined with a Boolean.")
+            }
             return try placeInstances(of: ids, placements: placements, objectRegistry: objectRegistry)
         }
         let fragment = try sceneFragment(copying: ids)
@@ -53,6 +57,7 @@ extension DesignDocument {
             placements: placements,
             destination: destination,
             parentWorld: parentWorld,
+            boolean: boolean,
             objectRegistry: objectRegistry
         )
     }
@@ -63,6 +68,7 @@ extension DesignDocument {
     public mutating func pasteSceneFragment(
         _ fragment: SceneFragment,
         placements: [Transform3D],
+        boolean: SceneNodePlacementBoolean? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SceneNodeID] {
         let destination: SceneFragmentInserter.Attachment
@@ -79,6 +85,7 @@ extension DesignDocument {
             placements: placements,
             destination: destination,
             parentWorld: parentWorld,
+            boolean: boolean,
             objectRegistry: objectRegistry
         )
     }
@@ -160,6 +167,7 @@ extension DesignDocument {
         placements: [Transform3D],
         destination: SceneFragmentInserter.Attachment,
         parentWorld: Transform3D,
+        boolean: SceneNodePlacementBoolean?,
         objectRegistry: ObjectTypeRegistry
     ) throws -> [SceneNodeID] {
         guard !placements.isEmpty else {
@@ -168,6 +176,7 @@ extension DesignDocument {
         var metadata = productMetadata
         var document = cadDocument
         var copiedRootIDs: [SceneNodeID] = []
+        var copiesByPlacement: [[SceneNodeID]] = []
         var nextDestination = destination
         for placement in placements {
             try placement.validateAffinePlacement()
@@ -181,6 +190,7 @@ extension DesignDocument {
                 cadDocument: &document
             )
             copiedRootIDs.append(contentsOf: insertion.rootSceneNodeIDs)
+            copiesByPlacement.append(insertion.sceneNodeIDs)
             // Later copies follow earlier ones among the same siblings.
             if case .child(let parentID, let index) = nextDestination {
                 nextDestination = .child(of: parentID, at: index + insertion.rootSceneNodeIDs.count)
@@ -188,8 +198,54 @@ extension DesignDocument {
         }
         try document.validate(tolerance: .standard)
         try metadata.validate(against: document, objectRegistry: objectRegistry)
-        cadDocument = document
-        productMetadata = metadata
+        var updated = self
+        updated.cadDocument = document
+        updated.productMetadata = metadata
+        if let boolean {
+            try updated.combinePlacedCopies(copiesByPlacement, rootIDs: copiedRootIDs, with: boolean, objectRegistry: objectRegistry)
+        }
+        self = updated
         return copiedRootIDs
+    }
+
+    /// Combines each placed copy with the body it was placed on, in placement order: the copy's one
+    /// body is the tool, the first copy combines with the target and every later copy with the
+    /// previous result. The consumed copies are hidden.
+    private mutating func combinePlacedCopies(
+        _ copiesByPlacement: [[SceneNodeID]],
+        rootIDs: [SceneNodeID],
+        with boolean: SceneNodePlacementBoolean,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard let targetNode = productMetadata.sceneNodes[boolean.targetSceneNodeID],
+              let reference = targetNode.reference,
+              reference.kind == .body || reference.kind == .feature,
+              var targetFeatureID = reference.featureID else {
+            throw EditorError(code: .referenceUnresolved, message: "A placement Boolean needs a body to combine with.")
+        }
+        for copiedNodeIDs in copiesByPlacement {
+            let toolFeatureIDs = copiedNodeIDs.compactMap { id -> FeatureID? in
+                guard let node = productMetadata.sceneNodes[id], node.isVisible,
+                      node.reference?.kind == .body else { return nil }
+                return node.reference?.featureID
+            }
+            guard toolFeatureIDs.count == 1, let toolFeatureID = toolFeatureIDs.first else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "A placement Boolean needs the placed objects to be exactly one body."
+                )
+            }
+            targetFeatureID = try createBoolean(
+                name: "Placed \(boolean.operation.rawValue.capitalized)",
+                targets: [BooleanTargetReference(featureID: targetFeatureID)],
+                tool: BooleanToolReference(featureID: toolFeatureID),
+                operation: boolean.operation,
+                keepTools: false,
+                objectRegistry: objectRegistry
+            )
+        }
+        for rootID in rootIDs {
+            productMetadata.sceneNodes[rootID]?.isVisible = false
+        }
     }
 }

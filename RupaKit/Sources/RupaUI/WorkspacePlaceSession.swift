@@ -11,6 +11,8 @@ struct WorkspacePlaceSession: Equatable, Sendable {
     struct Reference: Equatable, Sendable {
         var point: Point3D
         var normal: Vector3D?
+        /// The scene node presenting the body the point lies on, which a Boolean combines with.
+        var bodySceneNodeID: SceneNodeID? = nil
     }
 
     enum Phase: Equatable, Sendable {
@@ -33,6 +35,8 @@ struct WorkspacePlaceSession: Equatable, Sendable {
     /// Copies placed per destination click; each further copy repeats the placement once more.
     var copyCount = 1
     var output: SceneNodePlacementOutput = .independentCopy
+    /// The Boolean each placed copy makes with the body under the destination, `nil` for a new body.
+    var booleanOperation: BooleanOperation?
 
     init(rootSceneNodeIDs: [SceneNodeID]) {
         source = .selection(rootSceneNodeIDs)
@@ -55,7 +59,7 @@ struct WorkspacePlaceSession: Equatable, Sendable {
         case .source:
             "Place: click the reference point on the objects. Esc cancels."
         case .destination:
-            "Place: click where the reference point goes. F flips, I toggles instances, X/Y/Z sets the up axis, D adds a copy."
+            "Place: click where the reference point goes. F flips, I toggles instances, X/Y/Z sets the up axis, D adds a copy, Q/W/Shift-E union/difference/intersect with the body clicked, B places a new body."
         }
     }
 
@@ -86,11 +90,26 @@ struct WorkspacePlaceSession: Equatable, Sendable {
         while placements.count < copyCount {
             placements.append(try placement.composed(with: placements[placements.count - 1]))
         }
+        var boolean: SceneNodePlacementBoolean?
+        if let booleanOperation {
+            guard let target = destination.bodySceneNodeID else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "A \(booleanOperation.rawValue) placement needs a destination on a body."
+                )
+            }
+            boolean = SceneNodePlacementBoolean(operation: booleanOperation, targetSceneNodeID: target)
+        }
         switch self.source {
         case .selection(let ids):
-            return .placeSceneNodes(ids: ids, placements: placements, output: output)
+            return .placeSceneNodes(
+                ids: ids,
+                placements: placements,
+                output: boolean == nil ? output : .independentCopy,
+                boolean: boolean
+            )
         case .pasted(let fragment):
-            return .pasteSceneFragment(fragment, placements: placements)
+            return .pasteSceneFragment(fragment, placements: placements, boolean: boolean)
         }
     }
 }

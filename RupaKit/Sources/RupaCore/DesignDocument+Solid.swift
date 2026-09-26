@@ -443,11 +443,37 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Boolean")
+        // The kernel combines bodies in the targets' feature frame; a tool displayed elsewhere is
+        // handed over with its rigid placement relative to the targets, and the result is shown
+        // where the targets are.
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        func placement(of featureID: FeatureID) throws -> Transform3D {
+            try hierarchy.presentingSceneNodeID(for: featureID).map { try hierarchy.worldTransform(of: $0) } ?? .identity
+        }
+        let targetPlacements = try targets.map { try placement(of: $0.featureID) }
+        guard let targetPlacement = targetPlacements.first,
+              try targetPlacements.allSatisfy({ try targetPlacement.inverse().composed(with: $0).isApproximatelyIdentity() }) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Boolean targets must be displayed at one placement to be combined into one body."
+            )
+        }
+        let relativeToolPlacement = try targetPlacement.inverse().composed(with: try placement(of: tool.featureID))
+        let toolPlacement = relativeToolPlacement.isApproximatelyIdentity()
+            ? nil
+            : try relativeToolPlacement.rigidPlacement()
+        guard toolPlacement == nil || keepTools == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Keeping the Boolean tool requires it to be displayed where the targets are."
+            )
+        }
         let boolean = BooleanFeature(
             targets: targets,
             tool: tool,
             operation: operation,
-            keepTools: keepTools
+            keepTools: keepTools,
+            toolPlacement: toolPlacement
         )
         do {
             try boolean.validate()
@@ -487,18 +513,35 @@ extension DesignDocument {
         }
 
         try appendFeature(feature)
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
-            name: trimmedName,
-            reference: .body(featureID),
-            object: .body(
-                featureID: featureID,
-                documentID: cadDocument.id,
-                sourceSection: nil,
-                typeID: nil,
-                geometryRole: .solid,
-                objectRegistry: objectRegistry
-            )
+        let resultObject = ObjectDescriptor.body(
+            featureID: featureID,
+            documentID: cadDocument.id,
+            sourceSection: nil,
+            typeID: nil,
+            geometryRole: .solid,
+            objectRegistry: objectRegistry
         )
+        if let targetNodeID = targets.first.flatMap({ hierarchy.presentingSceneNodeID(for: $0.featureID) }),
+           let targetNode = productMetadata.sceneNodes[targetNodeID],
+           let parentID = hierarchy.parentID(of: targetNodeID),
+           let index = productMetadata.sceneNodes[parentID]?.childIDs.firstIndex(of: targetNodeID) {
+            try productMetadata.insertSceneNode(
+                SceneNode(
+                    name: trimmedName,
+                    reference: .body(featureID),
+                    object: resultObject,
+                    localTransform: targetNode.localTransform
+                ),
+                under: parentID,
+                at: index + 1
+            )
+        } else {
+            _ = try productMetadata.appendSceneNodeToFirstRoot(
+                name: trimmedName,
+                reference: .body(featureID),
+                object: resultObject
+            )
+        }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitBoolean = true

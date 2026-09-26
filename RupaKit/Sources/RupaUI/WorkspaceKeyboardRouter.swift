@@ -107,6 +107,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case setPlaceUpAxis(SceneNodePlacementSpec.UpAxis)
     /// Place: place one more consecutive copy per destination click.
     case addPlaceCopy
+    /// Place: combine each copy with the body under the destination, or `nil` for a new body.
+    case setPlaceBoolean(BooleanOperation?)
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -217,10 +219,14 @@ struct WorkspaceKeyboardRouter: Sendable {
         if input.isEscape {
             return .cancelActiveInteraction
         }
-        if context.isPlaceSessionActive,
-           input.modifiers.isEmpty,
-           let placeAction = placeAction(for: input.characters.lowercased()) {
-            return placeAction
+        if context.isPlaceSessionActive {
+            let key = input.characters.lowercased()
+            if input.modifiers.isEmpty, let placeAction = placeAction(for: key) {
+                return placeAction
+            }
+            if input.modifiers == [.shift], key == "e" {
+                return .setPlaceBoolean(.intersect)
+            }
         }
         if input.isTab,
            context.usesSketchAxisConstraint {
@@ -353,6 +359,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "y": .setPlaceUpAxis(.y)
         case "z": .setPlaceUpAxis(.z)
         case "d": .addPlaceCopy
+        case "q": .setPlaceBoolean(.union)
+        case "w": .setPlaceBoolean(.difference)
+        case "b": .setPlaceBoolean(nil)
         default: nil
         }
     }

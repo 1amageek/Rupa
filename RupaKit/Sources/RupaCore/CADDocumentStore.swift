@@ -895,12 +895,15 @@ public final class CADDocumentStore {
                 switch command {
                 case .duplicateSceneNodes(let ids):
                     try updatedDocument.duplicateSceneNodes(ids: ids, objectRegistry: objectRegistry)
-                case .placeSceneNodes(let ids, let placements, let output):
+                case .placeSceneNodes(let ids, let placements, let output, let boolean):
                     try updatedDocument.placeSceneNodes(
-                        ids: ids, placements: placements, output: output, objectRegistry: objectRegistry
+                        ids: ids, placements: placements, output: output, boolean: boolean,
+                        objectRegistry: objectRegistry
                     )
-                case .pasteSceneFragment(let fragment, let placements):
-                    try updatedDocument.pasteSceneFragment(fragment, placements: placements, objectRegistry: objectRegistry)
+                case .pasteSceneFragment(let fragment, let placements, let boolean):
+                    try updatedDocument.pasteSceneFragment(
+                        fragment, placements: placements, boolean: boolean, objectRegistry: objectRegistry
+                    )
                 default:
                     throw EditorError(code: .commandInvalid, message: "Command dispatch expected a scene copy command.")
                 }

@@ -160,6 +160,10 @@ import Testing
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: placing) == .togglePlaceOutput)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "y"), context: placing) == .setPlaceUpAxis(.y))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: placing) == .addPlaceCopy)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: placing) == .setPlaceBoolean(.union))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "w"), context: placing) == .setPlaceBoolean(.difference))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "E", modifiers: [.shift]), context: placing) == .setPlaceBoolean(.intersect))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "b"), context: placing) == .setPlaceBoolean(nil))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "f"), context: keyboardContext()) != .togglePlaceFlip)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: keyboardContext()) != .addPlaceCopy)
 }

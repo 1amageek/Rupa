@@ -96,7 +96,7 @@ import Testing
         let (box, _) = try boxUnderMovedParent(session)
         let offset = try Transform3D.translation(Vector3D(x: 0.3, y: 0, z: 0))
 
-        let first = try session.execute(.placeSceneNodes(ids: [box], placements: [offset], output: .componentInstance))
+        let first = try session.execute(.placeSceneNodes(ids: [box], placements: [offset], output: .componentInstance, boolean: nil))
         let document = session.document
         #expect(document.productMetadata.componentDefinitions.count == 1)
         #expect(document.productMetadata.componentInstances.count == 1)
@@ -110,7 +110,7 @@ import Testing
         let expected = try offset.composed(with: original.worldTransform)
         #expect(zip(placed.worldTransform.matrix.values, expected.matrix.values).allSatisfy { abs($0 - $1) < tolerance })
 
-        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [offset, offset], output: .componentInstance))
+        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [offset, offset], output: .componentInstance, boolean: nil))
         #expect(session.document.productMetadata.componentDefinitions.count == 1)
         #expect(session.document.productMetadata.componentInstances.count == 3)
         let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
@@ -132,7 +132,7 @@ import Testing
         }).id
         let before = session.document
         #expect(throws: (any Error).self) {
-            _ = try session.execute(.placeSceneNodes(ids: [box, other], placements: [.identity], output: .componentInstance))
+            _ = try session.execute(.placeSceneNodes(ids: [box, other], placements: [.identity], output: .componentInstance, boolean: nil))
         }
         #expect(session.document.productMetadata == before.productMetadata)
     }

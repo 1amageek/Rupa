@@ -70,10 +70,16 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Copies `ids` in place as independent siblings; the copies are the generated scene nodes.
     case duplicateSceneNodes(ids: [SceneNodeID])
     /// Places `ids` once per world-space placement of the selection, as independent copies or as
-    /// instances of the selection's component definition.
-    case placeSceneNodes(ids: [SceneNodeID], placements: [Transform3D], output: SceneNodePlacementOutput)
+    /// instances of the selection's component definition; copies may be combined with the body
+    /// they were placed on.
+    case placeSceneNodes(
+        ids: [SceneNodeID],
+        placements: [Transform3D],
+        output: SceneNodePlacementOutput,
+        boolean: SceneNodePlacementBoolean?
+    )
     /// Inserts one copy of a transported fragment per world-space placement.
-    case pasteSceneFragment(SceneFragment, placements: [Transform3D])
+    case pasteSceneFragment(SceneFragment, placements: [Transform3D], boolean: SceneNodePlacementBoolean?)
     case setSceneNodeMaterial(id: SceneNodeID, materialID: MaterialID?)
     case setTopologyMaterialBinding(
         target: SelectionTarget,

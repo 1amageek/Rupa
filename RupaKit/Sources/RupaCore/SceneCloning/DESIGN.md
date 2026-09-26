@@ -88,6 +88,11 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   creates one instance per placement whose transform carries the roots' parent
   frame, so each instance shows the objects at the placement a copy would take.
   Objects under different parents are refused: one instance has one frame.
+- A placement Boolean makes each placed copy the tool of a `createBoolean`
+  with the body the destination lies on (the first copy with the target, each
+  later copy with the previous result); a copy must contain exactly one body,
+  the copies are hidden once consumed, and component-instance output cannot be
+  combined.
 - Surface normals for placement come from `PlacedSurfaceNormalResolver`: the
   pick is taken into the occurrence's source frame, projected with Swift-CAD's
   surface query onto the presented body's faces, and the nearest face's normal

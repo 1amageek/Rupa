@@ -5191,6 +5191,9 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             placeSession?.output = placeSession?.output == .componentInstance ? .independentCopy : .componentInstance
+            if placeSession?.output == .componentInstance {
+                placeSession?.booleanOperation = nil
+            }
             reportPlaceOptions()
             return .handled
         case .setPlaceUpAxis(let axis):
@@ -5199,6 +5202,13 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .addPlaceCopy:
             placeSession?.copyCount += 1
+            reportPlaceOptions()
+            return .handled
+        case .setPlaceBoolean(let operation):
+            placeSession?.booleanOperation = operation
+            if operation != nil {
+                placeSession?.output = .independentCopy
+            }
             reportPlaceOptions()
             return .handled
         case .duplicateSelection:
@@ -7511,7 +7521,9 @@ private struct ProjectMainViewContent: View {
         guard let placeSession else { return }
         let output = placeSession.output == .componentInstance ? "instances" : "copies"
         reportToolStatus(
-            "Place: \(placeSession.copyCount) \(output), up \(placeSession.upAxis.rawValue.uppercased())"
+            "Place: \(placeSession.copyCount) \(output)"
+                + (placeSession.booleanOperation.map { ", \($0.rawValue) with the body clicked" } ?? ", new body")
+                + ", up \(placeSession.upAxis.rawValue.uppercased())"
                 + (placeSession.flipsOrientation ? ", flipped" : "")
                 + ", angle \(placeSession.angleDegrees)°, scale \(placeSession.scale)."
         )
@@ -7546,7 +7558,8 @@ private struct ProjectMainViewContent: View {
                     }
                     let command = try place.command(destination: WorkspacePlaceSession.Reference(
                         point: picked.point,
-                        normal: destinationNormal
+                        normal: destinationNormal,
+                        bodySceneNodeID: try pickedBodySceneNodeID(picked)
                     ))
                     submitSource(command) { result in
                         guard result != nil else { return }
@@ -7557,6 +7570,17 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus(error.localizedDescription, severity: .warning)
             }
         }
+    }
+
+    /// The scene node presenting the body a pick landed on; instances present no editable body.
+    private func pickedBodySceneNodeID(_ picked: ViewportPickedPoint) throws -> SceneNodeID? {
+        guard let occurrenceID = picked.occurrenceID else { return nil }
+        let hierarchy = try SceneNodeHierarchy(metadata: snapshot.document.document.productMetadata)
+        guard let occurrence = try hierarchy.resolvedOccurrences().first(where: { $0.id == occurrenceID }),
+              occurrence.componentInstanceID == nil else {
+            return nil
+        }
+        return occurrence.sourceSceneNodeID
     }
 
     /// The exact outward normal of the surface a pick landed on, from Swift-CAD.
