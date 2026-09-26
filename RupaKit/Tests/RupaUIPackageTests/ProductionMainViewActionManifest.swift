@@ -116,6 +116,7 @@ enum ProductionMainViewActionManifest {
         "deleteBodyFaces",
         "deleteParameter",
         "draftBodyFaces",
+        "duplicateSceneNodes",
         "extendSketchCurve",
         "filletBodyEdges",
         "insertSketchSplineControlPoint",

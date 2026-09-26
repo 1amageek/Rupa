@@ -190,6 +190,10 @@ Outliner projection tests verify this mapping and unchanged row identity/state.
     component neither predicts nor duplicates how far a delete reaches or
     where a group places its members; `MainView` reports the reach Core
     returns.
+    Duplicate takes the same context selection and emits `.duplicate`; it is
+    offered only when `ProductMetadata.sceneCopyRefusal` accepts the whole
+    selection (no root, pattern array or output, component instance, authored
+    mesh or construction row), so the menu never offers a copy Core refuses.
 14. The Delete key acts on the tree's current selection through the same
     intent and the same gate. It is ignored while a rename field holds focus
     and while the selection is empty, so the key still reaches the enclosing

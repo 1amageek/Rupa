@@ -1,6 +1,6 @@
 import RupaCore
 
-/// What Group, Ungroup, and Delete may do with a set of rows.
+/// What Group, Ungroup, Duplicate, and Delete may do with a set of rows.
 ///
 /// Each of the three becomes one Core command that refuses a whole selection rather than trimming
 /// it, so a control that is offered has to have asked for the same refusals first. Availability and
@@ -14,6 +14,8 @@ struct OutlinerLifecycleAvailability: Equatable, Sendable {
     let dissolvableIDs: [SceneNodeID]
     /// The rows Delete would remove, empty when Delete is unavailable.
     let deletableIDs: [SceneNodeID]
+    /// The rows Duplicate would copy, empty when Duplicate is unavailable.
+    let duplicableIDs: [SceneNodeID]
 
     init(
         ids: [SceneNodeID],
@@ -33,6 +35,7 @@ struct OutlinerLifecycleAvailability: Equatable, Sendable {
             ? placement.dissolvableGroupIDs
             : []
         deletableIDs = Self.deletableIDs(among: ids, metadata: metadata, projection: projection)
+        duplicableIDs = projection.canMutate(ids: ids) && metadata.sceneCopyRefusal(for: ids) == nil ? ids : []
     }
 
     var canGroup: Bool {
@@ -45,6 +48,10 @@ struct OutlinerLifecycleAvailability: Equatable, Sendable {
 
     var canDelete: Bool {
         !deletableIDs.isEmpty
+    }
+
+    var canDuplicate: Bool {
+        !duplicableIDs.isEmpty
     }
 
     /// The Group control's title. An unavailable Group keeps the bare verb, because a disabled

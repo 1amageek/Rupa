@@ -522,6 +522,31 @@ func outlinerLifecycleDeleteRefusesASelectionItWouldOnlyPartlyRemove() {
     }
 }
 
+/// Duplicate offers exactly the selections Core copies: whole objects, never a root, a pattern
+/// array or its output, and never a selection only part of which could be copied.
+@Test(.timeLimit(.minutes(1)))
+func outlinerLifecycleDuplicateOffersOnlyWhatCoreCopies() {
+    let scene = OutlinerLifecycleScene()
+
+    let pair = scene.lifecycle([scene.bracketID, scene.assemblyID])
+    #expect(pair.canDuplicate)
+    #expect(pair.duplicableIDs == [scene.bracketID, scene.assemblyID])
+
+    let refusals: [[SceneNodeID]] = [
+        [scene.rootID],
+        [scene.patternRootID],
+        [scene.generatedID],
+        [scene.bracketID, scene.generatedID],
+        [SceneNodeID()],
+        []
+    ]
+    for ids in refusals {
+        let lifecycle = scene.lifecycle(ids)
+        #expect(!lifecycle.canDuplicate)
+        #expect(lifecycle.duplicableIDs.isEmpty)
+    }
+}
+
 /// A scene holding one row of every kind the lifecycle actions have to answer differently.
 private struct OutlinerLifecycleScene {
     let metadata: ProductMetadata

@@ -59,9 +59,11 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   carried as a hidden node under the first copied root, keeping its placement
   relative to the copy, so every copied feature keeps one presenting node and
   no copy is drawn unplaced.
-- Component instances, pattern array roots and outputs, authored meshes and
-  construction references are refused with a typed error; their sharing
-  semantics are not copies.
+- Component instances, pattern array roots and outputs, authored meshes,
+  construction references and document roots are refused with a typed error;
+  their sharing semantics are not copies. `ProductMetadata.sceneCopyRefusal`
+  is the one statement of these refusals: extraction throws it and every UI
+  control that offers copying reads it.
 - Insertion never reuses an identity: each copy gets new FeatureIDs (remapped
   by the kernel), SceneNodeIDs and side-table IDs. Face material bindings follow
   their node and face subshape; edit sources follow their sketch feature.

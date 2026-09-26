@@ -29,6 +29,9 @@ struct SceneFragmentExtractor: Sendable {
             )
         }
         let rootIDs = hierarchy.outermostSceneNodeIDs(among: requestedRootIDs)
+        for rootID in rootIDs where metadata.rootSceneNodeIDs.contains(rootID) {
+            throw EditorError(code: .commandInvalid, message: "A document root is not copied; copy the objects inside it.")
+        }
         var subtreeIDs: [SceneNodeID] = []
         for rootID in rootIDs {
             subtreeIDs.append(contentsOf: hierarchy.subtreeIDs(of: rootID))
@@ -118,34 +121,9 @@ struct SceneFragmentExtractor: Sendable {
         )
     }
 
-    /// Nodes whose sharing semantics are not a copy are refused rather than silently shared.
     private func requireCopyable(_ id: SceneNodeID, metadata: ProductMetadata) throws {
-        guard let node = metadata.sceneNodes[id] else {
-            throw EditorError(code: .referenceUnresolved, message: "Scene node \(id.description) to copy does not exist.")
-        }
-        if PatternArrayOwnershipResolver().sourceID(containingOutputSceneNode: id, in: metadata) != nil {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array outputs are copied by exploding the array first."
-            )
-        }
-        if node.reference?.kind == .componentInstance || node.object?.category == .componentInstance {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Component instances are placed as new instances, not copied."
-            )
-        }
-        switch node.reference?.kind {
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Authored meshes and construction geometry are refused
-        // because copying would share their source instead of duplicating it. Production path:
-        // Duplicate, Place, Copy with Placement and independent-copy pattern arrays. Completion
-        // requires cloning the authored mesh or construction source under a new identity.
-        case .authoredMesh:
-            throw EditorError(code: .commandInvalid, message: "Copying authored meshes is not supported yet.")
-        case .construction:
-            throw EditorError(code: .commandInvalid, message: "Copying construction geometry is not supported yet.")
-        case .feature, .body, .sketch, .componentInstance, nil:
-            return
+        if let refusal = metadata.sceneCopyRefusal(forNode: id) {
+            throw refusal
         }
     }
 

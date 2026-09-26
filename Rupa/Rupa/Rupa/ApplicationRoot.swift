@@ -136,6 +136,7 @@ struct ApplicationRoot: App {
         .commands {
             ApplicationProjectCommands(coordinator: projectCoordinator)
             ApplicationToolCommands()
+            ApplicationEditCommands()
         }
     }
 

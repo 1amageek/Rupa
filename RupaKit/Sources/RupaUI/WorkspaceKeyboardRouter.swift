@@ -97,6 +97,8 @@ struct WorkspaceKeyboardInput: Equatable, Sendable {
 
 enum WorkspaceKeyboardAction: Equatable, Sendable {
     case deleteSelection
+    /// Copy the selected objects in place and select the copies for moving.
+    case duplicateSelection
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -189,6 +191,12 @@ struct WorkspaceKeyboardRouter: Sendable {
                 return nil
             }
             return .deleteSelection
+        }
+        if input.modifiers == [.shift],
+           input.characters.lowercased() == "d",
+           context.isSelectToolActive,
+           !context.ownsTextEditingKeys {
+            return .duplicateSelection
         }
         if let dimensionAction = dimensionAction(for: input, context: context) {
             return dimensionAction

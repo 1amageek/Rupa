@@ -439,6 +439,16 @@ started it. The menu is disabled rather than absent while no workspace is
 focused, because the command list is part of the window's chrome whether or
 not a document is open.
 
+The Edit menu's object copy actions follow the same pattern:
+`WorkspaceEditCommands` publishes one closure per action, `nil` when the
+current whole-object selection is one Core would refuse
+(`ProductMetadata.sceneCopyRefusal`), and the App's `ApplicationEditCommands`
+adds them after the pasteboard group. Duplicate (⌘D in the menu, Shift-D in the
+select tool, Outliner context menu) submits one `duplicateSceneNodes` source
+command, so the copy is one undo step, then selects the copied roots so the
+existing Move gizmo moves them; Core's [SceneCloning](../RupaCore/SceneCloning/DESIGN.md)
+owns what a copy contains.
+
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection

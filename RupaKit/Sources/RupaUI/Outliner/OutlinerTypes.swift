@@ -40,6 +40,7 @@ enum OutlinerIntent: Equatable, Sendable {
     case group(ids: [SceneNodeID])
     case ungroup(ids: [SceneNodeID])
     case delete(ids: [SceneNodeID])
+    case duplicate(ids: [SceneNodeID])
 }
 
 struct OutlinerMoveDragSession: Equatable, Sendable {

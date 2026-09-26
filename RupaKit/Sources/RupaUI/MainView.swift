@@ -1764,6 +1764,9 @@ private struct ProjectMainViewContent: View {
         case .delete(let ids):
             deleteSceneNodes(ids)
 
+        case .duplicate(let ids):
+            duplicateSceneNodes(ids)
+
         case .frameCurrentSelection:
             guard viewportControlSession.canFitSelected else {
                 reportToolStatus(
@@ -2022,6 +2025,11 @@ private struct ProjectMainViewContent: View {
                 selectedTool: selectedTool,
                 activate: { activateTool($0) }
             )
+        )
+        // The Edit menu is presented by the App; it offers only what Core would accept.
+        .focusedSceneValue(
+            \.workspaceEditCommands,
+            workspaceEditCommands
         )
         .onChange(of: selectionScope) { _, newScope in
             clearSelectionDragPreview()
@@ -5116,6 +5124,20 @@ private struct ProjectMainViewContent: View {
             }
             deleteSceneNodes(ids)
             return .handled
+        case .duplicateSelection:
+            let ids = snapshot.selection.wholeSceneNodeIDs
+            guard ids.isEmpty == false else {
+                guard snapshot.selection.selectedTargets.isEmpty == false else {
+                    return .ignored
+                }
+                reportToolStatus(
+                    "Duplicate copies whole objects. The selection holds only sub-object targets.",
+                    severity: .warning
+                )
+                return .handled
+            }
+            duplicateSceneNodes(ids)
+            return .handled
         case .cancelActiveInteraction:
             return cancelActiveWorkspaceInteraction()
         case .setSelectionScope(let scope):
@@ -7215,6 +7237,46 @@ private struct ProjectMainViewContent: View {
     ///
     /// A delete reaches past the selection whenever a selected feature has dependents, and by the
     /// time the user looks, the rows that would have shown it are gone. So the reach is reported.
+    /// The Edit menu actions for the current selection.
+    private var workspaceEditCommands: WorkspaceEditCommands {
+        let duplicate: (@MainActor () -> Void)?
+        if let ids = duplicableSelectionIDs {
+            duplicate = { duplicateSceneNodes(ids) }
+        } else {
+            duplicate = nil
+        }
+        return WorkspaceEditCommands(duplicate: duplicate)
+    }
+
+    /// The whole-object selection when Duplicate accepts it, otherwise `nil`.
+    private var duplicableSelectionIDs: [SceneNodeID]? {
+        let ids = snapshot.selection.wholeSceneNodeIDs
+        guard !ids.isEmpty,
+              snapshot.document.document.productMetadata.sceneCopyRefusal(for: ids) == nil else {
+            return nil
+        }
+        return ids
+    }
+
+    /// Copies `ids` in place as one undo step and selects the copies, so the Move gizmo moves them.
+    private func duplicateSceneNodes(_ ids: [SceneNodeID]) {
+        if let refusal = snapshot.document.document.productMetadata.sceneCopyRefusal(for: ids) {
+            reportToolStatus(refusal.message, severity: .warning)
+            return
+        }
+        submitSource(.duplicateSceneNodes(ids: ids)) { result in
+            guard let generated = result?.generatedIdentities.sceneNodeIDs,
+                  let metadata = workspace.view?.document.document.productMetadata else {
+                return
+            }
+            // The copied roots are the generated nodes no other generated node holds.
+            let generatedIDs = Set(generated)
+            let childIDs = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
+            let copiedRootIDs = generated.filter { generatedIDs.contains($0) && !childIDs.contains($0) }
+            selectSceneNodes(copiedRootIDs)
+        }
+    }
+
     private func deleteSceneNodes(_ ids: [SceneNodeID]) {
         guard ids.isEmpty == false else { return }
         let plan: SceneNodeDeletionPlan

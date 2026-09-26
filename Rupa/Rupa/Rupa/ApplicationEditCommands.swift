@@ -1,0 +1,22 @@
+import SwiftUI
+import RupaUI
+
+/// Adds the object copy actions to the Edit menu from the focused workspace.
+///
+/// The menu owns no selection. It reads the focused scene's `WorkspaceEditCommands` and calls the
+/// same closures the workspace key and the Outliner call, so an action cannot behave differently
+/// depending on where it was started.
+struct ApplicationEditCommands: Commands {
+    @FocusedValue(\.workspaceEditCommands) private var editCommands
+
+    var body: some Commands {
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Duplicate") {
+                editCommands?.duplicate?()
+            }
+            .keyboardShortcut("d", modifiers: .command)
+            .disabled(editCommands?.duplicate == nil)
+        }
+    }
+}

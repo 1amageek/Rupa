@@ -134,6 +134,23 @@ import Testing
     )
 }
 
+/// Shift-D duplicates the selection in the select tool, and gives the key up to typed input.
+@Test func workspaceKeyboardRouterDuplicatesOnShiftDOnlyWhileSelecting() {
+    let router = WorkspaceKeyboardRouter()
+    let shiftD = WorkspaceKeyboardInput(characters: "D", modifiers: [.shift])
+
+    #expect(router.action(for: shiftD, context: keyboardContext()) == .duplicateSelection)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: keyboardContext()) != .duplicateSelection)
+    #expect(router.action(for: shiftD, context: keyboardContext(isSelectToolActive: false)) == nil)
+    #expect(router.action(for: shiftD, context: keyboardContext(isDimensionCommandActive: true)) != .duplicateSelection)
+    #expect(
+        router.action(
+            for: WorkspaceKeyboardInput(characters: "d", modifiers: [.shift, .command]),
+            context: keyboardContext()
+        ) == nil
+    )
+}
+
 /// Delete removes the selection only while the workspace is the one holding the keys.
 ///
 /// The commands that take typed input own the editing keys while they are up, so a delete meant for

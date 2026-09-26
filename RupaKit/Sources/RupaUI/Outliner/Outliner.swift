@@ -386,6 +386,11 @@ struct Outliner: View {
             }
             .contentShape(Rectangle())
             .disabled(!lifecycle.canUngroup)
+            Button("Duplicate") {
+                sendContextDuplicate(for: row.id, projection: projection)
+            }
+            .contentShape(Rectangle())
+            .disabled(!lifecycle.canDuplicate)
             Divider()
             Button("Delete", role: .destructive) {
                 sendContextDelete(for: row.id, projection: projection)
@@ -490,6 +495,19 @@ struct Outliner: View {
         }
         settleSelection(for: contextID)
         onIntent(.ungroup(ids: lifecycle.dissolvableIDs))
+    }
+
+    private func sendContextDuplicate(
+        for contextID: SceneNodeID,
+        projection: OutlinerProjection
+    ) {
+        let lifecycle = contextLifecycle(for: contextID, projection: projection)
+        guard lifecycle.canDuplicate else {
+            actionError = "Roots, pattern outputs, component instances and meshes cannot be duplicated."
+            return
+        }
+        settleSelection(for: contextID)
+        onIntent(.duplicate(ids: lifecycle.duplicableIDs))
     }
 
     private func sendContextDelete(
