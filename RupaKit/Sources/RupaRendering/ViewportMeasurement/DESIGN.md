@@ -73,7 +73,10 @@ Measure is an explicit two-point viewport operation:
 
 ```text
 idle --click valid start--> anchored --hover valid point--> preview
-anchored --click valid end--> completed --click valid start--> anchored
+anchored --click valid end--> placing --hover--> axis and dimension line follow the cursor
+placing --click--> completed (along the chosen axis) | --right-click--> completed (straight)
+tool start with one edge or sketch curve selected --> placing across it
+completed --click valid start--> anchored
 any phase --tool exit / Escape / snapshot replacement--> idle
 ```
 
@@ -91,9 +94,13 @@ any phase --tool exit / Escape / snapshot replacement--> idle
 4. Every accepted endpoint retains whether it came from snap, presentation
    geometry, or the effective plane. Snap endpoints retain the selected
    candidate's kind, label, and source identity rather than only its coordinates.
-5. The displayed value is the finite Euclidean distance between the two accepted
-   `Point3D` values in model metres, formatted through the current ruler display
-   unit. Screen length and projected-plane distance never replace it.
+5. While placing, the cursor's point in the view plane through the midpoint
+   chooses, through Core `MeasurementDimensionGeometry.placementAxis`, the
+   effective construction plane's u, v or normal axis the dimension measures
+   along; the value is the component of the two points' difference along it,
+   in model metres through the ruler display unit, drawn with extension lines
+   and a dimension line through the cursor. Right-click while placing confirms
+   the straight Euclidean distance instead. Screen length never replaces either.
 6. Endpoint resolution requires the exact-ready presentation identity and its
    matching applied mounted-camera revision. Within that ready frame, a valid
    native surface miss removes only the geometry-hit option and may continue to
@@ -106,21 +113,25 @@ any phase --tool exit / Escape / snapshot replacement--> idle
 7. The segment and preview are transient presentation state. They do not select,
    mutate, dirty, persist, enter Undo, or invoke `MeasurementService` by
    themselves.
-8. A completed segment can be saved. `ViewportMeasurementState.savedAnchors(in:)`
-   turns each endpoint into a Core `MeasurementAnchor` through
-   `MeasurementAnchor.picked(_:under:in:role:)`: a displayed-surface hit
-   follows its occurrence, a snap follows the single scene node its sources
-   name (Core `SnapCandidate.measurementPickPlacement(in:)`), and a
-   construction-plane point stays in world space. RupaUI wraps the anchors in a
-   distance `MeasurementAnnotation` and submits the undoable
-   `EditorCommand.addMeasurementAnnotation`; this component never mutates the
-   document itself.
+8. A confirmed dimension is saved at once. `ViewportMeasurementState.annotation(named:in:)`
+   keeps the axis and the label position, and `savedAnchors(in:)` turns each
+   endpoint into a Core `MeasurementAnchor`: a point snapped to an edge end or
+   midpoint, vertex, face center or sketch point anchors to that geometry
+   (Core `MeasurementAnchor.associative(for:role:)`) so the measurement follows
+   edits; a measured edge or curve keeps its own anchors; otherwise a
+   displayed-surface hit follows its occurrence, a snap follows the single scene
+   node its sources name, and a construction-plane point stays in world space.
+   RupaUI submits the undoable `EditorCommand.addMeasurementAnnotation` when the
+   state becomes confirmed; this component never mutates the document itself.
 9. Saved annotations are drawn from Core `MeasurementAnnotationResolver`, the
    same resolution drawing projection uses. Only annotations whose every anchor
    resolves, and whose annotation node is effectively visible, reach the
    overlay; an unresolved one is never drawn from a subset of its anchors and
    is reported by the RupaUI Measure panel, which lists every saved
-   measurement and deletes one through its annotation scene node.
+   measurement and deletes one through its annotation scene node. A two-point
+   distance is drawn along its saved axis through its label position carried by
+   the annotation node's world transform, so moving the node moves the
+   dimension line.
 
 ### Selected-object world-bounds rulers
 

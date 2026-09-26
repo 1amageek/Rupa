@@ -85,6 +85,10 @@ selections copying refuses.
 orientation), the motions Move, Rotate and Scale produce, and holding component
 instances in place while their source moves.
 
+[MeasurementPlacement](MeasurementPlacement/DESIGN.md) owns Measure Distance
+dimension placement along construction-plane axes, associative anchors from snaps
+and the Measurements group.
+
 [MaterialAssignment](MaterialAssignment/DESIGN.md) owns Set, Fork and Remove
 Material on selections (a group reaches the objects inside it), library material
 edits, create, rename and delete, and the mass densities give measured solids.

@@ -9,6 +9,20 @@ enum ViewportMeasurementEndpointSource: Equatable, Sendable {
     case snap(SnapCandidate)
     case presentation(occurrenceID: SceneOccurrenceID)
     case constructionPlane(SketchPlane)
+    /// A point on a measured edge or curve, already anchored to it.
+    case anchor(MeasurementAnchor)
+}
+
+/// The two anchored points Measure starts placing a dimension between, such as the ends of a
+/// selected edge.
+public struct ViewportMeasurementSeed: Equatable, Sendable {
+    public var start: MeasuredCurvePoint
+    public var end: MeasuredCurvePoint
+
+    public init(start: MeasuredCurvePoint, end: MeasuredCurvePoint) {
+        self.start = start
+        self.end = end
+    }
 }
 
 /// A finite world-space point accepted by the measurement resolver.
@@ -204,6 +218,8 @@ struct ViewportMeasurementResolver: Sendable {
 enum ViewportMeasurementPhase: Equatable, Sendable {
     case idle
     case anchored
+    /// Both points are chosen; the cursor chooses the axis and where the dimension line goes.
+    case placing
     case completed
 }
 
@@ -215,11 +231,16 @@ public struct ViewportMeasurementState: Equatable, Sendable {
     var end: ViewportMeasurementEndpoint?
     public var distanceMeters: Double?
     public var status: String?
+    /// The construction-plane axis the dimension measures along, or `nil` for the straight distance.
+    public internal(set) var placementAxis: Vector3D?
+    /// Where the dimension line passes, once it is being placed.
+    public internal(set) var labelPosition: Point3D?
     public internal(set) var boundsSummary: String? = nil
     public var title: String {
         switch phase {
         case .idle: "Measure"
         case .anchored: "Measuring"
+        case .placing: "Place Dimension"
         case .completed: "Measured"
         }
     }
@@ -270,15 +291,28 @@ public struct ViewportMeasurementState: Equatable, Sendable {
             throw EditorError(code: .commandInvalid, message: "Complete a two-point measurement before saving it.")
         }
         return [
-            try MeasurementAnchor.picked(
-                start.point, under: start.source.pickPlacement(in: hierarchy),
-                in: hierarchy, role: .start
-            ),
-            try MeasurementAnchor.picked(
-                end.point, under: end.source.pickPlacement(in: hierarchy),
-                in: hierarchy, role: .end
-            ),
+            try start.source.savedAnchor(start.point, role: .start, in: hierarchy),
+            try end.source.savedAnchor(end.point, role: .end, in: hierarchy),
         ]
+    }
+
+    /// The saved annotation for the completed measurement.
+    public func annotation(named name: String, in hierarchy: SceneNodeHierarchy) throws -> MeasurementAnnotation {
+        MeasurementAnnotation(
+            name: name,
+            kind: .distance,
+            anchors: try savedAnchors(in: hierarchy),
+            labelPosition: labelPosition,
+            placementAxis: placementAxis
+        )
+    }
+
+    /// The dimension being placed or placed, once both points are known.
+    public func dimension() throws -> MeasurementDimensionGeometry? {
+        guard let start, let end = end ?? preview else { return nil }
+        return try MeasurementDimensionGeometry(
+            start: start.point, end: end.point, axis: placementAxis, labelPosition: labelPosition
+        )
     }
 }
 
@@ -289,9 +323,26 @@ extension ViewportMeasurementEndpointSource {
             candidate.measurementPickPlacement(in: hierarchy)
         case .presentation(let occurrenceID):
             .occurrence(occurrenceID)
-        case .constructionPlane:
+        case .constructionPlane, .anchor:
             .world
         }
+    }
+
+    /// The anchor a saved measurement keeps for this point: the geometry it was snapped to or
+    /// measured on when it has one, else the placement it was picked under.
+    func savedAnchor(_ point: Point3D, role: MeasurementAnchor.Role, in hierarchy: SceneNodeHierarchy) throws -> MeasurementAnchor {
+        switch self {
+        case .anchor(var anchor):
+            anchor.role = role
+            return anchor
+        case .snap(let candidate):
+            if let anchor = MeasurementAnchor.associative(for: candidate, role: role) {
+                return anchor
+            }
+        case .presentation, .constructionPlane:
+            break
+        }
+        return try MeasurementAnchor.picked(point, under: pickPlacement(in: hierarchy), in: hierarchy, role: role)
     }
 }
 
@@ -305,6 +356,44 @@ struct ViewportMeasurementSession: Equatable, Sendable {
     mutating func reset() {
         state = ViewportMeasurementState()
     }
+
+    /// Starts placing a dimension between two known points, such as the ends of a selected edge.
+    mutating func measure(from start: ViewportMeasurementEndpoint, to end: ViewportMeasurementEndpoint) {
+        state = ViewportMeasurementState(phase: .placing, start: start, end: end)
+        state.distanceMeters = Self.distance(from: start.point, to: end.point)
+        state.status = Self.placingStatus
+    }
+
+    /// Moves the dimension being placed to `cursor`, measuring along `axis` (straight when `nil`).
+    mutating func place(cursor: Point3D, axis: Vector3D?) {
+        guard state.phase == .placing, let start = state.start, let end = state.end else { return }
+        do {
+            let dimension = try MeasurementDimensionGeometry(
+                start: start.point, end: end.point, axis: axis, labelPosition: cursor
+            )
+            state.labelPosition = cursor
+            state.placementAxis = axis
+            state.distanceMeters = dimension.valueMeters
+        } catch {
+            state.status = error.localizedDescription
+        }
+    }
+
+    /// Right-click while placing: the straight distance between the two points.
+    mutating func confirmStraight() {
+        guard state.phase == .placing, let start = state.start, let end = state.end else { return }
+        state.placementAxis = nil
+        state.distanceMeters = Self.distance(from: start.point, to: end.point)
+        complete()
+    }
+
+    private mutating func complete() {
+        state.phase = .completed
+        state.status = "Measured and added to Measurements. Click to start another. Escape clears it."
+    }
+
+    private static let placingStatus =
+        "Move toward an axis and click to place the dimension. Right-click measures the straight distance."
 
     mutating func hover(_ endpoint: ViewportMeasurementEndpoint?) {
         guard state.phase == .anchored else {
@@ -334,6 +423,11 @@ struct ViewportMeasurementSession: Equatable, Sendable {
     }
 
     mutating func click(_ endpoint: ViewportMeasurementEndpoint?) {
+        // While placing, a click confirms the dimension wherever it lands.
+        if state.phase == .placing {
+            complete()
+            return
+        }
         guard let endpoint else {
             return
         }
@@ -342,6 +436,8 @@ struct ViewportMeasurementSession: Equatable, Sendable {
             return
         }
         switch state.phase {
+        case .placing:
+            complete()
         case .idle, .completed:
             state = ViewportMeasurementState(
                 phase: .anchored,
@@ -363,8 +459,8 @@ struct ViewportMeasurementSession: Equatable, Sendable {
             state.preview = nil
             state.end = endpoint
             state.distanceMeters = distance
-            state.phase = .completed
-            state.status = "Click to start a new measurement. Escape clears it. Surface points use the displayed mesh."
+            state.phase = .placing
+            state.status = Self.placingStatus
         }
     }
 

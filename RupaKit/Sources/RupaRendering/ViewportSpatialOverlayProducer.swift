@@ -302,6 +302,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let boundsRuler: ViewportMeasurementBoundsRulerInput?
         /// Persistent measurement annotations resolved through their placements.
         let saved: [SavedMeasurement]
+        /// The dimension being placed, drawn along its axis instead of the straight segment.
+        var dimension: MeasurementDimensionGeometry? = nil
     }
 
     /// One saved annotation whose every anchor resolved; unresolved ones are
@@ -309,6 +311,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     struct SavedMeasurement: Sendable {
         let points: [Point3D]
         let label: String
+        /// A distance dimension's lines, when the annotation is a two-point distance.
+        var dimension: MeasurementDimensionGeometry? = nil
     }
 
     /// Raw pattern inputs captured at the MainActor boundary.  Preview
@@ -1492,7 +1496,18 @@ enum ViewportSpatialOverlayProducer {
         _ = cameraLines
         guard let measurement = snapshot.measurement else { return }
         boundsRuler = measurement.boundsRuler
-        if let start = measurement.start,
+        if let dimension = measurement.dimension {
+            guard let text = measurement.label, !text.isEmpty else {
+                throw RealityViewportSpatialBatch.invalid(
+                    "Measurement geometry is missing its formatted distance label."
+                )
+            }
+            try appendDimension(
+                dimension, label: text, color: measurementColor, markerDiameter: 8,
+                meshes: &meshes, markers: &markers, labels: &labels
+            )
+            activeFamilies.insert(.measurement)
+        } else if let start = measurement.start,
            let end = measurement.end {
             guard let text = measurement.label, !text.isEmpty else {
                 throw RealityViewportSpatialBatch.invalid(
@@ -1540,6 +1555,14 @@ enum ViewportSpatialOverlayProducer {
             activeFamilies.insert(.measurement)
         }
         for saved in measurement.saved {
+            if let dimension = saved.dimension {
+                try appendDimension(
+                    dimension, label: saved.label, color: savedMeasurementColor, markerDiameter: 6,
+                    meshes: &meshes, markers: &markers, labels: &labels
+                )
+                activeFamilies.insert(.measurement)
+                continue
+            }
             guard saved.points.count >= 2,
                   saved.points.allSatisfy(\.isFinite),
                   !saved.label.isEmpty,
@@ -1571,6 +1594,37 @@ enum ViewportSpatialOverlayProducer {
             ))
             activeFamilies.insert(.measurement)
         }
+    }
+
+    /// A distance dimension: extension lines from each point, the dimension line and its label.
+    private static func appendDimension(
+        _ dimension: MeasurementDimensionGeometry,
+        label text: String,
+        color: SIMD4<Float>,
+        markerDiameter: Float,
+        meshes: inout [ViewportSpatialOverlayInput.Mesh],
+        markers: inout [ViewportSpatialOverlayInput.Marker],
+        labels: inout [ViewportSpatialOverlayInput.Label]
+    ) throws {
+        let points = [dimension.start, dimension.end, dimension.dimensionStart, dimension.dimensionEnd, dimension.labelAnchor]
+        guard points.allSatisfy(\.isFinite), !text.isEmpty else {
+            throw RealityViewportSpatialBatch.invalid("A measurement dimension needs finite points and a label.")
+        }
+        for extensionLine in dimension.extensionLines {
+            meshes.append(.init(family: .measurement, value: try line(extensionLine, color: color, depth: .annotation)))
+        }
+        meshes.append(.init(
+            family: .measurement,
+            value: try line([dimension.dimensionStart, dimension.dimensionEnd], color: color, depth: .annotation)
+        ))
+        for point in [dimension.start, dimension.end] {
+            markers.append(.init(family: .measurement, value: marker(anchor: point, diameterPoints: markerDiameter, color: color)))
+        }
+        labels.append(.init(
+            family: .measurement,
+            value: try label(text, anchor: dimension.labelAnchor, offset: CGPoint(x: 0, y: -14),
+                             color: color, alignment: .center, heightPoints: 10)
+        ))
     }
 
     private static func appendSnapReference(

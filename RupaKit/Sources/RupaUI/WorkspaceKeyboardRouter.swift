@@ -152,6 +152,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case pickArraySecondDirection
     /// Return: finish shaping the new array.
     case finishArrayCreation
+    /// Control-=: Measure Distance.
+    case activateMeasure
     /// M: Set Material on the selection.
     case setMaterial
     /// Shift-M: Fork Material on the selection.
@@ -242,6 +244,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isArrayCreationSessionActive, let arrayAction = arrayCreationAction(for: input) {
             return arrayAction
+        }
+        if input.phases.contains(.down), input.modifiers == [.control], input.characters == "=",
+           !context.ownsTextEditingKeys {
+            return .activateMeasure
         }
         if input.phases.contains(.down),
            context.isSelectToolActive,

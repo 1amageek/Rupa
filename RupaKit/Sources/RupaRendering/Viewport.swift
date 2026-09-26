@@ -188,6 +188,7 @@ public struct Viewport: View {
     private let showsAutomaticMeasurement: Bool
     private let showsBoundsReadout: Bool
     private let measurementConstructionPlane: SketchPlane?
+    private let measurementSeed: ViewportMeasurementSeed?
     private let allowsSelectionRectangle: Bool
     private let allowsObjectAffordances: Bool
     private let slotWidthMeters: Double
@@ -379,6 +380,7 @@ public struct Viewport: View {
         showsAutomaticMeasurement: Bool = false,
         showsBoundsReadout: Bool = false,
         measurementConstructionPlane: SketchPlane? = nil,
+        measurementSeed: ViewportMeasurementSeed? = nil,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
         meshSelectionDomain: GeometryAttributeDomain = .face,
@@ -506,6 +508,7 @@ public struct Viewport: View {
         self.showsAutomaticMeasurement = showsAutomaticMeasurement
         self.showsBoundsReadout = showsBoundsReadout
         self.measurementConstructionPlane = measurementConstructionPlane
+        self.measurementSeed = measurementSeed
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
         self.meshSelectionDomain = meshSelectionDomain
@@ -778,6 +781,12 @@ public struct Viewport: View {
                             refreshPlacementHighlight()
                         },
                         onSecondaryClick: { _, _ in
+                            // Right-click while placing a dimension measures the straight distance.
+                            if measurementToolActive, measurementSession.state.phase == .placing {
+                                measurementSession.confirmStraight()
+                                publishMeasurementState()
+                                return
+                            }
                             onCommandConfirm?()
                         },
                         onShiftScroll: { direction in
@@ -934,7 +943,12 @@ public struct Viewport: View {
                 cancelNativeInputGesture()
                 if !isActive {
                     resetMeasurement()
+                } else {
+                    startSeededMeasurement()
                 }
+            }
+            .onChange(of: measurementSeed) { _, _ in
+                if measurementToolActive { startSeededMeasurement() }
             }
             .onChange(of: automaticMeasurementReadout(), initial: true) { _, summary in
                 automaticMeasurementSummary = summary
@@ -2229,6 +2243,16 @@ public struct Viewport: View {
         measurementConstructionPlane ?? snapResolutionOptions?.constructionPlane
     }
 
+    /// Measure started with an edge or curve selected places a dimension across it at once.
+    private func startSeededMeasurement() {
+        guard let measurementSeed else { return }
+        measurementSession.measure(
+            from: ViewportMeasurementEndpoint(point: measurementSeed.start.worldPoint, source: .anchor(measurementSeed.start.anchor)),
+            to: ViewportMeasurementEndpoint(point: measurementSeed.end.worldPoint, source: .anchor(measurementSeed.end.anchor))
+        )
+        publishMeasurementState()
+    }
+
     private func resetMeasurement() {
         guard measurementSession.state != ViewportMeasurementState() else {
             return
@@ -2321,6 +2345,10 @@ public struct Viewport: View {
     private func handleMeasurementHover(
         at point: CGPoint
     ) {
+        if measurementSession.state.phase == .placing {
+            placeMeasurement(at: point)
+            return
+        }
         guard measurementSession.state.phase == .anchored else {
             return
         }
@@ -2332,6 +2360,31 @@ public struct Viewport: View {
             )
         }
         measurementSession.warn(resolution.warning)
+        publishMeasurementState()
+    }
+
+    /// Moves the dimension being placed to the cursor: the cursor's point in the view plane through
+    /// the measured midpoint decides the construction-plane axis it measures along.
+    private func placeMeasurement(at point: CGPoint) {
+        guard let start = measurementSession.state.start, let end = measurementSession.state.end else { return }
+        do {
+            let measure = try affordanceMeasure()
+            let midpoint = start.point + (end.point - start.point) * 0.5
+            let cursor = try measure.viewPlanePoint(at: point, through: midpoint)
+            let right = try measure.viewPlanePoint(at: CGPoint(x: point.x + 1, y: point.y), through: midpoint) - cursor
+            let up = try measure.viewPlanePoint(at: CGPoint(x: point.x, y: point.y - 1), through: midpoint) - cursor
+            let plane = activeMeasurementPlane ?? .xy
+            let system = try SketchPlaneCoordinateSystem(plane: plane)
+            let axis = MeasurementDimensionGeometry.placementAxis(
+                start: start.point, end: end.point, cursor: cursor,
+                viewNormal: right.cross(up), planeAxes: [system.u, system.v, system.normal]
+            )
+            measurementSession.place(cursor: cursor, axis: axis)
+        } catch {
+            if !ViewportNativeQueryFailure.isTransient(error) {
+                measurementSession.warn(error.localizedDescription)
+            }
+        }
         publishMeasurementState()
     }
 
@@ -2774,7 +2827,8 @@ public struct Viewport: View {
             }
             result.append(.init(
                 points: anchors.map(\.worldPoint),
-                label: savedMeasurementLabel(annotation, anchors: anchors)
+                label: savedMeasurementLabel(annotation, anchors: anchors),
+                dimension: try savedDimension(annotation, anchors: anchors)
             ))
         }
         return result
@@ -2791,6 +2845,25 @@ public struct Viewport: View {
         }
     }
 
+    /// A two-point distance drawn along its axis through its label position, which follows the
+    /// annotation node, so moving the node moves the dimension line.
+    private func savedDimension(
+        _ annotation: MeasurementAnnotation,
+        anchors: [MeasurementAnchorWorldPointResolver.ResolvedAnchor]
+    ) throws -> MeasurementDimensionGeometry? {
+        guard annotation.kind == .distance,
+              let first = anchors.first(where: { $0.role == .start }) ?? anchors.first,
+              let second = anchors.last(where: { $0.role == .end }) ?? anchors.last,
+              (second.worldPoint - first.worldPoint).length > 1.0e-12 else { return nil }
+        var label = annotation.labelPosition
+        if let position = label, let nodeID = annotation.sceneNodeID {
+            label = try SceneNodeHierarchy(metadata: document.productMetadata).worldTransform(of: nodeID).applied(to: position)
+        }
+        return try MeasurementDimensionGeometry(
+            start: first.worldPoint, end: second.worldPoint, axis: annotation.placementAxis, labelPosition: label
+        )
+    }
+
     private func savedMeasurementLabel(
         _ annotation: MeasurementAnnotation,
         anchors: [MeasurementAnchorWorldPointResolver.ResolvedAnchor]
@@ -2798,8 +2871,11 @@ public struct Viewport: View {
         guard annotation.kind == .distance,
               let first = anchors.first(where: { $0.role == .start }) ?? anchors.first,
               let second = anchors.last(where: { $0.role == .end }) ?? anchors.last,
-              let distance = measurementDistanceMeters(start: first.worldPoint, end: second.worldPoint) else {
+              var distance = measurementDistanceMeters(start: first.worldPoint, end: second.worldPoint) else {
             return annotation.name
+        }
+        if let axis = annotation.placementAxis, axis.length > 0 {
+            distance = abs((second.worldPoint - first.worldPoint).dot(axis) / axis.length)
         }
         return "\(annotation.name) \(formattedViewportLength(distance))"
     }
@@ -4654,7 +4730,7 @@ public struct Viewport: View {
                     }
                 case .constructionPlane(let plane):
                     picked.plane = plane
-                case .snap:
+                case .snap, .anchor:
                     break
                 }
                 onPointPick?(.point(picked))
@@ -5498,6 +5574,17 @@ extension Viewport {
         let savedMeasurements = try savedMeasurementOverlays()
         var measurement: ViewportSpatialOverlaySemanticSnapshot.Measurement?
         if measurementToolActive,
+           measurementSession.state.phase == .placing || measurementSession.state.phase == .completed,
+           let dimension = try measurementSession.state.dimension() {
+            measurement = .init(
+                start: dimension.start,
+                end: dimension.end,
+                label: formattedViewportLength(dimension.valueMeters),
+                boundsRuler: nil,
+                saved: savedMeasurements,
+                dimension: dimension
+            )
+        } else if measurementToolActive,
            let start = measurementSession.state.start,
            let end = measurementSession.state.visibleEnd {
             guard start.point.isFinite, end.point.isFinite,

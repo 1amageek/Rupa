@@ -266,7 +266,8 @@ func viewportMeasurementInputRequiresMatchingNativeFrame(projection: ViewportCam
         measurementInput(in: controller.view)?.onPick?(end, size, .replace)
     }
     let acceptedEnd = try #require(state.end)
-    #expect(state.phase == .completed)
+    // The second point starts placing the dimension; a further click or right-click confirms it.
+    #expect(state.phase == .placing)
     #expect(acceptedEnd.source == .constructionPlane(.xy))
     #expect(try #require(state.distanceMeters) > 0)
     canvasPoint = nil
@@ -342,7 +343,7 @@ func viewportMeasurementSessionRecomputesClickAndUsesWorldDistance() {
     session.hover(hover)
     session.click(click)
 
-    #expect(session.state.phase == .completed)
+    #expect(session.state.phase == .placing)
     #expect(session.state.end == click)
     #expect(session.state.distanceMeters == 2.8284271247461903)
     #expect(session.state.preview == nil)

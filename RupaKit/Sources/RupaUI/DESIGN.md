@@ -180,15 +180,17 @@ The palette does not own source state, perform rendering preparation, or bypass
 | Sweep | Current ordered section/guide selection and the clicked path | Existing sweep command through Workspace | Missing or incompatible operands remain a typed visible refusal; Select cancels before submission |
 | Surface Creation | Opens the [Modeling-owned surface operation family](Modeling/DESIGN.md#surface-creation-foundation) with the current selection | Preview then Apply publishes the selected native sheet operation | Invalid operands stay in the editable form with a visible error; Cancel discards draft and preview |
 | Mesh | Authored Mesh element selection, domain and existing Mesh operation fields | Existing Mesh preview/apply transaction and element overlay | Non-Mesh/CAD input explains Make Editable or required input; Cancel discards draft/preview and returns to Select; no Mesh-summary Logs detour substitutes for editing |
-| Measure | Two explicit viewport points resolved from current snap, visible geometry, or the effective plane | Rendering-owned hover preview, native spatial dimension line/text and 3D world distance remain visible; source does not mutate | Unresolved depth/nonfinite or degenerate input shows the reason; Escape or another tool clears the transient result |
+| Measure (Control-=) | Two explicit viewport points resolved from current snap, visible geometry, or the effective plane, or the one selected edge or sketch curve (its ends, or across it when closed) | The cursor places the dimension along a construction-plane axis, click confirms and right-click confirms the straight distance; the confirmed dimension is added to the Measurements group as one undoable annotation | Unresolved depth/nonfinite or degenerate input shows the reason; Escape or another tool clears the transient result |
 | Section | Clicked world position and effective construction-plane orientation | Existing construction-plane command preserves the clicked origin and plane normal, selects the created plane, and exposes existing section analysis/clipping | Unresolvable/nonfinite placement is nonmutating; Select cancels before submission |
 
 The prior viewport behavior that treated Measure as a clicked-object
 `MeasurementService` summary is superseded. Measure is two-point transient input
 owned by [ViewportMeasurement](../RupaRendering/ViewportMeasurement/DESIGN.md).
-MainView only selects the mode, forwards its active/status presentation, and
-clears it on tool exit or authority replacement. It does not resolve depth,
-calculate distance, retain endpoints, or invoke source measurement.
+MainView selects the mode, hands it the selected edge or curve's anchored
+points from Core `DesignDocument.measuredCurvePoints(for:topology:)`, forwards
+its active/status presentation, submits a confirmed dimension, and clears it on
+tool exit or authority replacement. It does not resolve depth or calculate
+distance.
 
 Ordinary object selection separately enables noninteractive projected rulers
 for one unambiguous selected occurrence. Those rulers are explicitly labeled

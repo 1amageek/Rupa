@@ -152,6 +152,7 @@ private struct ProjectMainViewContent: View {
     @State private var mirrorSession: WorkspaceMirrorSession?
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
+    @State private var measurementSeed: ViewportMeasurementSeed?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
@@ -2131,6 +2132,7 @@ private struct ProjectMainViewContent: View {
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
+            measurementSeed: measurementSeed,
             allowsSelectionRectangle: allowsSelectionRectangle,
             allowsObjectAffordances: allowsObjectAffordances,
             meshSelectionDomain: meshSelectionDomain,
@@ -2212,7 +2214,12 @@ private struct ProjectMainViewContent: View {
                 viewportProjectedGridMinorStep = minorStep
             },
             onMeasurementStateChange: { state in
+                // A dimension confirmed by click or right-click is added to Measurements at once.
+                let wasSaved = viewportMeasurementState.canSave
                 viewportMeasurementState = state
+                if state.canSave, !wasSaved {
+                    saveMeasurement(state)
+                }
             },
             onPointPick: handleViewportPointPick,
             onNativeGestureRefusal: { error in
@@ -4175,15 +4182,6 @@ private struct ProjectMainViewContent: View {
                 .help(boundsSummary)
                 .accessibilityIdentifier("WorkspaceMeasure.worldBounds")
         }
-        if state.canSave {
-            Button {
-                saveMeasurement(state)
-            } label: {
-                Label("Save", systemImage: "square.and.arrow.down")
-                    .font(.caption)
-            }
-            .accessibilityIdentifier("WorkspaceMeasure.save")
-        }
         WorkspaceSavedMeasurementsControl(
             resolutions: savedMeasurementResolutions,
             onDelete: deleteSavedMeasurement
@@ -4215,14 +4213,35 @@ private struct ProjectMainViewContent: View {
     /// Anchors are built against the document the command runs on, so each
     /// endpoint is stored in the local frame of the placement it was picked
     /// under and follows that placement afterwards.
+    /// Measure started with one edge or sketch curve selected measures across it.
+    private func selectedCurveMeasurementSeed() -> ViewportMeasurementSeed? {
+        guard snapshot.selection.selectedTargets.count == 1, let target = snapshot.selection.selectedTargets.first else {
+            return nil
+        }
+        switch target.component {
+        case .edge, .sketchEntity: break
+        default: return nil
+        }
+        do {
+            let document = snapshot.document.document
+            let topology = try TopologySnapshotService().snapshot(
+                document: document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            guard let points = try document.measuredCurvePoints(for: target, topology: topology) else { return nil }
+            return ViewportMeasurementSeed(start: points.start, end: points.end)
+        } catch {
+            reportToolStatus("The selected curve cannot be measured: \(error.localizedDescription)", severity: .warning)
+            return nil
+        }
+    }
+
     private func saveMeasurement(_ state: ViewportMeasurementState) {
         submitSource(name: "addMeasurementAnnotation", commands: { current in
             let document = current.document.document
             let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
-            let annotation = MeasurementAnnotation(
-                name: "Distance \(document.productMetadata.measurements.count + 1)",
-                kind: .distance,
-                anchors: try state.savedAnchors(in: hierarchy)
+            let annotation = try state.annotation(
+                named: "Distance \(document.productMetadata.measurements.count + 1)", in: hierarchy
             )
             return [.addMeasurementAnnotation(annotation)]
         }) { _ in
@@ -5144,6 +5163,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func activateTool(_ tool: ModelingTool) {
+        measurementSeed = tool == .measure ? selectedCurveMeasurementSeed() : nil
         let hasTransientModelingOperation = modelingDraft != nil
             || meshDraft != nil
             || historyPreviewTitle != nil
@@ -5558,6 +5578,9 @@ private struct ProjectMainViewContent: View {
         case .pickArraySecondDirection:
             arraySession?.pickSecondDirection()
             reportToolStatus(arraySession?.prompt ?? "")
+            return .handled
+        case .activateMeasure:
+            activateTool(.measure)
             return .handled
         case .setMaterial, .forkMaterial, .removeMaterial:
             let ids = snapshot.selection.wholeSceneNodeIDs
@@ -8162,6 +8185,11 @@ private struct ProjectMainViewContent: View {
                 ).bounds
             } else {
                 bounds = nil
+            }
+            if bounds == nil, transform.pickedPivot == nil, transform.pivotMode == .boundingBox {
+                // Measurements and other objects without solid bounds turn about their origins.
+                transform.pivotMode = .median
+                reportToolStatus("The selection has no measurable bounds; the pivot is the objects' origins.")
             }
             try transform.resolveFrame(
                 metadata: document.productMetadata,

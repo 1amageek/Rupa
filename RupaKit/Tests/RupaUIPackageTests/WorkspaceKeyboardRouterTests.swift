@@ -428,3 +428,9 @@ private func keyboardContext(
     context.hasWholeObjectSelection = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "m"), context: context) == nil)
 }
+
+@Test func workspaceKeyboardRouterStartsMeasureWithControlEquals() {
+    let router = WorkspaceKeyboardRouter()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "=", modifiers: [.control]), context: keyboardContext()) == .activateMeasure)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "="), context: keyboardContext()) == .activateDimensionCommand)
+}
