@@ -6,6 +6,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createSavedView(SavedView)
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
+    /// Records the plane Section Analysis's Previous option restores.
+    case setSectionAnalysisPlane(SketchPlane?)
     case addMeasurementAnnotation(MeasurementAnnotation)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
@@ -515,6 +517,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "updateSavedView"
         case .removeSavedView:
             "removeSavedView"
+        case .setSectionAnalysisPlane:
+            "setSectionAnalysisPlane"
         case .addMeasurementAnnotation:
             "addMeasurementAnnotation"
         case .rebaseWorkspaceOrigin:
@@ -849,6 +853,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         case .createSavedView,
              .updateSavedView,
              .removeSavedView,
+             .setSectionAnalysisPlane,
              .addMeasurementAnnotation,
              .rebaseWorkspaceOrigin,
              .renameDocument,

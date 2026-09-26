@@ -138,6 +138,7 @@ enum ProductionMainViewActionManifest {
         "forkMaterial",
         "matchSurfaceBoundaryContinuity",
         "mirrorSceneNodes",
+        "setSectionAnalysisPlane",
         "moveBodyEdges",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",

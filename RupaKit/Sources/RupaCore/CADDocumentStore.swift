@@ -265,6 +265,12 @@ public final class CADDocumentStore {
         var didMutate = command.mutatesDocument
         let identityBaseline = document
         switch command {
+        case .setSectionAnalysisPlane(let plane):
+            var updatedDocument = document
+            try updatedDocument.setSectionAnalysisPlane(plane)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createSavedView:
             func run() throws {
                 guard case .createSavedView(let savedView) = command else {

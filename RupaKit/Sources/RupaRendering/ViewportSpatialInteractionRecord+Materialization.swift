@@ -137,7 +137,8 @@ extension ViewportSpatialPreparedInteractionTarget {
              .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
              .affordance, .objectTransform, .patternArrayLinearAxis,
              .independentCopyExtrudeDistance, .independentCopyBodyDimension,
-             .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint:
+             .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint,
+             .sectionAnalysisDistance:
             return .projectionFree(self)
 
         case .patternArrayRadialAngle(let source):

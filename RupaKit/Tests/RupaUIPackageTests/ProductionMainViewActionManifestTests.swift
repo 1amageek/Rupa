@@ -23,7 +23,7 @@ func productionMainViewActionManifestHasDurableRows() {
 @Test(.timeLimit(.minutes(1)))
 func productionMainViewActionManifestCountsAreFixed() {
     let rows = ProductionMainViewActionManifest.rows
-    #expect(ProductionMainViewActionManifest.sourceCommandRows.count == 106)
+    #expect(ProductionMainViewActionManifest.sourceCommandRows.count == 107)
     #expect(ProductionMainViewActionManifest.canvasRows.count == 17)
     #expect(ProductionMainViewActionManifest.patternArrayRows.count == 3)
     #expect(ProductionMainViewActionManifest.snapshotRows.count == 9)
@@ -32,7 +32,7 @@ func productionMainViewActionManifestCountsAreFixed() {
     #expect(ProductionMainViewActionManifest.workspaceRows.count == 2)
     #expect(ProductionMainViewActionManifest.transientRows.count == 5)
     #expect(ProductionMainViewActionManifest.domainRows.count == 2)
-    #expect(rows.count == 148)
+    #expect(rows.count == 149)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -74,9 +74,9 @@ func productionMainViewGraphAuditIncludesEveryNonLegacyUIAndPresentationSource()
 @Test(.timeLimit(.minutes(1)))
 func productionMainViewActionManifestSourceCommandSetIsUniqueAndFixed() {
     let names = ProductionMainViewActionManifest.sourceCommandNames
-    #expect(names.count == 106)
+    #expect(names.count == 107)
     #expect(Set(names).count == names.count)
-    #expect(Set(ProductionMainViewActionManifest.sourceCommandRows.map(\.actionID)).count == 106)
+    #expect(Set(ProductionMainViewActionManifest.sourceCommandRows.map(\.actionID)).count == 107)
 }
 
 @Test(.timeLimit(.minutes(1)))

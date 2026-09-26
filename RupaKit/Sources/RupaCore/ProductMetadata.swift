@@ -17,6 +17,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
     public var savedViews: [SavedViewID: SavedView]
+    /// The plane of the last Section Analysis slice, which its Previous option restores.
+    public var sectionAnalysisPlane: SketchPlane?
     public var topologyMaterialBindings: [TopologyMaterialBinding.ID: TopologyMaterialBinding]
     public var semanticExtensions: [SemanticExtensionID: SemanticExtensionEnvelope]
 
@@ -35,6 +37,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
         savedViews: [SavedViewID: SavedView] = [:],
+        sectionAnalysisPlane: SketchPlane? = nil,
         topologyMaterialBindings: [TopologyMaterialBinding.ID: TopologyMaterialBinding] = [:],
         semanticExtensions: [SemanticExtensionID: SemanticExtensionEnvelope] = [:]
     ) {
@@ -52,6 +55,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.constructionPlanes = constructionPlanes
         self.measurements = measurements
         self.savedViews = savedViews
+        self.sectionAnalysisPlane = sectionAnalysisPlane
         self.topologyMaterialBindings = topologyMaterialBindings
         self.semanticExtensions = semanticExtensions
     }
@@ -71,6 +75,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case constructionPlanes
         case measurements
         case savedViews
+        case sectionAnalysisPlane
         case topologyMaterialBindings
         case semanticExtensions
     }
@@ -128,6 +133,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [SavedViewID: SavedView].self,
                 forKey: .savedViews
             ) ?? [:],
+            sectionAnalysisPlane: try container.decodeIfPresent(SketchPlane.self, forKey: .sectionAnalysisPlane),
             topologyMaterialBindings: try Self.decodeTopologyMaterialBindings(from: container),
             semanticExtensions: try Self.decodeSemanticExtensions(from: container)
         )
@@ -149,6 +155,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(constructionPlanes, forKey: .constructionPlanes)
         try container.encode(measurements, forKey: .measurements)
         try container.encode(savedViews, forKey: .savedViews)
+        try container.encodeIfPresent(sectionAnalysisPlane, forKey: .sectionAnalysisPlane)
         try encodeTopologyMaterialBindings(into: &container)
         try encodeSemanticExtensions(into: &container)
     }

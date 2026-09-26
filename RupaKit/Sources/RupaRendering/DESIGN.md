@@ -342,6 +342,16 @@ publishes the geometry frame with an empty overlay instead of failing the
 frame, so selection and hits keep resolving and the user can reduce what the
 overlay draws; `overlayFailure(for:)` reports the exhaustion through the same
 presentation-failure reporter. Any other overlay failure still fails the frame.
+
+While Section Analysis places its plane, the viewport offers the
+`sectionAnalysisDistance` native axis route: an arrow on the section plane along
+its source normal (the normal before Flip), registered as one spatial handle.
+Its axis value is the signed distance, so the plane may move to either side of
+its source. During the drag only the arrow previews the new distance, because
+moving the clipping plane live would rebuild the frame under the pointer; the
+release reports the distance through `onSectionAnalysisDistanceDrag`.
+`ViewportSectionAnalysisHandleTests` owns the signed drag and the registered,
+moving arrow.
 The revision does not repeat within one mounted viewport lifetime; exhaustion
 is an explicit failure rather than wraparound to a possibly retained identity.
 

@@ -60,6 +60,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case patternArrayOutputMode(ViewportPatternAffordanceSource.OutputModeHandle)
     case constructionPlane(identity: ViewportConstructionPlaneHandleIdentity, origin: Point3D,
                            normal: Vector3D, normalEnd: Point3D, corners: [Point3D])
+    /// The Section Analysis plane moved along its source normal; the axis value is the distance.
+    case sectionAnalysisDistance(axis: Axis)
     case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember],
                     groupEdit: ViewportObjectEditState?, placement: ViewportBodyPlacementBaseline?)
     case objectTransform(action: ViewportAffordanceAction, members: [ViewportObjectTransformMember], bounds: ViewportObjectEditState)
@@ -108,6 +110,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
                 .patternArrayCurvePathPoint(.init(sourceID: value.sourceID, pointIndex: value.pointIndex))
             case .patternArrayOutputMode(let value): .patternArrayOutputMode(.init(sourceID: value.sourceID))
             case .constructionPlane(let identity, _, _, _, _): .constructionPlane(identity)
+            case .sectionAnalysisDistance: .sectionAnalysisDistance
             case .affordance(let target, _, _, _): .affordance(target)
             case .objectTransform(let action, let members, _):
                 .objectTransform(nodes: members.map(\.sceneNodeID), action: action)

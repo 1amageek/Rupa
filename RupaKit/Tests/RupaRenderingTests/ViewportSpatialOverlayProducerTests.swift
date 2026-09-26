@@ -125,9 +125,10 @@ func nativeSectionKeepsOpenContoursUnfilledAndUnclosed() throws {
     )
     var paths: [ViewportSpatialOverlayInput.Path] = []
     var meshes: [ViewportSpatialOverlayInput.Mesh] = []
+    var records: [ViewportSpatialInteractionRecord] = []
     var families: Set<ViewportSpatialOverlayFamily> = []
     try ViewportSpatialOverlayProducer.appendSection(
-        section, paths: &paths, meshes: &meshes, activeFamilies: &families
+        section, paths: &paths, meshes: &meshes, interactionRecords: &records, activeFamilies: &families
     )
     #expect(paths.isEmpty)
     #expect(meshes.count == 1)

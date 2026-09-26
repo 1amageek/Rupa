@@ -19,6 +19,7 @@ struct ViewportNativeAxisInput: Sendable {
         case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragTarget)
         case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragTarget)
         case surfaceControlPoint(ViewportSurfaceControlPointDragTarget)
+        case sectionAnalysisDistance(ViewportSectionAnalysisDistanceDragTarget)
     }
 
     let record: ViewportSpatialInteractionRecord
@@ -50,6 +51,8 @@ struct ViewportNativeAxisInput: Sendable {
         case .slotWidth(_, _, _, let value):
             axis = value
         case .sketchVertexOffset(_, _, _, _, let value):
+            axis = value
+        case .sectionAnalysisDistance(let value):
             axis = value
         case .patternArrayLinearAxis(let value):
             axis = try Self.patternAxis(origin: value.basePoint, direction: value.direction, value: value.distanceMeters)
@@ -126,6 +129,13 @@ struct ViewportNativeAxisInput: Sendable {
             return sourceDelta
         case .edgeOffset, .sketchVertexOffset:
             return try Self.positiveValue(axis.baseValue, adding: sourceDelta)
+        case .sectionAnalysisDistance:
+            // A signed offset: the plane may move to either side of its source.
+            let result = axis.baseValue + sourceDelta
+            guard result.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native section distance overflowed.")
+            }
+            return result
         case .slotWidth:
             let scaledDelta = sourceDelta * 2.0
             guard scaledDelta.isFinite else {
@@ -245,6 +255,10 @@ struct ViewportNativeAxisInput: Sendable {
 
         case .patternArrayLinearAxis(let target):
             return .patternArrayLinearAxis(.init(sourceID: target.sourceID, axisSlot: target.axisSlot, distance: value))
+
+        case .sectionAnalysisDistance:
+            guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
+            return .sectionAnalysisDistance(.init(distanceMeters: value))
 
         case .independentCopyExtrudeDistance(let target):
             return .independentCopyExtrudeDistance(.init(

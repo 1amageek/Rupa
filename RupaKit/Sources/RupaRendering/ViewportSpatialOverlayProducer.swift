@@ -334,8 +334,17 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     /// Raw section inputs captured at the MainActor boundary.  Contour limits
     /// and hatch conversion are evaluated by the producer worker.
     struct SectionSource: Sendable {
+        /// The section's distance handle: the offset it moves, along which normal, and the
+        /// distance a drag in progress shows.
+        struct Handle: Sendable {
+            let distanceMeters: Double
+            let sourceNormal: Vector3D
+            let activeDistanceMeters: Double?
+        }
+
         let result: SectionAnalysisResult?
         let ruler: RulerConfiguration
+        var handle: Handle? = nil
     }
 
 
@@ -407,6 +416,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let sourceContourCount: Int
         let omittedContourCount: Int
         let hasTruncatedSourcePayload: Bool
+        var handle: SectionSource.Handle? = nil
     }
 
     let scene: ViewportScene
@@ -600,6 +610,7 @@ enum ViewportSpatialOverlayProducer {
             section,
             paths: &paths,
             meshes: &meshes,
+            interactionRecords: &interactionRecords,
             activeFamilies: &activeFamilies
         )
         activeFamilies.insert(.axes)
@@ -1240,7 +1251,8 @@ enum ViewportSpatialOverlayProducer {
             omittedSegmentCount: overlay.omittedSegmentCount,
             sourceContourCount: overlay.sourceContourCount,
             omittedContourCount: overlay.omittedContourCount,
-            hasTruncatedSourcePayload: overlay.hasTruncatedSourcePayload
+            hasTruncatedSourcePayload: overlay.hasTruncatedSourcePayload,
+            handle: source.handle
         )
     }
 
@@ -1381,6 +1393,7 @@ enum ViewportSpatialOverlayProducer {
         _ section: ViewportSpatialOverlaySemanticSnapshot.Section?,
         paths: inout [ViewportSpatialOverlayInput.Path],
         meshes: inout [ViewportSpatialOverlayInput.Mesh],
+        interactionRecords: inout [ViewportSpatialInteractionRecord],
         activeFamilies: inout Set<ViewportSpatialOverlayFamily>
     ) throws {
         guard let section else { return }
@@ -1433,14 +1446,43 @@ enum ViewportSpatialOverlayProducer {
                     depth: .annotation
                 )
             ))
-            meshes.append(.init(
-                family: .section,
-                value: try line(
-                    [plane.origin, plane.normalEnd],
-                    color: sectionNormalColor,
-                    depth: .annotation
+            if let handle = section.handle {
+                // The distance handle: an arrow along the source normal from the plane, moved by a
+                // drag in progress, that the native axis input drags to a new distance.
+                let length = (plane.normalEnd - plane.origin).length
+                let shift = (handle.activeDistanceMeters ?? handle.distanceMeters) - handle.distanceMeters
+                let base = plane.origin + handle.sourceNormal * shift
+                let tip = base + handle.sourceNormal * length
+                let index = try handleIndex(
+                    for: .sectionAnalysisDistance(axis: .init(
+                        origin: plane.origin, direction: handle.sourceNormal, baseValue: handle.distanceMeters
+                    )),
+                    in: &interactionRecords
                 )
-            ))
+                var arrow = try line([base, tip], color: sectionNormalColor, depth: .annotation)
+                arrow.handleIndex = index
+                arrow.hitTolerancePoints = 14
+                meshes.append(.init(family: .section, value: arrow))
+                let reference: Vector3D = abs(handle.sourceNormal.z) < 0.9 ? .unitZ : .unitX
+                let wing = try handle.sourceNormal.cross(reference).normalized(tolerance: 1e-12)
+                let back: Vector3D = handle.sourceNormal * (length * 0.2)
+                for sign in [1.0, -1.0] {
+                    let spread: Vector3D = wing * (sign * length * 0.1)
+                    let barb: Point3D = tip + (spread - back)
+                    meshes.append(.init(family: .section, value: try line(
+                        [tip, barb], color: sectionNormalColor, depth: .annotation
+                    )))
+                }
+            } else {
+                meshes.append(.init(
+                    family: .section,
+                    value: try line(
+                        [plane.origin, plane.normalEnd],
+                        color: sectionNormalColor,
+                        depth: .annotation
+                    )
+                ))
+            }
         }
         for segment in section.segments {
             try Task.checkCancellation()

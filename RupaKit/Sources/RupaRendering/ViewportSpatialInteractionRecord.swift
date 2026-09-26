@@ -136,6 +136,7 @@ struct ViewportSpatialInteractionRecord: Sendable {
                 try string(value.title)
                 try string(value.highlightedTitle)
             case .constructionPlane(_, _, _, _, let corners): try array(corners)
+            case .sectionAnalysisDistance: break
             case .objectTransform(_, let members, _):
                 try array(members)
                 for member in members {

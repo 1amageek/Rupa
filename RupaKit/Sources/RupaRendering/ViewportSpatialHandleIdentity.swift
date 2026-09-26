@@ -44,6 +44,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleIdentity)
     case patternArrayOutputMode(ViewportPatternArrayOutputModeHandleIdentity)
     case constructionPlane(ViewportConstructionPlaneHandleIdentity)
+    /// The one Section Analysis distance handle.
+    case sectionAnalysisDistance
     case affordance(ViewportAffordanceTarget)
     case objectTransform(nodes: [SceneNodeID], action: ViewportAffordanceAction)
 
@@ -124,7 +126,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                  .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension,
                  .patternArrayRadialAngle, .patternArrayCopyCount, .patternArrayCurveExtent,
                  .patternArrayCurvePathPoint, .patternArrayOutputMode,
-                 .constructionPlane: break
+                 .constructionPlane, .sectionAnalysisDistance: break
             }
         }
         return bytes

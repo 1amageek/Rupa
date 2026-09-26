@@ -1050,7 +1050,9 @@ reports interference: two body occurrences whose sections overlap, so the solids
 share space. A section is the even-odd region of its closed contours; sections
 interfere when their boundaries cross by more than the tolerance or a point just
 inside one lies inside the other beyond it, so bodies that only touch do not.
-Results encoded before interference was reported decode with none.
+Results encoded before interference was reported decode with none. The plane
+of the last placed slice is `ProductMetadata.sectionAnalysisPlane`, set by the
+undoable `setSectionAnalysisPlane` command and absent from older documents.
 `SectionAnalysisCommandTests` owns the face placement, overlap, containment,
 touching and separated cases and the older-result decoding.
 

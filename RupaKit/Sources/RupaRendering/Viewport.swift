@@ -168,6 +168,8 @@ public struct Viewport: View {
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
+    /// The Section Analysis distance handle, while the section plane is being placed.
+    private let sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle?
     private let snapResolutionOptions: SnapResolutionOptions?
     private let canvasDragPreviewKind: ViewportCanvasDragPreviewKind?
     private let canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind?
@@ -219,6 +221,7 @@ public struct Viewport: View {
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
     private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
+    private let onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)?
     private let onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)?
     private let onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)?
     private let onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)?
@@ -361,6 +364,7 @@ public struct Viewport: View {
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
+        sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle? = nil,
         snapResolutionOptions: SnapResolutionOptions? = nil,
         canvasDragPreviewKind: ViewportCanvasDragPreviewKind? = .rectangle(widthMeters: nil, heightMeters: nil),
         canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? = nil,
@@ -412,6 +416,7 @@ public struct Viewport: View {
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
         onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
+        onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)? = nil,
         onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? = nil,
         onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? = nil,
         onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? = nil,
@@ -485,6 +490,7 @@ public struct Viewport: View {
         self.surfaceContinuity = surfaceContinuity
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
+        self.sectionAnalysisHandle = sectionAnalysisHandle
         self.snapResolutionOptions = snapResolutionOptions
         self.canvasDragPreviewKind = canvasDragPreviewKind
         self.canvasPlacementPreviewKind = canvasPlacementPreviewKind
@@ -542,6 +548,7 @@ public struct Viewport: View {
         self.onSlotWidthDrag = onSlotWidthDrag
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
         self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
+        self.onSectionAnalysisDistanceDrag = onSectionAnalysisDistanceDrag
         self.onIndependentCopyExtrudeDistanceDrag = onIndependentCopyExtrudeDistanceDrag
         self.onIndependentCopyBodyDimensionDrag = onIndependentCopyBodyDimensionDrag
         self.onPatternArrayRadialAngleDrag = onPatternArrayRadialAngleDrag
@@ -1579,6 +1586,7 @@ public struct Viewport: View {
         key.surfaceAnalysisOptions = surfaceAnalysisOptions
         key.surfaceContinuity = surfaceContinuity
         key.sectionAnalysis = sectionAnalysis
+        key.sectionAnalysisHandle = sectionAnalysisHandle
         key.snap = displayedSnapOverlayResult
         key.snapOptions = snapResolutionOptions
         key.placement = placementHighlightState
@@ -1610,6 +1618,7 @@ public struct Viewport: View {
         if onConstructionPlaneHandleDrag != nil { key.availableRoutes |= 1 << 12 }
         if onEdgeFilletDrag != nil { key.availableRoutes |= 1 << 13 }
         if onPatternArrayLinearAxisDrag != nil { key.availableRoutes |= 1 << 14 }
+        if onSectionAnalysisDistanceDrag != nil { key.availableRoutes |= 1 << 22 }
         if onIndependentCopyExtrudeDistanceDrag != nil { key.availableRoutes |= 1 << 15 }
         if onIndependentCopyBodyDimensionDrag != nil { key.availableRoutes |= 1 << 16 }
         if onPatternArrayRadialAngleDrag != nil { key.availableRoutes |= 1 << 17 }
@@ -3730,6 +3739,7 @@ public struct Viewport: View {
         case .slotWidth: onSlotWidthDrag != nil
         case .sketchVertexOffset: onSketchVertexOffsetDrag != nil
         case .patternArrayLinearAxis: onPatternArrayLinearAxisDrag != nil
+        case .sectionAnalysisDistance: onSectionAnalysisDistanceDrag != nil
         case .independentCopyExtrudeDistance: onIndependentCopyExtrudeDistanceDrag != nil
         case .independentCopyBodyDimension: onIndependentCopyBodyDimensionDrag != nil
         // Only the axis and local-axis handles of these two routes reduce to
@@ -4088,6 +4098,7 @@ public struct Viewport: View {
         case .slotWidth(let target): onSlotWidthDrag?(target)
         case .sketchVertexOffset(let target): onSketchVertexOffsetDrag?(target)
         case .patternArrayLinearAxis(let target): onPatternArrayLinearAxisDrag?(target)
+        case .sectionAnalysisDistance(let target): onSectionAnalysisDistanceDrag?(target)
         case .independentCopyExtrudeDistance(let target): onIndependentCopyExtrudeDistanceDrag?(target)
         case .independentCopyBodyDimension(let target): onIndependentCopyBodyDimensionDrag?(target)
         case .polySplineSurfaceVertex(let target): onPolySplineSurfaceVertexDrag?(target)
@@ -5777,9 +5788,23 @@ extension Viewport {
                     options: surfaceAnalysisOptions
                 )
                 : nil
+        // During a drag of the section handle the arrow previews the new distance; the section
+        // itself follows once the drag is released.
+        var sectionHandle: ViewportSpatialOverlaySemanticSnapshot.SectionSource.Handle?
+        if let sectionAnalysisHandle, onSectionAnalysisDistanceDrag != nil {
+            var activeDistance: Double?
+            if case .active(let press) = nativeInputGesture, press.input.record.identity == .sectionAnalysisDistance {
+                activeDistance = press.value
+            }
+            sectionHandle = .init(
+                distanceMeters: sectionAnalysisHandle.distanceMeters,
+                sourceNormal: sectionAnalysisHandle.sourceNormal,
+                activeDistanceMeters: activeDistance
+            )
+        }
         let sectionSource: ViewportSpatialOverlaySemanticSnapshot.SectionSource? =
             sectionAnalysis.map {
-                .init(result: $0, ruler: workspaceRuler)
+                .init(result: $0, ruler: workspaceRuler, handle: sectionHandle)
             }
         let world = ViewportSpatialOverlaySemanticSnapshot.WorldContext(
             modelBounds: modelBounds

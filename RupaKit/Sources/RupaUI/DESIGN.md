@@ -825,8 +825,9 @@ edited value together as one source change, and Escape discards them all.
 Section Analysis is a view state, never a source change. The toolbar button
 starts its dialog, or removes the dialog or the placed slice. The plane comes
 from the face selected when it started (Selection), the last placed slice
-(Previous) or the effective construction plane (CPlane); D types the distance
-along that plane's normal and F flips it. The section keeps what lies behind the
+(Previous, kept with the document by `setSectionAnalysisPlane`, so it survives
+reopening) or the effective construction plane (CPlane); D types the distance
+along that plane's normal, dragging the section arrow sets it, and F flips it. The section keeps what lies behind the
 plane. OK, Return or right-click turns it into a fixed plane that stays until the
 command runs again, and Escape cancels the dialog. While shown it replaces a
 selected construction plane's section in the viewport, and interfering sections

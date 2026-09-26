@@ -154,8 +154,6 @@ private struct ProjectMainViewContent: View {
     @State private var sectionAnalysisSession: WorkspaceSectionAnalysisSession?
     /// The slice Section Analysis placed, shown until the command is run again.
     @State private var placedSectionQuery: SectionAnalysisQuery?
-    /// The plane of the last placed slice, which Section Analysis's Previous restores.
-    @State private var previousSectionPlane: SketchPlane?
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
     @State private var measurementSeed: ViewportMeasurementSeed?
@@ -2137,6 +2135,17 @@ private struct ProjectMainViewContent: View {
             surfaceContinuity: selectedSurfaceContinuitySummary,
             sectionAnalysis: sectionAnalysis,
             sectionClippingPlan: sectionClippingPlan,
+            sectionAnalysisHandle: sectionAnalysisSession.flatMap { placing in
+                commandSection.map { section in
+                    // The distance moves along the plane's source normal, before Flip.
+                    ViewportSectionAnalysisDistanceHandle(
+                        distanceMeters: placing.distanceMeters,
+                        sourceNormal: placing.flipsNormal
+                            ? Vector3D(x: -section.plane.normal.x, y: -section.plane.normal.y, z: -section.plane.normal.z)
+                            : section.plane.normal
+                    )
+                }
+            },
             snapResolutionOptions: activeSnapResolutionOptions(),
             canvasDragPreviewKind: canvasDragPreviewKind,
             canvasPlacementPreviewKind: canvasPlacementPreviewKind,
@@ -2193,6 +2202,9 @@ private struct ProjectMainViewContent: View {
             onSlotWidthDrag: viewportSlotWidthDragHandler,
             onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
             onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
+            onSectionAnalysisDistanceDrag: sectionAnalysisSession == nil ? nil : { target in
+                sectionAnalysisSession?.distanceMeters = target.distanceMeters
+            },
             onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
             onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
             onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
@@ -4139,7 +4151,9 @@ private struct ProjectMainViewContent: View {
             if case .face = target.component { return target }
             return nil
         } : nil
-        let section = WorkspaceSectionAnalysisSession(selectedFace: face, previousPlane: previousSectionPlane)
+        let section = WorkspaceSectionAnalysisSession(
+            selectedFace: face, previousPlane: snapshot.document.document.productMetadata.sectionAnalysisPlane
+        )
         sectionAnalysisSession = section
         reportToolStatus(section.prompt)
     }
@@ -4151,7 +4165,8 @@ private struct ProjectMainViewContent: View {
         switch result {
         case .success(let analysis):
             placedSectionQuery = WorkspaceSectionAnalysisSession.placedQuery(for: analysis)
-            previousSectionPlane = WorkspaceSectionAnalysisSession.placedPlane(for: analysis)
+            // The plane is kept with the document so Previous restores it after reopening.
+            submitSource(.setSectionAnalysisPlane(WorkspaceSectionAnalysisSession.placedPlane(for: analysis)))
             sectionAnalysisSession = nil
             isSectionDistanceFocused = false
             reportToolStatus("Section placed. Run Section Analysis again to remove it.")

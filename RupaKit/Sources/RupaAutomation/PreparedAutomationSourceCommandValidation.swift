@@ -6,6 +6,7 @@ enum PreparedAutomationSourceCommandValidation {
         case .createSavedView,
              .updateSavedView,
              .removeSavedView,
+             .setSectionAnalysisPlane,
              .addMeasurementAnnotation,
              .rebaseWorkspaceOrigin,
              .renameDocument,
