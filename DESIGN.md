@@ -154,8 +154,9 @@ Correctness-critical migrations back to that boundary:
 | Edge points | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `EdgeQueryEvaluator` midpoint, frame and closest point on the exact edge curve | Snap edge-middle candidates, edge-parameter measurement anchors and drawing edge lengths use the kernel query; delete chord midpoints and string curve-kind re-evaluation | Arc and closed-circle edges snap on the curve; anchors match kernel frames |
 | Solid volume | [CADTopology](swift-CAD/Sources/CADTopology/DESIGN.md): exact B-rep volume of the evaluated body | `MeasurementService` measures every solid from its evaluated body; delete the area x height prism paths | Extrude and straight-sweep volumes report `exactBRep` and match kernel volume |
 | Sketch curve intersection | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): public sketch curve intersection returning each entity's natural parameter from the certified 2D intersector | Sketch Cut/Split consume the kernel intersections; delete Rupa closed-form and sampled intersection code | Line/arc/circle/spline pairs cut at certified points; tangency and no-intersection are typed |
+| Face points and orientation | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `SurfaceQueryEvaluator.outwardFrame` returns the nearest face point and the outward normal, the kernel owning face orientation | Picks name the face they hit and resolve through `PlacedSurfacePointResolver`; delete Rupa's nearest-face search and its reading of face orientation (placement and topology normals) | Picks off a displayed face resolve to the exact point and outward normal; every box face points out of the body |
 
-Face area and face-center points have no exact kernel query yet; Rupa's
+Face area and face-center points still have no exact kernel query; Rupa's
 planar-only face area and vertex-average face center remain marked incomplete
 until Swift-CAD publishes exact face measurement.
 

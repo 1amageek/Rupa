@@ -66,8 +66,10 @@ import Testing
         return (box, parent)
     }
 
+    /// A pick off the displayed surface resolves to the exact face point and its outward normal,
+    /// both placed by the occurrence.
     @MainActor
-    @Test func pickedSurfaceNormalsAreTheKernelFaceNormalsPlaced() throws {
+    @Test func picksResolveToTheExactFacePointAndOutwardNormal() throws {
         let session = EditorSession()
         let (box, _) = try boxUnderMovedParent(session)
         let document = session.document
@@ -79,14 +81,18 @@ import Testing
         for face in faces {
             let center = try #require(face.center)
             let normal = try #require(face.normal)
-            let worldPoint = try occurrence.worldTransform.applied(to: Point3D(x: center.x, y: center.y, z: center.z))
-            let expected = try occurrence.worldTransform
+            let componentID = SelectionComponentID(rawValue: try #require(face.selectionComponentID))
+            let exactCenter = try occurrence.worldTransform.applied(to: Point3D(x: center.x, y: center.y, z: center.z))
+            let expectedNormal = try occurrence.worldTransform
                 .applyingNormal(to: Vector3D(x: normal.x, y: normal.y, z: normal.z))
                 .normalized(tolerance: 1.0e-12)
-            let resolved = try PlacedSurfaceNormalResolver().outwardNormal(
-                at: worldPoint, on: occurrence.id, document: document, topology: topology
+            // A tessellation hit lies slightly off the exact surface.
+            let displayedHit = exactCenter + expectedNormal * 1.0e-4
+            let resolved = try PlacedSurfacePointResolver().exactPoint(
+                near: displayedHit, onFace: componentID, of: occurrence.id, document: document, topology: topology
             )
-            #expect(close(resolved, expected))
+            #expect(close(resolved.point, exactCenter))
+            #expect(close(resolved.outwardNormal, expectedNormal))
         }
     }
 

@@ -161,7 +161,7 @@ public struct TopologySnapshotService: Sendable {
                 evaluatedDocument.brep.geometry.surfaces[face.surfaceID].map(describeSurface)
             }
             let center = face.flatMap { faceCenter($0, in: evaluatedDocument.brep) }
-            let normal = face.flatMap { faceNormal($0, in: evaluatedDocument.brep) }
+            let normal = face.flatMap { faceNormal($0, reference: stableReference, in: evaluatedDocument) }
             return TopologySummaryResult.Entry(
                 subshapeID: identity,
                 stableReference: stableReference,
@@ -306,27 +306,29 @@ public struct TopologySnapshotService: Sendable {
         )
     }
 
+    /// The outward normal at the face's representative parameter, oriented by Swift-CAD.
     private func faceNormal(
         _ face: Face,
-        in model: BRepModel
+        reference: StableSubshapeReference?,
+        in evaluatedDocument: EvaluatedDocument
     ) -> TopologySummaryResult.Entry.Point? {
-        guard let surface = model.geometry.surfaces[face.surfaceID] else {
+        guard let reference,
+              let surface = evaluatedDocument.brep.geometry.surfaces[face.surfaceID] else {
             return nil
         }
         do {
-            guard let parameter = try representativeParameter(on: face, surface: surface, in: model) else {
+            guard let parameter = try representativeParameter(on: face, surface: surface, in: evaluatedDocument.brep) else {
                 return nil
             }
-            let surfaceNormal = try surface.normal(
-                u: parameter.u,
-                v: parameter.v,
-                tolerance: .standard
+            let frame = try SurfaceQueryEvaluator(tolerance: .standard).outwardFrame(
+                at: SurfaceParameterReference(
+                    surface: SurfaceReference(subshape: reference),
+                    u: parameter.u,
+                    v: parameter.v
+                ),
+                in: evaluatedDocument
             )
-            return point(
-                face.orientation == .forward
-                    ? surfaceNormal
-                    : -surfaceNormal
-            )
+            return point(frame.outwardNormal)
         } catch {
             return nil
         }

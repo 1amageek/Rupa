@@ -2655,7 +2655,10 @@ While `pointPickActive` is set the viewport takes no drags and resolves each
 click with the Measure endpoint resolution (snap, displayed surface,
 construction plane) and hands the result to `onPointPick` as
 `ViewportPointPick.point` or, when nothing resolves, `.refused` with the
-reason. It selects nothing and edits nothing; the requesting command owns what
+reason. A point on a displayed CAD surface also carries the occurrence
+and the generated face the frame drew there (read from the prepared run list
+like a face pick), so a command can ask Swift-CAD for the exact point and
+normal instead of using the tessellation hit. It selects nothing and edits nothing; the requesting command owns what
 the point means.
 
 ## Verification and Change Impact

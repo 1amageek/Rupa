@@ -7458,8 +7458,15 @@ private struct ProjectMainViewContent: View {
         case .refused(let message):
             reportToolStatus(message, severity: .warning)
         case .point(let picked):
-            let point = picked.point
             pointPickRequest = nil
+            let exact: WorkspacePlaceSession.Reference
+            do {
+                exact = try exactPick(picked)
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                return
+            }
+            let point = exact.point
             switch request {
             case .copyReferencePoint(let ids):
                 do {
@@ -7467,7 +7474,7 @@ private struct ProjectMainViewContent: View {
                     try WorkspaceSceneClipboard().write(WorkspaceScenePlacementPayload(
                         fragment: try document.sceneFragment(copying: ids),
                         basePoint: point,
-                        baseNormal: try pickedSurfaceNormal(picked)
+                        baseNormal: exact.normal
                     ))
                     reportToolStatus("Copied \(ids.count) object(s) with placement. Paste with Placement places them.")
                 } catch {
@@ -7544,26 +7551,17 @@ private struct ProjectMainViewContent: View {
                 case .source:
                     // A source normal comes only from the objects' own surface; a plane under
                     // them says nothing about which way they face.
-                    place.pickSource(WorkspacePlaceSession.Reference(
-                        point: picked.point,
-                        normal: picked.occurrenceID == nil ? nil : try pickedSurfaceNormal(picked)
-                    ))
+                    place.pickSource(try exactPick(picked))
                     placeSession = place
                     reportToolStatus(place.prompt)
                 case .destination:
-                    let destinationNormal: Vector3D?
-                    if picked.occurrenceID != nil {
-                        destinationNormal = try pickedSurfaceNormal(picked)
-                    } else if let plane = picked.plane {
-                        destinationNormal = try SketchPlaneCoordinateSystem(plane: plane).normal
-                    } else {
-                        destinationNormal = nil
+                    var destination = try exactPick(picked)
+                    // A destination on the construction plane lands on it with the plane's normal.
+                    if destination.normal == nil, let plane = picked.plane {
+                        destination.normal = try SketchPlaneCoordinateSystem(plane: plane).normal
                     }
-                    let command = try place.command(destination: WorkspacePlaceSession.Reference(
-                        point: picked.point,
-                        normal: destinationNormal,
-                        bodySceneNodeID: try pickedBodySceneNodeID(picked)
-                    ))
+                    destination.bodySceneNodeID = try pickedBodySceneNodeID(picked)
+                    let command = try place.command(destination: destination)
                     submitSource(command) { result in
                         guard result != nil else { return }
                         reportToolStatus("Placed. Click another destination, or Esc to finish.")
@@ -7586,9 +7584,13 @@ private struct ProjectMainViewContent: View {
         return occurrence.sourceSceneNodeID
     }
 
-    /// The exact outward normal of the surface a pick landed on, from Swift-CAD.
-    private func pickedSurfaceNormal(_ picked: ViewportPickedPoint) throws -> Vector3D? {
-        guard let occurrenceID = picked.occurrenceID else { return nil }
+    /// The picked point as exact geometry: a pick on a displayed CAD face becomes Swift-CAD's
+    /// nearest point of that face with its outward normal; other picks keep their point and carry
+    /// no surface normal.
+    private func exactPick(_ picked: ViewportPickedPoint) throws -> WorkspacePlaceSession.Reference {
+        guard let occurrenceID = picked.occurrenceID, let faceComponentID = picked.faceComponentID else {
+            return WorkspacePlaceSession.Reference(point: picked.point, normal: nil)
+        }
         let document = snapshot.document.document
         let topology = try TopologySnapshotService().snapshot(
             document: document,
@@ -7597,12 +7599,14 @@ private struct ProjectMainViewContent: View {
             currentGeneration: snapshot.documentGeneration,
             metricPolicy: .omit
         )
-        return try PlacedSurfaceNormalResolver().outwardNormal(
-            at: picked.point,
-            on: occurrenceID,
+        let exact = try PlacedSurfacePointResolver().exactPoint(
+            near: picked.point,
+            onFace: faceComponentID,
+            of: occurrenceID,
             document: document,
             topology: topology
         )
+        return WorkspacePlaceSession.Reference(point: exact.point, normal: exact.outwardNormal)
     }
 
     /// The whole-object selection when Duplicate accepts it, otherwise `nil`.

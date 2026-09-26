@@ -93,10 +93,11 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   later copy with the previous result); a copy must contain exactly one body,
   the copies are hidden once consumed, and component-instance output cannot be
   combined.
-- Surface normals for placement come from `PlacedSurfaceNormalResolver`: the
-  pick is taken into the occurrence's source frame, projected with Swift-CAD's
-  surface query onto the presented body's faces, and the nearest face's normal
-  is oriented by the face and placed back into the world.
+- Surface points and normals for placement come from `PlacedSurfacePointResolver`:
+  the viewport names the face its pick landed on, the pick is taken into the
+  occurrence's source frame, Swift-CAD's `SurfaceQueryEvaluator.outwardFrame`
+  returns the nearest exact point of that face with its outward normal (the
+  kernel owns face orientation), and both are placed back into the world.
 
 ## Verification and Change Impact
 

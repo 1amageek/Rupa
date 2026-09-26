@@ -1681,6 +1681,29 @@ public struct Viewport: View {
         )
     }
 
+    /// The generated CAD face the frame drew at `point` for `occurrenceID`, read from the prepared
+    /// run list the same way a face pick is; `nil` when the pixel shows no CAD face of it.
+    private func pickedFaceComponentID(
+        at point: CGPoint,
+        occurrenceID: SceneOccurrenceID,
+        size: CGSize
+    ) throws -> SelectionComponentID? {
+        guard let surface = try presentationSurfaceHit(at: point),
+              surface.triangle.occurrenceID == occurrenceID,
+              case .cad = surface.triangle.sourceReference,
+              let sceneNodeID = presentationSceneNodeIDByOccurrenceID[occurrenceID],
+              let triangleIndex = Int(exactly: surface.triangle.faceID.rawValue) else {
+            return nil
+        }
+        let scene = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).scene
+        guard let item = scene.items.first(where: { $0.sceneNodeID == sceneNodeID }),
+              case .body(let component) = item.kind,
+              let topology = component.topology else {
+            return nil
+        }
+        return topology.componentID(forTriangle: triangleIndex)
+    }
+
     private func presentationQueryIdentity() throws -> RealityViewportPreparationRequest.Identity {
         let identity = try presentationPreparation.get()
         guard identity.snapshotID == presentationScene?.snapshotID else {
@@ -4616,6 +4639,15 @@ public struct Viewport: View {
                 switch endpoint.source {
                 case .presentation(let occurrenceID):
                     picked.occurrenceID = occurrenceID
+                    do {
+                        picked.faceComponentID = try pickedFaceComponentID(
+                            at: point, occurrenceID: occurrenceID, size: size
+                        )
+                    } catch {
+                        // An unavailable frame cannot name the face the point lies on.
+                        onPointPick?(.refused(error.localizedDescription))
+                        return
+                    }
                 case .constructionPlane(let plane):
                     picked.plane = plane
                 case .snap:
