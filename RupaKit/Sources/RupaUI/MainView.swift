@@ -149,6 +149,7 @@ private struct ProjectMainViewContent: View {
     @State private var pointPickRequest: WorkspacePointPickRequest?
     @State private var placeSession: WorkspacePlaceSession?
     @State private var transformSession: WorkspaceTransformSession?
+    @State private var mirrorSession: WorkspaceMirrorSession?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
@@ -2051,6 +2052,7 @@ private struct ProjectMainViewContent: View {
             }
             if newScope != .object {
                 transformSession = nil
+                mirrorSession = nil
             }
         }
         // A transform follows the objects it moves, and ends when the selection is something else.
@@ -2060,6 +2062,9 @@ private struct ProjectMainViewContent: View {
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
             if let transformSession, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
+            }
+            if let mirrorSession, mirrorSession.sceneNodeIDs != ids {
+                self.mirrorSession = nil
             }
         }
     }
@@ -2112,7 +2117,7 @@ private struct ProjectMainViewContent: View {
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             measurementToolActive: selectedTool == .measure,
             pointPickActive: pointPickRequest != nil || placeSession != nil
-                || transformSession?.pendingPoint != nil,
+                || transformSession?.pendingPoint != nil || mirrorSession != nil,
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
@@ -3898,6 +3903,10 @@ private struct ProjectMainViewContent: View {
                 workspaceContextDivider
                 transformSessionContextPanelContent(transformSession)
             }
+            if let mirrorSession {
+                workspaceContextDivider
+                mirrorSessionContextPanelContent(mirrorSession)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
@@ -4015,6 +4024,36 @@ private struct ProjectMainViewContent: View {
                 }
             }
         }
+    }
+
+    /// Mirror's command dialog: the plane and the Cut, Union and Instances options.
+    @ViewBuilder
+    private func mirrorSessionContextPanelContent(_ mirror: WorkspaceMirrorSession) -> some View {
+        workspaceValuePill("Mirror", mirror.planeName, accessibilityIdentifier: "WorkspaceMirror.plane")
+        Toggle("Cut down mirror plane", isOn: Binding(
+            get: { mirror.options.cutsAtPlane },
+            set: { mirrorSession?.options.cutsAtPlane = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceMirror.cut")
+        Toggle("Union halves", isOn: Binding(
+            get: { mirror.options.unionsHalves },
+            set: { if $0 != mirror.options.unionsHalves { mirrorSession?.toggleUnion() } }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceMirror.union")
+        Toggle("Make Instances", isOn: Binding(
+            get: { mirror.options.makesInstances },
+            set: { if $0 != mirror.options.makesInstances { mirrorSession?.toggleInstances() } }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceMirror.instances")
+        Button("Mirror") { applyMirror() }
+            .controlSize(.small)
+            .accessibilityIdentifier("WorkspaceMirror.apply")
     }
 
     /// A stored option field: submitting it changes the option without applying a motion.
@@ -5116,6 +5155,7 @@ private struct ProjectMainViewContent: View {
             pointPickRequest = nil
             placeSession = nil
             transformSession = nil
+            mirrorSession = nil
         }
         setActiveTool(tool)
         reportToolStatus(tool == .solid ? solidShape.activationPrompt : tool.activationPrompt)
@@ -5379,6 +5419,7 @@ private struct ProjectMainViewContent: View {
                     || !selectedSurfaceControlPointReferences.isEmpty),
             isPlaceSessionActive: placeSession != nil,
             isTransformSessionActive: transformSession != nil,
+            isMirrorSessionActive: mirrorSession != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty
         )
     }
@@ -5456,6 +5497,32 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .finishTransform:
             finishTransformSession()
+            return .handled
+        case .beginMirror:
+            beginMirrorSession(sceneNodeIDs: snapshot.selection.wholeSceneNodeIDs)
+            return .handled
+        case .chooseMirrorAxis(let axis, let positive):
+            do {
+                try mirrorSession?.choose(axis: axis, positive: positive, constructionPlane: mirrorConstructionPlane)
+                reportToolStatus(mirrorSession?.prompt ?? "")
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+            return .handled
+        case .toggleMirrorInstances:
+            mirrorSession?.toggleInstances()
+            reportMirrorOptions()
+            return .handled
+        case .toggleMirrorUnion:
+            mirrorSession?.toggleUnion()
+            reportMirrorOptions()
+            return .handled
+        case .beginMirrorFreestyle:
+            mirrorSession?.beginFreestyle()
+            reportToolStatus(mirrorSession?.prompt ?? "")
+            return .handled
+        case .applyMirror:
+            applyMirror()
             return .handled
         case .setPlaceBoolean(let operation):
             placeSession?.booleanOperation = operation
@@ -5640,6 +5707,16 @@ private struct ProjectMainViewContent: View {
         if placeSession != nil {
             placeSession = nil
             reportToolStatus("Place finished.")
+            return .handled
+        }
+        if mirrorSession?.freestylePoints != nil {
+            mirrorSession?.freestylePoints = nil
+            reportToolStatus(mirrorSession?.prompt ?? "")
+            return .handled
+        }
+        if mirrorSession != nil {
+            mirrorSession = nil
+            reportToolStatus("Mirror canceled.")
             return .handled
         }
         if transformSession?.pendingPoint != nil {
@@ -7664,8 +7741,15 @@ private struct ProjectMainViewContent: View {
         } else {
             copyWithPlacement = nil
         }
+        let mirror: (@MainActor () -> Void)?
+        if let ids = duplicableSelectionIDs {
+            mirror = { beginMirrorSession(sceneNodeIDs: ids) }
+        } else {
+            mirror = nil
+        }
         return WorkspaceEditCommands(
             duplicate: duplicate,
+            mirror: mirror,
             place: place,
             copyWithPlacement: copyWithPlacement,
             pasteWithPlacement: { beginPasteWithPlacement() },
@@ -7736,6 +7820,10 @@ private struct ProjectMainViewContent: View {
         }
         if transformSession?.pendingPoint != nil {
             handleTransformPointPick(pick)
+            return
+        }
+        if mirrorSession != nil {
+            handleMirrorPointPick(pick)
             return
         }
         guard let request = pointPickRequest else {
@@ -7811,6 +7899,82 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(place.prompt)
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    /// The construction plane Mirror's axis keys and freestyle line are read in.
+    private var mirrorConstructionPlane: SketchPlane {
+        workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane ?? .xy
+    }
+
+    /// Starts Mirror on whole objects, across the construction plane's positive X.
+    private func beginMirrorSession(sceneNodeIDs ids: [SceneNodeID]) {
+        guard !ids.isEmpty else { return }
+        do {
+            pointPickRequest = nil
+            placeSession = nil
+            transformSession = nil
+            let mirror = try WorkspaceMirrorSession(sceneNodeIDs: ids, constructionPlane: mirrorConstructionPlane)
+            mirrorSession = mirror
+            reportToolStatus(mirror.prompt)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    private func reportMirrorOptions() {
+        guard let mirrorSession else { return }
+        let options = mirrorSession.options
+        reportToolStatus(
+            "Mirror across \(mirrorSession.planeName)"
+                + (options.cutsAtPlane ? ", cut at the plane" : "")
+                + (options.unionsHalves ? ", halves joined" : "")
+                + (options.makesInstances ? ", as instances" : ", as copies")
+                + "."
+        )
+    }
+
+    /// Applies the mirror once, selects what it made and ends the session.
+    private func applyMirror() {
+        guard let mirror = mirrorSession else { return }
+        mirrorSession = nil
+        submitSource(mirror.command) { result in
+            guard result != nil else { return }
+            guard let generated = result?.generatedIdentities.sceneNodeIDs,
+                  let metadata = workspace.view?.document.document.productMetadata, !generated.isEmpty else {
+                reportToolStatus("Mirrored.")
+                return
+            }
+            let generatedIDs = Set(generated)
+            let childIDs = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
+            selectSceneNodes(generated.filter { generatedIDs.contains($0) && !childIDs.contains($0) })
+            reportToolStatus("Mirrored.")
+        }
+    }
+
+    /// A click sets the plane tangent to the face clicked; in freestyle, clicks are the line's ends.
+    private func handleMirrorPointPick(_ pick: ViewportPointPick) {
+        guard var mirror = mirrorSession else { return }
+        switch pick {
+        case .refused(let message):
+            reportToolStatus(message, severity: .warning)
+        case .point(let picked):
+            do {
+                let exact = try exactPick(picked)
+                if mirror.freestylePoints != nil {
+                    try mirror.addFreestylePoint(exact.point, constructionPlane: mirrorConstructionPlane)
+                } else {
+                    guard let normal = exact.normal else {
+                        reportToolStatus("Click a face to mirror across the plane touching it.", severity: .warning)
+                        return
+                    }
+                    try mirror.choose(facePoint: exact.point, normal: normal)
+                }
+                mirrorSession = mirror
+                reportToolStatus(mirror.prompt)
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         }
     }
 

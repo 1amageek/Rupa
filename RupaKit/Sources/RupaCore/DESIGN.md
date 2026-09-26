@@ -85,6 +85,10 @@ selections copying refuses.
 orientation), the motions Move, Rotate and Scale produce, and holding component
 instances in place while their source moves.
 
+[SceneMirror](SceneMirror/DESIGN.md) owns Mirror: the world mirror plane, the
+Cut down mirror plane, Union halves and Make Instances options, and the
+Swift-CAD mirror features, copies and instances they make.
+
 [ControlPointMove](ControlPointMove/DESIGN.md) owns Move Control Point's
 proportional falloff and construction-plane mirror for B-spline surface control
 points (`moveSurfaceControlPointsProportionally`).

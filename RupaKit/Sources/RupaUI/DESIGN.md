@@ -503,6 +503,17 @@ length and uniform scaling). Every drag, freestyle and typed motion commits one
 each is one undo step. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
 
+Mirror (Option-X, Edit menu) runs a `WorkspaceMirrorSession` on the
+whole-object selection. The plane starts at the construction plane's positive
+X; X/Y/Z choose that axis's positive side and Shift-X/Y/Z the negative side, a
+click on a face chooses the plane tangent to it at the exact point toward its
+outward normal, and F takes a freestyle line through two clicks. I toggles Make
+Instances and Q Union halves (they exclude each other); the panel adds Cut down
+mirror plane. Return or the panel's Mirror button submits one
+`mirrorSceneNodes` command, selects what it made and ends the session; Escape
+backs out of a freestyle pick, then cancels. Core's
+[SceneMirror](../RupaCore/SceneMirror/DESIGN.md) owns what each option makes.
+
 With surface control points selected in vertex scope the panel shows Move
 Control Point's Proportional (None, All, Selected with falloff U and V) and
 Mirror (X, Y, Z of the active construction plane) options. While either is

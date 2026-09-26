@@ -383,3 +383,24 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
     #expect(action("d", [.command]) == nil)
 }
+
+@Test func workspaceKeyboardRouterStartsAndDrivesMirror() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.hasWholeObjectSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "≈", modifiers: [.option]), context: context) == .beginMirror)
+    context.hasWholeObjectSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "≈", modifiers: [.option]), context: context) == nil)
+
+    context.isMirrorSessionActive = true
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    #expect(action("y") == .chooseMirrorAxis(.y, positive: true))
+    #expect(action("X", [.shift]) == .chooseMirrorAxis(.x, positive: false))
+    #expect(action("i") == .toggleMirrorInstances)
+    #expect(action("q") == .toggleMirrorUnion)
+    #expect(action("f") == .beginMirrorFreestyle)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .applyMirror)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
+}

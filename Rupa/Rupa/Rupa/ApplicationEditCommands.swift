@@ -17,6 +17,11 @@ struct ApplicationEditCommands: Commands {
             }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(editCommands?.duplicate == nil)
+            Button("Mirror") {
+                editCommands?.mirror?()
+            }
+            .keyboardShortcut("x", modifiers: .option)
+            .disabled(editCommands?.mirror == nil)
             Button("Place") {
                 editCommands?.place?()
             }

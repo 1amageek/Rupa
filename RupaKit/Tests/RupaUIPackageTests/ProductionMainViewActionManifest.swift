@@ -77,6 +77,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspacePatternArrayCreationPlanner.swift",
         "Sources/RupaUI/WorkspacePlaceSession.swift",
         "Sources/RupaUI/WorkspaceTransformSession.swift",
+        "Sources/RupaUI/WorkspaceMirrorSession.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -128,6 +129,7 @@ enum ProductionMainViewActionManifest {
         "insertSurfaceTrimKnot",
         "joinSketchCurves",
         "matchSurfaceBoundaryContinuity",
+        "mirrorSceneNodes",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",
         "moveSceneNodes",

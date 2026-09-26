@@ -890,6 +890,12 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .mirrorSceneNodes(let ids, let plane, let options):
+            var updatedDocument = document
+            try updatedDocument.mirrorSceneNodes(ids: ids, plane: plane, options: options, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .duplicateSceneNodes, .placeSceneNodes, .pasteSceneFragment:
             func run() throws {
                 var updatedDocument = document

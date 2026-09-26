@@ -42,6 +42,7 @@ enum PreparedAutomationSourceCommandValidation {
              .ungroupSceneNode,
              .deleteSceneNodes,
              .transformSceneNodes,
+             .mirrorSceneNodes,
              .duplicateSceneNodes,
              .placeSceneNodes,
              .pasteSceneFragment,

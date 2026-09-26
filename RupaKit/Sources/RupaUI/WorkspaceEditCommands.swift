@@ -9,6 +9,8 @@ import SwiftUI
 public struct WorkspaceEditCommands {
     /// Copies the selected objects in place and selects the copies for moving.
     public var duplicate: (@MainActor () -> Void)?
+    /// Starts Mirror on the selected objects.
+    public var mirror: (@MainActor () -> Void)?
     /// Places copies or instances of the selected objects from one picked point onto others.
     public var place: (@MainActor () -> Void)?
     /// Copies the selected objects with a reference point picked next, for Paste with Placement.
@@ -24,6 +26,7 @@ public struct WorkspaceEditCommands {
 
     public init(
         duplicate: (@MainActor () -> Void)?,
+        mirror: (@MainActor () -> Void)? = nil,
         place: (@MainActor () -> Void)? = nil,
         copyWithPlacement: (@MainActor () -> Void)? = nil,
         pasteWithPlacement: (@MainActor () -> Void)? = nil,
@@ -32,6 +35,7 @@ public struct WorkspaceEditCommands {
         curveArray: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
+        self.mirror = mirror
         self.place = place
         self.copyWithPlacement = copyWithPlacement
         self.pasteWithPlacement = pasteWithPlacement

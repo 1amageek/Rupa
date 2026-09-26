@@ -68,6 +68,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Moves `ids` together as one body, `worldDelta` being the motion in world space; with
     /// `compensatingInstances`, instances of a moved component definition stay in place.
     case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D, compensatingInstances: Bool)
+    /// Mirror the selected objects across a world plane with the dialog's options.
+    case mirrorSceneNodes(ids: [SceneNodeID], plane: SceneMirrorPlane, options: SceneMirrorOptions)
     /// Copies `ids` in place as independent siblings; the copies are the generated scene nodes.
     case duplicateSceneNodes(ids: [SceneNodeID])
     /// Places `ids` once per world-space placement of the selection, as independent copies or as
@@ -550,6 +552,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "deleteSceneNodes"
         case .transformSceneNodes:
             "transformSceneNodes"
+        case .mirrorSceneNodes:
+            "mirrorSceneNodes"
         case .duplicateSceneNodes:
             "duplicateSceneNodes"
         case .placeSceneNodes:
@@ -832,6 +836,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .ungroupSceneNode,
              .deleteSceneNodes,
              .transformSceneNodes,
+             .mirrorSceneNodes,
              .duplicateSceneNodes,
              .placeSceneNodes,
              .pasteSceneFragment,

@@ -124,6 +124,18 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginTransformFreestyle
     /// Return: finish the transform.
     case finishTransform
+    /// Option-X: start Mirror on the whole-object selection.
+    case beginMirror
+    /// X/Y/Z mirror toward that axis's positive side; with Shift, toward its negative side.
+    case chooseMirrorAxis(SceneTransformAxis, positive: Bool)
+    /// I: toggle mirrored instances.
+    case toggleMirrorInstances
+    /// Q: toggle joining the halves.
+    case toggleMirrorUnion
+    /// F: pick the mirror line.
+    case beginMirrorFreestyle
+    /// Return: apply the mirror.
+    case applyMirror
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -171,6 +183,7 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasSurfaceControlVertexSlideTargets: Bool
     var isPlaceSessionActive: Bool = false
     var isTransformSessionActive: Bool = false
+    var isMirrorSessionActive: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
 
@@ -200,6 +213,18 @@ struct WorkspaceKeyboardRouter: Sendable {
     ) -> WorkspaceKeyboardAction? {
         if context.isTransformSessionActive, let transformAction = transformSessionAction(for: input) {
             return transformAction
+        }
+        if context.isMirrorSessionActive, let mirrorAction = mirrorSessionAction(for: input) {
+            return mirrorAction
+        }
+        if input.phases.contains(.down),
+           input.modifiers == [.option],
+           ["x", "≈"].contains(input.characters.lowercased()),
+           context.isSelectToolActive,
+           context.hasWholeObjectSelection,
+           !context.isPlaceSessionActive,
+           !context.ownsTextEditingKeys {
+            return .beginMirror
         }
         if let snapOverrideAction = snapOverrideAction(for: input) {
             return snapOverrideAction
@@ -420,6 +445,27 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "w": return .cycleTransformOrientation
         case "v": return .pickTransformPivot
         case "f": return .beginTransformFreestyle
+        default: return nil
+        }
+    }
+
+    /// The keys Mirror takes while it runs, which Plasticity's Mirror uses too.
+    private func mirrorSessionAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down),
+              input.modifiers.isEmpty || input.modifiers == [.shift] else {
+            return nil
+        }
+        if input.isReturn {
+            return .applyMirror
+        }
+        let shifted = input.modifiers == [.shift]
+        switch input.characters.lowercased() {
+        case "x": return .chooseMirrorAxis(.x, positive: !shifted)
+        case "y": return .chooseMirrorAxis(.y, positive: !shifted)
+        case "z": return .chooseMirrorAxis(.z, positive: !shifted)
+        case "i" where !shifted: return .toggleMirrorInstances
+        case "q" where !shifted: return .toggleMirrorUnion
+        case "f" where !shifted: return .beginMirrorFreestyle
         default: return nil
         }
     }
