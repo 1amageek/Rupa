@@ -434,3 +434,17 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "=", modifiers: [.control]), context: keyboardContext()) == .activateMeasure)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "="), context: keyboardContext()) == .activateDimensionCommand)
 }
+
+@Test func workspaceKeyboardRouterDrivesSectionAnalysis() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters), context: context)
+    }
+    #expect(action("f") != .flipSectionAnalysis)
+    context.isSectionAnalysisSessionActive = true
+    #expect(action("d") == .focusSectionAnalysisDistance)
+    #expect(action("f") == .flipSectionAnalysis)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .confirmSectionAnalysis)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
+}

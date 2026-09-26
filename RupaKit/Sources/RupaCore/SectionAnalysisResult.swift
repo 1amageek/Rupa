@@ -8,6 +8,8 @@ public struct SectionAnalysisQuery: Codable, Equatable, Sendable {
         case constructionPlane(ConstructionPlaneSourceID)
         case activeConstructionPlane
         case sceneNode(SceneNodeID)
+        /// A selected planar face; the plane faces out of the body.
+        case face(SelectionTarget)
     }
 
     public var source: Source
@@ -43,6 +45,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         case constructionPlane
         case activeConstructionPlane
         case sceneNode
+        case face
     }
 
     public enum BodyClassification: String, Codable, Equatable, Sendable {
@@ -214,6 +217,36 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         }
     }
 
+    /// Two bodies whose sections overlap: solids that occupy the same space.
+    public struct Interference: Codable, Equatable, Sendable {
+        public var firstBodyID: String
+        public var firstSceneNodeID: SceneNodeID?
+        public var firstOccurrenceID: SceneOccurrenceID?
+        public var secondBodyID: String
+        public var secondSceneNodeID: SceneNodeID?
+        public var secondOccurrenceID: SceneOccurrenceID?
+        /// The closed contours of both sections.
+        public var contourIDs: [String]
+
+        public init(
+            firstBodyID: String,
+            firstSceneNodeID: SceneNodeID? = nil,
+            firstOccurrenceID: SceneOccurrenceID? = nil,
+            secondBodyID: String,
+            secondSceneNodeID: SceneNodeID? = nil,
+            secondOccurrenceID: SceneOccurrenceID? = nil,
+            contourIDs: [String]
+        ) {
+            self.firstBodyID = firstBodyID
+            self.firstSceneNodeID = firstSceneNodeID
+            self.firstOccurrenceID = firstOccurrenceID
+            self.secondBodyID = secondBodyID
+            self.secondSceneNodeID = secondSceneNodeID
+            self.secondOccurrenceID = secondOccurrenceID
+            self.contourIDs = contourIDs
+        }
+    }
+
     public var displayUnit: LengthDisplayUnit
     public var plane: Plane
     public var toleranceMeters: Double
@@ -233,7 +266,13 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
     public var bodies: [Body]
     public var intersectionSegments: [IntersectionSegment]
     public var intersectionContours: [IntersectionContour]
+    public var interferences: [Interference]
     public var diagnostics: [EditorDiagnostic]
+
+    /// Every contour of a section some other section overlaps.
+    public var interferingContourIDs: Set<String> {
+        Set(interferences.flatMap(\.contourIDs))
+    }
 
     public init(
         displayUnit: LengthDisplayUnit,
@@ -242,6 +281,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         bodies: [Body],
         intersectionSegments: [IntersectionSegment],
         intersectionContours: [IntersectionContour] = [],
+        interferences: [Interference] = [],
         truncatedIntersectionSegments: Bool,
         diagnostics: [EditorDiagnostic]
     ) {
@@ -264,6 +304,35 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         self.bodies = bodies
         self.intersectionSegments = intersectionSegments
         self.intersectionContours = intersectionContours
+        self.interferences = interferences
         self.diagnostics = diagnostics
+    }
+}
+
+extension SectionAnalysisResult {
+    /// Results saved before interference was reported decode with none.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        displayUnit = try container.decode(LengthDisplayUnit.self, forKey: .displayUnit)
+        plane = try container.decode(Plane.self, forKey: .plane)
+        toleranceMeters = try container.decode(Double.self, forKey: .toleranceMeters)
+        bodyCount = try container.decode(Int.self, forKey: .bodyCount)
+        triangleCount = try container.decode(Int.self, forKey: .triangleCount)
+        intersectingBodyCount = try container.decode(Int.self, forKey: .intersectingBodyCount)
+        touchingBodyCount = try container.decode(Int.self, forKey: .touchingBodyCount)
+        frontBodyCount = try container.decode(Int.self, forKey: .frontBodyCount)
+        behindBodyCount = try container.decode(Int.self, forKey: .behindBodyCount)
+        coplanarBodyCount = try container.decode(Int.self, forKey: .coplanarBodyCount)
+        spansPlaneBodyCount = try container.decode(Int.self, forKey: .spansPlaneBodyCount)
+        intersectingTriangleCount = try container.decode(Int.self, forKey: .intersectingTriangleCount)
+        intersectionSegmentCount = try container.decode(Int.self, forKey: .intersectionSegmentCount)
+        closedIntersectionContourCount = try container.decode(Int.self, forKey: .closedIntersectionContourCount)
+        openIntersectionContourCount = try container.decode(Int.self, forKey: .openIntersectionContourCount)
+        truncatedIntersectionSegments = try container.decode(Bool.self, forKey: .truncatedIntersectionSegments)
+        bodies = try container.decode([Body].self, forKey: .bodies)
+        intersectionSegments = try container.decode([IntersectionSegment].self, forKey: .intersectionSegments)
+        intersectionContours = try container.decode([IntersectionContour].self, forKey: .intersectionContours)
+        interferences = try container.decodeIfPresent([Interference].self, forKey: .interferences) ?? []
+        diagnostics = try container.decode([EditorDiagnostic].self, forKey: .diagnostics)
     }
 }

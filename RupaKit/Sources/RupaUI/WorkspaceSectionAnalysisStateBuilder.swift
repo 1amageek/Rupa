@@ -24,6 +24,19 @@ struct WorkspaceSectionAnalysisStateBuilder {
         }
     }
 
+    /// The analysis the Section Analysis command asks for.
+    func analysis(for query: SectionAnalysisQuery) throws -> SectionAnalysisResult {
+        try SectionAnalysisService().analyze(
+            document: document,
+            query: query,
+            activeConstructionPlaneID: nil,
+            displayUnit: displayUnit,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: documentGeneration
+        )
+    }
+
     private func resolveAnalysisSummary(for nodes: [SceneNode]) throws -> SectionAnalysisResult? {
         guard let query = sectionAnalysisQuery(for: nodes) else {
             return nil

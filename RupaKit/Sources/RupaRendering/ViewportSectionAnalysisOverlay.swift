@@ -59,6 +59,8 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         public var points2D: [Point2D]
         public var isClosed: Bool
         public var signedAreaSquareMeters: Double
+        /// The section of this contour overlaps another body's section.
+        public var isInterfering: Bool
 
         public init(
             id: String,
@@ -66,7 +68,8 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
             points: [Point3D],
             points2D: [Point2D],
             isClosed: Bool,
-            signedAreaSquareMeters: Double
+            signedAreaSquareMeters: Double,
+            isInterfering: Bool = false
         ) {
             self.id = id
             self.bodyID = bodyID
@@ -74,6 +77,7 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
             self.points2D = points2D
             self.isClosed = isClosed
             self.signedAreaSquareMeters = signedAreaSquareMeters
+            self.isInterfering = isInterfering
         }
     }
 
@@ -82,17 +86,20 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         public var contourID: String
         public var start: Point3D
         public var end: Point3D
+        public var isInterfering: Bool
 
         public init(
             id: String,
             contourID: String,
             start: Point3D,
-            end: Point3D
+            end: Point3D,
+            isInterfering: Bool = false
         ) {
             self.id = id
             self.contourID = contourID
             self.start = start
             self.end = end
+            self.isInterfering = isInterfering
         }
     }
 
@@ -167,6 +174,7 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
         }
         let visibleContourLimit = max(0, maximumVisibleContours)
         let visibleContours = result.intersectionContours.prefix(visibleContourLimit)
+        let interferingContourIDs = result.interferingContourIDs
         try checkpoint(visibleContours.count, 0, 0)
         let contourItems = try visibleContours.map { contour in
             try checkpoint(1, contour.points.count, 1)
@@ -180,7 +188,8 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
                 points: contour.points,
                 points2D: contour.points2D,
                 isClosed: contour.isClosed,
-                signedAreaSquareMeters: contour.signedAreaSquareMeters
+                signedAreaSquareMeters: contour.signedAreaSquareMeters,
+                isInterfering: interferingContourIDs.contains(contour.id)
             )
         }
         let hatchItems = try hatches(
@@ -353,7 +362,8 @@ public struct ViewportSectionAnalysisOverlay: Equatable {
                         id: "\(contour.id):hatch:\(hatchIndex)",
                         contourID: contour.id,
                         start: point(on: plane, x: startX, y: y),
-                        end: point(on: plane, x: endX, y: y)
+                        end: point(on: plane, x: endX, y: y),
+                        isInterfering: contour.isInterfering
                     ))
                     hatchIndex += 1
                 }

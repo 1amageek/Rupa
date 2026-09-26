@@ -154,6 +154,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case finishArrayCreation
     /// Control-=: Measure Distance.
     case activateMeasure
+    /// D: type the Section Analysis distance.
+    case focusSectionAnalysisDistance
+    /// F: flip the Section Analysis plane.
+    case flipSectionAnalysis
+    /// Return: place the Section Analysis slice.
+    case confirmSectionAnalysis
     /// M: Set Material on the selection.
     case setMaterial
     /// Shift-M: Fork Material on the selection.
@@ -209,6 +215,7 @@ struct WorkspaceKeyboardContext: Sendable {
     var isTransformSessionActive: Bool = false
     var isMirrorSessionActive: Bool = false
     var isArrayCreationSessionActive: Bool = false
+    var isSectionAnalysisSessionActive: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
 
@@ -244,6 +251,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isArrayCreationSessionActive, let arrayAction = arrayCreationAction(for: input) {
             return arrayAction
+        }
+        if context.isSectionAnalysisSessionActive, let sectionAction = sectionAnalysisAction(for: input) {
+            return sectionAction
         }
         if input.phases.contains(.down), input.modifiers == [.control], input.characters == "=",
            !context.ownsTextEditingKeys {
@@ -509,6 +519,19 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "i" where !shifted: return .toggleMirrorInstances
         case "q" where !shifted: return .toggleMirrorUnion
         case "f" where !shifted: return .beginMirrorFreestyle
+        default: return nil
+        }
+    }
+
+    /// The keys Section Analysis takes while its dialog is up, which Plasticity's uses too.
+    private func sectionAnalysisAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
+        if input.isReturn {
+            return .confirmSectionAnalysis
+        }
+        switch input.characters.lowercased() {
+        case "d": return .focusSectionAnalysisDistance
+        case "f": return .flipSectionAnalysis
         default: return nil
         }
     }

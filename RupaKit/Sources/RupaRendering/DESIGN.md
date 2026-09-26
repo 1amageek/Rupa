@@ -333,6 +333,8 @@ before owned allocation, append, and hierarchy/analysis/hatch visits. A stopped
 worker propagates `CancellationError`, never partial or empty success. Native
 section preparation admits the complete source and all derived hatches rather
 than using the legacy UI's visible-prefix limits.
+A contour Core reports as interfering, and the hatches filling it, carry that
+flag through the overlay and are drawn red instead of the section yellow.
 The revision does not repeat within one mounted viewport lifetime; exhaustion
 is an explicit failure rather than wraparound to a possibly retained identity.
 

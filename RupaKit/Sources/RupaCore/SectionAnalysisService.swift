@@ -56,7 +56,10 @@ public struct SectionAnalysisService: Sendable {
             flipsNormal: query.flipsNormal,
             document: document,
             hierarchy: hierarchy,
-            activeConstructionPlaneID: activeConstructionPlaneID
+            activeConstructionPlaneID: activeConstructionPlaneID,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
@@ -146,6 +149,7 @@ public struct SectionAnalysisService: Sendable {
             bodies: bodies,
             intersectionSegments: segments,
             intersectionContours: contours,
+            interferences: SectionAnalysisInterferenceDetector(tolerance: tolerance).interferences(in: contours),
             truncatedIntersectionSegments: truncatedSegments,
             diagnostics: diagnostics
         )
@@ -191,13 +195,19 @@ public struct SectionAnalysisService: Sendable {
         flipsNormal: Bool,
         document: DesignDocument,
         hierarchy: SceneNodeHierarchy,
-        activeConstructionPlaneID: ConstructionPlaneSourceID?
+        activeConstructionPlaneID: ConstructionPlaneSourceID?,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> ResolvedPlane {
         let basePlane = try resolvePlane(
             source,
             document: document,
             hierarchy: hierarchy,
-            activeConstructionPlaneID: activeConstructionPlaneID
+            activeConstructionPlaneID: activeConstructionPlaneID,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard offsetMeters != 0.0 || flipsNormal else {
             return basePlane
@@ -213,9 +223,21 @@ public struct SectionAnalysisService: Sendable {
         _ source: SectionAnalysisQuery.Source,
         document: DesignDocument,
         hierarchy: SceneNodeHierarchy,
-        activeConstructionPlaneID: ConstructionPlaneSourceID?
+        activeConstructionPlaneID: ConstructionPlaneSourceID?,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> ResolvedPlane {
         switch source {
+        case .face(let target):
+            return try resolvedFacePlane(
+                target,
+                document: document,
+                hierarchy: hierarchy,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
+            )
         case .sketchPlane(let plane):
             return try resolvedSketchPlane(
                 plane,
@@ -347,6 +369,38 @@ public struct SectionAnalysisService: Sendable {
             ),
             coordinateSystem: coordinateSystem
         )
+    }
+
+    /// The plane of a selected planar face, at the occurrence the selection names, facing out of
+    /// the body.
+    private func resolvedFacePlane(
+        _ target: SelectionTarget,
+        document: DesignDocument,
+        hierarchy: SceneNodeHierarchy,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> ResolvedPlane {
+        let topology = try TopologySnapshotService().snapshot(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        let facePlane = try ConstructionPlaneTargetResolver().planarGeneratedFacePlane(
+            alignedTo: target,
+            topology: topology,
+            operationName: "Section analysis",
+            tolerance: document.modelingSettings.tolerance
+        )
+        let name = document.productMetadata.sceneNodes[target.sceneNodeID]?.name
+        let local = try resolvedSketchPlane(
+            facePlane,
+            sourceKind: .face,
+            sourceID: target.sceneNodeID.description,
+            sourceName: name.map { "\($0) face" } ?? "Face"
+        )
+        return try placedPlane(local, by: hierarchy.worldTransform(of: target.sceneNodeID))
     }
 
     private func resolvedSceneNodePlane(

@@ -389,11 +389,13 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         struct Contour: Sendable {
             let points: [Point3D]
             let isClosed: Bool
+            var isInterfering = false
         }
 
         struct Hatch: Sendable {
             let start: Point3D
             let end: Point3D
+            var isInterfering = false
         }
 
         let plane: Plane?
@@ -1215,13 +1217,13 @@ enum ViewportSpatialOverlayProducer {
         contours.reserveCapacity(overlay.contours.count)
         for contour in overlay.contours {
             try Task.checkCancellation()
-            contours.append(.init(points: contour.points, isClosed: contour.isClosed))
+            contours.append(.init(points: contour.points, isClosed: contour.isClosed, isInterfering: contour.isInterfering))
         }
         var hatches: [ViewportSpatialOverlaySemanticSnapshot.Section.Hatch] = []
         hatches.reserveCapacity(overlay.hatches.count)
         for hatch in overlay.hatches {
             try Task.checkCancellation()
-            hatches.append(.init(start: hatch.start, end: hatch.end))
+            hatches.append(.init(start: hatch.start, end: hatch.end, isInterfering: hatch.isInterfering))
         }
         return .init(
             plane: overlay.plane.map {
@@ -1451,13 +1453,14 @@ enum ViewportSpatialOverlayProducer {
                 )
             ))
         }
+        // A section some other body's section overlaps is drawn red: the two solids interfere.
         for contour in section.contours where contour.isClosed && contour.points.count >= 3 {
             try Task.checkCancellation()
             paths.append(.init(
                 family: .section,
                 value: try polygonFill(
                     contour.points,
-                    color: SIMD4<Float>(0.98, 0.84, 0.26, 0.10),
+                    color: contour.isInterfering ? SIMD4<Float>(0.94, 0.20, 0.18, 0.32) : SIMD4<Float>(0.98, 0.84, 0.26, 0.10),
                     depth: .annotation
                 )
             ))
@@ -1465,7 +1468,7 @@ enum ViewportSpatialOverlayProducer {
                 family: .section,
                 value: try closedLine(
                     contour.points,
-                    color: SIMD4<Float>(0.98, 0.84, 0.26, 0.42),
+                    color: contour.isInterfering ? SIMD4<Float>(0.94, 0.20, 0.18, 0.9) : SIMD4<Float>(0.98, 0.84, 0.26, 0.42),
                     depth: .annotation
                 )
             ))
@@ -1476,7 +1479,7 @@ enum ViewportSpatialOverlayProducer {
                 family: .section,
                 value: try line(
                     [hatch.start, hatch.end],
-                    color: SIMD4<Float>(0.98, 0.84, 0.26, 0.34),
+                    color: hatch.isInterfering ? SIMD4<Float>(0.94, 0.20, 0.18, 0.6) : SIMD4<Float>(0.98, 0.84, 0.26, 0.34),
                     depth: .annotation
                 )
             ))

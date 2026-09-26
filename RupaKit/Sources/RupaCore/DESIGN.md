@@ -1013,6 +1013,18 @@ bounds. Document summaries still include authored hidden sources; visibility is
 not an instruction to discard source measurements. Section analysis separately
 selects visible occurrences, using the same resolved placements.
 
+Section analysis also sections at a selected planar face (`.face`): the face's
+plane from the generated topology, placed by the selected node's world
+transform and facing out of the body, then moved by the query's offset and flip
+like every other source. A non-face or non-planar target throws. Each result
+reports interference: two body occurrences whose sections overlap, so the solids
+share space. A section is the even-odd region of its closed contours; sections
+interfere when their boundaries cross by more than the tolerance or a point just
+inside one lies inside the other beyond it, so bodies that only touch do not.
+Results encoded before interference was reported decode with none.
+`SectionAnalysisCommandTests` owns the face placement, overlap, containment,
+touching and separated cases and the older-result decoding.
+
 Focused checks own translated/grouped selection bounds, independent component
 counts, reflected/nonuniform volume and area, profile bounds, retained IDs and
 stale/singular refusal. Extrusion, straight-sweep and far-from-origin fixtures

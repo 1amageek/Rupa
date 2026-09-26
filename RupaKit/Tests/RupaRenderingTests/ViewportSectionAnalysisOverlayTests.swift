@@ -103,9 +103,30 @@ import Testing
     #expect(overlay.hatches.allSatisfy { $0.contourID == contour.id })
 }
 
+@Test func viewportSectionAnalysisOverlayMarksInterferingContoursAndTheirHatches() throws {
+    let square = [Point2D(x: -1, y: -1), Point2D(x: 1, y: -1), Point2D(x: 1, y: 1), Point2D(x: -1, y: 1)]
+    let first = viewportSectionContour(points2D: square, bodyID: "body-a")
+    let second = viewportSectionContour(points2D: square.map { Point2D(x: $0.x + 1, y: $0.y) }, bodyID: "body-b")
+    let apart = viewportSectionContour(points2D: square.map { Point2D(x: $0.x + 5, y: $0.y) }, bodyID: "body-c")
+    let result = viewportSectionAnalysisResult(
+        segments: [],
+        contours: [first, second, apart],
+        interferences: [SectionAnalysisResult.Interference(
+            firstBodyID: "body-a", secondBodyID: "body-b", contourIDs: [first.id, second.id]
+        )]
+    )
+
+    let overlay = ViewportSectionAnalysisOverlay.build(result: result, ruler: WorkspaceScalePreset.architecture.rulerConfiguration)
+
+    #expect(overlay.contours.map(\.isInterfering) == [true, true, false])
+    #expect(overlay.hatches.contains { $0.contourID == apart.id && !$0.isInterfering })
+    #expect(overlay.hatches.filter { $0.contourID != apart.id }.allSatisfy { $0.isInterfering })
+}
+
 private func viewportSectionAnalysisResult(
     segments: [SectionAnalysisResult.IntersectionSegment],
     contours: [SectionAnalysisResult.IntersectionContour] = [],
+    interferences: [SectionAnalysisResult.Interference] = [],
     truncatedIntersectionSegments: Bool = false
 ) -> SectionAnalysisResult {
     SectionAnalysisResult(
@@ -123,6 +144,7 @@ private func viewportSectionAnalysisResult(
         bodies: [],
         intersectionSegments: segments,
         intersectionContours: contours,
+        interferences: interferences,
         truncatedIntersectionSegments: truncatedIntersectionSegments,
         diagnostics: []
     )

@@ -150,6 +150,12 @@ private struct ProjectMainViewContent: View {
     @State private var placeSession: WorkspacePlaceSession?
     @State private var transformSession: WorkspaceTransformSession?
     @State private var mirrorSession: WorkspaceMirrorSession?
+    /// Section Analysis while its dialog is up.
+    @State private var sectionAnalysisSession: WorkspaceSectionAnalysisSession?
+    /// The slice Section Analysis placed, shown until the command is run again.
+    @State private var placedSectionQuery: SectionAnalysisQuery?
+    /// The plane of the last placed slice, which Section Analysis's Previous restores.
+    @State private var previousSectionPlane: SketchPlane?
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
     @State private var measurementSeed: ViewportMeasurementSeed?
@@ -219,6 +225,7 @@ private struct ProjectMainViewContent: View {
     private let operationSequencer: ProjectWorkspaceOperationSequencer
     @FocusState private var isWorkspaceFocused: Bool
     @FocusState private var focusedPlaceOption: WorkspacePlaceOptionField?
+    @FocusState private var isSectionDistanceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
     private let viewportObjectSelectionIndex: ViewportObjectSelectionIndex
@@ -2080,7 +2087,16 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportCanvas: some View {
-        let sectionAnalysis = selectedSectionAnalysisSummary
+        // The Section Analysis command's section replaces a selected construction plane's.
+        let commandSection: SectionAnalysisResult? = if case .success(let analysis) = commandSectionAnalysisResult {
+            analysis
+        } else {
+            nil
+        }
+        let sectionAnalysis = commandSection ?? selectedSectionAnalysisSummary
+        let sectionClippingPlan = commandSection.map {
+            SectionAnalysisClippingPlan(result: $0, retaining: WorkspaceSectionAnalysisSession.retainedSide)
+        } ?? selectedSectionClippingPlan(for: sectionAnalysis)
         return Viewport(
             document: snapshot.document.document,
             sourceIdentity: .document(id: snapshot.document.document.id, generation: snapshot.documentGeneration),
@@ -2110,7 +2126,7 @@ private struct ProjectMainViewContent: View {
             surfaceAnalysisOptions: surfaceAnalysisOptions,
             surfaceContinuity: selectedSurfaceContinuitySummary,
             sectionAnalysis: sectionAnalysis,
-            sectionClippingPlan: selectedSectionClippingPlan(for: sectionAnalysis),
+            sectionClippingPlan: sectionClippingPlan,
             snapResolutionOptions: activeSnapResolutionOptions(),
             canvasDragPreviewKind: canvasDragPreviewKind,
             canvasPlacementPreviewKind: canvasPlacementPreviewKind,
@@ -2718,6 +2734,7 @@ private struct ProjectMainViewContent: View {
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
             || slideCommandState.isActive
+            || sectionAnalysisSession != nil
     }
 
     @discardableResult
@@ -2745,6 +2762,10 @@ private struct ProjectMainViewContent: View {
         if slotProfileCommandState.isActive {
             slotProfileCommandState.deactivate()
             reportToolStatus("Slot complete.")
+            return true
+        }
+        if sectionAnalysisSession != nil {
+            confirmSectionAnalysis()
             return true
         }
         return false
@@ -3924,6 +3945,10 @@ private struct ProjectMainViewContent: View {
                 workspaceContextDivider
                 mirrorSessionContextPanelContent(mirrorSession)
             }
+            if sectionAnalysisSession != nil || placedSectionQuery != nil {
+                workspaceContextDivider
+                sectionAnalysisContextPanelContent()
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
@@ -4071,6 +4096,131 @@ private struct ProjectMainViewContent: View {
         Button("Mirror") { applyMirror() }
             .controlSize(.small)
             .accessibilityIdentifier("WorkspaceMirror.apply")
+    }
+
+    /// Whether Section Analysis's dialog is up or its slice is placed.
+    private var isSectionAnalysisShown: Bool {
+        sectionAnalysisSession != nil || placedSectionQuery != nil
+    }
+
+    /// The Section Analysis command's section: the dialog's while it is up, else the placed slice.
+    private var commandSectionAnalysisResult: Result<SectionAnalysisResult, Error>? {
+        guard let query = sectionAnalysisSession?.query(constructionPlane: effectiveSketchPlane(fallback: .xy))
+                ?? placedSectionQuery else {
+            return nil
+        }
+        do {
+            return .success(try sectionAnalysisStateBuilder.analysis(for: query))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// Section Analysis toggles: it starts the dialog, or removes the dialog or placed slice.
+    private func toggleSectionAnalysis() {
+        if isSectionAnalysisShown {
+            sectionAnalysisSession = nil
+            placedSectionQuery = nil
+            reportToolStatus("Section Analysis removed.")
+            return
+        }
+        let targets = snapshot.selection.selectedTargets
+        let face = targets.count == 1 ? targets.first.flatMap { target -> SelectionTarget? in
+            if case .face = target.component { return target }
+            return nil
+        } : nil
+        let section = WorkspaceSectionAnalysisSession(selectedFace: face, previousPlane: previousSectionPlane)
+        sectionAnalysisSession = section
+        reportToolStatus(section.prompt)
+    }
+
+    /// OK, Return or right-click: the section becomes a fixed slice that stays until the command
+    /// is run again.
+    private func confirmSectionAnalysis() {
+        guard sectionAnalysisSession != nil, let result = commandSectionAnalysisResult else { return }
+        switch result {
+        case .success(let analysis):
+            placedSectionQuery = WorkspaceSectionAnalysisSession.placedQuery(for: analysis)
+            previousSectionPlane = WorkspaceSectionAnalysisSession.placedPlane(for: analysis)
+            sectionAnalysisSession = nil
+            isSectionDistanceFocused = false
+            reportToolStatus("Section placed. Run Section Analysis again to remove it.")
+        case .failure(let error):
+            reportToolStatus("Section Analysis: \(error.localizedDescription)", severity: .warning)
+        }
+    }
+
+    /// Section Analysis's command dialog, or the placed slice's summary.
+    @ViewBuilder
+    private func sectionAnalysisContextPanelContent() -> some View {
+        let result = commandSectionAnalysisResult
+        if let section = sectionAnalysisSession {
+            Picker("Plane", selection: Binding(
+                get: { section.planeSource },
+                set: { source in
+                    do {
+                        try sectionAnalysisSession?.choose(source)
+                    } catch {
+                        reportToolStatus(error.localizedDescription, severity: .warning)
+                    }
+                }
+            )) {
+                ForEach(WorkspaceSectionAnalysisSession.PlaneSource.allCases) { source in
+                    Text(source.title).tag(source)
+                        .disabled(!section.offers(source))
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceSectionAnalysis.plane")
+            let unit = snapshot.workspaceState.displayUnit
+            HStack(spacing: 4) {
+                Text("Distance").foregroundStyle(.secondary)
+                TextField("Distance", value: Binding(
+                    get: { section.distanceMeters / unit.metersPerUnit },
+                    set: { sectionAnalysisSession?.distanceMeters = $0 * unit.metersPerUnit }
+                ), format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 56)
+                    .focused($isSectionDistanceFocused)
+                    .accessibilityIdentifier("WorkspaceSectionAnalysis.distance")
+                Text(unit.symbol).foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            Toggle("Flip", isOn: Binding(
+                get: { section.flipsNormal },
+                set: { if $0 != section.flipsNormal { sectionAnalysisSession?.toggleFlip() } }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .accessibilityIdentifier("WorkspaceSectionAnalysis.flip")
+            Button("OK") { confirmSectionAnalysis() }
+                .controlSize(.small)
+                .disabled(!(result.map { if case .success = $0 { true } else { false } } ?? false))
+                .accessibilityIdentifier("WorkspaceSectionAnalysis.confirm")
+        } else {
+            workspaceValuePill("Section", "Placed", accessibilityIdentifier: "WorkspaceSectionAnalysis.placed")
+            Button("Remove") { toggleSectionAnalysis() }
+                .controlSize(.small)
+                .accessibilityIdentifier("WorkspaceSectionAnalysis.remove")
+        }
+        switch result {
+        case .success(let analysis) where !analysis.interferences.isEmpty:
+            workspaceValuePill(
+                "Interference",
+                "\(analysis.interferences.count)",
+                accessibilityIdentifier: "WorkspaceSectionAnalysis.interference"
+            )
+        case .failure(let error):
+            Text(error.localizedDescription)
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+                .accessibilityIdentifier("WorkspaceSectionAnalysis.failure")
+        default:
+            EmptyView()
+        }
     }
 
     /// A stored option field: submitting it changes the option without applying a motion.
@@ -5454,6 +5604,7 @@ private struct ProjectMainViewContent: View {
             isTransformSessionActive: transformSession != nil,
             isMirrorSessionActive: mirrorSession != nil,
             isArrayCreationSessionActive: arraySession != nil,
+            isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty
         )
     }
@@ -5606,6 +5757,15 @@ private struct ProjectMainViewContent: View {
         case .finishArrayCreation:
             arraySession = nil
             reportToolStatus("Array finished.")
+            return .handled
+        case .focusSectionAnalysisDistance:
+            isSectionDistanceFocused = true
+            return .handled
+        case .flipSectionAnalysis:
+            sectionAnalysisSession?.toggleFlip()
+            return .handled
+        case .confirmSectionAnalysis:
+            confirmSectionAnalysis()
             return .handled
         case .setPlaceBoolean(let operation):
             placeSession?.booleanOperation = operation
@@ -5805,6 +5965,11 @@ private struct ProjectMainViewContent: View {
         if mirrorSession != nil {
             mirrorSession = nil
             reportToolStatus("Mirror canceled.")
+            return .handled
+        }
+        if sectionAnalysisSession != nil {
+            sectionAnalysisSession = nil
+            reportToolStatus("Section Analysis canceled.")
             return .handled
         }
         if transformSession?.pendingPoint != nil {
@@ -9119,6 +9284,8 @@ private struct ProjectMainViewContent: View {
             "Active CPlane"
         case .sceneNode:
             "Scene Node"
+        case .face:
+            "Face"
         }
     }
 
