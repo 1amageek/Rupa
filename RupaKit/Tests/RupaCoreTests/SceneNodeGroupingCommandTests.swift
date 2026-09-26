@@ -330,7 +330,8 @@ import Testing
             try patterned.session.execute(
                 .transformSceneNodes(
                     ids: [outputID],
-                    worldDelta: try .translation(Vector3D(x: 1.0, y: 0.0, z: 0.0))
+                    worldDelta: try .translation(Vector3D(x: 1.0, y: 0.0, z: 0.0)),
+                    compensatingInstances: false
                 )
             )
         }
@@ -377,7 +378,7 @@ private extension EditorSession {
         by translation: Vector3D
     ) throws -> CommandExecutionResult {
         try execute(
-            .transformSceneNodes(ids: ids, worldDelta: try .translation(translation))
+            .transformSceneNodes(ids: ids, worldDelta: try .translation(translation), compensatingInstances: false)
         )
     }
 
@@ -390,7 +391,8 @@ private extension EditorSession {
         try execute(
             .transformSceneNodes(
                 ids: ids,
-                worldDelta: try .rotation(axis: axis, angleRadians: angleRadians, about: pivot)
+                worldDelta: try .rotation(axis: axis, angleRadians: angleRadians, about: pivot),
+                compensatingInstances: false
             )
         )
     }

@@ -65,8 +65,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case ungroupSceneNode(id: SceneNodeID)
     /// Removes `ids` and everything that cannot outlive them, or nothing at all.
     case deleteSceneNodes(ids: [SceneNodeID])
-    /// Moves `ids` together as one rigid body, `worldDelta` being the motion in world space.
-    case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D)
+    /// Moves `ids` together as one body, `worldDelta` being the motion in world space; with
+    /// `compensatingInstances`, instances of a moved component definition stay in place.
+    case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D, compensatingInstances: Bool)
     /// Copies `ids` in place as independent siblings; the copies are the generated scene nodes.
     case duplicateSceneNodes(ids: [SceneNodeID])
     /// Places `ids` once per world-space placement of the selection, as independent copies or as

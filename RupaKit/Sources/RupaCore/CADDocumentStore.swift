@@ -872,7 +872,7 @@ public final class CADDocumentStore {
             try run()
         case .transformSceneNodes:
             func run() throws {
-                guard case .transformSceneNodes(let ids, let worldDelta) = command else {
+                guard case .transformSceneNodes(let ids, let worldDelta, let compensatingInstances) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected transformSceneNodes."
@@ -882,6 +882,7 @@ public final class CADDocumentStore {
                 try updatedDocument.transformSceneNodes(
                     ids: ids,
                     worldDelta: worldDelta,
+                    compensatingInstances: compensatingInstances,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument

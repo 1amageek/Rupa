@@ -81,6 +81,10 @@ under the first object's parent, so the distribution is read in that frame and
 every output lands where the objects are displayed. It refuses the same
 selections copying refuses.
 
+[SceneTransform](SceneTransform/DESIGN.md) owns the transform frame (pivot and
+orientation), the motions Move, Rotate and Scale produce, and holding component
+instances in place while their source moves.
+
 Booleans combine bodies where they are displayed: `createBoolean` hands
 Swift-CAD the tool's rigid placement relative to the targets
 (`BooleanFeature.toolPlacement`), requires the targets to share one placement,
@@ -490,7 +494,7 @@ no-op behavior, stale generation, and one-step undo/redo.
 `EditorCommand.groupSceneNodes(name:memberIDs:origin:)`,
 `EditorCommand.ungroupSceneNode(id:)`,
 `EditorCommand.deleteSceneNodes(ids:)`, and
-`EditorCommand.transformSceneNodes(ids:worldDelta:)` are the Core source
+`EditorCommand.transformSceneNodes(ids:worldDelta:compensatingInstances:)` are the Core source
 commands for adding, removing, and placing structure in the Product hierarchy.
 They complement the move contract above: a move changes which parent a node
 hangs from, these change which nodes exist and where they stand. The commands
@@ -547,8 +551,8 @@ stable IDs and never mutate `ProductMetadata` directly.
    unchanged, and surfaces as a typed refusal the caller can report. A delete
    that reached past the selection reports how far it reached, because by the
    time the user looks, the rows that would have shown it are gone.
-7. `EditorCommand.transformSceneNodes(ids:worldDelta:)` states one motion in
-   world space and moves the selection as a single rigid body, so members keep
+7. `EditorCommand.transformSceneNodes(ids:worldDelta:compensatingInstances:)` states one motion in
+   world space and moves the selection as a single body, so members keep
    their arrangement relative to one another however far apart they sit in the
    tree. `SceneNodeRelativeTransformPlanner` carries the motion into each
    node's own parent space before composing it with that node's local
