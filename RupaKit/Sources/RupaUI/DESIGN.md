@@ -469,6 +469,16 @@ none. F flips, I toggles instances, X/Y/Z choose the up axis and D adds a
 consecutive copy (each copy repeats the placement from the previous one); the
 viewport context panel shows the phase and edits angle and scale.
 
+Copy with Placement (Shift-Command-C) waits for a reference point on the
+selection, then writes the selection's `SceneFragment`, that point and its
+surface normal to the pasteboard as JSON under Rupa's own type
+`team.stamp.rupa.scene-placement` through `WorkspaceSceneClipboard`, so other
+windows and documents can read it; ordinary pasteboard contents are not read.
+Paste with Placement (Shift-Command-V) reads it and starts a
+`WorkspacePlaceSession` whose source is the copied reference, so each
+destination pick submits one `pasteSceneFragment` with the Place options.
+Pasted objects are always independent copies.
+
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection

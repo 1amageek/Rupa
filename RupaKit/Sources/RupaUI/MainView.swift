@@ -5186,6 +5186,10 @@ private struct ProjectMainViewContent: View {
             reportPlaceOptions()
             return .handled
         case .togglePlaceOutput:
+            guard placeSession?.allowsInstances == true else {
+                reportToolStatus("Pasted objects are placed as independent copies.", severity: .warning)
+                return .handled
+            }
             placeSession?.output = placeSession?.output == .componentInstance ? .independentCopy : .componentInstance
             reportPlaceOptions()
             return .handled
@@ -7353,9 +7357,22 @@ private struct ProjectMainViewContent: View {
         } else {
             place = nil
         }
+        let copyWithPlacement: (@MainActor () -> Void)?
+        if let ids = duplicableSelectionIDs {
+            copyWithPlacement = {
+                placeSession = nil
+                let request = WorkspacePointPickRequest.copyReferencePoint(rootSceneNodeIDs: ids)
+                pointPickRequest = request
+                reportToolStatus(request.prompt)
+            }
+        } else {
+            copyWithPlacement = nil
+        }
         return WorkspaceEditCommands(
             duplicate: duplicate,
             place: place,
+            copyWithPlacement: copyWithPlacement,
+            pasteWithPlacement: { beginPasteWithPlacement() },
             rectangularArray: arrayAction(.rectangular),
             radialArray: arrayAction(.radial),
             curveArray: arrayAction(.curve)
@@ -7431,6 +7448,18 @@ private struct ProjectMainViewContent: View {
             let point = picked.point
             pointPickRequest = nil
             switch request {
+            case .copyReferencePoint(let ids):
+                do {
+                    let document = snapshot.document.document
+                    try WorkspaceSceneClipboard().write(WorkspaceScenePlacementPayload(
+                        fragment: try document.sceneFragment(copying: ids),
+                        basePoint: point,
+                        baseNormal: try pickedSurfaceNormal(picked)
+                    ))
+                    reportToolStatus("Copied \(ids.count) object(s) with placement. Paste with Placement places them.")
+                } catch {
+                    reportToolStatus(error.localizedDescription, severity: .warning)
+                }
             case .radialArrayCenter(let ids):
                 do {
                     let axis: Vector3D
@@ -7460,6 +7489,22 @@ private struct ProjectMainViewContent: View {
         let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
         placeSession = place
         reportToolStatus(place.prompt)
+    }
+
+    /// Starts placing the objects Copy with Placement put on the pasteboard.
+    private func beginPasteWithPlacement() {
+        do {
+            guard let payload = try WorkspaceSceneClipboard().read() else {
+                reportToolStatus("Nothing copied with placement to paste.", severity: .warning)
+                return
+            }
+            pointPickRequest = nil
+            let place = WorkspacePlaceSession(pasting: payload)
+            placeSession = place
+            reportToolStatus(place.prompt)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
     }
 
     private func reportPlaceOptions() {

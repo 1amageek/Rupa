@@ -11,6 +11,10 @@ public struct WorkspaceEditCommands {
     public var duplicate: (@MainActor () -> Void)?
     /// Places copies or instances of the selected objects from one picked point onto others.
     public var place: (@MainActor () -> Void)?
+    /// Copies the selected objects with a reference point picked next, for Paste with Placement.
+    public var copyWithPlacement: (@MainActor () -> Void)?
+    /// Places the objects on the pasteboard at destinations picked next.
+    public var pasteWithPlacement: (@MainActor () -> Void)?
     /// Arrays the selected objects along the parent's X axis.
     public var rectangularArray: (@MainActor () -> Void)?
     /// Arrays the selected objects around a center the user picks next.
@@ -21,12 +25,16 @@ public struct WorkspaceEditCommands {
     public init(
         duplicate: (@MainActor () -> Void)?,
         place: (@MainActor () -> Void)? = nil,
+        copyWithPlacement: (@MainActor () -> Void)? = nil,
+        pasteWithPlacement: (@MainActor () -> Void)? = nil,
         rectangularArray: (@MainActor () -> Void)? = nil,
         radialArray: (@MainActor () -> Void)? = nil,
         curveArray: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.place = place
+        self.copyWithPlacement = copyWithPlacement
+        self.pasteWithPlacement = pasteWithPlacement
         self.rectangularArray = rectangularArray
         self.radialArray = radialArray
         self.curveArray = curveArray

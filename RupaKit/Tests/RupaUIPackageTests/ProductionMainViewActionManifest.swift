@@ -140,6 +140,7 @@ enum ProductionMainViewActionManifest {
         "offsetCurve",
         "offsetRegions",
         "offsetSketchVertex",
+        "pasteSceneFragment",
         "placeSceneNodes",
         "projectBodyOutlinesToConstructionPlane",
         "projectCurvesToGeneratedFace",

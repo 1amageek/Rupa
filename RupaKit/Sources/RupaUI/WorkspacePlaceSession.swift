@@ -18,7 +18,13 @@ struct WorkspacePlaceSession: Equatable, Sendable {
         case destination(source: Reference)
     }
 
-    let rootSceneNodeIDs: [SceneNodeID]
+    /// What each placement inserts: the selected objects, or objects copied with placement.
+    enum Source: Equatable, Sendable {
+        case selection([SceneNodeID])
+        case pasted(SceneFragment)
+    }
+
+    let source: Source
     var phase: Phase = .source
     var upAxis: SceneNodePlacementSpec.UpAxis = .z
     var flipsOrientation = false
@@ -29,7 +35,19 @@ struct WorkspacePlaceSession: Equatable, Sendable {
     var output: SceneNodePlacementOutput = .independentCopy
 
     init(rootSceneNodeIDs: [SceneNodeID]) {
-        self.rootSceneNodeIDs = rootSceneNodeIDs
+        source = .selection(rootSceneNodeIDs)
+    }
+
+    /// Pastes copied objects: the reference point they were copied at is the source.
+    init(pasting payload: WorkspaceScenePlacementPayload) {
+        source = .pasted(payload.fragment)
+        phase = .destination(source: Reference(point: payload.basePoint, normal: payload.baseNormal))
+    }
+
+    /// Pasted objects are always independent copies; only a selection can be placed as instances.
+    var allowsInstances: Bool {
+        if case .selection = source { return true }
+        return false
     }
 
     var prompt: String {
@@ -47,15 +65,15 @@ struct WorkspacePlaceSession: Equatable, Sendable {
 
     /// The command placing the objects with `destination` as the target reference.
     func command(destination: Reference) throws -> EditorCommand {
-        guard case .destination(let source) = phase else {
+        guard case .destination(let reference) = phase else {
             throw EditorError(code: .commandInvalid, message: "Place needs its source reference point first.")
         }
         guard copyCount >= 1 else {
             throw EditorError(code: .commandInvalid, message: "Place needs at least one copy.")
         }
         let placement = try SceneNodePlacementSpec(
-            sourcePoint: source.point,
-            sourceNormal: source.normal,
+            sourcePoint: reference.point,
+            sourceNormal: reference.normal,
             destinationPoint: destination.point,
             destinationNormal: destination.normal,
             upAxis: upAxis,
@@ -68,6 +86,11 @@ struct WorkspacePlaceSession: Equatable, Sendable {
         while placements.count < copyCount {
             placements.append(try placement.composed(with: placements[placements.count - 1]))
         }
-        return .placeSceneNodes(ids: rootSceneNodeIDs, placements: placements, output: output)
+        switch self.source {
+        case .selection(let ids):
+            return .placeSceneNodes(ids: ids, placements: placements, output: output)
+        case .pasted(let fragment):
+            return .pasteSceneFragment(fragment, placements: placements)
+        }
     }
 }

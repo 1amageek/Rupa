@@ -22,6 +22,16 @@ struct ApplicationEditCommands: Commands {
             }
             .keyboardShortcut("d", modifiers: .control)
             .disabled(editCommands?.place == nil)
+            Button("Copy with Placement") {
+                editCommands?.copyWithPlacement?()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(editCommands?.copyWithPlacement == nil)
+            Button("Paste with Placement") {
+                editCommands?.pasteWithPlacement?()
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(editCommands?.pasteWithPlacement == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)
