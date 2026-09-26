@@ -636,6 +636,7 @@ public struct Viewport: View {
                 case .failure(let error): error
                 case .success(let identity):
                     presentationPlanCache.failure(for: identity) ?? presentationFrameFailure(for: identity)
+                        ?? presentationPlanCache.overlayFailure(for: identity)
                         ?? presentationSurface.flatMap { gridFailure?.rendererID == ObjectIdentifier($0) ? gridFailure?.error : nil }
                 }
                 ZStack {

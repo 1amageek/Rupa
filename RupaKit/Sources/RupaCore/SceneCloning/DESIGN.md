@@ -67,7 +67,11 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   the copy's representations and selection name the new asset and fresh
   representation IDs, so no copy shares a mesh with its source.
 - Pattern array roots and outputs, construction references and document roots
-  are refused with a typed error; their sharing semantics are not copies.
+  are refused with a typed error; their sharing semantics are not copies. A
+  saved measurement's annotation node (and so a Measurements group holding one)
+  is refused too: the fragment carries the node but not the measurement's
+  distance and anchors, whose anchors may name geometry outside the copy.
+  `SceneCopyMeasurementRefusalTests` owns this refusal.
   `ProductMetadata.sceneCopyRefusal` is the one statement of these refusals:
   extraction throws it and every UI control that offers copying reads it.
   Independent-copy pattern outputs do not yet copy authored meshes.

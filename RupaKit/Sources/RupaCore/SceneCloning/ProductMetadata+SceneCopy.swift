@@ -35,6 +35,14 @@ extension ProductMetadata {
         if PatternArrayOwnershipResolver().sourceID(containingOutputSceneNode: id, in: self) != nil {
             return EditorError(code: .commandInvalid, message: "Pattern array outputs are copied by exploding the array first.")
         }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): A saved measurement is refused because a scene fragment
+        // carries its annotation node but not the measurement (its distance and anchors), and its
+        // anchors may name geometry outside the copy. Production path: Duplicate, Place, Copy with
+        // Placement and independent-copy pattern arrays, including a Measurements group. Completion
+        // requires carrying the measurement with its anchors remapped onto the copied geometry.
+        if measurements.values.contains(where: { $0.sceneNodeID == id }) {
+            return EditorError(code: .commandInvalid, message: "Saved measurements are not copied; measure the copy again.")
+        }
         switch node.reference?.kind {
         // FIXME(INCOMPLETE_IMPLEMENTATION): Construction geometry is refused because copying would
         // share its source instead of duplicating it. Production path: Duplicate, Place, Copy with

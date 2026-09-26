@@ -103,6 +103,62 @@ import Testing
         #expect(document.productMetadata == before.productMetadata)
     }
 
+    /// The scene node presenting `featureID`.
+    private func node(_ featureID: FeatureID, in document: DesignDocument) throws -> SceneNodeID {
+        try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == featureID }).id
+    }
+
+    @Test func candidatesAreTakenWhereTheSceneDrawsThem() throws {
+        var document = DesignDocument.empty()
+        let wall = try document.createLineSketch(name: "Wall", plane: .xy, start: point(2, -1), end: point(2, 1))
+        let lifted = try document.createLineSketch(name: "Lifted", plane: .xy, start: point(1.5, -1), end: point(1.5, 1))
+        let featureID = try document.createLineSketch(name: "Line", plane: .xy, start: point(0, 0), end: point(1, 0))
+        // The wall is drawn at x = 12; the lifted line leaves the plane.
+        try document.transformSceneNodes(ids: [try node(wall, in: document)], worldDelta: try .translation(Vector3D(x: 10, y: 0, z: 0)))
+        try document.transformSceneNodes(ids: [try node(lifted, in: document)], worldDelta: try .translation(Vector3D(x: 0, y: 0, z: 1)))
+        let (target, entityID) = try curve(featureID, in: document)
+
+        #expect(try document.completeSketchCurve(target: target) == [.end])
+        guard case .line(let line) = entity(featureID, entityID, in: document) else {
+            Issue.record("Expected the line.")
+            return
+        }
+        #expect(abs(try value(line.end.x, in: document) - 12) < 1e-9)
+    }
+
+    @Test func aCrossingThatCannotBeCertifiedRefusesInsteadOfTakingAFartherOne() throws {
+        var document = DesignDocument.empty()
+        // The circle touches the extension at x = 3; the wall at x = 5 is farther.
+        _ = try document.createCircleSketch(name: "Touching", plane: .xy, center: point(3, 1), radius: .length(1, .meter))
+        _ = try document.createLineSketch(name: "Wall", plane: .xy, start: point(5, -1), end: point(5, 1))
+        let featureID = try document.createLineSketch(name: "Line", plane: .xy, start: point(0, 0), end: point(1, 0))
+        let (target, _) = try curve(featureID, in: document)
+        let before = document.cadDocument.designGraph
+        #expect(throws: EditorError.self) { try document.completeSketchCurve(target: target) }
+        #expect(document.cadDocument.designGraph == before)
+    }
+
+    @Test func aCollinearCurveIsMetWhereItBeginsAndOneOverTheEndCompletesIt() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createLineSketch(name: "Ahead", plane: .xy, start: point(3, 0), end: point(2, 0))
+        let featureID = try document.createLineSketch(name: "Line", plane: .xy, start: point(0, 0), end: point(1, 0))
+        let (target, entityID) = try curve(featureID, in: document)
+        #expect(try document.completeSketchCurve(target: target) == [.end])
+        guard case .line(let line) = entity(featureID, entityID, in: document) else {
+            Issue.record("Expected the line.")
+            return
+        }
+        #expect(abs(try value(line.end.x, in: document) - 2) < 1e-9)
+
+        var covered = DesignDocument.empty()
+        _ = try covered.createLineSketch(name: "Over", plane: .xy, start: point(0.5, 0), end: point(3, 0))
+        let coveredID = try covered.createLineSketch(name: "Line", plane: .xy, start: point(0, 0), end: point(1, 0))
+        let (coveredTarget, _) = try curve(coveredID, in: covered)
+        #expect(throws: EditorError.self, "The end already lies on the collinear line; nothing is extended.") {
+            try covered.completeSketchCurve(target: coveredTarget)
+        }
+    }
+
     @Test func subdivideSplitsEverySpanAtItsMiddleAndReportsTheNewControlPoints() throws {
         var document = DesignDocument.empty()
         let points = [point(0, 0), point(1, 2), point(2, 2), point(3, 0), point(4, -2), point(5, -2), point(6, 0)]

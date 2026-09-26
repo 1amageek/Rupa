@@ -413,6 +413,13 @@ final class MeshSourcePresentationPlanCache {
         return error
     }
 
+    /// Why the ready frame for this identity was published without its spatial overlay, or `nil`
+    /// when it carries its overlay (or is not the ready frame).
+    func overlayFailure(for identity: RealityViewportPreparationRequest.Identity) -> MeshSourcePresentationRenderError? {
+        guard case let .ready(current, _, _) = state, current == identity else { return nil }
+        return self.current?.overlayFailure
+    }
+
     /// Whether a build for this scene identity is still in flight.
     func isPreparing(_ identity: RealityViewportPreparationRequest.Identity) -> Bool {
         guard case let .preparing(current) = state else {
@@ -513,7 +520,20 @@ final class MeshSourcePresentationPlanCache {
                 }
                 let first = plan?.occurrences.first?.positions.first
                 let origin = first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? request.fallbackOrigin
-                let overlay = try request.spatialOverlay(origin, plan?.retainedByteCount ?? 0)
+                // The spatial overlay (handles, labels, analysis) is auxiliary to the geometry. When
+                // it alone exceeds the admission limits the frame is published with the geometry
+                // and no overlay, so selection and hits keep working and the user can reduce what
+                // the overlay draws; the overlay failure is reported, never hidden.
+                let overlay: ViewportSpatialOverlayProducer.Output
+                var overlayFailure: MeshSourcePresentationRenderError?
+                do {
+                    overlay = try request.spatialOverlay(origin, plan?.retainedByteCount ?? 0)
+                } catch let error as MeshSourcePresentationRenderError where error.code == .resourceExhausted {
+                    overlayFailure = error
+                    overlay = (try RealityViewportSpatialBatch(
+                        renderOrigin: origin, retainedSurfaceByteCount: plan?.retainedByteCount ?? 0
+                    ), [])
+                }
                 let spatial = overlay.spatialBatch
                 guard spatial.handleCount == overlay.interactionRecords.count,
                       spatial.retainedSemanticByteCount == (try ViewportSpatialInteractionRecord.retainedByteCount(for: overlay.interactionRecords, limits: spatial.limits)) else {
@@ -525,7 +545,10 @@ final class MeshSourcePresentationPlanCache {
                 try Task.checkCancellation()
                 let surface = try await RealityViewport.prepare(plan: plan, spatialBatch: spatial, reusing: reusable?.surface)
                 try Task.checkCancellation()
-                result = .success(Prepared(identity: request.identity, plan: plan, surface: surface, interactionRecords: overlay.interactionRecords))
+                result = .success(Prepared(
+                    identity: request.identity, plan: plan, surface: surface,
+                    interactionRecords: overlay.interactionRecords, overlayFailure: overlayFailure
+                ))
             } catch is CancellationError {
                 // A cancelled build publishes nothing at all. Identity would
                 // discard it anyway, but a cancellation is not a failure and is
@@ -578,6 +601,8 @@ final class MeshSourcePresentationPlanCache {
         let plan: MeshSourcePresentationRenderPlan?
         let surface: RealityViewport
         let interactionRecords: [ViewportSpatialInteractionRecord]
+        /// Why the frame was published without its spatial overlay, if it was.
+        var overlayFailure: MeshSourcePresentationRenderError? = nil
     }
 
     private func finish(

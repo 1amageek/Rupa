@@ -2129,3 +2129,26 @@ func planCacheScene(
     )
     return try UniversalViewportSceneBuilder().build(from: snapshot, project: project)
 }
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func anOverlayOverItsLimitPublishesTheGeometryFrameAndReportsTheOverlay() async throws {
+    let scene = try planCacheScene(suffix: "overlay-exhausted")
+    let cache = MeshSourcePresentationPlanCache { scene in try MeshSourcePresentationRenderPlan(scene: scene) }
+    let identity = planCacheIdentity(scene)
+    cache.prepare(.init(identity: identity, scene: scene, fallbackOrigin: .origin, spatialOverlay: { _, _ in
+        throw MeshSourcePresentationRenderError(code: .resourceExhausted, message: "Spatial overlay exceeds 640 items.")
+    }))
+    try await settlePlanCache(cache)
+    #expect(cache.failure(for: identity) == nil, "An auxiliary overlay failure does not fail the frame.")
+    #expect(cache.surface(for: identity) != nil, "The geometry frame stays queryable for selection and hits.")
+    #expect(cache.overlayFailure(for: identity)?.code == .resourceExhausted)
+
+    // Any other overlay failure is still a frame failure.
+    let other = planCacheIdentity(scene, overlayRevision: 1)
+    cache.prepare(.init(identity: other, scene: scene, fallbackOrigin: .origin, spatialOverlay: { _, _ in
+        throw MeshSourcePresentationRenderError(code: .failed, message: "Overlay is invalid.")
+    }))
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: other) != nil)
+}

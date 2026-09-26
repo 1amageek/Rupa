@@ -335,6 +335,13 @@ section preparation admits the complete source and all derived hatches rather
 than using the legacy UI's visible-prefix limits.
 A contour Core reports as interfering, and the hatches filling it, carry that
 flag through the overlay and are drawn red instead of the section yellow.
+
+The spatial overlay (handles, labels, analysis) is auxiliary to the geometry.
+When it alone exceeds the admission limits, `MeshSourcePresentationPlanCache`
+publishes the geometry frame with an empty overlay instead of failing the
+frame, so selection and hits keep resolving and the user can reduce what the
+overlay draws; `overlayFailure(for:)` reports the exhaustion through the same
+presentation-failure reporter. Any other overlay failure still fails the frame.
 The revision does not repeat within one mounted viewport lifetime; exhaustion
 is an explicit failure rather than wraparound to a possibly retained identity.
 

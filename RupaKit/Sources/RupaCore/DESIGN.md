@@ -919,15 +919,21 @@ carrying the kernel message, and the document is unchanged.
 ### Complete Edge and Subdivide
 
 `completeSketchCurve` extends each open end of a sketch line, arc or open spline
-to the nearest crossing with another curve in its sketch plane (every sketch
-whose `plane` equals it, the same rule as Cut Curve's cutters). The kernel's
+to the nearest crossing with another curve in its plane where the scene draws
+it. Candidates come from every sketch's visible presentation occurrences (the
+placement rule viewport, measurement and section analysis share), carried into
+the selected sketch's coordinates through their world transforms; a curve that
+placement lifts off the plane is not a candidate, and a circle or arc placement
+would stretch into an ellipse refuses the command. The kernel's
 `SketchCurveIntersector` finds the crossings on the extension: a line along
 itself, an arc around its circle (never overlapping itself; when both ends would
 meet at one crossing only the nearer end extends) and a spline along a unit ray
-on its end tangent. An end already lying on another curve is complete. The
-extension is `extendSketchCurve`'s, so its constraint and Bridge Curve refusals
-apply and a failed end leaves the document unchanged; no reachable crossing is a
-command-invalid error.
+on its end tangent. A collinear line or a co-circular arc is met where it begins,
+and one already over the end completes it. A crossing the kernel cannot certify
+(a tangency or its proof budget) refuses the command, because a farther crossing
+could otherwise be taken as the nearest. The extension is `extendSketchCurve`'s,
+so its constraint and Bridge Curve refusals apply and a failed end leaves the
+document unchanged; no reachable crossing is a command-invalid error.
 
 `subdivideSketchSpline` splits every cubic span of an open spline at its middle
 through `insertSketchSplineControlPoint`, from the last span back, so n spans
