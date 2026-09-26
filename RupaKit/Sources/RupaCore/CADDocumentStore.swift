@@ -877,6 +877,24 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .duplicateSceneNodes, .placeSceneNodes, .pasteSceneFragment:
+            func run() throws {
+                var updatedDocument = document
+                switch command {
+                case .duplicateSceneNodes(let ids):
+                    try updatedDocument.duplicateSceneNodes(ids: ids, objectRegistry: objectRegistry)
+                case .placeSceneNodes(let ids, let placements):
+                    try updatedDocument.placeSceneNodes(ids: ids, placements: placements, objectRegistry: objectRegistry)
+                case .pasteSceneFragment(let fragment, let placements):
+                    try updatedDocument.pasteSceneFragment(fragment, placements: placements, objectRegistry: objectRegistry)
+                default:
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected a scene copy command.")
+                }
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .setSceneNodeMaterial:
             func run() throws {
                 guard case .setSceneNodeMaterial(let id, let materialID) = command else {

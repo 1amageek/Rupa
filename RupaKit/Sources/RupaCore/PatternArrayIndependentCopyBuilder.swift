@@ -2,6 +2,8 @@ import SwiftCAD
 import RupaCoreTypes
 
 struct PatternArrayIndependentCopyBuilder: Sendable {
+    /// Inserts one copy of the definition per transform, each under a new output group whose
+    /// local transform is that pattern transform.
     func createOutputs(
         name: String,
         definition: ComponentDefinition,
@@ -11,67 +13,47 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         cadDocument: inout CADDocument,
         tolerance: ModelingTolerance
     ) throws -> PatternArrayIndependentCopyBuildResult {
-        let sourceFeatureIDs = try sourceFeatureClosure(
-            for: definition,
+        let fragment = try SceneFragmentExtractor().extract(
+            rootSceneNodeIDs: definition.rootSceneNodeIDs,
+            frame: .parentOfFirstRoot,
             metadata: metadata,
             cadDocument: cadDocument
         )
-        guard !sourceFeatureIDs.isEmpty else {
+        guard !fragment.features.isEmpty else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Independent-copy pattern arrays require cloneable CAD feature scene nodes."
             )
         }
 
+        var updatedMetadata = metadata
+        var updatedCADDocument = cadDocument
         var outputSceneNodeIDs: [SceneNodeID] = []
         var outputFeatureIDs: [FeatureID] = []
-        outputSceneNodeIDs.reserveCapacity(transforms.count)
-        outputFeatureIDs.reserveCapacity(transforms.count * sourceFeatureIDs.count)
-
-        var updatedCADDocument = cadDocument
         for (relativeOutputIndex, transform) in transforms.enumerated() {
             let outputIndex = startingOutputIndex + relativeOutputIndex
-            let featureIDMap = featureIDMap(for: sourceFeatureIDs)
-            let clonedFeatures = try clonedFeatureNodes(
-                sourceFeatureIDs: sourceFeatureIDs,
-                featureIDMap: featureIDMap,
-                cadDocument: cadDocument,
-                outputIndex: outputIndex
-            )
-            try appendClonedFeatures(
-                clonedFeatures,
-                to: &updatedCADDocument
-            )
-            outputFeatureIDs.append(contentsOf: clonedFeatures.map(\.id))
-
             var outputNode = SceneNode(
                 name: "\(name) \(outputIndex + 1)",
                 object: .group(),
                 localTransform: transform
             )
-            var sceneIDMap: [SceneNodeID: SceneNodeID] = [:]
-            let clonedRootIDs = try definition.rootSceneNodeIDs.map { rootSceneNodeID in
-                try cloneSceneTree(
-                    rootSceneNodeID,
-                    namePrefix: outputNode.name,
-                    featureIDMap: featureIDMap,
-                    sceneIDMap: &sceneIDMap,
-                    metadata: &metadata
-                )
-            }
-            for clonedID in sceneIDMap.values {
-                guard let binding = metadata.sceneNodes[clonedID]?.boundaryOccurrences else { continue }
-                guard let first = sceneIDMap[binding.first], let second = sceneIDMap[binding.second] else {
-                    throw EditorError(code: .commandInvalid, message: "Copy a boundary-dependent sheet together with both source occurrences.")
-                }
-                metadata.sceneNodes[clonedID]?.boundaryOccurrences = .init(first: first, second: second)
-            }
-            outputNode.childIDs = clonedRootIDs
-            metadata.sceneNodes[outputNode.id] = outputNode
+            let insertion = try SceneFragmentInserter().insert(
+                fragment,
+                placement: .identity,
+                parentWorld: .identity,
+                attachment: .detached,
+                naming: .patternOutput(prefix: outputNode.name, outputIndex: outputIndex),
+                metadata: &updatedMetadata,
+                cadDocument: &updatedCADDocument
+            )
+            outputNode.childIDs = insertion.rootSceneNodeIDs
+            updatedMetadata.sceneNodes[outputNode.id] = outputNode
             outputSceneNodeIDs.append(outputNode.id)
+            outputFeatureIDs.append(contentsOf: insertion.featureIDs)
         }
 
         try updatedCADDocument.validate(tolerance: tolerance)
+        metadata = updatedMetadata
         cadDocument = updatedCADDocument
         return PatternArrayIndependentCopyBuildResult(
             outputSceneNodeIDs: outputSceneNodeIDs,
@@ -98,13 +80,11 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument
     ) {
-        removeSceneSubtrees(
+        SceneFragmentOutputRemover().remove(
             rootedAt: sceneNodeIDs,
-            metadata: &metadata
-        )
-        removeFeatures(
-            featureIDs,
-            from: &cadDocument
+            featureIDs: featureIDs,
+            metadata: &metadata,
+            cadDocument: &cadDocument
         )
     }
 
@@ -130,292 +110,6 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         cadDocument.designGraph.order.filter {
             featureIDs.contains($0)
         }
-    }
-
-    private func sourceFeatureClosure(
-        for definition: ComponentDefinition,
-        metadata: ProductMetadata,
-        cadDocument: CADDocument
-    ) throws -> [FeatureID] {
-        var referencedFeatureIDs: Set<FeatureID> = []
-        for rootSceneNodeID in definition.rootSceneNodeIDs {
-            try collectSceneFeatureIDs(
-                rootSceneNodeID,
-                metadata: metadata,
-                featureIDs: &referencedFeatureIDs
-            )
-        }
-        guard !referencedFeatureIDs.isEmpty else {
-            return []
-        }
-
-        var closureFeatureIDs = referencedFeatureIDs
-        var pendingFeatureIDs = Array(referencedFeatureIDs)
-        while let featureID = pendingFeatureIDs.popLast() {
-            guard let feature = cadDocument.designGraph.nodes[featureID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Independent-copy pattern array source scene nodes must reference existing CAD features."
-                )
-            }
-            for input in feature.inputs where closureFeatureIDs.insert(input.featureID).inserted {
-                pendingFeatureIDs.append(input.featureID)
-            }
-        }
-
-        let orderedFeatureIDs = cadDocument.designGraph.order.filter {
-            closureFeatureIDs.contains($0)
-        }
-        guard orderedFeatureIDs.count == closureFeatureIDs.count else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Independent-copy pattern array feature closure must be fully ordered in the CAD graph."
-            )
-        }
-        return orderedFeatureIDs
-    }
-
-    private func collectSceneFeatureIDs(
-        _ sceneNodeID: SceneNodeID,
-        metadata: ProductMetadata,
-        featureIDs: inout Set<FeatureID>
-    ) throws {
-        guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Independent-copy pattern array definitions must reference existing scene nodes."
-            )
-        }
-        if sceneNode.reference?.kind == .componentInstance || sceneNode.object?.category == .componentInstance {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Independent-copy pattern arrays do not clone nested component instances yet."
-            )
-        }
-        if let featureID = sceneNode.reference?.featureID {
-            featureIDs.insert(featureID)
-        }
-        for childID in sceneNode.childIDs {
-            try collectSceneFeatureIDs(
-                childID,
-                metadata: metadata,
-                featureIDs: &featureIDs
-            )
-        }
-    }
-
-    private func featureIDMap(
-        for sourceFeatureIDs: [FeatureID]
-    ) -> [FeatureID: FeatureID] {
-        Dictionary(uniqueKeysWithValues: sourceFeatureIDs.map { ($0, FeatureID()) })
-    }
-
-    private func clonedFeatureNodes(
-        sourceFeatureIDs: [FeatureID],
-        featureIDMap: [FeatureID: FeatureID],
-        cadDocument: CADDocument,
-        outputIndex: Int
-    ) throws -> [FeatureNode] {
-        return try sourceFeatureIDs.map { sourceFeatureID in
-            guard let source = cadDocument.designGraph.nodes[sourceFeatureID],
-                  let clonedFeatureID = featureIDMap[sourceFeatureID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Independent-copy pattern array feature closure contains a missing CAD feature."
-                )
-            }
-            // Swift-CAD owns which operation fields name other features.
-            var feature = try source.remappingFeatureReferences(featureIDMap)
-            feature.id = clonedFeatureID
-            if let name = feature.name {
-                feature.name = "\(name) Copy \(outputIndex + 1)"
-            }
-            return feature
-        }
-    }
-
-    private func appendClonedFeatures(
-        _ features: [FeatureNode],
-        to cadDocument: inout CADDocument
-    ) throws {
-        var updatedCADDocument = cadDocument
-        for feature in features {
-            guard updatedCADDocument.designGraph.nodes[feature.id] == nil,
-                  !updatedCADDocument.designGraph.order.contains(feature.id) else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Independent-copy pattern array generated duplicate CAD feature IDs."
-                )
-            }
-            updatedCADDocument.designGraph.nodes[feature.id] = feature
-            updatedCADDocument.designGraph.order.append(feature.id)
-            updatedCADDocument.designGraph.dependencies.append(
-                contentsOf: dependencyEdges(for: feature)
-            )
-        }
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
-        cadDocument = updatedCADDocument
-    }
-
-    private func dependencyEdges(for feature: FeatureNode) -> [DependencyEdge] {
-        Set(feature.inputs.map(\.featureID))
-            .sorted { $0.description < $1.description }
-            .map { DependencyEdge(source: $0, target: feature.id) }
-    }
-
-    private func cloneSceneTree(
-        _ sceneNodeID: SceneNodeID,
-        namePrefix: String,
-        featureIDMap: [FeatureID: FeatureID],
-        sceneIDMap: inout [SceneNodeID: SceneNodeID],
-        metadata: inout ProductMetadata
-    ) throws -> SceneNodeID {
-        guard var sceneNode = metadata.sceneNodes[sceneNodeID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Independent-copy pattern array source scene tree contains a missing node."
-            )
-        }
-        let clonedSceneNodeID = SceneNodeID()
-        sceneIDMap[sceneNodeID] = clonedSceneNodeID
-        let childIDs = sceneNode.childIDs
-        sceneNode.id = clonedSceneNodeID
-        sceneNode.name = "\(namePrefix) \(sceneNode.name)"
-        sceneNode.reference = try sceneNode.reference.map {
-            try remappedSceneNodeReference($0, using: featureIDMap)
-        }
-        sceneNode.object = try sceneNode.object.map {
-            try remappedObjectDescriptor($0, using: featureIDMap)
-        }
-        sceneNode.childIDs = try childIDs.map { childID in
-            try cloneSceneTree(
-                childID,
-                namePrefix: namePrefix,
-                featureIDMap: featureIDMap,
-                sceneIDMap: &sceneIDMap,
-                metadata: &metadata
-            )
-        }
-        metadata.sceneNodes[clonedSceneNodeID] = sceneNode
-        return clonedSceneNodeID
-    }
-
-    private func remappedSceneNodeReference(
-        _ reference: SceneNodeReference,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> SceneNodeReference {
-        func remappedFeatureID(_ featureID: FeatureID) throws -> FeatureID {
-            guard let remapped = featureIDMap[featureID] else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Pattern array scene references can only name cloned source features."
-                )
-            }
-            return remapped
-        }
-        switch reference.kind {
-        case .feature:
-            guard let featureID = reference.featureID else {
-                throw EditorError(code: .commandInvalid, message: "Feature scene references require a feature ID.")
-            }
-            return .feature(try remappedFeatureID(featureID))
-        case .body:
-            guard let featureID = reference.featureID else {
-                throw EditorError(code: .commandInvalid, message: "Body scene references require a feature ID.")
-            }
-            return .body(try remappedFeatureID(featureID))
-        case .sketch:
-            guard let featureID = reference.featureID else {
-                throw EditorError(code: .commandInvalid, message: "Sketch scene references require a feature ID.")
-            }
-            return .sketch(try remappedFeatureID(featureID))
-        case .componentInstance:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Independent-copy pattern arrays do not clone component instance scene references."
-            )
-        case .construction:
-            return reference
-        case .authoredMesh:
-            return reference
-        }
-    }
-
-    private func remappedObjectDescriptor(
-        _ object: ObjectDescriptor,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> ObjectDescriptor {
-        guard object.category != .componentInstance else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Independent-copy pattern arrays do not clone component instance objects."
-            )
-        }
-        var clonedObject = object
-        try clonedObject.remapCADRepresentations(using: featureIDMap)
-        if let sourceSection = object.sourceSection {
-            clonedObject.sourceSection = try sourceSection.remappingFeatureIDs(featureIDMap)
-        }
-        return clonedObject
-    }
-
-    private func removeSceneSubtrees(
-        rootedAt rootSceneNodeIDs: [SceneNodeID],
-        metadata: inout ProductMetadata
-    ) {
-        var removedSceneNodeIDs: Set<SceneNodeID> = []
-        for rootSceneNodeID in rootSceneNodeIDs {
-            collectSceneSubtree(
-                rootSceneNodeID,
-                metadata: metadata,
-                removedSceneNodeIDs: &removedSceneNodeIDs
-            )
-        }
-        guard !removedSceneNodeIDs.isEmpty else {
-            return
-        }
-        for sceneNodeID in removedSceneNodeIDs {
-            metadata.sceneNodes.removeValue(forKey: sceneNodeID)
-        }
-        metadata.rootSceneNodeIDs.removeAll { removedSceneNodeIDs.contains($0) }
-        for sceneNodeID in metadata.sceneNodes.keys {
-            metadata.sceneNodes[sceneNodeID]?.childIDs.removeAll { removedSceneNodeIDs.contains($0) }
-        }
-    }
-
-    private func collectSceneSubtree(
-        _ sceneNodeID: SceneNodeID,
-        metadata: ProductMetadata,
-        removedSceneNodeIDs: inout Set<SceneNodeID>
-    ) {
-        guard removedSceneNodeIDs.insert(sceneNodeID).inserted,
-              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
-            return
-        }
-        for childID in sceneNode.childIDs {
-            collectSceneSubtree(
-                childID,
-                metadata: metadata,
-                removedSceneNodeIDs: &removedSceneNodeIDs
-            )
-        }
-    }
-
-    private func removeFeatures(
-        _ featureIDs: Set<FeatureID>,
-        from cadDocument: inout CADDocument
-    ) {
-        guard !featureIDs.isEmpty else {
-            return
-        }
-        cadDocument.designGraph.order.removeAll { featureIDs.contains($0) }
-        for featureID in featureIDs {
-            cadDocument.designGraph.nodes.removeValue(forKey: featureID)
-        }
-        cadDocument.designGraph.dependencies.removeAll {
-            featureIDs.contains($0.source) || featureIDs.contains($0.target)
-        }
-        cadDocument.designGraph.revision = cadDocument.designGraph.revision.advanced()
     }
 
     private func referencedFeatureIDs(

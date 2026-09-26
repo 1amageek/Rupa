@@ -73,6 +73,9 @@ that distinction; unit, constraint and geometry errors propagate. Explicit curve
 element selections retain curve intent. Exact section evaluation remains the
 authority for ambiguity, bounds and output validity.
 
+[SceneCloning](SceneCloning/DESIGN.md) owns copying product objects: scene fragments,
+their insertion at placements, and the independent-copy pattern outputs built on them.
+
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on
 every construction plane. Cylinder wall offsets retain the center and change the

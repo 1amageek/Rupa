@@ -217,13 +217,19 @@ func patternCopyRemapsCADRepresentationInsteadOfStoredFeatureID() throws {
         typeID: nil
     )
 
-    try object.remapCADRepresentations(using: [sourceFeatureID: copiedFeatureID])
+    let targetDocumentID = DocumentID()
+    var unmapped = object
+
+    try object.remapCADRepresentations(using: [sourceFeatureID: copiedFeatureID], documentID: targetDocumentID)
 
     #expect(object.sourceFeatureID == copiedFeatureID)
     #expect(object.geometryRepresentations.source(for: .modeling) == .cad(
-        sourceID: documentID.description,
+        sourceID: targetDocumentID.description,
         outputID: copiedFeatureID.description
     ))
+    #expect(throws: EditorError.self) {
+        try unmapped.remapCADRepresentations(using: [:], documentID: targetDocumentID)
+    }
 }
 
 @Test(.timeLimit(.minutes(1)), arguments: [0, 1, 2])

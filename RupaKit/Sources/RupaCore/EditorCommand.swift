@@ -59,6 +59,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case deleteSceneNodes(ids: [SceneNodeID])
     /// Moves `ids` together as one rigid body, `worldDelta` being the motion in world space.
     case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D)
+    /// Copies `ids` in place as independent siblings; the copies are the generated scene nodes.
+    case duplicateSceneNodes(ids: [SceneNodeID])
+    /// Inserts one independent copy of `ids` per world-space placement of the selection.
+    case placeSceneNodes(ids: [SceneNodeID], placements: [Transform3D])
+    /// Inserts one copy of a transported fragment per world-space placement.
+    case pasteSceneFragment(SceneFragment, placements: [Transform3D])
     case setSceneNodeMaterial(id: SceneNodeID, materialID: MaterialID?)
     case setTopologyMaterialBinding(
         target: SelectionTarget,
@@ -517,6 +523,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "deleteSceneNodes"
         case .transformSceneNodes:
             "transformSceneNodes"
+        case .duplicateSceneNodes:
+            "duplicateSceneNodes"
+        case .placeSceneNodes:
+            "placeSceneNodes"
+        case .pasteSceneFragment:
+            "pasteSceneFragment"
         case .setSceneNodeMaterial:
             "setSceneNodeMaterial"
         case .setTopologyMaterialBinding:
@@ -790,6 +802,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .ungroupSceneNode,
              .deleteSceneNodes,
              .transformSceneNodes,
+             .duplicateSceneNodes,
+             .placeSceneNodes,
+             .pasteSceneFragment,
              .setSceneNodeMaterial,
              .setTopologyMaterialBinding,
              .setSceneNodeAppearance,

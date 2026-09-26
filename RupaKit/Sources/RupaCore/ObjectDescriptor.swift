@@ -252,21 +252,40 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         geometryRepresentations.representations[id] = representation
     }
 
+    /// The features the object's CAD representations name.
+    var cadRepresentationFeatureIDs: [FeatureID] {
+        geometryRepresentations.representations.values.compactMap { representation in
+            guard case let .cad(_, outputID) = representation.source,
+                  let uuid = UUID(uuidString: outputID) else {
+                return nil
+            }
+            return FeatureID(uuid)
+        }
+    }
+
+    /// Points every CAD representation at its copied feature in `documentID`; a representation
+    /// whose feature was not copied is a typed failure rather than a link back to the source.
     mutating func remapCADRepresentations(
-        using featureIDMap: [FeatureID: FeatureID]
+        using featureIDMap: [FeatureID: FeatureID],
+        documentID: DocumentID
     ) throws {
         var remappedRepresentations: [GeometryRepresentationID: GeometryRepresentation] = [:]
         var representationIDMap: [GeometryRepresentationID: GeometryRepresentationID] = [:]
         for representation in geometryRepresentations.representations.values {
             let remappedRepresentation: GeometryRepresentation
-            if case let .cad(sourceID, outputID) = representation.source,
-               let uuid = UUID(uuidString: outputID),
-               let remappedFeatureID = featureIDMap[FeatureID(uuid)] {
+            if case let .cad(_, outputID) = representation.source {
+                guard let uuid = UUID(uuidString: outputID),
+                      let remappedFeatureID = featureIDMap[FeatureID(uuid)] else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "A copied object's CAD representation names a feature outside the copy."
+                    )
+                }
                 let remappedID = Self.cadRepresentationID(featureID: remappedFeatureID)
                 remappedRepresentation = GeometryRepresentation(
                     id: remappedID,
                     source: .cad(
-                        sourceID: sourceID,
+                        sourceID: documentID.description,
                         outputID: remappedFeatureID.description
                     )
                 )
@@ -277,7 +296,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
             guard remappedRepresentations[remappedRepresentation.id] == nil else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Independent-copy CAD representation remapping produced a duplicate representation ID."
+                    message: "Copying a CAD representation produced a duplicate representation ID."
                 )
             }
             remappedRepresentations[remappedRepresentation.id] = remappedRepresentation

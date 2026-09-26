@@ -384,6 +384,8 @@ struct PatternArrayDocumentSynchronizer {
             }
             metadata.componentInstances.removeValue(forKey: componentInstanceID)
             metadata.sceneNodes.removeValue(forKey: childID)
+            // Keep the tree consistent: copies are extracted from it before new outputs attach.
+            metadata.sceneNodes[source.rootSceneNodeID]?.childIDs.removeAll { $0 == childID }
         }
     }
 
