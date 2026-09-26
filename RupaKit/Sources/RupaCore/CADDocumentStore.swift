@@ -2316,6 +2316,24 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .completeSketchCurve(let target):
+            var updatedDocument = document
+            try updatedDocument.completeSketchCurve(target: target, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .subdivideSketchSpline(let target):
+            var updatedDocument = document
+            try updatedDocument.subdivideSketchSpline(target: target, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .subdivideSurface(let target):
+            var updatedDocument = document
+            try updatedDocument.subdivideSurface(target: target, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .joinSketchCurves:
             func run() throws {
                 guard case .joinSketchCurves(let target, let adjacentTarget, let continuity) = command else {

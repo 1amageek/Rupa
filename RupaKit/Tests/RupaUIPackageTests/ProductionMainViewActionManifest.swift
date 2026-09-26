@@ -78,6 +78,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspacePlaceSession.swift",
         "Sources/RupaUI/WorkspaceTransformSession.swift",
         "Sources/RupaUI/WorkspaceMirrorSession.swift",
+        "Sources/RupaUI/WorkspaceCurveRefinementPlanner.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -126,6 +127,9 @@ enum ProductionMainViewActionManifest {
         "draftBodyFaces",
         "duplicateSceneNodes",
         "extendSketchCurve",
+        "completeSketchCurve",
+        "subdivideSketchSpline",
+        "subdivideSurface",
         "filletBodyEdges",
         "insertSketchSplineControlPoint",
         "insertSurfaceKnot",

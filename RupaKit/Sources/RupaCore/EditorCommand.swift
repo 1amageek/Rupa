@@ -316,6 +316,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case reverseSketchCurve(target: SelectionTarget)
     case rebuildSketchCurve(target: SelectionTarget, options: CurveRebuildOptions)
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
+    /// Complete Edge: extends a sketch curve's open ends to the nearest curve its extension meets.
+    case completeSketchCurve(target: SelectionTarget)
+    /// Subdivide: splits every span of a sketch spline at its middle.
+    case subdivideSketchSpline(target: SelectionTarget)
+    /// Subdivide: raises a B-spline surface's degree and adds a span in each direction.
+    case subdivideSurface(target: SelectionTarget)
     case joinSketchCurves(
         target: SelectionTarget,
         adjacentTarget: SelectionTarget,
@@ -736,6 +742,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "rebuildSketchCurve"
         case .extendSketchCurve:
             "extendSketchCurve"
+        case .completeSketchCurve:
+            "completeSketchCurve"
+        case .subdivideSketchSpline:
+            "subdivideSketchSpline"
+        case .subdivideSurface:
+            "subdivideSurface"
         case .joinSketchCurves:
             "joinSketchCurves"
         case .unjoinSketchCurve:
@@ -947,6 +959,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .reverseSketchCurve,
              .rebuildSketchCurve,
              .extendSketchCurve,
+             .completeSketchCurve,
+             .subdivideSketchSpline,
+             .subdivideSurface,
              .joinSketchCurves,
              .unjoinSketchCurve,
              .splitSketchCurve,

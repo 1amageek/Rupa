@@ -916,6 +916,29 @@ the command says the cutter does not reach; a root the kernel cannot certify
 (tangent or overlapping curves) and invalid geometry are command-invalid errors
 carrying the kernel message, and the document is unchanged.
 
+### Complete Edge and Subdivide
+
+`completeSketchCurve` extends each open end of a sketch line, arc or open spline
+to the nearest crossing with another curve in its sketch plane (every sketch
+whose `plane` equals it, the same rule as Cut Curve's cutters). The kernel's
+`SketchCurveIntersector` finds the crossings on the extension: a line along
+itself, an arc around its circle (never overlapping itself; when both ends would
+meet at one crossing only the nearer end extends) and a spline along a unit ray
+on its end tangent. An end already lying on another curve is complete. The
+extension is `extendSketchCurve`'s, so its constraint and Bridge Curve refusals
+apply and a failed end leaves the document unchanged; no reachable crossing is a
+command-invalid error.
+
+`subdivideSketchSpline` splits every cubic span of an open spline at its middle
+through `insertSketchSplineControlPoint`, from the last span back, so n spans
+become 2n with the same shape and joint constraints follow their joints. Span k's
+new control points are 6k+2, 6k+3 and 6k+4. `subdivideSurface` raises a
+B-spline surface's degree in u and v with Swift-CAD's exact
+`BSplineSurface3D.elevatingDegree`, inserts a knot at the middle of the widest
+span in each direction and updates the degree and control-point properties.
+`CurveRefinementTests` owns the line, arc, spline, unreached, spline subdivision
+and surface subdivision cases.
+
 ### Evaluated primitive measurement contract
 
 Every solid `PrimitiveDefinition` uses the same output-driven

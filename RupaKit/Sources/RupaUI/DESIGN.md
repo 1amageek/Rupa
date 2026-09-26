@@ -523,6 +523,16 @@ mirror plane. Return or the panel's Mirror button submits one
 backs out of a freestyle pick, then cancels. Core's
 [SceneMirror](../RupaCore/SceneMirror/DESIGN.md) owns what each option makes.
 
+Complete Edge and Subdivide (Edit menu) act on the selection through
+`WorkspaceCurveRefinementPlanner`: a selected sketch curve counts itself, a
+selected sketch object each of its curves, and a selected B-spline surface
+object or face its surface. Each item offers its action only when the selection
+holds something it changes. Complete Edge submits one `completeSketchCurve` per
+line, arc or open spline; Subdivide submits `subdivideSketchSpline` per open
+spline and `subdivideSurface` per surface as one undo step, then selects the
+control points the spline splits made. `WorkspaceCurveRefinementPlannerTests`
+owns what the selection yields.
+
 With surface control points selected in vertex scope the panel shows Move
 Control Point's Proportional (None, All, Selected with falloff U and V) and
 Mirror (X, Y, Z of the active construction plane) options. While either is

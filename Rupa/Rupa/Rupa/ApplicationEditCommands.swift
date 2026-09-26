@@ -37,6 +37,14 @@ struct ApplicationEditCommands: Commands {
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .disabled(editCommands?.pasteWithPlacement == nil)
+            Button("Complete Edge") {
+                editCommands?.completeEdge?()
+            }
+            .disabled(editCommands?.completeEdge == nil)
+            Button("Subdivide") {
+                editCommands?.subdivide?()
+            }
+            .disabled(editCommands?.subdivide == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)

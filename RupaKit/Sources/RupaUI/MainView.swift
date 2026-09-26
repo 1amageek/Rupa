@@ -8003,8 +8003,40 @@ private struct ProjectMainViewContent: View {
             pasteWithPlacement: { beginPasteWithPlacement() },
             rectangularArray: arrayAction(.rectangular),
             radialArray: arrayAction(.radial),
-            curveArray: arrayAction(.curve)
+            curveArray: arrayAction(.curve),
+            completeEdge: completeEdgeAction,
+            subdivide: subdivideAction
         )
+    }
+
+    private var curveRefinementPlanner: WorkspaceCurveRefinementPlanner {
+        WorkspaceCurveRefinementPlanner(document: snapshot.document.document)
+    }
+
+    /// Complete Edge on the selected curves, or `nil` when none can be completed.
+    private var completeEdgeAction: (@MainActor () -> Void)? {
+        let commands = curveRefinementPlanner.completeEdgeCommands(for: snapshot.selection.selectedTargets)
+        guard !commands.isEmpty else { return nil }
+        return {
+            submitSource(commands, name: "Complete Edge") { _ in
+                reportToolStatus("Complete Edge extended \(commands.count == 1 ? "the curve" : "\(commands.count) curves").")
+            }
+        }
+    }
+
+    /// Subdivide on the selected splines and surfaces, or `nil` when none is selected. The control
+    /// points it creates on curves become the selection.
+    private var subdivideAction: (@MainActor () -> Void)? {
+        let subdivision = curveRefinementPlanner.subdivision(for: snapshot.selection.selectedTargets)
+        guard !subdivision.commands.isEmpty else { return nil }
+        return {
+            submitSource(subdivision.commands, name: "Subdivide") { _ in
+                if !subdivision.createdControlPoints.isEmpty {
+                    selectTargets(subdivision.createdControlPoints)
+                }
+                reportToolStatus("Subdivided.")
+            }
+        }
     }
 
     /// Starts making an array of `ids`: a rectangular array is made at once, a radial array waits

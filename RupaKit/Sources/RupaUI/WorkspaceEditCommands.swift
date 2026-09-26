@@ -23,6 +23,10 @@ public struct WorkspaceEditCommands {
     public var radialArray: (@MainActor () -> Void)?
     /// Arrays the selected objects along a path curve the user picks next.
     public var curveArray: (@MainActor () -> Void)?
+    /// Extends the selected curves to the nearest curves their extensions meet.
+    public var completeEdge: (@MainActor () -> Void)?
+    /// Doubles the selected splines' control points or raises the selected surfaces' degree.
+    public var subdivide: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -32,7 +36,9 @@ public struct WorkspaceEditCommands {
         pasteWithPlacement: (@MainActor () -> Void)? = nil,
         rectangularArray: (@MainActor () -> Void)? = nil,
         radialArray: (@MainActor () -> Void)? = nil,
-        curveArray: (@MainActor () -> Void)? = nil
+        curveArray: (@MainActor () -> Void)? = nil,
+        completeEdge: (@MainActor () -> Void)? = nil,
+        subdivide: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -42,6 +48,8 @@ public struct WorkspaceEditCommands {
         self.rectangularArray = rectangularArray
         self.radialArray = radialArray
         self.curveArray = curveArray
+        self.completeEdge = completeEdge
+        self.subdivide = subdivide
     }
 }
 
