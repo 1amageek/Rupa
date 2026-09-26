@@ -107,7 +107,7 @@ import Testing
         let motion = try move.typedMove(Vector3D(x: 0, y: 0, z: 0.5))
         #expect(try (motion.applied(to: .origin) - Point3D(x: 0.5, y: 0, z: 0)).length < 1e-12)
         move.compensatesInstances = true
-        guard case .transformSceneNodes(let ids, _, true) = move.command(worldDelta: motion) else {
+        guard case .transformSceneNodes(let ids, _, true) = try move.command(worldDelta: motion) else {
             Issue.record("A transform submits transformSceneNodes with its instance option.")
             return
         }

@@ -2062,13 +2062,23 @@ private struct ProjectMainViewContent: View {
                 slideCommandState.deactivate()
             }
             if newScope != .object {
-                transformSession = nil
+                if newScope != .edge || transformSession?.edgeTargets.isEmpty != false {
+                    transformSession = nil
+                }
                 mirrorSession = nil
             }
         }
         // A transform follows the objects it moves, and ends when the selection is something else.
         .onChange(of: snapshot.documentGeneration) { _, _ in
             refreshTransformFrame()
+        }
+        // Move Edges ends when other things are selected; a move empties the selection until the
+        // moved edges are selected again.
+        .onChange(of: snapshot.selection.selectedTargets) { _, targets in
+            if let transformSession, !transformSession.edgeTargets.isEmpty, !targets.isEmpty,
+               Set(targets) != Set(transformSession.edgeTargets) {
+                self.transformSession = nil
+            }
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs, initial: true) { _, _ in
             refreshSelectionMass()
@@ -2077,7 +2087,7 @@ private struct ProjectMainViewContent: View {
             refreshSelectionMass()
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
-            if let transformSession, transformSession.sceneNodeIDs != ids {
+            if let transformSession, transformSession.edgeTargets.isEmpty, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
             }
             if let mirrorSession, mirrorSession.sceneNodeIDs != ids {
@@ -5605,7 +5615,8 @@ private struct ProjectMainViewContent: View {
             isMirrorSessionActive: mirrorSession != nil,
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
-            hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty
+            hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
+            hasMovableEdgeSelection: selectionScope == .edge && selectedMovableEdgeTargets != nil
         )
     }
 
@@ -5654,7 +5665,9 @@ private struct ProjectMainViewContent: View {
             reportPlaceOptions()
             return .handled
         case .transformMode(let mode):
-            if transformSession == nil {
+            if transformSession == nil, selectionScope == .edge, let edges = selectedMovableEdgeTargets {
+                beginEdgeMoveSession(edges)
+            } else if transformSession == nil {
                 beginTransformSession(mode, sceneNodeIDs: snapshot.selection.wholeSceneNodeIDs)
             } else {
                 transformSession?.press(mode: mode)
@@ -8340,6 +8353,58 @@ private struct ProjectMainViewContent: View {
     }
 
     /// Starts Move, Rotate or Scale on whole objects.
+    /// The selected edges when they all belong to one body Move Edges can change.
+    private var selectedMovableEdgeTargets: [SelectionTarget]? {
+        let targets = snapshot.selection.selectedTargets
+        guard let first = targets.first, targets.allSatisfy({ target in
+            guard case .edge(let componentID) = target.component else { return false }
+            return target.sceneNodeID == first.sceneNodeID && componentID.generatedTopologySubshapeID != nil
+        }) else { return nil }
+        return targets
+    }
+
+    /// Move (G) on selected edges: typed motions and freestyle points move them with the kernel's
+    /// edge move.
+    private func beginEdgeMoveSession(_ edges: [SelectionTarget]) {
+        guard let nodeID = edges.first?.sceneNodeID else { return }
+        do {
+            let hierarchy = try SceneNodeHierarchy(metadata: snapshot.document.document.productMetadata)
+            var moving = WorkspaceTransformSession(sceneNodeIDs: [nodeID], mode: .move)
+            moving.edgeTargets = edges
+            moving.edgeBodyWorldTransform = try hierarchy.worldTransform(of: nodeID)
+            pointPickRequest = nil
+            placeSession = nil
+            transformSession = moving
+            refreshTransformFrame()
+            if let transformSession { reportToolStatus(transformSession.prompt) }
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    /// Submits a transform motion; after an edge move the moved edges become the selection and
+    /// the session's edges again.
+    private func submitTransformCommand(_ command: EditorCommand) {
+        guard case .moveBodyEdges(let targets, _, _) = command else {
+            submitSource(command)
+            return
+        }
+        submitSource(command) { result in
+            guard result != nil, let nodeID = targets.first?.sceneNodeID,
+                  let document = workspace.view?.document.document,
+                  let featureID = document.productMetadata.sceneNodes[nodeID]?.reference?.featureID else { return }
+            do {
+                let moved = try document.edgeTargets(following: targets, to: featureID, objectRegistry: objectRegistry)
+                transformSession?.edgeTargets = moved
+                selectTargets(moved)
+                refreshTransformFrame()
+            } catch {
+                transformSession = nil
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
+    }
+
     private func beginTransformSession(
         _ mode: WorkspaceTransformSession.Mode,
         sceneNodeIDs ids: [SceneNodeID]
@@ -8408,7 +8473,7 @@ private struct ProjectMainViewContent: View {
     private func applyTransformMotion(_ motion: () throws -> Transform3D) {
         guard let transformSession else { return }
         do {
-            submitSource(transformSession.command(worldDelta: try motion()))
+            submitTransformCommand(try transformSession.command(worldDelta: try motion()))
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
         }
@@ -8433,7 +8498,7 @@ private struct ProjectMainViewContent: View {
                     let motion = try transform.addFreestylePoint(exact.point)
                     transformSession = transform
                     if let motion {
-                        submitSource(transform.command(worldDelta: motion))
+                        submitTransformCommand(try transform.command(worldDelta: motion))
                     }
                     reportToolStatus(transform.prompt)
                 }

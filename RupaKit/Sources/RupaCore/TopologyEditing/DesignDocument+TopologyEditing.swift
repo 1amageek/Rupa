@@ -171,7 +171,7 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-    private func topologyEditSelection(
+    func topologyEditSelection(
         _ target: SelectionTarget, kind: TopologySummaryResult.Entry.Kind,
         objectRegistry: ObjectTypeRegistry,
         currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?

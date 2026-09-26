@@ -1,6 +1,7 @@
 import Foundation
 import RupaCore
 import RupaRendering
+import SwiftCAD
 
 /// Move, Rotate or Scale in progress: the objects, the frame options, the constraint and any
 /// freestyle points collected so far.
@@ -39,6 +40,11 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     var rotationAxis = Vector3D(x: 0, y: 0, z: 1)
     /// Freestyle Scale scales every direction about the axis start instead of along the axis.
     var freestyleUniform = false
+    /// Edges of one body the session moves instead of whole objects (Move Edges); only Move
+    /// applies to them, and each motion becomes the kernel's edge move.
+    var edgeTargets: [SelectionTarget] = []
+    /// The world transform of the edges' body, to express a world motion in its frame.
+    var edgeBodyWorldTransform = Transform3D.identity
 
     init(sceneNodeIDs: [SceneNodeID], mode: Mode) {
         self.sceneNodeIDs = sceneNodeIDs
@@ -66,7 +72,11 @@ struct WorkspaceTransformSession: Equatable, Sendable {
 
     /// The gizmo the viewport draws, once a frame is resolved and no point pick is pending.
     func gizmo(distanceStepMeters: Double) -> ViewportTransformGizmoConfiguration? {
-        guard let frame, pendingPoint == nil else { return nil }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Move Edges has no gizmo drag; the viewport's transform
+        // gizmo previews whole-object placement only. Production path: typed values and freestyle
+        // points reach `command(worldDelta:)`. Done when an edge gizmo drag previews the edge move
+        // and commits `moveBodyEdges`.
+        guard let frame, pendingPoint == nil, edgeTargets.isEmpty else { return nil }
         let increments = snapsToIncrements
             ? ViewportTransformGizmoConfiguration.Increments(
                 distanceMeters: distanceStepMeters,
@@ -80,6 +90,7 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     /// Switches to `mode`; the key of the current mode toggles that mode's own constraint instead
     /// (G: screen in Move and Rotate, S: uniform in Scale).
     mutating func press(mode next: Mode) {
+        guard edgeTargets.isEmpty || next == .move else { return }
         guard next == mode else {
             mode = next
             constraint = nil
@@ -229,9 +240,23 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         try SceneTransformMotion.scale(in: try requiredFrame(), factors: factors)
     }
 
-    /// The command applying `worldDelta` to the session's objects.
-    func command(worldDelta: Transform3D) -> EditorCommand {
-        .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: compensatesInstances)
+    /// The command applying `worldDelta` to the session's objects, or moving its edges by the
+    /// motion's translation expressed in their body's frame.
+    func command(worldDelta: Transform3D) throws -> EditorCommand {
+        guard !edgeTargets.isEmpty else {
+            return .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: compensatesInstances)
+        }
+        let pivot = try requiredFrame().origin
+        let world = try worldDelta.applied(to: pivot) - pivot
+        let local = try edgeBodyWorldTransform.inverseApplyingLinearPart(to: world)
+        guard local.length > ModelingTolerance.standard.distance else {
+            throw EditorError(code: .commandInvalid, message: "Move Edges needs a motion.")
+        }
+        return .moveBodyEdges(
+            targets: edgeTargets,
+            direction: try local.normalized(tolerance: ModelingTolerance.standard.distance),
+            distance: .length(local.length, .meter)
+        )
     }
 
     /// The command a gizmo drag commits: the one world motion every dragged node received,
@@ -268,7 +293,8 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     }
 
     var title: String {
-        switch mode {
+        if !edgeTargets.isEmpty { return edgeTargets.count == 1 ? "Move Edge" : "Move Edges" }
+        return switch mode {
         case .move: "Move"
         case .rotate: "Rotate"
         case .scale: "Scale"
@@ -296,6 +322,8 @@ struct WorkspaceTransformSession: Equatable, Sendable {
             case .scale: ["axis start", "axis end", "ratio point"]
             }
             return "\(title) freestyle: click the \(names[freestylePoints.count]). Esc cancels."
+        case nil where !edgeTargets.isEmpty:
+            return "\(title): type the motion, or F for two points. W orientation, V pivot, Return or Esc finishes."
         case nil:
             return "\(title): drag the gizmo. X/Y/Z axis, Shift-X/Y/Z plane, W orientation, V pivot, F freestyle, Return or Esc finishes."
         }

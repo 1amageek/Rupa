@@ -512,6 +512,15 @@ length and uniform scaling). Every drag, freestyle and typed motion commits one
 each is one undo step. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
 
+With edges of one body selected in edge scope, G runs the same session as Move
+Edges: the session keeps the edges and their body's world transform, only Move
+applies, and every typed or freestyle motion's translation (in the body's frame)
+commits one `moveBodyEdges`; the moved edges become the selection and the
+session's edges again. Selecting something else ends it.
+FIXME(INCOMPLETE_IMPLEMENTATION): Move Edges shows no gizmo, because the
+viewport's transform gizmo previews whole-object placement only; proportional
+editing of edges is not available either.
+
 Mirror (Option-X, Edit menu) runs a `WorkspaceMirrorSession` on the
 whole-object selection. The plane starts at the construction plane's positive
 X; X/Y/Z choose that axis's positive side and Shift-X/Y/Z the negative side, a

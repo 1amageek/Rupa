@@ -266,6 +266,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createBodyShell(name: String, target: SelectionTarget, thickness: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
+    /// Move Edges: moves edges of one body by `distance` along `direction` in the body's frame,
+    /// through the kernel's edge move.
+    case moveBodyEdges(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveSketchEntityPoint(
         target: SelectionTarget,
@@ -714,6 +717,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "filletBodyEdges"
         case .moveBodyEdge:
             "moveBodyEdge"
+        case .moveBodyEdges:
+            "moveBodyEdges"
         case .moveBodyVertex:
             "moveBodyVertex"
         case .moveSketchEntityPoint:
@@ -945,6 +950,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createBodyShell,
              .filletBodyEdges,
              .moveBodyEdge,
+             .moveBodyEdges,
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,

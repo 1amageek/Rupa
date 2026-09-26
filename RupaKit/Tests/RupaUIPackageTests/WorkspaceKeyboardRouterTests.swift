@@ -448,3 +448,13 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .confirmSectionAnalysis)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelActiveInteraction)
 }
+
+@Test func workspaceKeyboardRouterMovesSelectedEdges() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.hasMovableEdgeSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == .transformMode(.move))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: context) != .transformMode(.rotate))
+    context.hasMovableEdgeSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
+}

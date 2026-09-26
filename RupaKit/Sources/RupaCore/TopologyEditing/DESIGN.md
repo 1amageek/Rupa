@@ -147,6 +147,16 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   together with cloned feature identities. No copied display curves define geometry.
   Frame synchronization uses a candidate CAD document and publishes only after
   every binding resolves, retaining the original document on failure.
+- `moveBodyEdges` (Move Edges) appends one Swift-CAD `EdgeMoveFeature` per
+  selected edge of one body, each targeting the body the previous one made and
+  naming its edge by the reference resolved on the current body (the kernel
+  follows its lineage). The direction is in the body's own frame. The kernel owns
+  what can move: straight edges of line-only planar solids and circular edges
+  along their axis with the planar cap they bound. The candidate is evaluated
+  before it is kept, so a refused move leaves the document unchanged.
+  `edgeTargets(following:to:)` follows the moved edges through the lineage so a
+  selection survives the move. `BodyEdgeMoveFeatureTests` owns a straight edge,
+  a circular edge and a refused sideways circle move.
 
 ## State, Ownership, and Lifecycle
 

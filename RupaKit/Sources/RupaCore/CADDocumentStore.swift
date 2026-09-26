@@ -1978,6 +1978,15 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .moveBodyEdges(let targets, let direction, let distance):
+            var updatedDocument = document
+            try updatedDocument.moveBodyEdges(
+                targets: targets, direction: direction, distance: distance, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .chamferBodyEdges:
             func run() throws {
                 guard case .chamferBodyEdges(let targets, let distance) = command else {

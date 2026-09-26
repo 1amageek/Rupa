@@ -109,6 +109,7 @@ enum PreparedAutomationSourceCommandValidation {
              .chamferBodyEdges,
              .filletBodyEdges,
              .moveBodyEdge,
+             .moveBodyEdges,
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,
