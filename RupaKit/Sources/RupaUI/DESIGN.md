@@ -459,6 +459,16 @@ parent frame; Curve reuses the Curve Array path pick with a new-array target.
 The new array is selected so the array inspector and viewport handles edit it.
 Escape withdraws a pending point or path pick.
 
+Place (Edit menu, Control-D) runs a `WorkspacePlaceSession` on the selection:
+the first viewport point pick is the source reference, and every later pick
+places the objects at that destination as one `placeSceneNodes` source command
+while the session keeps waiting for more destinations until Escape. Surface
+picks take their exact normal from `PlacedSurfaceNormalResolver`; a destination
+on the construction plane takes the plane normal; a source off the objects has
+none. F flips, I toggles instances, X/Y/Z choose the up axis and D adds a
+consecutive copy (each copy repeats the placement from the previous one); the
+viewport context panel shows the phase and edits angle and scale.
+
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection

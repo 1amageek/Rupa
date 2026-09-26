@@ -75,6 +75,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspaceCanvasCommandPlanner.swift",
         "Sources/RupaCore/SweepSelectionPlanningService.swift",
         "Sources/RupaUI/WorkspacePatternArrayCreationPlanner.swift",
+        "Sources/RupaUI/WorkspacePlaceSession.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -139,6 +140,7 @@ enum ProductionMainViewActionManifest {
         "offsetCurve",
         "offsetRegions",
         "offsetSketchVertex",
+        "placeSceneNodes",
         "projectBodyOutlinesToConstructionPlane",
         "projectCurvesToGeneratedFace",
         "projectSketchCurvesToConstructionPlane",

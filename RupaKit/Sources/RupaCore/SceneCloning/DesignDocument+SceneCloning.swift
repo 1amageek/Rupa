@@ -21,14 +21,19 @@ extension DesignDocument {
         try placeSceneNodes(ids: ids, placements: [.identity], objectRegistry: objectRegistry)
     }
 
-    /// Inserts one independent copy of `ids` per placement, each placement being a world-space
-    /// transform applied to the selection, beside the selection, and returns the copied roots.
+    /// Places `ids` once per world-space placement of the selection and returns the new roots:
+    /// independent copies beside the selection, or instances of the selection's component
+    /// definition that show it at the same placements.
     @discardableResult
     public mutating func placeSceneNodes(
         ids: [SceneNodeID],
         placements: [Transform3D],
+        output: SceneNodePlacementOutput = .independentCopy,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SceneNodeID] {
+        if output == .componentInstance {
+            return try placeInstances(of: ids, placements: placements, objectRegistry: objectRegistry)
+        }
         let fragment = try sceneFragment(copying: ids)
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         let firstRootID = fragment.roots[0].sceneNodeID
@@ -76,6 +81,78 @@ extension DesignDocument {
             parentWorld: parentWorld,
             objectRegistry: objectRegistry
         )
+    }
+
+    private mutating func placeInstances(
+        of ids: [SceneNodeID],
+        placements: [Transform3D],
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> [SceneNodeID] {
+        if let refusal = productMetadata.sceneCopyRefusal(for: ids) {
+            throw refusal
+        }
+        guard !placements.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "Placing instances requires at least one placement.")
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let roots = hierarchy.outermostSceneNodeIDs(among: ids)
+        guard Set(roots.map { hierarchy.parentID(of: $0) }).count == 1 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Instances keep one placement frame; place objects under one parent together."
+            )
+        }
+        // An instance shows its definition roots in the definition's own frame, so the instance
+        // transform carries the roots' parent frame to reproduce their world placement.
+        let parentWorld = try hierarchy.parentWorldTransform(of: roots[0])
+        guard let documentRootID = productMetadata.rootSceneNodeIDs.first else {
+            throw EditorError(code: .commandInvalid, message: "Placing instances requires a document root.")
+        }
+        let inverseInstanceParent = try hierarchy.worldTransform(of: documentRootID).inverse()
+
+        var updated = self
+        let definitionID: ComponentDefinitionID
+        if let existing = updated.productMetadata.componentDefinitions.values.first(where: {
+            Set($0.rootSceneNodeIDs) == Set(roots)
+        }) {
+            definitionID = existing.id
+        } else {
+            let base = "\(productMetadata.sceneNodes[roots[0]]?.name ?? "Object") Source"
+            let taken = Set(updated.productMetadata.componentDefinitions.values.map(\.name))
+            var name = base
+            var ordinal = 2
+            while taken.contains(name) {
+                name = "\(base) \(ordinal)"
+                ordinal += 1
+            }
+            definitionID = try updated.createComponentDefinition(
+                name: name, rootSceneNodeIDs: roots, objectRegistry: objectRegistry
+            )
+        }
+        let definitionName = updated.productMetadata.componentDefinitions[definitionID]?.name ?? "Instance"
+        var instanceNodeIDs: [SceneNodeID] = []
+        for placement in placements {
+            try placement.validateAffinePlacement()
+            let taken = Set(updated.productMetadata.componentInstances.values.map(\.name))
+            var ordinal = 1
+            while taken.contains("\(definitionName) \(ordinal)") {
+                ordinal += 1
+            }
+            let instanceID = try updated.createComponentInstance(
+                name: "\(definitionName) \(ordinal)",
+                definitionID: definitionID,
+                localTransform: try inverseInstanceParent.composed(with: try placement.composed(with: parentWorld)),
+                objectRegistry: objectRegistry
+            )
+            guard let nodeID = updated.productMetadata.sceneNodes.values.first(where: {
+                $0.reference?.componentInstanceID == instanceID
+            })?.id else {
+                throw EditorError(code: .referenceUnresolved, message: "A placed instance has no scene node.")
+            }
+            instanceNodeIDs.append(nodeID)
+        }
+        self = updated
+        return instanceNodeIDs
     }
 
     private mutating func insertCopies(

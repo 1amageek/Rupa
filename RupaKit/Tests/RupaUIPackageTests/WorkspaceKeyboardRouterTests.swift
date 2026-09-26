@@ -151,6 +151,19 @@ import Testing
     )
 }
 
+/// Place's option keys act only while Place is running.
+@Test func workspaceKeyboardRouterRoutesPlaceOptionKeysOnlyDuringPlace() {
+    let router = WorkspaceKeyboardRouter()
+    var placing = keyboardContext()
+    placing.isPlaceSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "f"), context: placing) == .togglePlaceFlip)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: placing) == .togglePlaceOutput)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "y"), context: placing) == .setPlaceUpAxis(.y))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: placing) == .addPlaceCopy)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "f"), context: keyboardContext()) != .togglePlaceFlip)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: keyboardContext()) != .addPlaceCopy)
+}
+
 /// Delete removes the selection only while the workspace is the one holding the keys.
 ///
 /// The commands that take typed input own the editing keys while they are up, so a delete meant for

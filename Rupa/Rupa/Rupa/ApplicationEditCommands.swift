@@ -17,6 +17,11 @@ struct ApplicationEditCommands: Commands {
             }
             .keyboardShortcut("d", modifiers: .command)
             .disabled(editCommands?.duplicate == nil)
+            Button("Place") {
+                editCommands?.place?()
+            }
+            .keyboardShortcut("d", modifiers: .control)
+            .disabled(editCommands?.place == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)

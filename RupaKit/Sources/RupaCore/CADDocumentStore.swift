@@ -895,8 +895,10 @@ public final class CADDocumentStore {
                 switch command {
                 case .duplicateSceneNodes(let ids):
                     try updatedDocument.duplicateSceneNodes(ids: ids, objectRegistry: objectRegistry)
-                case .placeSceneNodes(let ids, let placements):
-                    try updatedDocument.placeSceneNodes(ids: ids, placements: placements, objectRegistry: objectRegistry)
+                case .placeSceneNodes(let ids, let placements, let output):
+                    try updatedDocument.placeSceneNodes(
+                        ids: ids, placements: placements, output: output, objectRegistry: objectRegistry
+                    )
                 case .pasteSceneFragment(let fragment, let placements):
                     try updatedDocument.pasteSceneFragment(fragment, placements: placements, objectRegistry: objectRegistry)
                 default:

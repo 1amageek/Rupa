@@ -99,6 +99,14 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case deleteSelection
     /// Copy the selected objects in place and select the copies for moving.
     case duplicateSelection
+    /// Place: turn the placed objects to point along the destination normal instead of facing it.
+    case togglePlaceFlip
+    /// Place: switch between independent copies and component instances.
+    case togglePlaceOutput
+    /// Place: choose which axis is up when the source point carries no surface normal.
+    case setPlaceUpAxis(SceneNodePlacementSpec.UpAxis)
+    /// Place: place one more consecutive copy per destination click.
+    case addPlaceCopy
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -144,6 +152,7 @@ struct WorkspaceKeyboardContext: Sendable {
     var selectionScope: WorkspaceSelectionScope
     var hasCurveControlVertexSlideInput: Bool
     var hasSurfaceControlVertexSlideTargets: Bool
+    var isPlaceSessionActive: Bool = false
 
     /// Whether a command is currently taking typed input.
     ///
@@ -207,6 +216,11 @@ struct WorkspaceKeyboardRouter: Sendable {
         // one is running.
         if input.isEscape {
             return .cancelActiveInteraction
+        }
+        if context.isPlaceSessionActive,
+           input.modifiers.isEmpty,
+           let placeAction = placeAction(for: input.characters.lowercased()) {
+            return placeAction
         }
         if input.isTab,
            context.usesSketchAxisConstraint {
@@ -328,6 +342,19 @@ struct WorkspaceKeyboardRouter: Sendable {
             return nil
         }
         return .activateDimensionCommand
+    }
+
+    /// Place's option keys, which Plasticity's Place uses as well.
+    private func placeAction(for key: String) -> WorkspaceKeyboardAction? {
+        switch key {
+        case "f": .togglePlaceFlip
+        case "i": .togglePlaceOutput
+        case "x": .setPlaceUpAxis(.x)
+        case "y": .setPlaceUpAxis(.y)
+        case "z": .setPlaceUpAxis(.z)
+        case "d": .addPlaceCopy
+        default: nil
+        }
     }
 
     private func offsetAction(

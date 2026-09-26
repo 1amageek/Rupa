@@ -85,7 +85,7 @@ import Testing
         let first = try Transform3D.translation(Vector3D(x: 0.5, y: 0, z: 0))
         let second = try Transform3D.rotation(axis: .unitZ, angleRadians: .pi / 2)
 
-        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [first, second]))
+        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [first, second], output: .independentCopy))
         let document = session.document
         let children = try #require(document.productMetadata.sceneNodes[parent]?.childIDs)
         #expect(children.count == 3 && children[0] == box)

@@ -147,6 +147,7 @@ private struct ProjectMainViewContent: View {
     @State private var patternArrayCurvePathPickState: PatternArrayCurvePathPickState
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
     @State private var pointPickRequest: WorkspacePointPickRequest?
+    @State private var placeSession: WorkspacePlaceSession?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
@@ -2096,7 +2097,7 @@ private struct ProjectMainViewContent: View {
             hoverClearSignal: viewportHoverClearSignal,
             showsConstructionPlaneHover: showsConstructionPlaneHover,
             measurementToolActive: selectedTool == .measure,
-            pointPickActive: pointPickRequest != nil,
+            pointPickActive: pointPickRequest != nil || placeSession != nil,
             showsAutomaticMeasurement: showsAutomaticBoundsRulers,
             showsBoundsReadout: showsBoundsReadout,
             measurementConstructionPlane: workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane,
@@ -3870,9 +3871,61 @@ private struct ProjectMainViewContent: View {
                     accessibilityIdentifier: "WorkspaceConstructionPlane.pickOrigin"
                 )
             }
+            if let placeSession {
+                workspaceContextDivider
+                placeSessionContextPanelContent(placeSession)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
+    }
+
+    /// Place's phase and the options every placement of the session uses.
+    @ViewBuilder
+    private func placeSessionContextPanelContent(_ place: WorkspacePlaceSession) -> some View {
+        workspaceValuePill(
+            "Place",
+            place.phase == .source ? "Pick Source" : "Pick Destination",
+            accessibilityIdentifier: "WorkspacePlace.phase"
+        )
+        placeOptionField("Angle", value: place.angleDegrees, unit: "deg") { value in
+            placeSession?.angleDegrees = value
+        }
+        placeOptionField("Scale", value: place.scale, unit: "x") { value in
+            guard value > 0 else {
+                reportToolStatus("Place scale must be greater than zero.", severity: .warning)
+                return
+            }
+            placeSession?.scale = value
+        }
+        workspaceValuePill("Copies", "\(place.copyCount)", accessibilityIdentifier: "WorkspacePlace.copies")
+        workspaceValuePill(
+            "Output",
+            place.output == .componentInstance ? "Instances" : "Copies",
+            accessibilityIdentifier: "WorkspacePlace.output"
+        )
+        workspaceValuePill(
+            "Up",
+            place.upAxis.rawValue.uppercased() + (place.flipsOrientation ? " flipped" : ""),
+            accessibilityIdentifier: "WorkspacePlace.up"
+        )
+    }
+
+    private func placeOptionField(
+        _ title: String,
+        value: Double,
+        unit: String,
+        onCommit: @escaping (Double) -> Void
+    ) -> some View {
+        HStack(spacing: 4) {
+            Text(title).foregroundStyle(.secondary)
+            TextField(title, value: Binding(get: { value }, set: onCommit), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspacePlace.\(title.lowercased())")
+            Text(unit).foregroundStyle(.secondary)
+        }
+        .font(.caption)
     }
 
     @ViewBuilder
@@ -5105,7 +5158,8 @@ private struct ProjectMainViewContent: View {
             hasSurfaceControlVertexSlideTargets: !input.isDelete
                 && slideCommandState.isSurfaceControlVerticesActive
                 && (!selectedPolySplineSurfaceVertexTargets.isEmpty
-                    || !selectedSurfaceControlPointReferences.isEmpty)
+                    || !selectedSurfaceControlPointReferences.isEmpty),
+            isPlaceSessionActive: placeSession != nil
         )
     }
 
@@ -5126,6 +5180,22 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             deleteSceneNodes(ids)
+            return .handled
+        case .togglePlaceFlip:
+            placeSession?.flipsOrientation.toggle()
+            reportPlaceOptions()
+            return .handled
+        case .togglePlaceOutput:
+            placeSession?.output = placeSession?.output == .componentInstance ? .independentCopy : .componentInstance
+            reportPlaceOptions()
+            return .handled
+        case .setPlaceUpAxis(let axis):
+            placeSession?.upAxis = axis
+            reportPlaceOptions()
+            return .handled
+        case .addPlaceCopy:
+            placeSession?.copyCount += 1
+            reportPlaceOptions()
             return .handled
         case .duplicateSelection:
             let ids = snapshot.selection.wholeSceneNodeIDs
@@ -5298,6 +5368,11 @@ private struct ProjectMainViewContent: View {
         if pointPickRequest != nil {
             pointPickRequest = nil
             reportToolStatus("Point pick canceled.")
+            return .handled
+        }
+        if placeSession != nil {
+            placeSession = nil
+            reportToolStatus("Place finished.")
             return .handled
         }
         if viewAlignedConstructionPlaneRequest != nil {
@@ -7272,8 +7347,15 @@ private struct ProjectMainViewContent: View {
             guard let arrayIDs else { return nil }
             return { beginPatternArrayCreation(kind, rootSceneNodeIDs: arrayIDs) }
         }
+        let place: (@MainActor () -> Void)?
+        if let ids = duplicableSelectionIDs {
+            place = { beginPlaceSession(rootSceneNodeIDs: ids) }
+        } else {
+            place = nil
+        }
         return WorkspaceEditCommands(
             duplicate: duplicate,
+            place: place,
             rectangularArray: arrayAction(.rectangular),
             radialArray: arrayAction(.radial),
             curveArray: arrayAction(.curve)
@@ -7335,13 +7417,18 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportPointPick(_ pick: ViewportPointPick) {
+        if placeSession != nil {
+            handlePlacePointPick(pick)
+            return
+        }
         guard let request = pointPickRequest else {
             return
         }
         switch pick {
         case .refused(let message):
             reportToolStatus(message, severity: .warning)
-        case .point(let point):
+        case .point(let picked):
+            let point = picked.point
             pointPickRequest = nil
             switch request {
             case .radialArrayCenter(let ids):
@@ -7361,6 +7448,89 @@ private struct ProjectMainViewContent: View {
                 }
             }
         }
+    }
+
+    /// Starts Place for `ids`: the next click picks the source reference point.
+    private func beginPlaceSession(rootSceneNodeIDs ids: [SceneNodeID]) {
+        if let refusal = snapshot.document.document.productMetadata.sceneCopyRefusal(for: ids) {
+            reportToolStatus(refusal.message, severity: .warning)
+            return
+        }
+        pointPickRequest = nil
+        let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
+        placeSession = place
+        reportToolStatus(place.prompt)
+    }
+
+    private func reportPlaceOptions() {
+        guard let placeSession else { return }
+        let output = placeSession.output == .componentInstance ? "instances" : "copies"
+        reportToolStatus(
+            "Place: \(placeSession.copyCount) \(output), up \(placeSession.upAxis.rawValue.uppercased())"
+                + (placeSession.flipsOrientation ? ", flipped" : "")
+                + ", angle \(placeSession.angleDegrees)°, scale \(placeSession.scale)."
+        )
+    }
+
+    /// The first pick is the source reference; every later pick places the objects there.
+    private func handlePlacePointPick(_ pick: ViewportPointPick) {
+        guard var place = placeSession else { return }
+        switch pick {
+        case .refused(let message):
+            reportToolStatus(message, severity: .warning)
+        case .point(let picked):
+            do {
+                switch place.phase {
+                case .source:
+                    // A source normal comes only from the objects' own surface; a plane under
+                    // them says nothing about which way they face.
+                    place.pickSource(WorkspacePlaceSession.Reference(
+                        point: picked.point,
+                        normal: picked.occurrenceID == nil ? nil : try pickedSurfaceNormal(picked)
+                    ))
+                    placeSession = place
+                    reportToolStatus(place.prompt)
+                case .destination:
+                    let destinationNormal: Vector3D?
+                    if picked.occurrenceID != nil {
+                        destinationNormal = try pickedSurfaceNormal(picked)
+                    } else if let plane = picked.plane {
+                        destinationNormal = try SketchPlaneCoordinateSystem(plane: plane).normal
+                    } else {
+                        destinationNormal = nil
+                    }
+                    let command = try place.command(destination: WorkspacePlaceSession.Reference(
+                        point: picked.point,
+                        normal: destinationNormal
+                    ))
+                    submitSource(command) { result in
+                        guard result != nil else { return }
+                        reportToolStatus("Placed. Click another destination, or Esc to finish.")
+                    }
+                }
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
+        }
+    }
+
+    /// The exact outward normal of the surface a pick landed on, from Swift-CAD.
+    private func pickedSurfaceNormal(_ picked: ViewportPickedPoint) throws -> Vector3D? {
+        guard let occurrenceID = picked.occurrenceID else { return nil }
+        let document = snapshot.document.document
+        let topology = try TopologySnapshotService().snapshot(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: snapshot.cadInteraction,
+            currentGeneration: snapshot.documentGeneration,
+            metricPolicy: .omit
+        )
+        return try PlacedSurfaceNormalResolver().outwardNormal(
+            at: picked.point,
+            on: occurrenceID,
+            document: document,
+            topology: topology
+        )
     }
 
     /// The whole-object selection when Duplicate accepts it, otherwise `nil`.

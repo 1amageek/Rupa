@@ -77,6 +77,21 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   non-affine result is a typed failure.
 - Removal of outputs removes the nodes, features and every side-table entry
   keyed by them.
+- `SceneNodePlacementSpec` turns two picked references into the world
+  transform Place and Paste apply: the source point lands on the destination
+  point, the source surface normal faces the destination normal (or points
+  along it when flipped; the up axis stands in for a missing source normal and
+  stays vertical for a missing destination normal), then a spin about the
+  destination normal and a uniform scale about the destination point.
+- `placeSceneNodes` with `.componentInstance` output reuses the component
+  definition whose roots are exactly the selection (creating one otherwise) and
+  creates one instance per placement whose transform carries the roots' parent
+  frame, so each instance shows the objects at the placement a copy would take.
+  Objects under different parents are refused: one instance has one frame.
+- Surface normals for placement come from `PlacedSurfaceNormalResolver`: the
+  pick is taken into the occurrence's source frame, projected with Swift-CAD's
+  surface query onto the presented body's faces, and the nearest face's normal
+  is oriented by the face and placed back into the world.
 
 ## Verification and Change Impact
 

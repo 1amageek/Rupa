@@ -4612,7 +4612,16 @@ public struct Viewport: View {
         if pointPickActive {
             let resolution = measurementEndpoint(at: point)
             if let endpoint = resolution.endpoint {
-                onPointPick?(.point(endpoint.point))
+                var picked = ViewportPickedPoint(point: endpoint.point)
+                switch endpoint.source {
+                case .presentation(let occurrenceID):
+                    picked.occurrenceID = occurrenceID
+                case .constructionPlane(let plane):
+                    picked.plane = plane
+                case .snap:
+                    break
+                }
+                onPointPick?(.point(picked))
             } else {
                 onPointPick?(.refused((resolution.failure ?? .viewRayUnavailable).message))
             }
