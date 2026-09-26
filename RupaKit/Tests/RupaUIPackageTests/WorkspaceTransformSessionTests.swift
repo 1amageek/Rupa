@@ -142,4 +142,45 @@ import Testing
         #expect(throws: EditorError.self) { _ = try move.dragCommand([first, divergent]) }
         #expect(throws: EditorError.self) { _ = try move.dragCommand([]) }
     }
+
+    @Test func dialogRotatesAboutItsTypedAxisAndAnAxisKeySetsIt() throws {
+        var rotate = session(.rotate)
+        rotate.press(axis: .x, plane: false)
+        #expect(rotate.rotationAxis == Vector3D(x: 1, y: 0, z: 0))
+        let quarter = try rotate.typedRotation(degrees: 90)
+        #expect(try (quarter.applied(to: pivot + Vector3D(x: 0, y: 1, z: 0)) - (pivot + Vector3D(x: 0, y: 0, z: 1))).length < 1e-12)
+
+        rotate.rotationAxis = Vector3D(x: 0, y: 0, z: 0)
+        #expect(throws: EditorError.self) { _ = try rotate.typedRotation(degrees: 90) }
+        rotate.rotationAxis = Vector3D(x: 1, y: 1, z: 0)
+        #expect(throws: EditorError.self) { _ = try rotate.typedRotation(degrees: .infinity) }
+    }
+
+    @Test func freestyleScaleTakesATypedRatioOrLengthOnceItsAxisIsPicked() throws {
+        var scale = session(.scale)
+        #expect(throws: EditorError.self) { _ = try scale.typedFreestyleScale(ratio: 2) }
+        scale.beginFreestyle()
+        _ = try scale.addFreestylePoint(.origin)
+        _ = try scale.addFreestylePoint(Point3D(x: 0.5, y: 0, z: 0))
+        #expect(scale.hasFreestyleScaleAxis)
+        var byLength = scale
+        let ratio = try scale.typedFreestyleScale(ratio: 3)
+        #expect(try (ratio.applied(to: Point3D(x: 1, y: 1, z: 0)) - Point3D(x: 3, y: 1, z: 0)).length < 1e-12)
+        #expect(!scale.hasFreestyleScaleAxis)
+        #expect(scale.pendingPoint == nil)
+
+        byLength.freestyleUniform = true
+        let length = try byLength.typedFreestyleScale(length: 1)
+        #expect(try (length.applied(to: Point3D(x: 1, y: 1, z: 0)) - Point3D(x: 2, y: 2, z: 0)).length < 1e-12)
+    }
+
+    @Test func choosingAPivotModeReplacesAPickedPivot() throws {
+        var move = session(.move)
+        try move.pickPivot(at: pivot, normal: nil)
+        move.orientation = .pivot
+        move.choose(pivotMode: .median)
+        #expect(move.pivotMode == .median)
+        #expect(move.pickedPivot == nil)
+        #expect(move.orientation == .world)
+    }
 }

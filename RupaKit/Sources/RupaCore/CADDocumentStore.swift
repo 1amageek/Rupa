@@ -2652,6 +2652,30 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .moveSurfaceControlPointsProportionally:
+            func run() throws {
+                guard case .moveSurfaceControlPointsProportionally(
+                    let targets, let deltaX, let deltaY, let deltaZ, let options
+                ) = command else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Command dispatch expected moveSurfaceControlPointsProportionally."
+                    )
+                }
+                var updatedDocument = document
+                try updatedDocument.moveSurfaceControlPointsProportionally(
+                    targets: targets,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    deltaZ: deltaZ,
+                    options: options,
+                    objectRegistry: objectRegistry
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .setSurfaceControlPointWeight:
             func run() throws {
                 guard case .setSurfaceControlPointWeight(let target, let weight) = command else {

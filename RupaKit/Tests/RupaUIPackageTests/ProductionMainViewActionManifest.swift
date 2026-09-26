@@ -135,6 +135,7 @@ enum ProductionMainViewActionManifest {
         "moveSketchSplineControlPoint",
         "moveSurfaceControlPoint",
         "moveSurfaceControlPointsInFrame",
+        "moveSurfaceControlPointsProportionally",
         "moveSurfaceTrimControlPoint",
         "moveSurfaceTrimEndpoint",
         "offsetBodyFace",

@@ -137,6 +137,7 @@ enum PreparedAutomationSourceCommandValidation {
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
              .moveSurfaceControlPointsInFrame,
+             .moveSurfaceControlPointsProportionally,
              .setSurfaceControlPointWeight,
              .setSurfaceKnotValue,
              .insertSurfaceKnot,

@@ -35,6 +35,10 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     var freestylePoints: [Point3D] = []
     /// The frame last resolved for the current document and options.
     var frame: SceneTransformFrame?
+    /// Rotate's typed axis, in frame components; an axis constraint sets it to that axis.
+    var rotationAxis = Vector3D(x: 0, y: 0, z: 1)
+    /// Freestyle Scale scales every direction about the axis start instead of along the axis.
+    var freestyleUniform = false
 
     init(sceneNodeIDs: [SceneNodeID], mode: Mode) {
         self.sceneNodeIDs = sceneNodeIDs
@@ -96,6 +100,9 @@ struct WorkspaceTransformSession: Equatable, Sendable {
             toggle(.plane(normal: axis))
         } else {
             toggle(.axis(axis))
+            if mode == .rotate, constraint == .axis(axis) {
+                rotationAxis = Vector3D(x: axis == .x ? 1 : 0, y: axis == .y ? 1 : 0, z: axis == .z ? 1 : 0)
+            }
         }
     }
 
@@ -134,8 +141,43 @@ struct WorkspaceTransformSession: Equatable, Sendable {
             )
         case .scale:
             let ratio = try SceneTransformMotion.freestyleRatio(axisStart: points[0], axisEnd: points[1], toward: points[2])
-            return try SceneTransformMotion.freestyleScale(axisStart: points[0], axisEnd: points[1], ratio: ratio)
+            return try freestyleScale(axisStart: points[0], axisEnd: points[1], ratio: ratio)
         }
+    }
+
+    /// Whether freestyle Scale has its axis and waits for a ratio point or a typed ratio or length.
+    var hasFreestyleScaleAxis: Bool {
+        mode == .scale && pendingPoint == .freestyle && freestylePoints.count == 2
+    }
+
+    /// Freestyle Scale by a typed ratio, once its axis is picked.
+    mutating func typedFreestyleScale(ratio: Double) throws -> Transform3D {
+        guard hasFreestyleScaleAxis else {
+            throw EditorError(code: .commandInvalid, message: "Freestyle Scale needs its axis start and end first.")
+        }
+        let points = freestylePoints
+        let motion = try freestyleScale(axisStart: points[0], axisEnd: points[1], ratio: ratio)
+        freestylePoints = []
+        pendingPoint = nil
+        return motion
+    }
+
+    /// Freestyle Scale that makes the picked axis `length` long.
+    mutating func typedFreestyleScale(length: Double) throws -> Transform3D {
+        guard hasFreestyleScaleAxis else {
+            throw EditorError(code: .commandInvalid, message: "Freestyle Scale needs its axis start and end first.")
+        }
+        let ratio = try SceneTransformMotion.freestyleRatio(
+            axisStart: freestylePoints[0], axisEnd: freestylePoints[1], length: length
+        )
+        return try typedFreestyleScale(ratio: ratio)
+    }
+
+    private func freestyleScale(axisStart: Point3D, axisEnd: Point3D, ratio: Double) throws -> Transform3D {
+        if freestyleUniform {
+            return try SceneTransformMotion.uniformScale(in: .world(at: axisStart), factor: ratio)
+        }
+        return try SceneTransformMotion.freestyleScale(axisStart: axisStart, axisEnd: axisEnd, ratio: ratio)
     }
 
     /// Places the pivot at `point`, with its axes from the surface normal there when there is one.
@@ -163,9 +205,23 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         try SceneTransformMotion.translation(in: try requiredFrame(), by: components)
     }
 
-    /// The typed Rotate by degrees about a frame axis, as one world motion.
-    func typedRotation(axis: SceneTransformAxis, degrees: Double) throws -> Transform3D {
-        try SceneTransformMotion.rotation(in: try requiredFrame(), about: axis, angleRadians: degrees * .pi / 180)
+    /// The typed Rotate by degrees about `rotationAxis` through the pivot, as one world motion.
+    func typedRotation(degrees: Double) throws -> Transform3D {
+        let frame = try requiredFrame()
+        guard degrees.isFinite else {
+            throw EditorError(code: .commandInvalid, message: "A rotation angle must be finite.")
+        }
+        let axis = frame.worldVector(rotationAxis)
+        guard axis.length > ModelingTolerance.standard.distance else {
+            throw EditorError(code: .commandInvalid, message: "A rotation axis must not be zero.")
+        }
+        return try Transform3D.rotation(axis: axis, angleRadians: degrees * .pi / 180, about: frame.origin)
+    }
+
+    /// Chooses the pivot mode; a picked pivot gives way to it.
+    mutating func choose(pivotMode: SceneTransformPivotMode) {
+        self.pivotMode = pivotMode
+        removePivot()
     }
 
     /// The typed Scale by frame-axis factors, as one world motion.

@@ -494,11 +494,22 @@ same key again clears it. W cycles the orientation, V picks a pivot (its
 surface normal gives the pivot axes) and Option-V removes it. F collects
 freestyle points through the viewport point pick: Move takes a start and end,
 Rotate an axis start and end, a reference and a target, Scale an axis start
-and end and a ratio point. Typed values in the context panel apply one motion
-in the frame. Every drag, freestyle and typed motion commits one
+and end and a ratio point. The context panel is the command dialog: orientation
+and pivot menus, the instance-inverse and snap options, and typed values that
+each apply one motion in the frame (Move XYZ, Rotate angle about a typed axis,
+Scale factors, and once a freestyle Scale axis is picked, its ratio, a target
+length and uniform scaling). Every drag, freestyle and typed motion commits one
 `transformSceneNodes` command with the session's instance-inverse option, so
 each is one undo step. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
+
+With surface control points selected in vertex scope the panel shows Move
+Control Point's Proportional (None, All, Selected with falloff U and V) and
+Mirror (X, Y, Z of the active construction plane) options. While either is
+set, a control point drag submits one `moveSurfaceControlPointsProportionally`
+with the dragged point as the active one and the rest of the selection, so
+Core's [ControlPointMove](../RupaCore/ControlPointMove/DESIGN.md) decides every
+displacement; the drag preview still shows the dragged point alone.
 
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the

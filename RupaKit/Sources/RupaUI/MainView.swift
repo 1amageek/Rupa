@@ -149,6 +149,7 @@ private struct ProjectMainViewContent: View {
     @State private var pointPickRequest: WorkspacePointPickRequest?
     @State private var placeSession: WorkspacePlaceSession?
     @State private var transformSession: WorkspaceTransformSession?
+    @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
@@ -3902,20 +3903,46 @@ private struct ProjectMainViewContent: View {
         .accessibilityIdentifier("ViewportContextPanel")
     }
 
-    /// The transform's mode, frame options and typed values; each typed value applies one motion.
+    /// The transform's command dialog: mode, orientation, pivot, options and typed values; each typed
+    /// value applies one motion.
     @ViewBuilder
     private func transformSessionContextPanelContent(_ transform: WorkspaceTransformSession) -> some View {
         workspaceValuePill(transform.title, transform.constraintName, accessibilityIdentifier: "WorkspaceTransform.mode")
-        workspaceValuePill(
-            "Orientation",
-            transform.orientation.rawValue,
-            accessibilityIdentifier: "WorkspaceTransform.orientation"
-        )
-        workspaceValuePill(
-            "Pivot",
-            transform.pickedPivot == nil ? transform.pivotMode.rawValue : "picked",
-            accessibilityIdentifier: "WorkspaceTransform.pivot"
-        )
+        Menu(transform.orientation.rawValue) {
+            ForEach(SceneTransformOrientation.allCases, id: \.self) { orientation in
+                Button(orientation.rawValue) {
+                    transformSession?.orientation = orientation
+                    refreshTransformFrame()
+                }
+                .disabled(orientation == .pivot && transform.pickedPivot == nil)
+            }
+        }
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceTransform.orientation")
+        Menu(transform.pickedPivot == nil ? transform.pivotMode.rawValue : "picked") {
+            ForEach(SceneTransformPivotMode.allCases, id: \.self) { mode in
+                Button(mode.rawValue) {
+                    transformSession?.choose(pivotMode: mode)
+                    refreshTransformFrame()
+                }
+            }
+        }
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceTransform.pivot")
+        Toggle("Instances inversely", isOn: Binding(
+            get: { transform.compensatesInstances },
+            set: { transformSession?.compensatesInstances = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceTransform.instancesInversely")
+        Toggle("Snap", isOn: Binding(
+            get: { transform.snapsToIncrements },
+            set: { transformSession?.snapsToIncrements = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceTransform.snap")
         let unit = snapshot.workspaceState.ruler.displayUnit
         switch transform.mode {
         case .move:
@@ -3931,24 +3958,79 @@ private struct ProjectMainViewContent: View {
                 }
             }
         case .rotate:
+            transformOptionField("Angle", unit: "deg") { value in
+                try transform.typedRotation(degrees: value)
+            }
             ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
-                transformOptionField(axis.rawValue.uppercased(), unit: "deg") { value in
-                    return try transform.typedRotation(axis: axis, degrees: value)
+                transformValueField("Axis \(axis.rawValue.uppercased())", value: {
+                    switch axis {
+                    case .x: transform.rotationAxis.x
+                    case .y: transform.rotationAxis.y
+                    case .z: transform.rotationAxis.z
+                    }
+                }()) { value in
+                    switch axis {
+                    case .x: transformSession?.rotationAxis.x = value
+                    case .y: transformSession?.rotationAxis.y = value
+                    case .z: transformSession?.rotationAxis.z = value
+                    }
                 }
             }
         case .scale:
-            ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
-                transformOptionField(axis.rawValue.uppercased(), unit: "x") { value in
-                    var factors = Vector3D(x: 1, y: 1, z: 1)
-                    switch axis {
-                    case .x: factors.x = value
-                    case .y: factors.y = value
-                    case .z: factors.z = value
+            if transform.hasFreestyleScaleAxis {
+                transformOptionField("Ratio", unit: "x") { value in
+                    guard var updated = transformSession else {
+                        throw EditorError(code: .commandInvalid, message: "No transform is running.")
                     }
-                    return try transform.typedScale(factors)
+                    let motion = try updated.typedFreestyleScale(ratio: value)
+                    transformSession = updated
+                    return motion
+                }
+                transformOptionField("Length", unit: unit.symbol) { value in
+                    guard var updated = transformSession else {
+                        throw EditorError(code: .commandInvalid, message: "No transform is running.")
+                    }
+                    let motion = try updated.typedFreestyleScale(length: unit.meters(from: value))
+                    transformSession = updated
+                    return motion
+                }
+                Toggle("Uniform", isOn: Binding(
+                    get: { transform.freestyleUniform },
+                    set: { transformSession?.freestyleUniform = $0 }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .accessibilityIdentifier("WorkspaceTransform.uniform")
+            } else {
+                ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
+                    transformOptionField(axis.rawValue.uppercased(), unit: "x") { value in
+                        var factors = Vector3D(x: 1, y: 1, z: 1)
+                        switch axis {
+                        case .x: factors.x = value
+                        case .y: factors.y = value
+                        case .z: factors.z = value
+                        }
+                        return try transform.typedScale(factors)
+                    }
                 }
             }
         }
+    }
+
+    /// A stored option field: submitting it changes the option without applying a motion.
+    private func transformValueField(
+        _ title: String,
+        value: Double,
+        onCommit: @escaping (Double) -> Void
+    ) -> some View {
+        HStack(spacing: 4) {
+            Text(title).foregroundStyle(.secondary)
+            TextField(title, value: Binding(get: { value }, set: onCommit), format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 44)
+                .accessibilityIdentifier("WorkspaceTransform.\(title.lowercased())")
+        }
+        .font(.caption)
     }
 
     /// A typed value field: submitting it applies the motion `motion` makes of it and clears it.
@@ -4224,6 +4306,10 @@ private struct ProjectMainViewContent: View {
            selectedSurfaceControlPointReferences.isEmpty == false {
             workspaceContextDivider
             surfaceControlPointSlideContextPanelContent(selectedSurfaceControlPointReferences)
+        } else if selectedTool == .select, selectionScope == .vertex,
+                  selectedSurfaceControlPointReferences.isEmpty == false {
+            workspaceContextDivider
+            surfaceControlPointMoveOptionsContent()
         }
 
         if selectedConstructionPlaneTargets != nil {
@@ -4376,6 +4462,43 @@ private struct ProjectMainViewContent: View {
             },
             confirm: { _ = confirmActiveWorkspaceCommand() }
         )
+    }
+
+    /// Move Control Point's Proportional and Mirror options, which every control point drag uses.
+    @ViewBuilder
+    private func surfaceControlPointMoveOptionsContent() -> some View {
+        let options = surfaceControlPointMoveOptions
+        Menu("Proportional: \(options.proportional.rawValue)") {
+            ForEach(SurfaceControlPointMoveOptions.Proportional.allCases, id: \.self) { mode in
+                Button(mode.rawValue) { surfaceControlPointMoveOptions.proportional = mode }
+            }
+        }
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceControlPointMove.proportional")
+        if options.proportional != .none {
+            transformValueField("Falloff U", value: options.falloffU) { value in
+                guard value.isFinite, value > 0 else {
+                    reportToolStatus("A falloff must be a positive number of control points.", severity: .warning)
+                    return
+                }
+                surfaceControlPointMoveOptions.falloffU = value
+            }
+            transformValueField("Falloff V", value: options.falloffV) { value in
+                guard value.isFinite, value > 0 else {
+                    reportToolStatus("A falloff must be a positive number of control points.", severity: .warning)
+                    return
+                }
+                surfaceControlPointMoveOptions.falloffV = value
+            }
+        }
+        Menu("Mirror: \(options.mirrorAxis?.rawValue.uppercased() ?? "None")") {
+            Button("None") { surfaceControlPointMoveOptions.mirrorAxis = nil }
+            ForEach(SurfaceControlPointMoveOptions.MirrorAxis.allCases, id: \.self) { axis in
+                Button(axis.rawValue.uppercased()) { surfaceControlPointMoveOptions.mirrorAxis = axis }
+            }
+        }
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceControlPointMove.mirror")
     }
 
     @ViewBuilder
@@ -6406,6 +6529,22 @@ private struct ProjectMainViewContent: View {
     private func handleViewportSurfaceControlPointDrag(_ target: ViewportSurfaceControlPointDragTarget) {
         guard selectedTool == .select,
               selectionScope == .vertex else {
+            return
+        }
+        if !surfaceControlPointMoveOptions.isPlainMove {
+            // The dragged control point is the active one; the rest of the selection moves with it.
+            var options = surfaceControlPointMoveOptions
+            options.mirrorPlane = workspacePlaneMode.sketchPlane ?? activeConstructionPlane?.plane ?? .xy
+            let others = selectedSurfaceControlPointReferences.filter { $0 != target.target }
+            submitSource(
+                .moveSurfaceControlPointsProportionally(
+                    targets: others + [target.target],
+                    deltaX: .length(target.deltaX, .meter),
+                    deltaY: .length(target.deltaY, .meter),
+                    deltaZ: .length(target.deltaZ, .meter),
+                    options: options
+                )
+            )
             return
         }
         submitSource(

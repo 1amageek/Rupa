@@ -371,6 +371,15 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         vDistance: CADExpression,
         normalDistance: CADExpression
     )
+    /// Move Control Point with proportional falloff and mirror; the last target of each surface
+    /// is its active control point.
+    case moveSurfaceControlPointsProportionally(
+        targets: [SelectionReference],
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        options: SurfaceControlPointMoveOptions
+    )
     case setSurfaceControlPointWeight(
         target: SelectionReference,
         weight: CADExpression
@@ -743,6 +752,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "moveSurfaceControlPoint"
         case .moveSurfaceControlPointsInFrame:
             "moveSurfaceControlPointsInFrame"
+        case .moveSurfaceControlPointsProportionally:
+            "moveSurfaceControlPointsProportionally"
         case .setSurfaceControlPointWeight:
             "setSurfaceControlPointWeight"
         case .setSurfaceKnotValue:
@@ -922,6 +933,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
              .moveSurfaceControlPointsInFrame,
+             .moveSurfaceControlPointsProportionally,
              .setSurfaceControlPointWeight,
              .setSurfaceKnotValue,
              .insertSurfaceKnot,

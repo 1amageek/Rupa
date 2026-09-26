@@ -85,6 +85,10 @@ selections copying refuses.
 orientation), the motions Move, Rotate and Scale produce, and holding component
 instances in place while their source moves.
 
+[ControlPointMove](ControlPointMove/DESIGN.md) owns Move Control Point's
+proportional falloff and construction-plane mirror for B-spline surface control
+points (`moveSurfaceControlPointsProportionally`).
+
 Booleans combine bodies where they are displayed: `createBoolean` hands
 Swift-CAD the tool's rigid placement relative to the targets
 (`BooleanFeature.toolPlacement`), requires the targets to share one placement,
