@@ -4898,6 +4898,9 @@ private struct ProjectMainViewContent: View {
             edgeOffsetCommandState.deactivate()
             slotProfileCommandState.deactivate()
             viewAlignedConstructionPlaneRequest = nil
+            // A point pick belongs to the select tool; another tool's clicks are its own.
+            pointPickRequest = nil
+            placeSession = nil
         }
         setActiveTool(tool)
         reportToolStatus(tool == .solid ? solidShape.activationPrompt : tool.activationPrompt)
