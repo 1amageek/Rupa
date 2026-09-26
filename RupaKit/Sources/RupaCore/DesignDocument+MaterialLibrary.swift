@@ -101,7 +101,7 @@ extension DesignDocument {
     // MARK: - Support
 
     /// The appearance `node` carries, resolved once for every reader.
-    private func appearance(of node: SceneNode) -> Material {
+    func appearance(of node: SceneNode) -> Material {
         let library = productMetadata.materialLibrary
         if let assignedID = node.materialID, let assigned = library.materials[assignedID] {
             return assigned
@@ -112,20 +112,16 @@ extension DesignDocument {
         return Material.neutral(named: node.name)
     }
 
-    /// `material` under a new identity and `name`, carrying the same four
-    /// components.
-    private static func copy(_ material: Material, named name: String) -> Material {
-        Material(
-            name: name,
-            baseColor: material.baseColor,
-            metallic: material.metallic,
-            roughness: material.roughness,
-            opacity: material.opacity
-        )
+    /// `material` under a new identity and `name`, carrying every component.
+    static func copy(_ material: Material, named name: String) -> Material {
+        var copied = material
+        copied.id = MaterialID()
+        copied.name = name
+        return copied
     }
 
     /// The material `edit` produces, validated before any document holds it.
-    private static func material(
+    static func material(
         _ material: Material,
         applying edit: MaterialComponentEdit
     ) throws -> Material {
@@ -139,6 +135,19 @@ extension DesignDocument {
             edited.metallic = metallic
         case .roughness(let roughness):
             edited.roughness = roughness
+        case .ior(let value): edited.ior = value
+        case .clearcoat(let value): edited.clearcoat = value
+        case .clearcoatRoughness(let value): edited.clearcoatRoughness = value
+        case .sheen(let value): edited.sheen = value
+        case .sheenColor(let value): edited.sheenColor = value
+        case .sheenRoughness(let value): edited.sheenRoughness = value
+        case .specularColor(let value): edited.specularColor = value
+        case .specularIntensity(let value): edited.specularIntensity = value
+        case .iridescence(let value): edited.iridescence = value
+        case .iridescenceIOR(let value): edited.iridescenceIOR = value
+        case .thickness(let value): edited.thickness = value
+        case .transmission(let value): edited.transmission = value
+        case .density(let value): edited.density = value
         }
         do {
             try edited.validate()
@@ -151,7 +160,16 @@ extension DesignDocument {
     private static func componentDomainMessage(for error: MaterialError) -> String {
         switch error {
         case .valueOutOfRange(let field, let value):
-            return "Material \(field) must be a value from 0 to 1, not \(value)."
+            switch field {
+            case "ior", "iridescenceIOR":
+                return "Material \(field) must be an index of refraction from 1 to 3, not \(value)."
+            case "thickness":
+                return "Material thickness must be zero or more, not \(value)."
+            case "density":
+                return "Material density must be greater than zero, not \(value)."
+            default:
+                return "Material \(field) must be a value from 0 to 1, not \(value)."
+            }
         }
     }
 
@@ -167,7 +185,7 @@ extension DesignDocument {
     ///
     /// Two nodes may share a name and two materials may not, so a name the
     /// library already holds gains the smallest integer that separates them.
-    private func uniqueMaterialName(basedOn preferredName: String) -> String {
+    func uniqueMaterialName(basedOn preferredName: String) -> String {
         let trimmedName = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmedName.isEmpty ? "Material" : trimmedName
         let taken = materialNames()

@@ -85,6 +85,10 @@ selections copying refuses.
 orientation), the motions Move, Rotate and Scale produce, and holding component
 instances in place while their source moves.
 
+[MaterialAssignment](MaterialAssignment/DESIGN.md) owns Set, Fork and Remove
+Material on selections (a group reaches the objects inside it), library material
+edits, create, rename and delete, and the mass densities give measured solids.
+
 [SceneMirror](SceneMirror/DESIGN.md) owns Mirror: the world mirror plane, the
 Cut down mirror plane, Union halves and Make Instances options, and the
 Swift-CAD mirror features, copies and instances they make.

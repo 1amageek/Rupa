@@ -5714,7 +5714,7 @@ extension Viewport {
             )
         }
         let dragPreview = try makeSemanticDragPreview()
-        return ViewportSpatialOverlaySemanticSnapshot(
+        var semantic = ViewportSpatialOverlaySemanticSnapshot(
             scene: scene,
             interaction: interaction,
             meshSelection: meshSelection,
@@ -5734,6 +5734,20 @@ extension Viewport {
             drawsLegacyBodies: drawsLegacyBodies,
             drawsDragPreviewBodies: rendersDragPreviewDocument
         )
+        // A curve or sketch whose node names a material draws in its color and opacity.
+        for item in scene.items {
+            switch item.kind {
+            case .curve, .sketch: break
+            default: continue
+            }
+            guard let nodeID = item.sceneNodeID,
+                  document.productMetadata.sceneNodes[nodeID]?.materialID != nil,
+                  let material = document.sceneNodeAppearance(id: nodeID) else { continue }
+            semantic.curveColors[nodeID] = SIMD4<Float>(
+                Float(material.baseColor.r), Float(material.baseColor.g), Float(material.baseColor.b), Float(material.opacity)
+            )
+        }
+        return semantic
     }
 
     private func makeSemanticSketchCurveSource(

@@ -216,8 +216,19 @@ struct RealityViewportMaterial {
         material.metallic = .init(floatLiteral: Float(surface.metallic))
         material.roughness = .init(floatLiteral: Float(surface.roughness))
         // SimpleMaterial cannot disable dielectric specular response. Keep
-        // the explicit viewport toggle exact with the native PBR parameter.
-        material.specular = shading.isSpecularEnabled ? 0.9 : 0.0
+        // the explicit viewport toggle exact with the native PBR parameter,
+        // scaled by the material's specular intensity.
+        material.specular = .init(floatLiteral: shading.isSpecularEnabled ? Float(0.9 * surface.specularIntensity) : 0.0)
+        material.clearcoat = .init(floatLiteral: Float(surface.clearcoat))
+        material.clearcoatRoughness = .init(floatLiteral: Float(surface.clearcoatRoughness))
+        // FIXME(INCOMPLETE_IMPLEMENTATION): The native physically based material has no index of
+        // refraction, iridescence, thickness, sheen roughness or specular color, so those authored
+        // layers are stored, edited and exported but not drawn; transmission is drawn only as
+        // blending. Production path: every studio-lit body surface. Completion requires a custom
+        // surface shader that reads those layers, with a rendering test per layer.
+        if surface.sheen.r > 0 || surface.sheen.g > 0 || surface.sheen.b > 0 {
+            material.sheen = .init(tint: nsColor(surface.sheen))
+        }
         if let opacity = transparentOpacity(of: surface) {
             material.blending = .transparent(opacity: .init(floatLiteral: opacity))
         }
@@ -251,7 +262,7 @@ struct RealityViewportMaterial {
     /// own `Blending` type, so the caller selects the case and this decides
     /// only whether there is one to select.
     private static func transparentOpacity(of surface: ViewportSurface) -> Float? {
-        surface.isTransparent ? Float(surface.opacity) : nil
+        surface.isTransparent ? Float(surface.displayedOpacity) : nil
     }
 
     private static func makeOcclusionMaterial() -> OcclusionMaterial {

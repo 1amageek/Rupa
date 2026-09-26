@@ -151,6 +151,7 @@ private struct ProjectMainViewContent: View {
     @State private var transformSession: WorkspaceTransformSession?
     @State private var mirrorSession: WorkspaceMirrorSession?
     @State private var arraySession: WorkspaceArrayCreationSession?
+    @State private var selectionMass: SceneMass?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
@@ -2060,6 +2061,12 @@ private struct ProjectMainViewContent: View {
         // A transform follows the objects it moves, and ends when the selection is something else.
         .onChange(of: snapshot.documentGeneration) { _, _ in
             refreshTransformFrame()
+        }
+        .onChange(of: snapshot.selection.wholeSceneNodeIDs, initial: true) { _, _ in
+            refreshSelectionMass()
+        }
+        .onChange(of: snapshot.documentGeneration) { _, _ in
+            refreshSelectionMass()
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
             if let transformSession, transformSession.sceneNodeIDs != ids {
@@ -5552,6 +5559,27 @@ private struct ProjectMainViewContent: View {
             arraySession?.pickSecondDirection()
             reportToolStatus(arraySession?.prompt ?? "")
             return .handled
+        case .setMaterial, .forkMaterial, .removeMaterial:
+            let ids = snapshot.selection.wholeSceneNodeIDs
+            let command: EditorCommand
+            let status: String
+            switch action {
+            case .setMaterial:
+                command = .assignMaterial(ids: ids, materialID: nil)
+                status = "Set Material: edit the material in the Properties inspector."
+            case .forkMaterial:
+                command = .forkMaterial(ids: ids)
+                status = "Forked the material; edit the copy in the Properties inspector."
+            default:
+                command = .removeMaterial(ids: ids)
+                status = "Removed the material."
+            }
+            submitSource(command) { result in
+                guard result != nil else { return }
+                inspectorTab = .properties
+                reportToolStatus(status)
+            }
+            return .handled
         case .finishArrayCreation:
             arraySession = nil
             reportToolStatus("Array finished.")
@@ -8079,6 +8107,30 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// The selected objects' mass from their materials' densities, measured when the selection or
+    /// the document changes; a selection that cannot be measured shows no mass.
+    private func refreshSelectionMass() {
+        guard !snapshot.selection.wholeSceneNodeIDs.isEmpty else {
+            selectionMass = nil
+            return
+        }
+        do {
+            let document = snapshot.document.document
+            let measurement = try MeasurementService().measure(
+                document: document,
+                selection: snapshot.selection,
+                ruler: snapshot.workspaceState.ruler,
+                objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction,
+                currentGeneration: snapshot.documentGeneration
+            )
+            selectionMass = try document.mass(of: measurement)
+        } catch {
+            selectionMass = nil
+            reportToolStatus("The selection's mass could not be measured: \(error.localizedDescription)", severity: .warning)
+        }
+    }
+
     /// Starts Move, Rotate or Scale on whole objects.
     private func beginTransformSession(
         _ mode: WorkspaceTransformSession.Mode,
@@ -8978,6 +9030,7 @@ private struct ProjectMainViewContent: View {
                     }
                 }
             },
+            mass: selectionMass,
             isBusy: modelingPreview.isBusy,
             onEditTransform: { component, value in
                 let ids = nodes.map(\.id)

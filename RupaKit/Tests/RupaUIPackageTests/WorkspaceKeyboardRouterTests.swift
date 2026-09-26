@@ -417,3 +417,14 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "2"), context: context) == .pickArraySecondDirection)
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .finishArrayCreation)
 }
+
+@Test func workspaceKeyboardRouterMapsMaterialKeys() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.hasWholeObjectSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "m"), context: context) == .setMaterial)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "M", modifiers: [.shift]), context: context) == .forkMaterial)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "µ", modifiers: [.option]), context: context) == .removeMaterial)
+    context.hasWholeObjectSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "m"), context: context) == nil)
+}

@@ -13,6 +13,8 @@ struct WorkspaceObjectTransformInspectorView: View {
     /// the section offers no control for it. See `RupaCore/DESIGN.md`.
     var appearances: [SceneNodeID: RupaCore.Material]
     var onCommitProperties: ([EditorCommand], String) -> Void
+    /// The selection's mass from its materials' densities, when it has measured solids.
+    var mass: SceneMass? = nil
     var isBusy: Bool
     var onEditTransform: (InspectorTransformComponent, Double) -> Void
 
@@ -132,6 +134,69 @@ struct WorkspaceObjectTransformInspectorView: View {
                 materialPicker
             }
             appearanceControls
+            materialActions
+            if let mass, mass.kilograms > 0 || mass.unweighedSolidCount > 0 {
+                workspaceInspectorValueRow(
+                    "Mass",
+                    mass.kilograms.formatted(.number.precision(.significantDigits(1...6))) + " kg"
+                        + (mass.unweighedSolidCount > 0 ? " (\(mass.unweighedSolidCount) without density)" : "")
+                )
+            }
+        }
+    }
+
+    /// The material the whole selection shares, if it shares one.
+    private var sharedMaterialID: MaterialID? {
+        let ids = Set(nodes.map(\.materialID))
+        guard ids.count == 1, let shared = ids.first else { return nil }
+        return shared
+    }
+
+    /// Fork, Remove and the library's New, Rename and Delete.
+    @ViewBuilder
+    private var materialActions: some View {
+        inspectorActionRow {
+            Button("Fork") {
+                onCommitProperties([.forkMaterial(ids: nodes.map(\.id))], "Fork Material")
+            }
+            .contentShape(Rectangle())
+            .disabled(isBusy)
+            .accessibilityIdentifier("WorkspaceObjectTransform.forkMaterial")
+            Button("Remove") {
+                onCommitProperties([.removeMaterial(ids: nodes.map(\.id))], "Remove Material")
+            }
+            .contentShape(Rectangle())
+            .disabled(isBusy || nodes.allSatisfy { $0.materialID == nil })
+            .accessibilityIdentifier("WorkspaceObjectTransform.removeMaterial")
+            Button("New") {
+                onCommitProperties([.createMaterial(name: "Material")], "New Material")
+            }
+            .contentShape(Rectangle())
+            .disabled(isBusy)
+            .accessibilityIdentifier("WorkspaceObjectTransform.newMaterial")
+        }
+        if let sharedMaterialID, let material = appearances[nodes[0].id] {
+            inspectorControlRow("Name") {
+                TextField("Name", text: Binding(
+                    get: { material.name },
+                    set: { name in
+                        guard !isBusy, name != material.name else { return }
+                        onCommitProperties([.renameMaterial(id: sharedMaterialID, name: name)], "Rename Material")
+                    }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .frame(minWidth: inspectorControlWidth)
+                .accessibilityIdentifier("WorkspaceObjectTransform.materialName")
+            }
+            inspectorActionRow {
+                Button("Delete Material") {
+                    onCommitProperties([.deleteMaterial(id: sharedMaterialID)], "Delete Material")
+                }
+                .contentShape(Rectangle())
+                .disabled(isBusy)
+                .accessibilityIdentifier("WorkspaceObjectTransform.deleteMaterial")
+            }
         }
     }
 
@@ -151,6 +216,77 @@ struct WorkspaceObjectTransformInspectorView: View {
             numericControl("Roughness", values: materials.map(\.roughness), sliderRange: 0...1) { value in
                 commitAppearance(.roughness(value))
             }
+            numericControl("IOR", values: materials.map(\.ior), sliderRange: 1...3) { value in
+                commitAppearance(.ior(value))
+            }
+            DisclosureGroup("Advanced") {
+                advancedAppearanceControls(materials)
+            }
+            .font(.caption)
+            .accessibilityIdentifier("WorkspaceObjectTransform.advancedMaterial")
+        }
+    }
+
+    /// The physical layers Plasticity lists under the material dialog's Advanced menu.
+    @ViewBuilder
+    private func advancedAppearanceControls(_ materials: [RupaCore.Material]) -> some View {
+        numericControl("Clearcoat", values: materials.map(\.clearcoat), sliderRange: 0...1) { commitAppearance(.clearcoat($0)) }
+        numericControl("Clearcoat Roughness", values: materials.map(\.clearcoatRoughness), sliderRange: 0...1) {
+            commitAppearance(.clearcoatRoughness($0))
+        }
+        colorRow("Sheen Color", colors: materials.map(\.sheenColor)) { commitAppearance(.sheenColor($0)) }
+        numericControl("Sheen", values: materials.map(\.sheen), sliderRange: 0...1) { commitAppearance(.sheen($0)) }
+        numericControl("Sheen Roughness", values: materials.map(\.sheenRoughness), sliderRange: 0...1) {
+            commitAppearance(.sheenRoughness($0))
+        }
+        colorRow("Specular Color", colors: materials.map(\.specularColor)) { commitAppearance(.specularColor($0)) }
+        numericControl("Specular Intensity", values: materials.map(\.specularIntensity), sliderRange: 0...1) {
+            commitAppearance(.specularIntensity($0))
+        }
+        numericControl("Iridescence", values: materials.map(\.iridescence), sliderRange: 0...1) { commitAppearance(.iridescence($0)) }
+        numericControl("Iridescence IOR", values: materials.map(\.iridescenceIOR), sliderRange: 1...3) {
+            commitAppearance(.iridescenceIOR($0))
+        }
+        numericControl(
+            "Thickness",
+            values: materials.map { displayUnit.value(fromMeters: $0.thickness) },
+            sliderRange: 0...displayUnit.value(fromMeters: 0.1),
+            onChange: { commitAppearance(.thickness(displayUnit.meters(from: $0))) },
+            unitLabel: { displayUnit.symbol }
+        )
+        numericControl("Transmission", values: materials.map(\.transmission), sliderRange: 0...1) {
+            commitAppearance(.transmission($0))
+        }
+        numericControl(
+            "Density",
+            values: materials.map { $0.density ?? 0 },
+            sliderRange: 0...20_000,
+            onChange: { commitAppearance(.density($0 > 0 ? $0 : nil)) },
+            unitLabel: { "kg/m³" }
+        )
+    }
+
+    /// A color layer's swatch; picking a color writes it to every selected material.
+    private func colorRow(
+        _ title: String,
+        colors: [ColorRGBA],
+        commit: @escaping (ColorRGBA) -> Void
+    ) -> some View {
+        inspectorControlRow(title) {
+            ColorPicker("", selection: Binding(
+                get: {
+                    let color = colors.first ?? ColorRGBA(r: 0, g: 0, b: 0, a: 1)
+                    return Color(red: color.r, green: color.g, blue: color.b)
+                },
+                set: { picked in
+                    guard !isBusy else { return }
+                    let resolved = picked.resolve(in: environment)
+                    commit(ColorRGBA(r: Double(resolved.red), g: Double(resolved.green), b: Double(resolved.blue), a: 1))
+                }
+            ), supportsOpacity: false)
+            .labelsHidden()
+            .controlSize(.small)
+            .disabled(isBusy)
         }
     }
 

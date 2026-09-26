@@ -421,6 +421,9 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     let measurement: Measurement?
     let drawsLegacyBodies: Bool
     let drawsDragPreviewBodies: Bool
+    /// The color and opacity a curve or sketch object draws with when its node names a material;
+    /// objects without one keep the canvas's curve and sketch colors.
+    var curveColors: [SceneNodeID: SIMD4<Float>] = [:]
 
     init(
         scene: ViewportScene,
@@ -884,7 +887,7 @@ enum ViewportSpatialOverlayProducer {
                     selectedNodes: selectedNodes
                 ) ? selectionColor : (hoveredFeatures.contains(item.featureID)
                     || item.sceneNodeID.map(hoveredNodes.contains) == true
-                    ? hoverColor : curveColor)
+                    ? hoverColor : (item.sceneNodeID.flatMap { snapshot.curveColors[$0] } ?? curveColor))
                 for segment in component.segments {
                     guard segment.points.count >= 2 else {
                         throw RealityViewportSpatialBatch.invalid(
@@ -917,7 +920,7 @@ enum ViewportSpatialOverlayProducer {
                 )
                 let color = itemSelected ? selectionColor : (hoveredFeatures.contains(item.featureID)
                     || item.sceneNodeID.map(hoveredNodes.contains) == true
-                    ? hoverColor : sketchColor)
+                    ? hoverColor : (item.sceneNodeID.flatMap { snapshot.curveColors[$0] } ?? sketchColor))
                 let selectedEntityIDs = Set(selectedSketchEntities.compactMap {
                     $0.featureID == item.featureID ? $0.entityID : nil
                 })

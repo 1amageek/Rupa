@@ -152,6 +152,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case pickArraySecondDirection
     /// Return: finish shaping the new array.
     case finishArrayCreation
+    /// M: Set Material on the selection.
+    case setMaterial
+    /// Shift-M: Fork Material on the selection.
+    case forkMaterial
+    /// Option-M: Remove Material from the selection.
+    case removeMaterial
     /// Back out of whatever the workspace is in the middle of.
     case cancelActiveInteraction
     /// Choose what a click in the viewport selects.
@@ -236,6 +242,14 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isArrayCreationSessionActive, let arrayAction = arrayCreationAction(for: input) {
             return arrayAction
+        }
+        if input.phases.contains(.down),
+           context.isSelectToolActive,
+           context.hasWholeObjectSelection,
+           !context.ownsTextEditingKeys,
+           !context.isPlaceSessionActive,
+           let materialAction = materialAction(for: input) {
+            return materialAction
         }
         if input.phases.contains(.down),
            input.modifiers == [.option],
@@ -489,6 +503,18 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "i" where !shifted: return .toggleMirrorInstances
         case "q" where !shifted: return .toggleMirrorUnion
         case "f" where !shifted: return .beginMirrorFreestyle
+        default: return nil
+        }
+    }
+
+    /// M, Shift-M and Option-M: Set, Fork and Remove Material.
+    private func materialAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        let key = input.characters.lowercased()
+        switch input.modifiers {
+        case []: return key == "m" ? .setMaterial : nil
+        case [.shift]: return key == "m" ? .forkMaterial : nil
+        // Option-M can arrive as a composed character, so the key is matched on either form.
+        case [.option]: return key == "m" || key == "µ" ? .removeMaterial : nil
         default: return nil
         }
     }

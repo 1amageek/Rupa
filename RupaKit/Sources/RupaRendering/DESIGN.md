@@ -2303,6 +2303,16 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
     before partial native mutation. Wire color, background,
     culling, specular, and section state remain ephemeral session settings.
     They never edit source, evaluation, history, persistence, or provenance.
+    `ViewportSurface` carries the layers the native physically based material
+    draws: clearcoat and its roughness, sheen (color scaled by amount) and the
+    specular intensity (scaling the session specular), and transmission, drawn
+    as blending at up to half the opacity as Plasticity draws transparent
+    materials outside render mode. Index of refraction, iridescence, thickness,
+    sheen roughness and specular color are authored and stored but not drawn;
+    the studio material builder marks that incomplete. A curve or sketch object
+    whose node names a material draws in that material's color and opacity
+    (`ViewportSpatialOverlaySemanticSnapshot.curveColors`); one naming none keeps
+    the canvas curve and sketch colors.
     The resolved value is the authored surface, not a color alone: base color,
     opacity, metallic, and roughness all come from the document material the
     node carries. `RealityViewport` combines each entry with the shading policy

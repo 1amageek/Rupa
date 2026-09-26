@@ -890,6 +890,26 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .assignMaterial, .forkMaterial, .removeMaterial, .editMaterial,
+             .createMaterial, .renameMaterial, .deleteMaterial:
+            var updatedDocument = document
+            switch command {
+            case .assignMaterial(let ids, let materialID):
+                try updatedDocument.assignMaterial(ids: ids, materialID: materialID, objectRegistry: objectRegistry)
+            case .forkMaterial(let ids): try updatedDocument.forkMaterial(ids: ids, objectRegistry: objectRegistry)
+            case .removeMaterial(let ids): try updatedDocument.removeMaterial(ids: ids, objectRegistry: objectRegistry)
+            case .editMaterial(let id, let edit):
+                try updatedDocument.editMaterial(id: id, edit: edit, objectRegistry: objectRegistry)
+            case .createMaterial(let name): try updatedDocument.createMaterial(name: name, objectRegistry: objectRegistry)
+            case .renameMaterial(let id, let name):
+                try updatedDocument.renameMaterial(id: id, name: name, objectRegistry: objectRegistry)
+            case .deleteMaterial(let id): try updatedDocument.deleteMaterial(id: id, objectRegistry: objectRegistry)
+            default:
+                throw EditorError(code: .commandInvalid, message: "Command dispatch expected a material command.")
+            }
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .mirrorSceneNodes(let ids, let plane, let options):
             var updatedDocument = document
             try updatedDocument.mirrorSceneNodes(ids: ids, plane: plane, options: options, objectRegistry: objectRegistry)

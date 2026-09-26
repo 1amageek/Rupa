@@ -92,6 +92,16 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Applies one appearance component to the material `id` names, creating and
     /// assigning a material when the node names none.
     case setSceneNodeAppearance(id: SceneNodeID, edit: MaterialComponentEdit)
+    /// Set Material: the objects the selection reaches share one material, a library one when named.
+    case assignMaterial(ids: [SceneNodeID], materialID: MaterialID?)
+    /// Fork Material: the objects the selection reaches take a new copy of their appearance.
+    case forkMaterial(ids: [SceneNodeID])
+    /// Remove Material: the objects the selection reaches and their faces return to the default.
+    case removeMaterial(ids: [SceneNodeID])
+    case editMaterial(id: MaterialID, edit: MaterialComponentEdit)
+    case createMaterial(name: String)
+    case renameMaterial(id: MaterialID, name: String)
+    case deleteMaterial(id: MaterialID)
     case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: PropertyID, value: ObjectPropertyValue?)
     case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
@@ -554,6 +564,20 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "transformSceneNodes"
         case .mirrorSceneNodes:
             "mirrorSceneNodes"
+        case .assignMaterial:
+            "assignMaterial"
+        case .forkMaterial:
+            "forkMaterial"
+        case .removeMaterial:
+            "removeMaterial"
+        case .editMaterial:
+            "editMaterial"
+        case .createMaterial:
+            "createMaterial"
+        case .renameMaterial:
+            "renameMaterial"
+        case .deleteMaterial:
+            "deleteMaterial"
         case .duplicateSceneNodes:
             "duplicateSceneNodes"
         case .placeSceneNodes:
@@ -837,6 +861,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .deleteSceneNodes,
              .transformSceneNodes,
              .mirrorSceneNodes,
+             .assignMaterial,
+             .forkMaterial,
+             .removeMaterial,
+             .editMaterial,
+             .createMaterial,
+             .renameMaterial,
+             .deleteMaterial,
              .duplicateSceneNodes,
              .placeSceneNodes,
              .pasteSceneFragment,

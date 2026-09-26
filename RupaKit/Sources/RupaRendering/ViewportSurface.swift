@@ -13,6 +13,12 @@ struct ViewportSurface: Equatable, Sendable {
     var opacity: Double
     var metallic: Double
     var roughness: Double
+    var clearcoat: Double = 0
+    var clearcoatRoughness: Double = 0
+    /// The sheen color already scaled by the sheen amount.
+    var sheen: ColorRGBA = ColorRGBA(r: 0, g: 0, b: 0, a: 1)
+    var specularIntensity: Double = 1
+    var transmission: Double = 0
 
     /// The surface a body carries before a document authors a material for it.
     static let neutral = ViewportSurface(
@@ -40,8 +46,25 @@ struct ViewportSurface: Equatable, Sendable {
             metallic: material?.metallic ?? Material.neutralMetallic,
             roughness: material?.roughness ?? Material.neutralRoughness
         )
+        guard let material else { return }
+        clearcoat = material.clearcoat
+        clearcoatRoughness = material.clearcoatRoughness
+        sheen = ColorRGBA(
+            r: material.sheenColor.r * material.sheen,
+            g: material.sheenColor.g * material.sheen,
+            b: material.sheenColor.b * material.sheen,
+            a: 1
+        )
+        specularIntensity = material.specularIntensity
+        transmission = material.transmission
+    }
+
+    /// The opacity the canvas blends with: a transmitting material shows through at up to half
+    /// its opacity, as Plasticity draws transparent materials outside render mode.
+    var displayedOpacity: Double {
+        opacity * (1 - transmission / 2)
     }
 
     /// Whether this surface needs native transparent blending.
-    var isTransparent: Bool { opacity < 1 }
+    var isTransparent: Bool { displayedOpacity < 1 }
 }

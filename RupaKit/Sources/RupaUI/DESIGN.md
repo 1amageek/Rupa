@@ -529,6 +529,19 @@ with the dragged point as the active one and the rest of the selection, so
 Core's [ControlPointMove](../RupaCore/ControlPointMove/DESIGN.md) decides every
 displacement; the drag preview still shows the dragged point alone.
 
+Materials follow Plasticity's Set, Fork and Remove Material: M submits
+`assignMaterial` (the reached objects share one material, a new one when they do
+not already), Shift-M `forkMaterial` and Option-M `removeMaterial`, and each
+opens the Properties inspector, whose material section edits the material the
+selection carries: color, opacity, metallic, roughness and IOR, an Advanced
+group with clearcoat, sheen, specular, iridescence, thickness, transmission and
+density, Fork, Remove and New buttons, and Name and Delete for a material the
+whole selection shares. The section shows the selection's mass from its
+materials' densities (`DesignDocument.mass(of:)`), measured when the selection
+or the document changes. Core's
+[MaterialAssignment](../RupaCore/MaterialAssignment/DESIGN.md) owns what each
+does.
+
 `WorkspaceKeyboardRouterTests` owns the routing decisions: the Escape action
 and the conditions that suppress it, the digits that name each scope and the
 commands that withhold them, and the plane request now surviving a selection
