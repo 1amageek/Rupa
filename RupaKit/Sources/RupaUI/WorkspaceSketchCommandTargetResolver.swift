@@ -26,6 +26,16 @@ struct WorkspaceSketchCommandTargetResolver {
         )
     }
 
+    /// The curve Offset Planar Curve acts on: an open curve Slot also takes, or a circle.
+    func curveOffsetTarget(for entity: InspectorSketchEntity?) -> SelectionTarget? {
+        if let open = slotSourceCurveTarget(for: entity) { return open }
+        guard let entity, entity.entityKind == "circle" else { return nil }
+        return SelectionTarget(
+            sceneNodeID: entity.target.sceneNodeID,
+            component: .sketchEntity(.sketchEntity(featureID: entity.sourceFeatureID, entityID: entity.entityID))
+        )
+    }
+
     func vertexOffsetTarget(for entity: InspectorSketchEntity?) -> SelectionTarget? {
         guard let entity,
               vertexOffsetHandle(for: entity) != nil else {

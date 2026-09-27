@@ -1024,7 +1024,9 @@ extension ViewportSpatialOverlayProducer {
                         featureID: item.featureID,
                         entityID: primitive.entityID
                     )
-                    let pointDisplayVisible = source.overlayState.pointDisplays[componentID]?.isVisible == true
+                    // Toggle Points' choice wins over selection and hover; without one, the handles
+                    // follow them.
+                    let pointDisplayVisible = source.overlayState.pointDisplays[componentID]?.isVisible
                     let curvatureDisplay = source.overlayState.curveCurvatureDisplays[componentID]
                     let sketchPlane: SketchPlane
                     if let feature = source.document.cadDocument.designGraph.nodes[item.featureID],
@@ -1068,7 +1070,7 @@ extension ViewportSpatialOverlayProducer {
                             selection: source.selection
                         ),
                         state: .normal,
-                        showsPointHandles: emitsPointHandles && (pointDisplayVisible || entityHighlighted),
+                        showsPointHandles: emitsPointHandles && (pointDisplayVisible ?? entityHighlighted),
                         showsCurveHandles: emitsCurveHandles && entityHighlighted,
                         showsDimensions: emitsDimensions && (selectedEntities.contains(primitive.entityID) || entityHovered
                             || hasActiveDimensionOverride(

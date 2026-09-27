@@ -1221,3 +1221,61 @@ func offsetRoutesPreserveSourceDistancesUnderModelScale() throws {
     try assertSourceBaseValue(vertex, equals: 0.2)
     try assertSourceBaseValue(spline, equals: 0.2)
 }
+
+/// Toggle Points: a hidden curve shows no control points even while selected, a shown one shows
+/// them unselected, and without a choice they follow the selection.
+@Test
+func toggledPointsWinOverSelectionForASplinesControlPoints() throws {
+    let featureID = FeatureID()
+    let splineID = SketchEntityID()
+    let nodeID = SceneNodeID()
+    let scene = ViewportScene(items: [
+        ViewportSceneItem(
+            id: "toggle-points",
+            featureID: featureID,
+            sceneNodeID: nodeID,
+            modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            kind: .sketch(primitives: [
+                .spline(
+                    entityID: splineID,
+                    points: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0.25), CGPoint(x: 1, y: 0)],
+                    controlPoints: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0.5), CGPoint(x: 1, y: 0)],
+                    sketchPlane: .defaultWorkspacePlane
+                ),
+            ])
+        ),
+    ])
+    let componentID = SelectionComponentID.sketchEntity(featureID: featureID, entityID: splineID)
+    let selected = SelectionModel(selectedTargets: [
+        SelectionTarget(sceneNodeID: nodeID, component: .sketchEntity(componentID)),
+    ])
+    /// The spline's control points drawn: display markers, or editing handles while selected.
+    func controlPointCount(selection: SelectionModel, mode: PointDisplay.Mode?) throws -> Int {
+        let overlay = ViewportSceneOverlayState(
+            pointDisplays: mode.map { [componentID: PointDisplay(componentID: componentID, mode: $0)] } ?? [:]
+        )
+        let input = ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.RawInput(
+            document: .empty(), scene: scene, selection: selection, overlayState: overlay,
+            ruler: .standard(for: .meter), enabledRoutes: [.curvePointControl, .splineControl]
+        )
+        var meshes: [ViewportSpatialOverlayInput.Mesh] = []
+        var paths: [ViewportSpatialOverlayInput.Path] = []
+        var labels: [ViewportSpatialOverlayInput.Label] = []
+        var markers: [ViewportSpatialOverlayInput.Marker] = []
+        var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
+        var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
+        var records: [ViewportSpatialInteractionRecord] = []
+        var families: Set<ViewportSpatialOverlayFamily> = []
+        try ViewportSpatialOverlayProducer.appendSketchCurveAffordances(
+            from: input, meshes: &meshes, paths: &paths, labels: &labels, markers: &markers,
+            cameraLines: &cameraLines, cameraPaths: &cameraPaths, interactionRecords: &records,
+            activeFamilies: &families, checkpoint: { _, _, _ in }
+        )
+        let handles = records.filter { if case .splineControlPoint = $0.identity { return true }; return false }
+        return markers.count + handles.count
+    }
+    #expect(try controlPointCount(selection: selected, mode: .hidden) == 0)
+    #expect(try controlPointCount(selection: selected, mode: nil) > 0)
+    #expect(try controlPointCount(selection: SelectionModel(), mode: .visible) > 0)
+    #expect(try controlPointCount(selection: SelectionModel(), mode: nil) == 0)
+}

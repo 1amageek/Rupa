@@ -228,3 +228,22 @@ private func wholeSketchEntityTarget(
         component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: entityID))
     )
 }
+
+@Test func workspaceSketchCommandTargetResolverOffsetsCirclesThatSlotRefuses() {
+    let sceneNodeID = SceneNodeID()
+    let featureID = FeatureID()
+    let circleID = SketchEntityID()
+    let lineID = SketchEntityID()
+    let resolver = WorkspaceSketchCommandTargetResolver()
+    let circle = sketchCommandEntity(sceneNodeID: sceneNodeID, featureID: featureID, entityID: circleID, kind: "circle")
+
+    #expect(resolver.slotSourceCurveTarget(for: circle) == nil)
+    #expect(resolver.curveOffsetTarget(for: circle)
+        == wholeSketchEntityTarget(sceneNodeID: sceneNodeID, featureID: featureID, entityID: circleID))
+    #expect(resolver.curveOffsetTarget(for: sketchCommandEntity(
+        sceneNodeID: sceneNodeID, featureID: featureID, entityID: lineID, kind: "line"
+    )) == wholeSketchEntityTarget(sceneNodeID: sceneNodeID, featureID: featureID, entityID: lineID))
+    #expect(resolver.curveOffsetTarget(for: sketchCommandEntity(
+        sceneNodeID: sceneNodeID, featureID: featureID, entityID: SketchEntityID(), kind: "point"
+    )) == nil)
+}

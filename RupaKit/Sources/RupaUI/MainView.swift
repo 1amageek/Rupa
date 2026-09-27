@@ -2822,7 +2822,7 @@ private struct ProjectMainViewContent: View {
             return true
         }
         if slotProfileCommandState.isActive {
-            if let target = selectedSlotSourceCurveTarget {
+            if let target = selectedCurveOffsetTarget {
                 createCommandedCurveOffset(target)
             } else {
                 slotProfileCommandState.deactivate()
@@ -4549,7 +4549,11 @@ private struct ProjectMainViewContent: View {
             edgeOffsetContextPanelContent(selectedEdgeTargets)
         }
 
-        if !slotProfileCommandState.isVertexOffsetActive, let slotTarget = selectedSlotSourceCurveTarget {
+        // A circle has the dialog only while its Offset runs: Slot, the idle dialog's default,
+        // takes open curves.
+        if !slotProfileCommandState.isVertexOffsetActive,
+           let slotTarget = selectedSlotSourceCurveTarget
+            ?? (slotProfileCommandState.isCurveOffsetActive ? selectedCurveOffsetTarget : nil) {
             workspaceContextDivider
             slotProfileContextPanelContent(slotTarget)
         }
@@ -5939,7 +5943,7 @@ private struct ProjectMainViewContent: View {
                 activateRegionOffsetCommand()
             } else if selectedSketchVertexOffsetTarget != nil {
                 activateVertexOffsetCommand()
-            } else if selectedSlotSourceCurveTarget != nil {
+            } else if selectedCurveOffsetTarget != nil {
                 activateSlotProfileCommand()
             } else {
                 activateRegionOffsetCommand()
@@ -6035,7 +6039,9 @@ private struct ProjectMainViewContent: View {
                         plane: activeSketchPlane(),
                         name: nil
                     )
-                )
+                ) { result in
+                    moveCreatedObjects(of: result)
+                }
                 return .handled
             }
             let bodies = bodyOutlineProjectionTargets(from: selectedSceneNodes)
@@ -6919,7 +6925,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func activateSlotProfileCommand() {
-        guard selectedSlotSourceCurveTarget != nil else {
+        guard selectedCurveOffsetTarget != nil else {
             if selectionScope != .sketchEntity {
                 selectionScope = .sketchEntity
             }
@@ -6933,6 +6939,10 @@ private struct ProjectMainViewContent: View {
         regionOffsetCommandState.deactivate()
         edgeOffsetCommandState.deactivate()
         slideCommandState.deactivate()
+        if slotProfileCommandState.isCurveOffsetActive, selectedSlotSourceCurveTarget == nil {
+            reportToolStatus("Slot takes an open curve; a circle is offset only.", severity: .warning)
+            return
+        }
         slotProfileCommandState.pressOffsetKey()
         reportToolStatus(slotProfileCommandState.isCurveOffsetActive
             ? "Offset: D types the distance, S makes it symmetric, O again makes a Slot."
@@ -9028,16 +9038,7 @@ private struct ProjectMainViewContent: View {
             return
         }
         submitSource(.duplicateSceneNodes(ids: ids)) { result in
-            guard let generated = result?.generatedIdentities.sceneNodeIDs,
-                  let metadata = workspace.view?.document.document.productMetadata else {
-                return
-            }
-            // The copied roots are the generated nodes no other generated node holds.
-            let generatedIDs = Set(generated)
-            let childIDs = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
-            let copiedRootIDs = generated.filter { generatedIDs.contains($0) && !childIDs.contains($0) }
-            selectSceneNodes(copiedRootIDs)
-            beginTransformSession(.move, sceneNodeIDs: copiedRootIDs)
+            moveCreatedObjects(of: result)
         }
     }
 
@@ -9243,6 +9244,13 @@ private struct ProjectMainViewContent: View {
 
     private var selectedConstructionPlaneTargets: [SelectionTarget]? {
         constructionPlaneTargetSelectionBuilder.constructionPlaneTargets
+    }
+
+    /// The curve O offsets: an open curve, or a circle, which Slot does not take.
+    private var selectedCurveOffsetTarget: SelectionTarget? {
+        sketchCommandTargetResolver.curveOffsetTarget(
+            for: sketchCommandTargetResolver.entity(from: selectedSketchEntityResult)
+        )
     }
 
     private var selectedSlotSourceCurveTarget: SelectionTarget? {
@@ -11715,7 +11723,24 @@ private struct ProjectMainViewContent: View {
                 plane: activeSketchPlane(),
                 name: nil
             )
-        )
+        ) { result in
+            moveCreatedObjects(of: result)
+        }
+    }
+
+    /// Selects the objects a command created, the generated nodes no other generated node holds,
+    /// and starts a Move of them, so a duplicate or an outline is placed before it is left, as
+    /// Plasticity places it before OK.
+    private func moveCreatedObjects(of result: CommandExecutionResult?) {
+        guard result?.didMutate == true,
+              let generated = result?.generatedIdentities.sceneNodeIDs,
+              let metadata = workspace.view?.document.document.productMetadata else { return }
+        let generatedIDs = Set(generated)
+        let childIDs = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
+        let roots = generated.filter { generatedIDs.contains($0) && !childIDs.contains($0) && metadata.sceneNodes[$0] != nil }
+        guard !roots.isEmpty else { return }
+        selectSceneNodes(roots)
+        beginTransformSession(.move, sceneNodeIDs: roots)
     }
 
     /// The running O command's result: Offset Planar Curve with its Symmetric option, or Slot.

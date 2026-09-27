@@ -605,7 +605,9 @@ and selects the new curve, whose inspector edits its continuity, tension and
 trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
 → G3 → G0 and Q trims the curves it bridges. Option-D projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
-with bodies selected, their outlines (Project Outline); I projects selected
+with bodies selected, their outlines (Project Outline), then selects what it
+created with a Move running so it is placed, as Duplicate and Create Instance do
+(`moveCreatedObjects`: the generated nodes no other generated node holds); I projects selected
 curves onto the one selected face (Project Curve Body). I on any other
 selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until the
 kernel's intersection curve serves Project Body Body and Project Curve Curve. With the select tool and sketch curves or vertices selected, B applies the
@@ -613,8 +615,9 @@ inspector's Fillet or Chamfer to the first of them (a vertex takes Core's Fillet
 Vertex path), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
-points where they are. With one open sketch curve selected, O starts Offset
-Planar Curve: S makes it symmetric, and O again turns it into Slot. With a line
+points where they are. With one open sketch curve or a circle selected, O
+starts Offset Planar Curve: S makes it symmetric, and O again turns an open
+curve's offset into Slot (a circle's stays an offset). With a line
 or arc end selected, O starts Offset Vertex instead, as the official Offset
 Curve dispatch does (the inspector's Slot still takes the curve of a selected
 end). In every O command — Offset, Slot, Offset Vertex, Offset Edge, Offset

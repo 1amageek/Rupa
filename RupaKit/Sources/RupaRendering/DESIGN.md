@@ -1556,7 +1556,12 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    Reading it off the primitive is what keeps the drawing and this query at one
    curve when a document changes that count, rather than at two that agreed
    only while both were fixed. Spline control points are the affordance
-   producer's, which maps them through the scene item's model transform. The two mappings differ only
+   producer's, which maps them through the scene item's model transform. The
+   producer draws a curve's point handles by Toggle Points' choice for it
+   (`pointDisplays`) when there is one — hidden stays hidden while the curve is
+   selected or hovered, shown shows them unselected — and otherwise while the
+   curve is selected, hovered or edited;
+   `toggledPointsWinOverSelectionForASplinesControlPoints` covers the three. The two mappings differ only
    in that transform, which a sketch item carries as the identity, and each
    stays with the producer that owns what is on screen rather than being
    re-derived here.
