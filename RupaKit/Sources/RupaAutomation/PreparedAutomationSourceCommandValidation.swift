@@ -135,6 +135,7 @@ enum PreparedAutomationSourceCommandValidation {
              .unjoinSketchCurve,
              .splitSketchCurve,
              .trimSketchCurveSegment,
+             .trimSketchCurve,
              .cutSketchCurve,
              .createExtrusion,
              .setExtrusion,

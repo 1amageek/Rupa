@@ -916,6 +916,24 @@ the command says the cutter does not reach; a root the kernel cannot certify
 (tangent or overlapping curves) and invalid geometry are command-invalid errors
 carrying the kernel message, and the document is unchanged.
 
+### Trim contract
+
+`trimSketchCurve(target:near:)` removes the segment of a sketch line, arc, circle
+or open spline that holds a point near the curve, as Plasticity's Trim does:
+segments are bounded by the curve's ends, its crossings with every other line,
+circle, arc and open spline of the same sketch, and, on a spline, the joints
+between its cubic spans. The crossings come from Swift-CAD's
+`SketchCurveIntersector` exactly as Cut Curve's do (authored reach, never an
+extension); a crossing the kernel cannot certify refuses the command. The point
+only chooses the segment: its parameter is the nearest of Swift-CAD's sketch
+curve samples, never a cut position. An open curve is split at the bounds with
+`splitSketchCurve` and the bounded piece removed, or removed whole when no bound
+lies inside it; a circle becomes the arc from the next crossing round to the
+previous one, and needs two crossings to keep anything, so with fewer it is
+removed. Split and removal refusals (constraints, Bridge Curve sources) apply,
+and any refusal leaves the document unchanged. `SketchCurveTrimTests` own the
+line, arc, circle, spline-joint and refusal cases.
+
 ### Complete Edge and Subdivide
 
 `completeSketchCurve` extends each open end of a sketch line, arc or open spline

@@ -72,6 +72,38 @@ extension DesignDocument {
         return angles
     }
 
+    /// Where every other line, circle, arc and open spline of the target's sketch crosses it, at
+    /// the authored reach: interior fractions for a line, arc or open spline target, distinct angles
+    /// for a circle. The bounds Trim takes its segments from.
+    func trimCrossings(of targetSelection: EditableSketchEntitySelection) throws -> [Double] {
+        let target = try cutCurveGeometry(targetSelection.entity, role: .target)
+        var crossings: [Double] = []
+        for (entityID, entity) in targetSelection.sketch.entities.sorted(by: { $0.key.description < $1.key.description })
+            where entityID != targetSelection.entityID {
+            switch entity {
+            case .point: continue
+            case .spline(let spline) where spline.isClosed: continue
+            default: break
+            }
+            let cutter = try cutCurveGeometry(entity, role: .cutter)
+            for intersection in try cutCurveIntersections(target: target, cutter: cutter, extendsCutter: false) {
+                switch target {
+                case .line, .circle:
+                    crossings.append(intersection.firstParameter)
+                case let .arc(_, _, startAngle, endAngle):
+                    crossings.append(normalizedAngleDelta(from: startAngle, to: intersection.firstParameter) /
+                        positiveArcSpan(startAngle: startAngle, endAngle: endAngle))
+                case let .cubicBezierChain(controlPoints):
+                    crossings.append(intersection.firstParameter / Double((controlPoints.count - 1) / 3))
+                }
+            }
+        }
+        if case .circle = target {
+            return uniqueCutAngles(crossings)
+        }
+        return uniqueInteriorCutFractions(crossings)
+    }
+
     func validateCutSketchCurveSelections(
         targetSelection: EditableSketchEntitySelection,
         cutterSelection: EditableSketchEntitySelection,

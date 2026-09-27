@@ -51,7 +51,7 @@ extension DesignDocument {
         return createdEntityIDs
     }
 
-    private func sequentialCutCurveLocalFractions(
+    func sequentialCutCurveLocalFractions(
         fractions: [Double],
         entity: SketchEntity
     ) throws -> [Double] {
@@ -234,7 +234,7 @@ extension DesignDocument {
         return [newEntityID]
     }
 
-    private func validateSketchCircleCanCut(
+    func validateSketchCircleCanCut(
         selection: EditableSketchEntitySelection
     ) throws {
         guard productMetadata.bridgeCurveSources.values.contains(where: { source in

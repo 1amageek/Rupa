@@ -342,6 +342,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case unjoinSketchCurve(target: SelectionTarget)
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)
+    /// Trim: removes the segment of the curve holding the point nearest `point`, in its sketch's
+    /// plane coordinates, bounded by its ends, its crossings with the sketch's other curves and a
+    /// spline's span joints.
+    case trimSketchCurve(target: SelectionTarget, point: Point2D)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case createExtrusion(name: String, source: ExtrudeFeature)
     case setExtrusion(featureID: FeatureID, source: ExtrudeFeature)
@@ -778,6 +782,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "splitSketchCurve"
         case .trimSketchCurveSegment:
             "trimSketchCurveSegment"
+        case .trimSketchCurve:
+            "trimSketchCurve"
         case .cutSketchCurve:
             "cutSketchCurve"
         case .createExtrusion:
@@ -993,6 +999,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .unjoinSketchCurve,
              .splitSketchCurve,
              .trimSketchCurveSegment,
+             .trimSketchCurve,
              .cutSketchCurve,
              .createExtrusion,
              .setExtrusion,

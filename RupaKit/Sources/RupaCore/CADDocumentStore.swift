@@ -2480,6 +2480,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .trimSketchCurve:
+            func run() throws {
+                guard case .trimSketchCurve(let target, let point) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected trimSketchCurve.")
+                }
+                var updatedDocument = document
+                try updatedDocument.trimSketchCurve(target: target, near: point, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .cutSketchCurve:
             func run() throws {
                 guard case .cutSketchCurve(let target, let cutter, let options) = command else {

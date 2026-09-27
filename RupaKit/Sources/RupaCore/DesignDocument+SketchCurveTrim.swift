@@ -9,7 +9,14 @@ extension DesignDocument {
     ) throws {
         let selection = try editableSketchEntity(for: target, operationName: "Sketch curve trim")
         try validateSketchCurveSegmentCanTrim(selection: selection)
+        try removeSketchCurve(selection, objectRegistry: objectRegistry)
+    }
 
+    /// Removes the selected curve from its sketch with the constraints and dimensions that name it.
+    mutating func removeSketchCurve(
+        _ selection: EditableSketchEntitySelection,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
         var feature = selection.feature
         var sketch = selection.sketch
         sketch.entities.removeValue(forKey: selection.entityID)
@@ -76,6 +83,11 @@ extension DesignDocument {
             )
         }
 
+        try validateSketchCurveHasNoBridgeUse(selection)
+    }
+
+    /// Refuses removing a curve a Bridge Curve was generated as, or bridges from.
+    func validateSketchCurveHasNoBridgeUse(_ selection: EditableSketchEntitySelection) throws {
         for source in productMetadata.bridgeCurveSources.values where source.featureID == selection.featureID {
             if source.entityID == selection.entityID {
                 throw EditorError(

@@ -576,6 +576,12 @@ beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
+Trim (T, with the select tool) runs until Escape: each click on a sketch curve
+resolves the curve under the pointer in sketch-entity scope, whatever the
+selection scope, carries the click's world point into that sketch's plane and
+submits one `trimSketchCurve`, so each removed segment is one undo step. Core
+owns which segment the point chooses ([Trim contract](../RupaCore/DESIGN.md#trim-contract)).
+
 ### What the workspace says, and where the canvas stops
 
 The workspace answers the user on three channels, and they stay three because

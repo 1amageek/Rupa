@@ -217,6 +217,7 @@ enum ProductionMainViewActionManifest {
         "splitSketchCurve",
         "splitSurfaceSpan",
         "transformSceneNodes",
+        "trimSketchCurve",
         "trimSketchCurveSegment",
         "unjoinSketchCurve",
         "updatePatternArray",

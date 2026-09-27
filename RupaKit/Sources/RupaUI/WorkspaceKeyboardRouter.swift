@@ -189,6 +189,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleRegionOffsetLockedDistance
     case toggleCombinedRegions
     case activateSlideCommand
+    /// T: Trim removes each clicked curve segment until Escape.
+    case activateTrimCommand
+    case endTrimCommand
     case slideCurveControlVertices(SplineControlPointSlideDirection)
     case slideSurfaceControlVertices(PolySplineSurfaceVertexSlideDirection)
     case adjustPolygonSideCount(Int)
@@ -216,6 +219,7 @@ struct WorkspaceKeyboardContext: Sendable {
     var isMirrorSessionActive: Bool = false
     var isArrayCreationSessionActive: Bool = false
     var isSectionAnalysisSessionActive: Bool = false
+    var isTrimCommandActive: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
     /// Whether the selection holds edges of one body that Move can move.
@@ -256,6 +260,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isSectionAnalysisSessionActive, let sectionAction = sectionAnalysisAction(for: input) {
             return sectionAction
+        }
+        if let trimAction = trimAction(for: input, context: context) {
+            return trimAction
         }
         if input.phases.contains(.down), input.modifiers == [.control], input.characters == "=",
            !context.ownsTextEditingKeys {
@@ -624,6 +631,20 @@ struct WorkspaceKeyboardRouter: Sendable {
         default:
             return nil
         }
+    }
+
+    /// T starts Trim with the select tool; Escape ends it.
+    private func trimAction(
+        for input: WorkspaceKeyboardInput,
+        context: WorkspaceKeyboardContext
+    ) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), !context.ownsTextEditingKeys else { return nil }
+        if context.isTrimCommandActive {
+            return input.isEscape ? .endTrimCommand : nil
+        }
+        guard context.isSelectToolActive, input.modifiers.isEmpty,
+              input.characters.lowercased() == "t" else { return nil }
+        return .activateTrimCommand
     }
 
     private func slideAction(

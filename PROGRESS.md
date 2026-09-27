@@ -37,8 +37,18 @@
   - [ ] FB5 Integrate all twenty commands, run affected package and native/UI/app workflows, restart Rupa and verify each end-to-end acceptance path against the official Plasticity pages. `depends:FB18a,FB21,FB22,FB23,FB17,FB18,FB19,FB20,FB16,FB1,FBS,FB2,FB10,FB11,FB12,FB13,FB4,FB14,FB3,FB15` `parallel:none`
 - [ ] SK Complete every Plasticity Sketch command (https://doc.plasticity.xyz/sketch) to its official page: each group audits the pages against the source, implements the missing behavior through Swift-CAD for geometry and Rupa for intent and placement, and verifies UI, persistence, undo and failure. `depends:FB` `parallel:none`
   - [ ] SK1 Bridge and Connect: Bridge, Bridge Curve, Bridge Edge, Bridge Vertex. `depends:none` `parallel:none`
-  - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:SK1` `parallel:none`
-  - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:SK2` `parallel:none`
+    - [ ] SK1.1 Bridge Vertex (L): two curve end vertices bridged with G0–G3 continuity and tension, through Bridge Curve's source. `depends:none` `parallel:none`
+    - [ ] SK1.2 Bridge chooses Bridge Curve, Bridge Vertex or Bridge Edge from the selection. `depends:SK1.1` `parallel:none`
+    - [ ] SK1.3 Bridge Edge: two body edge ends (Side 1/2) bridged with G0–G3 and tension, through a kernel bridge endpoint on a body edge. `depends:SK1.2` `parallel:none`
+    - [ ] SK1.4 Bridge keys while placing: Tab cycles continuity, D edits G1 tension, Q toggles trim, X/Y/Z constrain. `depends:SK1.3` `parallel:none`
+  - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:none` `parallel:none`
+    - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`
+    - [ ] SK2.2 Split Segment at a clicked point on the curve. `depends:SK2.1` `parallel:none`
+    - [ ] SK2.3 Cut Curve: Extend and Screen space options in the command dialog, and a face as the cutter. `depends:SK2.2` `parallel:none`
+  - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
+    - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
+    - [ ] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
+    - [ ] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection. `depends:SK3.2` `parallel:none`
   - [ ] SK4 Align and Extend: Align, Align Vertex, Extend, Extend Curve. `depends:SK3` `parallel:none`
   - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:SK4` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:SK5` `parallel:none`

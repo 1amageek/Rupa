@@ -459,3 +459,16 @@ private func keyboardContext(
     context.hasMovableTopologySelection = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
 }
+
+@Test func workspaceKeyboardRouterStartsTrimWithTAndEndsItWithEscape() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) == .activateTrimCommand)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "T", modifiers: [.shift]), context: context) != .activateTrimCommand)
+    context.isTrimCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .endTrimCommand)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
+    context.isTrimCommandActive = false
+    context.isSelectToolActive = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
+}

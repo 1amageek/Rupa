@@ -183,6 +183,8 @@ private struct ProjectMainViewContent: View {
     @State private var surfaceTrimDomainVUpperBound: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
+    /// Trim (T) is running: each click on a sketch curve removes the segment under it.
+    @State private var isTrimCommandActive = false
     @State private var sketchSplitFraction: Double
     @State private var sketchRebuildControlPointCount: Int
     @State private var sketchRebuildToleranceMeters: Double
@@ -5402,6 +5404,10 @@ private struct ProjectMainViewContent: View {
             createViewAlignedConstructionPlane(from: target, request: request)
             return
         }
+        if isTrimCommandActive, selectedTool == .select {
+            trimSegment(at: target)
+            return
+        }
 
         if modelingDraft?.kind == .constrainedSurface {
             let plane = effectiveSketchPlane(fallback: target.sketchPlane)
@@ -5639,6 +5645,7 @@ private struct ProjectMainViewContent: View {
             isMirrorSessionActive: mirrorSession != nil,
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
+            isTrimCommandActive: isTrimCommandActive,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
         )
@@ -5903,6 +5910,14 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .activateSlideCommand:
             activateSlideCommand()
+            return .handled
+        case .activateTrimCommand:
+            isTrimCommandActive = true
+            reportToolStatus("Trim: click a curve segment to remove it; Escape ends.")
+            return .handled
+        case .endTrimCommand:
+            isTrimCommandActive = false
+            reportToolStatus("Trim ended.")
             return .handled
         case .slideCurveControlVertices(let direction):
             guard let input = selectedSplineControlPointSlideInput() else {
@@ -7845,6 +7860,24 @@ private struct ProjectMainViewContent: View {
         }
         if selectionScope != .edge || classification.edgeTargets.isEmpty {
             edgeOffsetCommandState.deactivate()
+        }
+    }
+
+    /// Trim's click: the sketch curve under the pointer loses the segment the click lands in.
+    private func trimSegment(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .sketchEntity
+        guard let hit = target.hit, let curve = resolver.selectionTarget(for: hit),
+              case .sketchEntity = curve.component,
+              let worldPoint = target.modelWorldPoint else {
+            reportToolStatus("Trim: click on a sketch curve.", severity: .warning)
+            return
+        }
+        do {
+            let point = try snapshot.document.document.sketchPlanePoint(ofWorld: worldPoint, on: curve)
+            submitSource(.trimSketchCurve(target: curve, point: point))
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
         }
     }
 
