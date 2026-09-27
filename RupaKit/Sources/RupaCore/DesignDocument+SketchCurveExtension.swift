@@ -382,10 +382,10 @@ extension DesignDocument {
                 message: "\(owner) requires a spline endpoint target."
             )
         }
-        guard shape == .linear else {
+        guard ExtendCurveShape.supported(for: .spline(spline)).contains(shape) else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "\(owner) supports spline extension with Linear shape only."
+                message: "\(owner) does not build the \(shape.rawValue) shape on a spline."
             )
         }
         guard spline.isClosed == false else {
@@ -397,7 +397,19 @@ extension DesignDocument {
         try validateSpline(spline, owner: owner)
 
         var updated = spline
-        if isStart {
+        if shape == .natural {
+            // Swift-CAD continues the end span's own cubic by the arc length.
+            let points = try spline.controlPoints.map { point -> Point2D in
+                let resolved = try resolvedSketchPoint(point, owner: "\(owner) control point")
+                return Point2D(x: resolved.x, y: resolved.y)
+            }
+            let continued = try CubicBezierChainExtension(tolerance: .standard).naturalSpan(
+                of: points,
+                at: isStart ? .start : .end,
+                length: try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
+            ).map { sketchPoint(x: $0.x, y: $0.y) }
+            updated.controlPoints = isStart ? continued + spline.controlPoints : spline.controlPoints + continued
+        } else if isStart {
             let first = spline.controlPoints[0]
             let next = spline.controlPoints[1]
             let direction = try normalizedDirection(

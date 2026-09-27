@@ -1003,8 +1003,10 @@ document is unchanged.
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all
-along its circle), an open spline Linear only until its higher-continuity
-extensions exist (SK4.5). `extendSketchCurve` refuses any other shape, and the
+along its circle), an open spline Natural (Swift-CAD's
+`CubicBezierChainExtension.naturalSpan` continues its end span's own cubic by the
+arc length, as one new span) and Linear; the spline's Soft, Reflective and Arc
+wait for their definitions (SK4.5). `extendSketchCurve` refuses any other shape, and the
 inspector offers only these, keeping the chosen shape when the selected curve
 takes it and otherwise its first (`effectiveExtendShape`), so a spline end no
 longer fails on the Natural default. `ExtendCurveShapeTests` cover both.
