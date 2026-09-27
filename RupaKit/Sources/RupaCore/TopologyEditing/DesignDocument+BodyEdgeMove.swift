@@ -113,6 +113,14 @@ extension DesignDocument {
             throw EditorError(code: .commandInvalid, message: "\(kind.title) needs a direction.")
         }
         let translation = DirectMoveVector(direction: unit, distance: distance)
+        if let surfaceID = directSurfaceSource(for: targets) {
+            try editSurfaceBoundary(
+                kind, targets: targets, featureID: surfaceID,
+                motion: try TopologyMotionDecomposition.transform(.translation(translation), parameters: cadDocument.parameters),
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
+            return
+        }
         let selections = try topologySelections(
             kind, targets: targets, objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
@@ -145,6 +153,14 @@ extension DesignDocument {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws {
+        if let surfaceID = directSurfaceSource(for: targets) {
+            try editSurfaceBoundary(
+                kind, targets: targets, featureID: surfaceID,
+                motion: try TopologyMotionDecomposition.transform(motion, parameters: cadDocument.parameters),
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
+            return
+        }
         let selections = try topologySelections(
             kind, targets: targets, objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation, currentGeneration: currentGeneration

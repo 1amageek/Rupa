@@ -158,7 +158,13 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   translation, a rotation about its fixed axis, or a scale along the eigenvectors
   of its symmetric linear part about its fixed point. It refuses shears, mirrors
   and screw motions. The motion is in the body's own frame, and the feature keeps
-  the body's solid or sheet role (`FeatureNodeFactory`). The kernel
+  the body's solid or sheet role (`FeatureNodeFactory`). A sheet shown straight
+  from its `BSplineSurfaceFeature` source (`directSurfaceSource`) is edited on the
+  surface instead (`editSurfaceBoundary`). A corner moves its corner control
+  point, an edge moves its boundary row, and a face moves the whole net, all by
+  the motion. This is exact because a clamped surface interpolates its corners
+  and boundary rows. No feature is appended. A trimmed sheet is refused and marked
+  `FIXME(INCOMPLETE_IMPLEMENTATION)`. The kernel
   owns what can move. It re-solves the planar faces around the moved vertices as
   planes, or as bilinear patches where a four-sided face warps. It keeps curved
   faces elsewhere, and moves a circular edge along its axis with the cap it
@@ -170,6 +176,8 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   and a refused target of the wrong kind. `BodyTopologyTransformTests` owns a
   shared corner moved once and a turned face. `TopologyMotionDecompositionTests`
   owns the exact read-back of moves, turns and scales and the refused shear.
+  `SurfaceBoundaryEditTests` owns a lifted boundary row, a lowered corner and a
+  turned edge of a B-spline sheet.
 
 ## State, Ownership, and Lifecycle
 

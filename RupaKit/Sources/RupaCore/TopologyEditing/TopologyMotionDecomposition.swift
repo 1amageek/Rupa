@@ -66,6 +66,38 @@ public enum TopologyMotionDecomposition {
         ))
     }
 
+    /// The motion as a transform of the body's coordinates, its expressions resolved in
+    /// `parameters`.
+    public static func transform(_ motion: TopologyMotion, parameters: ParameterTable) throws -> Transform3D {
+        let tolerance = ModelingTolerance.standard
+        switch motion {
+        case .translation(let vector):
+            let distance = try parameters.resolvedValue(for: vector.distance).value
+            return try Transform3D.translation(try vector.direction.normalized(tolerance: tolerance.distance) * distance)
+        case .rotation(let rotation):
+            let angle = try parameters.resolvedValue(for: rotation.angle).value
+            return try Transform3D.rotation(axis: rotation.axis, angleRadians: angle, about: rotation.origin)
+        case .scale(let scale):
+            let factors = try scale.factors.map { try parameters.resolvedValue(for: $0).value }
+            let x = try scale.xAxis.normalized(tolerance: tolerance.distance)
+            let y = try scale.yAxis.normalized(tolerance: tolerance.distance)
+            let axes = [x, y, x.cross(y)]
+            // L = Σ fᵢ eᵢ eᵢᵀ about the origin: p' = o + L (p − o).
+            func column(_ unit: Vector3D) -> Vector3D {
+                zip(axes, factors).reduce(Vector3D.zero) { $0 + $1.0 * ($1.1 * $1.0.dot(unit)) }
+            }
+            let (cx, cy, cz) = (column(.unitX), column(.unitY), column(.unitZ))
+            let o = scale.origin - .origin
+            let t = o - (cx * o.x + cy * o.y + cz * o.z)
+            return Transform3D(matrix: try Matrix4x4(values: [
+                cx.x, cy.x, cz.x, t.x,
+                cx.y, cy.y, cz.y, t.y,
+                cx.z, cy.z, cz.z, t.z,
+                0, 0, 0, 1,
+            ]))
+        }
+    }
+
     /// The point the motion keeps, chosen with no component along `freeDirections`, in which the
     /// linear part is the identity: it solves (I − L + Σ d dᵀ) o = t.
     private static func fixedPoint(columns: [Vector3D], translation t: Vector3D, freeDirections: [Vector3D]) throws -> Point3D {
