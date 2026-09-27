@@ -1,3 +1,4 @@
+import RupaProjectModel
 import Foundation
 import SwiftCAD
 import RupaCoreTypes
@@ -45,6 +46,7 @@ struct PatternArrayDocumentSynchronizer {
         previousSource: PatternArraySource? = nil,
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
         tolerance: ModelingTolerance
     ) throws {
         guard var source = metadata.patternArrays[sourceID] else {
@@ -90,7 +92,8 @@ struct PatternArrayDocumentSynchronizer {
             PatternArrayIndependentCopyBuilder().removeOutputs(
                 source: source,
                 metadata: &metadata,
-                cadDocument: &cadDocument
+                cadDocument: &cadDocument,
+                authoredMeshAssets: &authoredMeshAssets
             )
             source.outputSceneNodeIDs = []
             source.outputFeatureIDs = []
@@ -110,7 +113,8 @@ struct PatternArrayDocumentSynchronizer {
             let definitionIdentity = try PatternArrayDefinitionIdentityService().identity(
                 for: definition,
                 metadata: metadata,
-                cadDocument: cadDocument
+                cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets
             )
             let reuseCandidate = previousSource ?? source
             let canReuseIndependentCopies = reuseCandidate.outputMode == .independentCopy &&
@@ -124,6 +128,7 @@ struct PatternArrayDocumentSynchronizer {
                     transforms: transforms,
                     metadata: &metadata,
                     cadDocument: &cadDocument,
+                    authoredMeshAssets: &authoredMeshAssets,
                     tolerance: tolerance
                 )
             } else {
@@ -135,7 +140,8 @@ struct PatternArrayDocumentSynchronizer {
                 PatternArrayIndependentCopyBuilder().removeOutputs(
                     source: source,
                     metadata: &metadata,
-                    cadDocument: &cadDocument
+                    cadDocument: &cadDocument,
+                    authoredMeshAssets: &authoredMeshAssets
                 )
                 let result = try PatternArrayIndependentCopyBuilder().createOutputs(
                     name: source.name,
@@ -143,6 +149,7 @@ struct PatternArrayDocumentSynchronizer {
                     transforms: transforms,
                     metadata: &metadata,
                     cadDocument: &cadDocument,
+                    authoredMeshAssets: &authoredMeshAssets,
                     tolerance: tolerance
                 )
                 source.outputSceneNodeIDs = result.outputSceneNodeIDs
@@ -191,6 +198,7 @@ struct PatternArrayDocumentSynchronizer {
         transforms: [Transform3D],
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
         tolerance: ModelingTolerance
     ) throws {
         let builder = PatternArrayIndependentCopyBuilder()
@@ -225,7 +233,8 @@ struct PatternArrayDocumentSynchronizer {
                 metadata: metadata,
                 cadDocument: cadDocument
             )
-            guard !outputFeatureIDs.isEmpty,
+            // An output copying meshes alone owns no features.
+            guard !outputFeatureIDs.isEmpty || ownedFeatureIDs.isEmpty,
                   outputFeatureIDs.isSubset(of: ownedFeatureIDs) else {
                 throw EditorError(
                     code: .referenceUnresolved,
@@ -255,7 +264,8 @@ struct PatternArrayDocumentSynchronizer {
             rootedAt: staleOutputSceneNodeIDs,
             featureIDs: staleFeatureIDs,
             metadata: &metadata,
-            cadDocument: &cadDocument
+            cadDocument: &cadDocument,
+            authoredMeshAssets: &authoredMeshAssets
         )
 
         let appendedTransforms = Array(transforms.dropFirst(reusedCount))
@@ -273,6 +283,7 @@ struct PatternArrayDocumentSynchronizer {
                 startingOutputIndex: reusedCount,
                 metadata: &metadata,
                 cadDocument: &cadDocument,
+                authoredMeshAssets: &authoredMeshAssets,
                 tolerance: tolerance
             )
         }
@@ -393,6 +404,7 @@ struct PatternArrayDocumentSynchronizer {
         source: PatternArraySource,
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
         tolerance: ModelingTolerance
     ) throws -> PatternArrayExplodeResult {
         guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
@@ -429,6 +441,7 @@ struct PatternArrayDocumentSynchronizer {
                 transforms: transforms,
                 metadata: &metadata,
                 cadDocument: &cadDocument,
+                authoredMeshAssets: &authoredMeshAssets,
                 tolerance: tolerance
             )
             rootNode.childIDs = result.outputSceneNodeIDs

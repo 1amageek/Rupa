@@ -12,6 +12,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         startingOutputIndex: Int = 0,
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
         tolerance: ModelingTolerance
     ) throws -> PatternArrayIndependentCopyBuildResult {
         let fragment = try SceneFragmentExtractor().extract(
@@ -19,17 +20,12 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             frame: .parentOfFirstRoot,
             metadata: metadata,
             cadDocument: cadDocument,
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Independent-copy pattern outputs are built where
-            // only metadata and the CAD document are in reach, so a definition presenting an
-            // authored mesh fails extraction as a missing mesh. Production path: independent-copy
-            // Rectangular, Radial and Curve arrays. Completion requires the pattern synchronizer to
-            // carry the document's authored mesh assets through to insertion.
-            authoredMeshAssets: [:]
+            authoredMeshAssets: authoredMeshAssets
         )
-        guard !fragment.features.isEmpty else {
+        guard !fragment.features.isEmpty || !fragment.authoredMeshes.isEmpty else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Independent-copy pattern arrays require cloneable CAD feature scene nodes."
+                message: "Independent-copy pattern arrays require CAD features or meshes to copy."
             )
         }
 
@@ -37,7 +33,6 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         var updatedCADDocument = cadDocument
         var outputSceneNodeIDs: [SceneNodeID] = []
         var outputFeatureIDs: [FeatureID] = []
-        var unusedMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
         for (relativeOutputIndex, transform) in transforms.enumerated() {
             let outputIndex = startingOutputIndex + relativeOutputIndex
             var outputNode = SceneNode(
@@ -53,7 +48,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
                 naming: .patternOutput(prefix: outputNode.name, outputIndex: outputIndex),
                 metadata: &updatedMetadata,
                 cadDocument: &updatedCADDocument,
-                authoredMeshAssets: &unusedMeshAssets
+                authoredMeshAssets: &authoredMeshAssets
             )
             outputNode.childIDs = insertion.rootSceneNodeIDs
             updatedMetadata.sceneNodes[outputNode.id] = outputNode
@@ -73,28 +68,58 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
     func removeOutputs(
         source: PatternArraySource,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset]
     ) {
         removeOutputs(
             rootedAt: source.outputSceneNodeIDs,
             featureIDs: Set(source.outputFeatureIDs),
             metadata: &metadata,
-            cadDocument: &cadDocument
+            cadDocument: &cadDocument,
+            authoredMeshAssets: &authoredMeshAssets
         )
     }
 
+    /// Removes the outputs and the mesh copies only they presented.
     func removeOutputs(
         rootedAt sceneNodeIDs: [SceneNodeID],
         featureIDs: Set<FeatureID>,
         metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
+        cadDocument: inout CADDocument,
+        authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset]
     ) {
+        var removedMeshIDs: Set<GeometrySourceID> = []
+        var pending = sceneNodeIDs
+        while let id = pending.popLast() {
+            guard let node = metadata.sceneNodes[id] else { continue }
+            removedMeshIDs.formUnion(Self.authoredMeshIDs(of: node))
+            pending.append(contentsOf: node.childIDs)
+        }
         SceneFragmentOutputRemover().remove(
             rootedAt: sceneNodeIDs,
             featureIDs: featureIDs,
             metadata: &metadata,
             cadDocument: &cadDocument
         )
+        guard !removedMeshIDs.isEmpty else { return }
+        let stillPresented = metadata.sceneNodes.values.reduce(into: Set<GeometrySourceID>()) {
+            $0.formUnion(Self.authoredMeshIDs(of: $1))
+        }
+        for id in removedMeshIDs.subtracting(stillPresented) {
+            authoredMeshAssets.removeValue(forKey: id)
+        }
+    }
+
+    /// The authored meshes a node presents or carries as a representation.
+    static func authoredMeshIDs(of node: SceneNode) -> Set<GeometrySourceID> {
+        var ids = Set(node.object?.geometryRepresentations.representations.values.compactMap { representation -> GeometrySourceID? in
+            if case .authoredMesh(let id) = representation.source { return id }
+            return nil
+        } ?? [])
+        if node.reference?.kind == .authoredMesh, let id = node.reference?.geometrySourceID {
+            ids.insert(id)
+        }
+        return ids
     }
 
     func outputFeatureClosure(

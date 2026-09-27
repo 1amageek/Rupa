@@ -1,15 +1,26 @@
 import Foundation
 import SwiftCAD
 import RupaCoreTypes
+import RupaProjectModel
 
 public struct PatternArraySummaryService: Sendable {
     public init() {}
+
+    /// The document's authored meshes, which a mesh definition's identity reads.
+    private var authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
+    private var readsDocumentMeshes = false
 
     public func summarize(
         document: DesignDocument,
         generation: DocumentGeneration,
         dirty: Bool
     ) -> PatternArraySummaryResult {
+        guard readsDocumentMeshes else {
+            var reading = self
+            reading.authoredMeshAssets = document.authoredMeshAssets
+            reading.readsDocumentMeshes = true
+            return reading.summarize(document: document, generation: generation, dirty: dirty)
+        }
         let metadata = document.productMetadata
         let outputOwnershipIndex = outputOwnershipIndex(for: metadata.patternArrays.values)
         let summaries = metadata.patternArrays.values
@@ -497,7 +508,17 @@ public struct PatternArraySummaryService: Sendable {
                 to: &diagnostics
             )
         }
-        if source.outputFeatureIDs.isEmpty {
+        // A definition of meshes alone copies meshes, not features.
+        let definitionPresentsMeshes = metadata.componentDefinitions[source.definitionID].map { definition in
+            var pending = definition.rootSceneNodeIDs
+            while let id = pending.popLast() {
+                guard let node = metadata.sceneNodes[id] else { continue }
+                if !PatternArrayIndependentCopyBuilder.authoredMeshIDs(of: node).isEmpty { return true }
+                pending.append(contentsOf: node.childIDs)
+            }
+            return false
+        } ?? false
+        if source.outputFeatureIDs.isEmpty && !definitionPresentsMeshes {
             appendDiagnostic(
                 code: "missingIndependentCopyFeatureOutputs",
                 message: "Independent-copy pattern array source has no cloned feature outputs.",
@@ -610,7 +631,8 @@ public struct PatternArraySummaryService: Sendable {
                 inSceneSubtreeRootedAt: outputSceneNodeID,
                 metadata: metadata
             )
-            if descendantFeatureIDs.isEmpty {
+            // An output copying meshes alone references no features.
+            if descendantFeatureIDs.isEmpty, !source.outputFeatureIDs.isEmpty {
                 appendDiagnostic(
                     code: "missingIndependentCopyOutputFeatureReferences",
                     message: "Independent-copy pattern array output scene nodes must reference generated features.",
@@ -659,7 +681,8 @@ public struct PatternArraySummaryService: Sendable {
             let currentIdentity = try PatternArrayDefinitionIdentityService().identity(
                 for: definition,
                 metadata: metadata,
-                cadDocument: cadDocument
+                cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets
             )
             if storedIdentity != currentIdentity {
                 appendDiagnostic(

@@ -60,21 +60,29 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   relative to the copy, so every copied feature keeps one presenting node and
   no copy is drawn unplaced.
 - A copied component instance is a new instance of the same definition with
-  the same instance transform; its definition must exist in the destination
-  document, so an instance pasted into another document is a typed failure.
+  the same instance transform. The fragment carries each instance's definition
+  with its content (extracted in the world frame); where the destination lacks
+  the definition, the content is inserted hidden at its world placement under
+  the first document root and a new definition with a unique name names it.
   A copied authored mesh (a mesh object or a mesh representation of any copied
   object) is a new asset with the same mesh under a new source identity, and
   the copy's representations and selection name the new asset and fresh
   representation IDs, so no copy shares a mesh with its source.
-- Pattern array roots and outputs, construction references and document roots
-  are refused with a typed error; their sharing semantics are not copies. A
-  saved measurement's annotation node (and so a Measurements group holding one)
-  is refused too: the fragment carries the node but not the measurement's
-  distance and anchors, whose anchors may name geometry outside the copy.
-  `SceneCopyMeasurementRefusalTests` owns this refusal.
+- Pattern array outputs and document roots are refused with a typed error; their
+  sharing semantics are not copies. A copied construction plane is a new plane
+  source named "<name> Copy" (numbered when taken). A saved measurement whose
+  annotation node is copied travels with it: anchors on copied nodes name the
+  copies (scene node, feature, generated subshape, and the occurrence resolved
+  in the new scene), anchors on geometry outside the copy keep measuring it, and
+  world positions, the label and the placement axis move with the copy.
   `ProductMetadata.sceneCopyRefusal` is the one statement of these refusals:
   extraction throws it and every UI control that offers copying reads it.
-  Independent-copy pattern outputs do not yet copy authored meshes.
+  Independent-copy pattern outputs copy authored meshes too: the synchronizer
+  carries the document's mesh assets, a definition's identity includes the
+  content of the meshes it presents, an output may copy meshes alone, and
+  removing outputs removes the mesh copies only they presented.
+  `SceneCopyCompletenessTests` owns measurements, construction planes, mesh
+  arrays and instances pasted into another document.
 - Insertion never reuses an identity: each copy gets new FeatureIDs (remapped
   by the kernel), SceneNodeIDs and side-table IDs. Face material bindings follow
   their node and face subshape; edit sources follow their sketch feature.

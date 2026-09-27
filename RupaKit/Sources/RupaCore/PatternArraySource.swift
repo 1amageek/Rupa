@@ -334,11 +334,6 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
                     "Independent-copy pattern array sources must own at least one output scene node."
                 )
             }
-            guard !outputFeatureIDs.isEmpty else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Independent-copy pattern array sources must own cloned CAD features."
-                )
-            }
             guard outputInstanceIDs.isEmpty else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Independent-copy pattern array sources must not own component instances."

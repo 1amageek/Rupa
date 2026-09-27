@@ -396,7 +396,7 @@ struct SurfaceFillCommandTests {
         let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
             definition: ComponentDefinition(name: "Sources", rootSceneNodeIDs: boundaries.map(\.sceneNodeID)),
             transforms: [.translation(Vector3D(x: 1, y: 0, z: 0))],
-            metadata: &copied.productMetadata, cadDocument: &copied.cadDocument,
+            metadata: &copied.productMetadata, cadDocument: &copied.cadDocument, authoredMeshAssets: &copied.authoredMeshAssets,
             tolerance: copied.modelingSettings.tolerance)
         let root = try #require(copied.productMetadata.rootSceneNodeIDs.first)
         copied.productMetadata.sceneNodes[root]?.childIDs += clone.outputSceneNodeIDs

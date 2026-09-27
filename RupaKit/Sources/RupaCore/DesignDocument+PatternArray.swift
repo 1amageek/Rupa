@@ -37,6 +37,7 @@ extension DesignDocument {
         }
 
         var updatedCADDocument = cadDocument
+        var updatedMeshAssets = authoredMeshAssets
         var updatedMetadata = productMetadata
         // The pattern group sits where its outputs are placed from: a given parent, otherwise the
         // first document root.
@@ -68,10 +69,12 @@ extension DesignDocument {
             for: source.id,
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
+            authoredMeshAssets: &updatedMeshAssets,
             tolerance: modelingSettings.tolerance
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
+        authoredMeshAssets = updatedMeshAssets
         productMetadata = updatedMetadata
         return source.id
     }
@@ -125,6 +128,7 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
         var updatedCADDocument = cadDocument
+        var updatedMeshAssets = authoredMeshAssets
         var updatedMetadata = productMetadata
         guard var source = updatedMetadata.patternArrays[id] else {
             throw EditorError(
@@ -186,10 +190,12 @@ extension DesignDocument {
             previousSource: previousSource,
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
+            authoredMeshAssets: &updatedMeshAssets,
             tolerance: modelingSettings.tolerance
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
+        authoredMeshAssets = updatedMeshAssets
         productMetadata = updatedMetadata
     }
 
@@ -199,6 +205,7 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> PatternArrayExplodeResult {
         var updatedCADDocument = cadDocument
+        var updatedMeshAssets = authoredMeshAssets
         var updatedMetadata = productMetadata
         guard let source = updatedMetadata.patternArrays[id] else {
             throw EditorError(
@@ -217,11 +224,13 @@ extension DesignDocument {
             source: source,
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
+            authoredMeshAssets: &updatedMeshAssets,
             tolerance: modelingSettings.tolerance
         )
         updatedMetadata.patternArrays.removeValue(forKey: id)
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
+        authoredMeshAssets = updatedMeshAssets
         productMetadata = updatedMetadata
         return result
     }
@@ -233,6 +242,7 @@ extension DesignDocument {
             return
         }
         var updatedCADDocument = cadDocument
+        var updatedMeshAssets = authoredMeshAssets
         var updatedMetadata = productMetadata
         let sourceIDs = updatedMetadata.patternArrays.keys.sorted {
             $0.description < $1.description
@@ -243,11 +253,13 @@ extension DesignDocument {
                 for: sourceID,
                 metadata: &updatedMetadata,
                 cadDocument: &updatedCADDocument,
+            authoredMeshAssets: &updatedMeshAssets,
             tolerance: modelingSettings.tolerance
             )
         }
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
+        authoredMeshAssets = updatedMeshAssets
         productMetadata = updatedMetadata
     }
 }

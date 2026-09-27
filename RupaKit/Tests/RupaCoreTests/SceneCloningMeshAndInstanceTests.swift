@@ -84,12 +84,11 @@ import Testing
         #expect(copied.name != original.name)
         _ = try document.validate()
 
-        // Another document has no such definition, so the instance cannot be pasted there.
+        // Another document has no such definition, so the paste brings it along.
         let fragment = try document.sceneFragment(copying: [instanceNode])
         var other = DesignDocument.empty()
-        #expect(throws: EditorError.self) {
-            try other.pasteSceneFragment(fragment, placements: [.identity])
-        }
+        _ = try other.pasteSceneFragment(fragment, placements: [.identity])
+        #expect(other.productMetadata.componentDefinitions.count == 1)
     }
 
     @Test func pasteboardFragmentsWrittenBeforeMeshesAndInstancesStillDecode() throws {

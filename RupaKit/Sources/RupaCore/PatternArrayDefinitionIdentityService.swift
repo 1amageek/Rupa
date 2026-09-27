@@ -1,23 +1,45 @@
 import Foundation
 import SwiftCAD
 import RupaCoreTypes
+import RupaProjectModel
 
 public struct PatternArrayDefinitionIdentityService: Sendable {
     private static let algorithm = "sha256-pattern-definition-identity-v2"
 
     public init() {}
 
+    /// The definition's identity: its scene structure, its CAD feature closure and the content of
+    /// the authored meshes it presents, so a change to any of them is seen as a new definition.
     public func identity(
         for definition: ComponentDefinition,
         metadata: ProductMetadata,
-        cadDocument: CADDocument
+        cadDocument: CADDocument,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
     ) throws -> PatternArrayDefinitionIdentity {
         let sourceFeatureIDs = try featureClosure(
             for: definition,
             metadata: metadata,
             cadDocument: cadDocument
         )
-        guard !sourceFeatureIDs.isEmpty else {
+        var meshIDs: Set<GeometrySourceID> = []
+        var pending = definition.rootSceneNodeIDs
+        while let id = pending.popLast() {
+            guard let node = metadata.sceneNodes[id] else { continue }
+            meshIDs.formUnion(PatternArrayIndependentCopyBuilder.authoredMeshIDs(of: node))
+            pending.append(contentsOf: node.childIDs)
+        }
+        let meshEncoder = JSONEncoder()
+        meshEncoder.outputFormatting = [.sortedKeys]
+        let meshDigests = try meshIDs.sorted { $0.description < $1.description }.map { id -> String in
+            guard let asset = authoredMeshAssets[id] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Pattern array definition identity requires the meshes the definition presents."
+                )
+            }
+            return PatternArrayStableDigest.hexDigest(for: try meshEncoder.encode(asset.source))
+        }
+        guard !sourceFeatureIDs.isEmpty || !meshDigests.isEmpty else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array definition identity requires cloneable CAD feature scene nodes."
@@ -25,7 +47,7 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
         }
         let featureTokenByID = featureTokenMap(for: sourceFeatureIDs)
         let featureIDTokenByID = try PatternArrayFeatureIDTokenMapService().tokenMap(for: sourceFeatureIDs)
-        let payload = try PatternArrayDefinitionIdentityPayload(
+        var payload = try PatternArrayDefinitionIdentityPayload(
             definition: definition,
             metadata: metadata,
             cadDocument: cadDocument,
@@ -33,6 +55,8 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
             featureTokenByID: featureTokenByID,
             featureIDTokenByID: featureIDTokenByID
         )
+        // Absent for a CAD-only definition, so its identity is unchanged from before meshes counted.
+        payload.meshes = meshDigests.isEmpty ? nil : meshDigests
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(payload)
@@ -132,6 +156,7 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
 private struct PatternArrayDefinitionIdentityPayload: Encodable {
     var rootSceneNodes: [PatternArrayDefinitionSceneNodeIdentity]
     var features: [PatternArrayDefinitionFeatureIdentity]
+    var meshes: [String]? = nil
 
     init(
         definition: ComponentDefinition,

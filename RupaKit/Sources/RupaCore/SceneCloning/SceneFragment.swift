@@ -38,6 +38,27 @@ public struct SceneFragment: Codable, Equatable, Sendable {
     public var authoredMeshes: [GeometrySourceID: AuthoredMeshAsset]
     /// The component instances the copied nodes present.
     public var componentInstances: [ComponentInstanceID: ComponentInstance]
+    /// The definitions of those instances with their content, so the instances can be pasted into
+    /// a document that does not hold them.
+    public var componentDefinitions: [ComponentDefinitionID: ComponentDefinitionContent]
+    /// The saved measurements whose annotation nodes are copied.
+    public var measurements: [MeasurementAnnotation]
+    /// The construction planes the copied construction nodes present.
+    public var constructionPlanes: [ConstructionPlaneSource]
+
+    /// A component definition carried by a fragment: its name and properties, and its root
+    /// subtrees as a fragment of their own.
+    public struct ComponentDefinitionContent: Codable, Equatable, Sendable {
+        public var name: String
+        public var properties: [String: String]
+        public var content: SceneFragment
+
+        public init(name: String, properties: [String: String], content: SceneFragment) {
+            self.name = name
+            self.properties = properties
+            self.content = content
+        }
+    }
 
     public init(
         roots: [Root],
@@ -51,7 +72,10 @@ public struct SceneFragment: Codable, Equatable, Sendable {
         joinedCurveSources: [JoinedCurveSource] = [],
         joinedCurveGroupSources: [JoinedCurveGroupSource] = [],
         authoredMeshes: [GeometrySourceID: AuthoredMeshAsset] = [:],
-        componentInstances: [ComponentInstanceID: ComponentInstance] = [:]
+        componentInstances: [ComponentInstanceID: ComponentInstance] = [:],
+        componentDefinitions: [ComponentDefinitionID: ComponentDefinitionContent] = [:],
+        measurements: [MeasurementAnnotation] = [],
+        constructionPlanes: [ConstructionPlaneSource] = []
     ) {
         self.roots = roots
         self.carriedPresenters = carriedPresenters
@@ -65,11 +89,15 @@ public struct SceneFragment: Codable, Equatable, Sendable {
         self.joinedCurveGroupSources = joinedCurveGroupSources
         self.authoredMeshes = authoredMeshes
         self.componentInstances = componentInstances
+        self.componentDefinitions = componentDefinitions
+        self.measurements = measurements
+        self.constructionPlanes = constructionPlanes
     }
 
     private enum CodingKeys: String, CodingKey {
         case roots, carriedPresenters, sceneNodes, features, parameters, materials, faceMaterialBindings
         case bridgeCurveSources, joinedCurveSources, joinedCurveGroupSources, authoredMeshes, componentInstances
+        case componentDefinitions, measurements, constructionPlanes
     }
 
     public init(from decoder: Decoder) throws {
@@ -89,5 +117,11 @@ public struct SceneFragment: Codable, Equatable, Sendable {
         componentInstances = try container.decodeIfPresent(
             [ComponentInstanceID: ComponentInstance].self, forKey: .componentInstances
         ) ?? [:]
+        // Fragments copied before definitions and measurements could be copied carry neither.
+        componentDefinitions = try container.decodeIfPresent(
+            [ComponentDefinitionID: ComponentDefinitionContent].self, forKey: .componentDefinitions
+        ) ?? [:]
+        measurements = try container.decodeIfPresent([MeasurementAnnotation].self, forKey: .measurements) ?? []
+        constructionPlanes = try container.decodeIfPresent([ConstructionPlaneSource].self, forKey: .constructionPlanes) ?? []
     }
 }

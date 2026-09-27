@@ -17,10 +17,10 @@
     - [ ] FB15.4 Proportional editing of edges (neighbouring edges follow with a falloff). `depends:FB15.3` `parallel:none`
   - [x] FB16 Review RV27 fixes: an overlay over its admission limits publishes the geometry frame so selection and hits keep working; Complete Edge takes candidates where the scene draws them, meets collinear and co-circular curves where they begin and refuses crossings the kernel cannot certify; saved measurements are refused by copying instead of losing their data. `depends:FB15.1` `parallel:none`
   - [x] FB17 Section Analysis completeness: a draggable distance handle on the section plane and a Previous plane saved with the document. `depends:FB16` `parallel:none`
-  - [ ] FB18 Copy completeness: saved measurements copied with anchors remapped onto the copied geometry, mesh objects in independent-copy arrays, and component instances pasted into another document with their definitions. `depends:FB16` `parallel:none`
+  - [x] FB18 Copy completeness: saved measurements copied with anchors remapped onto the copied geometry, mesh objects in independent-copy arrays, and component instances pasted into another document with their definitions. `depends:FB16` `parallel:none`
   - [ ] FB19 Material rendering of IOR, iridescence, thickness, sheen roughness and specular color in the viewport. `depends:FB16` `parallel:none`
   - [ ] FB20 Complete Edge on solid and sheet edges through a kernel 3D curve intersection and curve extension to it. `depends:FB16` `parallel:none`
-  - [ ] FB18a Copy construction geometry (construction planes cloned under a new identity) instead of refusing it. `depends:FB18` `parallel:none`
+  - [x] FB18a Copy construction geometry (construction planes cloned under a new identity) instead of refusing it. `depends:FB18` `parallel:none`
   - [ ] FB21 Mirror of sheet bodies on the cut, join and copy paths through a kernel mirror of open shells. `depends:FB16` `parallel:none`
   - [ ] FB22 Snap candidates on sketches presented by a moved scene node, placed through the occurrence placement. `depends:FB16` `parallel:none`
   - [ ] FB23 Exact face centroid and face area from Swift-CAD for face-center snapping and face-area metrics, replacing the Rupa approximations. `depends:FB16` `parallel:none`

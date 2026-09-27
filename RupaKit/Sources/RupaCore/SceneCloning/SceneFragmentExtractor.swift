@@ -128,6 +128,23 @@ struct SceneFragmentExtractor: Sendable {
             }
         }
 
+        // Each copied instance's definition travels with its content, extracted in the world frame so
+        // it can be recreated where the destination lacks it.
+        var componentDefinitions: [ComponentDefinitionID: SceneFragment.ComponentDefinitionContent] = [:]
+        for instance in componentInstances.values where componentDefinitions[instance.definitionID] == nil {
+            guard let definition = metadata.componentDefinitions[instance.definitionID] else {
+                throw EditorError(code: .referenceUnresolved, message: "A copied instance refers to a missing component definition.")
+            }
+            componentDefinitions[definition.id] = SceneFragment.ComponentDefinitionContent(
+                name: definition.name,
+                properties: definition.properties,
+                content: try extract(
+                    rootSceneNodeIDs: definition.rootSceneNodeIDs, frame: .world,
+                    metadata: metadata, cadDocument: cadDocument, authoredMeshAssets: authoredMeshAssets
+                )
+            )
+        }
+
         return SceneFragment(
             roots: try rootIDs.map { SceneFragment.Root(sceneNodeID: $0, placement: try placement(of: $0)) },
             carriedPresenters: carriedPresenters,
@@ -146,7 +163,20 @@ struct SceneFragmentExtractor: Sendable {
                 .filter { featureIDs.contains($0.featureID) }
                 .sorted { $0.id.description < $1.id.description },
             authoredMeshes: authoredMeshes,
-            componentInstances: componentInstances
+            componentInstances: componentInstances,
+            componentDefinitions: componentDefinitions,
+            measurements: metadata.measurements.values
+                .filter { $0.sceneNodeID.map(subtreeIDSet.contains) ?? false }
+                .sorted { $0.id.description < $1.id.description },
+            constructionPlanes: try sceneNodes.values
+                .compactMap { $0.reference?.kind == .construction ? $0.reference?.constructionPlaneID : nil }
+                .sorted { $0.description < $1.description }
+                .map { id in
+                    guard let plane = metadata.constructionPlanes[id] else {
+                        throw EditorError(code: .referenceUnresolved, message: "A copied construction node refers to a missing plane.")
+                    }
+                    return plane
+                }
         )
     }
 

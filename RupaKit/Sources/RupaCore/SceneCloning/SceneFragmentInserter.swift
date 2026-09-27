@@ -84,20 +84,62 @@ struct SceneFragmentInserter: Sendable {
             }
             meshIDMap[id] = copiedID
         }
-        var instanceIDMap: [ComponentInstanceID: ComponentInstanceID] = [:]
-        for (id, instance) in fragment.componentInstances.sorted(by: { $0.key.description < $1.key.description }) {
-            // FIXME(INCOMPLETE_IMPLEMENTATION): An instance copies as a new instance of its own
-            // definition, which only the document holding that definition has. Production path:
-            // Paste with Placement into another document. Completion requires carrying the
-            // definition with the fragment and inserting it once per destination document.
-            guard updatedMetadata.componentDefinitions[instance.definitionID] != nil else {
+        // An instance keeps its definition where the destination holds it; otherwise the definition
+        // is recreated once from the content the fragment carries: its subtrees are inserted hidden
+        // at their world placement under the first document root, and a new definition names them.
+        var definitionIDMap: [ComponentDefinitionID: ComponentDefinitionID] = [:]
+        for definitionID in Set(fragment.componentInstances.values.map(\.definitionID)).sorted(by: { $0.description < $1.description }) {
+            if updatedMetadata.componentDefinitions[definitionID] != nil {
+                definitionIDMap[definitionID] = definitionID
+                continue
+            }
+            guard let carried = fragment.componentDefinitions[definitionID],
+                  let documentRootID = updatedMetadata.rootSceneNodeIDs.first,
+                  let documentRoot = updatedMetadata.sceneNodes[documentRootID] else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "An instance can be pasted only into the document that holds its definition."
+                    message: "An instance was copied without its component definition."
                 )
             }
+            let rootWorld = try SceneNodeHierarchy(metadata: updatedMetadata).worldTransform(of: documentRootID)
+            let content = try insert(
+                carried.content, placement: .identity, parentWorld: rootWorld,
+                attachment: .child(of: documentRootID, at: documentRoot.childIDs.count), naming: .copy,
+                metadata: &updatedMetadata, cadDocument: &updatedDocument, authoredMeshAssets: &updatedMeshAssets
+            )
+            for rootID in content.rootSceneNodeIDs { updatedMetadata.sceneNodes[rootID]?.isVisible = false }
+            let taken = Set(updatedMetadata.componentDefinitions.values.map(\.name))
+            var name = carried.name
+            var ordinal = 2
+            while taken.contains(name) {
+                name = "\(carried.name) \(ordinal)"
+                ordinal += 1
+            }
+            var definition = ComponentDefinition(name: name, rootSceneNodeIDs: content.rootSceneNodeIDs)
+            definition.properties = carried.properties
+            updatedMetadata.componentDefinitions[definition.id] = definition
+            definitionIDMap[definitionID] = definition.id
+        }
+        // A copied construction plane is a new plane source under a new, unique name.
+        var constructionPlaneIDMap: [ConstructionPlaneSourceID: ConstructionPlaneSourceID] = [:]
+        for plane in fragment.constructionPlanes {
+            var copied = plane
+            copied.id = ConstructionPlaneSourceID()
+            let taken = Set(updatedMetadata.constructionPlanes.values.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
+            copied.name = "\(plane.name) Copy"
+            var ordinal = 2
+            while taken.contains(copied.name) {
+                copied.name = "\(plane.name) Copy \(ordinal)"
+                ordinal += 1
+            }
+            updatedMetadata.constructionPlanes[copied.id] = copied
+            constructionPlaneIDMap[plane.id] = copied.id
+        }
+        var instanceIDMap: [ComponentInstanceID: ComponentInstanceID] = [:]
+        for (id, instance) in fragment.componentInstances.sorted(by: { $0.key.description < $1.key.description }) {
             var copied = instance
             copied.id = ComponentInstanceID()
+            copied.definitionID = definitionIDMap[instance.definitionID] ?? instance.definitionID
             let taken = Set(updatedMetadata.componentInstances.values.map(\.name))
             var ordinal = 2
             copied.name = "\(instance.name) Copy"
@@ -125,7 +167,8 @@ struct SceneFragmentInserter: Sendable {
             node.id = try copiedSceneNodeID(id)
             node.childIDs = try node.childIDs.map(copiedSceneNodeID)
             node.reference = try node.reference.map {
-                try remapped($0, featureIDMap: featureIDMap, meshIDMap: meshIDMap, instanceIDMap: instanceIDMap)
+                try remapped($0, featureIDMap: featureIDMap, meshIDMap: meshIDMap, instanceIDMap: instanceIDMap,
+                             constructionPlaneIDMap: constructionPlaneIDMap)
             }
             node.object = try node.object.map { object in
                 var copied = object
@@ -276,6 +319,28 @@ struct SceneFragmentInserter: Sendable {
             updatedMetadata.joinedCurveGroupSources[copied.id] = copied
         }
 
+        // Saved measurements follow the copy; anchors on copied nodes take the copies' occurrences.
+        if !fragment.measurements.isEmpty {
+            let occurrences = try SceneNodeHierarchy(metadata: updatedMetadata).resolvedOccurrences()
+            for measurement in fragment.measurements {
+                var copied = try measurement.copied(sceneNodes: sceneIDMap, features: featureIDMap, placement: placement)
+                for index in copied.anchors.indices where measurement.anchors[index].occurrenceID != nil
+                    && copied.anchors[index].occurrenceID == nil {
+                    let anchor = copied.anchors[index]
+                    let nodeID = anchor.sceneNodeID ?? anchor.topologyReference?.sceneNodeID ?? anchor.topologyEdgeParameter?.sceneNodeID
+                    let matches = occurrences.filter { $0.sceneNodeID == nodeID }
+                    guard matches.count == 1 else {
+                        throw EditorError(
+                            code: .commandInvalid,
+                            message: "A copied measurement's anchor has no single occurrence in the copy."
+                        )
+                    }
+                    copied.anchors[index].occurrenceID = matches[0].id
+                }
+                updatedMetadata.measurements[copied.id] = copied
+            }
+        }
+
         metadata = updatedMetadata
         cadDocument = updatedDocument
         authoredMeshAssets = updatedMeshAssets
@@ -358,7 +423,8 @@ struct SceneFragmentInserter: Sendable {
         _ reference: SceneNodeReference,
         featureIDMap: [FeatureID: FeatureID],
         meshIDMap: [GeometrySourceID: GeometrySourceID],
-        instanceIDMap: [ComponentInstanceID: ComponentInstanceID]
+        instanceIDMap: [ComponentInstanceID: ComponentInstanceID],
+        constructionPlaneIDMap: [ConstructionPlaneSourceID: ConstructionPlaneSourceID]
     ) throws -> SceneNodeReference {
         func copied(_ featureID: FeatureID?) throws -> FeatureID {
             guard let featureID, let copied = featureIDMap[featureID] else {
@@ -384,7 +450,11 @@ struct SceneFragmentInserter: Sendable {
             }
             return .componentInstance(copied)
         case .construction:
-            throw EditorError(code: .commandInvalid, message: "Construction geometry is not copied.")
+            guard let id = reference.constructionPlaneID else { return reference }
+            guard let copied = constructionPlaneIDMap[id] else {
+                throw EditorError(code: .commandInvalid, message: "A copied construction node names a plane outside the copy.")
+            }
+            return .constructionPlane(copied)
         }
     }
 }

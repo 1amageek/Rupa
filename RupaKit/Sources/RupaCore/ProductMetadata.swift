@@ -1717,6 +1717,21 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try source.validate()
+            // Independent copies own cloned CAD features unless their outputs copy meshes alone.
+            if source.outputMode == .independentCopy, source.outputFeatureIDs.isEmpty {
+                var pending = source.outputSceneNodeIDs
+                var presentsMeshes = false
+                while let id = pending.popLast(), !presentsMeshes {
+                    guard let node = sceneNodes[id] else { continue }
+                    presentsMeshes = !PatternArrayIndependentCopyBuilder.authoredMeshIDs(of: node).isEmpty
+                    pending.append(contentsOf: node.childIDs)
+                }
+                guard presentsMeshes else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Independent-copy pattern array sources must own cloned CAD features or meshes."
+                    )
+                }
+            }
         }
 
         for (_, source) in patternArrays {
@@ -1911,7 +1926,9 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             let descendantFeatureIDs = referencedFeatureIDs(inSceneSubtreeRootedAt: outputSceneNodeID)
-            guard !descendantFeatureIDs.isEmpty,
+            // An output copying meshes alone references no features.
+            let copiesFeatures = !descendantFeatureIDs.isEmpty || !source.outputFeatureIDs.isEmpty
+            guard !copiesFeatures || !descendantFeatureIDs.isEmpty,
                   descendantFeatureIDs.isSubset(of: ownedFeatureIDs) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Independent-copy pattern array output scene nodes must reference only owned cloned features."
