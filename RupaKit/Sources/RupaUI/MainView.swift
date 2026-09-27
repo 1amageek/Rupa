@@ -829,19 +829,18 @@ private struct ProjectMainViewContent: View {
         ) throws -> Void,
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        let task = enqueueWorkspaceOperation {
-            guard let current = workspace.view else {
-                throw ProjectWorkspaceActionError(
-                    code: .snapshotUnavailable,
-                    message: "The project workspace has no published view snapshot."
-                )
-            }
-            var selection = current.selection
-            try mutation(&selection, current.document.document)
-            let published = try await workspace.applySelection(.replace(selection))
-            completion(published)
-            return published
+        reportFailure(of: selectionSubmitter.queue(mutation, completion: completion))
+    }
+
+    /// Selection changes check against the workspace's latest published view: a completion runs
+    /// after its command published, when `snapshot` still holds the view before it.
+    private var selectionSubmitter: WorkspaceSelectionSubmitter {
+        WorkspaceSelectionSubmitter(workspace: workspace) { operation in
+            enqueueWorkspaceOperation(operation)
         }
+    }
+
+    private func reportFailure(of task: Task<ProjectViewSnapshot, Error>) {
         Task { @MainActor in
             do {
                 _ = try await task.value
@@ -893,10 +892,8 @@ private struct ProjectMainViewContent: View {
             DesignDocument
         ) throws -> Void
     ) -> Bool {
-        var selection = snapshot.selection
         do {
-            try update(&selection, snapshot.document.document)
-            submitSelectionMutation(update)
+            reportFailure(of: try selectionSubmitter.submit(update))
             return true
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
@@ -3871,9 +3868,20 @@ private struct ProjectMainViewContent: View {
             selectedTool: selectedTool,
             selectedTargetCount: selectedTargetCount,
             selectedReferenceCount: snapshot.selection.selectedReferences.count,
-            isDimensionCommandActive: dimensionCommandState.isActive,
-            hasViewAlignedConstructionPlaneRequest: viewAlignedConstructionPlaneRequest != nil
+            runningCommandInputs: runningContextPanelCommandInputs
         )
+    }
+
+    /// The running commands `viewportContextPanelContent` holds a section for.
+    private var runningContextPanelCommandInputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> {
+        var inputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> = []
+        if viewAlignedConstructionPlaneRequest != nil { inputs.insert(.viewAlignedConstructionPlane) }
+        if dimensionCommandState.isActive { inputs.insert(.dimension) }
+        if placeSession != nil { inputs.insert(.place) }
+        if transformSession != nil { inputs.insert(.transform) }
+        if mirrorSession != nil { inputs.insert(.mirror) }
+        if sectionAnalysisSession != nil || placedSectionQuery != nil { inputs.insert(.sectionAnalysis) }
+        return inputs
     }
 
     private var viewportContextPanelSelectionPresentation: WorkspaceViewportContextPanelVisibility.SelectionPresentation {

@@ -1015,6 +1015,29 @@ same throwing session operation; an acknowledgement means the MainActor state
 was applied, not that a RealityKit frame has completed display. Replacing the
 document creates a new session and invalidates the old viewport instance ID.
 
+A selection change is checked against the workspace's latest published view,
+never against the snapshot a view value captured. A command's completion runs
+after the workspace has published the command's result: a feature appended and
+a node's reference moved to it, a group or copy made, control points inserted.
+The captured snapshot predates that result and refuses the very targets the
+command made, so every selection helper goes through
+`WorkspaceSelectionSubmitter`, which takes no snapshot: it checks the change
+against `workspace.view` at once, so the caller learns whether it applies, and
+queues it to apply to whichever view is current when its turn comes.
+`WorkspaceSelectionSubmitterTests` select an edge moved by a committed
+`moveBodyEdges`, which the pre-move snapshot refuses.
+
+The viewport context panel is present whenever it has something to hold: a
+creation tool, a selection, or a running command whose inputs live in it — the
+view-aligned construction plane request, the Dimension command, Place,
+Move/Rotate/Scale, Mirror and Section Analysis (running or placed). A running
+command's inputs do not depend on what is selected: Section Analysis starts
+with nothing selected, and a move whose selection is being restored must not
+lose its dialog meanwhile. `WorkspaceViewportContextPanelVisibility` receives
+the running command inputs, and D can only move focus into a field that
+exists. `WorkspaceViewportContextPanelVisibilityTests` prove each input keeps
+the panel with nothing selected.
+
 ## State, Ownership, and Lifecycle
 
 SwiftUI owns transient interaction and render-cache observation state. The

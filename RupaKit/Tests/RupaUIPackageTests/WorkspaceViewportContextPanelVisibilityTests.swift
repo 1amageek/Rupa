@@ -7,8 +7,7 @@ import Testing
         selectedTool: .select,
         selectedTargetCount: 0,
         selectedReferenceCount: 0,
-        isDimensionCommandActive: false,
-        hasViewAlignedConstructionPlaneRequest: false
+        runningCommandInputs: []
     ))
 }
 
@@ -17,33 +16,27 @@ import Testing
         selectedTool: .select,
         selectedTargetCount: 1,
         selectedReferenceCount: 0,
-        isDimensionCommandActive: false,
-        hasViewAlignedConstructionPlaneRequest: false
+        runningCommandInputs: []
     ))
     #expect(WorkspaceViewportContextPanelVisibility.isVisible(
         selectedTool: .select,
         selectedTargetCount: 0,
         selectedReferenceCount: 1,
-        isDimensionCommandActive: false,
-        hasViewAlignedConstructionPlaneRequest: false
+        runningCommandInputs: []
     ))
 }
 
-@Test func workspaceViewportContextPanelShowsTransientCommands() {
-    #expect(WorkspaceViewportContextPanelVisibility.isVisible(
-        selectedTool: .select,
-        selectedTargetCount: 0,
-        selectedReferenceCount: 0,
-        isDimensionCommandActive: true,
-        hasViewAlignedConstructionPlaneRequest: false
-    ))
-    #expect(WorkspaceViewportContextPanelVisibility.isVisible(
-        selectedTool: .select,
-        selectedTargetCount: 0,
-        selectedReferenceCount: 0,
-        isDimensionCommandActive: false,
-        hasViewAlignedConstructionPlaneRequest: true
-    ))
+/// Every running command keeps the panel that holds its inputs with nothing selected, so Section
+/// Analysis started from an empty selection shows its Plane, Distance and Flip.
+@Test func workspaceViewportContextPanelShowsRunningCommandsWithNothingSelected() {
+    for input in WorkspaceViewportContextPanelVisibility.CommandInput.allCases {
+        #expect(WorkspaceViewportContextPanelVisibility.isVisible(
+            selectedTool: .select,
+            selectedTargetCount: 0,
+            selectedReferenceCount: 0,
+            runningCommandInputs: [input]
+        ), "\(input)")
+    }
 }
 
 @Test func workspaceViewportContextPanelShowsCreationTools() {
@@ -52,8 +45,7 @@ import Testing
             selectedTool: tool,
             selectedTargetCount: 0,
             selectedReferenceCount: 0,
-            isDimensionCommandActive: false,
-            hasViewAlignedConstructionPlaneRequest: false
+            runningCommandInputs: []
         ))
     }
 }

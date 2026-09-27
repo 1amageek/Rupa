@@ -7,17 +7,25 @@ enum WorkspaceViewportContextPanelVisibility {
         case referenceSelection
     }
 
+    /// A running command whose inputs live in the panel. While one runs the panel stays, whatever
+    /// is selected: Section Analysis starts with nothing selected, and D can only move focus into a
+    /// field that exists.
+    enum CommandInput: Hashable, CaseIterable {
+        case viewAlignedConstructionPlane
+        case dimension
+        case place
+        case transform
+        case mirror
+        case sectionAnalysis
+    }
+
     static func isVisible(
         selectedTool: ModelingTool,
         selectedTargetCount: Int,
         selectedReferenceCount: Int,
-        isDimensionCommandActive: Bool,
-        hasViewAlignedConstructionPlaneRequest: Bool
+        runningCommandInputs: Set<CommandInput>
     ) -> Bool {
-        if hasViewAlignedConstructionPlaneRequest {
-            return true
-        }
-        if isDimensionCommandActive {
+        if !runningCommandInputs.isEmpty {
             return true
         }
         if selectedTargetCount > 0 || selectedReferenceCount > 0 {
