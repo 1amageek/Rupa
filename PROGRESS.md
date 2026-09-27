@@ -65,9 +65,19 @@
     - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
     - [ ] SK6.2 Offset Planar Curve on splines and joined curve chains with Round, Linear and Natural gap fill. `depends:SK6.1` `parallel:none`
     - [ ] SK6.3 Freestyle Offset Planar Curve (F). `depends:SK6.2` `parallel:none`
-  - [ ] SK7 Project: Project, Project Body Body, Project Curve Body, Project Curve Curve, Project Outline, Alternative Duplicate, Duplicate Curve and Project, Create Outline. `depends:SK6` `parallel:none`
-  - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:SK7` `parallel:none`
-  - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:SK8` `parallel:none`
+  - [ ] SK7 Project: Project, Project Body Body, Project Curve Body, Project Curve Curve, Project Outline, Alternative Duplicate, Duplicate Curve and Project, Create Outline. `depends:none` `parallel:none`
+    - [x] SK7.1 Keys: Option-D for Alternative Duplicate (curves, edges) or Project Outline (bodies), I for Project Curve Body onto the one selected face. `depends:none` `parallel:none`
+    - [ ] SK7.2 Project Curve Body onto curved faces, with Normal and Vector directions and Bidirectional. `depends:SK7.1` `parallel:none`
+    - [ ] SK7.3 Project Body Body and Project Curve Curve through a kernel intersection curve. `depends:SK7.2` `parallel:none`
+    - [ ] SK7.4 Create Outline as 3D boundary curves at the body. `depends:SK7.3` `parallel:none`
+  - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
+    - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:none` `parallel:none`
+    - [ ] SK8.2 Insert Knot by a click on the spline. `depends:SK8.1` `parallel:none`
+    - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
+  - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
+    - [ ] SK9.1 Realize Instances: a component instance becomes an independent, editable copy of its definition. `depends:none` `parallel:none`
+    - [ ] SK9.2 Create Instance as its own command on the selection. `depends:SK9.1` `parallel:none`
+    - [ ] SK9.3 Text: curves from typed text in a chosen font, through kernel glyph outlines. `depends:SK9.2` `parallel:none`
   - [ ] SK10 Integrate every Sketch command, rebuild and restart Rupa, and verify each against its official page. `depends:SK1,SK2,SK3,SK4,SK5,SK6,SK7,SK8,SK9` `parallel:none`
 - [x] FO1 Restored direct .rupa opening by updating ~/Applications/Rupa.app to the signed September 25 verified build and unregistering eight competing old/build-path application registrations without deleting their files. Saved document 559512EF before restart; default-handler open now displays its Constrained Surface with one body, Valid evaluation and zero errors. Installed executable SHA-256 matches the verified build. Previous installed app preserved at .verification/Rupa-installed-20260906.app-backup. No production source changes required. `depends:none` `parallel:none`
 - [x] BF1 Audited nineteen foundation commands against official specifications, concrete Core/UI/native/API paths and history. Existing transform, clone/remap, pattern and knot primitives are reusable; complete command workflows remain missing or partial. Identified divergent transform failure contracts, absent standard array creation UI, transient Measure disconnected from persistent annotations, and Section Analysis bypassing occurrence transforms. Twelve focused Core behavioral tests pass in /tmp/foundation-core-audit.log and /tmp/foundation-core-behavior.log; no full UI/native-kernel parity claim. Production sources unchanged by this audit; step 2 remains paused with its prior uncommitted edits preserved. `depends:none` `parallel:none`

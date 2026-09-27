@@ -530,3 +530,19 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: context) == .cycleBridgeContinuity)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: context) == .trimBridgeSources)
 }
+
+@Test func workspaceKeyboardRouterProjectsTheSelectionWithOptionD() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "∂", modifiers: [.option]), context: context) == nil)
+    context.hasProjectableSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "∂", modifiers: [.option]), context: context) == .projectToConstructionPlane)
+}
+
+@Test func workspaceKeyboardRouterProjectsCurvesOntoAFaceWithI() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: context) == nil)
+    context.hasProjectableSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: context) == .projectCurvesOntoFace)
+}

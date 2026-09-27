@@ -205,6 +205,11 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
     case unjoinSketchCurve
+    /// Option-D: Alternative Duplicate of selected curves or edges onto the construction plane, or
+    /// Project Outline of selected bodies.
+    case projectToConstructionPlane
+    /// I: Project Curve Body of the selected curves onto the selected face.
+    case projectCurvesOntoFace
     /// Escape ends Trim or Split Segment.
     case endCurvePickCommand
     case slideCurveControlVertices(SplineControlPointSlideDirection)
@@ -242,6 +247,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasBridgeableSelection: Bool = false
     /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
     var hasSelectedBridgeCurve: Bool = false
+    /// Whether anything is selected that Option-D can project onto the construction plane.
+    var hasProjectableSelection: Bool = false
     /// Whether the selection holds sketch curves or vertices Fillet, Join or Unjoin act on: the
     /// count of selected sketch targets.
     var selectedSketchTargetCount: Int = 0
@@ -675,6 +682,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         if input.modifiers == [.option], key == "j" || key == "∆" {
             return context.selectedSketchTargetCount == 1 ? .unjoinSketchCurve : nil
         }
+        if input.modifiers == [.option], key == "d" || key == "∂" {
+            return context.hasProjectableSelection ? .projectToConstructionPlane : nil
+        }
         guard input.modifiers.isEmpty else { return nil }
         if context.hasSelectedBridgeCurve {
             if input.isTab { return .cycleBridgeContinuity }
@@ -685,6 +695,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
         case "b": return context.selectedSketchTargetCount > 0 ? .applySketchCornerTreatment : nil
         case "j": return context.selectedSketchTargetCount == 2 ? .joinSketchCurves : nil
+        case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil
         default: return nil
         }
     }

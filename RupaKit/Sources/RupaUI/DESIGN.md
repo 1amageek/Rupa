@@ -589,7 +589,12 @@ one G1 `createBridgeCurve` joining the ends Core reads from the selection
 ([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
 and selects the new curve, whose inspector edits its continuity, tension and
 trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
-→ G3 → G0 and Q trims the curves it bridges. With the select tool and sketch curves or vertices selected, B applies the
+→ G3 → G0 and Q trims the curves it bridges. Option-D projects the selected
+sketch curves or edges onto the construction plane (Alternative Duplicate) or,
+with bodies selected, their outlines (Project Outline); I projects selected
+curves onto the one selected face (Project Curve Body). I on any other
+selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until the
+kernel's intersection curve serves Project Body Body and Project Curve Curve. With the select tool and sketch curves or vertices selected, B applies the
 inspector's Fillet or Chamfer to the first of them (a vertex takes Core's Fillet
 Vertex path), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV

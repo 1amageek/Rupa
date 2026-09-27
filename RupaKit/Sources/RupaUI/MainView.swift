@@ -5656,6 +5656,7 @@ private struct ProjectMainViewContent: View {
             isCurvePickCommandActive: curvePickCommand != nil,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
+            hasProjectableSelection: !snapshot.selection.selectedTargets.isEmpty,
             selectedSketchTargetCount: selectedSketchTargets.count,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
@@ -5960,6 +5961,49 @@ private struct ProjectMainViewContent: View {
                 )
             )
             reportToolStatus("Bridge continuity: \(next.rawValue.uppercased()).")
+            return .handled
+        case .projectToConstructionPlane:
+            let curves = snapshot.selection.selectedTargets.filter { target in
+                switch target.component {
+                case .sketchEntity, .edge: return true
+                default: return false
+                }
+            }
+            if !curves.isEmpty {
+                submitSource(
+                    .projectSketchCurvesToConstructionPlane(
+                        targets: curves,
+                        plane: activeSketchPlane(),
+                        name: nil
+                    )
+                )
+                return .handled
+            }
+            let bodies = bodyOutlineProjectionTargets(from: selectedSceneNodes)
+            guard !bodies.isEmpty else {
+                reportToolStatus("Option-D projects curves, edges or bodies onto the construction plane.", severity: .warning)
+                return .handled
+            }
+            projectSelectedBodyOutlinesToConstructionPlane(bodies)
+            return .handled
+        case .projectCurvesOntoFace:
+            let selected = snapshot.selection.selectedTargets
+            let faces = selected.filter { if case .face = $0.component { return true }; return false }
+            let curves = selected.filter { target in
+                switch target.component {
+                case .sketchEntity, .edge: return true
+                default: return false
+                }
+            }
+            guard faces.count == 1, !curves.isEmpty else {
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Project routes curves onto one face only;
+                // Project Body Body and Project Curve Curve need a kernel intersection curve.
+                // Production path: I on any other selection reports this refusal. Done when those
+                // selections project through the kernel with their own tests.
+                reportToolStatus("Project: select curves and one face to project them onto.", severity: .warning)
+                return .handled
+            }
+            projectSelectedCurvesToGeneratedFace(curves, face: faces[0])
             return .handled
         case .trimBridgeSources:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
