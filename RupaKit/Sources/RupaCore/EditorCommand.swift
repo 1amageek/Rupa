@@ -348,6 +348,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         adjacentTarget: SelectionTarget,
         continuity: SketchCurveJoinContinuity = .g0
     )
+    /// Join Curves on two or more curves: their meeting free ends become joints of one joined curve.
+    case joinSketchCurveChain(targets: [SelectionTarget], continuity: SketchCurveJoinContinuity = .g0)
     case unjoinSketchCurve(target: SelectionTarget)
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)
@@ -794,6 +796,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "subdivideSurface"
         case .joinSketchCurves:
             "joinSketchCurves"
+        case .joinSketchCurveChain:
+            "joinSketchCurveChain"
         case .unjoinSketchCurve:
             "unjoinSketchCurve"
         case .splitSketchCurve:
@@ -1024,6 +1028,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .subdivideSketchSpline,
              .subdivideSurface,
              .joinSketchCurves,
+             .joinSketchCurveChain,
              .unjoinSketchCurve,
              .splitSketchCurve,
              .trimSketchCurveSegment,

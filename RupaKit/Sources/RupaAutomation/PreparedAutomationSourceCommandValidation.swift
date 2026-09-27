@@ -134,6 +134,7 @@ enum PreparedAutomationSourceCommandValidation {
              .subdivideSketchSpline,
              .subdivideSurface,
              .joinSketchCurves,
+             .joinSketchCurveChain,
              .unjoinSketchCurve,
              .splitSketchCurve,
              .trimSketchCurveSegment,

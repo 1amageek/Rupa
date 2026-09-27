@@ -370,13 +370,15 @@ public struct CurveAnalysisService: Sendable {
             }
         }
         for source in document.productMetadata.joinedCurveGroupSources.values where source.featureID == featureID {
-            try mergeEndpointJoin(
-                first: endpointSample(for: source.firstJoinedReference, sketch: sketch, document: document),
-                second: endpointSample(for: source.secondJoinedReference, sketch: sketch, document: document),
-                constraintKind: "joinedCurveGroup",
-                requiredContinuity: curveAnalysisContinuityLevel(source.continuity),
-                into: &pendingByPair
-            )
+            for joint in source.joints {
+                try mergeEndpointJoin(
+                    first: endpointSample(for: joint.firstReference, sketch: sketch, document: document),
+                    second: endpointSample(for: joint.secondReference, sketch: sketch, document: document),
+                    constraintKind: "joinedCurveGroup",
+                    requiredContinuity: curveAnalysisContinuityLevel(joint.continuity),
+                    into: &pendingByPair
+                )
+            }
         }
 
         return pendingByPair.values

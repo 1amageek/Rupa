@@ -17,8 +17,16 @@ extension DesignDocument {
             for: adjacentTarget,
             operationName: "Join Curves adjacent"
         )
-        if case .line = targetSelection.entity,
-           case .line = adjacentSelection.entity {
+        // Two collinear lines that no joined curve holds merge into one line; every other join
+        // holds its curves together end to end.
+        if case .line(let targetLine) = targetSelection.entity,
+           case .line(let adjacentLine) = adjacentSelection.entity,
+           targetSelection.featureID == adjacentSelection.featureID,
+           !productMetadata.joinedCurveGroupSources.values.contains(where: { source in
+               source.featureID == targetSelection.featureID &&
+                   source.memberEntityIDs.contains(where: { $0 == targetSelection.entityID || $0 == adjacentSelection.entityID })
+           }),
+           try joinLinesAreCollinear(targetLine, adjacentLine, owner: "Join Curves") {
             try joinSketchLinePair(
                 target: target,
                 targetSelection: targetSelection,
@@ -29,11 +37,8 @@ extension DesignDocument {
             )
             return
         }
-        try joinSketchCurveGroup(
-            target: target,
-            targetSelection: targetSelection,
-            adjacentTarget: adjacentTarget,
-            adjacentSelection: adjacentSelection,
+        try joinSketchCurves(
+            targets: [target, adjacentTarget],
             continuity: continuity,
             objectRegistry: objectRegistry
         )
@@ -109,64 +114,6 @@ extension DesignDocument {
         if targetSelection.sketch.entities.count == 1 {
             try markSketchObjectAsSourceEdited(featureID: targetSelection.featureID)
         }
-        try commitSketchEntityEdit(
-            featureID: targetSelection.featureID,
-            feature: &feature,
-            sketch: sketch,
-            objectRegistry: objectRegistry,
-            errorOwner: "Join Curves"
-        )
-        didCommitJoin = true
-    }
-
-    private mutating func joinSketchCurveGroup(
-        target: SelectionTarget,
-        targetSelection: EditableSketchEntitySelection,
-        adjacentTarget: SelectionTarget,
-        adjacentSelection: EditableSketchEntitySelection,
-        continuity: SketchCurveJoinContinuity,
-        objectRegistry: ObjectTypeRegistry
-    ) throws {
-        let join = try sketchCurveGroupJoinPlan(
-            target: target,
-            targetSelection: targetSelection,
-            adjacentTarget: adjacentTarget,
-            adjacentSelection: adjacentSelection,
-            continuity: continuity
-        )
-        try validateSketchCurveGroupJoin(
-            join,
-            sketch: targetSelection.sketch,
-            featureID: targetSelection.featureID
-        )
-
-        var feature = targetSelection.feature
-        var sketch = targetSelection.sketch
-        let constraintsBeforeJoin = sketch.constraints
-        let dimensionsBeforeJoin = sketch.dimensions
-        _ = try applySketchCurveGroupJoinConstraints(to: &sketch, join: join)
-
-        let previousCADDocument = cadDocument
-        let previousProductMetadata = productMetadata
-        var didCommitJoin = false
-        defer {
-            if didCommitJoin == false {
-                cadDocument = previousCADDocument
-                productMetadata = previousProductMetadata
-            }
-        }
-        let joinedSource = JoinedCurveGroupSource(
-            featureID: targetSelection.featureID,
-            memberEntityIDs: join.memberEntityIDs,
-            firstJoinedReference: join.firstJoinedReference,
-            secondJoinedReference: join.secondJoinedReference,
-            continuity: join.continuity,
-            constraintsBeforeJoin: constraintsBeforeJoin,
-            dimensionsBeforeJoin: dimensionsBeforeJoin,
-            constraintsAfterJoin: sketch.constraints,
-            dimensionsAfterJoin: sketch.dimensions
-        )
-        productMetadata.joinedCurveGroupSources[joinedSource.id] = joinedSource
         try commitSketchEntityEdit(
             featureID: targetSelection.featureID,
             feature: &feature,
@@ -261,10 +208,16 @@ extension DesignDocument {
             sketch: selection.sketch
         )
 
+        // Unjoin takes away exactly what each joint added, so edits made since the join stay.
         var feature = selection.feature
         var sketch = selection.sketch
-        sketch.constraints = source.constraintsBeforeJoin
-        sketch.dimensions = source.dimensionsBeforeJoin
+        for joint in source.joints {
+            for constraint in joint.addedConstraints {
+                if let index = sketch.constraints.firstIndex(of: constraint) {
+                    sketch.constraints.remove(at: index)
+                }
+            }
+        }
 
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata

@@ -781,7 +781,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
         case "b": return context.selectedSketchTargetCount > 0 ? .beginFillet : nil
-        case "j": return context.selectedSketchTargetCount == 2 ? .joinSketchCurves : nil
+        case "j": return context.selectedSketchTargetCount >= 2 ? .joinSketchCurves : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil
         default: return nil
         }

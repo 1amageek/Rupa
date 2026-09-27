@@ -158,7 +158,7 @@ extension DesignDocument {
         return squaredDistance(firstPoint, secondPoint) <= joinCurveEndpointToleranceSquared
     }
 
-        private func joinLinesAreCollinear(
+        func joinLinesAreCollinear(
         _ first: SketchLine,
         _ second: SketchLine,
         owner: String

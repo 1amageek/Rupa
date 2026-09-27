@@ -1020,27 +1020,36 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     )
                 }
             }
-            guard joinedCurveGroupReference(
-                source.firstJoinedReference,
-                referencesAnyOf: Set(source.memberEntityIDs),
-                in: sketch
-            ),
-            joinedCurveGroupReference(
-                source.secondJoinedReference,
-                referencesAnyOf: Set(source.memberEntityIDs),
-                in: sketch
-            ) else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Joined curve group sources must store source line, arc, or spline endpoint references."
-                )
+            var heldEnds: Set<SketchReference> = []
+            for joint in source.joints {
+                guard joinedCurveGroupReference(
+                    joint.firstReference,
+                    referencesAnyOf: Set(source.memberEntityIDs),
+                    in: sketch
+                ),
+                joinedCurveGroupReference(
+                    joint.secondReference,
+                    referencesAnyOf: Set(source.memberEntityIDs),
+                    in: sketch
+                ) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Joined curve group sources must store source line, arc, or spline endpoint references."
+                    )
+                }
+                guard joinedCurveGroupReferenceEntityID(joint.firstReference) !=
+                        joinedCurveGroupReferenceEntityID(joint.secondReference) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Joined curve group endpoint references must connect distinct source entities."
+                    )
+                }
+                guard heldEnds.insert(joint.firstReference).inserted,
+                      heldEnds.insert(joint.secondReference).inserted else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "A joined curve group holds each curve end in one joint at most."
+                    )
+                }
+                try validateJoinedCurveGroupContinuity(joint, in: sketch)
             }
-            guard joinedCurveGroupReferenceEntityID(source.firstJoinedReference) !=
-                    joinedCurveGroupReferenceEntityID(source.secondJoinedReference) else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Joined curve group endpoint references must connect distinct source entities."
-                )
-            }
-            try validateJoinedCurveGroupContinuity(source, in: sketch)
         }
     }
 
@@ -1133,14 +1142,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     }
 
     private func validateJoinedCurveGroupContinuity(
-        _ source: JoinedCurveGroupSource,
+        _ joint: JoinedCurveGroupJoint,
         in sketch: Sketch
     ) throws {
-        switch source.continuity {
+        switch joint.continuity {
         case .g0:
             return
         case .g1:
-            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(source, in: sketch) else {
+            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(joint, in: sketch) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Joined curve group G1 continuity requires line-arc, spline-line, or spline-spline endpoint pairs."
                 )
@@ -1153,7 +1162,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
         case .g2:
-            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(source, in: sketch) else {
+            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(joint, in: sketch) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Joined curve group G2 continuity requires two spline endpoints."
                 )
@@ -1215,20 +1224,20 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     }
 
     private func joinedCurveGroupContinuityConstraint(
-        _ source: JoinedCurveGroupSource,
+        _ joint: JoinedCurveGroupJoint,
         in sketch: Sketch
     ) -> SketchConstraint? {
         guard let first = joinedCurveGroupContinuityEndpoint(
-            source.firstJoinedReference,
+            joint.firstReference,
             in: sketch
         ),
         let second = joinedCurveGroupContinuityEndpoint(
-            source.secondJoinedReference,
+            joint.secondReference,
             in: sketch
         ) else {
             return nil
         }
-        switch source.continuity {
+        switch joint.continuity {
         case .g0:
             return nil
         case .g1:

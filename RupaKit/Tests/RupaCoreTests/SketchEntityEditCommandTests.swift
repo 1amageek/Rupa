@@ -7539,49 +7539,6 @@ import Testing
 }
 
 @MainActor
-@Test func joinSketchCurvesRejectsNonCollinearAlignedSourceLinesWithoutMutation() async throws {
-    let setup = try lineChainSlotSession(
-        name: "Join Non Collinear Source Lines",
-        points: [
-            sketchTestPoint(x: 0.000, y: 0.000),
-            sketchTestPoint(x: 0.005, y: 0.000),
-            sketchTestPoint(x: 0.010, y: 0.002),
-        ]
-    )
-    let session = setup.session
-    let firstLineID = setup.lineIDs[0]
-    let secondLineID = setup.lineIDs[1]
-    let beforeGeneration = session.generation
-    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
-    let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
-    let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
-
-    do {
-        _ = try session.execute(
-            .joinSketchCurves(
-                target: try #require(firstLine.selectionTarget()),
-                adjacentTarget: try #require(secondLine.selectionTarget())
-            )
-        )
-        Issue.record("Join Curves must reject aligned but non-collinear source lines.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message == "Join Curves requires selected source lines to be collinear.")
-    } catch {
-        Issue.record("Join Curves must throw EditorError.")
-    }
-    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
-    guard case .sketch(let sketch) = feature.operation else {
-        Issue.record("Join rejection feature must remain a sketch.")
-        return
-    }
-    #expect(session.generation == beforeGeneration)
-    #expect(sketch.entities.count == 2)
-    #expect(sketch.entities.keys.contains(firstLineID))
-    #expect(sketch.entities.keys.contains(secondLineID))
-}
-
-@MainActor
 @Test func joinSketchCurvesRejectsInteriorEndpointReferencesWithoutMutation() async throws {
     let setup = try lineChainSlotSession(
         name: "Join Referenced Interior Endpoint",

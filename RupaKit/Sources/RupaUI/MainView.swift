@@ -6118,14 +6118,18 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .joinSketchCurves:
             let targets = selectedSketchTargets
-            guard targets.count == 2 else { return .ignored }
-            submitSource(
-                .joinSketchCurves(
-                    target: targets[0],
-                    adjacentTarget: targets[1],
-                    continuity: sketchCurveJoinContinuity
+            guard targets.count >= 2 else { return .ignored }
+            if targets.count == 2 {
+                submitSource(
+                    .joinSketchCurves(
+                        target: targets[0],
+                        adjacentTarget: targets[1],
+                        continuity: sketchCurveJoinContinuity
+                    )
                 )
-            )
+            } else {
+                submitSource(.joinSketchCurveChain(targets: targets, continuity: sketchCurveJoinContinuity))
+            }
             return .handled
         case .unjoinSketchCurve:
             guard let target = selectedSketchTargets.first else { return .ignored }

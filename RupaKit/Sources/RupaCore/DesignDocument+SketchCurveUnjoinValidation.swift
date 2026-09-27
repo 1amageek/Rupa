@@ -89,13 +89,6 @@ extension DesignDocument {
                 )
             }
         }
-        guard sketch.constraints == source.constraintsAfterJoin,
-              sketch.dimensions == source.dimensionsAfterJoin else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Unjoin Curve cannot restore a joined curve group after its constraints or dimensions changed."
-            )
-        }
         let affectedEntityIDs = Set(source.memberEntityIDs)
         for bridgeSource in productMetadata.bridgeCurveSources.values where bridgeSource.featureID == source.featureID {
             guard bridgeEndpointReferencesAnyJoinEntity(

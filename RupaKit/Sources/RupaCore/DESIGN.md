@@ -1032,6 +1032,24 @@ inspector offers only these, keeping the chosen shape when the selected curve
 takes it and otherwise its first (`effectiveExtendShape`), so a spline end no
 longer fails on the Natural default. `ExtendCurveShapeTests` cover both.
 
+`joinSketchCurves(targets:continuity:)` is Join Curves on two or more curves of one
+sketch (`joinSketchCurveChain`; two selected curves take `joinSketchCurves`, which
+merges two collinear lines no joined curve holds and otherwise takes the same
+path). Every pair of free curve ends that meet becomes a joint holding them together
+at the chosen continuity; an end a joint already holds is not free, and a selected
+endpoint handle offers only that end. The selected curves, with the joined curves
+some of them already belong to, become one `JoinedCurveGroupSource`, so a curve is
+still owned by one joined curve: its first joint keeps the stored first and second
+references with the constraint snapshots around it, every later joint is one of
+`additionalJoints` (`JoinedCurveGroupJoint`: its two ends, continuity and the
+constraints it added), and `joints` lists them all. Three or more free ends at one
+point, curves that do not meet in one piece, and curves a collinear line join
+merged are refused with the document unchanged. Unjoin Curve on any member removes
+exactly the constraints each joint added, so constraints, dimensions and geometry
+edited since the join stay. Product metadata validation checks every joint's ends
+and continuity and that a curve end is held by one joint at most, and curve
+analysis reads every joint. `JoinCurveChainTests` own these.
+
 `deleteRedundantSketchSplineJoints` is Delete Redundant Topology: from the last
 joint back, a joint whose two spans Swift-CAD's `CubicBezierChainJoints` finds to
 be the halves of one cubic becomes that cubic, so the curve keeps its shape with

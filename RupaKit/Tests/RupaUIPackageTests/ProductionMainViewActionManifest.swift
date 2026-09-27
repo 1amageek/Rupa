@@ -140,6 +140,7 @@ enum ProductionMainViewActionManifest {
         "insertSurfaceKnot",
         "insertSurfaceTrimKnot",
         "joinSketchCurves",
+        "joinSketchCurveChain",
         "forkMaterial",
         "matchSurfaceBoundaryContinuity",
         "mirrorSceneNodes",

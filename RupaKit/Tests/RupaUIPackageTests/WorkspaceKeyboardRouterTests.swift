@@ -497,6 +497,8 @@ private func keyboardContext(
     context.selectedSketchTargetCount = 2
     #expect(action("j") == .joinSketchCurves)
     #expect(action("∆", [.option]) == nil)
+    context.selectedSketchTargetCount = 3
+    #expect(action("j") == .joinSketchCurves)
     context.isPlaceSessionActive = true
     #expect(action("j") != .joinSketchCurves)
 }

@@ -2552,6 +2552,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .joinSketchCurveChain(targets, continuity):
+            var updatedDocument = document
+            try updatedDocument.joinSketchCurves(targets: targets, continuity: continuity, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .cutSketchCurves(targets, cutters, options):
             var updatedDocument = document
             try updatedDocument.cutSketchCurves(
