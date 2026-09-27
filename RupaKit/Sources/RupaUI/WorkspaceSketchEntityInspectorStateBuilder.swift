@@ -217,8 +217,16 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
             canJoin: joinState.canJoin,
             canUnjoin: joinState.canUnjoin,
             canAlignVertex: vertexAlignmentReferenceTarget(for: entity) != nil,
-            canProject: curveProjectionTargets(for: entity).isEmpty == false
+            canProject: curveProjectionTargets(for: entity).isEmpty == false,
+            extendShapes: extendShapes(for: entity)
         )
+    }
+
+    private func extendShapes(for entity: InspectorSketchEntity) -> [ExtendCurveShape] {
+        guard let feature = document.cadDocument.designGraph.nodes[entity.sourceFeatureID],
+              case .sketch(let sketch) = feature.operation,
+              let authored = sketch.entities[entity.entityID] else { return [] }
+        return ExtendCurveShape.supported(for: authored)
     }
 
     func cutterTarget(excluding target: SelectionTarget) -> SelectionTarget? {

@@ -65,7 +65,7 @@
     - [ ] SK4.4 Align on two curves, and Extend Curve to a chosen target curve or solid (Dependent Curve Extend). `depends:SK4.3` `parallel:none`
     - [ ] SK4.5 Extend Curve shapes (Natural, Linear, Soft, Reflective, Arc) as distinct extensions on every curve kind, once their definitions are confirmed. `depends:SK4.4` `parallel:none`
     - [ ] SK4.6 Align as a command (menu) choosing Align Vertex from the selection, with Tab cycling continuity and Show Curvature in its dialog. `depends:none` `parallel:none`
-    - [ ] SK4.7 Extend Curve: a shape valid for the curve kind by default and a length set by D or the cursor. `depends:none` `parallel:none`
+    - [x] SK4.7 Extend Curve offers and accepts only the shapes the curve kind takes (one Core rule), keeping a valid default; D and cursor length stay with the Extend dialog work (SK4.5). `depends:none` `parallel:none`
   - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:none` `parallel:none`
     - [x] SK5.1 Keys: B applies Fillet or Chamfer to the selected sketch curves or vertex (Fillet Vertex now reachable), J joins two selected curves, Option-J unjoins one. `depends:none` `parallel:none`
     - [ ] SK5.2 Fillet Curve live drag: a radius handle, D and C for fillet and chamfer distance while dragging. `depends:SK5.1` `parallel:none`

@@ -16,7 +16,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
     /// The G1/G2 continuity distance both aligned ends take, or `nil` to keep their control points.
     @Binding var vertexAlignmentDistanceMeters: Double?
     var sliderMetersRange: (Double) -> ClosedRange<Double>
-    var onExtend: (SelectionTarget) -> Void
+    var onExtend: (SelectionTarget, ExtendCurveShape) -> Void
     var onOffsetVertex: (InspectorSketchEntity) -> Void
     var onApplyCornerTreatment: (SelectionTarget) -> Void
     var onJoin: (InspectorSketchEntity) -> Void
@@ -174,8 +174,11 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             extendDistanceMeters = max(meters, 1.0e-9)
         }
         inspectorControlRow("Shape") {
-            Picker("", selection: $extendShape) {
-                ForEach(ExtendCurveShape.allCases, id: \.self) { shape in
+            Picker("", selection: Binding(
+                get: { state.effectiveExtendShape(extendShape) ?? extendShape },
+                set: { extendShape = $0 }
+            )) {
+                ForEach(state.extendShapes, id: \.self) { shape in
                     Text(extendCurveShapeTitle(shape)).tag(shape)
                 }
             }
@@ -185,12 +188,14 @@ struct WorkspaceSketchCurveOperationControlsView: View {
         }
         inspectorActionRow {
             Button {
-                onExtend(entity.target)
+                if let shape = state.effectiveExtendShape(extendShape) {
+                    onExtend(entity.target, shape)
+                }
             } label: {
                 Label("Extend", systemImage: "arrow.up.right.line")
                     .contentShape(Rectangle())
             }
-            .disabled(state.canExtend == false)
+            .disabled(state.canExtend == false || state.extendShapes.isEmpty)
             .accessibilityIdentifier("InspectorCurve.extend")
         }
     }

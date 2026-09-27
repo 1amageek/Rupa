@@ -247,3 +247,16 @@ private func wholeSketchEntityTarget(
         sceneNodeID: sceneNodeID, featureID: featureID, entityID: SketchEntityID(), kind: "point"
     )) == nil)
 }
+
+@Test func extendKeepsTheChosenShapeWhenTheCurveTakesItAndOtherwiseItsFirst() {
+    var state = WorkspaceSketchCurveOperationControlsState(
+        canExtend: true, canOffsetVertex: false, canApplyCornerTreatment: false,
+        canJoin: false, canUnjoin: false, canAlignVertex: false, canProject: false,
+        extendShapes: [.linear]
+    )
+    #expect(state.effectiveExtendShape(.natural) == .linear)
+    state.extendShapes = [.natural, .soft, .reflective, .arc]
+    #expect(state.effectiveExtendShape(.arc) == .arc)
+    state.extendShapes = []
+    #expect(state.effectiveExtendShape(.natural) == nil)
+}

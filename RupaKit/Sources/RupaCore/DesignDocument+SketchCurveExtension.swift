@@ -194,31 +194,13 @@ extension DesignDocument {
         }
 
         switch (selection.entity, endpoint) {
-        case (.line, .line):
-            guard shape != .arc else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch curve extend Arc shape for line curves requires arc construction parameters."
-                )
-            }
-        case (.arc, .arc):
-            guard shape != .linear else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch curve extend Linear shape for arcs would create a new tangent line segment and is not supported yet."
-                )
-            }
+        case (.line, .line), (.arc, .arc):
+            break
         case (.spline(let spline), .spline):
             guard spline.isClosed == false else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "Sketch curve extend requires an open spline curve."
-                )
-            }
-            guard shape == .linear else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch curve extend supports spline extension with Linear shape only until higher-continuity spline extension is implemented."
                 )
             }
         case (.point, _),
@@ -229,6 +211,14 @@ extension DesignDocument {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sketch curve extend requires an endpoint target that belongs to the selected source curve type."
+            )
+        }
+
+        let supported = ExtendCurveShape.supported(for: selection.entity)
+        guard supported.contains(shape) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Extend Curve builds \(supported.map(\.rawValue).joined(separator: ", ")) on this curve, not \(shape.rawValue)."
             )
         }
 

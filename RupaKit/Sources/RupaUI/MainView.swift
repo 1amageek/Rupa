@@ -11584,13 +11584,14 @@ private struct ProjectMainViewContent: View {
     }
 
     private func extendSelectedSketchCurve(
-        _ target: SelectionTarget
+        _ target: SelectionTarget,
+        shape: ExtendCurveShape
     ) {
         submitSource(
             .extendSketchCurve(
                 target: target,
                 distance: .length(max(sketchExtendDistanceMeters, 1.0e-9), .meter),
-                shape: sketchExtendShape
+                shape: shape
             )
         )
     }
