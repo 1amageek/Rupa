@@ -175,11 +175,41 @@ extension DesignDocument {
                     code: .commandInvalid,
                     message: "Curve offset source point entities do not identify the adjacent curve sides required by Offset Vertex. Select a source line or arc endpoint with a vertex handle."
                 )
-            case .spline:
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Offset Planar Curve currently supports source line, circle, and arc sketch targets; spline offsets require joined curve offset support."
+            case .spline(let spline):
+                // Swift-CAD fits the offset of the spline's cubic chain within the modeling distance.
+                let points = try spline.controlPoints.map { point -> Point2D in
+                    let resolved = try resolvedSketchPoint(point, owner: "Curve offset spline control point")
+                    return Point2D(x: resolved.x, y: resolved.y)
+                }
+                let offsetter = CubicBezierChainOffset(tolerance: .standard)
+                func offsetSpline(_ signedDistance: Double) throws -> SketchSpline {
+                    let chain: [Point2D]
+                    do {
+                        chain = try offsetter.offset(of: points, distance: signedDistance)
+                    } catch let error as KernelError {
+                        throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)")
+                    }
+                    return SketchSpline(
+                        controlPoints: chain.map { sketchPoint(x: $0.x, y: $0.y) },
+                        isClosed: spline.isClosed
+                    )
+                }
+                if options.isSymmetric {
+                    let firstID = try createSplineSketch(
+                        name: "\(name) Positive", plane: selection.sketch.plane,
+                        spline: try offsetSpline(distanceMeters), objectRegistry: objectRegistry
+                    )
+                    let secondID = try createSplineSketch(
+                        name: "\(name) Negative", plane: selection.sketch.plane,
+                        spline: try offsetSpline(-distanceMeters), objectRegistry: objectRegistry
+                    )
+                    return [firstID, secondID]
+                }
+                let featureID = try createSplineSketch(
+                    name: name, plane: selection.sketch.plane,
+                    spline: try offsetSpline(distanceMeters), objectRegistry: objectRegistry
                 )
+                return [featureID]
             }
         case .region:
             let featureIDs = try offsetProfileRegion(

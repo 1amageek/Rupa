@@ -994,6 +994,13 @@ could otherwise be taken as the nearest. The extension is `extendSketchCurve`'s,
 so its constraint and Bridge Curve refusals apply and a failed end leaves the
 document unchanged; no reachable crossing is a command-invalid error.
 
+`offsetCurve` on a sketch spline (Offset Planar Curve) makes a new curve sketch of
+the spline Swift-CAD's `CubicBezierChainOffset` fits within the modeling distance
+of the exact offset, on both sides when symmetric. A fold (the distance reaching
+the radius of curvature on the inside) or a corner joint, which needs gap fill
+(SK6.2), refuses the command with the kernel's message and the document
+unchanged.
+
 `applySketchCornerTreatments(vertices:distance:treatment:)` fillets or chamfers
 several selected curve ends: each corner once, even when both of its ends are
 selected, in selection order, since a treatment shortens its two curves only at

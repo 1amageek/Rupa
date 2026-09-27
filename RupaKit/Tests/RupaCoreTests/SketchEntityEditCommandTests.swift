@@ -2822,11 +2822,11 @@ import Testing
 }
 
 @MainActor
-@Test func offsetCurveCommandRejectsUnsupportedSplineBeforeMutation() async throws {
+@Test func offsetCurveCommandOffsetsASplineThroughTheKernelAndRefusesAFold() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createSplineSketch(
-            name: "Unsupported Offset Spline",
+            name: "Offset Spline",
             plane: .xy,
             spline: SketchSpline(controlPoints: [
                 SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
@@ -2840,25 +2840,27 @@ import Testing
     let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
     let target = try #require(sourceSpline.selectionTarget())
 
-    do {
-        _ = try session.execute(
-            .offsetCurve(
-                target: target,
-                distance: .length(1.0, .millimeter),
-                options: OffsetCurveOptions(),
-                vertexHandle: nil
-            )
-        )
-        Issue.record("Spline offset must fail until joined curve offset support exists.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("source line, circle, and arc"))
+    // Far past the curve's radius of curvature on its inside, the offset folds back.
+    let generation = session.generation
+    #expect(throws: EditorError.self) {
+        _ = try session.execute(.offsetCurve(
+            target: target, distance: .length(-50.0, .millimeter), options: OffsetCurveOptions(), vertexHandle: nil
+        ))
     }
+    #expect(session.generation == generation)
 
+    let result = try session.execute(
+        .offsetCurve(target: target, distance: .length(1.0, .millimeter), options: OffsetCurveOptions(), vertexHandle: nil)
+    )
+    #expect(result.didMutate)
     let after = try SketchEntitySnapshotService().snapshot(document: session.document)
-    #expect(session.generation == DocumentGeneration(1))
-    #expect(after.counts.sketchCount == before.counts.sketchCount)
-    #expect(after.counts.entityCount == before.counts.entityCount)
+    let splines = after.entries.filter { $0.entityKind == "spline" }
+    #expect(splines.count == 2)
+    let offset = try #require(splines.first { $0.sourceFeatureID != sourceSpline.sourceFeatureID })
+    // The offset starts one millimeter to the left of the start tangent (2, 3).
+    let start = try #require(offset.start)
+    let normal = (x: -3.0 / 13.0.squareRoot(), y: 2.0 / 13.0.squareRoot())
+    #expect(abs(start.x - normal.x * 0.001) < 1e-9 && abs(start.y - normal.y * 0.001) < 1e-9)
 }
 
 @MainActor
