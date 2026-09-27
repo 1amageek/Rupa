@@ -284,9 +284,10 @@ public struct TopologySnapshotService: Sendable {
         }
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area centroid of planar and
-    // cylindrical faces only; on any other support the face center is this average of boundary
-    // vertices, not the centroid. Production path: topology snapshot face centers used by Face
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area centroid of planar,
+    // cylindrical, conical, spherical and toroidal faces; on a B-spline or procedural support, or a
+    // boundary it does not cover, the face center is this average of boundary vertices, not the
+    // centroid. Production path: topology snapshot face centers used by Face
     // Center snapping, construction-plane and generated-face targets. Completion requires
     // Swift-CAD to measure every support and deleting this Rupa computation.
     private func boundaryVertexMean(
@@ -378,8 +379,9 @@ public struct TopologySnapshotService: Sendable {
         return nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area of planar and cylindrical
-    // faces only, so the area of a face on any other support is nil. Production path: topology
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area of planar, cylindrical,
+    // conical, spherical and toroidal faces, so the area of a face on a B-spline or procedural
+    // support, or with a boundary it does not cover, is nil. Production path: topology
     // snapshot metrics consumed by drawing face-area annotations and inspectors. Completion
     // requires Swift-CAD to measure every support.
     private func faceAreaSquareMeters(

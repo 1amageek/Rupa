@@ -1002,8 +1002,9 @@ image, a planar face area scales by the placed face plane's area ratio, and a
 curved face area by the square of a placement that keeps angles; a placement
 failure is a warning diagnostic and no value. Face areas and face centers are
 Swift-CAD's exact area and area centroid (`BRepModel.faceAreaMeasurement`) on
-planar and cylindrical faces. On other supports the area is absent and the
-center is the boundary-vertex average, marked
+planar, cylindrical, conical, spherical and toroidal faces. On B-spline and
+procedural supports, and boundaries Swift-CAD does not cover, the area is
+absent and the center is the boundary-vertex average, marked
 `FIXME(INCOMPLETE_IMPLEMENTATION)` until Swift-CAD measures every support.
 
 ### Placed measurement aggregation

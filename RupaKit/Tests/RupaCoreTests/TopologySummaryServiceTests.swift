@@ -137,6 +137,24 @@ private struct UnexpectedEdgeLengthEvaluator: BRepEdgeLengthEvaluating {
     #expect(metricValuesApproximatelyEqual(edgeLengths, [2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]))
 }
 
+/// A sphere's faces carry Swift-CAD's exact area and area centroid rather than the average of
+/// their corners: each octant measures πR²/2 and centers R/2 along each axis it spans.
+@Test func topologySnapshotReportsExactSphereFaceAreasAndCenters() throws {
+    var document = DesignDocument.empty()
+    let radius = 0.75
+    _ = try document.createAnalyticSphere(name: "Sphere", center: .origin, radius: radius)
+    let faces = try TopologySnapshotService().snapshot(document: document).entries.filter { $0.kind == .face }
+    #expect(faces.count == 8)
+    for face in faces {
+        let area = try #require(face.areaSquareMeters)
+        #expect(abs(area - .pi * radius * radius / 2) < 1e-12)
+        let center = try #require(face.center)
+        for component in [center.x, center.y, center.z] {
+            #expect(abs(abs(component) - radius / 2) < 1e-12)
+        }
+    }
+}
+
 @MainActor
 @Test func topologySummaryServiceReportsBSplineEdgeLengthsFromSmoothLoft() throws {
     let document = try topologySummarySmoothLoftDocument()

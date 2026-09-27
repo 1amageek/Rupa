@@ -27,7 +27,8 @@
   - [x] FB22 Snap candidates on sketches presented by a moved scene node, placed through the occurrence placement. `depends:FB16` `parallel:none`
   - [ ] FB23 Exact face centroid and face area from Swift-CAD for face-center snapping and face-area metrics, replacing the Rupa approximations. `depends:FB16` `parallel:none`
     - [x] FB23.1 Planar and cylindrical faces take their area and centroid from swift-CAD's closed-form face measurement (d5a1cfc). `depends:FB16` `parallel:none`
-    - [ ] FB23.2 Face measurement on the remaining supports (cone, sphere, torus, B-spline) and with rational or certified pcurves. `depends:FB23.1` `parallel:none`
+    - [x] FB23.2 Conical, spherical and toroidal faces (and analytic planes and cylinders) take their area and centroid from swift-CAD: cones and tori with straight pcurves, spheres bounded by great circles and circles of latitude (swift-CAD b6b66f5). `depends:FB23.1` `parallel:none`
+    - [ ] FB23.3 Face measurement on B-spline and procedural supports, and on curved faces with harmonic, B-spline or certified pcurves, through certified area-element bounds. `depends:FB23.2` `parallel:none`
   - [x] FB24 G on faces and vertices of one body runs Move Faces and Move Vertices through the kernel's face and vertex moves, like Move Edges. `depends:FB15.3` `parallel:none`
   - [x] FB25 R and S on edges, faces and vertices of one body rotate and scale them together through the kernel's topology transform, and several targets move each shared vertex once (swift-CAD 7fe60b6). `depends:FB24` `parallel:none`
   - [x] FB26 G, R and S on edges and corners of an untrimmed B-spline sheet move its boundary control rows and corner points exactly. `depends:FB25` `parallel:none`
