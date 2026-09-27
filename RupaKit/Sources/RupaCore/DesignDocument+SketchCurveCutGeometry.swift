@@ -87,15 +87,7 @@ extension DesignDocument {
             }
             let cutter = try cutCurveGeometry(entity, role: .cutter)
             for intersection in try cutCurveIntersections(target: target, cutter: cutter, extendsCutter: false) {
-                switch target {
-                case .line, .circle:
-                    crossings.append(intersection.firstParameter)
-                case let .arc(_, _, startAngle, endAngle):
-                    crossings.append(normalizedAngleDelta(from: startAngle, to: intersection.firstParameter) /
-                        positiveArcSpan(startAngle: startAngle, endAngle: endAngle))
-                case let .cubicBezierChain(controlPoints):
-                    crossings.append(intersection.firstParameter / Double((controlPoints.count - 1) / 3))
-                }
+                crossings.append(splitParameter(ofNatural: intersection.firstParameter, on: target))
             }
         }
         if case .circle = target {
@@ -164,18 +156,35 @@ extension DesignDocument {
     ) throws -> [Double] {
         let intersections = try cutCurveIntersections(target: target, cutter: cutter, extendsCutter: extendsCutter)
         return uniqueInteriorCutFractions(intersections.map { intersection in
-            switch target {
-            case .line:
-                return intersection.firstParameter
-            case let .arc(_, _, startAngle, endAngle):
-                return normalizedAngleDelta(from: startAngle, to: intersection.firstParameter) /
-                    positiveArcSpan(startAngle: startAngle, endAngle: endAngle)
-            case let .cubicBezierChain(controlPoints):
-                return intersection.firstParameter / Double((controlPoints.count - 1) / 3)
-            case .circle:
-                return intersection.firstParameter
-            }
+            splitParameter(ofNatural: intersection.firstParameter, on: target)
         })
+    }
+
+    /// The parameter `splitSketchCurve` takes (line fraction, arc sweep fraction, chain parameter
+    /// over span count) for a natural parameter Swift-CAD reports on `target`; a circle keeps its
+    /// polar angle.
+    func splitParameter(ofNatural parameter: Double, on target: SketchCurveGeometry2D) -> Double {
+        switch target {
+        case .line, .circle:
+            return parameter
+        case let .arc(_, _, startAngle, endAngle):
+            return normalizedAngleDelta(from: startAngle, to: parameter) /
+                positiveArcSpan(startAngle: startAngle, endAngle: endAngle)
+        case let .cubicBezierChain(controlPoints):
+            return parameter / Double((controlPoints.count - 1) / 3)
+        }
+    }
+
+    /// The split parameter of the point of `entity` nearest `point`, from Swift-CAD's
+    /// `SketchCurveProjector`: a line, arc or open spline's fraction, a circle's polar angle.
+    func sketchCurveSplitParameter(of entity: SketchEntity, nearestTo point: Point2D) throws -> Double {
+        let geometry = try cutCurveGeometry(entity, role: .target)
+        do {
+            let projection = try SketchCurveProjector(tolerance: .standard).nearest(on: geometry, to: point)
+            return splitParameter(ofNatural: projection.parameter, on: geometry)
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "The curve point could not be found: \(error.message)")
+        }
     }
 
     private func cutCurveIntersections(

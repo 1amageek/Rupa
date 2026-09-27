@@ -45,6 +45,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.subdivide?()
             }
             .disabled(editCommands?.subdivide == nil)
+            Button("Split Segment") {
+                editCommands?.splitSegment?()
+            }
+            .disabled(editCommands?.splitSegment == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)

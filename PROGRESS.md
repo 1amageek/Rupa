@@ -43,7 +43,7 @@
     - [ ] SK1.4 Bridge keys while placing: Tab cycles continuity, D edits G1 tension, Q toggles trim, X/Y/Z constrain. `depends:SK1.3` `parallel:none`
   - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:none` `parallel:none`
     - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`
-    - [ ] SK2.2 Split Segment at a clicked point on the curve. `depends:SK2.1` `parallel:none`
+    - [x] SK2.2 Split Segment (Edit menu): each click splits the sketch curve at swift-CAD's projection of the click (SketchCurveProjector, swift-CAD b9a290f). `depends:SK2.1` `parallel:none`
     - [ ] SK2.3 Cut Curve: Extend and Screen space options in the command dialog, and a face as the cutter. `depends:SK2.2` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`

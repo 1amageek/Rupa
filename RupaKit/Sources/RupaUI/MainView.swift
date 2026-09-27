@@ -183,8 +183,9 @@ private struct ProjectMainViewContent: View {
     @State private var surfaceTrimDomainVUpperBound: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
-    /// Trim (T) is running: each click on a sketch curve removes the segment under it.
-    @State private var isTrimCommandActive = false
+    /// Trim (T) or Split Segment is running: each click on a sketch curve removes the segment under
+    /// it, or splits the curve there.
+    @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var sketchSplitFraction: Double
     @State private var sketchRebuildControlPointCount: Int
     @State private var sketchRebuildToleranceMeters: Double
@@ -5404,8 +5405,8 @@ private struct ProjectMainViewContent: View {
             createViewAlignedConstructionPlane(from: target, request: request)
             return
         }
-        if isTrimCommandActive, selectedTool == .select {
-            trimSegment(at: target)
+        if let command = curvePickCommand, selectedTool == .select {
+            applyCurvePick(command, at: target)
             return
         }
 
@@ -5645,7 +5646,7 @@ private struct ProjectMainViewContent: View {
             isMirrorSessionActive: mirrorSession != nil,
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
-            isTrimCommandActive: isTrimCommandActive,
+            isCurvePickCommandActive: curvePickCommand != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
         )
@@ -5912,12 +5913,11 @@ private struct ProjectMainViewContent: View {
             activateSlideCommand()
             return .handled
         case .activateTrimCommand:
-            isTrimCommandActive = true
-            reportToolStatus("Trim: click a curve segment to remove it; Escape ends.")
+            beginCurvePickCommand(.trim)
             return .handled
-        case .endTrimCommand:
-            isTrimCommandActive = false
-            reportToolStatus("Trim ended.")
+        case .endCurvePickCommand:
+            if let command = curvePickCommand { reportToolStatus("\(command.title) ended.") }
+            curvePickCommand = nil
             return .handled
         case .slideCurveControlVertices(let direction):
             guard let input = selectedSplineControlPointSlideInput() else {
@@ -7863,19 +7863,30 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Trim's click: the sketch curve under the pointer loses the segment the click lands in.
-    private func trimSegment(at target: ViewportCanvasTarget) {
+    private func beginCurvePickCommand(_ command: WorkspaceCurvePickCommand) {
+        curvePickCommand = command
+        reportToolStatus(command.prompt)
+    }
+
+    /// A Trim or Split Segment click: the sketch curve under the pointer, in sketch-entity scope
+    /// whatever the selection scope, with the click carried into its sketch's plane.
+    private func applyCurvePick(_ command: WorkspaceCurvePickCommand, at target: ViewportCanvasTarget) {
         var resolver = selectionTargetResolver
         resolver.selectionScope = .sketchEntity
         guard let hit = target.hit, let curve = resolver.selectionTarget(for: hit),
               case .sketchEntity = curve.component,
               let worldPoint = target.modelWorldPoint else {
-            reportToolStatus("Trim: click on a sketch curve.", severity: .warning)
+            reportToolStatus("\(command.title): click on a sketch curve.", severity: .warning)
             return
         }
         do {
             let point = try snapshot.document.document.sketchPlanePoint(ofWorld: worldPoint, on: curve)
-            submitSource(.trimSketchCurve(target: curve, point: point))
+            switch command {
+            case .trim:
+                submitSource(.trimSketchCurve(target: curve, point: point))
+            case .splitSegment:
+                submitSource(.splitSketchCurveAtPoint(target: curve, point: point))
+            }
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
         }
@@ -8075,8 +8086,15 @@ private struct ProjectMainViewContent: View {
             radialArray: arrayAction(.radial),
             curveArray: arrayAction(.curve),
             completeEdge: completeEdgeAction,
-            subdivide: subdivideAction
+            subdivide: subdivideAction,
+            splitSegment: splitSegmentAction
         )
+    }
+
+    /// Split Segment from the Edit menu, offered with the select tool.
+    private var splitSegmentAction: (@MainActor () -> Void)? {
+        guard selectedTool == .select else { return nil }
+        return { beginCurvePickCommand(.splitSegment) }
     }
 
     private var curveRefinementPlanner: WorkspaceCurveRefinementPlanner {

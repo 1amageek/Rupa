@@ -154,11 +154,13 @@ Correctness-critical migrations back to that boundary:
 | Edge points | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `EdgeQueryEvaluator` midpoint, frame and closest point on the exact edge curve | Snap edge-middle candidates, edge-parameter measurement anchors and drawing edge lengths use the kernel query; delete chord midpoints and string curve-kind re-evaluation | Arc and closed-circle edges snap on the curve; anchors match kernel frames |
 | Solid volume | [CADTopology](swift-CAD/Sources/CADTopology/DESIGN.md): exact B-rep volume of the evaluated body | `MeasurementService` measures every solid from its evaluated body; delete the area x height prism paths | Extrude and straight-sweep volumes report `exactBRep` and match kernel volume |
 | Sketch curve intersection | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): public sketch curve intersection returning each entity's natural parameter from the certified 2D intersector | Sketch Cut/Split consume the kernel intersections; delete Rupa closed-form and sampled intersection code | Line/arc/circle/spline pairs cut at certified points; tangency and no-intersection are typed |
+| Sketch curve nearest point | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `SketchCurveProjector` reports the nearest point of a sketch line, circle, arc or cubic chain in the intersector's natural parameters | Trim and Split Segment choose and place their point through the kernel projection; Rupa keeps no curve projection of its own | Line, circle, arc-end and chain-foot projections match their closed forms and the foot's normal condition |
 | Face points and orientation | [CADKernel](swift-CAD/Sources/CADKernel/DESIGN.md): `SurfaceQueryEvaluator.outwardFrame` returns the nearest face point and the outward normal, the kernel owning face orientation | Picks name the face they hit and resolve through `PlacedSurfacePointResolver`; delete Rupa's nearest-face search and its reading of face orientation (placement and topology normals) | Picks off a displayed face resolve to the exact point and outward normal; every box face points out of the body |
 
-Face area and face-center points still have no exact kernel query; Rupa's
-planar-only face area and vertex-average face center remain marked incomplete
-until Swift-CAD publishes exact face measurement.
+Face area and face centers come from Swift-CAD's exact face measurement on
+planar, cylindrical, conical, spherical and toroidal faces; on B-spline and
+procedural faces the area is absent and the center is Rupa's vertex average,
+marked incomplete until Swift-CAD measures those supports.
 
 ## Related Designs
 

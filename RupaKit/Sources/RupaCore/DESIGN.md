@@ -925,14 +925,21 @@ circle, arc and open spline of the same sketch, and, on a spline, the joints
 between its cubic spans. The crossings come from Swift-CAD's
 `SketchCurveIntersector` exactly as Cut Curve's do (authored reach, never an
 extension); a crossing the kernel cannot certify refuses the command. The point
-only chooses the segment: its parameter is the nearest of Swift-CAD's sketch
-curve samples, never a cut position. An open curve is split at the bounds with
+only chooses the segment: its parameter is Swift-CAD's `SketchCurveProjector`
+foot on the curve, never a cut position. An open curve is split at the bounds with
 `splitSketchCurve` and the bounded piece removed, or removed whole when no bound
 lies inside it; a circle becomes the arc from the next crossing round to the
 previous one, and needs two crossings to keep anything, so with fewer it is
 removed. Split and removal refusals (constraints, Bridge Curve sources) apply,
 and any refusal leaves the document unchanged. `SketchCurveTrimTests` own the
 line, arc, circle, spline-joint and refusal cases.
+
+`splitSketchCurve(target:at:)` is Split Segment: it inserts a vertex into a
+sketch line, arc or open spline at Swift-CAD's `SketchCurveProjector` foot of a
+point of the sketch plane, through `splitSketchCurve(target:fraction:)`, so the
+split's constraint, dimension and Bridge Curve rules apply. A circle has no
+segment to divide and is refused, as is a point at either end.
+`SketchCurveTrimTests` also own the split cases.
 
 ### Complete Edge and Subdivide
 

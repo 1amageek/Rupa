@@ -4,7 +4,7 @@ import Testing
 @testable import RupaCore
 
 /// Trim removes the segment a point lands in, bounded by the curve's ends, its crossings with the
-/// sketch's other curves and a spline's span joints.
+/// sketch's other curves and a spline's span joints; Split Segment splits a curve at a point's foot.
 @MainActor
 @Suite struct SketchCurveTrimTests {
     private func mm(_ value: Double) -> CADExpression { .length(value, .millimeter) }
@@ -134,6 +134,53 @@ import Testing
         let lastX = try session.document.resolvedLengthValue(kept.controlPoints[3].x, owner: "test")
         #expect(abs(lastX - 0.003) < 1e-12)
         #expect(try sketch(session, featureID).entities.count == 2)
+    }
+
+    @Test func splitSegmentInsertsAVertexAtTheClickedLinePoint() throws {
+        let base = SketchEntityID()
+        let (session, featureID) = try session([(base, line(0, 0, 10, 0))])
+        _ = try session.execute(.splitSketchCurveAtPoint(
+            target: try target(session, featureID, base), point: Point2D(x: 0.003, y: 0.001)
+        ))
+        let spans = try lineSpans(session, try sketch(session, featureID), excluding: [])
+        #expect(spans == [[0, 3], [3, 10]])
+    }
+
+    @Test func splitSegmentOnASplineSplitsAtTheProjectedFoot() throws {
+        let spline = SketchEntityID()
+        let controls = [(0.0, 0.0), (1, 2), (2, 2), (3, 0)].map { point($0.0, $0.1) }
+        let (session, featureID) = try session([(spline, .spline(SketchSpline(controlPoints: controls)))])
+        // Above the symmetric span's middle, whose foot is B(1/2) = (1.5, 1.5) mm.
+        _ = try session.execute(.splitSketchCurveAtPoint(
+            target: try target(session, featureID, spline), point: Point2D(x: 0.0015, y: 0.005)
+        ))
+        guard case .spline(let first) = try sketch(session, featureID).entities[spline] else {
+            Issue.record("The split spline must remain a spline.")
+            return
+        }
+        let end = try #require(first.controlPoints.last)
+        #expect(abs(try session.document.resolvedLengthValue(end.x, owner: "test") - 0.0015) < 1e-12)
+        #expect(abs(try session.document.resolvedLengthValue(end.y, owner: "test") - 0.0015) < 1e-12)
+        #expect(try sketch(session, featureID).entities.count == 2)
+    }
+
+    @Test func splitSegmentRefusesACircleAndAnEnd() throws {
+        let (circle, base) = (SketchEntityID(), SketchEntityID())
+        let (session, featureID) = try session([
+            (circle, .circle(SketchCircle(center: point(0, 0), radius: mm(5)))), (base, line(20, 0, 30, 0)),
+        ])
+        let before = session.document.cadDocument.designGraph
+        #expect(throws: EditorError.self) {
+            _ = try session.execute(.splitSketchCurveAtPoint(
+                target: try target(session, featureID, circle), point: Point2D(x: 0.005, y: 0)
+            ))
+        }
+        #expect(throws: EditorError.self) {
+            _ = try session.execute(.splitSketchCurveAtPoint(
+                target: try target(session, featureID, base), point: Point2D(x: 0.019, y: 0)
+            ))
+        }
+        #expect(session.document.cadDocument.designGraph == before)
     }
 
     @Test func aPointTargetIsRefusedAndTheDocumentIsUnchanged() throws {

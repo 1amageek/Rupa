@@ -191,7 +191,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateSlideCommand
     /// T: Trim removes each clicked curve segment until Escape.
     case activateTrimCommand
-    case endTrimCommand
+    /// Escape ends Trim or Split Segment.
+    case endCurvePickCommand
     case slideCurveControlVertices(SplineControlPointSlideDirection)
     case slideSurfaceControlVertices(PolySplineSurfaceVertexSlideDirection)
     case adjustPolygonSideCount(Int)
@@ -219,7 +220,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isMirrorSessionActive: Bool = false
     var isArrayCreationSessionActive: Bool = false
     var isSectionAnalysisSessionActive: Bool = false
-    var isTrimCommandActive: Bool = false
+    /// Whether Trim or Split Segment is taking curve clicks.
+    var isCurvePickCommandActive: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
     /// Whether the selection holds edges of one body that Move can move.
@@ -633,14 +635,14 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
     }
 
-    /// T starts Trim with the select tool; Escape ends it.
+    /// T starts Trim with the select tool; Escape ends Trim or Split Segment.
     private func trimAction(
         for input: WorkspaceKeyboardInput,
         context: WorkspaceKeyboardContext
     ) -> WorkspaceKeyboardAction? {
         guard input.phases.contains(.down), !context.ownsTextEditingKeys else { return nil }
-        if context.isTrimCommandActive {
-            return input.isEscape ? .endTrimCommand : nil
+        if context.isCurvePickCommandActive {
+            return input.isEscape ? .endCurvePickCommand : nil
         }
         guard context.isSelectToolActive, input.modifiers.isEmpty,
               input.characters.lowercased() == "t" else { return nil }

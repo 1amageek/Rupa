@@ -346,6 +346,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// plane coordinates, bounded by its ends, its crossings with the sketch's other curves and a
     /// spline's span joints.
     case trimSketchCurve(target: SelectionTarget, point: Point2D)
+    /// Split Segment: inserts a vertex into the curve at its point nearest `point`, in its sketch's
+    /// plane coordinates.
+    case splitSketchCurveAtPoint(target: SelectionTarget, point: Point2D)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case createExtrusion(name: String, source: ExtrudeFeature)
     case setExtrusion(featureID: FeatureID, source: ExtrudeFeature)
@@ -784,6 +787,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "trimSketchCurveSegment"
         case .trimSketchCurve:
             "trimSketchCurve"
+        case .splitSketchCurveAtPoint:
+            "splitSketchCurveAtPoint"
         case .cutSketchCurve:
             "cutSketchCurve"
         case .createExtrusion:
@@ -1000,6 +1005,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .splitSketchCurve,
              .trimSketchCurveSegment,
              .trimSketchCurve,
+             .splitSketchCurveAtPoint,
              .cutSketchCurve,
              .createExtrusion,
              .setExtrusion,

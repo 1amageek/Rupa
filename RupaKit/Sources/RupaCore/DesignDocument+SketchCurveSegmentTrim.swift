@@ -48,7 +48,7 @@ extension DesignDocument {
             bounds += (1..<max(spanCount, 1)).map { Double($0) / Double(spanCount) }
         }
         bounds = uniqueInteriorCutFractions(bounds)
-        let picked = try trimPickedParameter(of: selection.entity, near: point)
+        let picked = try sketchCurveSplitParameter(of: selection.entity, nearestTo: point)
         let lower = bounds.last { $0 < picked } ?? 0
         let upper = bounds.first { $0 > picked } ?? 1
         let cuts = [lower, upper].filter { $0 > 0 && $0 < 1 }
@@ -93,11 +93,7 @@ extension DesignDocument {
             try removeSketchCurve(selection, objectRegistry: objectRegistry)
             return
         }
-        let center = Point2D(
-            x: try resolvedLengthValue(circle.center.x, owner: "Trim circle center x"),
-            y: try resolvedLengthValue(circle.center.y, owner: "Trim circle center y")
-        )
-        let picked = atan2(point.y - center.y, point.x - center.x)
+        let picked = try sketchCurveSplitParameter(of: selection.entity, nearestTo: point)
         let offsets = angles.map { normalizedAngleDelta(from: picked, to: $0) }
         guard let nextIndex = offsets.indices.min(by: { offsets[$0] < offsets[$1] }),
               let previousIndex = offsets.indices.max(by: { offsets[$0] < offsets[$1] }) else {
@@ -124,46 +120,5 @@ extension DesignDocument {
             objectRegistry: objectRegistry,
             errorOwner: "Trim"
         )
-    }
-
-    /// The parameter of the curve sample nearest `point`: fraction for a line or arc, the chain
-    /// parameter over span count for a spline. It chooses a segment and never a cut position.
-    private func trimPickedParameter(of entity: SketchEntity, near point: Point2D) throws -> Double {
-        let sampler = SketchCurveSampler(samplesPerSegment: 256)
-        func resolved(_ source: SketchPoint, _ owner: String) throws -> Point2D {
-            Point2D(
-                x: try resolvedLengthValue(source.x, owner: "\(owner) x"),
-                y: try resolvedLengthValue(source.y, owner: "\(owner) y")
-            )
-        }
-        let samples: [CurveEvaluationSample]
-        switch entity {
-        case .line(let line):
-            let start = try resolved(line.start, "Trim line start")
-            let end = try resolved(line.end, "Trim line end")
-            let dx = end.x - start.x, dy = end.y - start.y
-            let lengthSquared = dx * dx + dy * dy
-            guard lengthSquared > 0 else {
-                throw EditorError(code: .commandInvalid, message: "Trim found a line with no length.")
-            }
-            return min(max(((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared, 0), 1)
-        case .arc(let arc):
-            samples = sampler.arcSamples(
-                center: try resolved(arc.center, "Trim arc center"),
-                radius: try resolvedPositiveLengthValue(arc.radius, owner: "Trim arc radius"),
-                startAngle: try resolvedAngleValue(arc.startAngle, owner: "Trim arc start angle"),
-                endAngle: try resolvedAngleValue(arc.endAngle, owner: "Trim arc end angle")
-            )
-        case .spline(let spline):
-            samples = sampler.splineSamples(for: try spline.controlPoints.map { try resolved($0, "Trim spline") })
-        case .circle, .point:
-            throw EditorError(code: .commandInvalid, message: "Trim takes a line, arc, circle or open spline.")
-        }
-        guard let nearest = samples.min(by: {
-            hypot($0.point.x - point.x, $0.point.y - point.y) < hypot($1.point.x - point.x, $1.point.y - point.y)
-        }) else {
-            throw EditorError(code: .commandInvalid, message: "Trim could not sample the curve.")
-        }
-        return nearest.parameter
     }
 }

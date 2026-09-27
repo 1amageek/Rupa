@@ -215,6 +215,7 @@ enum ProductionMainViewActionManifest {
         "slideSketchSplineControlPoints",
         "slideSurfaceControlPoints",
         "splitSketchCurve",
+        "splitSketchCurveAtPoint",
         "splitSurfaceSpan",
         "transformSceneNodes",
         "trimSketchCurve",

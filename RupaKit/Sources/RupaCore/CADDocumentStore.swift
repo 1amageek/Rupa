@@ -2480,6 +2480,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .splitSketchCurveAtPoint:
+            func run() throws {
+                guard case .splitSketchCurveAtPoint(let target, let point) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected splitSketchCurveAtPoint.")
+                }
+                var updatedDocument = document
+                try updatedDocument.splitSketchCurve(target: target, at: point, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .trimSketchCurve:
             func run() throws {
                 guard case .trimSketchCurve(let target, let point) = command else {

@@ -27,6 +27,8 @@ public struct WorkspaceEditCommands {
     public var completeEdge: (@MainActor () -> Void)?
     /// Doubles the selected splines' control points or raises the selected surfaces' degree.
     public var subdivide: (@MainActor () -> Void)?
+    /// Starts Split Segment: each clicked sketch curve splits where it is clicked.
+    public var splitSegment: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -38,7 +40,8 @@ public struct WorkspaceEditCommands {
         radialArray: (@MainActor () -> Void)? = nil,
         curveArray: (@MainActor () -> Void)? = nil,
         completeEdge: (@MainActor () -> Void)? = nil,
-        subdivide: (@MainActor () -> Void)? = nil
+        subdivide: (@MainActor () -> Void)? = nil,
+        splitSegment: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -50,6 +53,7 @@ public struct WorkspaceEditCommands {
         self.curveArray = curveArray
         self.completeEdge = completeEdge
         self.subdivide = subdivide
+        self.splitSegment = splitSegment
     }
 }
 

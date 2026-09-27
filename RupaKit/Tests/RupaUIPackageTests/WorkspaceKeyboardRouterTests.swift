@@ -465,10 +465,10 @@ private func keyboardContext(
     var context = keyboardContext()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) == .activateTrimCommand)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "T", modifiers: [.shift]), context: context) != .activateTrimCommand)
-    context.isTrimCommandActive = true
-    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .endTrimCommand)
+    context.isCurvePickCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .endCurvePickCommand)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
-    context.isTrimCommandActive = false
+    context.isCurvePickCommandActive = false
     context.isSelectToolActive = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
 }
