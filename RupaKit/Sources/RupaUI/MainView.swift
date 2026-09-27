@@ -186,6 +186,8 @@ private struct ProjectMainViewContent: View {
     /// Trim (T) or Split Segment is running: each click on a sketch curve removes the segment under
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
+    /// Cut Curve's Extend option: the cutter reaches the target along its line or circle.
+    @State private var cutCurveExtendsCutter = false
     @State private var sketchSplitFraction: Double
     @State private var sketchRebuildControlPointCount: Int
     @State private var sketchRebuildToleranceMeters: Double
@@ -9934,15 +9936,7 @@ private struct ProjectMainViewContent: View {
                 .accessibilityIdentifier("InspectorCurve.line.trim")
             }
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
-                inspectorActionRow {
-                    Button {
-                        cutSelectedSketchCurve(entity.target, cutter: cutter)
-                    } label: {
-                        Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityIdentifier("InspectorCurve.line.cut")
-                }
+                cutCurveActionRow(entity.target, cutter: cutter, identifier: "InspectorCurve.line.cut")
             }
             let sagitta = sketchLineArcSagitta(for: entity)
             inspectorActionRow {
@@ -9988,15 +9982,7 @@ private struct ProjectMainViewContent: View {
             )
             sketchCurveOperationControls(entity, controls: [.alignment, .projection])
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
-                inspectorActionRow {
-                    Button {
-                        cutSelectedSketchCurve(entity.target, cutter: cutter)
-                    } label: {
-                        Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityIdentifier("InspectorCurve.circle.cut")
-                }
+                cutCurveActionRow(entity.target, cutter: cutter, identifier: "InspectorCurve.circle.cut")
             }
         case "arc":
             if let radius = entity.radius {
@@ -10116,15 +10102,7 @@ private struct ProjectMainViewContent: View {
                 .accessibilityIdentifier("InspectorCurve.arc.trim")
             }
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
-                inspectorActionRow {
-                    Button {
-                        cutSelectedSketchCurve(entity.target, cutter: cutter)
-                    } label: {
-                        Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityIdentifier("InspectorCurve.arc.cut")
-                }
+                cutCurveActionRow(entity.target, cutter: cutter, identifier: "InspectorCurve.arc.cut")
             }
         case "spline":
             inspectorRow("Control Points", "\(entity.controlPoints.count)")
@@ -11322,9 +11300,27 @@ private struct ProjectMainViewContent: View {
             .cutSketchCurve(
                 target: target,
                 cutter: cutter,
-                options: CutCurveOptions()
+                options: CutCurveOptions(extendsCutter: cutCurveExtendsCutter)
             )
         )
+    }
+
+    /// Cut Curve's dialog row: Extend lets the cutter reach the target along its line or circle.
+    @ViewBuilder
+    private func cutCurveActionRow(_ target: SelectionTarget, cutter: SelectionTarget, identifier: String) -> some View {
+        inspectorActionRow {
+            Button {
+                cutSelectedSketchCurve(target, cutter: cutter)
+            } label: {
+                Label("Cut", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                    .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier(identifier)
+            Toggle("Extend", isOn: $cutCurveExtendsCutter)
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .accessibilityIdentifier("\(identifier).extend")
+        }
     }
 
     private func joinSelectedSketchCurves(
