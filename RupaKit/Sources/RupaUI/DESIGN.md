@@ -584,6 +584,12 @@ scope, carries the click's world point into that sketch's plane and submits one
 is one undo step. Core owns which segment the point chooses and where it splits
 ([Trim contract](../RupaCore/DESIGN.md#trim-contract)).
 
+Bridge (Edit menu, and L with two sketch curves or curve ends selected) submits
+one G1 `createBridgeCurve` joining the ends Core reads from the selection
+([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
+and selects the new curve, whose inspector edits its continuity, tension and
+trim.
+
 ### What the workspace says, and where the canvas stops
 
 The workspace answers the user on three channels, and they stay three because

@@ -472,3 +472,13 @@ private func keyboardContext(
     context.isSelectToolActive = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
 }
+
+@Test func workspaceKeyboardRouterBridgesTwoSelectedCurveEndsWithL() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == nil)
+    context.hasBridgeableSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == .bridgeSelection)
+    context.isSelectToolActive = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == nil)
+}

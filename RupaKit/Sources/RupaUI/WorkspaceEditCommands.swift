@@ -29,6 +29,8 @@ public struct WorkspaceEditCommands {
     public var subdivide: (@MainActor () -> Void)?
     /// Starts Split Segment: each clicked sketch curve splits where it is clicked.
     public var splitSegment: (@MainActor () -> Void)?
+    /// Joins the two selected sketch curves or curve ends with a Bridge Curve.
+    public var bridge: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -41,7 +43,8 @@ public struct WorkspaceEditCommands {
         curveArray: (@MainActor () -> Void)? = nil,
         completeEdge: (@MainActor () -> Void)? = nil,
         subdivide: (@MainActor () -> Void)? = nil,
-        splitSegment: (@MainActor () -> Void)? = nil
+        splitSegment: (@MainActor () -> Void)? = nil,
+        bridge: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -54,6 +57,7 @@ public struct WorkspaceEditCommands {
         self.completeEdge = completeEdge
         self.subdivide = subdivide
         self.splitSegment = splitSegment
+        self.bridge = bridge
     }
 }
 

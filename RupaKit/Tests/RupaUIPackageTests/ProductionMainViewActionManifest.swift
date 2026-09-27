@@ -109,6 +109,7 @@ enum ProductionMainViewActionManifest {
         "appendFeatureGraph",
         "convertSketchLineToArc",
         "convertSketchLineToSpline",
+        "createBridgeCurve",
         "createConstructionPlaneFromTargets",
         "createAnalyticSphere",
         "createBoolean",

@@ -941,6 +941,19 @@ split's constraint, dimension and Bridge Curve rules apply. A circle has no
 segment to divide and is refused, as is a point at either end.
 `SketchCurveTrimTests` also own the split cases.
 
+### Bridge selection contract
+
+`bridgeEndpoints(for:)` reads Bridge's two ends from two selected targets of one
+sketch, in selection order, and the command creates the Bridge Curve with them.
+Two curves (lines, arcs, open splines) meet at the pair of their ends nearest
+each other, which is Plasticity's Bridge Curve; two curve-end vertices (a line's
+or an arc's start or end, an open spline's first or last control point) meet
+where they are, which is Bridge Vertex. A curve and a vertex offer the curve's two
+ends against the vertex. A single target, a center, a circle, a closed spline,
+two sketches or one end twice are refused. The ends carry no parameter, so the
+Bridge Curve source keeps joining the curve ends as they move.
+`BridgeSelectionTests` own these cases.
+
 ### Complete Edge and Subdivide
 
 `completeSketchCurve` extends each open end of a sketch line, arc or open spline

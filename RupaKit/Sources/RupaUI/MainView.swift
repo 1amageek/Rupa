@@ -5647,6 +5647,7 @@ private struct ProjectMainViewContent: View {
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
+            hasBridgeableSelection: bridgeAction != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
         )
@@ -5914,6 +5915,13 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .activateTrimCommand:
             beginCurvePickCommand(.trim)
+            return .handled
+        case .bridgeSelection:
+            guard let bridgeAction else {
+                reportToolStatus("Bridge: select two sketch curves or two curve ends.", severity: .warning)
+                return .handled
+            }
+            bridgeAction()
             return .handled
         case .endCurvePickCommand:
             if let command = curvePickCommand { reportToolStatus("\(command.title) ended.") }
@@ -8087,8 +8095,44 @@ private struct ProjectMainViewContent: View {
             curveArray: arrayAction(.curve),
             completeEdge: completeEdgeAction,
             subdivide: subdivideAction,
-            splitSegment: splitSegmentAction
+            splitSegment: splitSegmentAction,
+            bridge: bridgeAction
         )
+    }
+
+    /// Bridge on two selected sketch curves or curve ends (Edit menu and L).
+    private var bridgeAction: (@MainActor () -> Void)? {
+        let targets = snapshot.selection.selectedTargets
+        guard selectedTool == .select, targets.count == 2, targets.allSatisfy({ target in
+            if case .sketchEntity = target.component { return true }
+            return false
+        }) else { return nil }
+        return { createBridge(joining: targets) }
+    }
+
+    /// Joins two curves at their nearest ends, or two curve ends, with a G1 Bridge Curve and selects
+    /// it, so its continuity, tension and trim are edited in its inspector.
+    private func createBridge(joining targets: [SelectionTarget]) {
+        let existing = Set(snapshot.document.document.productMetadata.bridgeCurveSources.keys)
+        submitSource(name: "Bridge", commands: { current in
+            let ends = try current.document.document.bridgeEndpoints(for: targets)
+            return [
+                .createBridgeCurve(
+                    featureID: ends.featureID,
+                    firstEndpoint: ends.first,
+                    secondEndpoint: ends.second,
+                    continuity: .g1
+                ),
+            ]
+        }) { results in
+            guard results.last?.didMutate == true, let document = workspace.view?.document.document,
+                  let created = document.productMetadata.bridgeCurveSources.first(where: { !existing.contains($0.key) })?.value,
+                  let target = try SketchEntitySnapshotService().snapshot(document: document).entries.first(where: {
+                      $0.entityID == created.entityID.description && $0.sceneNodeID == targets[0].sceneNodeID.description
+                  })?.selectionTarget() else { return }
+            selectTargets([target])
+            reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
     }
 
     /// Split Segment from the Edit menu, offered with the select tool.

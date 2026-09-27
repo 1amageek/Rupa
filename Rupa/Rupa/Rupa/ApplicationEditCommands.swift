@@ -49,6 +49,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.splitSegment?()
             }
             .disabled(editCommands?.splitSegment == nil)
+            Button("Bridge") {
+                editCommands?.bridge?()
+            }
+            .disabled(editCommands?.bridge == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)

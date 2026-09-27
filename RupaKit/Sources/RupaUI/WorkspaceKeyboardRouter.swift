@@ -191,6 +191,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateSlideCommand
     /// T: Trim removes each clicked curve segment until Escape.
     case activateTrimCommand
+    /// L: Bridge Vertex joins the two selected curve ends (or curves).
+    case bridgeSelection
     /// Escape ends Trim or Split Segment.
     case endCurvePickCommand
     case slideCurveControlVertices(SplineControlPointSlideDirection)
@@ -222,6 +224,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isSectionAnalysisSessionActive: Bool = false
     /// Whether Trim or Split Segment is taking curve clicks.
     var isCurvePickCommandActive: Bool = false
+    /// Whether the selection is two sketch curves or curve ends Bridge can join.
+    var hasBridgeableSelection: Bool = false
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
     /// Whether the selection holds edges of one body that Move can move.
@@ -644,9 +648,12 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isCurvePickCommandActive {
             return input.isEscape ? .endCurvePickCommand : nil
         }
-        guard context.isSelectToolActive, input.modifiers.isEmpty,
-              input.characters.lowercased() == "t" else { return nil }
-        return .activateTrimCommand
+        guard context.isSelectToolActive, input.modifiers.isEmpty else { return nil }
+        switch input.characters.lowercased() {
+        case "t": return .activateTrimCommand
+        case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
+        default: return nil
+        }
     }
 
     private func slideAction(
