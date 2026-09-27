@@ -219,7 +219,7 @@ struct WorkspaceKeyboardContext: Sendable {
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
     /// Whether the selection holds edges of one body that Move can move.
-    var hasMovableEdgeSelection: Bool = false
+    var hasMovableTopologySelection: Bool = false
 
     /// Whether a command is currently taking typed input.
     ///
@@ -355,10 +355,10 @@ struct WorkspaceKeyboardRouter: Sendable {
            let mode = transformMode(for: key) {
             return .transformMode(mode)
         }
-        // G moves selected edges; Rotate and Scale do not apply to them.
+        // G moves selected edges, faces or vertices; Rotate and Scale do not apply to them.
         if input.modifiers.isEmpty,
            context.isSelectToolActive,
-           context.hasMovableEdgeSelection,
+           context.hasMovableTopologySelection,
            !context.isPlaceSessionActive,
            !context.ownsTextEditingKeys,
            key == "g" {

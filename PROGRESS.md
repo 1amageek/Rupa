@@ -13,7 +13,7 @@
   - [ ] FB15 Move Planar Edges and Move Circular Edges to the Move page: Move Gizmo, axis constraints, freestyle and proportional editing on solid and sheet edges. `depends:FB3` `parallel:none`
     - [x] FB15.1 G on edges of one body moves them with typed motions and freestyle points through swift-CAD's EdgeMoveFeature (straight edges of planar solids; circular edges along their axis with their planar cap, keeping the circle) and keeps the moved edges selected (swift-CAD 56180d0, Rupa 40a13201). `depends:none` `parallel:none`
     - [ ] FB15.2 Edge Move Gizmo drag with a live preview of the moved body. `depends:FB15.1` `parallel:none`
-    - [ ] FB15.3 Kernel edge move for straight edges of sheets and of bodies with curved faces (neighbour faces re-solved analytically where they stay planar or keep their surface). `depends:FB15.1` `parallel:none`
+    - [x] FB15.3 Kernel edge move for straight edges of sheets and of bodies with curved faces: only the faces around the moved vertices are re-solved, as planes or bilinear patches, and curved edges translate with cylinders along their axis (swift-CAD 993bc3e, e949263). `depends:FB15.1` `parallel:none`
     - [ ] FB15.4 Proportional editing of edges (neighbouring edges follow with a falloff). `depends:FB15.3` `parallel:none`
   - [x] FB16 Review RV27 fixes: an overlay over its admission limits publishes the geometry frame so selection and hits keep working; Complete Edge takes candidates where the scene draws them, meets collinear and co-circular curves where they begin and refuses crossings the kernel cannot certify; saved measurements are refused by copying instead of losing their data. `depends:FB15.1` `parallel:none`
   - [x] FB17 Section Analysis completeness: a draggable distance handle on the section plane and a Previous plane saved with the document. `depends:FB16` `parallel:none`
@@ -28,6 +28,7 @@
   - [ ] FB23 Exact face centroid and face area from Swift-CAD for face-center snapping and face-area metrics, replacing the Rupa approximations. `depends:FB16` `parallel:none`
     - [x] FB23.1 Planar and cylindrical faces take their area and centroid from swift-CAD's closed-form face measurement (d5a1cfc). `depends:FB16` `parallel:none`
     - [ ] FB23.2 Face measurement on the remaining supports (cone, sphere, torus, B-spline) and with rational or certified pcurves. `depends:FB23.1` `parallel:none`
+  - [x] FB24 G on faces and vertices of one body runs Move Faces and Move Vertices through the kernel's face and vertex moves, like Move Edges. `depends:FB15.3` `parallel:none`
   - [ ] FB5 Integrate all twenty commands, run affected package and native/UI/app workflows, restart Rupa and verify each end-to-end acceptance path against the official Plasticity pages. `depends:FB18a,FB21,FB22,FB23,FB17,FB18,FB19,FB20,FB16,FB1,FBS,FB2,FB10,FB11,FB12,FB13,FB4,FB14,FB3,FB15` `parallel:none`
 - [ ] SK Complete every Plasticity Sketch command (https://doc.plasticity.xyz/sketch) to its official page: each group audits the pages against the source, implements the missing behavior through Swift-CAD for geometry and Rupa for intent and placement, and verifies UI, persistence, undo and failure. `depends:FB` `parallel:none`
   - [ ] SK1 Bridge and Connect: Bridge, Bridge Curve, Bridge Edge, Bridge Vertex. `depends:none` `parallel:none`

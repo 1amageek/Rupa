@@ -140,6 +140,8 @@ enum ProductionMainViewActionManifest {
         "mirrorSceneNodes",
         "setSectionAnalysisPlane",
         "moveBodyEdges",
+        "moveBodyFaces",
+        "moveBodyVertices",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",
         "moveSceneNodes",

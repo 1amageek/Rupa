@@ -2060,7 +2060,8 @@ private struct ProjectMainViewContent: View {
                 slideCommandState.deactivate()
             }
             if newScope != .object {
-                if newScope != .edge || transformSession?.edgeTargets.isEmpty != false {
+                if transformSession?.topologyTargets.isEmpty != false
+                    || newScope != Self.selectionScope(movedBy: transformSession?.topologyKind ?? .edges) {
                     transformSession = nil
                 }
                 mirrorSession = nil
@@ -2070,11 +2071,11 @@ private struct ProjectMainViewContent: View {
         .onChange(of: snapshot.documentGeneration) { _, _ in
             refreshTransformFrame()
         }
-        // Move Edges ends when other things are selected; a move empties the selection until the
-        // moved edges are selected again.
+        // Move Edges, Faces or Vertices ends when other things are selected; a move empties the
+        // selection until the moved targets are selected again.
         .onChange(of: snapshot.selection.selectedTargets) { _, targets in
-            if let transformSession, !transformSession.edgeTargets.isEmpty, !targets.isEmpty,
-               Set(targets) != Set(transformSession.edgeTargets) {
+            if let transformSession, !transformSession.topologyTargets.isEmpty, !targets.isEmpty,
+               Set(targets) != Set(transformSession.topologyTargets) {
                 self.transformSession = nil
             }
         }
@@ -2085,7 +2086,7 @@ private struct ProjectMainViewContent: View {
             refreshSelectionMass()
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
-            if let transformSession, transformSession.edgeTargets.isEmpty, transformSession.sceneNodeIDs != ids {
+            if let transformSession, transformSession.topologyTargets.isEmpty, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
             }
             if let mirrorSession, mirrorSession.sceneNodeIDs != ids {
@@ -5631,7 +5632,7 @@ private struct ProjectMainViewContent: View {
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
-            hasMovableEdgeSelection: selectionScope == .edge && selectedMovableEdgeTargets != nil
+            hasMovableTopologySelection: selectedMovableTopology != nil
         )
     }
 
@@ -5680,8 +5681,8 @@ private struct ProjectMainViewContent: View {
             reportPlaceOptions()
             return .handled
         case .transformMode(let mode):
-            if transformSession == nil, selectionScope == .edge, let edges = selectedMovableEdgeTargets {
-                beginEdgeMoveSession(edges)
+            if transformSession == nil, let movable = selectedMovableTopology {
+                beginTopologyMoveSession(movable.kind, targets: movable.targets)
             } else if transformSession == nil {
                 beginTransformSession(mode, sceneNodeIDs: snapshot.selection.wholeSceneNodeIDs)
             } else {
@@ -8368,25 +8369,47 @@ private struct ProjectMainViewContent: View {
     }
 
     /// Starts Move, Rotate or Scale on whole objects.
-    /// The selected edges when they all belong to one body Move Edges can change.
-    private var selectedMovableEdgeTargets: [SelectionTarget]? {
-        let targets = snapshot.selection.selectedTargets
-        guard let first = targets.first, targets.allSatisfy({ target in
-            guard case .edge(let componentID) = target.component else { return false }
-            return target.sceneNodeID == first.sceneNodeID && componentID.generatedTopologySubshapeID != nil
-        }) else { return nil }
-        return targets
+    /// The selection scope whose targets a Move of `kind` moves.
+    static func selectionScope(movedBy kind: BodyTopologyMoveKind) -> WorkspaceSelectionScope {
+        switch kind {
+        case .edges: .edge
+        case .faces: .face
+        case .vertices: .vertex
+        }
     }
 
-    /// Move (G) on selected edges: typed motions and freestyle points move them with the kernel's
-    /// edge move.
-    private func beginEdgeMoveSession(_ edges: [SelectionTarget]) {
-        guard let nodeID = edges.first?.sceneNodeID else { return }
+    /// The selected edges, faces or vertices, in their own scope, when they all belong to one body
+    /// the kernel's direct edits can change.
+    private var selectedMovableTopology: (kind: BodyTopologyMoveKind, targets: [SelectionTarget])? {
+        let kind: BodyTopologyMoveKind
+        switch selectionScope {
+        case .edge: kind = .edges
+        case .face: kind = .faces
+        case .vertex: kind = .vertices
+        default: return nil
+        }
+        let targets = snapshot.selection.selectedTargets
+        guard let first = targets.first, targets.allSatisfy({ target in
+            let componentID: SelectionComponentID
+            switch (kind, target.component) {
+            case (.edges, .edge(let id)), (.faces, .face(let id)), (.vertices, .vertex(let id)): componentID = id
+            default: return false
+            }
+            return target.sceneNodeID == first.sceneNodeID && componentID.generatedTopologySubshapeID != nil
+        }) else { return nil }
+        return (kind, targets)
+    }
+
+    /// Move (G) on selected edges, faces or vertices: typed motions and freestyle points move them
+    /// with the kernel's direct edit of that kind.
+    private func beginTopologyMoveSession(_ kind: BodyTopologyMoveKind, targets: [SelectionTarget]) {
+        guard let nodeID = targets.first?.sceneNodeID else { return }
         do {
             let hierarchy = try SceneNodeHierarchy(metadata: snapshot.document.document.productMetadata)
             var moving = WorkspaceTransformSession(sceneNodeIDs: [nodeID], mode: .move)
-            moving.edgeTargets = edges
-            moving.edgeBodyWorldTransform = try hierarchy.worldTransform(of: nodeID)
+            moving.topologyTargets = targets
+            moving.topologyKind = kind
+            moving.topologyBodyWorldTransform = try hierarchy.worldTransform(of: nodeID)
             pointPickRequest = nil
             placeSession = nil
             transformSession = moving
@@ -8397,10 +8420,14 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Submits a transform motion; after an edge move the moved edges become the selection and
-    /// the session's edges again.
+    /// Submits a transform motion; after a move of edges, faces or vertices the moved targets
+    /// become the selection and the session's targets again.
     private func submitTransformCommand(_ command: EditorCommand) {
-        guard case .moveBodyEdges(let targets, _, _) = command else {
+        let targets: [SelectionTarget]
+        switch command {
+        case .moveBodyEdges(let moved, _, _), .moveBodyFaces(let moved, _, _), .moveBodyVertices(let moved, _, _):
+            targets = moved
+        default:
             submitSource(command)
             return
         }
@@ -8409,8 +8436,8 @@ private struct ProjectMainViewContent: View {
                   let document = workspace.view?.document.document,
                   let featureID = document.productMetadata.sceneNodes[nodeID]?.reference?.featureID else { return }
             do {
-                let moved = try document.edgeTargets(following: targets, to: featureID, objectRegistry: objectRegistry)
-                transformSession?.edgeTargets = moved
+                let moved = try document.topologyTargets(following: targets, to: featureID, objectRegistry: objectRegistry)
+                transformSession?.topologyTargets = moved
                 selectTargets(moved)
                 refreshTransformFrame()
             } catch {

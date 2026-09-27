@@ -1984,10 +1984,17 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .moveBodyEdges(let targets, let direction, let distance):
+        case .moveBodyEdges(let targets, let direction, let distance),
+             .moveBodyFaces(let targets, let direction, let distance),
+             .moveBodyVertices(let targets, let direction, let distance):
+            let kind: BodyTopologyMoveKind = switch command {
+            case .moveBodyFaces: .faces
+            case .moveBodyVertices: .vertices
+            default: .edges
+            }
             var updatedDocument = document
-            try updatedDocument.moveBodyEdges(
-                targets: targets, direction: direction, distance: distance, objectRegistry: objectRegistry,
+            try updatedDocument.moveBodyTopology(
+                kind, targets: targets, direction: direction, distance: distance, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation, currentGeneration: generation
             )
             document = updatedDocument

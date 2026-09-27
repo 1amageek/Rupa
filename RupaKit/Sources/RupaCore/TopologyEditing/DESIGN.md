@@ -147,16 +147,22 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   together with cloned feature identities. No copied display curves define geometry.
   Frame synchronization uses a candidate CAD document and publishes only after
   every binding resolves, retaining the original document on failure.
-- `moveBodyEdges` (Move Edges) appends one Swift-CAD `EdgeMoveFeature` per
-  selected edge of one body, each targeting the body the previous one made and
-  naming its edge by the reference resolved on the current body (the kernel
-  follows its lineage). The direction is in the body's own frame. The kernel owns
-  what can move: straight edges of line-only planar solids and circular edges
-  along their axis with the planar cap they bound. The candidate is evaluated
-  before it is kept, so a refused move leaves the document unchanged.
-  `edgeTargets(following:to:)` follows the moved edges through the lineage so a
-  selection survives the move. `BodyEdgeMoveFeatureTests` owns a straight edge,
-  a circular edge and a refused sideways circle move.
+- `moveBodyTopology` (Move Edges, Move Faces, Move Vertices, with the
+  `moveBodyEdges`, `moveBodyFaces` and `moveBodyVertices` entry points) appends
+  one Swift-CAD `EdgeMoveFeature`, `FaceMoveFeature` or `VertexMoveFeature` per
+  selected target of one body. Each feature targets the body the previous one
+  made and names its subshape by the reference resolved on the current body (the
+  kernel follows its lineage). The direction is in the body's own frame, and the
+  feature keeps the body's solid or sheet role (`FeatureNodeFactory`). The kernel
+  owns what can move. It re-solves the planar faces around the moved vertices as
+  planes, or as bilinear patches where a four-sided face warps. It keeps curved
+  faces elsewhere, and moves a circular edge along its axis with the cap it
+  bounds. The candidate is evaluated before it is kept, so a refused move leaves
+  the document unchanged. `topologyTargets(following:to:)` follows the moved
+  edges, faces or vertices through the lineage so a selection survives the move.
+  `BodyEdgeMoveFeatureTests` owns a straight edge, a circular edge and a refused
+  sideways circle move. `BodyTopologyMoveTests` owns a face move, a vertex move
+  and a refused target of the wrong kind.
 
 ## State, Ownership, and Lifecycle
 

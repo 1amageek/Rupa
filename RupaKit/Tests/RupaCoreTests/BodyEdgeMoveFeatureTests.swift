@@ -33,7 +33,7 @@ import Testing
             return
         }
         #expect(document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID == moveID)
-        let moved = try #require(try document.edgeTargets(following: [target], to: moveID).first)
+        let moved = try #require(try document.topologyTargets(following: [target], to: moveID).first)
         let movedEntry = try #require(try edges(of: document).first { $0.selectionTarget() == moved })
         #expect(abs((movedEntry.midpoint?.x ?? 0) - (maxX + 0.02)) < 1e-9)
         #expect(abs((movedEntry.midpoint?.z ?? 0) - maxZ) < 1e-9)

@@ -452,9 +452,9 @@ private func keyboardContext(
 @Test func workspaceKeyboardRouterMovesSelectedEdges() {
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()
-    context.hasMovableEdgeSelection = true
+    context.hasMovableTopologySelection = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == .transformMode(.move))
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: context) != .transformMode(.rotate))
-    context.hasMovableEdgeSelection = false
+    context.hasMovableTopologySelection = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
 }

@@ -512,12 +512,14 @@ length and uniform scaling). Every drag, freestyle and typed motion commits one
 each is one undo step. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
 
-With edges of one body selected in edge scope, G runs the same session as Move
-Edges: the session keeps the edges and their body's world transform, only Move
-applies, and every typed or freestyle motion's translation (in the body's frame)
-commits one `moveBodyEdges`; the moved edges become the selection and the
-session's edges again. Selecting something else ends it.
-FIXME(INCOMPLETE_IMPLEMENTATION): Move Edges shows no gizmo, because the
+With edges, faces or vertices of one body selected in their own scope, G runs
+the same session as Move Edges, Move Faces or Move Vertices. The session keeps
+the targets, their kind and their body's world transform, and only Move applies.
+Every typed or freestyle motion's translation, in the body's frame, commits one
+`moveBodyEdges`, `moveBodyFaces` or `moveBodyVertices`. The moved targets become
+the selection and the session's targets again. Changing the scope or selecting
+something else ends it.
+FIXME(INCOMPLETE_IMPLEMENTATION): these moves show no gizmo, because the
 viewport's transform gizmo previews whole-object placement only; proportional
 editing of edges is not available either.
 

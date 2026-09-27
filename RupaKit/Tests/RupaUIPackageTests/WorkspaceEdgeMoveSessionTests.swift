@@ -16,9 +16,9 @@ import Testing
         let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == featureID }).id
         let edge = SelectionTarget(sceneNodeID: node, component: .edge(SelectionComponentID(rawValue: "edge")))
         var moving = WorkspaceTransformSession(sceneNodeIDs: [node], mode: .move)
-        moving.edgeTargets = [edge]
+        moving.topologyTargets = [edge]
         // The body is turned a quarter turn about Z, so world +Y is its own +X.
-        moving.edgeBodyWorldTransform = try Transform3D.rotation(axis: .unitZ, angleRadians: .pi / 2, about: .origin)
+        moving.topologyBodyWorldTransform = try Transform3D.rotation(axis: .unitZ, angleRadians: .pi / 2, about: .origin)
         moving.pivotMode = .median
         try moving.resolveFrame(metadata: document.productMetadata, constructionPlane: nil, selectionBounds: nil)
 
@@ -37,5 +37,18 @@ import Testing
         let meters = try document.cadDocument.parameters.resolvedValue(for: distance).value
         #expect(abs(meters - 0.01) < 1e-12)
         #expect(throws: EditorError.self) { try moving.command(worldDelta: .identity) }
+
+        // The same session moves faces or vertices with their own direct edits.
+        moving.topologyKind = .faces
+        #expect(moving.title == "Move Face")
+        guard case .moveBodyFaces = try moving.command(worldDelta: try Transform3D.translation(Vector3D(x: 0, y: 0.01, z: 0))) else {
+            Issue.record("Expected a face move.")
+            return
+        }
+        moving.topologyKind = .vertices
+        guard case .moveBodyVertices = try moving.command(worldDelta: try Transform3D.translation(Vector3D(x: 0, y: 0.01, z: 0))) else {
+            Issue.record("Expected a vertex move.")
+            return
+        }
     }
 }

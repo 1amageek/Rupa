@@ -111,6 +111,8 @@ enum PreparedAutomationSourceCommandValidation {
              .filletBodyEdges,
              .moveBodyEdge,
              .moveBodyEdges,
+             .moveBodyFaces,
+             .moveBodyVertices,
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,

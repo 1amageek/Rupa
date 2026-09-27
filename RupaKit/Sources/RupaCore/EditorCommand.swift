@@ -271,6 +271,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Move Edges: moves edges of one body by `distance` along `direction` in the body's frame,
     /// through the kernel's edge move.
     case moveBodyEdges(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
+    /// Move Faces: moves planar faces of one body through the kernel's face move.
+    case moveBodyFaces(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
+    /// Move Vertices: moves vertices of one body through the kernel's vertex move.
+    case moveBodyVertices(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveSketchEntityPoint(
         target: SelectionTarget,
@@ -723,6 +727,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "moveBodyEdge"
         case .moveBodyEdges:
             "moveBodyEdges"
+        case .moveBodyFaces:
+            "moveBodyFaces"
+        case .moveBodyVertices:
+            "moveBodyVertices"
         case .moveBodyVertex:
             "moveBodyVertex"
         case .moveSketchEntityPoint:
@@ -956,6 +964,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .filletBodyEdges,
              .moveBodyEdge,
              .moveBodyEdges,
+             .moveBodyFaces,
+             .moveBodyVertices,
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,

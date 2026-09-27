@@ -180,6 +180,7 @@ extension DesignDocument {
         switch target.component {
         case .edge(let component) where kind == .edge: subshapeID = component.generatedTopologySubshapeID
         case .face(let component) where kind == .face: subshapeID = component.generatedTopologySubshapeID
+        case .vertex(let component) where kind == .vertex: subshapeID = component.generatedTopologySubshapeID
         default: subshapeID = nil
         }
         guard let subshapeID,
@@ -207,6 +208,7 @@ extension DesignDocument {
         switch evaluated.subshapes.entries[subshapeID] {
         case .edge: matchesKind = kind == .edge
         case .face: matchesKind = kind == .face
+        case .vertex: matchesKind = kind == .vertex
         default: matchesKind = false
         }
         guard subshapeID.featureID == sourceID, matchesKind else {
