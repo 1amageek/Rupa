@@ -259,6 +259,8 @@ struct WorkspaceSlotContextPanel<DistanceInput: View>: View {
     var inputModeTitle: String
     /// Offset's Symmetric option (S), shown for an offset only.
     var symmetricTitle: String?
+    /// Offset's gap fill at corners (V), shown for an offset only.
+    var gapFillTitle: String?
     var create: () -> Void
 
     var body: some View {
@@ -271,6 +273,9 @@ struct WorkspaceSlotContextPanel<DistanceInput: View>: View {
         distanceInput
         if let symmetricTitle {
             workspaceValuePill("Symmetric (S)", symmetricTitle, accessibilityIdentifier: "WorkspaceSlot.symmetric")
+        }
+        if let gapFillTitle {
+            workspaceValuePill("Gap (V)", gapFillTitle, accessibilityIdentifier: "WorkspaceSlot.gapFill")
         }
         workspaceValuePill(
             "Input",

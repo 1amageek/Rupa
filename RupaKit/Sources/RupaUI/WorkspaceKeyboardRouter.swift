@@ -160,6 +160,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case flipSectionAnalysis
     /// Return: place the Section Analysis slice.
     case confirmSectionAnalysis
+    /// V while Offset Planar Curve runs: its gap fill Round → Linear → Natural.
+    case cycleCurveOffsetGapFill
     /// Return while Offset, Slot, Offset Vertex, Offset Edge, Offset Region or Slide runs: create
     /// its result, as right-click does.
     case confirmWorkspaceCommand
@@ -705,6 +707,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             }
             return context.isRegionOffsetCommandActive ? .activateRegionOffsetDistanceInput : nil
         case "v":
+            if context.isCurveOffsetCommandActive {
+                return .cycleCurveOffsetGapFill
+            }
             if context.isEdgeOffsetCommandActive {
                 return .cycleEdgeOffsetGapFill
             }

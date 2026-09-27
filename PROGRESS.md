@@ -74,7 +74,7 @@
     - [ ] SK5.5 Join Curves on three or more curves and already-joined chains; Unjoin after the joined curve was edited. `depends:none` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:none` `parallel:none`
     - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
-    - [ ] SK6.2 Offset Planar Curve on joined curve chains and cornered splines with Round, Linear and Natural gap fill; smooth splines offset through swift-CAD 34d284f is done. `depends:SK6.1` `parallel:none`
+    - [ ] SK6.2 Offset Planar Curve on joined curve chains (lines, arcs and splines joined by Join) and Natural gap fill; splines, cornered splines with Round and Linear gap fill and V to step it are done (swift-CAD 34d284f, a2faa31). `depends:SK6.1` `parallel:none`
     - [ ] SK6.3 Freestyle Offset Planar Curve (F). `depends:SK6.2` `parallel:none`
     - [x] SK6.4 O on a selected curve end starts Offset Vertex, and D sets its distance. `depends:none` `parallel:none`
     - [x] SK6.5 Return and right-click create the offset, slot or region result instead of only closing the command. `depends:none` `parallel:none`

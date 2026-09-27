@@ -612,3 +612,10 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: fillet) == .confirmFillet)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: fillet) == .cancelFillet)
 }
+
+@Test func workspaceKeyboardRouterStepsTheCurveOffsetGapFillOnV() {
+    let router = WorkspaceKeyboardRouter()
+    var offset = keyboardContext(isSlotProfileCommandActive: true)
+    offset.isCurveOffsetCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "v"), context: offset) == .cycleCurveOffsetGapFill)
+}

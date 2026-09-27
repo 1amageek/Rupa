@@ -183,11 +183,18 @@ extension DesignDocument {
                 }
                 let offsetter = CubicBezierChainOffset(tolerance: .standard)
                 func offsetSpline(_ signedDistance: Double) throws -> SketchSpline {
+                    // Corners join by the gap fill; Natural waits for its definition on splines.
+                    let gapFill: CubicBezierChainOffset.GapFill? = switch options.gapFill {
+                    case .round: .round
+                    case .linear: .linear
+                    case .natural: nil
+                    }
                     let chain: [Point2D]
                     do {
-                        chain = try offsetter.offset(of: points, distance: signedDistance)
+                        chain = try offsetter.offset(of: points, distance: signedDistance, gapFill: gapFill)
                     } catch let error as KernelError {
-                        throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)")
+                        let hint = options.gapFill == .natural ? " Natural gap fill is not available on a spline's corners; use Round or Linear." : ""
+                        throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)\(hint)")
                     }
                     return SketchSpline(
                         controlPoints: chain.map { sketchPoint(x: $0.x, y: $0.y) },

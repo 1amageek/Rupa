@@ -217,6 +217,8 @@ private struct ProjectMainViewContent: View {
     @State private var faceDraftAngleDegrees: Double
     @State private var edgeOffsetDistanceMeters: Double
     @State private var edgeOffsetGapFill: OffsetCurveGapFill
+    /// Offset Planar Curve's gap fill at a curve's corners, which V steps.
+    @State private var curveOffsetGapFill: OffsetCurveGapFill = .round
     @State private var edgeOffsetCommandState: EdgeOffsetCommandState
     @State private var dimensionCommandState: DimensionCommandState
     @State private var slotProfileWidthMeters: Double
@@ -4866,6 +4868,8 @@ private struct ProjectMainViewContent: View {
             inputModeTitle: slotProfileCommandState.inputModeTitle,
             symmetricTitle: slotProfileCommandState.isCurveOffsetActive
                 ? (slotProfileCommandState.isSymmetric ? "On" : "Off") : nil,
+            gapFillTitle: slotProfileCommandState.isCurveOffsetActive
+                ? regionOffsetGapFillTitle(curveOffsetGapFill) : nil,
             create: { createCommandedCurveOffset(target) }
         )
     }
@@ -4912,6 +4916,7 @@ private struct ProjectMainViewContent: View {
             ),
             inputModeTitle: slotProfileCommandState.inputModeTitle,
             symmetricTitle: nil,
+            gapFillTitle: nil,
             create: { createCommandedVertexOffset(entity) }
         )
     }
@@ -6052,6 +6057,10 @@ private struct ProjectMainViewContent: View {
         case .activateRegionOffsetDistanceInput:
             regionOffsetCommandState.activateDistanceInput()
             focusedCommandDistance = .regionOffset
+            return .handled
+        case .cycleCurveOffsetGapFill:
+            curveOffsetGapFill = edgeOffsetCommandState.gapFill(after: curveOffsetGapFill)
+            reportToolStatus("Offset: gap fill \(regionOffsetGapFillTitle(curveOffsetGapFill)).")
             return .handled
         case .cycleEdgeOffsetGapFill:
             edgeOffsetGapFill = edgeOffsetCommandState.gapFill(after: edgeOffsetGapFill)
@@ -12113,7 +12122,9 @@ private struct ProjectMainViewContent: View {
             .offsetCurve(
                 target: target,
                 distance: .length(max(slotProfileWidthMeters, 1.0e-9), .meter),
-                options: OffsetCurveOptions(mode: .offset, isSymmetric: slotProfileCommandState.isSymmetric),
+                options: OffsetCurveOptions(
+                    mode: .offset, isSymmetric: slotProfileCommandState.isSymmetric, gapFill: curveOffsetGapFill
+                ),
                 vertexHandle: nil
             )
         ) { result in
