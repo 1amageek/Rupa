@@ -8192,7 +8192,8 @@ private struct ProjectMainViewContent: View {
             completeEdge: completeEdgeAction,
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
-            bridge: bridgeAction
+            bridge: bridgeAction,
+            realizeInstances: realizeInstancesAction
         )
     }
 
@@ -8241,6 +8242,21 @@ private struct ProjectMainViewContent: View {
                   })?.selectionTarget() else { return }
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
+    }
+
+    /// Realize Instances on the selected component instances (Edit menu).
+    private var realizeInstancesAction: (@MainActor () -> Void)? {
+        let document = snapshot.document.document
+        let ids = snapshot.selection.wholeSceneNodeIDs.filter {
+            document.productMetadata.sceneNodes[$0]?.reference?.kind == .componentInstance
+        }
+        guard !ids.isEmpty else { return nil }
+        return {
+            submitSource(.realizeComponentInstances(sceneNodeIDs: Array(ids))) { result in
+                guard result?.didMutate == true else { return }
+                reportToolStatus("Realized \(ids.count == 1 ? "the instance" : "\(ids.count) instances") as independent copies.")
+            }
         }
     }
 

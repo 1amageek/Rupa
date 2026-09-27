@@ -52,6 +52,7 @@ enum PreparedAutomationSourceCommandValidation {
              .renameMaterial,
              .deleteMaterial,
              .duplicateSceneNodes,
+             .realizeComponentInstances,
              .placeSceneNodes,
              .pasteSceneFragment,
              .setSceneNodeMaterial,

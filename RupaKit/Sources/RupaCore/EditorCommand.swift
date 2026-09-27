@@ -74,6 +74,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case mirrorSceneNodes(ids: [SceneNodeID], plane: SceneMirrorPlane, options: SceneMirrorOptions)
     /// Copies `ids` in place as independent siblings; the copies are the generated scene nodes.
     case duplicateSceneNodes(ids: [SceneNodeID])
+    /// Realize Instances: each component instance node becomes an independent copy of its definition.
+    case realizeComponentInstances(sceneNodeIDs: [SceneNodeID])
     /// Places `ids` once per world-space placement of the selection, as independent copies or as
     /// instances of the selection's component definition; copies may be combined with the body
     /// they were placed on.
@@ -607,6 +609,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "deleteMaterial"
         case .duplicateSceneNodes:
             "duplicateSceneNodes"
+        case .realizeComponentInstances:
+            "realizeComponentInstances"
         case .placeSceneNodes:
             "placeSceneNodes"
         case .pasteSceneFragment:
@@ -915,6 +919,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .renameMaterial,
              .deleteMaterial,
              .duplicateSceneNodes,
+             .realizeComponentInstances,
              .placeSceneNodes,
              .pasteSceneFragment,
              .setSceneNodeMaterial,

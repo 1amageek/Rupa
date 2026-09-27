@@ -118,6 +118,16 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   returns the nearest exact point of that face with its outward normal (the
   kernel owns face orientation), and both are placed back into the world.
 
+Realize Instances (`realizeComponentInstances`) turns each selected component
+instance node into an independent copy of its definition, inserted right after
+the instance among its siblings, and deletes the instance. An instance shows a
+definition root at W(instance node) ∘ L(instance) ∘ L(root) while the root sits
+at W(root's parent) ∘ L(root), so the copy is placed by
+W(instance node) ∘ L(instance) ∘ W(root's parent)⁻¹ and appears exactly where the
+instance showed it. The definition and its other instances are untouched. A
+node that is not a component instance is refused and the document is unchanged.
+`RealizeComponentInstanceTests` own both cases.
+
 ## Verification and Change Impact
 
 `SceneCloningTests` prove: in-place duplicate evaluates to the same geometry at

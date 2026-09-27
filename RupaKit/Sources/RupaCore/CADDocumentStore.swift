@@ -962,12 +962,14 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .duplicateSceneNodes, .placeSceneNodes, .pasteSceneFragment:
+        case .duplicateSceneNodes, .realizeComponentInstances, .placeSceneNodes, .pasteSceneFragment:
             func run() throws {
                 var updatedDocument = document
                 switch command {
                 case .duplicateSceneNodes(let ids):
                     try updatedDocument.duplicateSceneNodes(ids: ids, objectRegistry: objectRegistry)
+                case .realizeComponentInstances(let ids):
+                    try updatedDocument.realizeComponentInstances(sceneNodeIDs: ids, objectRegistry: objectRegistry)
                 case .placeSceneNodes(let ids, let placements, let output, let boolean):
                     try updatedDocument.placeSceneNodes(
                         ids: ids, placements: placements, output: output, boolean: boolean,

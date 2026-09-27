@@ -53,6 +53,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.bridge?()
             }
             .disabled(editCommands?.bridge == nil)
+            Button("Realize Instances") {
+                editCommands?.realizeInstances?()
+            }
+            .disabled(editCommands?.realizeInstances == nil)
             Menu("Array") {
                 Button("Rectangular Array") { editCommands?.rectangularArray?() }
                     .disabled(editCommands?.rectangularArray == nil)

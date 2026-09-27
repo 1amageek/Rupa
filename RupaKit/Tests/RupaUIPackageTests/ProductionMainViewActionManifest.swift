@@ -129,6 +129,7 @@ enum ProductionMainViewActionManifest {
         "duplicateSceneNodes",
         "extendSketchCurve",
         "completeSketchCurve",
+        "realizeComponentInstances",
         "subdivideSketchSpline",
         "subdivideSurface",
         "insertSketchSplineControlPoint",

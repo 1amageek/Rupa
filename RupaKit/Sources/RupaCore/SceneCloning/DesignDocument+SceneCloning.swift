@@ -91,6 +91,56 @@ extension DesignDocument {
         )
     }
 
+    /// Realize Instances: each selected component instance node becomes an independent copy of its
+    /// definition where the instance shows it, beside the instance, and the instance is removed.
+    /// The definition and its other instances are untouched. Returns the copied roots.
+    ///
+    /// An instance shows a definition root at W(instance node) ∘ L(instance) ∘ L(root), while the
+    /// root itself sits at W(root's parent) ∘ L(root); the copy is therefore placed by
+    /// W(instance node) ∘ L(instance) ∘ W(root's parent)⁻¹.
+    @discardableResult
+    public mutating func realizeComponentInstances(
+        sceneNodeIDs ids: [SceneNodeID],
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> [SceneNodeID] {
+        guard !ids.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "Realize Instances takes component instances.")
+        }
+        var updated = self
+        var realized: [SceneNodeID] = []
+        for id in ids {
+            guard let node = updated.productMetadata.sceneNodes[id],
+                  node.reference?.kind == .componentInstance,
+                  let instanceID = node.reference?.componentInstanceID,
+                  let instance = updated.productMetadata.componentInstances[instanceID],
+                  let definition = updated.productMetadata.componentDefinitions[instance.definitionID],
+                  let firstRoot = definition.rootSceneNodeIDs.first else {
+                throw EditorError(code: .commandInvalid, message: "Realize Instances takes component instances.")
+            }
+            let hierarchy = try SceneNodeHierarchy(metadata: updated.productMetadata)
+            let placement = try hierarchy.worldTransform(of: id)
+                .composed(with: instance.localTransform)
+                .composed(with: try hierarchy.parentWorldTransform(of: firstRoot).inverse())
+            let fragment = try updated.sceneFragment(copying: definition.rootSceneNodeIDs)
+            let destination: SceneFragmentInserter.Attachment
+            let parentWorld: Transform3D
+            if let parentID = hierarchy.parentID(of: id), let parent = updated.productMetadata.sceneNodes[parentID] {
+                destination = .child(of: parentID, at: (parent.childIDs.firstIndex(of: id) ?? parent.childIDs.count - 1) + 1)
+                parentWorld = try hierarchy.worldTransform(of: parentID)
+            } else {
+                destination = .documentRoot
+                parentWorld = .identity
+            }
+            realized += try updated.insertCopies(
+                of: fragment, placements: [placement], destination: destination,
+                parentWorld: parentWorld, boolean: nil, objectRegistry: objectRegistry
+            )
+            try updated.deleteSceneNodes(ids: [id], objectRegistry: objectRegistry)
+        }
+        self = updated
+        return realized
+    }
+
     private mutating func placeInstances(
         of ids: [SceneNodeID],
         placements: [Transform3D],
