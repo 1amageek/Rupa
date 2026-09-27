@@ -94,7 +94,7 @@
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`
     - [x] SK9.2 Create Instance (Edit menu): an instance of the selected bodies, sheets or curves appears where they are, linked as their component definition, and is selected with Move running to place it. `depends:SK9.1` `parallel:none`
-    - [ ] SK9.3 Text: curves from typed text in a chosen font, through kernel glyph outlines. `depends:SK9.2` `parallel:none`
+    - [x] SK9.3 Text (Edit menu, palette): a dialog of text, font and size makes one closed spline per glyph contour on the active construction plane through CoreText outlines. `depends:SK9.2` `parallel:none`
     - [x] SK9.4 Toggle Points hides a selected curve's control points (its choice wins over selection and hover). `depends:none` `parallel:none`
     - [ ] SK9.5 Instances of a group are listed under an Instances category in the Outliner. `depends:none` `parallel:none`
   - [x] SK11 Command Palette (F): every Sketch command with a key or an Edit menu item is found by its name or its pages' other names and runs that same path; shortcut assignment and favorites are not offered. `depends:none` `parallel:none`

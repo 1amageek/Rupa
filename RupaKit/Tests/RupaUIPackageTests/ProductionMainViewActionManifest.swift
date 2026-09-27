@@ -151,6 +151,7 @@ enum ProductionMainViewActionManifest {
         "createCircleSketch",
         "createConstrainedSurface",
         "createSheetSurfaceEdit",
+        "createSketch",
         "createSurfaceFill",
         "deleteSceneNodes",
         "extrudeSection",

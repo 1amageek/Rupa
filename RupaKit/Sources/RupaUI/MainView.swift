@@ -189,6 +189,11 @@ private struct ProjectMainViewContent: View {
     @State private var cutCurveSession: WorkspaceCutCurveSession?
     @State private var filletSession: WorkspaceFilletSession?
     @State private var isCommandPaletteOpen = false
+    @State private var isTextDialogPresented = false
+    @State private var textDialogText = ""
+    @State private var textDialogFontFamily = "Helvetica"
+    /// Text's size; the official default is 1 cm.
+    @State private var textDialogSizeMeters = 0.01
     /// Cut Curve's Extend option: the cutter reaches the target along its line or circle.
     @State private var cutCurveExtendsCutter = false
     @State private var sketchSplitFraction: Double
@@ -2053,6 +2058,16 @@ private struct ProjectMainViewContent: View {
         ))
         .onAppear {
             isWorkspaceFocused = true
+        }
+        .sheet(isPresented: $isTextDialogPresented) {
+            WorkspaceTextDialog(
+                text: $textDialogText,
+                fontFamily: $textDialogFontFamily,
+                sizeMeters: $textDialogSizeMeters,
+                unit: snapshot.workspaceState.ruler.displayUnit,
+                create: { createTextCurves() },
+                cancel: { isTextDialogPresented = false }
+            )
         }
         // The Tools menu is presented by the App; the active tool lives here.
         // One focused scene value joins them without moving the tool state out.
@@ -8548,6 +8563,7 @@ private struct ProjectMainViewContent: View {
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
             deleteRedundantTopology: deleteRedundantTopologyAction,
+            text: { isTextDialogPresented = true },
             alignVertex: alignVertexAction,
             reverseCurves: reverseCurvesAction,
             createInstance: createInstanceAction,
@@ -8601,6 +8617,38 @@ private struct ProjectMainViewContent: View {
                   })?.selectionTarget() else { return }
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
+    }
+
+    /// Text's curves: every contour of the typed text's glyphs, in the chosen font and size, as one
+    /// closed spline of a new curve sketch on the active construction plane, the baseline starting
+    /// at its origin.
+    private func createTextCurves() {
+        let contours: [[Point2D]]
+        do {
+            contours = try SketchTextOutliner().contours(
+                of: textDialogText, fontName: textDialogFontFamily, size: textDialogSizeMeters
+            )
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return
+        }
+        isTextDialogPresented = false
+        var entities: [SketchEntityID: SketchEntity] = [:]
+        for contour in contours {
+            entities[SketchEntityID()] = .spline(SketchSpline(
+                controlPoints: contour.map { SketchPoint(x: .length($0.x, .meter), y: .length($0.y, .meter)) },
+                isClosed: true
+            ))
+        }
+        submitSource(
+            .createSketch(
+                name: "Text",
+                sketch: Sketch(plane: activeSketchPlane(), entities: entities),
+                geometryRole: .curve
+            )
+        ) { result in
+            if result?.didMutate == true { reportToolStatus("Text: \(contours.count) curves.") }
         }
     }
 

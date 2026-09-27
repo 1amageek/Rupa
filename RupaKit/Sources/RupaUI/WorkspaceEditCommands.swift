@@ -31,6 +31,8 @@ public struct WorkspaceEditCommands {
     public var splitSegment: (@MainActor () -> Void)?
     /// Joins the two selected sketch curves or curve ends with a Bridge Curve.
     public var bridge: (@MainActor () -> Void)?
+    /// Opens Text's dialog, which makes curves from typed text.
+    public var text: (@MainActor () -> Void)?
     /// Removes the joints of the selected spline that one cubic spans, keeping its shape.
     public var deleteRedundantTopology: (@MainActor () -> Void)?
     /// Aligns the selected curve end with the other selected end at the chosen continuity.
@@ -58,6 +60,7 @@ public struct WorkspaceEditCommands {
         splitSegment: (@MainActor () -> Void)? = nil,
         bridge: (@MainActor () -> Void)? = nil,
         deleteRedundantTopology: (@MainActor () -> Void)? = nil,
+        text: (@MainActor () -> Void)? = nil,
         alignVertex: (@MainActor () -> Void)? = nil,
         reverseCurves: (@MainActor () -> Void)? = nil,
         createInstance: (@MainActor () -> Void)? = nil,
@@ -77,6 +80,7 @@ public struct WorkspaceEditCommands {
         self.splitSegment = splitSegment
         self.bridge = bridge
         self.deleteRedundantTopology = deleteRedundantTopology
+        self.text = text
         self.alignVertex = alignVertex
         self.reverseCurves = reverseCurves
         self.createInstance = createInstance

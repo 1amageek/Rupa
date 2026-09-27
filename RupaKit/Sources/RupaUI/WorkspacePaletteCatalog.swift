@@ -58,6 +58,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Complete Edge", invocation: .edit(.completeEdge)),
         Command(title: "Subdivide", invocation: .edit(.subdivide)),
         Command(title: "Insert Knot", aliases: ["Insert CV At Point"], invocation: .edit(.insertKnot)),
+        Command(title: "Text", invocation: .edit(.text)),
         Command(title: "Delete Redundant Topology", invocation: .edit(.deleteRedundantTopology)),
         Command(title: "Align Vertex", aliases: ["Align"], invocation: .edit(.alignVertex)),
         Command(title: "Reverse Curve", aliases: ["Reverse"], invocation: .edit(.reverseCurves)),
@@ -85,7 +86,7 @@ enum WorkspacePaletteEditCommand: Equatable {
     case duplicate, mirror, place, copyWithPlacement, pasteWithPlacement
     case rectangularArray, radialArray, curveArray
     case completeEdge, subdivide, splitSegment, insertKnot
-    case createInstance, realizeInstances, reverseCurves, alignVertex, deleteRedundantTopology
+    case createInstance, realizeInstances, reverseCurves, alignVertex, deleteRedundantTopology, text
 
     /// The closure the Edit menu runs for this item, nil while the selection leaves it unavailable.
     func action(in commands: WorkspaceEditCommands) -> (@MainActor () -> Void)? {
@@ -107,6 +108,7 @@ enum WorkspacePaletteEditCommand: Equatable {
         case .reverseCurves: commands.reverseCurves
         case .alignVertex: commands.alignVertex
         case .deleteRedundantTopology: commands.deleteRedundantTopology
+        case .text: commands.text
         }
     }
 }

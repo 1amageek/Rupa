@@ -596,6 +596,17 @@ the canvas as Return; the router gives the open palette's Escape back to it
 inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
 offered.
 
+Text (Edit menu, palette) opens `WorkspaceTextDialog` (text, font family, size;
+the official default is 1 cm) and OK makes the curves: `SketchTextOutliner`, the
+platform adapter over CoreText, lays the text out at a reference size, turns each
+glyph contour into one closed cubic Bezier chain scaled to the size (a line
+element a straight cubic span, a quadratic its exact cubic elevation, elements
+shorter than the modeling distance left out), and one `createSketch` makes a
+curve sketch of one closed spline per contour on the active construction plane,
+the baseline starting at its origin. A missing text, a non-positive size or a
+font not installed is refused before anything is submitted.
+`SketchTextOutlinerTests` check the contours and that the curves make regions.
+
 Delete Redundant Topology (Edit menu, palette) submits one
 `deleteRedundantSketchSplineJoints` on the selected spline.
 

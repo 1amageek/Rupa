@@ -57,6 +57,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.bridge?()
             }
             .disabled(editCommands?.bridge == nil)
+            Button("Text…") {
+                editCommands?.text?()
+            }
+            .disabled(editCommands?.text == nil)
             Button("Delete Redundant Topology") {
                 editCommands?.deleteRedundantTopology?()
             }
