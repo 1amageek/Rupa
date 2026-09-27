@@ -583,6 +583,19 @@ beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
+The Command Palette (F, with the select tool and nothing running that takes F)
+finds commands by name, as the official pages start them. `WorkspacePaletteCatalog`
+lists each command's title, the other names its pages give it, its key, and how it
+runs: the action its key triggers (`applyWorkspaceKeyboardAction`) or its Edit
+menu item's `WorkspaceEditCommands` closure, so the palette adds no behavior of
+its own and an Edit item the selection leaves unavailable shows disabled. Every
+typed word must occur in the title or an alias. `WorkspaceCommandPaletteView`
+scopes its Return with `submitScope()`, so running a command never also reaches
+the canvas as Return; the router gives the open palette's Escape back to it
+(`closeCommandPalette`) and nothing else. `WorkspaceCommandPaletteTests` mount it
+inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
+offered.
+
 Cut Curve (C, with the select tool) runs a `WorkspaceCutCurveSession`: the
 selected sketch curves seed it (with several, the last selected is the cutter and
 the others targets; with one, it is the target), the dialog's Targets/Cutters

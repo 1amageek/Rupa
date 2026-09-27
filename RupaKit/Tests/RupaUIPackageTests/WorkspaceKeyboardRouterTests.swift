@@ -579,3 +579,16 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: session) == .confirmCutCurve)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: session) == .cancelCutCurve)
 }
+
+@Test func workspaceKeyboardRouterOpensThePaletteOnFOnlyWhenNothingRunningTakesF() {
+    let router = WorkspaceKeyboardRouter()
+    let f = WorkspaceKeyboardInput(characters: "f")
+    #expect(router.action(for: f, context: keyboardContext()) == .openCommandPalette)
+    var transforming = keyboardContext()
+    transforming.isTransformSessionActive = true
+    #expect(router.action(for: f, context: transforming) == .beginTransformFreestyle)
+    var palette = keyboardContext()
+    palette.isCommandPaletteOpen = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: palette) == .closeCommandPalette)
+    #expect(router.action(for: f, context: palette) == nil)
+}

@@ -187,6 +187,7 @@ private struct ProjectMainViewContent: View {
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
+    @State private var isCommandPaletteOpen = false
     /// Cut Curve's Extend option: the cutter reaches the target along its line or circle.
     @State private var cutCurveExtendsCutter = false
     @State private var sketchSplitFraction: Double
@@ -2007,6 +2008,11 @@ private struct ProjectMainViewContent: View {
                     }
                 } else {
                     viewportCanvas
+                        .overlay(alignment: .top) {
+                            if isCommandPaletteOpen {
+                                commandPalette.padding(.top, 56)
+                            }
+                        }
                 }
             } toolPalette: {
                 floatingToolPalette
@@ -5760,6 +5766,7 @@ private struct ProjectMainViewContent: View {
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
             isCutCurveSessionActive: cutCurveSession != nil,
+            isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
             hasProjectableSelection: !snapshot.selection.selectedTargets.isEmpty,
@@ -6134,6 +6141,13 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .beginCutCurve:
             beginCutCurve()
+            return .handled
+        case .openCommandPalette:
+            isCommandPaletteOpen = true
+            return .handled
+        case .closeCommandPalette:
+            isCommandPaletteOpen = false
+            isWorkspaceFocused = true
             return .handled
         case .toggleCutCurveExtend:
             cutCurveSession?.extendsCutter.toggle()
@@ -8109,6 +8123,33 @@ private struct ProjectMainViewContent: View {
         if selectionScope != .edge || classification.edgeTargets.isEmpty {
             edgeOffsetCommandState.deactivate()
         }
+    }
+
+    /// The Command Palette: each command runs its key's action or its Edit menu item, after the
+    /// palette closes and the keyboard is back with the canvas.
+    private var commandPalette: some View {
+        WorkspaceCommandPaletteView(
+            isAvailable: { command in
+                switch command.invocation {
+                case .keyboard: true
+                case .edit(let item): item.action(in: workspaceEditCommands) != nil
+                }
+            },
+            run: { command in
+                isCommandPaletteOpen = false
+                isWorkspaceFocused = true
+                switch command.invocation {
+                case .keyboard(let action):
+                    _ = applyWorkspaceKeyboardAction(action)
+                case .edit(let item):
+                    item.action(in: workspaceEditCommands)?()
+                }
+            },
+            close: {
+                isCommandPaletteOpen = false
+                isWorkspaceFocused = true
+            }
+        )
     }
 
     /// Cut Curve (C): the selected sketch curves become its targets and cutter, and clicks on

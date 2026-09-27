@@ -217,6 +217,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case endCurvePickCommand
     /// C with the select tool: Cut Curve on the selected sketch curves.
     case beginCutCurve
+    /// F with the select tool and nothing running that takes F: the Command Palette.
+    case openCommandPalette
+    /// Escape while the Command Palette is open: close it.
+    case closeCommandPalette
     /// Tab while Cut Curve runs: Extend on or off.
     case toggleCutCurveExtend
     /// Return while Cut Curve runs: cut.
@@ -256,6 +260,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCurvePickCommandActive: Bool = false
     /// Whether Cut Curve's dialog is picking targets and cutters.
     var isCutCurveSessionActive: Bool = false
+    /// Whether the Command Palette is open, whose field owns every key but Escape.
+    var isCommandPaletteOpen: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
     var hasBridgeableSelection: Bool = false
     /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
@@ -304,6 +310,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         for input: WorkspaceKeyboardInput,
         context: WorkspaceKeyboardContext
     ) -> WorkspaceKeyboardAction? {
+        if context.isCommandPaletteOpen {
+            return input.isEscape && input.phases.contains(.down) ? .closeCommandPalette : nil
+        }
         if context.isTransformSessionActive, let transformAction = transformSessionAction(for: input) {
             return transformAction
         }
@@ -731,6 +740,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         switch key {
         case "c": return .beginCutCurve
+        case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
         case "b": return context.selectedSketchTargetCount > 0 ? .applySketchCornerTreatment : nil
