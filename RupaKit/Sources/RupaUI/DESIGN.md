@@ -1067,6 +1067,24 @@ the running command inputs, and D can only move focus into a field that
 exists. `WorkspaceViewportContextPanelVisibilityTests` prove each input keeps
 the panel with nothing selected.
 
+`WorkspaceKeyboardScope` is the workspace's keyboard input scope. SwiftUI
+offers every key to an ancestor's key handler before a focused text field
+inside it, so the router used to take the digits, deletes and Returns typed into
+a command dialog: Return finished Move before its field saw it, the dialog went
+with the session while its field held the keyboard, focus fell to the window,
+and the next G reached nothing. While one of the scope's text fields is being
+edited (its window's field editor is first responder) the field owns every key
+but Escape. Its Return, once the field has taken it, first applies the focused
+transform field, then gives the keyboard back to the canvas and acts as Return
+on the canvas does — finishing Move, placing a section — so a command keeps
+the Return meaning it had. An Escape handled while a field is edited also gives
+the keyboard back. A transform field holds its text until that Return and then
+applies its value once through `WorkspaceTransformSession.typedMotion`; a value
+field bound per keystroke would apply 1 and then 10 for a typed 10. Placing a
+section returns focus to the canvas as well. `WorkspaceKeyboardScopeTests`
+mount the scope with a field in a window and send it key events;
+`WorkspaceTransformSessionTests` cover the typed fields.
+
 ## State, Ownership, and Lifecycle
 
 SwiftUI owns transient interaction and render-cache observation state. The

@@ -231,6 +231,29 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         return try Transform3D.rotation(axis: axis, angleRadians: degrees * .pi / 180, about: frame.origin)
     }
 
+    /// The motion a value typed into `field` makes, with lengths in `unit`. A freestyle ratio or
+    /// length ends the freestyle, as a picked ratio point does.
+    mutating func typedMotion(
+        _ field: WorkspaceTransformTypedField,
+        value: Double,
+        unit: LengthDisplayUnit
+    ) throws -> Transform3D {
+        switch (mode, field) {
+        case (.move, .distance(let axis)):
+            return try typedMove(axis.vector(scaledBy: unit.meters(from: value), otherwise: 0))
+        case (.rotate, .angle):
+            return try typedRotation(degrees: value)
+        case (.scale, .factor(let axis)):
+            return try typedScale(axis.vector(scaledBy: value, otherwise: 1))
+        case (.scale, .ratio):
+            return try typedFreestyleScale(ratio: value)
+        case (.scale, .length):
+            return try typedFreestyleScale(length: unit.meters(from: value))
+        default:
+            throw EditorError(code: .commandInvalid, message: "\(title) takes no \(field.title) value.")
+        }
+    }
+
     /// Chooses the pivot mode; a picked pivot gives way to it.
     mutating func choose(pivotMode: SceneTransformPivotMode) {
         self.pivotMode = pivotMode
@@ -346,6 +369,17 @@ struct WorkspaceTransformSession: Equatable, Sendable {
             return "\(title): type the motion, or F for two points. W orientation, V pivot, Return or Esc finishes."
         case nil:
             return "\(title): drag the gizmo. X/Y/Z axis, Shift-X/Y/Z plane, W orientation, V pivot, F freestyle, Return or Esc finishes."
+        }
+    }
+}
+
+private extension SceneTransformAxis {
+    /// Frame components with `value` on this axis and `other` on the two others.
+    func vector(scaledBy value: Double, otherwise other: Double) -> Vector3D {
+        switch self {
+        case .x: Vector3D(x: value, y: other, z: other)
+        case .y: Vector3D(x: other, y: value, z: other)
+        case .z: Vector3D(x: other, y: other, z: value)
         }
     }
 }

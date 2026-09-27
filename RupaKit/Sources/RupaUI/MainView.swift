@@ -230,6 +230,9 @@ private struct ProjectMainViewContent: View {
     @FocusState private var isWorkspaceFocused: Bool
     @FocusState private var focusedPlaceOption: WorkspacePlaceOptionField?
     @FocusState private var isSectionDistanceFocused: Bool
+    @FocusState private var focusedTransformField: WorkspaceTransformTypedField?
+    /// What is typed into the transform dialog's fields, applied only on Return.
+    @State private var transformFieldTexts: [WorkspaceTransformTypedField: String] = [:]
 
     private let objectRegistry: ObjectTypeRegistry
     private let viewportObjectSelectionIndex: ViewportObjectSelectionIndex
@@ -2025,14 +2028,13 @@ private struct ProjectMainViewContent: View {
         .dividerDragStrip(height: 10)
         .collapsibleToggleHelp(expanded: "Hide Logs", collapsed: "Show Logs")
         // Keyboard focus is an input scope; visible canvas affordances are drawn by the viewport.
-        .focusable()
-        .focusEffectDisabled()
-        .focused($isWorkspaceFocused)
+        .modifier(WorkspaceKeyboardScope(
+            isFocused: $isWorkspaceFocused,
+            handle: { handleWorkspaceKeyboardInput($0) },
+            submit: { commitFocusedTransformField() }
+        ))
         .onAppear {
             isWorkspaceFocused = true
-        }
-        .onKeyPress(phases: .all) { keyPress in
-            handleWorkspaceKeyPress(keyPress)
         }
         // The Tools menu is presented by the App; the active tool lives here.
         // One focused scene value joins them without moving the tool state out.
@@ -4035,20 +4037,10 @@ private struct ProjectMainViewContent: View {
         switch transform.mode {
         case .move:
             ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
-                transformOptionField(axis.rawValue.uppercased(), unit: unit.symbol) { value in
-                    var components = Vector3D(x: 0, y: 0, z: 0)
-                    switch axis {
-                    case .x: components.x = unit.meters(from: value)
-                    case .y: components.y = unit.meters(from: value)
-                    case .z: components.z = unit.meters(from: value)
-                    }
-                    return try transform.typedMove(components)
-                }
+                transformOptionField(.distance(axis), unit: unit.symbol)
             }
         case .rotate:
-            transformOptionField("Angle", unit: "deg") { value in
-                try transform.typedRotation(degrees: value)
-            }
+            transformOptionField(.angle, unit: "deg")
             ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
                 transformValueField("Axis \(axis.rawValue.uppercased())", value: {
                     switch axis {
@@ -4066,22 +4058,8 @@ private struct ProjectMainViewContent: View {
             }
         case .scale:
             if transform.hasFreestyleScaleAxis {
-                transformOptionField("Ratio", unit: "x") { value in
-                    guard var updated = transformSession else {
-                        throw EditorError(code: .commandInvalid, message: "No transform is running.")
-                    }
-                    let motion = try updated.typedFreestyleScale(ratio: value)
-                    transformSession = updated
-                    return motion
-                }
-                transformOptionField("Length", unit: unit.symbol) { value in
-                    guard var updated = transformSession else {
-                        throw EditorError(code: .commandInvalid, message: "No transform is running.")
-                    }
-                    let motion = try updated.typedFreestyleScale(length: unit.meters(from: value))
-                    transformSession = updated
-                    return motion
-                }
+                transformOptionField(.ratio, unit: "x")
+                transformOptionField(.length, unit: unit.symbol)
                 Toggle("Uniform", isOn: Binding(
                     get: { transform.freestyleUniform },
                     set: { transformSession?.freestyleUniform = $0 }
@@ -4091,15 +4069,7 @@ private struct ProjectMainViewContent: View {
                 .accessibilityIdentifier("WorkspaceTransform.uniform")
             } else {
                 ForEach(SceneTransformAxis.allCases, id: \.self) { axis in
-                    transformOptionField(axis.rawValue.uppercased(), unit: "x") { value in
-                        var factors = Vector3D(x: 1, y: 1, z: 1)
-                        switch axis {
-                        case .x: factors.x = value
-                        case .y: factors.y = value
-                        case .z: factors.z = value
-                        }
-                        return try transform.typedScale(factors)
-                    }
+                    transformOptionField(.factor(axis), unit: "x")
                 }
             }
         }
@@ -4183,7 +4153,7 @@ private struct ProjectMainViewContent: View {
             // The plane is kept with the document so Previous restores it after reopening.
             submitSource(.setSectionAnalysisPlane(WorkspaceSectionAnalysisSession.placedPlane(for: analysis)))
             sectionAnalysisSession = nil
-            isSectionDistanceFocused = false
+            isWorkspaceFocused = true
             reportToolStatus("Section placed. Run Section Analysis again to remove it.")
         case .failure(let error):
             reportToolStatus("Section Analysis: \(error.localizedDescription)", severity: .warning)
@@ -4279,21 +4249,19 @@ private struct ProjectMainViewContent: View {
         .font(.caption)
     }
 
-    /// A typed value field: submitting it applies the motion `motion` makes of it and clears it.
-    private func transformOptionField(
-        _ title: String,
-        unit: String,
-        motion: @escaping (Double) throws -> Transform3D
-    ) -> some View {
+    /// A typed value field: it holds its text until Return, which applies the value as one motion
+    /// and clears it.
+    private func transformOptionField(_ field: WorkspaceTransformTypedField, unit: String) -> some View {
         HStack(spacing: 4) {
-            Text(title).foregroundStyle(.secondary)
-            TextField(title, value: Binding<Double?>(get: { nil }, set: { value in
-                guard let value else { return }
-                applyTransformMotion { try motion(value) }
-            }), format: .number)
+            Text(field.title).foregroundStyle(.secondary)
+            TextField(field.title, text: Binding(
+                get: { transformFieldTexts[field] ?? "" },
+                set: { transformFieldTexts[field] = $0 }
+            ))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 56)
-                .accessibilityIdentifier("WorkspaceTransform.\(title.lowercased())")
+                .focused($focusedTransformField, equals: field)
+                .accessibilityIdentifier("WorkspaceTransform.\(field.title.lowercased())")
             Text(unit).foregroundStyle(.secondary)
         }
         .font(.caption)
@@ -5607,10 +5575,6 @@ private struct ProjectMainViewContent: View {
 
     private func handleDeleteSelection() -> Bool {
         handleWorkspaceKeyboardInput(WorkspaceKeyboardInput(isDelete: true)) == .handled
-    }
-
-    private func handleWorkspaceKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
-        handleWorkspaceKeyboardInput(WorkspaceKeyboardInput(keyPress: keyPress))
     }
 
     private func handleWorkspaceKeyboardInput(_ input: WorkspaceKeyboardInput) -> KeyPress.Result {
@@ -8653,6 +8617,7 @@ private struct ProjectMainViewContent: View {
             pointPickRequest = nil
             placeSession = nil
             transformSession = moving
+            transformFieldTexts = [:]
             refreshTransformFrame()
             if let transformSession { reportToolStatus(transformSession.prompt) }
         } catch {
@@ -8696,6 +8661,7 @@ private struct ProjectMainViewContent: View {
         pointPickRequest = nil
         placeSession = nil
         transformSession = WorkspaceTransformSession(sceneNodeIDs: ids, mode: mode)
+        transformFieldTexts = [:]
         refreshTransformFrame()
         if let transformSession { reportToolStatus(transformSession.prompt) }
     }
@@ -8739,6 +8705,7 @@ private struct ProjectMainViewContent: View {
     private func finishTransformSession() {
         guard let transformSession else { return }
         self.transformSession = nil
+        transformFieldTexts = [:]
         reportToolStatus("\(transformSession.title) finished.")
     }
 
@@ -8753,10 +8720,27 @@ private struct ProjectMainViewContent: View {
     }
 
     /// Submits one motion of the running transform.
-    private func applyTransformMotion(_ motion: () throws -> Transform3D) {
-        guard let transformSession else { return }
+    /// Applies the value typed into the focused transform field as one motion, and clears it.
+    private func commitFocusedTransformField() {
+        guard let field = focusedTransformField,
+              let text = transformFieldTexts.removeValue(forKey: field) else { return }
+        let unit = snapshot.workspaceState.ruler.displayUnit
         do {
-            submitTransformCommand(try transformSession.command(worldDelta: try motion()))
+            guard let value = try field.value(of: text) else { return }
+            applyTransformMotion { transform in
+                try transform.typedMotion(field, value: value, unit: unit)
+            }
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+        }
+    }
+
+    private func applyTransformMotion(_ motion: (inout WorkspaceTransformSession) throws -> Transform3D) {
+        guard var transform = transformSession else { return }
+        do {
+            let delta = try motion(&transform)
+            transformSession = transform
+            submitTransformCommand(try transform.command(worldDelta: delta))
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
         }

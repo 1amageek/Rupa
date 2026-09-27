@@ -183,4 +183,23 @@ import Testing
         #expect(move.pickedPivot == nil)
         #expect(move.orientation == .world)
     }
+
+    @Test func aTypedFieldReadsItsTextOnceAndMakesItsModesMotion() throws {
+        #expect(try WorkspaceTransformTypedField.distance(.x).value(of: "  ") == nil)
+        #expect(try WorkspaceTransformTypedField.distance(.x).value(of: "10") == 10)
+        #expect(throws: EditorError.self) { _ = try WorkspaceTransformTypedField.angle.value(of: "ten") }
+
+        var move = session(.move)
+        let moved = try move.typedMotion(.distance(.y), value: 10, unit: .millimeter)
+        #expect(try (moved.applied(to: .origin) - Point3D(x: 0, y: 0.01, z: 0)).length < 1e-12)
+
+        var scale = session(.scale)
+        let scaled = try scale.typedMotion(.factor(.z), value: 2, unit: .millimeter)
+        #expect(try (scaled.applied(to: Point3D(x: 2, y: 3, z: 4)) - Point3D(x: 2, y: 3, z: 5)).length < 1e-12)
+
+        var rotate = session(.rotate)
+        #expect(throws: EditorError.self) { _ = try rotate.typedMotion(.distance(.x), value: 1, unit: .meter) }
+        let turned = try rotate.typedMotion(.angle, value: 180, unit: .meter)
+        #expect(try (turned.applied(to: Point3D(x: 2, y: 2, z: 3)) - Point3D(x: 0, y: 2, z: 3)).length < 1e-12)
+    }
 }
