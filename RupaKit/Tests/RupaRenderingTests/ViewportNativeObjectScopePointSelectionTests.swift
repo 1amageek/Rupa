@@ -112,9 +112,16 @@ private func objectScopePicks(
 }
 
 @MainActor
-private func objectScopeControlSession() -> ViewportControlSession {
-    ViewportControlSession(camera: .init(projection: .parallel), basis: .axisFront(.z))
+private func objectScopeControlSession(zoom: CGFloat = 1) -> ViewportControlSession {
+    var camera = ViewportCamera(projection: .parallel)
+    camera.zoom = zoom
+    return ViewportControlSession(camera: camera, basis: .axisFront(.z))
 }
+
+/// The fixture's box spans only 32 × 16 points at the fitted zoom, so every point on its front
+/// face lies within the edge pick tolerance. Pointers that must land on the face's interior use
+/// this zoom, which spans the box across 256 × 128 points.
+private let objectScopeFaceInteriorZoom: CGFloat = 8
 
 /// The pointer over the CAD body's unoccluded `-x` half, on its camera-facing
 /// face.
@@ -183,10 +190,10 @@ func viewportNativeObjectScopeFixtureCarriesBothOccurrencesAsSceneItems() async 
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func objectScopeHoverTransfersToBothEdgeTreatmentHandles() async throws {
+func objectScopeEdgeClickSelectsTheEdgeWhileHoverAddsNoHandles() async throws {
     _ = NSApplication.shared
     let fixture = try rectangleSelectionFixture()
-    let control = objectScopeControlSession()
+    let control = objectScopeControlSession(zoom: objectScopeFaceInteriorZoom)
     let geometry = try rectangleSelectionScreenGeometry(fixture: fixture, control: control)
     let size = rectangleSelectionViewportSize
     let selection = SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: fixture.cadSceneNodeID)])
@@ -224,6 +231,7 @@ func objectScopeHoverTransfersToBothEdgeTreatmentHandles() async throws {
         input(controller.view)?.onPick?(readyPoint, size, .replace)
         try await Task.sleep(for: .milliseconds(20))
     }
+    // The face's interior selects the object in object scope.
     #expect(try #require(picks.last?.hit).selectionComponent == .object)
     // The left front vertical edge is not hidden by the fixture's right-half occluder.
     let edge = try #require(fixture.topology.edges.first { edge in
@@ -239,6 +247,15 @@ func objectScopeHoverTransfersToBothEdgeTreatmentHandles() async throws {
     let reference = try await objectScopePicks(fixture: fixture, control: control,
         selectionHitPolicy: .edge, readyPoint: anchor, points: [anchor])
     let expectedComponent = try #require(reference.first?.target.hit?.selectionComponent)
+
+    // Clicking an edge of the selected object admits that exact edge before the occurrence.
+    picks.removeAll()
+    input(controller.view)?.onPick?(anchor, size, .replace)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(picks.last?.hit?.selectionComponent == expectedComponent)
+
+    // Hovering the edge only highlights it: no handle appears beside it to press or drag until
+    // the edge itself is selected.
     for offset in [CGFloat(18), CGFloat(38)] {
         let handle = CGPoint(x: anchor.x + offset, y: anchor.y)
         input(controller.view)?.onHover?(anchor, size)
@@ -252,10 +269,8 @@ func objectScopeHoverTransfersToBothEdgeTreatmentHandles() async throws {
         surface.onCanvasDrag?(handle, end, size, .replace)
         try await Task.sleep(for: .milliseconds(100))
     }
-    #expect(fillets.count == 1)
-    #expect(chamfers.count == 1)
-    #expect(fillets.first?.target.component == expectedComponent)
-    #expect(chamfers.first?.target.component == expectedComponent)
+    #expect(fillets.isEmpty)
+    #expect(chamfers.isEmpty)
     #expect(selection.selectedTargets == [SelectionTarget(sceneNodeID: fixture.cadSceneNodeID)])
 }
 
@@ -327,7 +342,7 @@ func viewportNativeObjectScopeSelectsNothingWhereTheFrameDrewNothing() async thr
 func viewportNativeCombinedScopePrefersTheCADFaceOverItsOccurrence() async throws {
     _ = NSApplication.shared
     let fixture = try rectangleSelectionFixture()
-    let control = objectScopeControlSession()
+    let control = objectScopeControlSession(zoom: objectScopeFaceInteriorZoom)
     let geometry = try rectangleSelectionScreenGeometry(fixture: fixture, control: control)
     let cadPoint = try objectScopeCADPoint(geometry: geometry)
     let frontFaceID = try #require(

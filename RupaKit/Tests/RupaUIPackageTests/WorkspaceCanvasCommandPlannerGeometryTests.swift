@@ -514,7 +514,7 @@ func canvasPlannerRejectsDegenerateRectangleAndCircleDrags() throws {
         Issue.record("A zero-radius circle drag must not plan a command.")
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
-        #expect(error.message == "Canvas circle drag requires a non-zero radius.")
+        #expect(error.message == "Circular placement requires a positive finite radius.")
     }
 }
 

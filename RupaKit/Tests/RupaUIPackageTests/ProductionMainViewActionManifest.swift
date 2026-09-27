@@ -79,6 +79,9 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspaceTransformSession.swift",
         "Sources/RupaUI/WorkspaceMirrorSession.swift",
         "Sources/RupaUI/WorkspaceCurveRefinementPlanner.swift",
+        "Sources/RupaUI/Modeling/FeatureLengthDraft.swift",
+        "Sources/RupaUI/Modeling/LoftFeatureDraft.swift",
+        "Sources/RupaUI/WorkspaceTransformMatrix.swift",
     ]
 
     static let productionSourceDirectories = [
@@ -104,10 +107,8 @@ enum ProductionMainViewActionManifest {
         "alignSketchVertex",
         "applySketchCornerTreatment",
         "appendFeatureGraph",
-        "chamferBodyEdges",
         "convertSketchLineToArc",
         "convertSketchLineToSpline",
-        "createConstructionPlane",
         "createConstructionPlaneFromTargets",
         "createAnalyticSphere",
         "createBoolean",
@@ -115,7 +116,6 @@ enum ProductionMainViewActionManifest {
         "createExtrudedRectangle",
         "createPatternArrayFromSceneNodes",
         "createLoft",
-        "createRevolve",
         "createSavedView",
         "createViewAlignedConstructionPlane",
         "cutSketchCurve",
@@ -130,7 +130,6 @@ enum ProductionMainViewActionManifest {
         "completeSketchCurve",
         "subdivideSketchSpline",
         "subdivideSurface",
-        "filletBodyEdges",
         "insertSketchSplineControlPoint",
         "insertSurfaceKnot",
         "insertSurfaceTrimKnot",
@@ -139,6 +138,23 @@ enum ProductionMainViewActionManifest {
         "matchSurfaceBoundaryContinuity",
         "mirrorSceneNodes",
         "setSectionAnalysisPlane",
+        "createBSplineSurface",
+        "createBodyEdgeTreatment",
+        "createBodyShell",
+        "createBoundaryBridge",
+        "createCircleSketch",
+        "createConstrainedSurface",
+        "createSheetSurfaceEdit",
+        "createSurfaceFill",
+        "deleteSceneNodes",
+        "extrudeSection",
+        "groupSceneNodes",
+        "revolveSection",
+        "setConstrainedSurface",
+        "setExtrudeExtents",
+        "setFeatureLength",
+        "setLoft",
+        "ungroupSceneNode",
         "moveBodyEdges",
         "moveBodyFaces",
         "moveBodyVertices",
@@ -175,8 +191,6 @@ enum ProductionMainViewActionManifest {
         "setFeatureSuppression",
         "reverseSketchCurve",
         "setBridgeCurveParameters",
-        "setComponentInstanceLock",
-        "setComponentInstanceVisibility",
         "setConstructionPlane",
         "setCubeDimensions",
         "setCylinderDimensions",
@@ -284,7 +298,7 @@ enum ProductionMainViewActionManifest {
             .canvas,
             "ModelingOperationDraft.loft(sheet: true)",
             "Sources/RupaUI/MainView.swift",
-            #"beginSurfaceModelingOperation[\s\S]*?sheet\s*=\s*true"#
+            #"beginSurfaceModelingOperation[\s\S]*?isSurfaceCreation\s*=\s*true"#
         ),
         routeRow("canvas.sweep", "SweepSelectionPlanningService", .sourceTransaction, .canvas, "EditorCommand.createSweep", "Sources/RupaCore/SweepSelectionPlanningService.swift", #"\bcommand\s*\("#),
         routeRow(
@@ -329,7 +343,7 @@ enum ProductionMainViewActionManifest {
     ]
 
     static let transientRows = [
-        "selectedTool", "hoveredTarget", "selectionDragPreviewTargets", "isWorkspaceFocused", "viewportCameraFrame",
+        "selectedTool", "hoveredTarget", "selectionDragPreviewTargets", "isWorkspaceFocused", "viewportCameraFrameRequest",
     ].map(transientRow)
 
     static let domainRows: [Row] = [
@@ -498,14 +512,14 @@ enum ProductionMainViewActionManifest {
             ),
         ]
         if name == "setSceneNodeTransform" {
-            // The viewport's body transform gizmo commits a released translate
-            // as this command. Naming the handler and the command it builds
+            // The viewport's body transform gizmo commits a released transform
+            // as placements. Naming the handler and the command builder it uses
             // together keeps the gizmo from drifting back onto a profile edit,
             // which reached only an extrude and only two of its axes.
             markers.append(
                 Marker(
                     relativePaths: ["Sources/RupaUI/MainView.swift"],
-                    regularExpression: #"submitSource\(name: "moveBodyPlacement"\)[\s\S]*?\.setSceneNodeTransform\s*\(\s*id:\s*node\.id,\s*localTransform:\s*target\.localTransform"#
+                    regularExpression: #"executeSource\(name: "transformBodyPlacements"\)[\s\S]*?WorkspaceTransformMatrix\.commands\(placements:"#
                 )
             )
         }

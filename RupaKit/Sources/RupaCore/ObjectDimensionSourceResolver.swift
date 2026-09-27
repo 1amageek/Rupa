@@ -59,8 +59,14 @@ package struct ObjectDimensionSourceResolver: Sendable {
         let signedSpan = CADExpression.subtract(extrude.distance, start)
         let endValue = try document.cadDocument.parameters.resolvedValue(for: extrude.distance).value
         let startValue = try document.cadDocument.parameters.resolvedValue(for: start).value
-        let depthExpression: CADExpression = extrude.direction == .symmetric ? extrude.distance
-            : (endValue >= startValue ? signedSpan : .subtract(start, extrude.distance))
+        // The depth is the authored distance itself unless a start extent makes it a span, so an
+        // edit of the depth reads and writes what the user typed.
+        let depthExpression: CADExpression
+        if extrude.direction == .symmetric || (extrude.startDistance == nil && endValue >= 0) {
+            depthExpression = extrude.distance
+        } else {
+            depthExpression = endValue >= startValue ? signedSpan : .subtract(start, extrude.distance)
+        }
         try validateGeneratedExtrusionDepthEdgeIfNeeded(
             target: target,
             featureID: featureID,

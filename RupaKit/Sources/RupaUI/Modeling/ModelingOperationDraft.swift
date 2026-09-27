@@ -26,9 +26,10 @@ struct ModelingOperationDraft: Equatable {
 
         var id: String { rawValue }
 
-        /// Operations not already represented by a canvas placement tool.
+        /// Operations not already represented by a canvas placement tool: the primitives and Sweep
+        /// have their own tools, and the surface-only creations open from the Surface tool.
         static var paletteOperations: [Self] {
-            allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge].contains($0) }
+            allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface].contains($0) }
         }
 
         static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge]

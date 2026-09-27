@@ -98,7 +98,7 @@ import RupaCore
     #expect(exchange.openWork.contains { $0.contains("Parametric material hatching") })
     #expect(!exchange.openWork.contains { $0.contains("Radial hatching") })
     #expect(exchange.evidence.contains { evidence in
-        evidence.notes.contains("Saved-view drawing projection now generates structured hidden-line strokes plus section contours, linear and radial hatch segments, and measurement-backed drawing annotations for SVG and PDF export.")
+        evidence.notes.contains("Saved-view drawing projection generates structured hidden-line strokes, section contours, hatch segments, and measurement-backed drawing annotations.")
     })
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })

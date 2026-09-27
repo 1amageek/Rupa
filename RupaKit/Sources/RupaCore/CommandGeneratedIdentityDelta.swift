@@ -68,6 +68,15 @@ public struct CommandGeneratedIdentityDelta: Codable, Equatable, Sendable {
             || beforePatternArraySourceIDs != afterPatternArraySourceIDs {
             throw CommandGeneratedIdentityError.identityChangedWithoutMutation
         }
+        // A command that left the document unchanged generated nothing; the document it read may
+        // itself be invalid, which its evaluation reports.
+        guard didMutate else {
+            self.init(
+                featureIDs: [], sourceBodyOutputs: [], sceneNodeIDs: [],
+                componentDefinitionIDs: [], componentInstanceIDs: [], patternArraySourceIDs: []
+            )
+            return
+        }
 
         let featureIDs = try Self.generatedFeatureIDs(
             beforeIDs: beforeFeatureIDs,

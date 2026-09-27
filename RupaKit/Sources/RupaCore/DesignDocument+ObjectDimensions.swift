@@ -138,8 +138,7 @@ extension DesignDocument {
         let start = extrude.startDistance ?? .length(0, .meter)
         let endValue = try resolvedLengthValue(extrude.distance, owner: "Extrude end")
         let startValue = try resolvedLengthValue(start, owner: "Extrude start")
-        extrude.distance = extrude.direction == .symmetric ? sizeY
-            : (endValue >= startValue ? .add(start, sizeY) : .subtract(start, sizeY))
+        extrude.distance = Self.extrusionDistance(for: sizeY, extrude: extrude, startValue: startValue, endValue: endValue)
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
@@ -224,8 +223,7 @@ extension DesignDocument {
         let start = extrude.startDistance ?? .length(0, .meter)
         let endValue = try resolvedLengthValue(extrude.distance, owner: "Extrude end")
         let startValue = try resolvedLengthValue(start, owner: "Extrude start")
-        extrude.distance = extrude.direction == .symmetric ? sizeY
-            : (endValue >= startValue ? .add(start, sizeY) : .subtract(start, sizeY))
+        extrude.distance = Self.extrusionDistance(for: sizeY, extrude: extrude, startValue: startValue, endValue: endValue)
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
@@ -382,5 +380,23 @@ extension DesignDocument {
             sizeZ: max(bounds.maxY - bounds.minY, 1.0e-9),
             radius: nil
         )
+    }
+}
+
+extension DesignDocument {
+    /// The end distance that gives an extrusion `size` as its depth: the size itself when the
+    /// extrusion starts at its plane and runs forward or symmetrically, so the source keeps what
+    /// the user typed, and the start offset by the size along the extrusion's sense otherwise.
+    static func extrusionDistance(
+        for size: CADExpression,
+        extrude: ExtrudeFeature,
+        startValue: Double,
+        endValue: Double
+    ) -> CADExpression {
+        if extrude.direction == .symmetric || (extrude.startDistance == nil && endValue >= 0) {
+            return size
+        }
+        let start = extrude.startDistance ?? .length(0, .meter)
+        return endValue >= startValue ? .add(start, size) : .subtract(start, size)
     }
 }

@@ -263,10 +263,13 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         }
         let direction = try local.normalized(tolerance: ModelingTolerance.standard.distance)
         let distance = CADExpression.length(local.length, .meter)
-        return switch topologyKind {
-        case .edges: .moveBodyEdges(targets: topologyTargets, direction: direction, distance: distance)
-        case .faces: .moveBodyFaces(targets: topologyTargets, direction: direction, distance: distance)
-        case .vertices: .moveBodyVertices(targets: topologyTargets, direction: direction, distance: distance)
+        switch topologyKind {
+        case .edges:
+            return .moveBodyEdges(targets: topologyTargets, direction: direction, distance: distance)
+        case .faces:
+            return .moveBodyFaces(targets: topologyTargets, direction: direction, distance: distance)
+        case .vertices:
+            return .moveBodyVertices(targets: topologyTargets, direction: direction, distance: distance)
         }
     }
 

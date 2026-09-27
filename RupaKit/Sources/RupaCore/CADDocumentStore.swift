@@ -209,13 +209,15 @@ public final class CADDocumentStore {
         let transactionSnapshot = transactionSnapshot()
         let ownsEvaluationBoundary = evaluationDeferralDepth == 0
         do {
-            let result = try withDeferredEvaluation {
+            let pending = try withDeferredEvaluation {
                 try applyCommand(command)
             }
-            if ownsEvaluationBoundary, result.didMutate {
+            if ownsEvaluationBoundary, pending.didMutate {
                 try requireValidCommittedEvaluation()
             }
-            return result
+            // Generated identities are read from the document the evaluation accepted, so a
+            // document that fails evaluation reports that failure rather than a malformed delta.
+            return try pending.result(after: document, generation: generation, diagnostics: diagnostics)
         } catch {
             restoreTransactionSnapshot(transactionSnapshot)
             throw error
@@ -257,7 +259,45 @@ public final class CADDocumentStore {
     // Each case body below runs inside a nested run() so the per-case
     // temporaries do not accumulate into this function's frame; unoptimized
     // builds must stay within 512 KB worker stacks on deep command chains.
-    private func applyCommand(_ command: EditorCommand) throws -> CommandExecutionResult {
+    /// A command applied to the document whose result waits for the evaluation boundary.
+    private struct PendingCommandExecution {
+        var commandName: String
+        var didMutate: Bool
+        var identityBaseline: DesignDocument
+        var primaryFeatureID: FeatureID?
+        var curveRebuildReport: CurveRebuildReport?
+        var addedSelectionDimensionID: SelectionDimensionID?
+        var createdConstructionPlaneID: ConstructionPlaneSourceID?
+
+        func result(
+            after document: DesignDocument,
+            generation: DocumentGeneration,
+            diagnostics: [EditorDiagnostic]
+        ) throws -> CommandExecutionResult {
+            let generatedIdentities = try CommandGeneratedIdentityDelta(
+                before: identityBaseline,
+                after: document,
+                didMutate: didMutate
+            )
+            if let primaryFeatureID,
+               document.cadDocument.designGraph.nodes[primaryFeatureID] == nil {
+                throw CommandGeneratedIdentityError.missingFeature(primaryFeatureID)
+            }
+            return try CommandExecutionResult(
+                commandName: commandName,
+                generation: generation,
+                didMutate: didMutate,
+                diagnostics: diagnostics,
+                primaryFeatureID: primaryFeatureID,
+                generatedIdentities: generatedIdentities,
+                curveRebuildReport: curveRebuildReport,
+                addedSelectionDimensionID: addedSelectionDimensionID,
+                createdConstructionPlaneID: createdConstructionPlaneID
+            )
+        }
+    }
+
+    private func applyCommand(_ command: EditorCommand) throws -> PendingCommandExecution {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
         var createdConstructionPlaneID: ConstructionPlaneSourceID?
@@ -3166,22 +3206,11 @@ public final class CADDocumentStore {
             try run()
         }
 
-        let generatedIdentities = try CommandGeneratedIdentityDelta(
-            before: identityBaseline,
-            after: document,
-            didMutate: didMutate
-        )
-        if let primaryFeatureID,
-           document.cadDocument.designGraph.nodes[primaryFeatureID] == nil {
-            throw CommandGeneratedIdentityError.missingFeature(primaryFeatureID)
-        }
-        return try CommandExecutionResult(
+        return PendingCommandExecution(
             commandName: command.name,
-            generation: generation,
             didMutate: didMutate,
-            diagnostics: diagnostics,
+            identityBaseline: identityBaseline,
             primaryFeatureID: primaryFeatureID,
-            generatedIdentities: generatedIdentities,
             curveRebuildReport: curveRebuildReport,
             addedSelectionDimensionID: addedSelectionDimensionID,
             createdConstructionPlaneID: createdConstructionPlaneID

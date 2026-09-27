@@ -990,12 +990,10 @@ enum ViewportSpatialOverlayProducer {
                         : (isEntityHovered || hoveredFeatures.contains(item.featureID)
                             ? hoverColor : color)
                     if points.count == 1 {
-                        markers.append(.init(
-                            family: .sketch,
-                            value: marker(
-                                anchor: points[0], diameterPoints: 6, color: primitiveColor
-                            )
-                        ))
+                        // A point moves with its sketch's placement preview like its strokes do.
+                        var pointMarker = marker(anchor: points[0], diameterPoints: 6, color: primitiveColor)
+                        pointMarker.objectPreviewOccurrenceID = item.id
+                        markers.append(.init(family: .sketch, value: pointMarker))
                     } else {
                         var vertices = points
                         if primitiveIsClosed(primitive), vertices.first != vertices.last {

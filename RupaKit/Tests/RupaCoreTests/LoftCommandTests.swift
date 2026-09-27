@@ -624,30 +624,7 @@ import SwiftCAD
 
 @Test func createLoftCanCreateClosedSectionLoopSheetResult() throws {
     var document = DesignDocument.empty()
-    let firstProfileID = try createLoftProfile(
-        in: &document,
-        name: "Loft Loop First",
-        width: 4.0,
-        height: 2.0,
-        x: 0.0,
-        z: 0.0
-    )
-    let secondProfileID = try createLoftProfile(
-        in: &document,
-        name: "Loft Loop Second",
-        width: 4.0,
-        height: 2.0,
-        x: 6.0,
-        z: 4.0
-    )
-    let thirdProfileID = try createLoftProfile(
-        in: &document,
-        name: "Loft Loop Third",
-        width: 4.0,
-        height: 2.0,
-        x: 0.0,
-        z: 8.0
-    )
+    let (firstProfileID, secondProfileID, thirdProfileID) = try createLoftRingProfiles(in: &document, name: "Loft Loop")
 
     let loftID = try document.createLoft(
         name: "Closed Loop Loft Sheet",
@@ -767,28 +744,7 @@ import SwiftCAD
 
 @Test func createLoftSmoothClosedSectionLoopCreatesCubicSheet() throws {
     var document = DesignDocument.empty()
-    let firstProfileID = try createLoftProfile(
-        in: &document,
-        name: "Smooth Loop First",
-        width: 4.0,
-        height: 2.0,
-        z: 0.0
-    )
-    let secondProfileID = try createLoftProfile(
-        in: &document,
-        name: "Smooth Loop Second",
-        width: 4.0,
-        height: 2.0,
-        x: 6.0,
-        z: 4.0
-    )
-    let thirdProfileID = try createLoftProfile(
-        in: &document,
-        name: "Smooth Loop Third",
-        width: 4.0,
-        height: 2.0,
-        z: 8.0
-    )
+    let (firstProfileID, secondProfileID, thirdProfileID) = try createLoftRingProfiles(in: &document, name: "Smooth Loop")
 
     let loftID = try document.createLoft(
         name: "Smooth Closed Loop Loft",
@@ -981,6 +937,30 @@ private func createLoftProfile(
         width: .length(width, .millimeter),
         height: .length(height, .millimeter)
     )
+}
+
+/// Three 4 × 2 mm sections standing around a ring 20 mm in radius, each facing along the ring,
+/// so a closed section loop through them turns once around it. Parallel sections stacked in a
+/// zig-zag do not close a loop: the kernel refuses their returning connection.
+private func createLoftRingProfiles(
+    in document: inout DesignDocument,
+    name: String
+) throws -> (FeatureID, FeatureID, FeatureID) {
+    let h = 3.0.squareRoot() / 2
+    let planes: [Plane3D] = [
+        Plane3D(origin: Point3D(x: 0.02, y: 0, z: 0), normal: .unitZ),
+        Plane3D(origin: Point3D(x: -0.01, y: 0, z: 0.02 * h), normal: Vector3D(x: -h, y: 0, z: -0.5)),
+        Plane3D(origin: Point3D(x: -0.01, y: 0, z: -0.02 * h), normal: Vector3D(x: h, y: 0, z: -0.5)),
+    ]
+    let ids = try planes.enumerated().map { index, plane in
+        try document.createRectangleSketch(
+            name: "\(name) \(index + 1)",
+            plane: .plane(plane),
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+    }
+    return (ids[0], ids[1], ids[2])
 }
 
 private func createTiltedLoftProfile(

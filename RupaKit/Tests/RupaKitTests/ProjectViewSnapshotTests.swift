@@ -134,7 +134,8 @@ func projectWorkspaceVisibilityFiltersTheViewportWithoutDroppingEvaluationSource
     #expect(hiddenOccurrence.mesh.identity == createdOccurrence.mesh.identity)
     #expect(hiddenOccurrence.worldTransform == createdOccurrence.worldTransform)
     #expect(hiddenOccurrence.worldBounds == createdOccurrence.worldBounds)
-    #expect(hiddenOccurrence.copyTelemetry == createdOccurrence.copyTelemetry)
+    // Hiding reuses the materialized mesh unchanged, so it records no copy of its own.
+    #expect(hiddenOccurrence.copyTelemetry.events.isEmpty)
     #expect(
         hiddenState.evaluationSource.occurrences[createdItem.id]
             == createdSourceOccurrence

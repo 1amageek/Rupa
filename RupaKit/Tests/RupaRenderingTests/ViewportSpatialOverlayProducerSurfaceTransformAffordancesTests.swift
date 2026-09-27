@@ -365,8 +365,9 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
     )
     let target = SelectionTarget(sceneNodeID: nodeID, component: .edge(componentID))
     let frame = ViewportEdgeTreatmentDragFrame(anchor: Point3D(x: 0, y: 0, z: -1), modelTransform: item.modelTransform)
+    // Edge treatment handles appear only on an unlocked object whose source is a solid.
     let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
-        document: .empty(),
+        document: bodyTransformTestDocument([item]),
         scene: ViewportScene(items: [item]),
         selection: SelectionModel(selectedTargets: [target]),
         ruler: .standard(for: .meter),

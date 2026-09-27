@@ -65,30 +65,23 @@ import SwiftCAD
 @MainActor
 @Test func automationCreatesClosedSectionLoopLoftSheetThroughEditorSession() async throws {
     var document = DesignDocument.empty()
-    let firstProfileID = try createAutomationLoftProfile(
-        in: &document,
-        name: "Automation Loop First",
-        width: 4.0,
-        height: 2.0,
-        x: 0.0,
-        z: 0.0
-    )
-    let secondProfileID = try createAutomationLoftProfile(
-        in: &document,
-        name: "Automation Loop Second",
-        width: 4.0,
-        height: 2.0,
-        x: 6.0,
-        z: 4.0
-    )
-    let thirdProfileID = try createAutomationLoftProfile(
-        in: &document,
-        name: "Automation Loop Third",
-        width: 4.0,
-        height: 2.0,
-        x: 0.0,
-        z: 8.0
-    )
+    // Three sections standing around a ring, each facing along it, so the loop through them
+    // closes; parallel sections stacked in a zig-zag are refused by the kernel.
+    let h = 3.0.squareRoot() / 2
+    let planes: [Plane3D] = [
+        Plane3D(origin: Point3D(x: 0.02, y: 0, z: 0), normal: .unitZ),
+        Plane3D(origin: Point3D(x: -0.01, y: 0, z: 0.02 * h), normal: Vector3D(x: -h, y: 0, z: -0.5)),
+        Plane3D(origin: Point3D(x: -0.01, y: 0, z: -0.02 * h), normal: Vector3D(x: h, y: 0, z: -0.5)),
+    ]
+    let profileIDs = try planes.enumerated().map { index, plane in
+        try document.createRectangleSketch(
+            name: "Automation Loop \(index + 1)",
+            plane: .plane(plane),
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+    }
+    let (firstProfileID, secondProfileID, thirdProfileID) = (profileIDs[0], profileIDs[1], profileIDs[2])
     let session = EditorSession(document: document)
 
     let result = try AutomationRunner().execute(

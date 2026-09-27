@@ -10,7 +10,7 @@ struct ModelingOperationViewContractTests {
         var calls = 0
         let document = DesignDocument.empty()
         let cases: [(ModelingOperationDraft.Kind, String?)] = [
-            (ModelingOperationDraft.Kind.loft, "Select at least two ordered sketch profiles."),
+            (ModelingOperationDraft.Kind.loft, "Select at least two ordered sections, separate from guides."),
             (.boolean, "Select target CAD bodies, then a separate tool body last."),
             (.box, nil),
         ]

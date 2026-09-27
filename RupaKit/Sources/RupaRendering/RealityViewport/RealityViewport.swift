@@ -761,7 +761,13 @@ final class RealityViewport {
                              snapshotID: EvaluationSnapshotID? = nil) throws {
         let mutations = snapshotID != nil && snapshotID != self.snapshotID ? appliedObjectPreviews : requested
         guard mutations != appliedObjectPreviews || displayMode != previewDisplayMode else { return }
-        guard let surfaceResources else { return }
+        guard let surfaceResources else {
+            // A scene with no surfaces still moves the spatial descriptors a preview tags, which
+            // read the recorded previews when the camera updates.
+            appliedObjectPreviews = mutations
+            previewDisplayMode = displayMode
+            return
+        }
         let available = surfaceResources.plan.nativePreparationByteLimit
             - (spatialResources?.preparedByteCount ?? surfaceResources.plan.retainedByteCount)
         for index in Array(objectPreviews.keys) where

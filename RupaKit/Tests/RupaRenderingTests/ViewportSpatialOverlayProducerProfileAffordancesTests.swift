@@ -483,6 +483,11 @@ private func profileRawInput(
             )))), outputs: [FeatureOutput(role: .body)]
         )], order: [item.featureID]
     )
+    // Profile handles appear only on an unlocked object the document presents.
+    if let nodeID = item.sceneNodeID {
+        document.productMetadata.sceneNodes[nodeID] = SceneNode(id: nodeID, name: item.id, reference: .body(item.featureID))
+        document.productMetadata.rootSceneNodeIDs.append(nodeID)
+    }
     return ProfileRawInput(
         document: document,
         scene: ViewportScene(items: [item]),

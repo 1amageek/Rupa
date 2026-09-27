@@ -264,8 +264,9 @@ private func recordTestBody(
         .init(featureID: featureID, sceneNodeID: node,
               baseLocalTransform: .identity, parentWorldTransform: .identity)
     }
+    // A single-body gizmo record carries its member's occurrence.
     let accepted = try ViewportSpatialInteractionRecord(target: .affordance(
-        target: target, members: [member], groupEdit: nil, placement: baseline(sceneNodeID)))
+        target: target, members: [member], groupEdit: nil, placement: baseline(sceneNodeID)), occurrenceID: "body.first")
     guard case .affordance(_, _, _, let placement) = accepted.target else {
         Issue.record("The affordance baseline was not retained.")
         return
@@ -275,14 +276,14 @@ private func recordTestBody(
     let withBaseline = try ViewportSpatialInteractionRecord.retainedByteCount(for: [accepted])
     let withoutBaseline = try ViewportSpatialInteractionRecord.retainedByteCount(for: [
         try ViewportSpatialInteractionRecord(target: .affordance(
-            target: target, members: [member], groupEdit: nil, placement: nil))
+            target: target, members: [member], groupEdit: nil, placement: nil), occurrenceID: "body.first")
     ])
     #expect(withBaseline > withoutBaseline)
     // A node the drawn member does not name, and a group gizmo that names no
     // single node at all, are both refusals rather than a chosen winner.
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportSpatialInteractionRecord(target: .affordance(
-            target: target, members: [member], groupEdit: nil, placement: baseline(.init())))
+            target: target, members: [member], groupEdit: nil, placement: baseline(.init())), occurrenceID: "body.first")
     }
     #expect(throws: MeshSourcePresentationRenderError.self) {
         try ViewportSpatialInteractionRecord(target: .affordance(
