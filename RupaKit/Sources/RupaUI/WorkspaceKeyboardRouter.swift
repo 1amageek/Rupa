@@ -198,8 +198,16 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateTrimCommand
     /// L: Bridge Vertex joins the two selected curve ends (or curves).
     case bridgeSelection
-    /// B: Fillet Curve or Fillet Vertex on the selected sketch curves or vertex.
-    case applySketchCornerTreatment
+    /// B: Fillet's dialog on the selected sketch curves or curve ends.
+    case beginFillet
+    /// D while Fillet runs: type its distance.
+    case focusFilletDistance
+    /// C while Fillet runs: Fillet or Chamfer.
+    case toggleFilletTreatment
+    /// Return while Fillet runs: apply it.
+    case confirmFillet
+    /// Escape while Fillet runs: end it without a change.
+    case cancelFillet
     /// Tab on a selected Bridge Curve: both ends step G0 → G1 → G2 → G3 → G0.
     case cycleBridgeContinuity
     /// Q on a selected Bridge Curve: trims the curves it bridges.
@@ -262,6 +270,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCurvePickCommandActive: Bool = false
     /// Whether Cut Curve's dialog is picking targets and cutters.
     var isCutCurveSessionActive: Bool = false
+    /// Whether Fillet's dialog runs.
+    var isFilletSessionActive: Bool = false
     /// Whether the Command Palette is open, whose field owns every key but Escape.
     var isCommandPaletteOpen: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
@@ -331,6 +341,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isCutCurveSessionActive, let cutAction = cutCurveAction(for: input) {
             return cutAction
+        }
+        if context.isFilletSessionActive, let filletAction = filletAction(for: input) {
+            return filletAction
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction
@@ -712,6 +725,18 @@ struct WorkspaceKeyboardRouter: Sendable {
     }
 
     /// T starts Trim with the select tool; Escape ends Trim or Split Segment.
+    /// The keys Fillet's dialog takes, which Plasticity's Fillet Curve uses too.
+    private func filletAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
+        if input.isReturn { return .confirmFillet }
+        if input.isEscape { return .cancelFillet }
+        switch input.characters.lowercased() {
+        case "d": return .focusFilletDistance
+        case "c": return .toggleFilletTreatment
+        default: return nil
+        }
+    }
+
     /// The keys Cut Curve's dialog takes, which Plasticity's Cut Curve uses too.
     private func cutCurveAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
         guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
@@ -750,7 +775,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
-        case "b": return context.selectedSketchTargetCount > 0 ? .applySketchCornerTreatment : nil
+        case "b": return context.selectedSketchTargetCount > 0 ? .beginFillet : nil
         case "j": return context.selectedSketchTargetCount == 2 ? .joinSketchCurves : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil
         default: return nil

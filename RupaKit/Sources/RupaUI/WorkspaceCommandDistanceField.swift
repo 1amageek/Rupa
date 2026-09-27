@@ -7,6 +7,8 @@ enum WorkspaceCommandDistanceField: Hashable {
     case curveOffset
     case edgeOffset
     case regionOffset
+    /// Fillet's or Chamfer's distance.
+    case cornerTreatment
 }
 
 /// A command dialog's typed distance, in the display unit. The value it holds is the command's own

@@ -39,7 +39,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Trim", shortcut: "T", invocation: .keyboard(.activateTrimCommand)),
         Command(title: "Split Segment", aliases: ["Split Curve At Point"], invocation: .edit(.splitSegment)),
         Command(title: "Slide", aliases: ["Slide Curve CV", "Slide Surface CV"], shortcut: "⇧G", invocation: .keyboard(.activateSlideCommand)),
-        Command(title: "Fillet", aliases: ["Fillet Curve", "Fillet Vertex", "Chamfer"], shortcut: "B", invocation: .keyboard(.applySketchCornerTreatment)),
+        Command(title: "Fillet", aliases: ["Fillet Curve", "Fillet Vertex", "Chamfer"], shortcut: "B", invocation: .keyboard(.beginFillet)),
         Command(title: "Join Curves", aliases: ["Join"], shortcut: "J", invocation: .keyboard(.joinSketchCurves)),
         Command(title: "Unjoin Curve", aliases: ["Unjoin"], shortcut: "⌥J", invocation: .keyboard(.unjoinSketchCurve)),
         Command(

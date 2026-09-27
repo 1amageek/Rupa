@@ -187,6 +187,7 @@ private struct ProjectMainViewContent: View {
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
+    @State private var filletSession: WorkspaceFilletSession?
     @State private var isCommandPaletteOpen = false
     /// Cut Curve's Extend option: the cutter reaches the target along its line or circle.
     @State private var cutCurveExtendsCutter = false
@@ -459,6 +460,7 @@ private struct ProjectMainViewContent: View {
         selectedTool = .select
         curvePickCommand = nil
         cutCurveSession = nil
+        filletSession = nil
         modelingDraft = ModelingOperationDraft(
             kind: kind,
             selection: snapshot.selection,
@@ -1232,6 +1234,7 @@ private struct ProjectMainViewContent: View {
         if tool != .select {
             curvePickCommand = nil
             cutCurveSession = nil
+            filletSession = nil
         }
         if !keepsSketchInputState(for: tool) {
             sketchInputState.clearTransientInput()
@@ -2774,6 +2777,7 @@ private struct ProjectMainViewContent: View {
 
     private var hasActiveWorkspaceCommand: Bool {
         cutCurveSession != nil
+            || filletSession != nil
             || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
@@ -2785,6 +2789,10 @@ private struct ProjectMainViewContent: View {
     private func confirmActiveWorkspaceCommand() -> Bool {
         if cutCurveSession != nil {
             confirmCutCurve()
+            return true
+        }
+        if filletSession != nil {
+            confirmFillet()
             return true
         }
         if slideCommandState.isCurveControlVerticesActive {
@@ -3938,6 +3946,7 @@ private struct ProjectMainViewContent: View {
         var inputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> = []
         if viewAlignedConstructionPlaneRequest != nil { inputs.insert(.viewAlignedConstructionPlane) }
         if cutCurveSession != nil { inputs.insert(.cutCurve) }
+        if filletSession != nil { inputs.insert(.fillet) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4029,6 +4038,10 @@ private struct ProjectMainViewContent: View {
             if let cutCurveSession {
                 workspaceContextDivider
                 cutCurveContextPanelContent(cutCurveSession)
+            }
+            if let filletSession {
+                workspaceContextDivider
+                filletContextPanelContent(filletSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -5500,6 +5513,7 @@ private struct ProjectMainViewContent: View {
         cancelModelingOperation()
         curvePickCommand = nil
         cutCurveSession = nil
+        filletSession = nil
         var draft = ModelingOperationDraft(
             kind: .surfacePatch,
             selection: snapshot.selection,
@@ -5766,6 +5780,7 @@ private struct ProjectMainViewContent: View {
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
             isCutCurveSessionActive: cutCurveSession != nil,
+            isFilletSessionActive: filletSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
@@ -6051,24 +6066,31 @@ private struct ProjectMainViewContent: View {
         case .activateTrimCommand:
             beginCurvePickCommand(.trim)
             return .handled
-        case .applySketchCornerTreatment:
-            let vertices = selectedSketchTargets.filter { target in
-                guard case .sketchEntity(let componentID) = target.component else { return false }
-                return componentID.sketchPointHandleReference != nil
-            }
-            if vertices.count > 1 {
-                // Fillet Vertex on every selected corner, as one step.
-                submitSource(
-                    .applySketchCornerTreatments(
-                        vertices: vertices,
-                        distance: .length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter),
-                        treatment: sketchCornerTreatment
-                    )
-                )
+        case .beginFillet:
+            guard let fillet = WorkspaceFilletSession(
+                selectedSketchTargets: selectedSketchTargets, treatment: sketchCornerTreatment
+            ) else {
+                reportToolStatus("Fillet: select sketch curves or curve ends.", severity: .warning)
                 return .handled
             }
-            guard let target = selectedSketchTargets.first else { return .ignored }
-            applySelectedSketchCornerTreatment(target)
+            curvePickCommand = nil
+            cutCurveSession = nil
+            filletSession = fillet
+            reportToolStatus("\(fillet.title): D types the distance, C switches Fillet and Chamfer, Return applies.")
+            return .handled
+        case .focusFilletDistance:
+            focusedCommandDistance = .cornerTreatment
+            return .handled
+        case .toggleFilletTreatment:
+            filletSession?.toggleTreatment()
+            if let filletSession { reportToolStatus("\(filletSession.title).") }
+            return .handled
+        case .confirmFillet:
+            confirmFillet()
+            return .handled
+        case .cancelFillet:
+            filletSession = nil
+            reportToolStatus("Fillet ended.")
             return .handled
         case .joinSketchCurves:
             let targets = selectedSketchTargets
@@ -8172,6 +8194,54 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// Return or right-click while Fillet runs: the treatment at the dialog's distance as one step,
+    /// every selected corner once; the dialog stays when it is refused.
+    private func confirmFillet() {
+        guard let fillet = filletSession else { return }
+        sketchCornerTreatment = fillet.treatment
+        let distance = CADExpression.length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter)
+        let command: EditorCommand
+        switch fillet.targets {
+        case .vertices(let vertices):
+            command = .applySketchCornerTreatments(vertices: vertices, distance: distance, treatment: fillet.treatment)
+        case .curves(let target, let adjacent):
+            command = .applySketchCornerTreatment(
+                target: target, adjacentTarget: adjacent, distance: distance, treatment: fillet.treatment
+            )
+        }
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            filletSession = nil
+            reportToolStatus("\(fillet.title) done.")
+        }
+    }
+
+    /// Fillet's dialog: Fillet or Chamfer (C), its distance (D) and Apply.
+    @ViewBuilder
+    private func filletContextPanelContent(_ fillet: WorkspaceFilletSession) -> some View {
+        workspaceStatusChip(fillet.title, systemImage: "rectangle.roundedtop", tint: .accentColor)
+        commandDistanceInput(
+            "Distance", meters: $sketchCornerTreatmentDistanceMeters, field: .cornerTreatment,
+            accessibilityIdentifier: "WorkspaceFillet.distance"
+        )
+        Picker("Treatment", selection: Binding(
+            get: { fillet.treatment },
+            set: { filletSession?.treatment = $0 }
+        )) {
+            Text("Fillet").tag(SketchCornerTreatment.fillet)
+            Text("Chamfer (C)").tag(SketchCornerTreatment.chamfer)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceFillet.treatment")
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Apply \(fillet.title)",
+            accessibilityIdentifier: "WorkspaceFillet.apply",
+            action: { confirmFillet() }
+        )
+    }
+
     /// Cut Curve (C): the selected sketch curves become its targets and cutter, and clicks on
     /// curves add to or remove from the list the dialog picks.
     private func beginCutCurve() {
@@ -8186,6 +8256,7 @@ private struct ProjectMainViewContent: View {
         mirrorSession = nil
         arraySession = nil
         curvePickCommand = nil
+        filletSession = nil
         let cut = WorkspaceCutCurveSession(selectedCurves: curves, extendsCutter: cutCurveExtendsCutter)
         cutCurveSession = cut
         selectTargets(cut.curves)
@@ -8244,6 +8315,7 @@ private struct ProjectMainViewContent: View {
         mirrorSession = nil
         arraySession = nil
         cutCurveSession = nil
+        filletSession = nil
         if selectedTool != .select { _ = setActiveTool(.select) }
         curvePickCommand = command
         reportToolStatus(command.prompt)
@@ -8824,6 +8896,7 @@ private struct ProjectMainViewContent: View {
         pointPickRequest = nil
         curvePickCommand = nil
         cutCurveSession = nil
+        filletSession = nil
         let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
         placeSession = place
         reportToolStatus(place.prompt)
@@ -8859,6 +8932,7 @@ private struct ProjectMainViewContent: View {
             transformSession = nil
             curvePickCommand = nil
             cutCurveSession = nil
+            filletSession = nil
             let mirror = try WorkspaceMirrorSession(sceneNodeIDs: ids, constructionPlane: mirrorConstructionPlane)
             mirrorSession = mirror
             reportToolStatus(mirror.prompt)
@@ -8997,6 +9071,7 @@ private struct ProjectMainViewContent: View {
             placeSession = nil
             curvePickCommand = nil
             cutCurveSession = nil
+            filletSession = nil
             transformSession = moving
             transformFieldTexts = [:]
             refreshTransformFrame()
@@ -9043,6 +9118,7 @@ private struct ProjectMainViewContent: View {
         placeSession = nil
         curvePickCommand = nil
         cutCurveSession = nil
+        filletSession = nil
         transformSession = WorkspaceTransformSession(sceneNodeIDs: ids, mode: mode)
         transformFieldTexts = [:]
         refreshTransformFrame()

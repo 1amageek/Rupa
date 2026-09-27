@@ -491,7 +491,7 @@ private func keyboardContext(
     }
     #expect(action("b") == nil)
     context.selectedSketchTargetCount = 1
-    #expect(action("b") == .applySketchCornerTreatment)
+    #expect(action("b") == .beginFillet)
     #expect(action("j") == nil)
     #expect(action("∆", [.option]) == .unjoinSketchCurve)
     context.selectedSketchTargetCount = 2
@@ -601,4 +601,14 @@ private func keyboardContext(
     aligning.hasSelectedBridgeCurve = true
     #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: aligning) == .cycleBridgeContinuity)
     #expect(SketchVertexAlignmentContinuity.g2.next == .g0)
+}
+
+@Test func workspaceKeyboardRouterRunsFilletsDialogKeys() {
+    let router = WorkspaceKeyboardRouter()
+    var fillet = keyboardContext()
+    fillet.isFilletSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: fillet) == .focusFilletDistance)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "c"), context: fillet) == .toggleFilletTreatment)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: fillet) == .confirmFillet)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: fillet) == .cancelFillet)
 }

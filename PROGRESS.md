@@ -68,7 +68,7 @@
     - [x] SK4.7 Extend Curve offers and accepts only the shapes the curve kind takes (one Core rule), keeping a valid default; D and cursor length stay with the Extend dialog work (SK4.5). `depends:none` `parallel:none`
   - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:none` `parallel:none`
     - [x] SK5.1 Keys: B applies Fillet or Chamfer to the selected sketch curves or vertex (Fillet Vertex now reachable), J joins two selected curves, Option-J unjoins one. `depends:none` `parallel:none`
-    - [ ] SK5.2 Fillet Curve live drag: a radius handle, D and C for fillet and chamfer distance while dragging. `depends:SK5.1` `parallel:none`
+    - [ ] SK5.2 Fillet Curve live drag: a radius handle and the drag direction choosing Fillet or Chamfer; B now opens the Fillet dialog with D for the distance, C for Chamfer and Return or right-click to apply. `depends:SK5.1` `parallel:none`
     - [ ] SK5.3 Join Curves endpoint feedback: coincident and separate ends drawn in distinct colors. `depends:SK5.2` `parallel:none`
     - [x] SK5.4 Fillet Vertex on several selected vertices at once (B; each corner once, as one step). `depends:none` `parallel:none`
     - [ ] SK5.5 Join Curves on three or more curves and already-joined chains; Unjoin after the joined curve was edited. `depends:none` `parallel:none`
