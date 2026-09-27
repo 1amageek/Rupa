@@ -298,6 +298,11 @@ snapshot's mesh and `ViewportBodyTopology(snapshot.topology)`. The two are
 written together or neither is written, because a run list indexes triangles of
 that mesh and is meaningless without it.
 
+`ViewportBodyTopology.Edge.affordanceFrame` forwards Core's optional evaluated
+edge anchor and adjacent-face normals unchanged; occurrence placement is applied
+by Rendering when it composes the world-space direction. See the
+[Core body display contract](../RupaCore/DESIGN.md).
+
 This holds for the branches that draw the body as a profile-derived box as well
 as for the branches that draw the evaluated mesh. An extrude and a straight
 prism sweep display a box built from the sketch profile and the resolved depth,

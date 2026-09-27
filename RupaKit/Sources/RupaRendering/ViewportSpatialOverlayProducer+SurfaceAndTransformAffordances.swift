@@ -664,9 +664,8 @@ extension ViewportSpatialOverlayProducer {
     /// A profile handle is reachable at the same screen size whatever the body
     /// measures and however far the camera is, so its extent is a point length
     /// owned here rather than a fraction of the body's projected span. The
-    /// three edge actions share one anchor and are separated along its inward
-    /// ray. The fill mark follows chamfer by two hit tolerances, so adjacent
-    /// hit regions only touch.
+    /// three edge actions share one anchor and extend along the composed face
+    /// normal in world space. Their leader lengths foreshorten with the view.
     enum ProfileAffordanceMetrics {
         static let markRadiusPoints: CGFloat = 8
         static let hitTolerancePoints: CGFloat = 10
@@ -3079,7 +3078,7 @@ private extension ViewportSpatialOverlayProducer {
                     item: item,
                     edit: edit,
                     anchor: edit.worldPoint(edit.position(for: vertex)),
-                    offsetPoints: nil,
+                    offset: nil,
                     path: squarePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                     input: input,
                     interactionRecords: &interactionRecords,
@@ -3111,7 +3110,7 @@ private extension ViewportSpatialOverlayProducer {
                     edit: edit,
                     anchor: frame?.anchor ?? edit.worldPoint(edit.position(for: face)),
                     profileFaceFrame: frame,
-                    offsetPoints: nil,
+                    offset: nil,
                     path: circlePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                     input: input,
                     interactionRecords: &interactionRecords,
@@ -3136,16 +3135,24 @@ private extension ViewportSpatialOverlayProducer {
                         "Edge treatment selection is not backed by body topology."
                     )
                 }
-                guard let localAnchor = midpoint(of: sourceEdge.displayPoints) else { continue }
-                let anchor = item.modelTransform.point(localAnchor)
+                guard let normalFrame = sourceEdge.affordanceFrame,
+                      !normalFrame.adjacentFaceNormals.isEmpty else { continue }
+                var normalSum = Vector3D.zero
+                for normal in normalFrame.adjacentFaceNormals {
+                    guard let worldNormal = normalized(item.modelTransform.normal(normal)) else {
+                        throw RealityViewportSpatialBatch.invalid("Edge affordance has an invalid face normal.")
+                    }
+                    normalSum = normalSum + worldNormal
+                }
+                guard let direction = normalized(normalSum) else { continue }
+                let anchor = item.modelTransform.point(normalFrame.anchor)
                 let edge = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
                 if wantsBoundarySurface, let loopID = sourceEdge.openBoundaryLoopID {
                     let hasCompleteDisplayLoop = topology.edges.allSatisfy { boundaryEdge in
                         boundaryEdge.openBoundaryLoopID != loopID || boundaryEdge.displayPoints.count >= 2
                     }
-                    if hasCompleteDisplayLoop,
-                       let localAnchor = midpoint(of: sourceEdge.displayPoints) {
+                    if hasCompleteDisplayLoop {
                         for boundaryEdge in topology.edges where boundaryEdge.openBoundaryLoopID == loopID {
                             let points = boundaryEdge.displayPoints.map(
                                 item.modelTransform.point
@@ -3173,8 +3180,8 @@ private extension ViewportSpatialOverlayProducer {
                             target: target,
                             item: item,
                             edit: edit,
-                            anchor: item.modelTransform.point(localAnchor),
-                            offsetPoints: ProfileAffordanceMetrics.boundarySurfaceOffsetPoints,
+                            anchor: anchor,
+                            offset: (direction, ProfileAffordanceMetrics.boundarySurfaceOffsetPoints),
                             path: plusPath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                             input: input,
                             interactionRecords: &interactionRecords,
@@ -3196,7 +3203,7 @@ private extension ViewportSpatialOverlayProducer {
                         item: item,
                         edit: edit,
                         anchor: anchor,
-                        offsetPoints: ProfileAffordanceMetrics.filletOffsetPoints,
+                        offset: (direction, ProfileAffordanceMetrics.filletOffsetPoints),
                         path: diamondPath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                         input: input,
                         interactionRecords: &interactionRecords,
@@ -3214,7 +3221,7 @@ private extension ViewportSpatialOverlayProducer {
                         item: item,
                         edit: edit,
                         anchor: anchor,
-                        offsetPoints: ProfileAffordanceMetrics.chamferOffsetPoints,
+                        offset: (direction, ProfileAffordanceMetrics.chamferOffsetPoints),
                         path: trianglePath(radius: ProfileAffordanceMetrics.markRadiusPoints),
                         input: input,
                         interactionRecords: &interactionRecords,
@@ -3234,9 +3241,8 @@ private extension ViewportSpatialOverlayProducer {
     ///
     /// A prepared record is reachable only through the collision geometry its
     /// drawing builds, so the record and the mark are emitted together. A nil
-    /// `offsetPoints` draws the mark on the anchor itself; a non-nil one moves
-    /// it along the ray toward the body centre and draws the leader line that
-    /// ties it back.
+    /// `offset` draws the mark on the anchor itself; a non-nil one moves it
+    /// along the supplied world direction and draws the leader back to it.
     private static func emitProfileHandle(
         route: SurfaceTransformAffordanceRoute,
         action: ViewportAffordanceAction,
@@ -3245,7 +3251,7 @@ private extension ViewportSpatialOverlayProducer {
         edit: ViewportObjectEditState,
         anchor: Point3D,
         profileFaceFrame: ViewportProfileFaceFrame? = nil,
-        offsetPoints: CGFloat?,
+        offset: (direction: Vector3D, lengthPoints: CGFloat)?,
         path: Path,
         input: SurfaceTransformAffordanceSource.RawInput,
         interactionRecords: inout [ViewportSpatialInteractionRecord],
@@ -3283,13 +3289,11 @@ private extension ViewportSpatialOverlayProducer {
         let identity = ViewportSpatialHandleIdentity.affordance(affordanceTarget)
         let state = state(for: identity, input: input)
         let placement: SurfaceTransformAffordanceSource.DirectedPoint
-        if let offsetPoints {
-            let toward = edit.worldPoint(edit.centerPoint)
+        if let offset {
             placement = .init(
                 anchor: anchor,
-                toward: toward == anchor ? anchor + .unitY : toward,
-                parallel: offsetPoints,
-                perpendicular: 0
+                along: offset.direction,
+                lengthPoints: offset.lengthPoints
             )
             try appendCameraLine(
                 .init(

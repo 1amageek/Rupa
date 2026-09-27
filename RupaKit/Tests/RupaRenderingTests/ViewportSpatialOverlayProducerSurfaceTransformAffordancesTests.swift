@@ -336,7 +336,7 @@ func surfaceTransformSourcePropagatesCheckpointCancellationBeforeAllocation() {
 }
 
 @Test
-func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
+func edgeFilletUsesFixedOriginAndExactWorldDirectedHandleOffset() throws {
     let featureID = FeatureID()
     let nodeID = SceneNodeID()
     let componentID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
@@ -345,7 +345,11 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
             .init(
                 componentID: componentID,
                 start: Point3D(x: -1, y: 0, z: -1),
-                end: Point3D(x: 1, y: 0, z: -1)
+                end: Point3D(x: 1, y: 0, z: -1),
+                affordanceFrame: .init(
+                    anchor: Point3D(x: 0, y: 0, z: -1),
+                    adjacentFaceNormals: [-Vector3D.unitY, -Vector3D.unitZ]
+                )
             ),
         ]
     )
@@ -452,9 +456,10 @@ func edgeFilletUsesFixedOriginAndExactDirectedHandleOffset() throws {
         Issue.record("Fillet line origin must use a fixed zero camera offset.")
     }
     if cameraLines.count == 1,
-       case .directed(_, let parallel, let perpendicular) = cameraLines[0].value.points[1].offset {
-        #expect(parallel == 18)
-        #expect(perpendicular == 0)
+       case .worldDirected(let direction, let lengthPoints) = cameraLines[0].value.points[1].offset {
+        #expect(lengthPoints == 18)
+        #expect(abs(direction.y + 1 / sqrt(2.0)) < 1.0e-10)
+        #expect(abs(direction.z + 1 / sqrt(2.0)) < 1.0e-10)
     } else if cameraLines.count == 1 {
         Issue.record("Fillet handle must use a directed 18 point offset.")
     }

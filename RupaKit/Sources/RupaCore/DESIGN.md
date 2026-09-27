@@ -1227,6 +1227,14 @@ display polyline; a failed sample omits the action rather than showing a false
 chord. These points are presentation data only and never replace exact B-rep
 geometry or topology identity.
 
+An edge's optional `affordanceFrame` carries the exact bounded-curve parameter
+midpoint and one outward unit normal per distinct adjacent face at that point.
+`BodyDisplaySnapshotService` resolves these from the same evaluated B-rep using
+kernel edge/surface queries; a missing or failed query omits the frame. Consumers
+must not invent a direction from the body centre. Normals remain separate so
+occurrence inverse-transpose transforms precede normalization and composition.
+The Rendering profile-affordance checks own end-to-end direction assertions.
+
 ### Object property effect contract
 
 Every object property declares the one effect its edit has, so a control the

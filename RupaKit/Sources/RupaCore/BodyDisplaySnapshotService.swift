@@ -91,6 +91,20 @@ public struct BodyDisplaySnapshotService: Sendable {
         })
         var edgeSubshapeIDs: [EdgeID: SubshapeID] = [:]
         var edgeDisplayPointsByID: [EdgeID: [Point3D]] = [:]
+        var adjacentFacesByEdgeID: [EdgeID: [SubshapeID]] = [:]
+        var seenFaces: Set<FaceID> = []
+        for (subshapeID, reference) in generatedEntries where subshapeID.featureID == featureID {
+            guard case .face(let faceID) = reference,
+                  seenFaces.insert(faceID).inserted,
+                  let face = model.faces[faceID] else { continue }
+            var seenEdges: Set<EdgeID> = []
+            for loopID in face.loops {
+                guard let loop = model.loops[loopID] else { continue }
+                for coedge in loop.edges where seenEdges.insert(coedge.edgeID).inserted {
+                    adjacentFacesByEdgeID[coedge.edgeID, default: []].append(subshapeID)
+                }
+            }
+        }
         for (subshapeID, reference) in generatedEntries where subshapeID.featureID == featureID {
             guard case .edge(let edgeID) = reference else { continue }
             if edgeSubshapeIDs[edgeID] == nil {
@@ -167,7 +181,12 @@ public struct BodyDisplaySnapshotService: Sendable {
                     start: start,
                     end: end,
                     displayPoints: edgeDisplayPointsByID[edgeID] ?? [],
-                    openBoundaryLoopID: openBoundaryLoopIDByEdgeID[edgeID]
+                    openBoundaryLoopID: openBoundaryLoopIDByEdgeID[edgeID],
+                    affordanceFrame: edgeAffordanceFrame(
+                        subshapeID: subshapeID,
+                        adjacentFaces: adjacentFacesByEdgeID[edgeID] ?? [],
+                        in: evaluatedDocument
+                    )
                 ))
             case .vertex(let vertexID):
                 guard let vertex = model.vertices[vertexID] else {
@@ -186,6 +205,42 @@ public struct BodyDisplaySnapshotService: Sendable {
             vertices: vertices,
             meshFaceRuns: meshFaceRuns(for: mesh, componentIDs: faceComponentIDs)
         )
+    }
+
+    private func edgeAffordanceFrame(
+        subshapeID: SubshapeID,
+        adjacentFaces: [SubshapeID],
+        in document: EvaluatedDocument
+    ) -> BodyDisplaySnapshot.Topology.Edge.AffordanceFrame? {
+        guard !adjacentFaces.isEmpty else { return nil }
+        do {
+            let tolerance = document.configuration.tolerance
+            let reference = try document.stableSubshapeReference(for: subshapeID)
+            let anchor = try EdgeQueryEvaluator(tolerance: tolerance).midpoint(
+                of: EdgeReference(subshape: reference), in: document
+            ).point
+            let query = SurfaceQueryEvaluator(tolerance: tolerance)
+            var normals: [Vector3D] = []
+            for faceID in adjacentFaces {
+                let faceReference = try document.stableSubshapeReference(for: faceID)
+                // The anchor already belongs to this edge's incident face. Query
+                // its support directly to avoid trim-boundary rounding rejection.
+                let frame = try query.outwardFrame(
+                    nearestTo: anchor,
+                    on: SurfaceReference(subshape: faceReference),
+                    in: document,
+                    options: SurfaceProjectionOptions(respectsTrimBounds: false)
+                )
+                guard (frame.point - anchor).length <= tolerance.distance,
+                      frame.outwardNormal.isFinite,
+                      frame.outwardNormal.length > 0 else { return nil }
+                normals.append(frame.outwardNormal * (1 / frame.outwardNormal.length))
+            }
+            return .init(anchor: anchor, adjacentFaceNormals: normals)
+        } catch {
+            // Absence suppresses the affordance; never substitute a guessed axis.
+            return nil
+        }
     }
 
     private func edgeDisplayPoints(

@@ -907,12 +907,15 @@ below. Point/tangent source edits are a separate, unfinished preview migration.
    reconstruction participates in preview or release. Both consume the same
    immutable frame; invalid coordinates, stale cameras and singular transforms
    refuse rather than commit a guessed value.
-   Offsets toward the body centre separate the two handles:
-   18 pt for `profileEdgeFillet` and 38 pt for
-   `profileEdgeChamfer`, each with a 10 pt reach. `38 - 18 >= 10 + 10`
-   holds the two reaches apart and the drawn marks span `8 + 8 < 20`, so
-   neither crosses the other, and changing one offset re-derives the other
-   from that rule.
+   Edge handles use Core's evaluated edge frame. Each adjacent face's outward
+   normal is inverse-transpose transformed and normalized in world space;
+   their normalized sum directs the leader in 3D. A boundary uses its single
+   face normal. Missing normals or a degenerate sum omit the handles.
+   Fillet, Chamfer and Boundary Surface use `worldDirected` lengths of
+   18, 38 and 58 pt respectively, converted at the anchor depth. Projection
+   naturally foreshortens these lengths; it does not flatten the direction
+   into the camera plane. Glyph sizes and 10 pt hit tolerances remain fixed,
+   and drawing/collision consume the same native placement.
    A corner or face handle therefore lands on the same point as the
    transform `vertexMove` or `faceMove` handle when one body carries both
    an object selection and a subshape selection. The frame's hit order

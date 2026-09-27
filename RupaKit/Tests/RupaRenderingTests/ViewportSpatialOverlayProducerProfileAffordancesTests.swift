@@ -151,9 +151,8 @@ func profileCornerHandlesAnchorEveryGeneratedVertexWithoutAnOffset() throws {
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
-func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
-    // The two edge handles share one anchor, so only their fixed screen offsets
-    // keep their footprints apart.
+func profileEdgeHandlesExtendAlongCombinedOutwardFaceNormals() throws {
+    // Point lengths set the world-space leaders; projection may foreshorten them.
     #expect(
         ProfileMetrics.chamferOffsetPoints - ProfileMetrics.filletOffsetPoints
             >= 2 * ProfileMetrics.hitTolerancePoints
@@ -192,7 +191,12 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
         let edit = ViewportObjectEditState(item: item)
         let anchor = Point3D(x: (edge.start.x + edge.end.x) * 0.5,
             y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
-        let toward = edit.worldPoint(edit.centerPoint)
+        let normalFrame = try #require(edge.affordanceFrame)
+        #expect(normalFrame.adjacentFaceNormals.count == 2)
+        let direction = try #require(ViewportSpatialOverlayProducer.normalized(
+            normalFrame.adjacentFaceNormals.reduce(Vector3D.zero, +)
+        ))
+        #expect(direction.dot(anchor - edit.worldPoint(edit.centerPoint)) > 0)
         let frame = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
         let expected: [(ViewportAffordanceAction, CGFloat)] = [
             (.profileEdgeFillet(target, frame), ProfileMetrics.filletOffsetPoints),
@@ -212,7 +216,9 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
             #expect(path.placement.parallel == offsetPoints)
             #expect(path.placement.perpendicular == 0)
             #expect(path.placement.anchor == anchor)
-            #expect(path.placement.toward == toward)
+            let worldDirection = try #require(path.placement.worldDirection)
+            #expect((worldDirection - direction).length < 1.0e-10)
+            #expect(!path.placement.carriesTowardPoint)
             #expect(path.hitTolerancePoints == Float(ProfileMetrics.hitTolerancePoints))
 
             let line = try #require(
@@ -225,6 +231,7 @@ func profileEdgeHandlesSeparateFilletAndChamferByFixedScreenOffsets() throws {
             #expect(line.points[0].usesFixedOffset)
             #expect(line.points[0].anchor == anchor)
             #expect(line.points[1].anchor == anchor)
+            #expect(line.points[1].worldDirection == path.placement.worldDirection)
             #expect(interactionRecords.contains { $0.identity == identity && $0.occurrenceID == item.id })
         }
 
@@ -306,6 +313,13 @@ func selectedBoundaryEdgeShowsSurfaceFillForADeletedFaceOpening() throws {
         item.modelTransform.point
     ))
     #expect(source.cameraPaths.count == 1)
+    let boundaryFrame = try #require(loopEdges[0].affordanceFrame)
+    #expect(boundaryFrame.adjacentFaceNormals.count == 1)
+    let boundaryDirection = try #require(source.cameraPaths.first?.placement.worldDirection)
+    let expectedBoundaryDirection = try #require(ViewportSpatialOverlayProducer.normalized(
+        item.modelTransform.normal(boundaryFrame.adjacentFaceNormals[0])
+    ))
+    #expect((boundaryDirection - expectedBoundaryDirection).length < 1.0e-10)
     guard case .affordance(let affordance) = try #require(source.cameraPaths.first).identity else {
         Issue.record("The fill glyph must be an addressable affordance.")
         return

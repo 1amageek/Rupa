@@ -100,22 +100,35 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
         }
 
         public struct Edge: Codable, Equatable, Sendable {
+            public struct AffordanceFrame: Codable, Equatable, Sendable {
+                public var anchor: Point3D
+                public var adjacentFaceNormals: [Vector3D]
+
+                public init(anchor: Point3D, adjacentFaceNormals: [Vector3D]) {
+                    self.anchor = anchor
+                    self.adjacentFaceNormals = adjacentFaceNormals
+                }
+            }
+
             public var componentID: SelectionComponentID
             public var start: Point3D
             public var end: Point3D
             public var displayPoints: [Point3D]
             public var openBoundaryLoopID: String?
+            public var affordanceFrame: AffordanceFrame?
 
             public init(
                 componentID: SelectionComponentID,
                 start: Point3D,
                 end: Point3D,
                 displayPoints: [Point3D]? = nil,
-                openBoundaryLoopID: String? = nil
+                openBoundaryLoopID: String? = nil,
+                affordanceFrame: AffordanceFrame? = nil
             ) {
                 self.componentID = componentID
                 self.start = start
                 self.end = end
+                self.affordanceFrame = affordanceFrame
                 let resolvedDisplayPoints = displayPoints ?? [start, end]
                 self.displayPoints = resolvedDisplayPoints
                 self.openBoundaryLoopID = displayPoints != nil
