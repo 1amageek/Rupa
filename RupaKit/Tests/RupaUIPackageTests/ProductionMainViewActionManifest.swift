@@ -142,6 +142,7 @@ enum ProductionMainViewActionManifest {
         "moveBodyEdges",
         "moveBodyFaces",
         "moveBodyVertices",
+        "transformBodyTopology",
         "moveBodyVertex",
         "movePolySplineSurfaceVertex",
         "moveSceneNodes",

@@ -454,7 +454,8 @@ private func keyboardContext(
     var context = keyboardContext()
     context.hasMovableTopologySelection = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == .transformMode(.move))
-    #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: context) != .transformMode(.rotate))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: context) == .transformMode(.rotate))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) == .transformMode(.scale))
     context.hasMovableTopologySelection = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: context) == nil)
 }

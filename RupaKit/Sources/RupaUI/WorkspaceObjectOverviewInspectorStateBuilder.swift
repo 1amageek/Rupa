@@ -438,6 +438,17 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(vertexMove.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Vertex", value: vertexMove.vertex.subshapeID.role),
             ]
+        case .topologyTransform(let transform):
+            let motion = switch transform.motion {
+            case .translation: "Move"
+            case .rotation: "Rotate"
+            case .scale: "Scale"
+            }
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "\(motion) Topology"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(transform.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Targets", value: "\(transform.subshapes.count)"),
+            ]
         case .linearPattern(let pattern):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Linear Pattern"),

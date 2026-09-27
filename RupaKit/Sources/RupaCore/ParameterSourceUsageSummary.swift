@@ -152,6 +152,10 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.translation.distance, path: "edgeMove.translation.distance")
         case .vertexMove(let feature):
             record(feature.translation.distance, path: "vertexMove.translation.distance")
+        case .topologyTransform(let feature):
+            for (index, expression) in feature.motion.expressions.enumerated() {
+                record(expression, path: "topologyTransform.motion[\(index)]")
+            }
         case .linearPattern(let feature):
             record(feature.spacing, path: "linearPattern.spacing")
         case .radialPattern(let feature):
@@ -315,6 +319,8 @@ public struct ParameterSourceUsageService: Sendable {
             "edgeMove"
         case .vertexMove:
             "vertexMove"
+        case .topologyTransform:
+            "topologyTransform"
         case .linearPattern:
             "linearPattern"
         case .radialPattern:

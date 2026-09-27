@@ -22,8 +22,6 @@ import Testing
         moving.pivotMode = .median
         try moving.resolveFrame(metadata: document.productMetadata, constructionPlane: nil, selectionBounds: nil)
 
-        moving.press(mode: .rotate)
-        #expect(moving.mode == .move, "Rotate does not apply to edges.")
         #expect(moving.gizmo(distanceStepMeters: 0.01) == nil)
         #expect(moving.title == "Move Edge")
 
@@ -50,5 +48,18 @@ import Testing
             Issue.record("Expected a vertex move.")
             return
         }
+
+        // Rotate turns them about an axis expressed in the body's frame: a world quarter turn
+        // about X is a quarter turn about the body's −Y, since the body is turned about Z.
+        moving.press(mode: .rotate)
+        #expect(moving.title == "Rotate Vertices")
+        let rotation = try moving.command(worldDelta: try Transform3D.rotation(axis: .unitX, angleRadians: .pi / 2, about: .origin))
+        guard case .transformBodyTopology(.vertices, [edge], .rotation(let turn)) = rotation else {
+            Issue.record("Expected a topology rotation.")
+            return
+        }
+        let angle = try document.cadDocument.parameters.resolvedValue(for: turn.angle).value
+        #expect(abs(abs(angle) - .pi / 2) < 1e-9)
+        #expect(abs(abs(turn.axis.dot(.unitY)) - 1) < 1e-9)
     }
 }

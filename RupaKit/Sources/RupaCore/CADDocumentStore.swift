@@ -2000,6 +2000,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .transformBodyTopology(let kind, let targets, let motion):
+            var updatedDocument = document
+            try updatedDocument.transformBodyTopology(
+                kind, targets: targets, motion: motion, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .chamferBodyEdges:
             func run() throws {
                 guard case .chamferBodyEdges(let targets, let distance) = command else {

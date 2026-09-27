@@ -29,6 +29,7 @@
     - [x] FB23.1 Planar and cylindrical faces take their area and centroid from swift-CAD's closed-form face measurement (d5a1cfc). `depends:FB16` `parallel:none`
     - [ ] FB23.2 Face measurement on the remaining supports (cone, sphere, torus, B-spline) and with rational or certified pcurves. `depends:FB23.1` `parallel:none`
   - [x] FB24 G on faces and vertices of one body runs Move Faces and Move Vertices through the kernel's face and vertex moves, like Move Edges. `depends:FB15.3` `parallel:none`
+  - [x] FB25 R and S on edges, faces and vertices of one body rotate and scale them together through the kernel's topology transform, and several targets move each shared vertex once (swift-CAD 7fe60b6). `depends:FB24` `parallel:none`
   - [ ] FB5 Integrate all twenty commands, run affected package and native/UI/app workflows, restart Rupa and verify each end-to-end acceptance path against the official Plasticity pages. `depends:FB18a,FB21,FB22,FB23,FB17,FB18,FB19,FB20,FB16,FB1,FBS,FB2,FB10,FB11,FB12,FB13,FB4,FB14,FB3,FB15` `parallel:none`
 - [ ] SK Complete every Plasticity Sketch command (https://doc.plasticity.xyz/sketch) to its official page: each group audits the pages against the source, implements the missing behavior through Swift-CAD for geometry and Rupa for intent and placement, and verifies UI, persistence, undo and failure. `depends:FB` `parallel:none`
   - [ ] SK1 Bridge and Connect: Bridge, Bridge Curve, Bridge Edge, Bridge Vertex. `depends:none` `parallel:none`

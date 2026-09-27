@@ -275,6 +275,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case moveBodyFaces(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
     /// Move Vertices: moves vertices of one body through the kernel's vertex move.
     case moveBodyVertices(targets: [SelectionTarget], direction: Vector3D, distance: CADExpression)
+    /// Rotate or Scale Edges, Faces or Vertices: moves them together by one motion in their body's
+    /// frame through the kernel's topology transform.
+    case transformBodyTopology(kind: BodyTopologyMoveKind, targets: [SelectionTarget], motion: TopologyMotion)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveSketchEntityPoint(
         target: SelectionTarget,
@@ -731,6 +734,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "moveBodyFaces"
         case .moveBodyVertices:
             "moveBodyVertices"
+        case .transformBodyTopology:
+            "transformBodyTopology"
         case .moveBodyVertex:
             "moveBodyVertex"
         case .moveSketchEntityPoint:
@@ -966,6 +971,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .moveBodyEdges,
              .moveBodyFaces,
              .moveBodyVertices,
+             .transformBodyTopology,
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,

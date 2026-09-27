@@ -40,9 +40,9 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     var rotationAxis = Vector3D(x: 0, y: 0, z: 1)
     /// Freestyle Scale scales every direction about the axis start instead of along the axis.
     var freestyleUniform = false
-    /// Edges, faces or vertices of one body the session moves instead of whole objects (Move
-    /// Edges, Faces or Vertices); only Move applies to them, and each motion becomes the kernel's
-    /// direct edit of that kind.
+    /// Edges, faces or vertices of one body the session moves, rotates or scales instead of whole
+    /// objects; a Move becomes the kernel's direct edit of that kind, and a Rotate or Scale its
+    /// topology transform.
     var topologyTargets: [SelectionTarget] = []
     /// What `topologyTargets` are.
     var topologyKind: BodyTopologyMoveKind = .edges
@@ -93,7 +93,6 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     /// Switches to `mode`; the key of the current mode toggles that mode's own constraint instead
     /// (G: screen in Move and Rotate, S: uniform in Scale).
     mutating func press(mode next: Mode) {
-        guard topologyTargets.isEmpty || next == .move else { return }
         guard next == mode else {
             mode = next
             constraint = nil
@@ -244,10 +243,17 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     }
 
     /// The command applying `worldDelta` to the session's objects, or moving its edges, faces or
-    /// vertices by the motion's translation expressed in their body's frame.
+    /// vertices by the motion expressed in their body's frame: a Move by its translation, a Rotate
+    /// or Scale by the whole motion.
     func command(worldDelta: Transform3D) throws -> EditorCommand {
         guard !topologyTargets.isEmpty else {
             return .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: compensatesInstances)
+        }
+        if mode != .move {
+            let local = try topologyBodyWorldTransform.inverse().composed(with: worldDelta.composed(with: topologyBodyWorldTransform))
+            return .transformBodyTopology(
+                kind: topologyKind, targets: topologyTargets, motion: try TopologyMotionDecomposition.motion(local)
+            )
         }
         let pivot = try requiredFrame().origin
         let world = try worldDelta.applied(to: pivot) - pivot
@@ -298,7 +304,13 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     }
 
     var title: String {
-        if !topologyTargets.isEmpty { return topologyTargets.count == 1 ? topologyKind.singularTitle : topologyKind.title }
+        if !topologyTargets.isEmpty {
+            return switch mode {
+            case .move: topologyTargets.count == 1 ? topologyKind.singularTitle : topologyKind.title
+            case .rotate: "Rotate \(topologyKind.noun)"
+            case .scale: "Scale \(topologyKind.noun)"
+            }
+        }
         return switch mode {
         case .move: "Move"
         case .rotate: "Rotate"

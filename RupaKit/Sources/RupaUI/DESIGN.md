@@ -512,11 +512,12 @@ length and uniform scaling). Every drag, freestyle and typed motion commits one
 each is one undo step. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
 
-With edges, faces or vertices of one body selected in their own scope, G runs
-the same session as Move Edges, Move Faces or Move Vertices. The session keeps
-the targets, their kind and their body's world transform, and only Move applies.
-Every typed or freestyle motion's translation, in the body's frame, commits one
-`moveBodyEdges`, `moveBodyFaces` or `moveBodyVertices`. The moved targets become
+With edges, faces or vertices of one body selected in their own scope, G, R
+and S run the same session as Move, Rotate or Scale for them. The session keeps
+the targets, their kind and their body's world transform. A Move's typed or
+freestyle translation, in the body's frame, commits one `moveBodyEdges`,
+`moveBodyFaces` or `moveBodyVertices`. A Rotate or Scale commits one
+`transformBodyTopology` with the motion read in the body's frame. The moved targets become
 the selection and the session's targets again. Changing the scope or selecting
 something else ends it.
 FIXME(INCOMPLETE_IMPLEMENTATION): these moves show no gizmo, because the

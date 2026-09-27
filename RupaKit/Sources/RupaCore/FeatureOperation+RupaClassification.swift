@@ -43,6 +43,7 @@ extension FeatureOperation {
              .faceMove,
              .edgeMove,
              .vertexMove,
+             .topologyTransform,
              .linearPattern,
              .radialPattern,
              .gridPattern,
@@ -107,6 +108,7 @@ extension FeatureOperation {
              .faceMove,
              .edgeMove,
              .vertexMove,
+             .topologyTransform,
              .linearPattern,
              .radialPattern,
              .gridPattern,
@@ -191,6 +193,8 @@ extension FeatureOperation {
         case .edgeMove(let feature):
             return [feature.target.featureID]
         case .vertexMove(let feature):
+            return [feature.target.featureID]
+        case .topologyTransform(let feature):
             return [feature.target.featureID]
         case .chamfer(let feature):
             return [feature.target.featureID]

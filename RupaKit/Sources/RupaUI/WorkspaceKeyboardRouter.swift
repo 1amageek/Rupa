@@ -355,14 +355,14 @@ struct WorkspaceKeyboardRouter: Sendable {
            let mode = transformMode(for: key) {
             return .transformMode(mode)
         }
-        // G moves selected edges, faces or vertices; Rotate and Scale do not apply to them.
+        // G, R and S move, rotate and scale selected edges, faces or vertices.
         if input.modifiers.isEmpty,
            context.isSelectToolActive,
            context.hasMovableTopologySelection,
            !context.isPlaceSessionActive,
            !context.ownsTextEditingKeys,
-           key == "g" {
-            return .transformMode(.move)
+           let mode = transformMode(for: key) {
+            return .transformMode(mode)
         }
         if context.usesSketchAxisConstraint,
            let axisConstraint = SketchAxisConstraint(rawValue: key) {

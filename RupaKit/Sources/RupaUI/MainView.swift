@@ -5682,7 +5682,7 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .transformMode(let mode):
             if transformSession == nil, let movable = selectedMovableTopology {
-                beginTopologyMoveSession(movable.kind, targets: movable.targets)
+                beginTopologyMoveSession(movable.kind, targets: movable.targets, mode: mode)
             } else if transformSession == nil {
                 beginTransformSession(mode, sceneNodeIDs: snapshot.selection.wholeSceneNodeIDs)
             } else {
@@ -8400,13 +8400,17 @@ private struct ProjectMainViewContent: View {
         return (kind, targets)
     }
 
-    /// Move (G) on selected edges, faces or vertices: typed motions and freestyle points move them
-    /// with the kernel's direct edit of that kind.
-    private func beginTopologyMoveSession(_ kind: BodyTopologyMoveKind, targets: [SelectionTarget]) {
+    /// Move, Rotate or Scale (G, R, S) on selected edges, faces or vertices: typed motions and
+    /// freestyle points move them with the kernel's direct edits.
+    private func beginTopologyMoveSession(
+        _ kind: BodyTopologyMoveKind,
+        targets: [SelectionTarget],
+        mode: WorkspaceTransformSession.Mode
+    ) {
         guard let nodeID = targets.first?.sceneNodeID else { return }
         do {
             let hierarchy = try SceneNodeHierarchy(metadata: snapshot.document.document.productMetadata)
-            var moving = WorkspaceTransformSession(sceneNodeIDs: [nodeID], mode: .move)
+            var moving = WorkspaceTransformSession(sceneNodeIDs: [nodeID], mode: mode)
             moving.topologyTargets = targets
             moving.topologyKind = kind
             moving.topologyBodyWorldTransform = try hierarchy.worldTransform(of: nodeID)
@@ -8425,7 +8429,8 @@ private struct ProjectMainViewContent: View {
     private func submitTransformCommand(_ command: EditorCommand) {
         let targets: [SelectionTarget]
         switch command {
-        case .moveBodyEdges(let moved, _, _), .moveBodyFaces(let moved, _, _), .moveBodyVertices(let moved, _, _):
+        case .moveBodyEdges(let moved, _, _), .moveBodyFaces(let moved, _, _), .moveBodyVertices(let moved, _, _),
+             .transformBodyTopology(_, let moved, _):
             targets = moved
         default:
             submitSource(command)

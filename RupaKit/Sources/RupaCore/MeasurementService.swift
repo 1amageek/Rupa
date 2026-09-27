@@ -1080,6 +1080,7 @@ public struct MeasurementService {
                  .faceMove,
                  .edgeMove,
                  .vertexMove,
+                 .topologyTransform,
                  .linearPattern,
                  .radialPattern,
                  .gridPattern,

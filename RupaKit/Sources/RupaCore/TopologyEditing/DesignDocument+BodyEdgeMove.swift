@@ -23,6 +23,15 @@ public enum BodyTopologyMoveKind: String, Codable, Equatable, Sendable {
         }
     }
 
+    /// What the targets are called: "Edges", "Faces" or "Vertices".
+    public var noun: String {
+        switch self {
+        case .edges: "Edges"
+        case .faces: "Faces"
+        case .vertices: "Vertices"
+        }
+    }
+
     public var singularTitle: String {
         switch self {
         case .edges: "Move Edge"
@@ -80,13 +89,14 @@ extension DesignDocument {
         )
     }
 
-    /// Moves edges, faces or vertices of one body through the kernel's direct edits, one feature
-    /// per target chained so each moves the body the previous one made.
+    /// Moves edges, faces or vertices of one body through the kernel's direct edits.
     ///
-    /// The kernel owns what moves: it re-solves the faces around the moved vertices (planes, or
-    /// bilinear patches where a four-sided face warps) and moves a circular edge along its axis
-    /// with the cap it bounds. The candidate is evaluated before it is kept, so a move the kernel
-    /// cannot make refuses the command and the document stays as it was.
+    /// One target becomes that kind's own kernel move. Several become one kernel topology
+    /// transform, so a vertex they share moves once. The kernel owns what can move: it re-solves
+    /// the faces around the moved vertices (planes, or bilinear patches where a four-sided face
+    /// warps) and moves a circular edge along its axis with the cap it bounds. The candidate is
+    /// evaluated before it is kept, so a move the kernel cannot make refuses the command and the
+    /// document stays as it was.
     public mutating func moveBodyTopology(
         _ kind: BodyTopologyMoveKind,
         targets: [SelectionTarget],
@@ -96,73 +106,135 @@ extension DesignDocument {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws {
-        guard let first = targets.first else {
-            throw EditorError(code: .commandInvalid, message: "\(kind.title) needs at least one target.")
-        }
-        guard targets.allSatisfy({ $0.sceneNodeID == first.sceneNodeID }) else {
-            throw EditorError(code: .commandInvalid, message: "\(kind.title) moves the parts of one body at a time.")
-        }
         let unit: Vector3D
         do {
             unit = try direction.normalized(tolerance: modelingSettings.tolerance.distance)
         } catch {
             throw EditorError(code: .commandInvalid, message: "\(kind.title) needs a direction.")
         }
+        let translation = DirectMoveVector(direction: unit, distance: distance)
+        let selections = try topologySelections(
+            kind, targets: targets, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        guard selections.references.count == 1, let reference = selections.references.first else {
+            try appendTopologyTransform(
+                selections, motion: .translation(translation), name: kind.title, objectRegistry: objectRegistry
+            )
+            return
+        }
+        let source = selections.sourceID
+        let operation: FeatureOperation = switch kind {
+        case .edges:
+            .edgeMove(EdgeMoveFeature(target: EdgeMoveTargetReference(featureID: source), edge: reference, translation: translation))
+        case .faces:
+            .faceMove(FaceMoveFeature(target: FaceMoveTargetReference(featureID: source), face: reference, translation: translation))
+        case .vertices:
+            .vertexMove(VertexMoveFeature(target: VertexMoveTargetReference(featureID: source), vertex: reference, translation: translation))
+        }
+        try appendDirectEdit(operation, name: kind.singularTitle, selections: selections, objectRegistry: objectRegistry)
+    }
 
-        var features: [FeatureNode] = []
-        var bodyFeatureID: FeatureID?
+    /// Rotates or scales (or moves) edges, faces or vertices of one body together by `motion`, in
+    /// the body's own frame, through one kernel topology transform.
+    public mutating func transformBodyTopology(
+        _ kind: BodyTopologyMoveKind,
+        targets: [SelectionTarget],
+        motion: TopologyMotion,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let selections = try topologySelections(
+            kind, targets: targets, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let verb = switch motion {
+        case .translation: "Move"
+        case .rotation: "Rotate"
+        case .scale: "Scale"
+        }
+        try appendTopologyTransform(selections, motion: motion, name: "\(verb) \(kind.noun)", objectRegistry: objectRegistry)
+    }
+
+    private struct TopologySelections {
+        var first: SelectionTarget
+        var sourceID: FeatureID
+        var references: [StableSubshapeReference]
+    }
+
+    /// The kernel references of `targets`, which must all be `kind` on one body, without repeats.
+    private func topologySelections(
+        _ kind: BodyTopologyMoveKind,
+        targets: [SelectionTarget],
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> TopologySelections {
+        guard let first = targets.first else {
+            throw EditorError(code: .commandInvalid, message: "\(kind.title) needs at least one target.")
+        }
+        guard targets.allSatisfy({ $0.sceneNodeID == first.sceneNodeID }) else {
+            throw EditorError(code: .commandInvalid, message: "\(kind.title) moves the parts of one body at a time.")
+        }
+        var sourceID: FeatureID?
+        var references: [StableSubshapeReference] = []
         var seen: Set<SubshapeID> = []
         for target in targets {
             let selection = try topologyEditSelection(
                 target, kind: kind.componentKind, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
             )
+            sourceID = sourceID ?? selection.sourceID
             guard seen.insert(selection.reference.subshapeID).inserted else { continue }
-            // Each move acts on the body the previous one made; the kernel follows the subshape's
-            // lineage from the source body.
-            let source = bodyFeatureID ?? selection.sourceID
-            let translation = DirectMoveVector(direction: unit, distance: distance)
-            let operation: FeatureOperation = switch kind {
-            case .edges:
-                .edgeMove(EdgeMoveFeature(
-                    target: EdgeMoveTargetReference(featureID: source), edge: selection.reference, translation: translation
-                ))
-            case .faces:
-                .faceMove(FaceMoveFeature(
-                    target: FaceMoveTargetReference(featureID: source), face: selection.reference, translation: translation
-                ))
-            case .vertices:
-                .vertexMove(VertexMoveFeature(
-                    target: VertexMoveTargetReference(featureID: source), vertex: selection.reference, translation: translation
-                ))
-            }
-            var candidate = cadDocument
-            for feature in features {
-                try candidate.appendFeature(feature, tolerance: modelingSettings.tolerance)
-            }
-            var feature = try FeatureNodeFactory.make(
-                operation: operation, id: FeatureID(), in: candidate, tolerance: modelingSettings.tolerance
-            )
-            feature.name = targets.count == 1 ? kind.singularTitle : kind.title
-            features.append(feature)
-            bodyFeatureID = feature.id
+            references.append(selection.reference)
         }
-        guard let primaryFeatureID = bodyFeatureID else {
+        guard let sourceID else {
             throw EditorError(code: .commandInvalid, message: "\(kind.title) needs at least one target.")
         }
+        return TopologySelections(first: first, sourceID: sourceID, references: references)
+    }
 
+    private mutating func appendTopologyTransform(
+        _ selections: TopologySelections,
+        motion: TopologyMotion,
+        name: String,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try appendDirectEdit(
+            .topologyTransform(TopologyTransformFeature(
+                target: TopologyTransformTargetReference(featureID: selections.sourceID),
+                subshapes: selections.references,
+                motion: motion
+            )),
+            name: name, selections: selections, objectRegistry: objectRegistry
+        )
+    }
+
+    /// Appends one direct-edit feature on the selections' body and keeps it only if the document
+    /// still evaluates.
+    private mutating func appendDirectEdit(
+        _ operation: FeatureOperation,
+        name: String,
+        selections: TopologySelections,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        var feature = try FeatureNodeFactory.make(
+            operation: operation, id: FeatureID(), in: cadDocument, tolerance: modelingSettings.tolerance
+        )
+        feature.name = name
         let previous = self
         var didCommit = false
         defer { if !didCommit { self = previous } }
         try appendTopologyEdit(
-            FeatureGraphTransaction(features: features, primaryFeatureID: primaryFeatureID),
-            replacing: first, objectRegistry: objectRegistry
+            FeatureGraphTransaction(features: [feature], primaryFeatureID: feature.id),
+            replacing: selections.first, objectRegistry: objectRegistry
         )
         do {
             _ = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
                 document: self, objectRegistry: objectRegistry,
                 currentEvaluation: nil, currentGeneration: nil,
-                failurePrefix: kind.title
+                failurePrefix: name
             )
         } catch let error as EditorError {
             throw EditorError(code: .commandInvalid, message: error.message)
