@@ -2628,14 +2628,16 @@ extension ViewportSpatialOverlayProducer {
                 }
             }
             if primitive.showsCurvature {
-                result.append(try curvatureEntry(
+                if let comb = try curvatureEntry(
                     primitive: primitive.primitive,
                     featureID: featureID,
                     sketchPlane: primitive.sketchPlane,
                     modelTransform: primitive.modelTransform,
                     state: state,
                     scaleFactor: primitive.curvatureScale
-                ))
+                ) {
+                    result.append(comb)
+                }
             }
 
         case .arc(_, let center, let radiusMeters, let startAngle, let endAngle, _):
@@ -2807,14 +2809,16 @@ extension ViewportSpatialOverlayProducer {
                 }
             }
             if primitive.showsCurvature {
-                result.append(try curvatureEntry(
+                if let comb = try curvatureEntry(
                     primitive: primitive.primitive,
                     featureID: featureID,
                     sketchPlane: primitive.sketchPlane,
                     modelTransform: primitive.modelTransform,
                     state: state,
                     scaleFactor: primitive.curvatureScale
-                ))
+                ) {
+                    result.append(comb)
+                }
             }
 
         case .spline(_, let points, let controlPoints, _):
@@ -2854,14 +2858,16 @@ extension ViewportSpatialOverlayProducer {
                         "Spline curvature source requires sampled points."
                     )
                 }
-                result.append(try curvatureEntry(
+                if let comb = try curvatureEntry(
                     primitive: primitive.primitive,
                     featureID: featureID,
                     sketchPlane: primitive.sketchPlane,
                     modelTransform: primitive.modelTransform,
                     state: state,
                     scaleFactor: primitive.curvatureScale
-                ))
+                ) {
+                    result.append(comb)
+                }
             }
         }
         return result
@@ -2874,19 +2880,19 @@ extension ViewportSpatialOverlayProducer {
         modelTransform: ScenePlacement,
         state: SketchCurveAffordanceState,
         scaleFactor: Double
-    ) throws -> SketchCurveAffordanceSource.Entry {
+    ) throws -> SketchCurveAffordanceSource.Entry? {
         guard scaleFactor.isFinite, scaleFactor > 0.0 else {
             throw RealityViewportSpatialBatch.invalid(
                 "Curvature comb scale must be positive and finite."
             )
         }
-        guard let comb = ViewportCurveCurvatureComb(primitive: primitive) else {
-            throw RealityViewportSpatialBatch.invalid(
-                "Curvature comb source has no finite drawable samples."
-            )
+        // A curve without curvature (a spline of straight spans, or one curved sample only) has
+        // no comb to draw; that is its comb, not a failure of the overlay.
+        guard let comb = ViewportCurveCurvatureComb(primitive: primitive), comb.samples.count >= 2 else {
+            return nil
         }
         let displayScale = comb.displayScale(scaleFactor: scaleFactor)
-        guard displayScale.isFinite, displayScale > 0.0, comb.samples.count >= 2 else {
+        guard displayScale.isFinite, displayScale > 0.0 else {
             throw RealityViewportSpatialBatch.invalid(
                 "Curvature comb source has no drawable span."
             )

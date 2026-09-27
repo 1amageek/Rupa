@@ -1279,3 +1279,58 @@ func toggledPointsWinOverSelectionForASplinesControlPoints() throws {
     #expect(try controlPointCount(selection: SelectionModel(), mode: .visible) > 0)
     #expect(try controlPointCount(selection: SelectionModel(), mode: nil) == 0)
 }
+
+/// A selected spline whose spans are straight has no curvature to comb: its comb is left out and
+/// its handles are still drawn, rather than the whole sketch overlay failing.
+@Test
+func aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles() throws {
+    let featureID = FeatureID()
+    let splineID = SketchEntityID()
+    let nodeID = SceneNodeID()
+    let scene = ViewportScene(items: [
+        ViewportSceneItem(
+            id: "straight-spline",
+            featureID: featureID,
+            sceneNodeID: nodeID,
+            modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            kind: .sketch(primitives: [
+                .spline(
+                    entityID: splineID,
+                    points: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0), CGPoint(x: 1, y: 0)],
+                    controlPoints: [CGPoint(x: 0, y: 0), CGPoint(x: 0.25, y: 0), CGPoint(x: 0.75, y: 0), CGPoint(x: 1, y: 0)],
+                    sketchPlane: .defaultWorkspacePlane
+                ),
+            ])
+        ),
+    ])
+    let componentID = SelectionComponentID.sketchEntity(featureID: featureID, entityID: splineID)
+    /// The handles and paths drawn with the given routes.
+    func draw(_ routes: Set<ViewportSpatialOverlayProducer.SketchCurveAffordanceRoute>) throws -> (handles: Int, paths: Int) {
+        let input = ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.RawInput(
+            document: .empty(), scene: scene,
+            selection: SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: nodeID, component: .sketchEntity(componentID))]),
+            overlayState: ViewportSceneOverlayState(),
+            ruler: .standard(for: .meter), enabledRoutes: routes
+        )
+        var meshes: [ViewportSpatialOverlayInput.Mesh] = []
+        var paths: [ViewportSpatialOverlayInput.Path] = []
+        var labels: [ViewportSpatialOverlayInput.Label] = []
+        var markers: [ViewportSpatialOverlayInput.Marker] = []
+        var cameraLines: [ViewportSpatialOverlayInput.CameraLine] = []
+        var cameraPaths: [ViewportSpatialOverlayInput.CameraPath] = []
+        var records: [ViewportSpatialInteractionRecord] = []
+        var families: Set<ViewportSpatialOverlayFamily> = []
+        try ViewportSpatialOverlayProducer.appendSketchCurveAffordances(
+            from: input, meshes: &meshes, paths: &paths, labels: &labels, markers: &markers,
+            cameraLines: &cameraLines, cameraPaths: &cameraPaths, interactionRecords: &records,
+            activeFamilies: &families, checkpoint: { _, _, _ in }
+        )
+        let handles = records.filter { if case .splineControlPoint = $0.identity { return true }; return false }.count
+        return (handles, paths.count + cameraPaths.count + meshes.count)
+    }
+    let withComb = try draw([.curvePointControl, .splineControl, .curvatureComb])
+    let withoutComb = try draw([.curvePointControl, .splineControl])
+    #expect(withComb.handles > 0)
+    #expect(withComb.handles == withoutComb.handles)
+    #expect(withComb.paths == withoutComb.paths)
+}

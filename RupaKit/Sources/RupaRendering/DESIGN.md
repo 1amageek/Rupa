@@ -517,6 +517,12 @@ handles in the same update. Release retains that transform until the committed
 source is observed, following the existing object-transform handoff contract
 below. Point/tangent source edits are a separate, unfinished preview migration.
 
+A highlighted or curvature-toggled sketch curve draws its curvature comb from
+`ViewportCurveCurvatureComb`. A curve with no curvature to comb — a spline of
+straight spans, or one curved sample only — draws no comb and keeps its other
+affordances; only an invalid comb scale fails the overlay
+(`aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles`).
+
 ### Source, frame, and provenance
 
 1. Required `ViewportSourceIdentity` plus any active drag-preview revision and
