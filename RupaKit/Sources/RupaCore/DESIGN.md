@@ -939,7 +939,10 @@ sketch line, arc or open spline at Swift-CAD's `SketchCurveProjector` foot of a
 point of the sketch plane, through `splitSketchCurve(target:fraction:)`, so the
 split's constraint, dimension and Bridge Curve rules apply. A circle has no
 segment to divide and is refused, as is a point at either end.
-`SketchCurveTrimTests` also own the split cases.
+`insertSketchSplineControlPoint(target:at:)` is Insert Knot: the same projection
+places a new control point on an open spline through the fraction-based
+insertion, keeping the shape. `SketchCurveTrimTests` also own the split and
+insert cases.
 
 ### Bridge selection contract
 

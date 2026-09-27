@@ -33,6 +33,8 @@ public struct WorkspaceEditCommands {
     public var bridge: (@MainActor () -> Void)?
     /// Turns the selected component instances into independent, editable copies.
     public var realizeInstances: (@MainActor () -> Void)?
+    /// Starts Insert Knot: each clicked spline gains a control point where it is clicked.
+    public var insertKnot: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -47,7 +49,8 @@ public struct WorkspaceEditCommands {
         subdivide: (@MainActor () -> Void)? = nil,
         splitSegment: (@MainActor () -> Void)? = nil,
         bridge: (@MainActor () -> Void)? = nil,
-        realizeInstances: (@MainActor () -> Void)? = nil
+        realizeInstances: (@MainActor () -> Void)? = nil,
+        insertKnot: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -62,6 +65,7 @@ public struct WorkspaceEditCommands {
         self.splitSegment = splitSegment
         self.bridge = bridge
         self.realizeInstances = realizeInstances
+        self.insertKnot = insertKnot
     }
 }
 

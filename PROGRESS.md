@@ -71,8 +71,8 @@
     - [ ] SK7.3 Project Body Body and Project Curve Curve through a kernel intersection curve. `depends:SK7.2` `parallel:none`
     - [ ] SK7.4 Create Outline as 3D boundary curves at the body. `depends:SK7.3` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
-    - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:none` `parallel:none`
-    - [ ] SK8.2 Insert Knot by a click on the spline. `depends:SK8.1` `parallel:none`
+    - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:SK8.2` `parallel:none`
+    - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`
     - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`

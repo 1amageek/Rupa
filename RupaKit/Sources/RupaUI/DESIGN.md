@@ -576,12 +576,13 @@ beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
-Trim (T, with the select tool) and Split Segment (Edit menu) run a
+Trim (T, with the select tool), Split Segment and Insert Knot (Edit menu) run a
 `WorkspaceCurvePickCommand` until Escape: each click on a sketch curve resolves
 the curve under the pointer in sketch-entity scope, whatever the selection
 scope, carries the click's world point into that sketch's plane and submits one
-`trimSketchCurve` or `splitSketchCurveAtPoint`, so each removed segment or split
-is one undo step. Core owns which segment the point chooses and where it splits
+`trimSketchCurve`, `splitSketchCurveAtPoint` or
+`insertSketchSplineControlPointAtPoint`, so each removed segment, split or new
+control point is one undo step. Core owns which segment the point chooses and where it splits
 ([Trim contract](../RupaCore/DESIGN.md#trim-contract)).
 
 Bridge (Edit menu, and L with two sketch curves or curve ends selected) submits

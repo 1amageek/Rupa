@@ -19,4 +19,20 @@ extension DesignDocument {
         let fraction = try sketchCurveSplitParameter(of: selection.entity, nearestTo: point)
         return try splitSketchCurve(target: target, fraction: .scalar(fraction), objectRegistry: objectRegistry)
     }
+
+    /// Insert Knot: inserts a control point into an open spline at its point nearest `point`, in the
+    /// sketch's plane coordinates, keeping the curve's shape. Returns the new control point's index.
+    @discardableResult
+    public mutating func insertSketchSplineControlPoint(
+        target: SelectionTarget,
+        at point: Point2D,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> Int {
+        let selection = try editableSketchEntity(for: target, operationName: "Insert Knot")
+        guard case .spline = selection.entity else {
+            throw EditorError(code: .commandInvalid, message: "Insert Knot takes a spline.")
+        }
+        let fraction = try sketchCurveSplitParameter(of: selection.entity, nearestTo: point)
+        return try insertSketchSplineControlPoint(target: target, fraction: .scalar(fraction), objectRegistry: objectRegistry)
+    }
 }

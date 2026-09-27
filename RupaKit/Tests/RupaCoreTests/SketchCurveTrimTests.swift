@@ -183,6 +183,22 @@ import Testing
         #expect(session.document.cadDocument.designGraph == before)
     }
 
+    @Test func insertKnotAddsAControlPointAtTheProjectedFootAndKeepsTheShape() throws {
+        let spline = SketchEntityID()
+        let controls = [(0.0, 0.0), (1, 2), (2, 2), (3, 0)].map { point($0.0, $0.1) }
+        let (session, featureID) = try session([(spline, .spline(SketchSpline(controlPoints: controls)))])
+        _ = try session.execute(.insertSketchSplineControlPointAtPoint(
+            target: try target(session, featureID, spline), point: Point2D(x: 0.0015, y: 0.005)
+        ))
+        guard case .spline(let refined) = try sketch(session, featureID).entities[spline] else {
+            Issue.record("Insert Knot keeps the spline.")
+            return
+        }
+        #expect(refined.controlPoints.count == 7)
+        #expect(abs(try session.document.resolvedLengthValue(refined.controlPoints[3].x, owner: "test") - 0.0015) < 1e-12)
+        #expect(abs(try session.document.resolvedLengthValue(refined.controlPoints[3].y, owner: "test") - 0.0015) < 1e-12)
+    }
+
     @Test func aPointTargetIsRefusedAndTheDocumentIsUnchanged() throws {
         let (base, dot) = (SketchEntityID(), SketchEntityID())
         let (session, featureID) = try session([(base, line(0, 0, 10, 0)), (dot, .point(point(5, 5)))])

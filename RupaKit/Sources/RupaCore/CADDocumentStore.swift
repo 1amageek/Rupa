@@ -2482,6 +2482,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .insertSketchSplineControlPointAtPoint:
+            func run() throws {
+                guard case .insertSketchSplineControlPointAtPoint(let target, let point) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected insertSketchSplineControlPointAtPoint.")
+                }
+                var updatedDocument = document
+                try updatedDocument.insertSketchSplineControlPoint(target: target, at: point, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .splitSketchCurveAtPoint:
             func run() throws {
                 guard case .splitSketchCurveAtPoint(let target, let point) = command else {

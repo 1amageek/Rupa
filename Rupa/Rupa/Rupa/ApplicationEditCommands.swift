@@ -49,6 +49,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.splitSegment?()
             }
             .disabled(editCommands?.splitSegment == nil)
+            Button("Insert Knot") {
+                editCommands?.insertKnot?()
+            }
+            .disabled(editCommands?.insertKnot == nil)
             Button("Bridge") {
                 editCommands?.bridge?()
             }

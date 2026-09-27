@@ -305,6 +305,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         distance: CADExpression
     )
     case insertSketchSplineControlPoint(target: SelectionTarget, fraction: CADExpression)
+    /// Insert Knot: a control point inserted at the spline's point nearest `point`, in its sketch's
+    /// plane coordinates.
+    case insertSketchSplineControlPointAtPoint(target: SelectionTarget, point: Point2D)
     case setSketchCircleParameters(
         target: SelectionTarget,
         center: SketchPoint?,
@@ -793,6 +796,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "trimSketchCurve"
         case .splitSketchCurveAtPoint:
             "splitSketchCurveAtPoint"
+        case .insertSketchSplineControlPointAtPoint:
+            "insertSketchSplineControlPointAtPoint"
         case .cutSketchCurve:
             "cutSketchCurve"
         case .createExtrusion:
@@ -1011,6 +1016,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .trimSketchCurveSegment,
              .trimSketchCurve,
              .splitSketchCurveAtPoint,
+             .insertSketchSplineControlPointAtPoint,
              .cutSketchCurve,
              .createExtrusion,
              .setExtrusion,

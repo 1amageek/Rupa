@@ -7990,6 +7990,8 @@ private struct ProjectMainViewContent: View {
                 submitSource(.trimSketchCurve(target: curve, point: point))
             case .splitSegment:
                 submitSource(.splitSketchCurveAtPoint(target: curve, point: point))
+            case .insertKnot:
+                submitSource(.insertSketchSplineControlPointAtPoint(target: curve, point: point))
             }
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
@@ -8193,7 +8195,8 @@ private struct ProjectMainViewContent: View {
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
-            realizeInstances: realizeInstancesAction
+            realizeInstances: realizeInstancesAction,
+            insertKnot: selectedTool == .select ? insertKnotAction : nil
         )
     }
 
@@ -8258,6 +8261,11 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Realized \(ids.count == 1 ? "the instance" : "\(ids.count) instances") as independent copies.")
             }
         }
+    }
+
+    /// Insert Knot from the Edit menu.
+    private var insertKnotAction: @MainActor () -> Void {
+        { beginCurvePickCommand(.insertKnot) }
     }
 
     /// Split Segment from the Edit menu, offered with the select tool.
