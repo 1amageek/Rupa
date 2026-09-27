@@ -196,8 +196,9 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         return length
     }
 
-    /// The area of a planar topology face as placed in the world. The summary area exists only
-    /// for planar faces, whose placed area scales by the area ratio of the placed face plane.
+    /// The area of a topology face as placed in the world. A planar face's area scales by the
+    /// area ratio of the placed face plane; a curved face's scales by the square of the
+    /// placement's scale, which must keep angles.
     public func placedFaceAreaSquareMeters(
         for anchor: MeasurementAnchor,
         in document: DesignDocument,
@@ -210,6 +211,19 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         }
         if placed.transform == .identity {
             return area
+        }
+        if placed.entry.surfaceKind != "plane" {
+            let images = try [Vector3D.unitX, .unitY, .unitZ].map { try placed.transform.applyingLinearPart(to: $0) }
+            let scale = images[0].length
+            let keepsAngles = images.allSatisfy { abs($0.length - scale) <= 1e-9 * scale }
+                && abs(images[0].dot(images[1])) <= 1e-9 * scale * scale
+                && abs(images[1].dot(images[2])) <= 1e-9 * scale * scale
+                && abs(images[0].dot(images[2])) <= 1e-9 * scale * scale
+            guard scale > 0, keepsAngles else {
+                throw EditorError(code: .commandInvalid,
+                    message: "Placed area of a curved face needs a placement without shear or uneven scale.")
+            }
+            return area * scale * scale
         }
         guard let normal = placed.entry.normal else {
             throw EditorError(code: .referenceUnresolved,

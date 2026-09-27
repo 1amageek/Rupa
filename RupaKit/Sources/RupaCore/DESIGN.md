@@ -998,10 +998,13 @@ and evaluates `EdgeQueryEvaluator.frame`. Drawing edge-length and face-area
 annotations take their placement from
 `MeasurementAnchorWorldPointResolver.placedTopologyEntry` (occurrence included):
 the placed edge length is the kernel arc length of the edge curve's affine
-image, and a planar face area scales by the placed face plane's area ratio; a
-placement failure is a warning diagnostic and no value. Face area itself and
-face centers stay Rupa computations marked `FIXME(INCOMPLETE_IMPLEMENTATION)`
-until Swift-CAD publishes exact face measurement.
+image, a planar face area scales by the placed face plane's area ratio, and a
+curved face area by the square of a placement that keeps angles; a placement
+failure is a warning diagnostic and no value. Face areas and face centers are
+Swift-CAD's exact area and area centroid (`BRepModel.faceAreaMeasurement`) on
+planar and cylindrical faces. On other supports the area is absent and the
+center is the boundary-vertex average, marked
+`FIXME(INCOMPLETE_IMPLEMENTATION)` until Swift-CAD measures every support.
 
 ### Placed measurement aggregation
 

@@ -160,7 +160,7 @@ public struct TopologySnapshotService: Sendable {
             let surfaceInfo = face.flatMap { face in
                 evaluatedDocument.brep.geometry.surfaces[face.surfaceID].map(describeSurface)
             }
-            let center = face.flatMap { faceCenter($0, in: evaluatedDocument.brep) }
+            let center = face.flatMap { faceCenter(faceID, $0, in: evaluatedDocument.brep) }
             let normal = face.flatMap { faceNormal($0, reference: stableReference, in: evaluatedDocument) }
             return TopologySummaryResult.Entry(
                 subshapeID: identity,
@@ -182,7 +182,7 @@ public struct TopologySnapshotService: Sendable {
                 surfaceUControlPointCount: surfaceInfo?.uControlPointCount,
                 surfaceVControlPointCount: surfaceInfo?.vControlPointCount,
                 areaSquareMeters: metricPolicy == .include
-                    ? face.flatMap { faceAreaSquareMeters($0, in: evaluatedDocument.brep) }
+                    ? face.flatMap { _ in faceAreaSquareMeters(faceID, in: evaluatedDocument.brep) }
                     : nil,
                 center: center,
                 normal: normal,
@@ -268,11 +268,28 @@ public struct TopologySnapshotService: Sendable {
         )
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The face center is an average of boundary vertices, not
-    // the exact face centroid; Swift-CAD publishes no face-centroid query yet. Production path:
-    // topology snapshot face centers used by Face Center snapping. Completion requires an exact
-    // Swift-CAD face measurement and deleting this Rupa computation.
+    /// The face's area centroid, measured exactly by Swift-CAD.
     private func faceCenter(
+        _ faceID: FaceID,
+        _ face: Face,
+        in model: BRepModel
+    ) -> TopologySummaryResult.Entry.Point? {
+        do {
+            let centroid = try model.faceAreaMeasurement(of: faceID, tolerance: .standard).centroid
+            return TopologySummaryResult.Entry.Point(x: centroid.x, y: centroid.y, z: centroid.z)
+        } catch let error as KernelError where error.code == .unsupportedCapability {
+            return boundaryVertexMean(face, in: model)
+        } catch {
+            return nil
+        }
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area centroid of planar and
+    // cylindrical faces only; on any other support the face center is this average of boundary
+    // vertices, not the centroid. Production path: topology snapshot face centers used by Face
+    // Center snapping, construction-plane and generated-face targets. Completion requires
+    // Swift-CAD to measure every support and deleting this Rupa computation.
+    private func boundaryVertexMean(
         _ face: Face,
         in model: BRepModel
     ) -> TopologySummaryResult.Entry.Point? {
@@ -361,86 +378,16 @@ public struct TopologySnapshotService: Sendable {
         return nil
     }
 
-    // FIXME(INCOMPLETE_IMPLEMENTATION): Face area is computed here only for planar line-loop
-    // faces and is nil otherwise; Swift-CAD publishes no exact face-area query yet. Production
-    // path: topology snapshot metrics consumed by drawing face-area annotations and inspectors.
-    // Completion requires an exact Swift-CAD face measurement (see the system kernel/application
-    // boundary) and deleting this Rupa computation.
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD measures the area of planar and cylindrical
+    // faces only, so the area of a face on any other support is nil. Production path: topology
+    // snapshot metrics consumed by drawing face-area annotations and inspectors. Completion
+    // requires Swift-CAD to measure every support.
     private func faceAreaSquareMeters(
-        _ face: Face,
-        in model: BRepModel
-    ) -> Double? {
-        guard let surface = model.geometry.surfaces[face.surfaceID] else {
-            return nil
-        }
-        switch surface {
-        case .plane(let plane):
-            return planarLineLoopFaceAreaSquareMeters(
-                face,
-                plane: plane,
-                in: model
-            )
-        case .cylinder, .bSpline, .analytic, .procedural:
-            return nil
-        }
-    }
-
-    private func planarLineLoopFaceAreaSquareMeters(
-        _ face: Face,
-        plane: Plane3D,
+        _ faceID: FaceID,
         in model: BRepModel
     ) -> Double? {
         do {
-            try plane.validate(tolerance: .standard)
-            let normal = try plane.normal.normalized(tolerance: ModelingTolerance.standard.distance)
-            var totalArea = 0.0
-            for loopID in face.loops {
-                guard let loop = model.loops[loopID],
-                      loop.edges.isEmpty == false,
-                      loop.edges.allSatisfy({ orientedEdge in
-                          guard let edge = model.edges[orientedEdge.edgeID],
-                                let curve = model.geometry.curves[edge.curveID] else {
-                              return false
-                          }
-                          if case .line = curve {
-                              return true
-                          }
-                          return false
-                      }) else {
-                    return nil
-                }
-                let points = try model.orderedPoints(for: loopID)
-                guard points.count >= 3 else {
-                    return nil
-                }
-                // Rebase to a loop vertex rather than plane.origin, which may sit on
-                // a world axis far from the loop and leave the cross-products at
-                // ~1e12. A loop vertex is always on the loop, so the relative
-                // coordinates stay small; face area is translation invariant.
-                let areaOrigin = points[0]
-                var signedDoubleArea = 0.0
-                for index in points.indices {
-                    let current = points[index] - areaOrigin
-                    let next = points[(index + 1) % points.count] - areaOrigin
-                    signedDoubleArea += current.cross(next).dot(normal)
-                }
-                let loopArea = abs(signedDoubleArea) * 0.5
-                guard loopArea.isFinite,
-                      loopArea > ModelingTolerance.standard.distance * ModelingTolerance.standard.distance else {
-                    return nil
-                }
-                switch loop.role {
-                case .outer:
-                    totalArea += loopArea
-                case .inner:
-                    totalArea -= loopArea
-                }
-            }
-            guard totalArea.isFinite,
-                  totalArea > ModelingTolerance.standard.distance * ModelingTolerance.standard.distance else {
-                return nil
-            }
-            return totalArea
+            return try model.faceAreaMeasurement(of: faceID, tolerance: .standard).area
         } catch {
             return nil
         }

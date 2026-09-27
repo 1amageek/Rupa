@@ -26,6 +26,8 @@
     - [ ] FB21.2 Cut a sheet at the mirror plane (kernel split of the sheet's faces along their exact plane intersection) and remove the Rupa cut refusal. `depends:FB21.1` `parallel:none`
   - [x] FB22 Snap candidates on sketches presented by a moved scene node, placed through the occurrence placement. `depends:FB16` `parallel:none`
   - [ ] FB23 Exact face centroid and face area from Swift-CAD for face-center snapping and face-area metrics, replacing the Rupa approximations. `depends:FB16` `parallel:none`
+    - [x] FB23.1 Planar and cylindrical faces take their area and centroid from swift-CAD's closed-form face measurement (d5a1cfc). `depends:FB16` `parallel:none`
+    - [ ] FB23.2 Face measurement on the remaining supports (cone, sphere, torus, B-spline) and with rational or certified pcurves. `depends:FB23.1` `parallel:none`
   - [ ] FB5 Integrate all twenty commands, run affected package and native/UI/app workflows, restart Rupa and verify each end-to-end acceptance path against the official Plasticity pages. `depends:FB18a,FB21,FB22,FB23,FB17,FB18,FB19,FB20,FB16,FB1,FBS,FB2,FB10,FB11,FB12,FB13,FB4,FB14,FB3,FB15` `parallel:none`
 - [ ] SK Complete every Plasticity Sketch command (https://doc.plasticity.xyz/sketch) to its official page: each group audits the pages against the source, implements the missing behavior through Swift-CAD for geometry and Rupa for intent and placement, and verifies UI, persistence, undo and failure. `depends:FB` `parallel:none`
   - [ ] SK1 Bridge and Connect: Bridge, Bridge Curve, Bridge Edge, Bridge Vertex. `depends:none` `parallel:none`
