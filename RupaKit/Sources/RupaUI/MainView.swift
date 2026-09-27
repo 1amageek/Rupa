@@ -8470,6 +8470,7 @@ private struct ProjectMainViewContent: View {
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
+            reverseCurves: reverseCurvesAction,
             createInstance: createInstanceAction,
             realizeInstances: realizeInstancesAction,
             insertKnot: selectedTool == .select ? insertKnotAction : nil
@@ -8521,6 +8522,22 @@ private struct ProjectMainViewContent: View {
                   })?.selectionTarget() else { return }
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
+    }
+
+    /// Reverse Curve on every selected sketch curve (Edit menu, palette), as one step; Core refuses
+    /// the whole step when one of them has no direction to reverse (a circle, or an arc until its
+    /// direction is represented).
+    private var reverseCurvesAction: (@MainActor () -> Void)? {
+        let curves = snapshot.selection.selectedTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component else { return false }
+            return componentID.sketchEntityReference != nil
+                && componentID.sketchPointHandleReference == nil
+                && componentID.sketchControlPointReference == nil
+        }
+        guard !curves.isEmpty else { return nil }
+        return {
+            submitSource(curves.map { .reverseSketchCurve(target: $0) }, name: "Reverse Curve")
         }
     }
 

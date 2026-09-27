@@ -596,6 +596,10 @@ the canvas as Return; the router gives the open palette's Escape back to it
 inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
 offered.
 
+Reverse Curve (Edit menu, palette) reverses every selected sketch curve as one
+step through `reverseSketchCurve`; Core refuses the step when one of them has no
+direction to reverse (a circle, or an arc until its direction is represented).
+
 Cut Curve (C, with the select tool) runs a `WorkspaceCutCurveSession`: the
 selected sketch curves seed it (with several, the last selected is the cutter and
 the others targets; with one, it is the target), the dialog's Targets/Cutters

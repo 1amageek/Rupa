@@ -58,6 +58,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Complete Edge", invocation: .edit(.completeEdge)),
         Command(title: "Subdivide", invocation: .edit(.subdivide)),
         Command(title: "Insert Knot", aliases: ["Insert CV At Point"], invocation: .edit(.insertKnot)),
+        Command(title: "Reverse Curve", aliases: ["Reverse"], invocation: .edit(.reverseCurves)),
         Command(title: "Create Instance", aliases: ["Create Curve Instance"], invocation: .edit(.createInstance)),
         Command(title: "Realize Instances", aliases: ["Realize Curve Instances"], invocation: .edit(.realizeInstances)),
         Command(title: "Measure Distance", aliases: ["Measure"], shortcut: "⌃=", invocation: .keyboard(.activateMeasure)),
@@ -82,7 +83,7 @@ enum WorkspacePaletteEditCommand: Equatable {
     case duplicate, mirror, place, copyWithPlacement, pasteWithPlacement
     case rectangularArray, radialArray, curveArray
     case completeEdge, subdivide, splitSegment, insertKnot
-    case createInstance, realizeInstances
+    case createInstance, realizeInstances, reverseCurves
 
     /// The closure the Edit menu runs for this item, nil while the selection leaves it unavailable.
     func action(in commands: WorkspaceEditCommands) -> (@MainActor () -> Void)? {
@@ -101,6 +102,7 @@ enum WorkspacePaletteEditCommand: Equatable {
         case .insertKnot: commands.insertKnot
         case .createInstance: commands.createInstance
         case .realizeInstances: commands.realizeInstances
+        case .reverseCurves: commands.reverseCurves
         }
     }
 }

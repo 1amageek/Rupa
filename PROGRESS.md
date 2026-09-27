@@ -90,7 +90,7 @@
     - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:SK8.2` `parallel:none`
     - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`
     - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
-    - [ ] SK8.4 Reverse on arcs and several curves, Reverse and Rebuild in the menu, and Rebuild as one dialog with its method, any Points count, OK and right-click. `depends:none` `parallel:none`
+    - [ ] SK8.4 Reverse on arcs (needs arc direction in the kernel model) and Rebuild as one dialog with its method, any Points count, OK and right-click; Reverse Curve on several curves from the Edit menu and palette is done. `depends:none` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`
     - [x] SK9.2 Create Instance (Edit menu): an instance of the selected bodies, sheets or curves appears where they are, linked as their component definition, and is selected with Move running to place it. `depends:SK9.1` `parallel:none`

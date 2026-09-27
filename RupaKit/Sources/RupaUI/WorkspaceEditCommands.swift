@@ -31,6 +31,8 @@ public struct WorkspaceEditCommands {
     public var splitSegment: (@MainActor () -> Void)?
     /// Joins the two selected sketch curves or curve ends with a Bridge Curve.
     public var bridge: (@MainActor () -> Void)?
+    /// Reverses the direction of every selected sketch line and spline, as one step.
+    public var reverseCurves: (@MainActor () -> Void)?
     /// Makes an instance of the selection where it is and starts moving it into place.
     public var createInstance: (@MainActor () -> Void)?
     /// Turns the selected component instances into independent, editable copies.
@@ -51,6 +53,7 @@ public struct WorkspaceEditCommands {
         subdivide: (@MainActor () -> Void)? = nil,
         splitSegment: (@MainActor () -> Void)? = nil,
         bridge: (@MainActor () -> Void)? = nil,
+        reverseCurves: (@MainActor () -> Void)? = nil,
         createInstance: (@MainActor () -> Void)? = nil,
         realizeInstances: (@MainActor () -> Void)? = nil,
         insertKnot: (@MainActor () -> Void)? = nil
@@ -67,6 +70,7 @@ public struct WorkspaceEditCommands {
         self.subdivide = subdivide
         self.splitSegment = splitSegment
         self.bridge = bridge
+        self.reverseCurves = reverseCurves
         self.createInstance = createInstance
         self.realizeInstances = realizeInstances
         self.insertKnot = insertKnot

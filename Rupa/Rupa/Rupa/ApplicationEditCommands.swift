@@ -57,6 +57,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.bridge?()
             }
             .disabled(editCommands?.bridge == nil)
+            Button("Reverse Curve") {
+                editCommands?.reverseCurves?()
+            }
+            .disabled(editCommands?.reverseCurves == nil)
             Button("Create Instance") {
                 editCommands?.createInstance?()
             }
