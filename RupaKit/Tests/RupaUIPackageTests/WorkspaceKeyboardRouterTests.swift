@@ -482,3 +482,21 @@ private func keyboardContext(
     context.isSelectToolActive = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == nil)
 }
+
+@Test func workspaceKeyboardRouterFilletsJoinsAndUnjoinsSelectedSketchCurves() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    #expect(action("b") == nil)
+    context.selectedSketchTargetCount = 1
+    #expect(action("b") == .applySketchCornerTreatment)
+    #expect(action("j") == nil)
+    #expect(action("∆", [.option]) == .unjoinSketchCurve)
+    context.selectedSketchTargetCount = 2
+    #expect(action("j") == .joinSketchCurves)
+    #expect(action("∆", [.option]) == nil)
+    context.isPlaceSessionActive = true
+    #expect(action("j") != .joinSketchCurves)
+}

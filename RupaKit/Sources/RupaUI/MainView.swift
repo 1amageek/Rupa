@@ -202,6 +202,7 @@ private struct ProjectMainViewContent: View {
     @State private var sketchCornerTreatment: SketchCornerTreatment
     @State private var sketchCurveJoinContinuity: SketchCurveJoinContinuity
     @State private var sketchVertexAlignmentContinuity: SketchVertexAlignmentContinuity
+    @State private var sketchVertexAlignmentDistanceMeters: Double?
     @State private var regionOffsetDistanceMeters: Double
     @State private var regionOffsetGapFill: OffsetCurveGapFill
     @State private var regionOffsetCommandState: RegionOffsetCommandState
@@ -5650,6 +5651,7 @@ private struct ProjectMainViewContent: View {
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
             hasBridgeableSelection: bridgeAction != nil,
+            selectedSketchTargetCount: selectedSketchTargets.count,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
         )
@@ -5917,6 +5919,25 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .activateTrimCommand:
             beginCurvePickCommand(.trim)
+            return .handled
+        case .applySketchCornerTreatment:
+            guard let target = selectedSketchTargets.first else { return .ignored }
+            applySelectedSketchCornerTreatment(target)
+            return .handled
+        case .joinSketchCurves:
+            let targets = selectedSketchTargets
+            guard targets.count == 2 else { return .ignored }
+            submitSource(
+                .joinSketchCurves(
+                    target: targets[0],
+                    adjacentTarget: targets[1],
+                    continuity: sketchCurveJoinContinuity
+                )
+            )
+            return .handled
+        case .unjoinSketchCurve:
+            guard let target = selectedSketchTargets.first else { return .ignored }
+            submitSource(.unjoinSketchCurve(target: target))
             return .handled
         case .bridgeSelection:
             guard let bridgeAction else {
@@ -8102,6 +8123,14 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// The selected sketch curves and vertices, in selection order.
+    private var selectedSketchTargets: [SelectionTarget] {
+        snapshot.selection.selectedTargets.filter { target in
+            if case .sketchEntity = target.component { return true }
+            return false
+        }
+    }
+
     /// Bridge on two selected sketch curves or curve ends (Edit menu and L).
     private var bridgeAction: (@MainActor () -> Void)? {
         let targets = snapshot.selection.selectedTargets
@@ -9110,6 +9139,7 @@ private struct ProjectMainViewContent: View {
             cornerTreatment: $sketchCornerTreatment,
             joinContinuity: $sketchCurveJoinContinuity,
             vertexAlignmentContinuity: $sketchVertexAlignmentContinuity,
+            vertexAlignmentDistanceMeters: $sketchVertexAlignmentDistanceMeters,
             sliderMetersRange: { meters in
                 lengthSliderMetersRange(for: meters)
             },
@@ -11358,7 +11388,11 @@ private struct ProjectMainViewContent: View {
                 target: entity.target,
                 reference: referenceTarget,
                 options: SketchVertexAlignmentOptions(
-                    continuity: sketchVertexAlignmentContinuity
+                    continuity: sketchVertexAlignmentContinuity,
+                    targetContinuityDistance: sketchVertexAlignmentContinuity == .g0
+                        ? nil : sketchVertexAlignmentDistanceMeters.map { .length($0, .meter) },
+                    referenceContinuityDistance: sketchVertexAlignmentContinuity == .g0
+                        ? nil : sketchVertexAlignmentDistanceMeters.map { .length($0, .meter) }
                 )
             )
         )

@@ -193,6 +193,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateTrimCommand
     /// L: Bridge Vertex joins the two selected curve ends (or curves).
     case bridgeSelection
+    /// B: Fillet Curve or Fillet Vertex on the selected sketch curves or vertex.
+    case applySketchCornerTreatment
+    /// J: Join Curves on the two selected sketch curves.
+    case joinSketchCurves
+    /// Option-J: Unjoin Curve on the selected sketch curve.
+    case unjoinSketchCurve
     /// Escape ends Trim or Split Segment.
     case endCurvePickCommand
     case slideCurveControlVertices(SplineControlPointSlideDirection)
@@ -226,6 +232,9 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCurvePickCommandActive: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
     var hasBridgeableSelection: Bool = false
+    /// Whether the selection holds sketch curves or vertices Fillet, Join or Unjoin act on: the
+    /// count of selected sketch targets.
+    var selectedSketchTargetCount: Int = 0
     /// Whether the selection holds whole objects a transform can move.
     var hasWholeObjectSelection: Bool = false
     /// Whether the selection holds edges of one body that Move can move.
@@ -648,10 +657,17 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isCurvePickCommandActive {
             return input.isEscape ? .endCurvePickCommand : nil
         }
-        guard context.isSelectToolActive, input.modifiers.isEmpty else { return nil }
-        switch input.characters.lowercased() {
+        guard context.isSelectToolActive, !context.isPlaceSessionActive else { return nil }
+        let key = input.characters.lowercased()
+        if input.modifiers == [.option], key == "j" || key == "∆" {
+            return context.selectedSketchTargetCount == 1 ? .unjoinSketchCurve : nil
+        }
+        guard input.modifiers.isEmpty else { return nil }
+        switch key {
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
+        case "b": return context.selectedSketchTargetCount > 0 ? .applySketchCornerTreatment : nil
+        case "j": return context.selectedSketchTargetCount == 2 ? .joinSketchCurves : nil
         default: return nil
         }
     }

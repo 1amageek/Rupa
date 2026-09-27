@@ -50,8 +50,16 @@
     - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
     - [ ] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
     - [ ] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection. `depends:SK3.2` `parallel:none`
-  - [ ] SK4 Align and Extend: Align, Align Vertex, Extend, Extend Curve. `depends:SK3` `parallel:none`
-  - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:SK4` `parallel:none`
+  - [ ] SK4 Align and Extend: Align, Align Vertex, Extend, Extend Curve. `depends:none` `parallel:none`
+    - [x] SK4.1 Align Vertex dialog: one CV distance for both aligned ends, set once G1 or G2 is chosen, through Core's continuity distances. `depends:none` `parallel:none`
+    - [ ] SK4.2 Align Vertex Parameter: the reference end placed at a chosen parameter of its curve instead of refusing. `depends:SK4.1` `parallel:none`
+    - [ ] SK4.3 Align Vertex G1/G2 between arcs and between an arc and a spline. `depends:SK4.2` `parallel:none`
+    - [ ] SK4.4 Align on two curves, and Extend Curve to a chosen target curve or solid (Dependent Curve Extend). `depends:SK4.3` `parallel:none`
+    - [ ] SK4.5 Extend Curve shapes (Natural, Linear, Soft, Reflective, Arc) as distinct extensions on every curve kind, once their definitions are confirmed. `depends:SK4.4` `parallel:none`
+  - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:none` `parallel:none`
+    - [x] SK5.1 Keys: B applies Fillet or Chamfer to the selected sketch curves or vertex (Fillet Vertex now reachable), J joins two selected curves, Option-J unjoins one. `depends:none` `parallel:none`
+    - [ ] SK5.2 Fillet Curve live drag: a radius handle, D and C for fillet and chamfer distance while dragging. `depends:SK5.1` `parallel:none`
+    - [ ] SK5.3 Join Curves endpoint feedback: coincident and separate ends drawn in distinct colors. `depends:SK5.2` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:SK5` `parallel:none`
   - [ ] SK7 Project: Project, Project Body Body, Project Curve Body, Project Curve Curve, Project Outline, Alternative Duplicate, Duplicate Curve and Project, Create Outline. `depends:SK6` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:SK7` `parallel:none`

@@ -13,6 +13,8 @@ struct WorkspaceSketchCurveOperationControlsView: View {
     @Binding var cornerTreatment: SketchCornerTreatment
     @Binding var joinContinuity: SketchCurveJoinContinuity
     @Binding var vertexAlignmentContinuity: SketchVertexAlignmentContinuity
+    /// The G1/G2 continuity distance both aligned ends take, or `nil` to keep their control points.
+    @Binding var vertexAlignmentDistanceMeters: Double?
     var sliderMetersRange: (Double) -> ClosedRange<Double>
     var onExtend: (SelectionTarget) -> Void
     var onOffsetVertex: (InspectorSketchEntity) -> Void
@@ -70,6 +72,27 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             .labelsHidden()
             .pickerStyle(.segmented)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignContinuity")
+        }
+        if vertexAlignmentContinuity != .g0 {
+            inspectorControlRow("Distance") {
+                Toggle("Set", isOn: Binding(
+                    get: { vertexAlignmentDistanceMeters != nil },
+                    set: { vertexAlignmentDistanceMeters = $0 ? (vertexAlignmentDistanceMeters ?? extendDistanceMeters) : nil }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.caption)
+                .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignDistanceEnabled")
+            }
+            if let distance = vertexAlignmentDistanceMeters {
+                workspaceLengthControl(
+                    "CV Distance",
+                    values: [distance],
+                    displayUnit: displayUnit,
+                    sliderMetersRange: sliderMetersRange(distance)
+                ) { meters in
+                    vertexAlignmentDistanceMeters = max(meters, 1.0e-9)
+                }
+            }
         }
         inspectorActionRow {
             Button {
