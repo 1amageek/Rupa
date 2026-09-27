@@ -634,7 +634,8 @@ curves onto the one selected face (Project Curve Body). I on any other
 selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until the
 kernel's intersection curve serves Project Body Body and Project Curve Curve. With the select tool and sketch curves or vertices selected, B applies the
 inspector's Fillet or Chamfer to the first of them (a vertex takes Core's Fillet
-Vertex path), J joins two selected curves with the inspector's continuity and
+Vertex path; several selected curve ends take `applySketchCornerTreatments`,
+every corner once, as one step), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
 points where they are. With one open sketch curve or a circle selected, O

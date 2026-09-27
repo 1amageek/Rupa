@@ -106,6 +106,7 @@ enum ProductionMainViewActionManifest {
         "addSketchConstraint",
         "alignSketchVertex",
         "applySketchCornerTreatment",
+        "applySketchCornerTreatments",
         "appendFeatureGraph",
         "convertSketchLineToArc",
         "convertSketchLineToSpline",

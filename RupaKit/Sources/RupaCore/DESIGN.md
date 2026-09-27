@@ -982,6 +982,12 @@ could otherwise be taken as the nearest. The extension is `extendSketchCurve`'s,
 so its constraint and Bridge Curve refusals apply and a failed end leaves the
 document unchanged; no reachable crossing is a command-invalid error.
 
+`applySketchCornerTreatments(vertices:distance:treatment:)` fillets or chamfers
+several selected curve ends: each corner once, even when both of its ends are
+selected, in selection order, since a treatment shortens its two curves only at
+the treated ends. A corner that cannot take it fails the whole command and the
+document is unchanged.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

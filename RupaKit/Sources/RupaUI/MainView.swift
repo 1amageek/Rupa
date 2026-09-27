@@ -6051,6 +6051,21 @@ private struct ProjectMainViewContent: View {
             beginCurvePickCommand(.trim)
             return .handled
         case .applySketchCornerTreatment:
+            let vertices = selectedSketchTargets.filter { target in
+                guard case .sketchEntity(let componentID) = target.component else { return false }
+                return componentID.sketchPointHandleReference != nil
+            }
+            if vertices.count > 1 {
+                // Fillet Vertex on every selected corner, as one step.
+                submitSource(
+                    .applySketchCornerTreatments(
+                        vertices: vertices,
+                        distance: .length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter),
+                        treatment: sketchCornerTreatment
+                    )
+                )
+                return .handled
+            }
             guard let target = selectedSketchTargets.first else { return .ignored }
             applySelectedSketchCornerTreatment(target)
             return .handled

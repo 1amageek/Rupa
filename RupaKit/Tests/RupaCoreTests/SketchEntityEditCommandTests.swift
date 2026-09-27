@@ -10118,3 +10118,44 @@ private extension ObjectPropertyValue {
         return value
     }
 }
+
+@MainActor
+@Test func applySketchCornerTreatmentsFilletsEachSelectedCornerOnce() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createRectangleSketchFromCorners(
+            name: "Several Corners",
+            plane: .xy,
+            firstCorner: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            oppositeCorner: SketchPoint(x: .length(10.0, .millimeter), y: .length(6.0, .millimeter))
+        )
+    )
+    let before = try SketchEntitySnapshotService().snapshot(document: session.document)
+    let bottomLine = try #require(bottomRectangleLine(in: before))
+    // Both ends of the bottom line name two corners; its end is selected twice over.
+    let vertices = [
+        try pointHandleSelectionTarget(bottomLine, handle: .lineStart),
+        try pointHandleSelectionTarget(bottomLine, handle: .lineEnd),
+        try pointHandleSelectionTarget(bottomLine, handle: .lineEnd),
+    ]
+    let result = try session.execute(
+        .applySketchCornerTreatments(vertices: vertices, distance: .length(2.0, .millimeter), treatment: .fillet)
+    )
+    let after = try SketchEntitySnapshotService().snapshot(document: session.document)
+    let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
+    #expect(result.didMutate)
+    #expect(arcs.count == 2)
+
+    // A corner that cannot take the fillet fails the whole command.
+    let generation = session.generation
+    let refreshed = try SketchEntitySnapshotService().snapshot(document: session.document)
+    let circleFree = try #require(refreshed.entries.first { $0.entityKind == "line" && $0.sourceFeatureID == bottomLine.sourceFeatureID })
+    #expect(throws: EditorError.self) {
+        _ = try session.execute(.applySketchCornerTreatments(
+            vertices: [try pointHandleSelectionTarget(circleFree, handle: .lineStart), try pointHandleSelectionTarget(circleFree, handle: .lineEnd)],
+            distance: .length(50.0, .millimeter),
+            treatment: .fillet
+        ))
+    }
+    #expect(session.generation == generation)
+}

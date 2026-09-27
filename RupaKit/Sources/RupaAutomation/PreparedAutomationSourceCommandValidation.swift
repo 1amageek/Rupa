@@ -104,6 +104,7 @@ enum PreparedAutomationSourceCommandValidation {
              .offsetRegions,
              .offsetSketchVertex,
              .applySketchCornerTreatment,
+             .applySketchCornerTreatments,
              .createSlotSketch,
              .offsetBodyFace,
              .deleteBodyFaces,

@@ -253,6 +253,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         distance: CADExpression,
         treatment: SketchCornerTreatment
     )
+    /// Fillet Vertex on several selected curve ends, each corner once, as one step.
+    case applySketchCornerTreatments(vertices: [SelectionTarget], distance: CADExpression, treatment: SketchCornerTreatment)
     case createSlotSketch(target: SelectionTarget, width: CADExpression)
     case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
     case deleteBodyFaces(targets: [SelectionTarget])
@@ -720,6 +722,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "offsetSketchVertex"
         case .applySketchCornerTreatment:
             "applySketchCornerTreatment"
+        case .applySketchCornerTreatments:
+            "applySketchCornerTreatments"
         case .createSlotSketch:
             "createSlotSketch"
         case .offsetBodyFace:
@@ -981,6 +985,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .offsetRegions,
              .offsetSketchVertex,
              .applySketchCornerTreatment,
+             .applySketchCornerTreatments,
              .createSlotSketch,
              .offsetBodyFace,
              .deleteBodyFaces,

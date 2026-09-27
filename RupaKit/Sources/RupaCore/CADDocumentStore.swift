@@ -1916,6 +1916,14 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .applySketchCornerTreatments(vertices, distance, treatment):
+            var updatedDocument = document
+            try updatedDocument.applySketchCornerTreatments(
+                vertices: vertices, distance: distance, treatment: treatment, objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createSlotSketch:
             func run() throws {
                 guard case .createSlotSketch(let target, let width) = command else {

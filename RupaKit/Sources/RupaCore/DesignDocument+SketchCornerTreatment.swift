@@ -3,6 +3,42 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    /// Fillet or chamfer at several selected curve ends: each corner once, even when both of its
+    /// ends are selected, in selection order. Any corner that cannot take it fails the whole
+    /// command and the document is unchanged. Returns the inserted arcs or lines.
+    @discardableResult
+    public mutating func applySketchCornerTreatments(
+        vertices: [SelectionTarget],
+        distance: CADExpression,
+        treatment: SketchCornerTreatment,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> [SketchEntityID] {
+        guard !vertices.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "Fillet Vertex needs at least one selected curve end.")
+        }
+        var corners: [SelectionTarget] = []
+        var cornerEnds: Set<SketchReference> = []
+        for vertex in vertices {
+            let selection = try editableSketchEntityBase(for: vertex, operationName: "Sketch corner treatment")
+            let corner = try sketchCornerTreatmentSelectionFromEndpoint(target: vertex, selection: selection)
+            guard !cornerEnds.contains(corner.selectedEndpoint.reference) else { continue }
+            cornerEnds.insert(corner.selectedEndpoint.reference)
+            cornerEnds.insert(corner.adjacentEndpoint.reference)
+            corners.append(vertex)
+        }
+        // A corner's curve ends keep their references while another corner is treated: a
+        // treatment shortens its two curves at the treated ends only.
+        var updated = self
+        var inserted: [SketchEntityID] = []
+        for vertex in corners {
+            inserted.append(try updated.applySketchCornerTreatment(
+                target: vertex, distance: distance, treatment: treatment, objectRegistry: objectRegistry
+            ))
+        }
+        self = updated
+        return inserted
+    }
+
     @discardableResult
     public mutating func applySketchCornerTreatment(
         target: SelectionTarget,
