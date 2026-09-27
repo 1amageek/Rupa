@@ -596,6 +596,9 @@ the canvas as Return; the router gives the open palette's Escape back to it
 inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
 offered.
 
+Delete Redundant Topology (Edit menu, palette) submits one
+`deleteRedundantSketchSplineJoints` on the selected spline.
+
 Align Vertex (Edit menu, palette) aligns the selected curve end with the other
 selected end at the inspector's continuity; with two alignable ends selected, Tab
 steps that continuity G0 → G1 → G2 → G0 (a selected Bridge Curve keeps Tab for

@@ -310,6 +310,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Insert Knot: a control point inserted at the spline's point nearest `point`, in its sketch's
     /// plane coordinates.
     case insertSketchSplineControlPointAtPoint(target: SelectionTarget, point: Point2D)
+    /// Delete Redundant Topology: the spline's joints one cubic spans are removed, keeping its shape.
+    case deleteRedundantSketchSplineJoints(target: SelectionTarget)
     case setSketchCircleParameters(
         target: SelectionTarget,
         center: SketchPoint?,
@@ -804,6 +806,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "splitSketchCurveAtPoint"
         case .insertSketchSplineControlPointAtPoint:
             "insertSketchSplineControlPointAtPoint"
+        case .deleteRedundantSketchSplineJoints:
+            "deleteRedundantSketchSplineJoints"
         case .cutSketchCurve:
             "cutSketchCurve"
         case .cutSketchCurves:
@@ -1026,6 +1030,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .trimSketchCurve,
              .splitSketchCurveAtPoint,
              .insertSketchSplineControlPointAtPoint,
+             .deleteRedundantSketchSplineJoints,
              .cutSketchCurve,
              .cutSketchCurves,
              .createExtrusion,

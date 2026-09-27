@@ -1009,6 +1009,15 @@ inspector offers only these, keeping the chosen shape when the selected curve
 takes it and otherwise its first (`effectiveExtendShape`), so a spline end no
 longer fails on the Natural default. `ExtendCurveShapeTests` cover both.
 
+`deleteRedundantSketchSplineJoints` is Delete Redundant Topology: from the last
+joint back, a joint whose two spans Swift-CAD's `CubicBezierChainJoints` finds to
+be the halves of one cubic becomes that cubic, so the curve keeps its shape with
+three fewer control points; the outer points keep their expressions and the new
+inner two are constants. A joint whose three control points a constraint or
+dimension names is kept, references past a removed joint move back three
+indices, and a spline with nothing to remove is refused with the document
+unchanged. `SplineRedundantJointsTests` own these.
+
 `subdivideSketchSpline` splits every cubic span of an open spline at its middle
 through `insertSketchSplineControlPoint`, from the last span back, so n spans
 become 2n with the same shape and joint constraints follow their joints. Span k's

@@ -8475,6 +8475,7 @@ private struct ProjectMainViewContent: View {
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
+            deleteRedundantTopology: deleteRedundantTopologyAction,
             alignVertex: alignVertexAction,
             reverseCurves: reverseCurvesAction,
             createInstance: createInstanceAction,
@@ -8528,6 +8529,18 @@ private struct ProjectMainViewContent: View {
                   })?.selectionTarget() else { return }
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
+    }
+
+    /// Delete Redundant Topology on the selected spline (Edit menu, palette).
+    private var deleteRedundantTopologyAction: (@MainActor () -> Void)? {
+        guard let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
+              entity.entityKind == "spline",
+              let target = sketchCommandTargetResolver.slotSourceCurveTarget(for: entity) else { return nil }
+        return {
+            submitSource(.deleteRedundantSketchSplineJoints(target: target)) { result in
+                if result?.didMutate == true { reportToolStatus("Delete Redundant Topology: joints one cubic spans removed.") }
+            }
         }
     }
 

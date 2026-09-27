@@ -2546,6 +2546,12 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .deleteRedundantSketchSplineJoints(target):
+            var updatedDocument = document
+            try updatedDocument.deleteRedundantSketchSplineJoints(target: target, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .cutSketchCurves(targets, cutters, options):
             var updatedDocument = document
             try updatedDocument.cutSketchCurves(

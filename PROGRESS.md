@@ -87,7 +87,7 @@
     - [x] SK7.5 Alternative Duplicate, Project Outline and Create Outline select their result with Move running to place it. `depends:none` `parallel:none`
     - [ ] SK7.6 Project Outline keeps the silhouette: interior edges left out and B-spline edges projected instead of failing the command. `depends:none` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
-    - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:SK8.2` `parallel:none`
+    - [x] SK8.1 Delete Redundant Topology (Edit menu, palette): joints of a spline that one cubic spans are removed without changing its shape (swift-CAD 36b13c4 CubicBezierChainJoints); constrained joints stay. `depends:SK8.2` `parallel:none`
     - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`
     - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
     - [ ] SK8.4 Reverse on arcs (needs arc direction in the kernel model) and Rebuild as one dialog with its method, any Points count, OK and right-click; Reverse Curve on several curves from the Edit menu and palette is done. `depends:none` `parallel:none`
