@@ -40,7 +40,8 @@
     - [x] SK1.1 Bridge Vertex (L): two selected curve ends joined by a G1 Bridge Curve whose inspector edits continuity, tension and trim; Bridge Curve itself is now created from two selected curves at their nearest ends. `depends:none` `parallel:none`
     - [x] SK1.2 Bridge (Edit menu) chooses Bridge Curve or Bridge Vertex from the selection; Bridge Edge joins it with SK1.3. `depends:SK1.1` `parallel:none`
     - [ ] SK1.3 Bridge Edge: two body edge ends (Side 1/2) bridged with G0–G3 and tension, through a kernel bridge endpoint on a body edge. `depends:SK1.2` `parallel:none`
-    - [ ] SK1.4 Bridge keys while placing: Tab cycles continuity, D edits G1 tension, Q toggles trim, X/Y/Z constrain. `depends:SK1.3` `parallel:none`
+    - [x] SK1.4 Bridge keys on a selected Bridge Curve: Tab steps both ends' continuity G0 → G3, Q trims the bridged curves. `depends:SK1.2` `parallel:none`
+    - [ ] SK1.5 Bridge keys D (G1 tension) and X/Y/Z (constraint) while the bridge is placed. `depends:SK1.4` `parallel:none`
   - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:none` `parallel:none`
     - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`
     - [x] SK2.2 Split Segment (Edit menu): each click splits the sketch curve at swift-CAD's projection of the click (SketchCurveProjector, swift-CAD b9a290f). `depends:SK2.1` `parallel:none`

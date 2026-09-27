@@ -588,7 +588,8 @@ Bridge (Edit menu, and L with two sketch curves or curve ends selected) submits
 one G1 `createBridgeCurve` joining the ends Core reads from the selection
 ([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
 and selects the new curve, whose inspector edits its continuity, tension and
-trim. With the select tool and sketch curves or vertices selected, B applies the
+trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
+→ G3 → G0 and Q trims the curves it bridges. With the select tool and sketch curves or vertices selected, B applies the
 inspector's Fillet or Chamfer to the first of them (a vertex takes Core's Fillet
 Vertex path), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV

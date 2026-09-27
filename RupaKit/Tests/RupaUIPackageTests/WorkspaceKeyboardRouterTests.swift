@@ -521,3 +521,12 @@ private func keyboardContext(
     context.isCurveOffsetCommandActive = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) == .toggleCurveOffsetSymmetric)
 }
+
+@Test func workspaceKeyboardRouterCyclesAndTrimsASelectedBridgeCurve() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: context) != .trimBridgeSources)
+    context.hasSelectedBridgeCurve = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: context) == .cycleBridgeContinuity)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: context) == .trimBridgeSources)
+}

@@ -197,6 +197,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case bridgeSelection
     /// B: Fillet Curve or Fillet Vertex on the selected sketch curves or vertex.
     case applySketchCornerTreatment
+    /// Tab on a selected Bridge Curve: both ends step G0 → G1 → G2 → G3 → G0.
+    case cycleBridgeContinuity
+    /// Q on a selected Bridge Curve: trims the curves it bridges.
+    case trimBridgeSources
     /// J: Join Curves on the two selected sketch curves.
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
@@ -236,6 +240,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCurvePickCommandActive: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
     var hasBridgeableSelection: Bool = false
+    /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
+    var hasSelectedBridgeCurve: Bool = false
     /// Whether the selection holds sketch curves or vertices Fillet, Join or Unjoin act on: the
     /// count of selected sketch targets.
     var selectedSketchTargetCount: Int = 0
@@ -670,6 +676,10 @@ struct WorkspaceKeyboardRouter: Sendable {
             return context.selectedSketchTargetCount == 1 ? .unjoinSketchCurve : nil
         }
         guard input.modifiers.isEmpty else { return nil }
+        if context.hasSelectedBridgeCurve {
+            if input.isTab { return .cycleBridgeContinuity }
+            if key == "q" { return .trimBridgeSources }
+        }
         switch key {
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil

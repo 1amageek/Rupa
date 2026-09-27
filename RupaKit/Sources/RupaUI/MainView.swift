@@ -5655,6 +5655,7 @@ private struct ProjectMainViewContent: View {
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
             hasBridgeableSelection: bridgeAction != nil,
+            hasSelectedBridgeCurve: selectedBridgeCurve != nil,
             selectedSketchTargetCount: selectedSketchTargets.count,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
             hasMovableTopologySelection: selectedMovableTopology != nil
@@ -5945,6 +5946,24 @@ private struct ProjectMainViewContent: View {
         case .unjoinSketchCurve:
             guard let target = selectedSketchTargets.first else { return .ignored }
             submitSource(.unjoinSketchCurve(target: target))
+            return .handled
+        case .cycleBridgeContinuity:
+            guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
+            let order = BridgeCurveEndpointContinuity.allCases
+            let next = order[(order.firstIndex(of: bridgeCurve.continuity.first).map { $0 + 1 } ?? 0) % order.count]
+            submitSource(
+                .setBridgeCurveParameters(
+                    sourceID: bridgeCurve.sourceID,
+                    firstEndpoint: nil,
+                    secondEndpoint: nil,
+                    continuity: BridgeCurveContinuity(first: next, second: next)
+                )
+            )
+            reportToolStatus("Bridge continuity: \(next.rawValue.uppercased()).")
+            return .handled
+        case .trimBridgeSources:
+            guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
+            trimBridgeCurveSources(bridgeCurve)
             return .handled
         case .bridgeSelection:
             guard let bridgeAction else {
@@ -8131,6 +8150,11 @@ private struct ProjectMainViewContent: View {
             splitSegment: splitSegmentAction,
             bridge: bridgeAction
         )
+    }
+
+    /// The Bridge Curve the inspector shows for the selection, if one is selected.
+    private var selectedBridgeCurve: InspectorBridgeCurve? {
+        sketchCommandTargetResolver.entity(from: selectedSketchEntityResult)?.bridgeCurve
     }
 
     /// The selected sketch curves and vertices, in selection order.
