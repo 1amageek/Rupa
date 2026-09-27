@@ -922,6 +922,17 @@ rule), each cutter cutting the pieces the earlier cutters left. A target no
 cutter crosses, an empty list, or a curve in both lists fails the whole cut and
 the document is unchanged.
 
+### Split Segment on a closed spline
+
+`splitSketchCurve(target:at:)` on a closed spline opens the loop where the point
+projects onto it (`openClosedSketchSpline`): the spline becomes open, starting and
+ending there, one span longer when the point falls inside a span (split there by
+De Casteljau) and the same points rotated when it falls on a joint. References to
+its control points follow them around the loop; a reference to the split span's
+two inner points or to the spline's ends has no counterpart and refuses the
+split. A circle is refused: the sketch model has no circle seam to put a vertex
+at. `splitSegmentOpensAClosedSplineWhereItIsClicked` covers both cases.
+
 ### Trim contract
 
 `trimSketchCurve(target:near:)` removes the segment of a sketch line, arc, circle

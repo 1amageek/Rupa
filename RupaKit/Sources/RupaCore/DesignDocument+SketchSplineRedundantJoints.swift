@@ -71,7 +71,7 @@ extension DesignDocument {
     }
 }
 
-private extension Sketch {
+extension Sketch {
     /// Whether a constraint or dimension names control point `index` of spline `entity`.
     func namesSplineControlPoint(entity: SketchEntityID, index: Int) -> Bool {
         func names(_ reference: SketchReference) -> Bool {

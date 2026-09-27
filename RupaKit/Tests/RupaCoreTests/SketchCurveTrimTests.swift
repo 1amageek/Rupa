@@ -276,4 +276,61 @@ import Testing
             ))
         }
     }
+
+    /// A closed spline split at a point opens there: one span more, starting and ending at the
+    /// point, with references following its control points around the loop.
+    @Test func splitSegmentOpensAClosedSplineWhereItIsClicked() throws {
+        let loop = SketchEntityID()
+        // A closed loop of four spans around (0, 0), each a quarter turn.
+        let k = 5.5228
+        let controls = [(10.0, 0.0), (10.0, k), (k, 10.0), (0.0, 10.0), (-k, 10.0), (-10.0, k), (-10.0, 0.0),
+                        (-10.0, -k), (-k, -10.0), (0.0, -10.0), (k, -10.0), (10.0, -k), (10.0, 0.0)]
+            .map { point($0.0, $0.1) }
+        let (session, featureID) = try session([(loop, .spline(SketchSpline(controlPoints: controls, isClosed: true)))])
+        guard case .sketch(var sketch) = session.document.cadDocument.designGraph.nodes[featureID]?.operation else {
+            Issue.record("The loop's sketch is present.")
+            return
+        }
+        // A fixed constraint on joint 2, the point (-10, 0).
+        sketch.constraints = [.fixed(.splineControlPoint(entity: loop, index: 6))]
+        var document = session.document
+        var feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+        feature.operation = .sketch(sketch)
+        document.cadDocument.designGraph.nodes[featureID] = feature
+        let target = try self.target(session, featureID, loop)
+
+        // Click beside the middle of the first span, near (7.07, 7.07).
+        try document.splitSketchCurve(target: target, at: Point2D(x: 0.0075, y: 0.0075))
+        guard case .sketch(let opened) = document.cadDocument.designGraph.nodes[featureID]?.operation,
+              case .spline(let spline) = opened.entities[loop] else {
+            Issue.record("The loop is present.")
+            return
+        }
+        #expect(!spline.isClosed)
+        #expect(spline.controlPoints.count == 16)
+        let first = try document.resolvedSketchPoint(spline.controlPoints[0], owner: "first")
+        let last = try document.resolvedSketchPoint(try #require(spline.controlPoints.last), owner: "last")
+        #expect(abs(first.x - last.x) < 1e-12 && abs(first.y - last.y) < 1e-12)
+        #expect(abs(hypot(first.x, first.y) - 0.01) < 1e-4)
+        // Joint 2 (-10, 0) is now after the right half of span 0 and all of span 1: index 6.
+        let fixed = try #require(opened.constraints.first)
+        guard case .fixed(.splineControlPoint(_, let index)) = fixed else {
+            Issue.record("The fixed constraint follows its control point.")
+            return
+        }
+        let moved = try document.resolvedSketchPoint(spline.controlPoints[index], owner: "fixed")
+        #expect(abs(moved.x + 0.01) < 1e-12 && abs(moved.y) < 1e-12)
+
+        // A click on a joint opens the loop there without a new span: joint 1 at (0, 10).
+        var atJoint = session.document
+        try atJoint.splitSketchCurve(target: target, at: Point2D(x: 0, y: 0.0101))
+        guard case .sketch(let jointOpened) = atJoint.cadDocument.designGraph.nodes[featureID]?.operation,
+              case .spline(let jointSpline) = jointOpened.entities[loop] else {
+            Issue.record("The loop is present.")
+            return
+        }
+        #expect(!jointSpline.isClosed && jointSpline.controlPoints.count == 13)
+        let start = try atJoint.resolvedSketchPoint(jointSpline.controlPoints[0], owner: "start")
+        #expect(abs(start.x) < 1e-12 && abs(start.y - 0.01) < 1e-12)
+    }
 }

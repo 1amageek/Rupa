@@ -53,7 +53,7 @@
     - [x] SK2.3 Cut Curve's Extend option in its dialog row: the cutter reaches the target along its line or circle. `depends:SK2.2` `parallel:none`
     - [ ] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
     - [x] SK2.5 Cut Curve (C): a dialog picking any number of target and cutter curves (splines included), Tab toggling Extend, Return or right-click cutting as one step. `depends:none` `parallel:none`
-    - [ ] SK2.6 Split Segment on circles and closed curves. `depends:none` `parallel:none`
+    - [x] SK2.6 Split Segment on closed splines opens the loop at the click (a circle is refused: the sketch model has no circle seam). `depends:none` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
     - [ ] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
