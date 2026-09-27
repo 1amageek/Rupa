@@ -403,11 +403,15 @@ extension DesignDocument {
                 let resolved = try resolvedSketchPoint(point, owner: "\(owner) control point")
                 return Point2D(x: resolved.x, y: resolved.y)
             }
-            let continued = try CubicBezierChainExtension(tolerance: .standard).naturalSpan(
-                of: points,
-                at: isStart ? .start : .end,
-                length: try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
-            ).map { sketchPoint(x: $0.x, y: $0.y) }
+            let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
+            let continued: [SketchPoint]
+            do {
+                continued = try CubicBezierChainExtension(tolerance: .standard).naturalSpan(
+                    of: points, at: isStart ? .start : .end, length: length
+                ).map { sketchPoint(x: $0.x, y: $0.y) }
+            } catch let error as KernelError {
+                throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
+            }
             updated.controlPoints = isStart ? continued + spline.controlPoints : spline.controlPoints + continued
         } else if isStart {
             let first = spline.controlPoints[0]

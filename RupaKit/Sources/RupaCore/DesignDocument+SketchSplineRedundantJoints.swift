@@ -32,8 +32,14 @@ extension DesignDocument {
         var joint = (points.count - 1) / 3 - 1
         while joint >= 1 {
             let affected = [3 * joint - 1, 3 * joint, 3 * joint + 1]
+            let merged: [Point2D]?
+            do {
+                merged = try joints.mergedSpan(of: points, atJoint: joint)
+            } catch let error as KernelError {
+                throw EditorError(code: .commandInvalid, message: "Delete Redundant Topology: \(error.message)")
+            }
             if !affected.contains(where: { sketch.namesSplineControlPoint(entity: selection.entityID, index: $0) }),
-               let merged = try joints.mergedSpan(of: points, atJoint: joint) {
+               let merged {
                 let span = (3 * joint - 3)...(3 * joint + 3)
                 points.replaceSubrange(span, with: merged)
                 spline.controlPoints.replaceSubrange(span, with: [
