@@ -8227,7 +8227,8 @@ private struct ProjectMainViewContent: View {
     private func confirmFillet() {
         guard let fillet = filletSession else { return }
         sketchCornerTreatment = fillet.treatment
-        let distance = CADExpression.length(max(sketchCornerTreatmentDistanceMeters, 1.0e-9), .meter)
+        // Core refuses a distance that is not positive.
+        let distance = CADExpression.length(sketchCornerTreatmentDistanceMeters, .meter)
         let command: EditorCommand
         switch fillet.targets {
         case .vertices(let vertices):
@@ -10982,7 +10983,8 @@ private struct ProjectMainViewContent: View {
         submitSource(
             .offsetCurve(
                 target: target,
-                distance: .length(max(meters, 1.0e-9), .meter),
+                // Core refuses a distance that is not positive.
+                distance: .length(meters, .meter),
                 options: OffsetCurveOptions(
                     isSymmetric: isSymmetric,
                     gapFill: gapFill
@@ -11877,7 +11879,8 @@ private struct ProjectMainViewContent: View {
             .offsetSketchVertex(
                 target: entity.target,
                 handle: handle,
-                distance: .length(max(sketchVertexOffsetDistanceMeters, 1.0e-9), .meter)
+                // Core refuses a distance that is not positive.
+                distance: .length(sketchVertexOffsetDistanceMeters, .meter)
             )
         ) { result in
             if result?.didMutate == true {
@@ -12125,7 +12128,8 @@ private struct ProjectMainViewContent: View {
         submitSource(
             .offsetCurve(
                 target: target,
-                distance: .length(max(slotProfileWidthMeters, 1.0e-9), .meter),
+                // The typed distance's sign chooses the side; Core refuses zero.
+                distance: .length(slotProfileWidthMeters, .meter),
                 options: OffsetCurveOptions(
                     mode: .offset, isSymmetric: slotProfileCommandState.isSymmetric, gapFill: curveOffsetGapFill
                 ),
@@ -12145,7 +12149,8 @@ private struct ProjectMainViewContent: View {
         submitSource(
             .offsetCurve(
                 target: target,
-                distance: .length(max(meters, 1.0e-9), .meter),
+                // Core refuses a width that is not positive.
+                distance: .length(meters, .meter),
                 options: OffsetCurveOptions(mode: .slot),
                 vertexHandle: nil
             )

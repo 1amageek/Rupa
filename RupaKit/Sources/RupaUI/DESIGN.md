@@ -680,7 +680,11 @@ typed. Return, in that field or on the canvas (`confirmWorkspaceCommand`), and
 right-click create the command's result at that distance as one source command
 — `offsetCurve`, `offsetSketchVertex` or `offsetRegions` — and end the command
 once it exists; a refused result leaves the command running. The panel's
-create button and the handles create it the same way.
+create button and the handles create it the same way. The typed value reaches
+Core as typed: a negative Offset Planar Curve distance offsets to the other side,
+and a width or distance that is not positive — Slot, Offset Vertex, Offset Edge,
+Fillet's dialog — is refused by Core rather than replaced by a tiny positive
+value.
 
 ### What the workspace says, and where the canvas stops
 
