@@ -181,6 +181,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case focusNextSketchDimensionInput
     case activateOffsetCommand
     case activateSlotWidthInput
+    /// S in Offset Planar Curve: copies on both sides.
+    case toggleCurveOffsetSymmetric
     case activateEdgeOffsetDistanceInput
     case activateRegionOffsetDistanceInput
     case cycleEdgeOffsetGapFill
@@ -216,6 +218,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var usesSketchAxisConstraint: Bool
     var isDimensionCommandActive: Bool
     var isSlotProfileCommandActive: Bool
+    /// Whether O started Offset Planar Curve (not yet turned into Slot).
+    var isCurveOffsetCommandActive: Bool = false
     var isEdgeOffsetCommandActive: Bool
     var isRegionOffsetCommandActive: Bool
     var isCurveControlVertexSlideActive: Bool
@@ -637,6 +641,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             }
             return context.isRegionOffsetCommandActive ? .cycleRegionOffsetGapFill : nil
         case "s":
+            if context.isCurveOffsetCommandActive {
+                return .toggleCurveOffsetSymmetric
+            }
             if context.isEdgeOffsetCommandActive {
                 return .toggleEdgeOffsetLockedDistance
             }

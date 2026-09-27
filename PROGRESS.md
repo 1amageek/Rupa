@@ -60,7 +60,10 @@
     - [x] SK5.1 Keys: B applies Fillet or Chamfer to the selected sketch curves or vertex (Fillet Vertex now reachable), J joins two selected curves, Option-J unjoins one. `depends:none` `parallel:none`
     - [ ] SK5.2 Fillet Curve live drag: a radius handle, D and C for fillet and chamfer distance while dragging. `depends:SK5.1` `parallel:none`
     - [ ] SK5.3 Join Curves endpoint feedback: coincident and separate ends drawn in distinct colors. `depends:SK5.2` `parallel:none`
-  - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:SK5` `parallel:none`
+  - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:none` `parallel:none`
+    - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
+    - [ ] SK6.2 Offset Planar Curve on splines and joined curve chains with Round, Linear and Natural gap fill. `depends:SK6.1` `parallel:none`
+    - [ ] SK6.3 Freestyle Offset Planar Curve (F). `depends:SK6.2` `parallel:none`
   - [ ] SK7 Project: Project, Project Body Body, Project Curve Body, Project Curve Curve, Project Outline, Alternative Duplicate, Duplicate Curve and Project, Create Outline. `depends:SK6` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:SK7` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:SK8` `parallel:none`

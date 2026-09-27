@@ -593,7 +593,10 @@ inspector's Fillet or Chamfer to the first of them (a vertex takes Core's Fillet
 Vertex path), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
-points where they are.
+points where they are. With one open sketch curve selected, O starts Offset
+Planar Curve: D focuses its distance, S makes it symmetric, and O again turns it
+into Slot, which D then sizes by width; the panel's create button or the width
+handle submits one `offsetCurve` in the chosen mode.
 
 ### What the workspace says, and where the canvas stops
 

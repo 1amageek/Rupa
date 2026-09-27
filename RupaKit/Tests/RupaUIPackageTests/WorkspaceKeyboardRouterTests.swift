@@ -500,3 +500,24 @@ private func keyboardContext(
     context.isPlaceSessionActive = true
     #expect(action("j") != .joinSketchCurves)
 }
+
+@Test func offsetKeyStartsOffsetPlanarCurveThenSlotAndSMakesItSymmetric() {
+    var state = SlotProfileCommandState.inactive
+    state.pressOffsetKey()
+    #expect(state.isCurveOffsetActive)
+    #expect(state.inputModeTitle == "Distance")
+    state.toggleSymmetric()
+    #expect(state.isSymmetric)
+    state.pressOffsetKey()
+    #expect(state.isActive && state.output == .slot)
+    #expect(state.inputModeTitle == "Width")
+    state.deactivate()
+    state.pressOffsetKey()
+    #expect(state.isCurveOffsetActive && !state.isSymmetric)
+
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext(isSlotProfileCommandActive: true)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) != .toggleCurveOffsetSymmetric)
+    context.isCurveOffsetCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: context) == .toggleCurveOffsetSymmetric)
+}

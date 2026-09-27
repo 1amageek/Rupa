@@ -4792,9 +4792,12 @@ private struct ProjectMainViewContent: View {
     private func slotProfileContextPanelContent(_ target: SelectionTarget) -> some View {
         WorkspaceSlotContextPanel(
             isActive: slotProfileCommandState.isActive,
+            title: slotProfileCommandState.isActive ? slotProfileCommandState.title : "Slot",
             widthTitle: formatted(slotProfileWidthMeters),
             inputModeTitle: slotProfileCommandState.inputModeTitle,
-            create: { createSlotFromOffsetCurve(target, width: slotProfileWidthMeters) }
+            symmetricTitle: slotProfileCommandState.isCurveOffsetActive
+                ? (slotProfileCommandState.isSymmetric ? "On" : "Off") : nil,
+            create: { createCommandedCurveOffset(target) }
         )
     }
 
@@ -5632,6 +5635,7 @@ private struct ProjectMainViewContent: View {
             usesSketchAxisConstraint: usesSketchAxisConstraint,
             isDimensionCommandActive: dimensionCommandState.isActive,
             isSlotProfileCommandActive: slotProfileCommandState.isActive,
+            isCurveOffsetCommandActive: slotProfileCommandState.isCurveOffsetActive,
             isEdgeOffsetCommandActive: edgeOffsetCommandState.isActive,
             isRegionOffsetCommandActive: regionOffsetCommandState.isActive,
             isCurveControlVertexSlideActive: slideCommandState.isCurveControlVerticesActive,
@@ -5885,6 +5889,9 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .activateSlotWidthInput:
             slotProfileCommandState.activateWidthInput()
+            return .handled
+        case .toggleCurveOffsetSymmetric:
+            slotProfileCommandState.toggleSymmetric()
             return .handled
         case .activateEdgeOffsetDistanceInput:
             edgeOffsetCommandState.activateDistanceInput()
@@ -6794,7 +6801,10 @@ private struct ProjectMainViewContent: View {
         regionOffsetCommandState.deactivate()
         edgeOffsetCommandState.deactivate()
         slideCommandState.deactivate()
-        slotProfileCommandState.activateWidthInput()
+        slotProfileCommandState.pressOffsetKey()
+        reportToolStatus(slotProfileCommandState.isCurveOffsetActive
+            ? "Offset: D types the distance, S makes it symmetric, O again makes a Slot."
+            : "Slot: D types the width.")
     }
 
     private func handleViewportShiftScroll(_ direction: ViewportScrollDirection) -> Bool {
@@ -7166,7 +7176,7 @@ private struct ProjectMainViewContent: View {
             return
         }
         slotProfileWidthMeters = max(target.width, 1.0e-9)
-        createSlotFromOffsetCurve(target.target, width: slotProfileWidthMeters)
+        createCommandedCurveOffset(target.target)
     }
 
     private func handleViewportSketchVertexOffsetDrag(_ target: ViewportSketchVertexOffsetDragTarget) {
@@ -11458,6 +11468,26 @@ private struct ProjectMainViewContent: View {
                 name: nil
             )
         )
+    }
+
+    /// The running O command's result: Offset Planar Curve with its Symmetric option, or Slot.
+    private func createCommandedCurveOffset(_ target: SelectionTarget) {
+        guard slotProfileCommandState.isCurveOffsetActive else {
+            createSlotFromOffsetCurve(target, width: slotProfileWidthMeters)
+            return
+        }
+        submitSource(
+            .offsetCurve(
+                target: target,
+                distance: .length(max(slotProfileWidthMeters, 1.0e-9), .meter),
+                options: OffsetCurveOptions(mode: .offset, isSymmetric: slotProfileCommandState.isSymmetric),
+                vertexHandle: nil
+            )
+        ) { result in
+            if result?.didMutate == true {
+                slotProfileCommandState.deactivate()
+            }
+        }
     }
 
     private func createSlotFromOffsetCurve(

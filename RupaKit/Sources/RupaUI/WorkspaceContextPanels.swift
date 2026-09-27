@@ -252,22 +252,29 @@ struct WorkspaceDimensionContextPanel<DimensionInputField: View>: View {
 @MainActor
 struct WorkspaceSlotContextPanel: View {
     var isActive: Bool
+    /// "Offset" for Offset Planar Curve, "Slot" for Slot.
+    var title: String = "Slot"
     var widthTitle: String
     var inputModeTitle: String
+    /// Offset's Symmetric option (S), shown for an offset only.
+    var symmetricTitle: String?
     var create: () -> Void
 
     var body: some View {
         workspaceStatusChip(
-            "Slot",
+            title,
             systemImage: "capsule",
             tint: isActive ? .accentColor : .secondary
         )
 
         workspaceValuePill(
-            "Width",
+            title == "Slot" ? "Width" : "Distance",
             widthTitle,
             accessibilityIdentifier: "WorkspaceSlot.width"
         )
+        if let symmetricTitle {
+            workspaceValuePill("Symmetric (S)", symmetricTitle, accessibilityIdentifier: "WorkspaceSlot.symmetric")
+        }
         workspaceValuePill(
             "Input",
             inputModeTitle,
@@ -276,7 +283,7 @@ struct WorkspaceSlotContextPanel: View {
 
         workspaceIconButton(
             systemImage: "capsule",
-            help: "Create Slot Profile",
+            help: title == "Slot" ? "Create Slot Profile" : "Create Offset Curve",
             accessibilityIdentifier: "WorkspaceSlot.create",
             action: create
         )
