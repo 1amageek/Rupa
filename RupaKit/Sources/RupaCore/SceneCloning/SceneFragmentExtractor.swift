@@ -11,6 +11,9 @@ struct SceneFragmentExtractor: Sendable {
         /// Placements relative to the first root's parent, for pattern outputs that reproduce a
         /// definition inside their own frame.
         case parentOfFirstRoot
+        /// Each root relative to its own parent, the frame a component instance shows its
+        /// definition's roots in: one instance placement reproduces them all, whatever their parents.
+        case definition
     }
 
     func extract(
@@ -49,10 +52,15 @@ struct SceneFragmentExtractor: Sendable {
             reference = .identity
         case .parentOfFirstRoot:
             reference = try hierarchy.parentWorldTransform(of: rootIDs[0])
+        case .definition:
+            reference = .identity
         }
         let inverseReference = try reference.inverse()
         func placement(of id: SceneNodeID) throws -> Transform3D {
-            try inverseReference.composed(with: try hierarchy.worldTransform(of: id))
+            if case .definition = frame {
+                return try hierarchy.parentWorldTransform(of: id).inverse().composed(with: try hierarchy.worldTransform(of: id))
+            }
+            return try inverseReference.composed(with: try hierarchy.worldTransform(of: id))
         }
 
         var sceneNodes: [SceneNodeID: SceneNode] = [:]

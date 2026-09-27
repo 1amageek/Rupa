@@ -212,4 +212,35 @@ import Testing
         #expect(session.document.cadDocument.designGraph == before)
         #expect(session.generation == generation)
     }
+
+    @Test func aClickRayMeetsTheClickedCurvesPlaneWhereItsNodePlacesIt() throws {
+        let base = SketchEntityID()
+        let (session, featureID) = try session([(base, line(0, 0, 10, 0))])
+        let curve = try target(session, featureID, base)
+        _ = try session.execute(.transformSceneNodes(
+            ids: [curve.sceneNodeID], worldDelta: try Transform3D.translation(Vector3D(x: 0.1, y: 0, z: 0.05)),
+            compensatingInstances: false
+        ))
+        let document = session.document
+        let straight = try document.sketchPlanePoint(
+            alongRay: Point3D(x: 0.103, y: 0.004, z: 1), direction: Vector3D(x: 0, y: 0, z: -1), on: curve
+        )
+        #expect(abs(straight.x - 0.003) < 1e-12 && abs(straight.y - 0.004) < 1e-12)
+        // An oblique ray lands where it crosses the placed plane, not below its origin.
+        let oblique = try document.sketchPlanePoint(
+            alongRay: Point3D(x: 0.1, y: 0, z: 1.05), direction: Vector3D(x: 0.003, y: 0.004, z: -1), on: curve
+        )
+        #expect(abs(oblique.x - 0.003) < 1e-12 && abs(oblique.y - 0.004) < 1e-12)
+
+        #expect(throws: EditorError.self) {
+            _ = try document.sketchPlanePoint(
+                alongRay: Point3D(x: 0, y: 0, z: 1), direction: Vector3D(x: 1, y: 0, z: 0), on: curve
+            )
+        }
+        #expect(throws: EditorError.self) {
+            _ = try document.sketchPlanePoint(
+                alongRay: Point3D(x: 0, y: 0, z: -1), direction: Vector3D(x: 0, y: 0, z: -1), on: curve
+            )
+        }
+    }
 }

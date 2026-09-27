@@ -123,13 +123,16 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
 
 Realize Instances (`realizeComponentInstances`) turns each selected component
 instance node into an independent copy of its definition, inserted right after
-the instance among its siblings, and deletes the instance. An instance shows a
-definition root at W(instance node) ∘ L(instance) ∘ L(root) while the root sits
-at W(root's parent) ∘ L(root), so the copy is placed by
-W(instance node) ∘ L(instance) ∘ W(root's parent)⁻¹ and appears exactly where the
-instance showed it. The definition and its other instances are untouched. A
-node that is not a component instance is refused and the document is unchanged.
-`RealizeComponentInstanceTests` own both cases.
+the instance among its siblings, and deletes the instance. An instance shows
+each definition root at W(instance node) ∘ L(instance) ∘ L(root), whatever that
+root's parent is, so the roots are extracted in the `.definition` frame (each at
+L(root), its placement in its own parent) and placed together by
+W(instance node) ∘ L(instance); every copy appears exactly where the instance
+showed its root, even when the roots' parents are placed differently. The
+definition and its other instances are untouched. A node that is not a
+component instance is refused and the document is unchanged.
+`RealizeComponentInstanceTests` own these cases, including roots under two
+differently placed groups.
 
 ## Verification and Change Impact
 

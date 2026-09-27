@@ -3,8 +3,9 @@ import RupaCore
 
 /// A typed value field of the Move, Rotate or Scale dialog.
 ///
-/// A field holds its text until Return; only then does the value become one motion, so the
-/// digits of a value on their way in never apply as motions of their own.
+/// Fields hold their text until Return; only then do all the typed values become one motion, so
+/// the digits of a value on their way in never apply as motions of their own and a value typed
+/// into another field is not lost.
 enum WorkspaceTransformTypedField: Hashable, Sendable {
     /// Move's distance along a frame axis, in the display unit.
     case distance(SceneTransformAxis)

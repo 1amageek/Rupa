@@ -230,7 +230,6 @@ private struct ProjectMainViewContent: View {
     @FocusState private var isWorkspaceFocused: Bool
     @FocusState private var focusedPlaceOption: WorkspacePlaceOptionField?
     @FocusState private var isSectionDistanceFocused: Bool
-    @FocusState private var focusedTransformField: WorkspaceTransformTypedField?
     /// What is typed into the transform dialog's fields, applied only on Return.
     @State private var transformFieldTexts: [WorkspaceTransformTypedField: String] = [:]
 
@@ -454,6 +453,7 @@ private struct ProjectMainViewContent: View {
         }
         cancelModelingOperation()
         selectedTool = .select
+        curvePickCommand = nil
         modelingDraft = ModelingOperationDraft(
             kind: kind,
             selection: snapshot.selection,
@@ -1223,6 +1223,8 @@ private struct ProjectMainViewContent: View {
     @discardableResult
     private func setActiveTool(_ tool: ModelingTool) -> ModelingToolActivationResult {
         selectedTool = tool
+        // Trim, Split Segment and Insert Knot take the select tool's clicks; another tool ends them.
+        if tool != .select { curvePickCommand = nil }
         if !keepsSketchInputState(for: tool) {
             sketchInputState.clearTransientInput()
         }
@@ -2031,7 +2033,7 @@ private struct ProjectMainViewContent: View {
         .modifier(WorkspaceKeyboardScope(
             isFocused: $isWorkspaceFocused,
             handle: { handleWorkspaceKeyboardInput($0) },
-            submit: { commitFocusedTransformField() }
+            submit: { commitTypedTransformValues() }
         ))
         .onAppear {
             isWorkspaceFocused = true
@@ -4260,7 +4262,6 @@ private struct ProjectMainViewContent: View {
             ))
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 56)
-                .focused($focusedTransformField, equals: field)
                 .accessibilityIdentifier("WorkspaceTransform.\(field.title.lowercased())")
             Text(unit).foregroundStyle(.secondary)
         }
@@ -5357,6 +5358,7 @@ private struct ProjectMainViewContent: View {
 
     private func beginSurfaceModelingOperation() {
         cancelModelingOperation()
+        curvePickCommand = nil
         var draft = ModelingOperationDraft(
             kind: .surfacePatch,
             selection: snapshot.selection,
@@ -7931,24 +7933,35 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
     private func beginCurvePickCommand(_ command: WorkspaceCurvePickCommand) {
+        cancelModelingOperation()
+        pointPickRequest = nil
+        placeSession = nil
+        transformSession = nil
+        mirrorSession = nil
+        arraySession = nil
+        if selectedTool != .select { _ = setActiveTool(.select) }
         curvePickCommand = command
         reportToolStatus(command.prompt)
     }
 
-    /// A Trim or Split Segment click: the sketch curve under the pointer, in sketch-entity scope
-    /// whatever the selection scope, with the click carried into its sketch's plane.
+    /// A Trim, Split Segment or Insert Knot click: the sketch curve under the pointer, in
+    /// sketch-entity scope whatever the selection scope, and where the click's camera ray meets
+    /// that curve's sketch plane.
     private func applyCurvePick(_ command: WorkspaceCurvePickCommand, at target: ViewportCanvasTarget) {
         var resolver = selectionTargetResolver
         resolver.selectionScope = .sketchEntity
         guard let hit = target.hit, let curve = resolver.selectionTarget(for: hit),
               case .sketchEntity = curve.component,
-              let worldPoint = target.modelWorldPoint else {
+              let ray = target.pickRay else {
             reportToolStatus("\(command.title): click on a sketch curve.", severity: .warning)
             return
         }
         do {
-            let point = try snapshot.document.document.sketchPlanePoint(ofWorld: worldPoint, on: curve)
+            let point = try snapshot.document.document.sketchPlanePoint(
+                alongRay: ray.origin, direction: ray.direction, on: curve
+            )
             switch command {
             case .trim:
                 submitSource(.trimSketchCurve(target: curve, point: point))
@@ -8467,6 +8480,7 @@ private struct ProjectMainViewContent: View {
             return
         }
         pointPickRequest = nil
+        curvePickCommand = nil
         let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
         placeSession = place
         reportToolStatus(place.prompt)
@@ -8500,6 +8514,7 @@ private struct ProjectMainViewContent: View {
             pointPickRequest = nil
             placeSession = nil
             transformSession = nil
+            curvePickCommand = nil
             let mirror = try WorkspaceMirrorSession(sceneNodeIDs: ids, constructionPlane: mirrorConstructionPlane)
             mirrorSession = mirror
             reportToolStatus(mirror.prompt)
@@ -8636,6 +8651,7 @@ private struct ProjectMainViewContent: View {
             moving.topologyBodyWorldTransform = try hierarchy.worldTransform(of: nodeID)
             pointPickRequest = nil
             placeSession = nil
+            curvePickCommand = nil
             transformSession = moving
             transformFieldTexts = [:]
             refreshTransformFrame()
@@ -8680,6 +8696,7 @@ private struct ProjectMainViewContent: View {
         guard !ids.isEmpty else { return }
         pointPickRequest = nil
         placeSession = nil
+        curvePickCommand = nil
         transformSession = WorkspaceTransformSession(sceneNodeIDs: ids, mode: mode)
         transformFieldTexts = [:]
         refreshTransformFrame()
@@ -8740,29 +8757,41 @@ private struct ProjectMainViewContent: View {
     }
 
     /// Submits one motion of the running transform.
-    /// Applies the value typed into the focused transform field as one motion, and clears it.
-    private func commitFocusedTransformField() {
-        guard let field = focusedTransformField,
-              let text = transformFieldTexts.removeValue(forKey: field) else { return }
+    /// Applies every value typed into the transform dialog together as one motion and clears them.
+    /// Returns false when a value is refused: the values stay for correction and the Return that
+    /// submitted them goes no further.
+    private func commitTypedTransformValues() -> Bool {
+        guard transformSession != nil else { return true }
         let unit = snapshot.workspaceState.ruler.displayUnit
+        var values: [WorkspaceTransformTypedField: Double] = [:]
         do {
-            guard let value = try field.value(of: text) else { return }
-            applyTransformMotion { transform in
-                try transform.typedMotion(field, value: value, unit: unit)
+            for (field, text) in transformFieldTexts {
+                if let value = try field.value(of: text) { values[field] = value }
             }
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
         }
+        guard !values.isEmpty else { return true }
+        guard applyTransformMotion({ transform in try transform.typedMotion(values, unit: unit) }) else {
+            return false
+        }
+        transformFieldTexts = [:]
+        return true
     }
 
-    private func applyTransformMotion(_ motion: (inout WorkspaceTransformSession) throws -> Transform3D) {
-        guard var transform = transformSession else { return }
+    /// Submits the motion the running transform makes; false when it could not be made.
+    @discardableResult
+    private func applyTransformMotion(_ motion: (inout WorkspaceTransformSession) throws -> Transform3D) -> Bool {
+        guard var transform = transformSession else { return false }
         do {
             let delta = try motion(&transform)
             transformSession = transform
             submitTransformCommand(try transform.command(worldDelta: delta))
+            return true
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
         }
     }
 

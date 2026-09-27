@@ -1042,6 +1042,13 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
    parallel to the plane and a plane behind the ray rather than substituting
    a nearest point.
 
+   `worldRay(at:revision:)` returns that same camera ray in CAD world space
+   (origin with the render origin added back, unit direction) as a
+   `ViewportPickRay`, for a caller whose plane the frame does not know: a
+   canvas click carries it so the clicked sketch curve's own placed plane can
+   be met in Core. It shares the same validation; the mounted Ortho/Persp
+   query test proves it passes through the anchor the plane query resolves.
+
    `retainsSectionedPoint(_:revision:)` reports whether the mounted frame keeps
    a world point on the kept side of the active section, applying the same
    native-scene-space predicate that admits native surface hits.

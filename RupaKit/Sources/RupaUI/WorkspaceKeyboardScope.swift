@@ -6,14 +6,16 @@ import SwiftUI
 /// SwiftUI offers every key to this scope's key handler before a text field inside it sees the
 /// key, so a handler that read them all would take the digits, deletes and Returns typed into a
 /// command dialog. While one of the scope's text fields is being edited it owns every key but
-/// Escape. Its Return, once the field has taken it, goes to `submit`, gives the keyboard back to
-/// the scope, and then reaches `handle` as a Return on the canvas does. An Escape the scope handles
-/// while a field is being edited gives the keyboard back to the scope too, since the command it
-/// ends may take the field with it.
+/// Escape. Its Return, once the field has taken it, goes to `submit`; when `submit` accepts what
+/// was typed the keyboard goes back to the scope and the Return reaches `handle` as a Return on
+/// the canvas does, and when it refuses, the field keeps the keyboard and the text to be
+/// corrected. An Escape the scope handles while a field is being edited gives the keyboard back
+/// to the scope too, since the command it ends may take the field with it.
 struct WorkspaceKeyboardScope: ViewModifier {
     var isFocused: FocusState<Bool>.Binding
     let handle: (WorkspaceKeyboardInput) -> KeyPress.Result
-    let submit: () -> Void
+    /// Applies what was typed; false when it is refused.
+    let submit: () -> Bool
     @State private var host = HostWindow()
 
     func body(content: Content) -> some View {
@@ -33,7 +35,7 @@ struct WorkspaceKeyboardScope: ViewModifier {
                 return result
             }
             .onSubmit {
-                submit()
+                guard submit() else { return }
                 isFocused.wrappedValue = true
                 _ = handle(WorkspaceKeyboardInput(characters: "\r", isReturn: true))
             }

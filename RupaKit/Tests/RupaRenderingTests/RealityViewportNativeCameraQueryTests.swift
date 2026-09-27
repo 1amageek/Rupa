@@ -112,6 +112,15 @@ func nativeCameraQueriesUseMountedEmptySceneCalibration() async throws {
         let resolved = try #require(planePoint)
         #expect(resolved.isApproximatelyEqual(to: anchor, tolerance: 1e-4))
 
+        // The pick ray through the same screen point passes through the anchor, ahead of its
+        // origin, in world space despite the render origin.
+        let ray = try viewport.worldRay(at: projected, revision: 1)
+        #expect(abs(ray.direction.length - 1) < 1e-6)
+        let toAnchor = anchor - ray.origin
+        let along = toAnchor.dot(ray.direction)
+        #expect(along > 0)
+        #expect((toAnchor - ray.direction * along).length < 1e-4)
+
         #expect(try viewport.projectWithinDepthRange(anchor, revision: 1) == projected)
         let near = try #require(viewport.camera.components[OrthographicCameraComponent.self]?.near
             ?? viewport.camera.components[PerspectiveCameraComponent.self]?.near)

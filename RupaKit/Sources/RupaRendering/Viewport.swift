@@ -4845,8 +4845,12 @@ public struct Viewport: View {
             return
         }
         let viewRayAnchorWorldPoint: Point3D
+        let pickRay: ViewportPickRay
         do {
             viewRayAnchorWorldPoint = try canvasViewRayAnchor(at: point)
+            pickRay = try presentationPlanCache.worldRay(
+                at: point, for: try presentationQueryIdentity(), revision: activeControlSession.revision
+            )
         } catch {
             // An unavailable frame cannot authorize selection or an edit.
             return
@@ -4857,6 +4861,7 @@ public struct Viewport: View {
                 modelPoint: input.point,
                 modelWorldPoint: exactWorldPoint,
                 viewRayAnchorWorldPoint: viewRayAnchorWorldPoint,
+                pickRay: pickRay,
                 sketchPlane: sketchPlane,
                 selectionIntent: selectionIntent,
                 modifierFlags: modifierFlags

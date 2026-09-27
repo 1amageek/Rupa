@@ -1717,6 +1717,21 @@ final class RealityViewport {
         )
     }
 
+    /// The world ray the mounted frame's camera casts through a screen point.
+    func worldRay(at point: CGPoint, revision: UInt64) throws -> ViewportPickRay {
+        try validateCameraQuery(point: point, revision: revision)
+        let ray = try nativeCameraRay(through: point)
+        let origin = SIMD3<Double>(ray.origin)
+        let direction = SIMD3<Double>(ray.direction)
+        let world = Point3D(x: origin.x + renderOrigin.x,
+                            y: origin.y + renderOrigin.y,
+                            z: origin.z + renderOrigin.z)
+        guard world.x.isFinite, world.y.isFinite, world.z.isFinite else {
+            throw Self.queryFailure("The native camera ray origin is not finite in CAD world space.")
+        }
+        return ViewportPickRay(origin: world, direction: Vector3D(x: direction.x, y: direction.y, z: direction.z))
+    }
+
     /// Intersects a screen point with the plane through `anchor` perpendicular
     /// to the direction the mounted frame is looking along.
     ///

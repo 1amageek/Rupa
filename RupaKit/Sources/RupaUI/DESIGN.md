@@ -584,9 +584,15 @@ view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
 Trim (T, with the select tool), Split Segment and Insert Knot (Edit menu) run a
-`WorkspaceCurvePickCommand` until Escape: each click on a sketch curve resolves
-the curve under the pointer in sketch-entity scope, whatever the selection
-scope, carries the click's world point into that sketch's plane and submits one
+`WorkspaceCurvePickCommand` until Escape, a change of tool or the start of
+another command that takes clicks (Place, Move/Rotate/Scale, Mirror, an array,
+a modeling operation), and starting one ends those: the command owning the
+clicks is always the one the tool and status show. Each click on a sketch curve
+resolves the curve under the pointer in sketch-entity scope, whatever the
+selection scope, and where the click's camera ray (`ViewportCanvasTarget.pickRay`)
+meets that curve's sketch plane as its scene node places it
+(`sketchPlanePoint(alongRay:direction:on:)`, which refuses a ray along the
+plane), then submits one
 `trimSketchCurve`, `splitSketchCurveAtPoint` or
 `insertSketchSplineControlPointAtPoint`, so each removed segment, split or new
 control point is one undo step. Core owns which segment the point chooses and where it splits
@@ -1081,13 +1087,16 @@ a command dialog: Return finished Move before its field saw it, the dialog went
 with the session while its field held the keyboard, focus fell to the window,
 and the next G reached nothing. While one of the scope's text fields is being
 edited (its window's field editor is first responder) the field owns every key
-but Escape. Its Return, once the field has taken it, first applies the focused
-transform field, then gives the keyboard back to the canvas and acts as Return
-on the canvas does — finishing Move, placing a section — so a command keeps
-the Return meaning it had. An Escape handled while a field is edited also gives
-the keyboard back. A transform field holds its text until that Return and then
-applies its value once through `WorkspaceTransformSession.typedMotion`; a value
-field bound per keystroke would apply 1 and then 10 for a typed 10. Placing a
+but Escape. Its Return, once the field has taken it, first applies every value
+typed into the transform dialog; when they are accepted it gives the keyboard
+back to the canvas and acts as Return on the canvas does — finishing Move,
+placing a section — so a command keeps the Return meaning it had, and when a
+value is refused (not a number, a field the mode does not take) the field keeps
+the keyboard, the texts stay and the session keeps running. An Escape handled
+while a field is edited also gives the keyboard back. Transform fields hold
+their text until that Return, and all of them become one motion through
+`WorkspaceTransformSession.typedMotion` — X 10 and Y 20 move by (10, 20, 0); a
+value field bound per keystroke would apply 1 and then 10 for a typed 10. Placing a
 section returns focus to the canvas as well. `WorkspaceKeyboardScopeTests`
 mount the scope with a field in a window and send it key events;
 `WorkspaceTransformSessionTests` cover the typed fields.

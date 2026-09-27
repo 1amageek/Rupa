@@ -2664,6 +2664,9 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
     public var modelPoint: Point2D
     public var modelWorldPoint: Point3D?
     public var viewRayAnchorWorldPoint: Point3D?
+    /// The camera ray through the click, for a command that needs where the click meets a plane
+    /// of its own.
+    public var pickRay: ViewportPickRay?
     public var sketchPlane: SketchPlane
     public var selectionIntent: ViewportSelectionIntent
     public var modifierFlags: ViewportInputModifierFlags
@@ -2673,6 +2676,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
         modelPoint: Point2D,
         modelWorldPoint: Point3D? = nil,
         viewRayAnchorWorldPoint: Point3D? = nil,
+        pickRay: ViewportPickRay? = nil,
         sketchPlane: SketchPlane = .defaultWorkspacePlane,
         selectionIntent: ViewportSelectionIntent = .replace,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -2681,6 +2685,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
         self.modelPoint = modelPoint
         self.modelWorldPoint = modelWorldPoint
         self.viewRayAnchorWorldPoint = viewRayAnchorWorldPoint
+        self.pickRay = pickRay
         self.sketchPlane = sketchPlane
         self.selectionIntent = selectionIntent
         self.modifierFlags = modifierFlags

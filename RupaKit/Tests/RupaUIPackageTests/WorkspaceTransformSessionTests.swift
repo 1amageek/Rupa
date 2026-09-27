@@ -184,22 +184,35 @@ import Testing
         #expect(move.orientation == .world)
     }
 
-    @Test func aTypedFieldReadsItsTextOnceAndMakesItsModesMotion() throws {
+    @Test func typedValuesReadTheirTextAndMakeOneMotionTogether() throws {
         #expect(try WorkspaceTransformTypedField.distance(.x).value(of: "  ") == nil)
         #expect(try WorkspaceTransformTypedField.distance(.x).value(of: "10") == 10)
         #expect(throws: EditorError.self) { _ = try WorkspaceTransformTypedField.angle.value(of: "ten") }
 
+        // X and Y typed into two fields move by both, not by the last one typed.
         var move = session(.move)
-        let moved = try move.typedMotion(.distance(.y), value: 10, unit: .millimeter)
-        #expect(try (moved.applied(to: .origin) - Point3D(x: 0, y: 0.01, z: 0)).length < 1e-12)
+        let moved = try move.typedMotion([.distance(.x): 10, .distance(.y): 20], unit: .millimeter)
+        #expect(try (moved.applied(to: .origin) - Point3D(x: 0.01, y: 0.02, z: 0)).length < 1e-12)
 
         var scale = session(.scale)
-        let scaled = try scale.typedMotion(.factor(.z), value: 2, unit: .millimeter)
-        #expect(try (scaled.applied(to: Point3D(x: 2, y: 3, z: 4)) - Point3D(x: 2, y: 3, z: 5)).length < 1e-12)
+        let scaled = try scale.typedMotion([.factor(.z): 2, .factor(.x): 3], unit: .millimeter)
+        #expect(try (scaled.applied(to: Point3D(x: 2, y: 3, z: 4)) - Point3D(x: 4, y: 3, z: 5)).length < 1e-12)
 
         var rotate = session(.rotate)
-        #expect(throws: EditorError.self) { _ = try rotate.typedMotion(.distance(.x), value: 1, unit: .meter) }
-        let turned = try rotate.typedMotion(.angle, value: 180, unit: .meter)
+        #expect(throws: EditorError.self) { _ = try rotate.typedMotion([.distance(.x): 1], unit: .meter) }
+        let turned = try rotate.typedMotion([.angle: 180], unit: .meter)
         #expect(try (turned.applied(to: Point3D(x: 2, y: 2, z: 3)) - Point3D(x: 0, y: 2, z: 3)).length < 1e-12)
+    }
+
+    @Test func freestyleScaleTakesARatioOrALengthButNotBoth() throws {
+        var scale = session(.scale)
+        scale.beginFreestyle()
+        _ = try scale.addFreestylePoint(.origin)
+        _ = try scale.addFreestylePoint(Point3D(x: 0.5, y: 0, z: 0))
+        var both = scale
+        #expect(throws: EditorError.self) { _ = try both.typedMotion([.ratio: 2, .length: 1], unit: .meter) }
+        let ratio = try scale.typedMotion([.ratio: 3], unit: .meter)
+        #expect(try (ratio.applied(to: Point3D(x: 1, y: 1, z: 0)) - Point3D(x: 3, y: 1, z: 0)).length < 1e-12)
+        #expect(!scale.hasFreestyleScaleAxis)
     }
 }

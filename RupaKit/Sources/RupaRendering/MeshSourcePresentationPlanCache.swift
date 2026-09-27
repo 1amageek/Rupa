@@ -277,6 +277,15 @@ final class MeshSourcePresentationPlanCache {
         )
     }
 
+    /// The world ray the mounted frame's camera casts through `point`.
+    func worldRay(
+        at point: CGPoint,
+        for identity: RealityViewportPreparationRequest.Identity,
+        revision: UInt64
+    ) throws -> ViewportPickRay {
+        try querySurface(for: identity).worldRay(at: point, revision: revision)
+    }
+
     /// Resolves the plane through `anchor` perpendicular to the direction the
     /// mounted frame is looking along. The frame states that direction from
     /// the camera entity it installed, so a caller never names a view plane

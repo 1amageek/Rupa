@@ -231,26 +231,53 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         return try Transform3D.rotation(axis: axis, angleRadians: degrees * .pi / 180, about: frame.origin)
     }
 
-    /// The motion a value typed into `field` makes, with lengths in `unit`. A freestyle ratio or
-    /// length ends the freestyle, as a picked ratio point does.
+    /// The one motion the values typed into the dialog make together, with lengths in `unit`:
+    /// Move's distances and Scale's factors along several axes combine, an untyped axis staying put.
+    /// A freestyle ratio or length ends the freestyle, as a picked ratio point does.
     mutating func typedMotion(
-        _ field: WorkspaceTransformTypedField,
-        value: Double,
+        _ values: [WorkspaceTransformTypedField: Double],
         unit: LengthDisplayUnit
     ) throws -> Transform3D {
-        switch (mode, field) {
-        case (.move, .distance(let axis)):
-            return try typedMove(axis.vector(scaledBy: unit.meters(from: value), otherwise: 0))
-        case (.rotate, .angle):
-            return try typedRotation(degrees: value)
-        case (.scale, .factor(let axis)):
-            return try typedScale(axis.vector(scaledBy: value, otherwise: 1))
-        case (.scale, .ratio):
-            return try typedFreestyleScale(ratio: value)
-        case (.scale, .length):
-            return try typedFreestyleScale(length: unit.meters(from: value))
-        default:
-            throw EditorError(code: .commandInvalid, message: "\(title) takes no \(field.title) value.")
+        var distances = Vector3D(x: 0, y: 0, z: 0)
+        var factors = Vector3D(x: 1, y: 1, z: 1)
+        var angle: Double?
+        var ratio: Double?
+        var length: Double?
+        for (field, value) in values {
+            switch (mode, field) {
+            case (.move, .distance(let axis)):
+                distances = axis.replacing(in: distances, with: unit.meters(from: value))
+            case (.rotate, .angle):
+                angle = value
+            case (.scale, .factor(let axis)):
+                factors = axis.replacing(in: factors, with: value)
+            case (.scale, .ratio):
+                ratio = value
+            case (.scale, .length):
+                length = unit.meters(from: value)
+            default:
+                throw EditorError(code: .commandInvalid, message: "\(title) takes no \(field.title) value.")
+            }
+        }
+        switch mode {
+        case .move:
+            return try typedMove(distances)
+        case .rotate:
+            guard let angle else {
+                throw EditorError(code: .commandInvalid, message: "\(title) needs an angle.")
+            }
+            return try typedRotation(degrees: angle)
+        case .scale:
+            switch (ratio, length) {
+            case (nil, nil):
+                return try typedScale(factors)
+            case (let ratio?, nil):
+                return try typedFreestyleScale(ratio: ratio)
+            case (nil, let length?):
+                return try typedFreestyleScale(length: length)
+            case (.some, .some):
+                throw EditorError(code: .commandInvalid, message: "Type a Ratio or a Length, not both.")
+            }
         }
     }
 
@@ -374,12 +401,14 @@ struct WorkspaceTransformSession: Equatable, Sendable {
 }
 
 private extension SceneTransformAxis {
-    /// Frame components with `value` on this axis and `other` on the two others.
-    func vector(scaledBy value: Double, otherwise other: Double) -> Vector3D {
+    /// `vector` with its component on this axis set to `value`.
+    func replacing(in vector: Vector3D, with value: Double) -> Vector3D {
+        var result = vector
         switch self {
-        case .x: Vector3D(x: value, y: other, z: other)
-        case .y: Vector3D(x: other, y: value, z: other)
-        case .z: Vector3D(x: other, y: other, z: value)
+        case .x: result.x = value
+        case .y: result.y = value
+        case .z: result.z = value
         }
+        return result
     }
 }

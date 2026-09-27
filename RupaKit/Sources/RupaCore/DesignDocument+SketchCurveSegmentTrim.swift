@@ -27,13 +27,30 @@ extension DesignDocument {
         }
     }
 
-    /// The point of the sketch plane under the world point `point`, for the sketch `target` names
-    /// through the scene node presenting it.
-    public func sketchPlanePoint(ofWorld point: Point3D, on target: SelectionTarget) throws -> Point2D {
+    /// Where a view ray through the pointer meets the plane of the sketch `target` names, as placed
+    /// by the scene node presenting it, in that plane's coordinates. A ray along the plane or
+    /// pointing away from it meets no point there and is refused.
+    public func sketchPlanePoint(
+        alongRay origin: Point3D,
+        direction: Vector3D,
+        on target: SelectionTarget
+    ) throws -> Point2D {
         let selection = try editableSketchEntity(for: target, operationName: "Sketch plane point")
         let world = try SceneNodeHierarchy(metadata: productMetadata).worldTransform(of: target.sceneNodeID)
-        let local = try world.inverse().applied(to: point)
-        return try SketchPlaneCoordinateSystem(plane: selection.sketch.plane).project(local).point
+        let localOrigin = try world.inverse().applied(to: origin)
+        let localDirection = try world.inverseApplyingLinearPart(to: direction)
+            .normalized(tolerance: ModelingTolerance.standard.distance)
+        let plane = try SketchPlaneCoordinateSystem(plane: selection.sketch.plane)
+        let approach = localDirection.dot(plane.normal)
+        // The viewport's own plane intersections refuse the same parallel rays.
+        guard abs(approach) > 1e-12 else {
+            throw EditorError(code: .commandInvalid, message: "The view looks along the sketch's plane; turn it to click on the curve.")
+        }
+        let distance = (plane.origin - localOrigin).dot(plane.normal) / approach
+        guard distance >= 0 else {
+            throw EditorError(code: .commandInvalid, message: "The sketch's plane lies behind the view.")
+        }
+        return plane.project(localOrigin + localDirection * distance).point
     }
 
     private mutating func trimOpenSketchCurve(

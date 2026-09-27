@@ -11,6 +11,8 @@ struct WorkspaceKeyboardScopeTests {
     @MainActor
     private final class Record {
         var events: [String] = []
+        /// Whether `submit` accepts what was typed.
+        var acceptsSubmit = true
     }
 
     private final class KeyableWindow: NSWindow {
@@ -35,7 +37,10 @@ struct WorkspaceKeyboardScopeTests {
                     record.events.append("handle:\(name)")
                     return input.isReturn || input.isEscape || input.characters == "g" ? .handled : .ignored
                 },
-                submit: { record.events.append("submit:\(text)") }
+                submit: {
+                    record.events.append("submit:\(text)")
+                    return record.acceptsSubmit
+                }
             ))
             .onAppear { isFocused = true }
         }
@@ -128,5 +133,23 @@ struct WorkspaceKeyboardScopeTests {
         try await press("1", keyCode: 18, in: mounted)
         try await press("g", keyCode: 5, in: mounted)
         #expect(mounted.record.events == ["handle:1", "handle:g"])
+    }
+
+    @Test func aRefusedSubmitKeepsTheFieldAndItsTextForCorrection() async throws {
+        let mounted = try await mount()
+        defer { mounted.window.contentView = nil; mounted.window.close() }
+        mounted.record.acceptsSubmit = false
+        let textField = try await editField(mounted)
+
+        try await press("x", keyCode: 7, in: mounted)
+        try await press("\r", keyCode: 36, in: mounted)
+        #expect(mounted.record.events == ["submit:x"])
+        #expect(textField.currentEditor()?.string == "x")
+
+        // The field still owns the keys: a G typed now goes into it, not to the canvas. AppKit
+        // selects the submitted text, so the G replaces it as a correction would.
+        try await press("g", keyCode: 5, in: mounted)
+        #expect(mounted.record.events == ["submit:x"])
+        #expect(textField.currentEditor()?.string == "g")
     }
 }
