@@ -57,6 +57,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.bridge?()
             }
             .disabled(editCommands?.bridge == nil)
+            Button("Align Vertex") {
+                editCommands?.alignVertex?()
+            }
+            .disabled(editCommands?.alignVertex == nil)
             Button("Reverse Curve") {
                 editCommands?.reverseCurves?()
             }

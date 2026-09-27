@@ -217,6 +217,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case endCurvePickCommand
     /// C with the select tool: Cut Curve on the selected sketch curves.
     case beginCutCurve
+    /// Tab with two alignable curve ends selected: Align Vertex's continuity G0 → G1 → G2 → G0.
+    case cycleAlignContinuity
     /// F with the select tool and nothing running that takes F: the Command Palette.
     case openCommandPalette
     /// Escape while the Command Palette is open: close it.
@@ -266,6 +268,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasBridgeableSelection: Bool = false
     /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
     var hasSelectedBridgeCurve: Bool = false
+    /// Whether the selection is a curve end and the end Align Vertex aligns it with.
+    var hasAlignableVertexPair: Bool = false
     /// Whether anything is selected that Option-D can project onto the construction plane.
     var hasProjectableSelection: Bool = false
     /// Whether the selection holds sketch curves or vertices Fillet, Join or Unjoin act on: the
@@ -734,6 +738,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             return context.hasProjectableSelection ? .projectToConstructionPlane : nil
         }
         guard input.modifiers.isEmpty else { return nil }
+        if input.isTab, context.hasAlignableVertexPair, !context.hasSelectedBridgeCurve {
+            return .cycleAlignContinuity
+        }
         if context.hasSelectedBridgeCurve {
             if input.isTab { return .cycleBridgeContinuity }
             if key == "q" { return .trimBridgeSources }

@@ -596,6 +596,11 @@ the canvas as Return; the router gives the open palette's Escape back to it
 inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
 offered.
 
+Align Vertex (Edit menu, palette) aligns the selected curve end with the other
+selected end at the inspector's continuity; with two alignable ends selected, Tab
+steps that continuity G0 → G1 → G2 → G0 (a selected Bridge Curve keeps Tab for
+its own continuity).
+
 Reverse Curve (Edit menu, palette) reverses every selected sketch curve as one
 step through `reverseSketchCurve`; Core refuses the step when one of them has no
 direction to reverse (a circle, or an arc until its direction is represented).

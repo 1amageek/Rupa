@@ -5769,6 +5769,7 @@ private struct ProjectMainViewContent: View {
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
+            hasAlignableVertexPair: alignVertexAction != nil,
             hasProjectableSelection: !snapshot.selection.selectedTargets.isEmpty,
             selectedSketchTargetCount: selectedSketchTargets.count,
             hasWholeObjectSelection: selectionScope == .object && !snapshot.selection.wholeSceneNodeIDs.isEmpty,
@@ -6156,6 +6157,10 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .beginCutCurve:
             beginCutCurve()
+            return .handled
+        case .cycleAlignContinuity:
+            sketchVertexAlignmentContinuity = sketchVertexAlignmentContinuity.next
+            reportToolStatus("Align Vertex: \(sketchVertexAlignmentContinuity.rawValue.uppercased()).")
             return .handled
         case .openCommandPalette:
             isCommandPaletteOpen = true
@@ -8470,6 +8475,7 @@ private struct ProjectMainViewContent: View {
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
+            alignVertex: alignVertexAction,
             reverseCurves: reverseCurvesAction,
             createInstance: createInstanceAction,
             realizeInstances: realizeInstancesAction,
@@ -8523,6 +8529,14 @@ private struct ProjectMainViewContent: View {
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
         }
+    }
+
+    /// Align Vertex on the selected curve end and the other selected end (Edit menu, palette), at
+    /// the inspector's continuity, which Tab steps.
+    private var alignVertexAction: (@MainActor () -> Void)? {
+        guard let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
+              selectedSketchVertexAlignmentReferenceTarget(for: entity) != nil else { return nil }
+        return { alignSelectedSketchVertex(entity) }
     }
 
     /// Reverse Curve on every selected sketch curve (Edit menu, palette), as one step; Core refuses

@@ -592,3 +592,13 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: palette) == .closeCommandPalette)
     #expect(router.action(for: f, context: palette) == nil)
 }
+
+@Test func workspaceKeyboardRouterStepsAlignContinuityOnTabWithTwoAlignableEnds() {
+    let router = WorkspaceKeyboardRouter()
+    var aligning = keyboardContext()
+    aligning.hasAlignableVertexPair = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: aligning) == .cycleAlignContinuity)
+    aligning.hasSelectedBridgeCurve = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: aligning) == .cycleBridgeContinuity)
+    #expect(SketchVertexAlignmentContinuity.g2.next == .g0)
+}
