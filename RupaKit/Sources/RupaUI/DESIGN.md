@@ -583,6 +583,15 @@ beside the selection count. The order in which MainView unwinds Escape is a
 view-local sequence over `@State`, and no package test reaches it; it is
 recorded here and in the UI test review rather than claimed as verified.
 
+Cut Curve (C, with the select tool) runs a `WorkspaceCutCurveSession`: the
+selected sketch curves seed it (with several, the last selected is the cutter and
+the others targets; with one, it is the target), the dialog's Targets/Cutters
+choice says which list a clicked curve joins or leaves (a curve is never in
+both), Tab toggles Extend, Return, right-click or the dialog's Cut submit one
+`cutSketchCurves`, and Escape, a tool change or another click-owning command ends
+it. The session's curves show as the selection. Screen space (S) and face cutters
+wait for the kernel (SK2.4).
+
 Trim (T, with the select tool), Split Segment and Insert Knot (Edit menu) run a
 `WorkspaceCurvePickCommand` until Escape, a change of tool or the start of
 another command that takes clicks (Place, Move/Rotate/Scale, Mirror, an array,

@@ -120,6 +120,7 @@ enum ProductionMainViewActionManifest {
         "createSavedView",
         "createViewAlignedConstructionPlane",
         "cutSketchCurve",
+        "cutSketchCurves",
         "deleteBodyFaces",
         "assignMaterial",
         "createMaterial",

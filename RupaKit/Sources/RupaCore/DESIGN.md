@@ -916,6 +916,12 @@ the command says the cutter does not reach; a root the kernel cannot certify
 (tangent or overlapping curves) and invalid geometry are command-invalid errors
 carrying the kernel message, and the document is unchanged.
 
+`cutSketchCurves(targets:cutters:options:)` is Cut Curve's dialog: each target is
+cut wherever any cutter crosses it (`cutCurveCrosses`, the same intersection
+rule), each cutter cutting the pieces the earlier cutters left. A target no
+cutter crosses, an empty list, or a curve in both lists fails the whole cut and
+the document is unchanged.
+
 ### Trim contract
 
 `trimSketchCurve(target:near:)` removes the segment of a sketch line, arc, circle

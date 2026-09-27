@@ -149,6 +149,29 @@ extension DesignDocument {
     }
 
     /// Target fractions strictly inside the target, in the parameter `splitSketchCurve` takes.
+    /// Whether `cutter` cuts `target` at all: two crossings on a circle target, an interior
+    /// crossing on any other target, with the cutter extended when `options` says so.
+    func cutCurveCrosses(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions) throws -> Bool {
+        let targetSelection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
+        let cutterSelection = try editableSketchEntity(for: cutter, operationName: "Cut Curve cutter")
+        try validateCutSketchCurveSelections(
+            targetSelection: targetSelection,
+            cutterSelection: cutterSelection,
+            options: options
+        )
+        let targetGeometry = try cutCurveGeometry(targetSelection.entity, role: .target)
+        let cutterGeometry = try cutCurveGeometry(cutterSelection.entity, role: .cutter)
+        if case .circle = targetGeometry {
+            let hits = try cutCurveIntersections(
+                target: targetGeometry, cutter: cutterGeometry, extendsCutter: options.extendsCutter
+            )
+            return uniqueCutAngles(hits.map(\.firstParameter)).count == 2
+        }
+        return try cutInteriorFractions(
+            target: targetGeometry, cutter: cutterGeometry, extendsCutter: options.extendsCutter
+        ).isEmpty == false
+    }
+
     private func cutInteriorFractions(
         target: SketchCurveGeometry2D,
         cutter: SketchCurveGeometry2D,

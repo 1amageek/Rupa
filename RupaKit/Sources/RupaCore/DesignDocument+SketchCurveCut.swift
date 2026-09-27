@@ -51,6 +51,55 @@ extension DesignDocument {
         return createdEntityIDs
     }
 
+    /// Cut Curve on several targets with several cutters: every target is cut wherever a cutter
+    /// crosses it, each cutter cutting the pieces the earlier ones left. A target no cutter crosses
+    /// fails the whole cut and the document is unchanged. Returns the entities the cuts created.
+    @discardableResult
+    public mutating func cutSketchCurves(
+        targets: [SelectionTarget],
+        cutters: [SelectionTarget],
+        options: CutCurveOptions = CutCurveOptions(),
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> [SketchEntityID] {
+        guard !targets.isEmpty, !cutters.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "Cut Curve needs at least one target and one cutter.")
+        }
+        guard Set(targets).isDisjoint(with: Set(cutters)) else {
+            throw EditorError(code: .commandInvalid, message: "Cut Curve takes a curve as a target or as a cutter, not both.")
+        }
+        var updated = self
+        var created: [SketchEntityID] = []
+        for target in targets {
+            let featureID = try updated.editableSketchEntity(for: target, operationName: "Cut Curve target").featureID
+            var pieces = [target]
+            var wasCut = false
+            for cutter in cutters {
+                var next: [SelectionTarget] = []
+                for piece in pieces {
+                    next.append(piece)
+                    guard try updated.cutCurveCrosses(target: piece, cutter: cutter, options: options) else { continue }
+                    let made = try updated.cutSketchCurve(
+                        target: piece, cutter: cutter, options: options, objectRegistry: objectRegistry
+                    )
+                    wasCut = true
+                    created += made
+                    next += made.map {
+                        SelectionTarget(
+                            sceneNodeID: target.sceneNodeID,
+                            component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: $0))
+                        )
+                    }
+                }
+                pieces = next
+            }
+            guard wasCut else {
+                throw EditorError(code: .commandInvalid, message: "Cut Curve: a target curve is not crossed by any cutter.")
+            }
+        }
+        self = updated
+        return created
+    }
+
     func sequentialCutCurveLocalFractions(
         fractions: [Double],
         entity: SketchEntity

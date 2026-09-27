@@ -186,6 +186,7 @@ private struct ProjectMainViewContent: View {
     /// Trim (T) or Split Segment is running: each click on a sketch curve removes the segment under
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
+    @State private var cutCurveSession: WorkspaceCutCurveSession?
     /// Cut Curve's Extend option: the cutter reaches the target along its line or circle.
     @State private var cutCurveExtendsCutter = false
     @State private var sketchSplitFraction: Double
@@ -456,6 +457,7 @@ private struct ProjectMainViewContent: View {
         cancelModelingOperation()
         selectedTool = .select
         curvePickCommand = nil
+        cutCurveSession = nil
         modelingDraft = ModelingOperationDraft(
             kind: kind,
             selection: snapshot.selection,
@@ -1226,7 +1228,10 @@ private struct ProjectMainViewContent: View {
     private func setActiveTool(_ tool: ModelingTool) -> ModelingToolActivationResult {
         selectedTool = tool
         // Trim, Split Segment and Insert Knot take the select tool's clicks; another tool ends them.
-        if tool != .select { curvePickCommand = nil }
+        if tool != .select {
+            curvePickCommand = nil
+            cutCurveSession = nil
+        }
         if !keepsSketchInputState(for: tool) {
             sketchInputState.clearTransientInput()
         }
@@ -2762,7 +2767,8 @@ private struct ProjectMainViewContent: View {
     }
 
     private var hasActiveWorkspaceCommand: Bool {
-        regionOffsetCommandState.isActive
+        cutCurveSession != nil
+            || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
             || slideCommandState.isActive
@@ -2771,6 +2777,10 @@ private struct ProjectMainViewContent: View {
 
     @discardableResult
     private func confirmActiveWorkspaceCommand() -> Bool {
+        if cutCurveSession != nil {
+            confirmCutCurve()
+            return true
+        }
         if slideCommandState.isCurveControlVerticesActive {
             slideCommandState.deactivate()
             reportToolStatus("Slide Curve CV complete.")
@@ -3921,6 +3931,7 @@ private struct ProjectMainViewContent: View {
     private var runningContextPanelCommandInputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> {
         var inputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> = []
         if viewAlignedConstructionPlaneRequest != nil { inputs.insert(.viewAlignedConstructionPlane) }
+        if cutCurveSession != nil { inputs.insert(.cutCurve) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4008,6 +4019,10 @@ private struct ProjectMainViewContent: View {
                     "Pick Origin",
                     accessibilityIdentifier: "WorkspaceConstructionPlane.pickOrigin"
                 )
+            }
+            if let cutCurveSession {
+                workspaceContextDivider
+                cutCurveContextPanelContent(cutCurveSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -4821,6 +4836,36 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// Cut Curve's dialog: which list clicks pick, its two lists, Extend (Tab) and Cut.
+    @ViewBuilder
+    private func cutCurveContextPanelContent(_ cut: WorkspaceCutCurveSession) -> some View {
+        workspaceStatusChip("Cut Curve", systemImage: "scissors", tint: .accentColor)
+        Picker("Pick", selection: Binding(
+            get: { cut.picking },
+            set: { cutCurveSession?.picking = $0; if let prompt = cutCurveSession?.prompt { reportToolStatus(prompt) } }
+        )) {
+            Text("Targets \(cut.targets.count)").tag(WorkspaceCutCurveSession.Role.targets)
+            Text("Cutters \(cut.cutters.count)").tag(WorkspaceCutCurveSession.Role.cutters)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceCutCurve.picking")
+        Toggle("Extend (Tab)", isOn: Binding(
+            get: { cut.extendsCutter },
+            set: { cutCurveSession?.extendsCutter = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceCutCurve.extend")
+        workspaceIconButton(
+            systemImage: "scissors",
+            help: "Cut",
+            accessibilityIdentifier: "WorkspaceCutCurve.cut",
+            action: { confirmCutCurve() }
+        )
+        .disabled(!cut.canCut)
+    }
+
     /// Offset Vertex's dialog on the selected curve end: its distance, which D focuses, and Create.
     @ViewBuilder
     private func vertexOffsetContextPanelContent(_ entity: InspectorSketchEntity) -> some View {
@@ -5448,6 +5493,7 @@ private struct ProjectMainViewContent: View {
     private func beginSurfaceModelingOperation() {
         cancelModelingOperation()
         curvePickCommand = nil
+        cutCurveSession = nil
         var draft = ModelingOperationDraft(
             kind: .surfacePatch,
             selection: snapshot.selection,
@@ -5472,6 +5518,10 @@ private struct ProjectMainViewContent: View {
         }
         if let command = curvePickCommand, selectedTool == .select {
             applyCurvePick(command, at: target)
+            return
+        }
+        if cutCurveSession != nil, selectedTool == .select {
+            pickCutCurve(at: target)
             return
         }
 
@@ -5709,6 +5759,7 @@ private struct ProjectMainViewContent: View {
             isArrayCreationSessionActive: arraySession != nil,
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
+            isCutCurveSessionActive: cutCurveSession != nil,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
             hasProjectableSelection: !snapshot.selection.selectedTargets.isEmpty,
@@ -6080,6 +6131,20 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             bridgeAction()
+            return .handled
+        case .beginCutCurve:
+            beginCutCurve()
+            return .handled
+        case .toggleCutCurveExtend:
+            cutCurveSession?.extendsCutter.toggle()
+            reportToolStatus("Cut Curve: Extend \(cutCurveSession?.extendsCutter == true ? "on" : "off").")
+            return .handled
+        case .confirmCutCurve:
+            confirmCutCurve()
+            return .handled
+        case .cancelCutCurve:
+            cutCurveSession = nil
+            reportToolStatus("Cut Curve ended.")
             return .handled
         case .endCurvePickCommand:
             if let command = curvePickCommand { reportToolStatus("\(command.title) ended.") }
@@ -8046,6 +8111,69 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// Cut Curve (C): the selected sketch curves become its targets and cutter, and clicks on
+    /// curves add to or remove from the list the dialog picks.
+    private func beginCutCurve() {
+        let curves = snapshot.selection.selectedTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component else { return false }
+            return componentID.sketchPointHandleReference == nil && componentID.sketchControlPointReference == nil
+        }
+        cancelModelingOperation()
+        pointPickRequest = nil
+        placeSession = nil
+        transformSession = nil
+        mirrorSession = nil
+        arraySession = nil
+        curvePickCommand = nil
+        let cut = WorkspaceCutCurveSession(selectedCurves: curves, extendsCutter: cutCurveExtendsCutter)
+        cutCurveSession = cut
+        selectTargets(cut.curves)
+        reportToolStatus(cut.prompt)
+    }
+
+    /// A click while Cut Curve runs: the sketch curve under the pointer joins or leaves the list
+    /// being picked.
+    private func pickCutCurve(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .sketchEntity
+        guard var cut = cutCurveSession, let hit = target.hit, let curve = resolver.selectionTarget(for: hit),
+              case .sketchEntity(let componentID) = curve.component,
+              let entity = componentID.sketchEntityReference else {
+            reportToolStatus("Cut Curve: click on a sketch curve.", severity: .warning)
+            return
+        }
+        let whole = SelectionTarget(
+            sceneNodeID: curve.sceneNodeID,
+            component: .sketchEntity(.sketchEntity(featureID: entity.featureID, entityID: entity.entityID))
+        )
+        cut.toggle(whole)
+        cutCurveSession = cut
+        selectTargets(cut.curves)
+        reportToolStatus(cut.prompt)
+    }
+
+    /// Return or right-click while Cut Curve runs: one cut of every target by every cutter; the
+    /// dialog stays when the cut is refused.
+    private func confirmCutCurve() {
+        guard let cut = cutCurveSession else { return }
+        guard cut.canCut else {
+            reportToolStatus("Cut Curve needs at least one target and one cutter.", severity: .warning)
+            return
+        }
+        cutCurveExtendsCutter = cut.extendsCutter
+        submitSource(
+            .cutSketchCurves(
+                targets: cut.targets,
+                cutters: cut.cutters,
+                options: CutCurveOptions(extendsCutter: cut.extendsCutter)
+            )
+        ) { result in
+            guard result?.didMutate == true else { return }
+            cutCurveSession = nil
+            reportToolStatus("Cut Curve done.")
+        }
+    }
+
     /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
     private func beginCurvePickCommand(_ command: WorkspaceCurvePickCommand) {
         cancelModelingOperation()
@@ -8054,6 +8182,7 @@ private struct ProjectMainViewContent: View {
         transformSession = nil
         mirrorSession = nil
         arraySession = nil
+        cutCurveSession = nil
         if selectedTool != .select { _ = setActiveTool(.select) }
         curvePickCommand = command
         reportToolStatus(command.prompt)
@@ -8594,6 +8723,7 @@ private struct ProjectMainViewContent: View {
         }
         pointPickRequest = nil
         curvePickCommand = nil
+        cutCurveSession = nil
         let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
         placeSession = place
         reportToolStatus(place.prompt)
@@ -8628,6 +8758,7 @@ private struct ProjectMainViewContent: View {
             placeSession = nil
             transformSession = nil
             curvePickCommand = nil
+            cutCurveSession = nil
             let mirror = try WorkspaceMirrorSession(sceneNodeIDs: ids, constructionPlane: mirrorConstructionPlane)
             mirrorSession = mirror
             reportToolStatus(mirror.prompt)
@@ -8765,6 +8896,7 @@ private struct ProjectMainViewContent: View {
             pointPickRequest = nil
             placeSession = nil
             curvePickCommand = nil
+            cutCurveSession = nil
             transformSession = moving
             transformFieldTexts = [:]
             refreshTransformFrame()
@@ -8810,6 +8942,7 @@ private struct ProjectMainViewContent: View {
         pointPickRequest = nil
         placeSession = nil
         curvePickCommand = nil
+        cutCurveSession = nil
         transformSession = WorkspaceTransformSession(sceneNodeIDs: ids, mode: mode)
         transformFieldTexts = [:]
         refreshTransformFrame()

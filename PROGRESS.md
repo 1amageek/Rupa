@@ -52,7 +52,7 @@
     - [x] SK2.2 Split Segment (Edit menu): each click splits the sketch curve at swift-CAD's projection of the click (SketchCurveProjector, swift-CAD b9a290f). `depends:SK2.1` `parallel:none`
     - [x] SK2.3 Cut Curve's Extend option in its dialog row: the cutter reaches the target along its line or circle. `depends:SK2.2` `parallel:none`
     - [ ] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
-    - [ ] SK2.5 Cut Curve: C starts it, spline targets and cutters are offered in the UI, several targets at once, and Tab toggles Extend. `depends:none` `parallel:none`
+    - [x] SK2.5 Cut Curve (C): a dialog picking any number of target and cutter curves (splines included), Tab toggling Extend, Return or right-click cutting as one step. `depends:none` `parallel:none`
     - [ ] SK2.6 Split Segment on circles and closed curves. `depends:none` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`

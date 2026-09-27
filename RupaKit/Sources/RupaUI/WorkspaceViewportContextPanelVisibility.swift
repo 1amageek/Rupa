@@ -17,6 +17,7 @@ enum WorkspaceViewportContextPanelVisibility {
         case transform
         case mirror
         case sectionAnalysis
+        case cutCurve
     }
 
     static func isVisible(

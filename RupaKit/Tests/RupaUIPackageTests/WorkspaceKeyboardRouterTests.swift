@@ -565,3 +565,17 @@ private func keyboardContext(
         context: keyboardContext(isDimensionCommandActive: true, isSlotProfileCommandActive: true)
     ) == .commitDimensionCommand)
 }
+
+@Test func workspaceKeyboardRouterRunsCutCurveOnCAndItsDialogKeys() {
+    let router = WorkspaceKeyboardRouter()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "c"), context: keyboardContext()) == .beginCutCurve)
+    #expect(router.action(
+        for: WorkspaceKeyboardInput(characters: "c"),
+        context: keyboardContext(isSelectToolActive: false, isPolygonToolActive: true)
+    ) == .togglePolygonSizingMode)
+    var session = keyboardContext()
+    session.isCutCurveSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: session) == .toggleCutCurveExtend)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: session) == .confirmCutCurve)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: session) == .cancelCutCurve)
+}

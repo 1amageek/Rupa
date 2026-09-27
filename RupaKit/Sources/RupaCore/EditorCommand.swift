@@ -355,6 +355,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// plane coordinates.
     case splitSketchCurveAtPoint(target: SelectionTarget, point: Point2D)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
+    /// Cut Curve's dialog: every target cut wherever a cutter crosses it, as one step.
+    case cutSketchCurves(targets: [SelectionTarget], cutters: [SelectionTarget], options: CutCurveOptions)
     case createExtrusion(name: String, source: ExtrudeFeature)
     case setExtrusion(featureID: FeatureID, source: ExtrudeFeature)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind = .solid)
@@ -800,6 +802,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "insertSketchSplineControlPointAtPoint"
         case .cutSketchCurve:
             "cutSketchCurve"
+        case .cutSketchCurves:
+            "cutSketchCurves"
         case .createExtrusion:
             "createExtrusion"
         case .setExtrusion:
@@ -1018,6 +1022,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .splitSketchCurveAtPoint,
              .insertSketchSplineControlPointAtPoint,
              .cutSketchCurve,
+             .cutSketchCurves,
              .createExtrusion,
              .setExtrusion,
              .extrudeProfile,

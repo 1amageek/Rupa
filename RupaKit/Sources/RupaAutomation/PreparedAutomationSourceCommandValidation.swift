@@ -140,6 +140,7 @@ enum PreparedAutomationSourceCommandValidation {
              .splitSketchCurveAtPoint,
              .insertSketchSplineControlPointAtPoint,
              .cutSketchCurve,
+             .cutSketchCurves,
              .createExtrusion,
              .setExtrusion,
              .extrudeProfile,

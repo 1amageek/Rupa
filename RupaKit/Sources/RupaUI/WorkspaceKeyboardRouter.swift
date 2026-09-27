@@ -215,6 +215,14 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case projectCurvesOntoFace
     /// Escape ends Trim or Split Segment.
     case endCurvePickCommand
+    /// C with the select tool: Cut Curve on the selected sketch curves.
+    case beginCutCurve
+    /// Tab while Cut Curve runs: Extend on or off.
+    case toggleCutCurveExtend
+    /// Return while Cut Curve runs: cut.
+    case confirmCutCurve
+    /// Escape while Cut Curve runs: end it without cutting.
+    case cancelCutCurve
     case slideCurveControlVertices(SplineControlPointSlideDirection)
     case slideSurfaceControlVertices(PolySplineSurfaceVertexSlideDirection)
     case adjustPolygonSideCount(Int)
@@ -246,6 +254,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isSectionAnalysisSessionActive: Bool = false
     /// Whether Trim or Split Segment is taking curve clicks.
     var isCurvePickCommandActive: Bool = false
+    /// Whether Cut Curve's dialog is picking targets and cutters.
+    var isCutCurveSessionActive: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
     var hasBridgeableSelection: Bool = false
     /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
@@ -305,6 +315,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isSectionAnalysisSessionActive, let sectionAction = sectionAnalysisAction(for: input) {
             return sectionAction
+        }
+        if context.isCutCurveSessionActive, let cutAction = cutCurveAction(for: input) {
+            return cutAction
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction
@@ -686,6 +699,15 @@ struct WorkspaceKeyboardRouter: Sendable {
     }
 
     /// T starts Trim with the select tool; Escape ends Trim or Split Segment.
+    /// The keys Cut Curve's dialog takes, which Plasticity's Cut Curve uses too.
+    private func cutCurveAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
+        if input.isTab { return .toggleCutCurveExtend }
+        if input.isReturn { return .confirmCutCurve }
+        if input.isEscape { return .cancelCutCurve }
+        return nil
+    }
+
     private func trimAction(
         for input: WorkspaceKeyboardInput,
         context: WorkspaceKeyboardContext
@@ -708,6 +730,7 @@ struct WorkspaceKeyboardRouter: Sendable {
             if key == "q" { return .trimBridgeSources }
         }
         switch key {
+        case "c": return .beginCutCurve
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
         case "b": return context.selectedSketchTargetCount > 0 ? .applySketchCornerTreatment : nil

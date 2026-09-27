@@ -2538,6 +2538,14 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .cutSketchCurves(targets, cutters, options):
+            var updatedDocument = document
+            try updatedDocument.cutSketchCurves(
+                targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .setExtrusion(featureID, source):
             var updated = document
             try updated.setExtrusion(featureID: featureID, source: source, objectRegistry: objectRegistry)

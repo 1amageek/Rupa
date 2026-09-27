@@ -243,4 +243,37 @@ import Testing
             )
         }
     }
+
+    @Test func cutCurveCutsEveryTargetWhereverACutterCrossesIt() throws {
+        let (low, high, left, right) = (SketchEntityID(), SketchEntityID(), SketchEntityID(), SketchEntityID())
+        let (session, featureID) = try session([
+            (low, line(0, 0, 10, 0)), (high, line(0, 5, 10, 5)),
+            (left, line(3, -5, 3, 10)), (right, line(7, -5, 7, 10)),
+        ])
+        let targets = try [low, high].map { try target(session, featureID, $0) }
+        let cutters = try [left, right].map { try target(session, featureID, $0) }
+        _ = try session.execute(.cutSketchCurves(targets: targets, cutters: cutters, options: CutCurveOptions()))
+        let cut = try sketch(session, featureID)
+        // Each target is now three pieces: 0-3, 3-7 and 7-10.
+        #expect(try lineSpans(session, cut, excluding: [left, right]) == [[0, 3], [0, 3], [3, 7], [3, 7], [7, 10], [7, 10]])
+    }
+
+    @Test func cutCurveRefusesATargetNoCutterCrossesAndACurveInBothLists() throws {
+        let (base, far, cutter) = (SketchEntityID(), SketchEntityID(), SketchEntityID())
+        let (session, featureID) = try session([
+            (base, line(0, 0, 10, 0)), (far, line(0, 50, 10, 50)), (cutter, line(5, -5, 5, 5)),
+        ])
+        let before = session.document.cadDocument.designGraph
+        let targets = try [base, far].map { try target(session, featureID, $0) }
+        let cutterTarget = try target(session, featureID, cutter)
+        #expect(throws: EditorError.self) {
+            _ = try session.execute(.cutSketchCurves(targets: targets, cutters: [cutterTarget], options: CutCurveOptions()))
+        }
+        #expect(session.document.cadDocument.designGraph == before)
+        #expect(throws: EditorError.self) {
+            _ = try session.execute(.cutSketchCurves(
+                targets: [targets[0], cutterTarget], cutters: [cutterTarget], options: CutCurveOptions()
+            ))
+        }
+    }
 }
