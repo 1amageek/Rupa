@@ -72,16 +72,15 @@ struct DisplayTessellationTests {
 
     @Test(.timeLimit(.minutes(1)))
     func aCylinderIsDrawnAtTheSideCountItDeclaresInsteadOfTheDocumentTolerance() throws {
-        let document = try Self.cylinderDocument()
-        let declared = try #require(
-            ObjectTypeRegistry.builtIn
-                .definition(for: .cylinder)?
-                .property(for: PropertyID("sides.x"))
+        var document = try Self.cylinderDocument()
+        let range = try #require(Self.sideCountRange())
+        let sideCount = Int(range.lowerBound)
+        let node = try Self.bodyNode(of: document)
+        try document.setSceneNodeObjectProperty(
+            id: node.id,
+            propertyID: "sides.x",
+            value: .integer(sideCount)
         )
-        guard case .integer(let sideCount) = declared.defaultValue else {
-            Issue.record("The declared side count must be a whole number.")
-            return
-        }
 
         let routed = try DocumentEvaluator
             .modelingDefault(for: document)
@@ -92,8 +91,17 @@ struct DisplayTessellationTests {
             artifactPolicy: .materialized
         ).evaluate(document.cadDocument)
 
+        // The document's own options take the larger of the turning count and the chord count
+        // for the profile circle.
+        let options = document.modelingSettings.tessellationOptions
+        let chordAngle = 2.0 * acos(1.0 - options.linearTolerance / Self.profileRadius)
+        let documentCount = Int(max(
+            (2.0 * .pi / options.angularTolerance).rounded(.up),
+            (2.0 * .pi / chordAngle).rounded(.up)
+        ))
+        #expect(documentCount != sideCount)
         #expect(Self.profileSampleCount(of: routed) == sideCount)
-        #expect(Self.profileSampleCount(of: unrouted) > sideCount * 10)
+        #expect(Self.profileSampleCount(of: unrouted) == documentCount)
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -108,7 +116,7 @@ struct DisplayTessellationTests {
         #expect(Self.approximatelyEqual(override.angularTolerance, 2.0 * .pi / 63.5))
         #expect(Self.approximatelyEqual(
             override.linearTolerance,
-            Self.profileRadius * (1.0 - cos(.pi / 64.0))
+            Self.profileRadius * (1.0 - cos(.pi / 63.5))
         ))
         #expect(options.featureOverrides.count == 1)
 
@@ -145,7 +153,7 @@ struct DisplayTessellationTests {
         #expect(Self.approximatelyEqual(override.angularTolerance, (.pi / 2.0) / 7.5))
         #expect(Self.approximatelyEqual(
             override.linearTolerance,
-            Self.cornerRadius * (1.0 - cos(.pi / 32.0))
+            Self.cornerRadius * (1.0 - cos(.pi / 30.0))
         ))
     }
 
@@ -165,7 +173,7 @@ struct DisplayTessellationTests {
             let resolved = try #require(options.featureOverrides[featureID])
             #expect(Self.approximatelyEqual(resolved.angularTolerance, 2.0 * .pi / 63.5))
             #expect(Self.approximatelyEqual(
-                resolved.linearTolerance, radius * (1.0 - cos(.pi / 64.0))
+                resolved.linearTolerance, radius * (1.0 - cos(.pi / 63.5))
             ))
             let fine = try DocumentEvaluator.modelingDefault(for: document)
                 .evaluate(document.cadDocument)

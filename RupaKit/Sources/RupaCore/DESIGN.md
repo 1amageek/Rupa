@@ -1589,17 +1589,18 @@ A claim resolves to the tolerances the kernel's samplers read:
 
 ```
 angularTolerance = span / (Double(count) - 0.5)
-linearTolerance  = radius * (1 - cos(span / (2 * Double(count))))
+linearTolerance  = radius * (1 - cos(span / (2 * (Double(count) - 0.5))))
 ```
 
 The angular tolerance is what the arc sampler divides the span by, and the half
 step keeps its `ceil` from returning `count + 1` for a span that lands a
 floating-point step above an exact multiple. The linear tolerance is the chord
-height of one segment. Cylindrical and conical sampling read only the angular
-tolerance, but spherical radial sampling takes the finer of the angular
-tolerance and the chord angle the linear tolerance implies, so a claim that left
-the linear tolerance at the document value would subdivide the spherical patch
-of a rounded corner past the count that named it. A claim whose radius the graph
+height of the same half-stepped segment. Every circular sampler takes the
+larger of the turning count and the chord count, and spherical radial sampling
+the finer of the two angles, so the chord bound carries the same half step: a
+claim that left the linear tolerance at the document value would subdivide the
+arc past the count that named it, and one at the exact segment's chord height
+could round up to `count + 1`. A claim whose radius the graph
 does not resolve names only an angular tolerance, which is radius independent.
 
 When more than one claim lands on one body, the finest tolerance wins. The

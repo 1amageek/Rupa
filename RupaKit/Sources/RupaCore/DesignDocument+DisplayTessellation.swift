@@ -26,8 +26,12 @@ extension DesignDocument {
             span / (Double(count) - 0.5)
         }
 
+        /// The chord height of a step of `span / (count - 0.5)`. Circular sampling takes the larger
+        /// of the turning count and the chord count, so the chord bound carries the same half
+        /// step as the angular one: `count` segments meet it, and its `ceil` does not return
+        /// `count + 1`.
         var linearTolerance: Double? {
-            radius.map { $0 * (1.0 - cos(span / (2.0 * Double(count)))) }
+            radius.map { $0 * (1.0 - cos(span / (2.0 * (Double(count) - 0.5)))) }
         }
     }
 
