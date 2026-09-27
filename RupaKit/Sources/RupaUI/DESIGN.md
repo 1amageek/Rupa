@@ -629,7 +629,8 @@ one G1 `createBridgeCurve` joining the ends Core reads from the selection
 ([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
 and selects the new curve, whose inspector edits its continuity, tension and
 trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
-→ G3 → G0 and Q trims the curves it bridges. Option-D projects the selected
+→ G3 → G0 and Q (or the inspector's Trim/Untrim Sources) turns trimming the
+curves it bridges on and off. Option-D projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
 with bodies selected, their outlines (Project Outline), then selects what it
 created with a Move running so it is placed, as Duplicate and Create Instance do

@@ -11352,6 +11352,8 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// Trim on the selected Bridge Curve (inspector, Q): turns it on, or off again, restoring the
+    /// curves it trimmed.
     private func trimBridgeCurveSources(_ bridgeCurve: InspectorBridgeCurve) {
         submitSource(
             .setBridgeCurveParameters(
@@ -11359,7 +11361,7 @@ private struct ProjectMainViewContent: View {
                 firstEndpoint: nil,
                 secondEndpoint: nil,
                 continuity: nil,
-                trimsSourceCurves: true
+                trimsSourceCurves: !bridgeCurve.trimsSourceCurves
             )
         )
     }

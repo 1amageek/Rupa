@@ -155,10 +155,9 @@ struct WorkspaceBridgeCurveInspectorView: View {
             Button {
                 onTrimSources(bridgeCurve)
             } label: {
-                Label("Trim Sources", systemImage: "scissors")
+                Label(bridgeCurve.trimsSourceCurves ? "Untrim Sources" : "Trim Sources", systemImage: "scissors")
                     .contentShape(Rectangle())
             }
-            .disabled(bridgeCurve.trimsSourceCurves)
             .accessibilityIdentifier("InspectorCurve.bridge.trimSources")
         }
     }

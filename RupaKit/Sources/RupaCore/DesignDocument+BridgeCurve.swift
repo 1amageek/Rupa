@@ -30,21 +30,12 @@ extension DesignDocument {
         }
         var nextFirstEndpoint = firstEndpoint
         var nextSecondEndpoint = secondEndpoint
+        var trimRecord: BridgeCurveTrimRecord?
         if trimsSourceCurves {
-            try validateBridgeCurveTrimDistinctSourceEntities(
-                firstEndpoint: firstEndpoint,
-                secondEndpoint: secondEndpoint
-            )
-            nextFirstEndpoint = try trimBridgeCurveSourceEndpoint(
-                firstEndpoint,
-                in: &sketch,
-                owner: "Bridge curve first trim"
-            )
-            nextSecondEndpoint = try trimBridgeCurveSourceEndpoint(
-                secondEndpoint,
-                in: &sketch,
-                owner: "Bridge curve second trim"
-            )
+            let trim = try trimBridgeCurveSources(first: firstEndpoint, second: secondEndpoint, in: &sketch)
+            nextFirstEndpoint = trim.first
+            nextSecondEndpoint = trim.second
+            trimRecord = trim.record
         }
         guard let firstSample = try resolver.sample(
             for: nextFirstEndpoint,
@@ -95,7 +86,8 @@ extension DesignDocument {
             firstEndpoint: nextFirstEndpoint,
             secondEndpoint: nextSecondEndpoint,
             continuity: continuity,
-            trimsSourceCurves: trimsSourceCurves
+            trimsSourceCurves: trimsSourceCurves,
+            trimRecord: trimRecord
         )
 
         let previousCADDocument = cadDocument
@@ -143,22 +135,16 @@ extension DesignDocument {
                 message: "Bridge curve source could not be resolved."
             )
         }
-        if let trimsSourceCurves,
-           trimsSourceCurves == false,
-           source.trimsSourceCurves {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Bridge curve trim cannot be disabled after source curves have been trimmed."
-            )
-        }
-        let nextSource = BridgeCurveSource(
+        let untrims = trimsSourceCurves == false && source.trimsSourceCurves
+        var nextSource = BridgeCurveSource(
             id: source.id,
             featureID: source.featureID,
             entityID: source.entityID,
             firstEndpoint: firstEndpoint ?? source.firstEndpoint,
             secondEndpoint: secondEndpoint ?? source.secondEndpoint,
             continuity: continuity ?? source.continuity,
-            trimsSourceCurves: trimsSourceCurves ?? source.trimsSourceCurves
+            trimsSourceCurves: trimsSourceCurves ?? source.trimsSourceCurves,
+            trimRecord: source.trimRecord
         )
         let firstTension = try resolvedBridgeTension(
             nextSource.firstEndpoint.tension,
@@ -208,22 +194,25 @@ extension DesignDocument {
             continuity: source.continuity
         )
         sketch.constraints.removeAll { previousConstraints.contains($0) }
+        if untrims {
+            try restoreBridgeCurveSources(of: &nextSource, in: &sketch)
+        }
         var resolvedNextSource = nextSource
         if resolvedNextSource.trimsSourceCurves {
-            try validateBridgeCurveTrimDistinctSourceEntities(
-                firstEndpoint: resolvedNextSource.firstEndpoint,
-                secondEndpoint: resolvedNextSource.secondEndpoint
+            let trim = try trimBridgeCurveSources(
+                first: resolvedNextSource.firstEndpoint,
+                second: resolvedNextSource.secondEndpoint,
+                in: &sketch
             )
-            resolvedNextSource.firstEndpoint = try trimBridgeCurveSourceEndpoint(
-                resolvedNextSource.firstEndpoint,
-                in: &sketch,
-                owner: "Bridge curve first trim"
-            )
-            resolvedNextSource.secondEndpoint = try trimBridgeCurveSourceEndpoint(
-                resolvedNextSource.secondEndpoint,
-                in: &sketch,
-                owner: "Bridge curve second trim"
-            )
+            resolvedNextSource.firstEndpoint = trim.first
+            resolvedNextSource.secondEndpoint = trim.second
+            if var record = source.trimRecord, source.trimsSourceCurves {
+                // A retrim of trimmed sources keeps what they were before the first trim.
+                record.trimmedEntities.merge(trim.record.trimmedEntities) { _, new in new }
+                resolvedNextSource.trimRecord = record
+            } else if !source.trimsSourceCurves {
+                resolvedNextSource.trimRecord = trim.record
+            }
         }
         guard let firstSample = try resolver.sample(
             for: resolvedNextSource.firstEndpoint,
@@ -611,6 +600,60 @@ extension DesignDocument {
         }
         return quantity.value > ModelingTolerance.standard.distance
             && quantity.value < 1.0 - ModelingTolerance.standard.distance
+    }
+
+    /// Trims a bridge's two source curves at its ends, returning the trimmed ends and what the
+    /// trim replaced.
+    private func trimBridgeCurveSources(
+        first: BridgeCurveEndpoint,
+        second: BridgeCurveEndpoint,
+        in sketch: inout Sketch
+    ) throws -> (first: BridgeCurveEndpoint, second: BridgeCurveEndpoint, record: BridgeCurveTrimRecord) {
+        try validateBridgeCurveTrimDistinctSourceEntities(firstEndpoint: first, secondEndpoint: second)
+        let entityIDs = [first, second].compactMap { bridgeCurveEndpointEntityID($0) }
+        var untrimmed: [SketchEntityID: SketchEntity] = [:]
+        for entityID in entityIDs { untrimmed[entityID] = sketch.entities[entityID] }
+        let trimmedFirst = try trimBridgeCurveSourceEndpoint(first, in: &sketch, owner: "Bridge curve first trim")
+        let trimmedSecond = try trimBridgeCurveSourceEndpoint(second, in: &sketch, owner: "Bridge curve second trim")
+        var trimmed: [SketchEntityID: SketchEntity] = [:]
+        for entityID in entityIDs { trimmed[entityID] = sketch.entities[entityID] }
+        return (trimmedFirst, trimmedSecond, BridgeCurveTrimRecord(
+            untrimmedFirstEndpoint: first,
+            untrimmedSecondEndpoint: second,
+            untrimmedEntities: untrimmed,
+            trimmedEntities: trimmed
+        ))
+    }
+
+    /// Turns Trim off: the source curves go back to what they were before the trim and the bridge
+    /// joins its untrimmed ends, keeping its current tension and sense. Refused when the trim was
+    /// not recorded or a trimmed curve was edited since, which the restore would undo.
+    private func restoreBridgeCurveSources(of source: inout BridgeCurveSource, in sketch: inout Sketch) throws {
+        guard let record = source.trimRecord else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "This Bridge Curve's trim was made before Rupa kept the trimmed curves, so it cannot be turned off; undo it instead."
+            )
+        }
+        for (entityID, trimmed) in record.trimmedEntities where sketch.entities[entityID] != trimmed {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "A curve this Bridge Curve trimmed was edited since, so its trim cannot be turned off without undoing that edit."
+            )
+        }
+        for (entityID, untrimmed) in record.untrimmedEntities {
+            sketch.entities[entityID] = untrimmed
+        }
+        func restored(_ untrimmed: BridgeCurveEndpoint, keeping current: BridgeCurveEndpoint) -> BridgeCurveEndpoint {
+            var endpoint = untrimmed
+            endpoint.reversesSense = current.reversesSense
+            endpoint.tension = current.tension
+            endpoint.trimSide = current.trimSide
+            return endpoint
+        }
+        source.firstEndpoint = restored(record.untrimmedFirstEndpoint, keeping: source.firstEndpoint)
+        source.secondEndpoint = restored(record.untrimmedSecondEndpoint, keeping: source.secondEndpoint)
+        source.trimRecord = nil
     }
 
     private func trimBridgeCurveSourceEndpoint(

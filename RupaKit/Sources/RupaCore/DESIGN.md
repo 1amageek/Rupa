@@ -950,6 +950,18 @@ places a new control point on an open spline through the fraction-based
 insertion, keeping the shape. `SketchCurveTrimTests` also own the split and
 insert cases.
 
+### Bridge trim contract
+
+A Bridge Curve's Trim rewrites its source curves at its ends. The trim is recorded
+on the `BridgeCurveSource` (`BridgeCurveTrimRecord`: the ends and curves before it,
+the curves after it; optional, so documents without it still decode), so
+`setBridgeCurveParameters(trimsSourceCurves: false)` turns it off: the curves go
+back, and the bridge rejoins its untrimmed ends keeping its tension and sense. A
+trimmed curve edited since, or a trim made before it was recorded, refuses the
+change and the document is unchanged. A retrim of trimmed curves keeps the
+curves from before the first trim. `bridgeCurveTrimTurnsOffAgainRestoringTheTrimmedCurves`
+covers the toggle and the refusal.
+
 ### Bridge selection contract
 
 `bridgeEndpoints(for:)` reads Bridge's two ends from two selected targets of one

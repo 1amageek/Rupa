@@ -766,6 +766,56 @@ import SwiftCAD
     #expect(document.productMetadata.bridgeCurveSources.isEmpty)
 }
 
+/// Trim is a toggle: turning it off puts the trimmed curves back and rejoins the untrimmed ends,
+/// unless a trimmed curve was edited since.
+@Test func bridgeCurveTrimTurnsOffAgainRestoringTheTrimmedCurves() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    var document = setup.document
+    let original = try #require(bridgeCurveSketch(in: document, featureID: setup.featureID))
+    try document.createBridgeCurve(
+        featureID: setup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(reference: .entity(setup.firstLineID), parameter: .scalar(0.5)),
+        secondEndpoint: BridgeCurveEndpoint(reference: .lineStart(setup.secondLineID)),
+        continuity: .g0,
+        trimsSourceCurves: true
+    )
+    let sourceID = try #require(document.productMetadata.bridgeCurveSources.values.first).id
+    let trimmed = try #require(bridgeCurveSketch(in: document, featureID: setup.featureID))
+    #expect(trimmed.entities[setup.firstLineID] != original.entities[setup.firstLineID])
+
+    var untrimmed = document
+    try untrimmed.setBridgeCurveParameters(sourceID: sourceID, trimsSourceCurves: false)
+    let restored = try #require(bridgeCurveSketch(in: untrimmed, featureID: setup.featureID))
+    let source = try #require(untrimmed.productMetadata.bridgeCurveSources[sourceID])
+    #expect(!source.trimsSourceCurves && source.trimRecord == nil)
+    #expect(restored.entities[setup.firstLineID] == original.entities[setup.firstLineID])
+    #expect(source.firstEndpoint.reference == .entity(setup.firstLineID))
+    #expect(source.firstEndpoint.parameter == .scalar(0.5))
+
+    // Trim on again trims the same way.
+    try untrimmed.setBridgeCurveParameters(sourceID: sourceID, trimsSourceCurves: true)
+    #expect(try #require(bridgeCurveSketch(in: untrimmed, featureID: setup.featureID)).entities[setup.firstLineID]
+        == trimmed.entities[setup.firstLineID])
+
+    // A trimmed curve edited since is not restored.
+    guard var feature = document.cadDocument.designGraph.nodes[setup.featureID],
+          case var .sketch(sketch) = feature.operation else {
+        Issue.record("The bridge's sketch is present.")
+        return
+    }
+    sketch.entities[setup.firstLineID] = .line(SketchLine(
+        start: bridgeCurvePoint(x: 0.0, y: 0.0005),
+        end: bridgeCurvePoint(x: 0.0015, y: 0.0)
+    ))
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[setup.featureID] = feature
+    let edited = document
+    #expect(throws: EditorError.self) {
+        try document.setBridgeCurveParameters(sourceID: sourceID, trimsSourceCurves: false)
+    }
+    #expect(document.productMetadata == edited.productMetadata)
+}
+
 private func bridgeCurveTwoLineDocument() throws -> (
     document: DesignDocument,
     featureID: FeatureID,
