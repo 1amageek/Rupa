@@ -160,6 +160,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case flipSectionAnalysis
     /// Return: place the Section Analysis slice.
     case confirmSectionAnalysis
+    /// Return while Offset, Slot, Offset Vertex, Offset Edge, Offset Region or Slide runs: create
+    /// its result, as right-click does.
+    case confirmWorkspaceCommand
     /// M: Set Material on the selection.
     case setMaterial
     /// Shift-M: Fork Material on the selection.
@@ -261,6 +264,16 @@ struct WorkspaceKeyboardContext: Sendable {
     ///
     /// Those commands own the editing keys while they are up, so the workspace must not read a
     /// delete meant for a half-typed number as a delete of the selection.
+    /// Whether an O command (Offset, Slot, Offset Vertex, Offset Edge, Offset Region) or a Slide
+    /// runs, which Return confirms.
+    var isWorkspaceCommandActive: Bool {
+        isSlotProfileCommandActive
+            || isEdgeOffsetCommandActive
+            || isRegionOffsetCommandActive
+            || isCurveControlVertexSlideActive
+            || isSurfaceControlVertexSlideActive
+    }
+
     var ownsTextEditingKeys: Bool {
         isDimensionCommandActive
             || isSlotProfileCommandActive
@@ -295,6 +308,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction
+        }
+        if input.isReturn, input.phases.contains(.down), input.modifiers.isEmpty,
+           context.isWorkspaceCommandActive, !context.isDimensionCommandActive {
+            return .confirmWorkspaceCommand
         }
         if input.phases.contains(.down), input.modifiers == [.control], input.characters == "=",
            !context.ownsTextEditingKeys {

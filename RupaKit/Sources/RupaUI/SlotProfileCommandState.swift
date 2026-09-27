@@ -1,5 +1,6 @@
-/// Offset Planar Curve and Slot on one selected open sketch curve: O starts Offset, O again turns
-/// it into Slot, D focuses the distance, and S makes an offset symmetric.
+/// Offset Planar Curve and Slot on one selected open sketch curve, and Offset Vertex on one
+/// selected curve end: O starts Offset (or Offset Vertex on an end), O again turns an Offset into
+/// Slot, D focuses the distance, S makes an offset symmetric, and Return creates the result.
 struct SlotProfileCommandState: Equatable {
     enum InputMode: Equatable {
         case inactive
@@ -12,6 +13,8 @@ struct SlotProfileCommandState: Equatable {
         case offset
         /// Slot: the curve offset symmetrically and closed by tangent arcs.
         case slot
+        /// Offset Vertex: new vertices on both sides of the selected curve end.
+        case vertexOffset
     }
 
     var inputMode: InputMode
@@ -38,7 +41,15 @@ struct SlotProfileCommandState: Equatable {
     }
 
     var title: String {
-        output == .offset ? "Offset" : "Slot"
+        switch output {
+        case .offset: "Offset"
+        case .slot: "Slot"
+        case .vertexOffset: "Offset Vertex"
+        }
+    }
+
+    var isVertexOffsetActive: Bool {
+        isActive && output == .vertexOffset
     }
 
     var inputModeTitle: String {
@@ -46,7 +57,7 @@ struct SlotProfileCommandState: Equatable {
         case .inactive:
             return "Inactive"
         case .width:
-            return output == .offset ? "Distance" : "Width"
+            return output == .slot ? "Width" : "Distance"
         }
     }
 
@@ -58,6 +69,13 @@ struct SlotProfileCommandState: Equatable {
             output = .offset
             isSymmetric = false
         }
+        inputMode = .width
+    }
+
+    /// O with a curve end selected: Offset Vertex.
+    mutating func beginVertexOffset() {
+        output = .vertexOffset
+        isSymmetric = false
         inputMode = .width
     }
 

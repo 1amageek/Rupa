@@ -546,3 +546,22 @@ private func keyboardContext(
     context.hasProjectableSelection = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "i"), context: context) == .projectCurvesOntoFace)
 }
+
+@Test func workspaceKeyboardRouterConfirmsARunningOffsetOrSlideCommandOnReturn() {
+    let router = WorkspaceKeyboardRouter()
+    let returnKey = WorkspaceKeyboardInput(isReturn: true)
+    for context in [
+        keyboardContext(isSlotProfileCommandActive: true),
+        keyboardContext(isEdgeOffsetCommandActive: true),
+        keyboardContext(isRegionOffsetCommandActive: true),
+        keyboardContext(isCurveControlVertexSlideActive: true),
+        keyboardContext(isSurfaceControlVertexSlideActive: true),
+    ] {
+        #expect(router.action(for: returnKey, context: context) == .confirmWorkspaceCommand)
+    }
+    #expect(router.action(for: returnKey, context: keyboardContext()) != .confirmWorkspaceCommand)
+    #expect(router.action(
+        for: returnKey,
+        context: keyboardContext(isDimensionCommandActive: true, isSlotProfileCommandActive: true)
+    ) == .commitDimensionCommand)
+}

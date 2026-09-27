@@ -250,11 +250,12 @@ struct WorkspaceDimensionContextPanel<DimensionInputField: View>: View {
 }
 
 @MainActor
-struct WorkspaceSlotContextPanel: View {
+struct WorkspaceSlotContextPanel<DistanceInput: View>: View {
     var isActive: Bool
-    /// "Offset" for Offset Planar Curve, "Slot" for Slot.
+    /// "Offset" for Offset Planar Curve, "Slot" for Slot, "Offset Vertex" for Offset Vertex.
     var title: String = "Slot"
-    var widthTitle: String
+    /// The typed width or distance, which D focuses.
+    var distanceInput: DistanceInput
     var inputModeTitle: String
     /// Offset's Symmetric option (S), shown for an offset only.
     var symmetricTitle: String?
@@ -267,11 +268,7 @@ struct WorkspaceSlotContextPanel: View {
             tint: isActive ? .accentColor : .secondary
         )
 
-        workspaceValuePill(
-            title == "Slot" ? "Width" : "Distance",
-            widthTitle,
-            accessibilityIdentifier: "WorkspaceSlot.width"
-        )
+        distanceInput
         if let symmetricTitle {
             workspaceValuePill("Symmetric (S)", symmetricTitle, accessibilityIdentifier: "WorkspaceSlot.symmetric")
         }
@@ -283,7 +280,7 @@ struct WorkspaceSlotContextPanel: View {
 
         workspaceIconButton(
             systemImage: "capsule",
-            help: title == "Slot" ? "Create Slot Profile" : "Create Offset Curve",
+            help: "Create \(title)",
             accessibilityIdentifier: "WorkspaceSlot.create",
             action: create
         )
@@ -291,9 +288,10 @@ struct WorkspaceSlotContextPanel: View {
 }
 
 @MainActor
-struct WorkspaceEdgeOffsetContextPanel: View {
+struct WorkspaceEdgeOffsetContextPanel<DistanceInput: View>: View {
     var isSupported: Bool
-    var distanceTitle: String
+    /// The typed distance, which D focuses.
+    var distanceInput: DistanceInput
     var gapFillTitle: String
     var inputModeTitle: String
     var lockedDistanceTitle: String
@@ -307,11 +305,7 @@ struct WorkspaceEdgeOffsetContextPanel: View {
             tint: isSupported ? .accentColor : .orange
         )
 
-        workspaceValuePill(
-            "Distance",
-            distanceTitle,
-            accessibilityIdentifier: "WorkspaceEdgeOffset.distance"
-        )
+        distanceInput
         workspaceValuePill(
             "Gap",
             gapFillTitle,
@@ -343,8 +337,9 @@ struct WorkspaceEdgeOffsetContextPanel: View {
 }
 
 @MainActor
-struct WorkspaceRegionOffsetContextPanel: View {
-    var distanceTitle: String
+struct WorkspaceRegionOffsetContextPanel<DistanceInput: View>: View {
+    /// The typed distance, which D focuses; a negative one offsets inward.
+    var distanceInput: DistanceInput
     var gapFillTitle: String
     var inputModeTitle: String
     var lockedDistanceTitle: String
@@ -359,11 +354,7 @@ struct WorkspaceRegionOffsetContextPanel: View {
             tint: .accentColor
         )
 
-        workspaceValuePill(
-            "Distance",
-            distanceTitle,
-            accessibilityIdentifier: "WorkspaceRegionOffset.distance"
-        )
+        distanceInput
         workspaceValuePill(
             "Gap",
             gapFillTitle,

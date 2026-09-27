@@ -44,11 +44,16 @@
     - [ ] SK1.3 Bridge Edge: two body edge ends (Side 1/2) bridged with G0–G3 and tension, through a kernel bridge endpoint on a body edge. `depends:SK1.2` `parallel:none`
     - [x] SK1.4 Bridge keys on a selected Bridge Curve: Tab steps both ends' continuity G0 → G3, Q trims the bridged curves. `depends:SK1.2` `parallel:none`
     - [ ] SK1.5 Bridge keys D (G1 tension) and X/Y/Z (constraint) while the bridge is placed. `depends:SK1.4` `parallel:none`
+    - [ ] SK1.6 Bridge Curve Trim is a real on/off toggle in its inspector and on Q. `depends:none` `parallel:none`
+    - [ ] SK1.7 Bridge Curve interaction: ends placed by clicking with nothing selected, and bridges between curves of different sketches. `depends:none` `parallel:none`
+    - [ ] SK1.8 G3 continuity on Bridge Curve, Bridge Vertex and Bridge Edge through the kernel. `depends:none` `parallel:none`
   - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:none` `parallel:none`
     - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`
     - [x] SK2.2 Split Segment (Edit menu): each click splits the sketch curve at swift-CAD's projection of the click (SketchCurveProjector, swift-CAD b9a290f). `depends:SK2.1` `parallel:none`
     - [x] SK2.3 Cut Curve's Extend option in its dialog row: the cutter reaches the target along its line or circle. `depends:SK2.2` `parallel:none`
     - [ ] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
+    - [ ] SK2.5 Cut Curve: C starts it, spline targets and cutters are offered in the UI, several targets at once, and Tab toggles Extend. `depends:none` `parallel:none`
+    - [ ] SK2.6 Split Segment on circles and closed curves. `depends:none` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [ ] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
     - [ ] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
@@ -59,28 +64,41 @@
     - [ ] SK4.3 Align Vertex G1/G2 between arcs and between an arc and a spline. `depends:SK4.2` `parallel:none`
     - [ ] SK4.4 Align on two curves, and Extend Curve to a chosen target curve or solid (Dependent Curve Extend). `depends:SK4.3` `parallel:none`
     - [ ] SK4.5 Extend Curve shapes (Natural, Linear, Soft, Reflective, Arc) as distinct extensions on every curve kind, once their definitions are confirmed. `depends:SK4.4` `parallel:none`
+    - [ ] SK4.6 Align as a command (menu) choosing Align Vertex from the selection, with Tab cycling continuity and Show Curvature in its dialog. `depends:none` `parallel:none`
+    - [ ] SK4.7 Extend Curve: a shape valid for the curve kind by default and a length set by D or the cursor. `depends:none` `parallel:none`
   - [ ] SK5 Fillet, Join and Unjoin: Fillet, Fillet Curve, Fillet Vertex, Join, Join Curves, Unjoin, Unjoin Curve. `depends:none` `parallel:none`
     - [x] SK5.1 Keys: B applies Fillet or Chamfer to the selected sketch curves or vertex (Fillet Vertex now reachable), J joins two selected curves, Option-J unjoins one. `depends:none` `parallel:none`
     - [ ] SK5.2 Fillet Curve live drag: a radius handle, D and C for fillet and chamfer distance while dragging. `depends:SK5.1` `parallel:none`
     - [ ] SK5.3 Join Curves endpoint feedback: coincident and separate ends drawn in distinct colors. `depends:SK5.2` `parallel:none`
+    - [ ] SK5.4 Fillet Vertex on several selected vertices at once. `depends:none` `parallel:none`
+    - [ ] SK5.5 Join Curves on three or more curves and already-joined chains; Unjoin after the joined curve was edited. `depends:none` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:none` `parallel:none`
     - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
     - [ ] SK6.2 Offset Planar Curve on splines and joined curve chains with Round, Linear and Natural gap fill. `depends:SK6.1` `parallel:none`
     - [ ] SK6.3 Freestyle Offset Planar Curve (F). `depends:SK6.2` `parallel:none`
+    - [x] SK6.4 O on a selected curve end starts Offset Vertex, and D sets its distance. `depends:none` `parallel:none`
+    - [x] SK6.5 Return and right-click create the offset, slot or region result instead of only closing the command. `depends:none` `parallel:none`
+    - [ ] SK6.6 Offset Planar Curve on circles and on several selected curves. `depends:none` `parallel:none`
   - [ ] SK7 Project: Project, Project Body Body, Project Curve Body, Project Curve Curve, Project Outline, Alternative Duplicate, Duplicate Curve and Project, Create Outline. `depends:none` `parallel:none`
     - [x] SK7.1 Keys: Option-D for Alternative Duplicate (curves, edges) or Project Outline (bodies), I for Project Curve Body onto the one selected face. `depends:none` `parallel:none`
     - [ ] SK7.2 Project Curve Body onto curved faces, with Normal and Vector directions and Bidirectional. `depends:SK7.1` `parallel:none`
     - [ ] SK7.3 Project Body Body and Project Curve Curve through a kernel intersection curve. `depends:SK7.2` `parallel:none`
     - [ ] SK7.4 Create Outline as 3D boundary curves at the body. `depends:SK7.3` `parallel:none`
+    - [ ] SK7.5 Alternative Duplicate, Project Outline and Create Outline select their result with Move running to place it. `depends:none` `parallel:none`
+    - [ ] SK7.6 Project Outline keeps the silhouette: interior edges left out and B-spline edges projected instead of failing the command. `depends:none` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
     - [ ] SK8.1 Delete Redundant Topology: joints of a spline that one cubic span spans are removed without changing its shape. `depends:SK8.2` `parallel:none`
     - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`
     - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
+    - [ ] SK8.4 Reverse on arcs and several curves, Reverse and Rebuild in the menu, and Rebuild as one dialog with its method, any Points count, OK and right-click. `depends:none` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`
     - [x] SK9.2 Create Instance (Edit menu): an instance of the selected bodies, sheets or curves appears where they are, linked as their component definition, and is selected with Move running to place it. `depends:SK9.1` `parallel:none`
     - [ ] SK9.3 Text: curves from typed text in a chosen font, through kernel glyph outlines. `depends:SK9.2` `parallel:none`
-  - [ ] SK10 Integrate every Sketch command, rebuild and restart Rupa, and verify each against its official page. `depends:SK1,SK2,SK3,SK4,SK5,SK6,SK7,SK8,SK9` `parallel:none`
+    - [ ] SK9.4 Toggle Points hides a selected curve's control points, and Toggle Points and Toggle Curve Curvature are commands. `depends:none` `parallel:none`
+    - [ ] SK9.5 Instances of a group are listed under an Instances category in the Outliner. `depends:none` `parallel:none`
+  - [ ] SK11 Command Palette: every Sketch command can be found and started by name, as the official pages start them. `depends:none` `parallel:none`
+  - [ ] SK10 Integrate every Sketch command, rebuild and restart Rupa, and verify each against its official page. `depends:SK1,SK2,SK3,SK4,SK5,SK6,SK7,SK8,SK9,SK11` `parallel:none`
 - [x] FO1 Restored direct .rupa opening by updating ~/Applications/Rupa.app to the signed September 25 verified build and unregistering eight competing old/build-path application registrations without deleting their files. Saved document 559512EF before restart; default-handler open now displays its Constrained Surface with one body, Valid evaluation and zero errors. Installed executable SHA-256 matches the verified build. Previous installed app preserved at .verification/Rupa-installed-20260906.app-backup. No production source changes required. `depends:none` `parallel:none`
 - [x] BF1 Audited nineteen foundation commands against official specifications, concrete Core/UI/native/API paths and history. Existing transform, clone/remap, pattern and knot primitives are reusable; complete command workflows remain missing or partial. Identified divergent transform failure contracts, absent standard array creation UI, transient Measure disconnected from persistent annotations, and Section Analysis bypassing occurrence transforms. Twelve focused Core behavioral tests pass in /tmp/foundation-core-audit.log and /tmp/foundation-core-behavior.log; no full UI/native-kernel parity claim. Production sources unchanged by this audit; step 2 remains paused with its prior uncommitted edits preserved. `depends:none` `parallel:none`
 - [ ] SC1 Complete all eleven approved Surface Creation operations: Extrude, Revolve, Sweep, Pipe, Loft, Constrained Surface, Patch, Bridge Surface, XNURBS, Square and PolySplines. Task completion requires every operation's full approved behavior, working UI and semantic API, source persistence/reediting and verified precision/failure contracts, followed by SC2 integration and verification in the restarted rebuilt application. All eleven operations must meet their acceptance criteria; partial completion is not task completion. The current user-authorized phases are step 2, basic operations (SC1.4): Extrude, Revolve, Sweep and Pipe, and step 3, Constrained Surface (SC1.5); the completed shared foundation remains their prerequisite. Other feature authoring and SC2 remain later work. Preserve the full eleven-operation acceptance scope for those later phases. Preserve unrelated edits and the existing project authority. `depends:none` `parallel:none`

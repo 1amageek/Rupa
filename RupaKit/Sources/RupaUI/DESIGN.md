@@ -614,9 +614,18 @@ Vertex path), J joins two selected curves with the inspector's continuity and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
 points where they are. With one open sketch curve selected, O starts Offset
-Planar Curve: D focuses its distance, S makes it symmetric, and O again turns it
-into Slot, which D then sizes by width; the panel's create button or the width
-handle submits one `offsetCurve` in the chosen mode.
+Planar Curve: S makes it symmetric, and O again turns it into Slot. With a line
+or arc end selected, O starts Offset Vertex instead, as the official Offset
+Curve dispatch does (the inspector's Slot still takes the curve of a selected
+end). In every O command — Offset, Slot, Offset Vertex, Offset Edge, Offset
+Region — D focuses the dialog's `WorkspaceCommandDistanceInput`, where the
+distance (Slot's width; a negative region distance offsets inward) is typed in
+the display unit; the value is the command's setting and creates nothing while
+typed. Return, in that field or on the canvas (`confirmWorkspaceCommand`), and
+right-click create the command's result at that distance as one source command
+— `offsetCurve`, `offsetSketchVertex` or `offsetRegions` — and end the command
+once it exists; a refused result leaves the command running. The panel's
+create button and the handles create it the same way.
 
 ### What the workspace says, and where the canvas stops
 

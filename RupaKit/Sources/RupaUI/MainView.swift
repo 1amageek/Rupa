@@ -230,6 +230,8 @@ private struct ProjectMainViewContent: View {
     @FocusState private var isWorkspaceFocused: Bool
     @FocusState private var focusedPlaceOption: WorkspacePlaceOptionField?
     @FocusState private var isSectionDistanceFocused: Bool
+    /// The O commands' typed distance D focuses.
+    @FocusState private var focusedCommandDistance: WorkspaceCommandDistanceField?
     /// What is typed into the transform dialog's fields, applied only on Return.
     @State private var transformFieldTexts: [WorkspaceTransformTypedField: String] = [:]
 
@@ -2779,19 +2781,52 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Slide Surface CV complete.")
             return true
         }
+        // Return and right-click create the running O command's result at its distance; the
+        // command ends once the result exists and stays for another try when it is refused.
         if regionOffsetCommandState.isActive {
-            regionOffsetCommandState.deactivate()
-            reportToolStatus("Offset Region complete.")
+            let targets = selectedRegionTargets
+            guard !targets.isEmpty else {
+                regionOffsetCommandState.deactivate()
+                return true
+            }
+            offsetSelectedRegions(
+                targets,
+                by: regionOffsetDistanceMeters,
+                gapFill: regionOffsetGapFill,
+                isSymmetric: regionOffsetCommandState.usesLockedDistance,
+                combinesRegions: regionOffsetCommandState.usesCombinedRegions
+            )
             return true
         }
         if edgeOffsetCommandState.isActive {
-            edgeOffsetCommandState.deactivate()
-            reportToolStatus("Offset Edge complete.")
+            let targets = selectedEdgeTargets
+            guard !targets.isEmpty else {
+                edgeOffsetCommandState.deactivate()
+                return true
+            }
+            offsetSelectedEdges(
+                targets,
+                by: edgeOffsetDistanceMeters,
+                gapFill: edgeOffsetGapFill,
+                isSymmetric: edgeOffsetCommandState.usesLockedDistance
+            )
+            return true
+        }
+        if slotProfileCommandState.isVertexOffsetActive {
+            if let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
+               selectedSketchVertexOffsetHandle(entity) != nil {
+                createCommandedVertexOffset(entity)
+            } else {
+                slotProfileCommandState.deactivate()
+            }
             return true
         }
         if slotProfileCommandState.isActive {
-            slotProfileCommandState.deactivate()
-            reportToolStatus("Slot complete.")
+            if let target = selectedSlotSourceCurveTarget {
+                createCommandedCurveOffset(target)
+            } else {
+                slotProfileCommandState.deactivate()
+            }
             return true
         }
         if sectionAnalysisSession != nil {
@@ -4514,9 +4549,16 @@ private struct ProjectMainViewContent: View {
             edgeOffsetContextPanelContent(selectedEdgeTargets)
         }
 
-        if let slotTarget = selectedSlotSourceCurveTarget {
+        if !slotProfileCommandState.isVertexOffsetActive, let slotTarget = selectedSlotSourceCurveTarget {
             workspaceContextDivider
             slotProfileContextPanelContent(slotTarget)
+        }
+
+        if slotProfileCommandState.isVertexOffsetActive,
+           let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
+           selectedSketchVertexOffsetHandle(entity) != nil {
+            workspaceContextDivider
+            vertexOffsetContextPanelContent(entity)
         }
 
         if slideCommandState.isCurveControlVerticesActive,
@@ -4762,11 +4804,48 @@ private struct ProjectMainViewContent: View {
         WorkspaceSlotContextPanel(
             isActive: slotProfileCommandState.isActive,
             title: slotProfileCommandState.isActive ? slotProfileCommandState.title : "Slot",
-            widthTitle: formatted(slotProfileWidthMeters),
+            distanceInput: commandDistanceInput(
+                slotProfileCommandState.output == .slot ? "Width" : "Distance",
+                meters: $slotProfileWidthMeters,
+                field: .curveOffset,
+                accessibilityIdentifier: "WorkspaceSlot.width"
+            ),
             inputModeTitle: slotProfileCommandState.inputModeTitle,
             symmetricTitle: slotProfileCommandState.isCurveOffsetActive
                 ? (slotProfileCommandState.isSymmetric ? "On" : "Off") : nil,
             create: { createCommandedCurveOffset(target) }
+        )
+    }
+
+    /// Offset Vertex's dialog on the selected curve end: its distance, which D focuses, and Create.
+    @ViewBuilder
+    private func vertexOffsetContextPanelContent(_ entity: InspectorSketchEntity) -> some View {
+        WorkspaceSlotContextPanel(
+            isActive: true,
+            title: slotProfileCommandState.title,
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $sketchVertexOffsetDistanceMeters, field: .curveOffset,
+                accessibilityIdentifier: "WorkspaceVertexOffset.distance"
+            ),
+            inputModeTitle: slotProfileCommandState.inputModeTitle,
+            symmetricTitle: nil,
+            create: { createCommandedVertexOffset(entity) }
+        )
+    }
+
+    private func commandDistanceInput(
+        _ title: String,
+        meters: Binding<Double>,
+        field: WorkspaceCommandDistanceField,
+        accessibilityIdentifier: String
+    ) -> WorkspaceCommandDistanceInput {
+        WorkspaceCommandDistanceInput(
+            title: title,
+            meters: meters,
+            unit: snapshot.workspaceState.ruler.displayUnit,
+            field: field,
+            focus: $focusedCommandDistance,
+            accessibilityIdentifier: accessibilityIdentifier
         )
     }
 
@@ -4775,7 +4854,10 @@ private struct ProjectMainViewContent: View {
         let supportResolution = edgeOffsetSupportStateResolver.resolution(for: targets)
         WorkspaceEdgeOffsetContextPanel(
             isSupported: supportResolution.isSupported,
-            distanceTitle: formatted(edgeOffsetDistanceMeters),
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $edgeOffsetDistanceMeters, field: .edgeOffset,
+                accessibilityIdentifier: "WorkspaceEdgeOffset.distance"
+            ),
             gapFillTitle: regionOffsetGapFillTitle(edgeOffsetGapFill),
             inputModeTitle: edgeOffsetCommandState.inputModeTitle,
             lockedDistanceTitle: edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
@@ -4794,7 +4876,10 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private func regionOffsetContextPanelContent(_ targets: [SelectionTarget]) -> some View {
         WorkspaceRegionOffsetContextPanel(
-            distanceTitle: formatted(regionOffsetDistanceMeters),
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $regionOffsetDistanceMeters, field: .regionOffset,
+                accessibilityIdentifier: "WorkspaceRegionOffset.distance"
+            ),
             gapFillTitle: regionOffsetGapFillTitle(regionOffsetGapFill),
             inputModeTitle: regionOffsetCommandState.inputModeTitle,
             lockedDistanceTitle: regionOffsetCommandState.usesLockedDistance ? "On" : "Off",
@@ -4802,7 +4887,7 @@ private struct ProjectMainViewContent: View {
             offsetInward: {
                 offsetSelectedRegions(
                     targets,
-                    by: -regionOffsetDistanceMeters,
+                    by: -abs(regionOffsetDistanceMeters),
                     gapFill: regionOffsetGapFill,
                     isSymmetric: regionOffsetCommandState.usesLockedDistance,
                     combinesRegions: regionOffsetCommandState.usesCombinedRegions
@@ -4811,7 +4896,7 @@ private struct ProjectMainViewContent: View {
             offsetOutward: {
                 offsetSelectedRegions(
                     targets,
-                    by: regionOffsetDistanceMeters,
+                    by: abs(regionOffsetDistanceMeters),
                     gapFill: regionOffsetGapFill,
                     isSymmetric: regionOffsetCommandState.usesLockedDistance,
                     combinesRegions: regionOffsetCommandState.usesCombinedRegions
@@ -5789,6 +5874,9 @@ private struct ProjectMainViewContent: View {
         case .confirmSectionAnalysis:
             confirmSectionAnalysis()
             return .handled
+        case .confirmWorkspaceCommand:
+            _ = confirmActiveWorkspaceCommand()
+            return .handled
         case .setPlaceBoolean(let operation):
             placeSession?.booleanOperation = operation
             if operation != nil {
@@ -5849,6 +5937,8 @@ private struct ProjectMainViewContent: View {
                 activateEdgeOffsetCommand()
             } else if selectedRegionTargets.isEmpty == false {
                 activateRegionOffsetCommand()
+            } else if selectedSketchVertexOffsetTarget != nil {
+                activateVertexOffsetCommand()
             } else if selectedSlotSourceCurveTarget != nil {
                 activateSlotProfileCommand()
             } else {
@@ -5857,15 +5947,18 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .activateSlotWidthInput:
             slotProfileCommandState.activateWidthInput()
+            focusedCommandDistance = .curveOffset
             return .handled
         case .toggleCurveOffsetSymmetric:
             slotProfileCommandState.toggleSymmetric()
             return .handled
         case .activateEdgeOffsetDistanceInput:
             edgeOffsetCommandState.activateDistanceInput()
+            focusedCommandDistance = .edgeOffset
             return .handled
         case .activateRegionOffsetDistanceInput:
             regionOffsetCommandState.activateDistanceInput()
+            focusedCommandDistance = .regionOffset
             return .handled
         case .cycleEdgeOffsetGapFill:
             edgeOffsetGapFill = edgeOffsetCommandState.gapFill(after: edgeOffsetGapFill)
@@ -6813,6 +6906,16 @@ private struct ProjectMainViewContent: View {
            let message = supportResolution.diagnosticMessage {
             reportToolStatus(message, severity: .warning)
         }
+    }
+
+    /// O with a line or arc end selected: Offset Vertex, whose distance D types and Return applies.
+    private func activateVertexOffsetCommand() {
+        selectionScope = .sketchEntity
+        regionOffsetCommandState.deactivate()
+        edgeOffsetCommandState.deactivate()
+        slideCommandState.deactivate()
+        slotProfileCommandState.beginVertexOffset()
+        reportToolStatus("Offset Vertex: drag the handle or D to type the distance, Return creates it.")
     }
 
     private func activateSlotProfileCommand() {
@@ -10553,7 +10656,11 @@ private struct ProjectMainViewContent: View {
                 ),
                 combinesRegions: combinesRegions
             )
-        )
+        ) { result in
+            if result?.didMutate == true {
+                regionOffsetCommandState.deactivate()
+            }
+        }
     }
 
     private func moveSelectedSketchEntityPoint(
@@ -11380,6 +11487,22 @@ private struct ProjectMainViewContent: View {
                 distance: .length(max(sketchVertexOffsetDistanceMeters, 1.0e-9), .meter)
             )
         )
+    }
+
+    /// The running Offset Vertex's result at its distance; the command ends once it exists.
+    private func createCommandedVertexOffset(_ entity: InspectorSketchEntity) {
+        guard let handle = selectedSketchVertexOffsetHandle(entity) else { return }
+        submitSource(
+            .offsetSketchVertex(
+                target: entity.target,
+                handle: handle,
+                distance: .length(max(sketchVertexOffsetDistanceMeters, 1.0e-9), .meter)
+            )
+        ) { result in
+            if result?.didMutate == true {
+                slotProfileCommandState.deactivate()
+            }
+        }
     }
 
     private func splitSelectedSketchCurve(
