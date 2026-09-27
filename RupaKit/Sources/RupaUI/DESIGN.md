@@ -449,7 +449,14 @@ adds them after the pasteboard group. Duplicate (⌘D in the menu, Shift-D in th
 select tool, Outliner context menu) submits one `duplicateSceneNodes` source
 command, so the copy is one undo step, then selects the copied roots and starts
 a Move of them; Core's [SceneCloning](../RupaCore/SceneCloning/DESIGN.md)
-owns what a copy contains.
+owns what a copy contains. Create Instance (Edit menu; Plasticity's Create Instance and
+Create Curve Instance, for bodies, sheets and curves alike) submits one
+`placeSceneNodes` with `.componentInstance` output at the selection's own
+placement: the selection becomes the definition (or reuses the one whose roots
+it is) and the new instance appears over it. The instance is then selected and
+a Move of it starts, so it is placed and Return or Escape confirms it, as
+Plasticity positions an instance before OK. A refused selection offers no
+action.
 
 The Edit menu's Array submenu makes Rectangular, Radial and Curve arrays of the
 same selection through `WorkspacePatternArrayCreationPlanner`, which builds one

@@ -8159,6 +8159,7 @@ private struct ProjectMainViewContent: View {
             subdivide: subdivideAction,
             splitSegment: splitSegmentAction,
             bridge: bridgeAction,
+            createInstance: createInstanceAction,
             realizeInstances: realizeInstancesAction,
             insertKnot: selectedTool == .select ? insertKnotAction : nil
         )
@@ -8209,6 +8210,25 @@ private struct ProjectMainViewContent: View {
                   })?.selectionTarget() else { return }
             selectTargets([target])
             reportToolStatus("Bridge: edit continuity, tension and trim in the inspector.")
+        }
+    }
+
+    /// Create Instance on the selection, offered when Core would copy it (Edit menu).
+    private var createInstanceAction: (@MainActor () -> Void)? {
+        guard let ids = duplicableSelectionIDs else { return nil }
+        return { createInstance(of: ids) }
+    }
+
+    /// Create Instance (Edit menu): an instance of `ids` where they are, as one undo step, selected
+    /// with a Move of it running so it is placed; Return or Escape ends the Move.
+    private func createInstance(of ids: [SceneNodeID]) {
+        submitSource(.placeSceneNodes(ids: ids, placements: [.identity], output: .componentInstance, boolean: nil)) { result in
+            guard let generated = result?.generatedIdentities.sceneNodeIDs,
+                  let metadata = workspace.view?.document.document.productMetadata else { return }
+            let instanceIDs = generated.filter { metadata.sceneNodes[$0]?.reference?.kind == .componentInstance }
+            guard !instanceIDs.isEmpty else { return }
+            selectSceneNodes(instanceIDs)
+            beginTransformSession(.move, sceneNodeIDs: instanceIDs)
         }
     }
 

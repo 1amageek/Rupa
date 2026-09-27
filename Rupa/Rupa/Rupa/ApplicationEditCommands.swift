@@ -57,6 +57,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.bridge?()
             }
             .disabled(editCommands?.bridge == nil)
+            Button("Create Instance") {
+                editCommands?.createInstance?()
+            }
+            .disabled(editCommands?.createInstance == nil)
             Button("Realize Instances") {
                 editCommands?.realizeInstances?()
             }

@@ -77,7 +77,7 @@
     - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`
-    - [ ] SK9.2 Create Instance as its own command on the selection. `depends:SK9.1` `parallel:none`
+    - [x] SK9.2 Create Instance (Edit menu): an instance of the selected bodies, sheets or curves appears where they are, linked as their component definition, and is selected with Move running to place it. `depends:SK9.1` `parallel:none`
     - [ ] SK9.3 Text: curves from typed text in a chosen font, through kernel glyph outlines. `depends:SK9.2` `parallel:none`
   - [ ] SK10 Integrate every Sketch command, rebuild and restart Rupa, and verify each against its official page. `depends:SK1,SK2,SK3,SK4,SK5,SK6,SK7,SK8,SK9` `parallel:none`
 - [x] FO1 Restored direct .rupa opening by updating ~/Applications/Rupa.app to the signed September 25 verified build and unregistering eight competing old/build-path application registrations without deleting their files. Saved document 559512EF before restart; default-handler open now displays its Constrained Surface with one body, Valid evaluation and zero errors. Installed executable SHA-256 matches the verified build. Previous installed app preserved at .verification/Rupa-installed-20260906.app-backup. No production source changes required. `depends:none` `parallel:none`

@@ -107,6 +107,9 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   creates one instance per placement whose transform carries the roots' parent
   frame, so each instance shows the objects at the placement a copy would take.
   Objects under different parents are refused: one instance has one frame.
+  Create Instance is this output at the identity placement, so the instance
+  shows the objects exactly where they are; `CreateInstanceTests` cover a body
+  and a sketch curve.
 - A placement Boolean makes each placed copy the tool of a `createBoolean`
   with the body the destination lies on (the first copy with the target, each
   later copy with the previous result); a copy must contain exactly one body,
