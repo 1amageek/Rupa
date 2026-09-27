@@ -138,6 +138,66 @@ struct SceneMirrorTests {
         #expect(try reflection.applied(to: Point3D(x: 1, y: 1, z: 3)) == Point3D(x: 1, y: 1, z: 1))
     }
 
+    /// A flat 4 cm × 2 cm B-spline sheet over x ∈ [x0, x0 + 0.04] and the scene node presenting it.
+    private func sheet(x0: Double) throws -> (DesignDocument, SceneNodeID) {
+        var document = DesignDocument.empty()
+        let xs = [x0, x0 + 0.04]
+        let featureID = try document.createBSplineSurface(name: "Sheet", surface: BSplineSurface3D(
+            uDegree: 1, vDegree: 1, uKnots: [0, 0, 1, 1], vKnots: [0, 0, 1, 1],
+            controlPoints: [0.0, 0.02].map { y in xs.map { Point3D(x: $0, y: y, z: 0) } }
+        ))
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == featureID })
+        return (document, node.id)
+    }
+
+    /// The faces and x extent of the sheet the node presents.
+    private func sheetFaces(_ nodeID: SceneNodeID, in document: DesignDocument) throws -> (faces: Int, minX: Double, maxX: Double) {
+        let featureID = try #require(document.productMetadata.sceneNodes[nodeID]?.reference?.featureID)
+        let evaluated = try DocumentEvaluator.modelingDefault(for: document).evaluateExact(document.cadDocument)
+        let bodyIDs = evaluated.subshapes.entries.compactMap { key, value -> BodyID? in
+            guard key.featureID == featureID, case .body(let id) = value else { return nil }
+            return id
+        }
+        #expect(bodyIDs.count == 1)
+        let bodyID = try #require(bodyIDs.first)
+        let body = try #require(evaluated.brep.bodies[bodyID])
+        #expect(body.kind == .sheet)
+        let faceIDs = body.shellIDs.flatMap { evaluated.brep.shells[$0]?.faceIDs ?? [] }
+        let xs = faceIDs.flatMap { faceID in
+            (evaluated.brep.faces[faceID]?.loops ?? []).flatMap { evaluated.brep.loops[$0]?.coedges.map(\.edgeID) ?? [] }
+        }.flatMap { edgeID -> [Double] in
+            guard let edge = evaluated.brep.edges[edgeID] else { return [] }
+            return [edge.startVertexID, edge.endVertexID].compactMap { evaluated.brep.vertices[$0]?.point.x }
+        }
+        return (faceIDs.count, xs.min() ?? .nan, xs.max() ?? .nan)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aSheetIsCopiedAndJoinedAcrossThePlaneAndACutIsRefused() throws {
+        let plane = try SceneMirrorPlane(origin: .origin, normal: .unitX)
+
+        var (copied, source) = try sheet(x0: 0.01)
+        let copy = try #require(try copied.mirrorSceneNodes(ids: [source], plane: plane, options: .init()).first)
+        let reflection = try sheetFaces(copy, in: copied)
+        #expect(reflection.faces == 1)
+        #expect(abs(reflection.minX + 0.05) < 1e-9)
+        #expect(abs(reflection.maxX + 0.01) < 1e-9)
+
+        var (joined, touching) = try sheet(x0: 0)
+        _ = try joined.mirrorSceneNodes(ids: [touching], plane: plane, options: .init(unionsHalves: true))
+        let union = try sheetFaces(touching, in: joined)
+        #expect(union.faces == 2)
+        #expect(abs(union.minX + 0.04) < 1e-9)
+        #expect(abs(union.maxX - 0.04) < 1e-9)
+
+        var (cut, crossing) = try sheet(x0: -0.01)
+        let before = cut
+        #expect(throws: EditorError.self) {
+            try cut.mirrorSceneNodes(ids: [crossing], plane: plane, options: .init(cutsAtPlane: true))
+        }
+        #expect(cut.cadDocument.designGraph == before.cadDocument.designGraph)
+    }
+
     @Test func mirrorRefusesConflictingOptionsLockedObjectsAndShearedPlacements() throws {
         var (document, box) = try box()
         let plane = try SceneMirrorPlane(origin: .origin, normal: .unitX)

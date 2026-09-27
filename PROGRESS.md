@@ -22,6 +22,8 @@
   - [ ] FB20 Complete Edge on solid and sheet edges through a kernel 3D curve intersection and curve extension to it. `depends:FB16` `parallel:none`
   - [x] FB18a Copy construction geometry (construction planes cloned under a new identity) instead of refusing it. `depends:FB18` `parallel:none`
   - [ ] FB21 Mirror of sheet bodies on the cut, join and copy paths through a kernel mirror of open shells. `depends:FB16` `parallel:none`
+    - [x] FB21.1 Sheets mirror to sheets on the copy and join paths: kept beside the reflection when proven clear of the plane, sewn along the plane when proven one-sided, refused when they may cross (swift-CAD 7212f2f). `depends:FB16` `parallel:none`
+    - [ ] FB21.2 Cut a sheet at the mirror plane (kernel split of the sheet's faces along their exact plane intersection) and remove the Rupa cut refusal. `depends:FB21.1` `parallel:none`
   - [x] FB22 Snap candidates on sketches presented by a moved scene node, placed through the occurrence placement. `depends:FB16` `parallel:none`
   - [ ] FB23 Exact face centroid and face area from Swift-CAD for face-center snapping and face-area metrics, replacing the Rupa approximations. `depends:FB16` `parallel:none`
   - [ ] FB5 Integrate all twenty commands, run affected package and native/UI/app workflows, restart Rupa and verify each end-to-end acceptance path against the official Plasticity pages. `depends:FB18a,FB21,FB22,FB23,FB17,FB18,FB19,FB20,FB16,FB1,FBS,FB2,FB10,FB11,FB12,FB13,FB4,FB14,FB3,FB15` `parallel:none`

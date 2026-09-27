@@ -35,7 +35,7 @@ extension DesignDocument {
                 continue
             }
             let local = try mirrorPlane(plane, placedBy: world)
-            try mirrorableBody(node)
+            try mirrorableBody(node, cuts: options.cutsAtPlane)
             if options.makesInstances {
                 try updated.appendMirror(to: root, plane: local, output: .kept, cuts: true, objectRegistry: objectRegistry)
                 results += try updated.placeSceneNodes(
@@ -67,22 +67,23 @@ extension DesignDocument {
     }
 
     /// Refuses objects Swift-CAD cannot mirror as a feature.
-    private func mirrorableBody(_ node: SceneNode) throws {
+    private func mirrorableBody(_ node: SceneNode, cuts: Bool) throws {
         guard let reference = node.reference, reference.kind == .body || reference.kind == .feature,
               reference.featureID != nil, node.object != nil else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Mirror cuts, joins and copies solid bodies; other objects can be mirrored as instances."
+                message: "Mirror cuts, joins and copies bodies; other objects can be mirrored as instances."
             )
         }
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD's mirror feature rebuilds exact solids only, so
-        // sheet bodies are refused on the cut, join and copy paths (Make Instances without a cut
-        // still mirrors them). Mirror of sheets is not complete until the kernel mirrors open shells
-        // and this refusal is replaced by that path with its own tests.
-        guard node.object?.geometryRole != .surface else {
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD mirrors sheets, joining a sheet to its
+        // reflection where it keeps to one side of the plane, but cannot yet cut a sheet at the
+        // plane, so a sheet is refused here whenever the mirror cuts. Mirror of sheets is not
+        // complete until the kernel splits a sheet at the plane and this refusal is replaced by
+        // that path with its own tests.
+        guard !(cuts && node.object?.geometryRole == .surface) else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Mirror of surface bodies is available only as instances without a cut."
+                message: "Mirror cannot cut a surface body at the plane yet."
             )
         }
     }
@@ -122,9 +123,9 @@ extension DesignDocument {
             throw EditorError(code: .referenceUnresolved, message: "Mirror needs the object's feature.")
         }
         let featureID = FeatureID()
-        let feature = FeatureNode(
-            id: featureID,
-            name: "Mirror",
+        // The factory gives the mirror its target's output role: a solid mirrors to a solid and a
+        // sheet to a sheet.
+        var feature = try FeatureNodeFactory.make(
             operation: .mirror(MirrorFeature(
                 target: PatternTargetReference(featureID: source),
                 planeOrigin: plane.origin,
@@ -132,9 +133,9 @@ extension DesignDocument {
                 output: output,
                 cutsAtPlane: cuts
             )),
-            inputs: [FeatureInput(featureID: source, role: .target)],
-            outputs: [FeatureOutput(role: .body)]
+            id: featureID, in: cadDocument, tolerance: modelingSettings.tolerance
         )
+        feature.name = "Mirror"
         try appendTopologyEdit(
             FeatureGraphTransaction(features: [feature], primaryFeatureID: featureID),
             replacing: SelectionTarget(sceneNodeID: nodeID),
