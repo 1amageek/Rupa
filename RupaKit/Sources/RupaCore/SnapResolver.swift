@@ -649,9 +649,8 @@ public struct SnapResolver: Sendable {
                 continue
             }
             let sceneNodeID = hierarchy.presentingSceneNodeID(for: featureID)
-            guard try sketchIsUnplaced(presentedBy: sceneNodeID, in: hierarchy) else {
-                continue
-            }
+            // An unpresented sketch stays in the world frame; a presented one is placed by its node.
+            let placement = try sceneNodeID.map { try ScenePlacement(hierarchy.worldTransform(of: $0)) } ?? .identity
             for (entityID, entity) in sketch.entities.sorted(by: { first, second in
                 first.key.description < second.key.description
             }) {
@@ -665,7 +664,8 @@ public struct SnapResolver: Sendable {
                     source: source,
                     sketchPlane: sketch.plane,
                     parameters: document.cadDocument.parameters,
-                    constructionPlane: constructionPlane
+                    constructionPlane: constructionPlane,
+                    placement: placement
                 )
                 snapEntities.append(snapEntity)
                 candidates += snapEntity.discreteCandidates
@@ -1027,27 +1027,6 @@ public struct SnapResolver: Sendable {
         return placedEntry
     }
 
-    /// Whether a sketch's snap geometry can be offered in its authored coordinates.
-    ///
-    /// Sketch snap entities, their closest-point curves and their intersections are computed in
-    /// the sketch plane, which has no in-plane rotation or scale, so they are exact only when the
-    /// sketch's presenting occurrence is not moved. An unpresented sketch stays in the world frame.
-    private func sketchIsUnplaced(
-        presentedBy sceneNodeID: SceneNodeID?,
-        in hierarchy: SceneNodeHierarchy
-    ) throws -> Bool {
-        guard let sceneNodeID else {
-            return true
-        }
-        let placement = try ScenePlacement(hierarchy.worldTransform(of: sceneNodeID))
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Sketch entities presented by a moved scene node offer
-        // no snap candidates. Production path: SnapResolver.objectCandidates for every tool.
-        // Completion requires placing each snap entity's points, curves and intersection geometry
-        // through the occurrence placement (including non-uniform scale); until then a moved
-        // sketch must not report snap points at its unplaced source position.
-        return placement == .identity
-    }
-
     private func topologyCandidates(
         from entry: TopologySummaryResult.Entry,
         constructionPlane: SketchPlaneCoordinateSystem?
@@ -1144,7 +1123,8 @@ public struct SnapResolver: Sendable {
         source: SnapSourceReference,
         sketchPlane: SketchPlane,
         parameters: ParameterTable,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        placement: ScenePlacement
     ) throws -> SnapEntity {
         let axisDirections = try axisDirections(
             sourcePlane: sketchPlane,
@@ -1160,7 +1140,8 @@ public struct SnapResolver: Sendable {
                 from: point,
                 on: sketchPlane,
                 parameters: parameters,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                placement: placement
             )
             return SnapEntity(
                 source: source,
@@ -1181,13 +1162,15 @@ public struct SnapResolver: Sendable {
                 from: line.start,
                 on: sketchPlane,
                 parameters: parameters,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                placement: placement
             )
             let end = try modelPoint(
                 from: line.end,
                 on: sketchPlane,
                 parameters: parameters,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                placement: placement
             )
             return SnapEntity(
                 source: source,
@@ -1208,7 +1191,8 @@ public struct SnapResolver: Sendable {
             let center = try projectedPoint(
                 localCenter,
                 from: sketchPlane,
-                onto: constructionPlane
+                onto: constructionPlane,
+                placement: placement
             )
             let radius = try resolvedValue(circle.radius, kind: .length, parameters: parameters)
             let quarterAngles = [0.0, Double.pi / 2.0, Double.pi, Double.pi * 1.5]
@@ -1216,7 +1200,8 @@ public struct SnapResolver: Sendable {
                 try projectedPoint(
                     offset(localCenter, radius: radius, angle: angle),
                     from: sketchPlane,
-                    onto: constructionPlane
+                    onto: constructionPlane,
+                placement: placement
                 )
             }
             let geometry = try circularGeometry(
@@ -1226,7 +1211,8 @@ public struct SnapResolver: Sendable {
                 endAngle: nil,
                 localCenter: localCenter,
                 sourcePlane: sketchPlane,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                placement: placement
             )
             return SnapEntity(
                 source: source,
@@ -1249,7 +1235,8 @@ public struct SnapResolver: Sendable {
             let center = try projectedPoint(
                 localCenter,
                 from: sketchPlane,
-                onto: constructionPlane
+                onto: constructionPlane,
+                placement: placement
             )
             let radius = try resolvedValue(arc.radius, kind: .length, parameters: parameters)
             let startAngle = try resolvedValue(arc.startAngle, kind: .angle, parameters: parameters)
@@ -1258,17 +1245,20 @@ public struct SnapResolver: Sendable {
             let startPoint = try projectedPoint(
                 offset(localCenter, radius: radius, angle: startAngle),
                 from: sketchPlane,
-                onto: constructionPlane
+                onto: constructionPlane,
+                placement: placement
             )
             let endPoint = try projectedPoint(
                 offset(localCenter, radius: radius, angle: endAngle),
                 from: sketchPlane,
-                onto: constructionPlane
+                onto: constructionPlane,
+                placement: placement
             )
             let midpoint = try projectedPoint(
                 offset(localCenter, radius: radius, angle: midpointAngle),
                 from: sketchPlane,
-                onto: constructionPlane
+                onto: constructionPlane,
+                placement: placement
             )
             let geometry = try circularGeometry(
                 center: center,
@@ -1277,7 +1267,8 @@ public struct SnapResolver: Sendable {
                 endAngle: endAngle,
                 localCenter: localCenter,
                 sourcePlane: sketchPlane,
-                constructionPlane: constructionPlane
+                constructionPlane: constructionPlane,
+                placement: placement
             )
             return SnapEntity(
                 source: source,
@@ -1297,7 +1288,8 @@ public struct SnapResolver: Sendable {
                     from: $0,
                     on: sketchPlane,
                     parameters: parameters,
-                    constructionPlane: constructionPlane
+                    constructionPlane: constructionPlane,
+                    placement: placement
                 )
             }
             let discreteCandidates = controlPoints.enumerated().map { index, controlPoint in
@@ -2058,12 +2050,14 @@ public struct SnapResolver: Sendable {
         from point: SketchPoint,
         on plane: SketchPlane,
         parameters: ParameterTable,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        placement: ScenePlacement = .identity
     ) throws -> Point2D {
         try projectedPoint(
             localPoint(from: point, parameters: parameters),
             from: plane,
-            onto: constructionPlane
+            onto: constructionPlane,
+            placement: placement
         )
     }
 
@@ -2077,11 +2071,18 @@ public struct SnapResolver: Sendable {
         )
     }
 
+    /// A sketch-local point where the snap plane sees it; a placed sketch's point is carried
+    /// through its occurrence placement first, the same way region centers are.
     private func projectedPoint(
         _ localPoint: Point2D,
         from sourcePlane: SketchPlane,
-        onto constructionPlane: SketchPlaneCoordinateSystem?
+        onto constructionPlane: SketchPlaneCoordinateSystem?,
+        placement: ScenePlacement = .identity
     ) throws -> Point2D {
+        if placement != .identity {
+            let sourcePoint = try SketchPlaneCoordinateSystem(plane: sourcePlane).point(from: localPoint)
+            return projectedMeasurementPoint(placement.point(sourcePoint), onto: constructionPlane)
+        }
         guard let constructionPlane else {
             return canvasPoint(from: localPoint, on: sourcePlane)
         }
@@ -2296,8 +2297,15 @@ public struct SnapResolver: Sendable {
         endAngle: Double?,
         localCenter: Point2D,
         sourcePlane: SketchPlane,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        placement: ScenePlacement = .identity
     ) throws -> SnapGeometry {
+        if placement != .identity {
+            return try placedCircularGeometry(
+                radius: radius, startAngle: startAngle, endAngle: endAngle, localCenter: localCenter,
+                sourcePlane: sourcePlane, constructionPlane: constructionPlane, placement: placement
+            )
+        }
         guard let constructionPlane,
               try circularProjectionRequiresPolyline(from: sourcePlane, onto: constructionPlane) else {
             if let startAngle, let endAngle {
@@ -2314,6 +2322,54 @@ public struct SnapResolver: Sendable {
                 sourcePlane: sourcePlane,
                 constructionPlane: constructionPlane
             )
+        )
+    }
+
+    /// A placed circle or arc stays exact while its placement, seen on the snap plane, is a
+    /// rotation, reflection and uniform scale; otherwise it becomes an ellipse and is sampled.
+    private func placedCircularGeometry(
+        radius: Double,
+        startAngle: Double?,
+        endAngle: Double?,
+        localCenter: Point2D,
+        sourcePlane: SketchPlane,
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        placement: ScenePlacement
+    ) throws -> SnapGeometry {
+        func placed(_ point: Point2D) throws -> Point2D {
+            try projectedPoint(point, from: sourcePlane, onto: constructionPlane, placement: placement)
+        }
+        let center = try placed(localCenter)
+        let unitX = try placed(Point2D(x: localCenter.x + 1, y: localCenter.y))
+        let unitY = try placed(Point2D(x: localCenter.x, y: localCenter.y + 1))
+        let ux = unitX.x - center.x, uy = unitX.y - center.y
+        let vx = unitY.x - center.x, vy = unitY.y - center.y
+        let scaleU = hypot(ux, uy), scaleV = hypot(vx, vy)
+        let isSimilarity = scaleU > 1.0e-12
+            && abs(scaleU - scaleV) <= 1.0e-9 * scaleU
+            && abs(ux * vx + uy * vy) <= 1.0e-9 * scaleU * scaleV
+        guard isSimilarity else {
+            let span = startAngle.flatMap { start in
+                endAngle.map { normalizedArcSpan(startAngle: start, endAngle: $0) }
+            } ?? Double.pi * 2.0
+            let start = startAngle ?? 0.0
+            let sampleCount = max(16, Int(ceil(span / (Double.pi / 24.0))))
+            return .polyline(points: try (0 ... sampleCount).map { index in
+                try placed(offset(localCenter, radius: radius, angle: start + span * Double(index) / Double(sampleCount)))
+            })
+        }
+        guard let startAngle, let endAngle else {
+            return .circle(center: center, radius: radius * scaleU)
+        }
+        func angle(_ theta: Double) -> Double {
+            atan2(uy * cos(theta) + vy * sin(theta), ux * cos(theta) + vx * sin(theta))
+        }
+        // A reflection reverses the arc's sense, so its ends trade places.
+        let reflected = ux * vy - uy * vx < 0
+        return .arc(
+            center: center, radius: radius * scaleU,
+            startAngle: reflected ? angle(endAngle) : angle(startAngle),
+            endAngle: reflected ? angle(startAngle) : angle(endAngle)
         )
     }
 

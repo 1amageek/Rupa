@@ -896,10 +896,10 @@ placed by its feature's presenting scene node (the direct occurrence) through
 `ScenePlacement`; an unpresented source stays in the world frame. Topology,
 surface-trim and region-center points are single points, so any affine
 placement maps them exactly. Sketch snap entities (points, closest-point curves,
-intersections) are computed in the sketch plane, which cannot express an
-in-plane rotation or scale; a sketch presented by a moved node therefore offers
-no entity candidates, a gap marked `FIXME(INCOMPLETE_IMPLEMENTATION)` in
-`SnapResolver`. Snap points on saved measurements come from
+intersections) are found in the sketch plane and placed by the presenting node's
+world transform: points and closest points map through the placement, and a
+circle or arc stays an exact arc when the placement is a similarity and is
+offered as its placed polyline otherwise. Snap points on saved measurements come from
 `MeasurementAnnotationResolver`; an unresolved annotation offers none and never
 fails the whole resolution.
 
