@@ -97,16 +97,30 @@ extension DesignDocument {
 
     /// Resolve both selected occurrences into the target's authored coordinates before any
     /// intersection query. The mapped cutter is temporary; its source and placement stay intact.
+    /// In Screen space the cutter is carried onto the target's plane along the view direction
+    /// (where its surface along the view meets that plane) instead of requiring the two coplanar.
     func placedCutSelections(
-        target: SelectionTarget, cutter: SelectionTarget
+        target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions = CutCurveOptions()
     ) throws -> (EditableSketchEntitySelection, EditableSketchEntitySelection) {
         let targetSelection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
         var cutterSelection = try editableSketchEntity(for: cutter, operationName: "Cut Curve cutter")
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        let relative = try hierarchy.worldTransform(of: target.sceneNodeID).inverse()
+        let targetWorld = try hierarchy.worldTransform(of: target.sceneNodeID)
+        let relative = try targetWorld.inverse()
             .composed(with: hierarchy.worldTransform(of: cutter.sceneNodeID))
         let source = try placedSketchPlane(cutterSelection.sketch.plane, through: relative)
         let destination = try SketchPlaneCoordinateSystem(plane: targetSelection.sketch.plane)
+        if options.usesScreenSpaceDirection {
+            guard let screenDirection = options.screenDirection else {
+                throw EditorError(code: .commandInvalid, message: "Cut Curve Screen space needs the view direction.")
+            }
+            let direction = try targetWorld.inverseApplyingLinearPart(to: screenDirection)
+            cutterSelection.entity = try obliquelyProjectedSketchEntity(
+                cutterSelection.entity, from: source, to: destination, along: direction, owner: "Cut Curve cutter"
+            )
+            cutterSelection.sketch.plane = targetSelection.sketch.plane
+            return (targetSelection, cutterSelection)
+        }
         guard source.projectsParallel(to: destination),
               abs(destination.project(source.origin).depth) <= ModelingTolerance.standard.distance else {
             throw EditorError(code: .commandInvalid, message: "Cut Curve requires the placed target and cutter to be coplanar.")
@@ -121,12 +135,6 @@ extension DesignDocument {
         cutterSelection: EditableSketchEntitySelection,
         options: CutCurveOptions
     ) throws {
-        guard options.usesScreenSpaceDirection == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Cut Curve screen-space direction requires a 3D cutter context that is not represented yet."
-            )
-        }
         guard targetSelection.featureID != cutterSelection.featureID ||
             targetSelection.entityID != cutterSelection.entityID else {
             throw EditorError(
@@ -172,7 +180,10 @@ extension DesignDocument {
     /// Whether `cutter` cuts `target` at all: two crossings on a circle target, an interior
     /// crossing on any other target, with the cutter extended when `options` says so.
     func cutCurveCrosses(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions) throws -> Bool {
-        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter)
+        if case .face = cutter.component {
+            return try !faceCutFractions(target: target, face: cutter).isEmpty
+        }
+        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter, options: options)
         try validateCutSketchCurveSelections(
             targetSelection: targetSelection,
             cutterSelection: cutterSelection,
@@ -309,5 +320,55 @@ extension DesignDocument {
             x: try resolvedLengthValue(point.x, owner: "\(owner) x"),
             y: try resolvedLengthValue(point.y, owner: "\(owner) y")
         )
+    }
+}
+
+extension DesignDocument {
+    /// A sketch curve on the plane `source` carried onto the plane `destination` along
+    /// `direction` (an oblique projection, affine): a line and a spline exactly, an arc or
+    /// circle through its cubic chain within the modeling distance. A direction along the
+    /// destination plane carries nothing onto it and is refused.
+    func obliquelyProjectedSketchEntity(
+        _ entity: SketchEntity,
+        from source: SketchPlaneCoordinateSystem,
+        to destination: SketchPlaneCoordinateSystem,
+        along direction: Vector3D,
+        owner: String
+    ) throws -> SketchEntity {
+        let approach = direction.dot(destination.normal)
+        guard abs(approach) > ModelingTolerance.standard.angle else {
+            throw EditorError(code: .commandInvalid, message: "\(owner): the view runs along the target's plane; turn it to cut in Screen space.")
+        }
+        func carried(_ local: Point2D) -> SketchPoint {
+            let point = source.point(from: local)
+            let along = (destination.origin - point).dot(destination.normal) / approach
+            let onPlane = destination.project(point + direction * along).point
+            return sketchPoint(x: onPlane.x, y: onPlane.y)
+        }
+        func point(_ sketchPoint: SketchPoint, _ name: String) throws -> Point2D {
+            let resolved = try resolvedProjectionPoint(sketchPoint, owner: "\(owner) \(name)")
+            return Point2D(x: resolved.x, y: resolved.y)
+        }
+        switch entity {
+        case .line(let line):
+            return .line(SketchLine(start: carried(try point(line.start, "line start")), end: carried(try point(line.end, "line end"))))
+        case .spline(var spline):
+            spline.controlPoints = try spline.controlPoints.map { carried(try point($0, "spline control point")) }
+            return .spline(spline)
+        case .arc:
+            let spans = try bezierSpans(of: entity, owner: owner)
+            var chain = spans[0]
+            for span in spans.dropFirst() { chain += span.dropFirst() }
+            return .spline(SketchSpline(controlPoints: chain.map(carried)))
+        case .circle(let circle):
+            let chain = try CubicBezierArcApproximation(tolerance: modelingSettings.tolerance).chain(
+                center: try point(circle.center, "circle center"),
+                radius: try resolvedPositiveLengthValue(circle.radius, owner: "\(owner) circle radius"),
+                startAngle: 0, sweep: 2 * Double.pi
+            )
+            return .spline(SketchSpline(controlPoints: chain.map(carried), isClosed: true))
+        case .point:
+            throw EditorError(code: .commandInvalid, message: "\(owner) must be a curve.")
+        }
     }
 }

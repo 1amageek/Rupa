@@ -6358,6 +6358,10 @@ private struct ProjectMainViewContent: View {
             isCommandPaletteOpen = false
             isWorkspaceFocused = true
             return .handled
+        case .toggleCutCurveScreenSpace:
+            cutCurveSession?.usesScreenSpace.toggle()
+            reportToolStatus("Cut Curve: Screen space \(cutCurveSession?.usesScreenSpace == true ? "on" : "off").")
+            return .handled
         case .toggleCutCurveExtend:
             cutCurveSession?.extendsCutter.toggle()
             reportToolStatus("Cut Curve: Extend \(cutCurveSession?.extendsCutter == true ? "on" : "off").")
@@ -8476,10 +8480,26 @@ private struct ProjectMainViewContent: View {
     private func pickCutCurve(at target: ViewportCanvasTarget) {
         var resolver = selectionTargetResolver
         resolver.selectionScope = .sketchEntity
-        guard var cut = cutCurveSession, let hit = target.hit, let curve = resolver.selectionTarget(for: hit),
+        guard var cut = cutCurveSession, let hit = target.hit else {
+            reportToolStatus("Cut Curve: click on a sketch curve.", severity: .warning)
+            return
+        }
+        // Screen space cuts along the view of the latest click.
+        if let ray = target.pickRay { cut.viewDirection = ray.direction }
+        guard let curve = resolver.selectionTarget(for: hit),
               case .sketchEntity(let componentID) = curve.component,
               let entity = componentID.sketchEntityReference else {
-            reportToolStatus("Cut Curve: click on a sketch curve.", severity: .warning)
+            // A face is a cutter.
+            var faceResolver = selectionTargetResolver
+            faceResolver.selectionScope = .face
+            if cut.picking == .cutters, let face = faceResolver.selectionTarget(for: hit), case .face = face.component {
+                cut.toggle(face)
+                cutCurveSession = cut
+                reportToolStatus(cut.prompt)
+                return
+            }
+            cutCurveSession = cut
+            reportToolStatus("Cut Curve: click on a sketch curve, or a face as a cutter.", severity: .warning)
             return
         }
         let whole = SelectionTarget(
@@ -8505,7 +8525,7 @@ private struct ProjectMainViewContent: View {
             .cutSketchCurves(
                 targets: cut.targets,
                 cutters: cut.cutters,
-                options: CutCurveOptions(extendsCutter: cut.extendsCutter)
+                options: cut.options
             )
         ) { result in
             guard result?.didMutate == true else { return }

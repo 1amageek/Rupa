@@ -2395,6 +2395,15 @@ refuse an unrepresentable ellipse explicitly. Reflections preserve the represent
 arc interval by reversing its parameter sense. Source documents remain unchanged
 when any selected cutter, placement or geometry operation fails.
 
+Cut Curve in Screen space (`CutCurveOptions.usesScreenSpaceDirection` with the world
+`screenDirection`) carries the cutter onto the target's plane along the view instead of
+requiring the two coplanar (`obliquelyProjectedSketchEntity`: an affine oblique projection,
+exact for lines and splines, an arc or circle through its cubic chain), then cuts as on one
+plane. A face cutter cuts a line, arc or open spline where it crosses the face inside its
+trim (`faceCutFractions`: the target in world space, its height along the face's outward
+normal from Swift-CAD's `FaceUVNChart` sampled for sign changes and bisected, each crossing
+checked on the trimmed face). `CutCurveScreenSpaceAndFaceTests` own these.
+
 Trim includes closed splines as intersection boundaries. A closed target's editing
 capability is separate from a closed cutter's intersection capability. An unsupported
 or uncertifiable cutter fails the operation; it is never silently treated as absent.

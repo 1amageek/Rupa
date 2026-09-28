@@ -1,11 +1,14 @@
 import RupaCore
+import SwiftCAD
 
 /// Cut Curve's dialog while it runs: the target curves, the cutters, which of the two a click on a
 /// curve adds to or removes from, and Extend.
 ///
 /// C starts it on the selected sketch curves: with several selected, the last one is the cutter
 /// and the others are the targets; with one, it is the target and the clicks pick cutters. Return
-/// or right-click cuts, Tab toggles Extend and Escape ends it.
+/// or right-click cuts, Tab toggles Extend, S toggles Screen space (the cutters' surfaces along the
+/// view the last click was made from) and Escape ends it. A face clicked while cutters are picked
+/// is a cutter too.
 struct WorkspaceCutCurveSession: Equatable {
     enum Role: Equatable {
         case targets
@@ -18,6 +21,10 @@ struct WorkspaceCutCurveSession: Equatable {
     var picking: Role
     /// Extend: a line or circle cutter reaches the targets along itself.
     var extendsCutter: Bool
+    /// Screen space: the cutters' surfaces run along the view.
+    var usesScreenSpace = false
+    /// The view direction of the latest click, which Screen space cuts along.
+    var viewDirection: Vector3D?
 
     init(selectedCurves: [SelectionTarget], extendsCutter: Bool = false) {
         switch selectedCurves.count {
@@ -37,9 +44,14 @@ struct WorkspaceCutCurveSession: Equatable {
         self.extendsCutter = extendsCutter
     }
 
-    /// Whether both lists hold a curve, so the cut can run.
+    /// Whether both lists hold a curve, so the cut can run; Screen space also needs a view.
     var canCut: Bool {
-        !targets.isEmpty && !cutters.isEmpty
+        !targets.isEmpty && !cutters.isEmpty && (!usesScreenSpace || viewDirection != nil)
+    }
+
+    /// The options the cut runs with.
+    var options: CutCurveOptions {
+        CutCurveOptions(extendsCutter: extendsCutter, usesScreenSpaceDirection: usesScreenSpace, screenDirection: viewDirection)
     }
 
     /// Every curve the dialog holds, which the viewport shows selected.

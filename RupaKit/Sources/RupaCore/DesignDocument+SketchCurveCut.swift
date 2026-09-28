@@ -10,7 +10,10 @@ extension DesignDocument {
         options: CutCurveOptions = CutCurveOptions(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SketchEntityID] {
-        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter)
+        if case .face = cutter.component {
+            return try cutSketchCurve(target: target, byFace: cutter, objectRegistry: objectRegistry)
+        }
+        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter, options: options)
         if case .circle = targetSelection.entity {
             return try cutSketchCircleTarget(
                 targetSelection: targetSelection,
@@ -318,5 +321,87 @@ extension DesignDocument {
                 message: "Cut Curve circle target cannot preserve constraints attached to the circle yet."
             )
         }
+    }
+}
+
+extension DesignDocument {
+    /// Cut Curve with a face as the cutter: the target is split wherever it crosses the face,
+    /// inside the face's trim (`faceCutFractions`).
+    mutating func cutSketchCurve(target: SelectionTarget, byFace face: SelectionTarget, objectRegistry: ObjectTypeRegistry) throws -> [SketchEntityID] {
+        let selection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
+        let fractions = try faceCutFractions(target: target, face: face)
+        guard !fractions.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "Cut Curve: the face does not cross the target curve.")
+        }
+        let localFractions = try sequentialCutCurveLocalFractions(fractions: fractions, entity: selection.entity)
+        var updated = self
+        var created: [SketchEntityID] = []
+        var remaining = target
+        for localFraction in localFractions {
+            let made = try updated.splitSketchCurve(target: remaining, fraction: .scalar(localFraction), objectRegistry: objectRegistry)
+            created.append(made)
+            remaining = SelectionTarget(
+                sceneNodeID: target.sceneNodeID,
+                component: .sketchEntity(.sketchEntity(featureID: selection.featureID, entityID: made))
+            )
+        }
+        self = updated
+        return created
+    }
+
+    /// Where a line, arc or open spline target crosses a face, as sorted interior fractions: the
+    /// target read in world space through its sketch's placement, its height along the face's
+    /// outward normal (Swift-CAD's `FaceUVNChart`, in the face body's frame) sampled for sign
+    /// changes and bisected, each crossing kept when it lies inside the face's trim.
+    func faceCutFractions(target: SelectionTarget, face: SelectionTarget) throws -> [Double] {
+        let owner = "Cut Curve"
+        let tolerance = modelingSettings.tolerance
+        let selection = try editableSketchEntity(for: target, operationName: "\(owner) target")
+        if case .circle = selection.entity {
+            throw EditorError(code: .commandInvalid, message: "\(owner): a face cuts lines, arcs and open splines.")
+        }
+        let source = try spatialSourceCurve(
+            selection.entity, system: try placedSketchSystem(for: target, plane: selection.sketch.plane), owner: owner
+        )
+        let topology = try TopologySnapshotService().snapshot(document: self)
+        guard let evaluated = topology.evaluatedDocument,
+              let entry = topology.entries.first(where: { $0.kind == .face && $0.selectionTarget() == face }),
+              let reference = entry.stableReference else {
+            throw EditorError(code: .referenceUnresolved, message: "\(owner) cutter face is not a face of an evaluated body.")
+        }
+        let surface = SurfaceReference(subshape: reference)
+        let chart = try FaceUVNChart(face: surface, in: evaluated, tolerance: tolerance)
+        let inverse = try worldPlacement(of: face.sceneNodeID).inverse()
+        let lower = source.breakpoints[0], upper = source.breakpoints[source.breakpoints.count - 1]
+        func height(_ w: Double) throws -> Double {
+            try chart.coordinate(of: try inverse.applied(to: try source.point(w))).n
+        }
+        let samples = 256
+        var fractions: [Double] = []
+        var previousW = lower
+        var previousHeight = try height(lower)
+        for index in 1...samples {
+            let w = lower + (upper - lower) * Double(index) / Double(samples)
+            let current = try height(w)
+            if (previousHeight < 0) != (current < 0) {
+                var a = previousW, b = w, heightA = previousHeight
+                for _ in 0..<60 {
+                    let middle = (a + b) / 2
+                    let heightMiddle = try height(middle)
+                    if (heightA < 0) == (heightMiddle < 0) { a = middle; heightA = heightMiddle } else { b = middle }
+                }
+                let crossing = (a + b) / 2
+                let onFace = try SurfaceQueryEvaluator(tolerance: tolerance).closestPoint(
+                    to: try inverse.applied(to: try source.point(crossing)), on: surface, in: evaluated
+                )
+                let fraction = (crossing - lower) / (upper - lower)
+                if onFace.distance <= tolerance.distance * Self.spatialFitDeviationFactor, fraction > 1.0e-9, fraction < 1 - 1.0e-9 {
+                    fractions.append(fraction)
+                }
+            }
+            previousW = w
+            previousHeight = current
+        }
+        return fractions
     }
 }

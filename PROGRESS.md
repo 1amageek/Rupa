@@ -51,7 +51,7 @@
     - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`
     - [x] SK2.2 Split Segment (Edit menu): each click splits the sketch curve at swift-CAD's projection of the click (SketchCurveProjector, swift-CAD b9a290f). `depends:SK2.1` `parallel:none`
     - [x] SK2.3 Cut Curve's Extend option in its dialog row: the cutter reaches the target along its line or circle. `depends:SK2.2` `parallel:none`
-    - [ ] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
+    - [x] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
     - [x] SK2.5 Cut Curve (C): a dialog picking any number of target and cutter curves (splines included), Tab toggling Extend, Return or right-click cutting as one step. `depends:none` `parallel:none`
     - [x] SK2.6 Split Segment on closed splines opens the loop at the click (a circle is refused: the sketch model has no circle seam). `depends:none` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`

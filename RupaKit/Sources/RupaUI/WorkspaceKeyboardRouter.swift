@@ -257,6 +257,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case closeCommandPalette
     /// Tab while Cut Curve runs: Extend on or off.
     case toggleCutCurveExtend
+    /// S while Cut Curve runs: Screen space, the cutters' surfaces along the view.
+    case toggleCutCurveScreenSpace
     /// Return while Cut Curve runs: cut.
     case confirmCutCurve
     /// Escape while Cut Curve runs: end it without cutting.
@@ -793,6 +795,7 @@ struct WorkspaceKeyboardRouter: Sendable {
     private func cutCurveAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
         guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
         if input.isTab { return .toggleCutCurveExtend }
+        if input.characters.lowercased() == "s" { return .toggleCutCurveScreenSpace }
         if input.isReturn { return .confirmCutCurve }
         if input.isEscape { return .cancelCutCurve }
         return nil

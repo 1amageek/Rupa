@@ -40,3 +40,17 @@ import Testing
         #expect(session.curves == [a, b])
     }
 }
+
+/// Screen space needs the view of a click before the cut can run, and carries it in the options.
+@Test func screenSpaceCutsAlongTheLatestClicksView() {
+    let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    let cutter = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    var session = WorkspaceCutCurveSession(selectedCurves: [target, cutter])
+    #expect(session.canCut)
+    session.usesScreenSpace = true
+    #expect(!session.canCut)
+    session.viewDirection = Vector3D(x: 0, y: 0, z: -1)
+    #expect(session.canCut)
+    #expect(session.options == CutCurveOptions(usesScreenSpaceDirection: true, screenDirection: Vector3D(x: 0, y: 0, z: -1)))
+}
+

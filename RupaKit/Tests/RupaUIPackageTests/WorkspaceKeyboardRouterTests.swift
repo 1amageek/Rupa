@@ -664,6 +664,7 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isTab: true), context: session) == .toggleCutCurveExtend)
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: session) == .confirmCutCurve)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: session) == .cancelCutCurve)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: session) == .toggleCutCurveScreenSpace)
 }
 
 @Test func workspaceKeyboardRouterOpensThePaletteOnFOnlyWhenNothingRunningTakesF() {

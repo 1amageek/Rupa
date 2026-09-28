@@ -629,8 +629,10 @@ the others targets; with one, it is the target), the dialog's Targets/Cutters
 choice says which list a clicked curve joins or leaves (a curve is never in
 both), Tab toggles Extend, Return, right-click or the dialog's Cut submit one
 `cutSketchCurves`, and Escape, a tool change or another click-owning command ends
-it. The session's curves show as the selection. Screen space (S) and face cutters
-wait for the kernel (SK2.4).
+it. The session's curves show as the selection. S toggles Screen space, which cuts
+along the view direction of the session's latest click (a cut needs one), and a face
+clicked while cutters are picked joins the cutters; both go to Core in
+`CutCurveOptions` and the cutter list (`WorkspaceCutCurveSessionTests`).
 
 Trim (T, with the select tool), Split Segment and Insert Knot (Edit menu) run a
 `WorkspaceCurvePickCommand` until Escape, a change of tool or the start of
