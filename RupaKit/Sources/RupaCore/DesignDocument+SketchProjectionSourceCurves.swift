@@ -15,7 +15,8 @@ extension DesignDocument {
                 for: target,
                 operationName: "\(operationName) source"
             )
-            let sourceSystem = try SketchPlaneCoordinateSystem(plane: selection.sketch.plane)
+            let placement = try SceneNodeHierarchy(metadata: productMetadata).worldTransform(of: target.sceneNodeID)
+            let sourceSystem = try placedSketchPlane(selection.sketch.plane, through: placement)
             return (
                 entity: try projectedSketchEntity(
                     selection.entity,
@@ -80,7 +81,7 @@ extension DesignDocument {
             }
             return .line(SketchLine(start: start, end: end))
         case .circle(let circle):
-            try validateCircularProjection(
+            let scale = try circularProjectionScale(
                 from: sourceSystem,
                 to: targetSystem,
                 owner: owner
@@ -93,14 +94,9 @@ extension DesignDocument {
                     to: targetSystem,
                     owner: "\(owner) circle center"
                 ),
-                radius: .length(radius, .meter)
+                radius: .length(radius * scale, .meter)
             ))
         case .arc(let arc):
-            try validateCircularProjection(
-                from: sourceSystem,
-                to: targetSystem,
-                owner: owner
-            )
             return .arc(try projectedSketchArc(
                 arc,
                 from: sourceSystem,

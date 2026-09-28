@@ -3,17 +3,36 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    func validateCircularProjection(
+    /// Forward frame for an authored sketch after an affine scene placement. Its basis keeps
+    /// scale and shear; only an unplaced orthonormal target frame may consume `project`.
+    func placedSketchPlane(_ plane: SketchPlane, through placement: Transform3D) throws -> SketchPlaneCoordinateSystem {
+        var frame = try SketchPlaneCoordinateSystem(plane: plane)
+        frame.origin = try placement.applied(to: frame.origin)
+        frame.u = try placement.applyingLinearPart(to: frame.u)
+        frame.v = try placement.applyingLinearPart(to: frame.v)
+        frame.normal = try frame.u.normalized(tolerance: 1e-12)
+            .cross(frame.v.normalized(tolerance: 1e-12)).normalized(tolerance: 1e-12)
+        return frame
+    }
+
+    func circularProjectionScale(
         from sourceSystem: SketchPlaneCoordinateSystem,
         to targetSystem: SketchPlaneCoordinateSystem,
         owner: String
-    ) throws {
-        guard sourceSystem.projectsParallel(to: targetSystem) else {
+    ) throws -> Double {
+        let ux = sourceSystem.u.dot(targetSystem.u), uy = sourceSystem.u.dot(targetSystem.v)
+        let vx = sourceSystem.v.dot(targetSystem.u), vy = sourceSystem.v.dot(targetSystem.v)
+        let scaleU = hypot(ux, uy), scaleV = hypot(vx, vy)
+        guard sourceSystem.projectsParallel(to: targetSystem), scaleU.isFinite, scaleV.isFinite,
+              scaleU > 1e-12, scaleV > 1e-12,
+              abs(scaleU - scaleV) <= 1e-9 * max(scaleU, scaleV),
+              abs((ux / scaleU) * (vx / scaleV) + (uy / scaleU) * (vy / scaleV)) <= 1e-9 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "\(owner) can project circle and arc sources only onto a parallel construction plane until ellipse or exact conic projection sources exist."
+                message: "\(owner) cannot represent a circle or arc stretched into an ellipse by its placement or projection."
             )
         }
+        return scaleU
     }
 
     func projectedSketchArc(
@@ -43,6 +62,7 @@ extension DesignDocument {
             x: sourceCenter.x + cos(startAngle + span / 2.0) * radius,
             y: sourceCenter.y + sin(startAngle + span / 2.0) * radius
         )
+        let mappedRadius = radius * (try circularProjectionScale(from: sourceSystem, to: targetSystem, owner: owner))
         let center = targetSystem.project(sourceSystem.point(from: sourceCenter)).point
         let projectedStart = targetSystem.project(sourceSystem.point(from: sourceStart)).point
         let projectedEnd = targetSystem.project(sourceSystem.point(from: sourceEnd)).point
@@ -51,14 +71,14 @@ extension DesignDocument {
         let targetEndAngle = atan2(projectedEnd.y - center.y, projectedEnd.x - center.x)
         let directDistance = projectedArcMidpointDistance(
             center: center,
-            radius: radius,
+            radius: mappedRadius,
             startAngle: targetStartAngle,
             endAngle: targetEndAngle,
             expected: projectedMid
         )
         let reversedDistance = projectedArcMidpointDistance(
             center: center,
-            radius: radius,
+            radius: mappedRadius,
             startAngle: targetEndAngle,
             endAngle: targetStartAngle,
             expected: projectedMid
@@ -66,14 +86,14 @@ extension DesignDocument {
         if reversedDistance < directDistance {
             return SketchArc(
                 center: sketchPoint(from: center),
-                radius: .length(radius, .meter),
+                radius: .length(mappedRadius, .meter),
                 startAngle: .angle(targetEndAngle, .radian),
                 endAngle: .angle(targetStartAngle, .radian)
             )
         }
         return SketchArc(
             center: sketchPoint(from: center),
-            radius: .length(radius, .meter),
+            radius: .length(mappedRadius, .meter),
             startAngle: .angle(targetStartAngle, .radian),
             endAngle: .angle(targetEndAngle, .radian)
         )
@@ -106,6 +126,9 @@ extension DesignDocument {
         let projected = targetSystem.project(
             sourceSystem.point(from: Point2D(x: sourcePoint.x, y: sourcePoint.y))
         ).point
+        guard projected.x.isFinite, projected.y.isFinite else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) produced a non-finite projected point.")
+        }
         return sketchPoint(from: projected)
     }
 

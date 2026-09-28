@@ -10,8 +10,7 @@ extension DesignDocument {
         options: CutCurveOptions = CutCurveOptions(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> [SketchEntityID] {
-        let targetSelection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
-        let cutterSelection = try editableSketchEntity(for: cutter, operationName: "Cut Curve cutter")
+        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter)
         if case .circle = targetSelection.entity {
             return try cutSketchCircleTarget(
                 targetSelection: targetSelection,
@@ -29,10 +28,11 @@ extension DesignDocument {
             fractions: fractions,
             entity: targetSelection.entity
         )
+        var updated = self
         var createdEntityIDs: [SketchEntityID] = []
         var remainingTarget = target
         for localFraction in localFractions {
-            let createdEntityID = try splitSketchCurve(
+            let createdEntityID = try updated.splitSketchCurve(
                 target: remainingTarget,
                 fraction: .scalar(localFraction),
                 objectRegistry: objectRegistry
@@ -48,6 +48,7 @@ extension DesignDocument {
                 )
             )
         }
+        self = updated
         return createdEntityIDs
     }
 

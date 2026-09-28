@@ -9,6 +9,7 @@ extension DesignDocument {
         sketch: Sketch,
         typeID: ObjectTypeID? = nil,
         geometryRole: ObjectDescriptor.GeometryRole = .sketchProfile,
+        worldTransform: Transform3D? = nil,
         properties: ObjectPropertySet = ObjectPropertySet(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
@@ -34,7 +35,7 @@ extension DesignDocument {
         }
 
         try appendFeature(feature)
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
+        let sceneNodeID = try productMetadata.appendSceneNodeToFirstRoot(
             name: name,
             reference: .sketch(featureID),
             object: .sketch(
@@ -46,6 +47,10 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
+        if let worldTransform {
+            let parent = try SceneNodeHierarchy(metadata: productMetadata).parentWorldTransform(of: sceneNodeID)
+            try setSceneNodeTransform(id: sceneNodeID, localTransform: parent.inverse().composed(with: worldTransform), objectRegistry: objectRegistry)
+        }
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitSketch = true
         return featureID

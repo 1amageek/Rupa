@@ -214,6 +214,7 @@ extension DesignDocument {
             name: outputName,
             sketch: projectedSketch,
             geometryRole: .curve,
+            worldTransform: .identity,
             objectRegistry: objectRegistry
         )
     }

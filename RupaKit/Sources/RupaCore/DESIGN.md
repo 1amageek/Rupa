@@ -2297,7 +2297,9 @@ source metadata and atomic commit, while swift-CAD owns spline refinement algebr
 
 Projection and Cut resolve the selected scene node hierarchy once per source/target
 pair. Source plane -> source world placement -> target inverse placement -> target
-plane is the common coordinate flow. Projection discards depth intentionally;
+plane is the common coordinate flow. Projected sketches are authored in world space;
+the creation boundary compensates the output parent placement so it applies exactly once.
+Projection discards depth intentionally;
 planar Cut requires coplanarity before interpreting intersections. Affine line and
 spline placement is exact; circular entities require an in-plane similarity and
 refuse an unrepresentable ellipse explicitly. Reflections preserve the represented

@@ -72,7 +72,7 @@ extension DesignDocument {
         return angles
     }
 
-    /// Where every other line, circle, arc and open spline of the target's sketch crosses it, at
+    /// Where every other line, circle, arc and spline of the target's sketch crosses it, at
     /// the authored reach: interior fractions for a line, arc or open spline target, distinct angles
     /// for a circle. The bounds Trim takes its segments from.
     func trimCrossings(of targetSelection: EditableSketchEntitySelection) throws -> [Double] {
@@ -82,7 +82,6 @@ extension DesignDocument {
             where entityID != targetSelection.entityID {
             switch entity {
             case .point: continue
-            case .spline(let spline) where spline.isClosed: continue
             default: break
             }
             let cutter = try cutCurveGeometry(entity, role: .cutter)
@@ -94,6 +93,27 @@ extension DesignDocument {
             return uniqueCutAngles(crossings)
         }
         return uniqueInteriorCutFractions(crossings)
+    }
+
+    /// Resolve both selected occurrences into the target's authored coordinates before any
+    /// intersection query. The mapped cutter is temporary; its source and placement stay intact.
+    func placedCutSelections(
+        target: SelectionTarget, cutter: SelectionTarget
+    ) throws -> (EditableSketchEntitySelection, EditableSketchEntitySelection) {
+        let targetSelection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
+        var cutterSelection = try editableSketchEntity(for: cutter, operationName: "Cut Curve cutter")
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let relative = try hierarchy.worldTransform(of: target.sceneNodeID).inverse()
+            .composed(with: hierarchy.worldTransform(of: cutter.sceneNodeID))
+        let source = try placedSketchPlane(cutterSelection.sketch.plane, through: relative)
+        let destination = try SketchPlaneCoordinateSystem(plane: targetSelection.sketch.plane)
+        guard source.projectsParallel(to: destination),
+              abs(destination.project(source.origin).depth) <= ModelingTolerance.standard.distance else {
+            throw EditorError(code: .commandInvalid, message: "Cut Curve requires the placed target and cutter to be coplanar.")
+        }
+        cutterSelection.entity = try projectedSketchEntity(cutterSelection.entity, from: source, to: destination, owner: "Cut Curve cutter")
+        cutterSelection.sketch.plane = targetSelection.sketch.plane
+        return (targetSelection, cutterSelection)
     }
 
     func validateCutSketchCurveSelections(
@@ -152,8 +172,7 @@ extension DesignDocument {
     /// Whether `cutter` cuts `target` at all: two crossings on a circle target, an interior
     /// crossing on any other target, with the cutter extended when `options` says so.
     func cutCurveCrosses(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions) throws -> Bool {
-        let targetSelection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
-        let cutterSelection = try editableSketchEntity(for: cutter, operationName: "Cut Curve cutter")
+        let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter)
         try validateCutSketchCurveSelections(
             targetSelection: targetSelection,
             cutterSelection: cutterSelection,
@@ -268,7 +287,7 @@ extension DesignDocument {
                 endAngle: try resolvedAngleValue(arc.endAngle, owner: "\(owner) end angle")
             )
         case .spline(let spline):
-            guard spline.isClosed == false else {
+            guard role == .cutter || spline.isClosed == false else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) requires an open spline curve.")
             }
             return try sketchSplineGeometry2D(spline, owner: owner)
