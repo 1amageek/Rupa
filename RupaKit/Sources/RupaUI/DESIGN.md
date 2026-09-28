@@ -684,7 +684,11 @@ distance, while Escape ends it unchanged. While it runs the viewport shows a rad
 handle (`viewportSketchCornerTreatmentHandle`) at the corner Core's
 `sketchCornerTreatmentEnds` names for the first selected end or the two curves; dragging
 it inward sets a Fillet radius and outward a Chamfer distance, and Return still applies.
-A selection Core cannot resolve to one corner shows no handle and Apply reports why. J joins two or more selected curves with the inspector's continuity
+A selection Core cannot resolve to one corner shows no handle and Apply reports why.
+With the select tool and two or more sketch curves selected, each end of a selected
+curve is drawn blue-green when it meets another selected curve's end as Join requires
+and purple when it does not (`viewportSketchJoinEndpointFeedback`, from Core's
+`sketchCurveJoinEndpointFeedback`), as the official Join Curves page shows. J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control

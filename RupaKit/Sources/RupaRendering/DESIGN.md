@@ -1099,6 +1099,10 @@ as spheres elsewhere.
    `sectionAnalysisDistance`: positive is a Fillet radius, negative a Chamfer
    distance, and zero or the unchanged baseline commits nothing.
    `ViewportSketchCornerTreatmentHandleTests` own this.
+   `joinEndpointFeedback` draws the ends of `SketchCurveJoinEndpointFeedback`
+   as markers at the sketch's own primitives, `joinAlignedColor` (blue-green)
+   or `joinSeparateColor` (purple); it prepares no interaction target
+   (`ViewportJoinEndpointFeedbackTests`).
 
    | Action | Query | Retained geometry |
    |---|---|---|
