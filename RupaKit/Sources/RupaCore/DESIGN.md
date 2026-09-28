@@ -940,8 +940,20 @@ resolver all read that curve. A spline's fraction, the parameter
 over its knot domain, which for a chain is the span parameter over the span
 count as before. `validateSplineForm` admits any form; a command that still reads
 a spline span by span calls `validateCubicBezierChainSpline`, which refuses any
-other degree or explicit knots by name until that command reads the general form
-(SK12.3). `GeneralSplineReadersTests` own the readers.
+other degree or explicit knots by name rather than read it as one.
+`GeneralSplineReadersTests` own the readers.
+
+Editing commands on any degree and knots:
+
+| Command | General form |
+|---|---|
+| Split Segment, Cut Curve, Trim, a bridge's source trim | `splitGeneralSpline`: the B-spline trimmed at the fraction's parameter; both parts keep the degree and carry its knots (explicit unless exactly the chain form's), so fractions on a part are linear in the original's and Cut's sequential fractions remap linearly; a constraint or dimension on an interior control point refuses the split |
+| Trim bounds | the spline's own joints, joint point j at knot j + 1 |
+| Extend Curve Natural | Swift-CAD's `naturalSpan(ofSegment:)` on the end segment's own polynomial, a same-degree span after a C0 joint |
+| Insert Knot, Subdivide, move, slide, Reverse, projection, Offset | general already |
+| Rebuild input, Delete Redundant Topology, opening a closed spline, spatial conversion | refused by name (`validateCubicBezierChainSpline`): they read cubic spans |
+
+`GeneralSplineEditingTests` own these.
 
 The constraint propagator reads a spline end through the clamped end conditions
 of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −

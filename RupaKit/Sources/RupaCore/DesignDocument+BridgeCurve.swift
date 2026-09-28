@@ -505,7 +505,7 @@ extension DesignDocument {
         case .spline(let spline):
             let split = try splitSpline(spline, fraction: parameter, owner: owner)
             if trimSide.keepsLowerParameterSide {
-                try validateCubicBezierChainSpline(split.retained, owner: owner)
+                try validateSplineForm(split.retained, owner: owner)
                 return TrimmedBridgeCurveEndpointSource(
                     entity: .spline(split.retained),
                     endpointReference: .splineControlPoint(
@@ -514,7 +514,7 @@ extension DesignDocument {
                     )
                 )
             }
-            try validateCubicBezierChainSpline(split.new, owner: owner)
+            try validateSplineForm(split.new, owner: owner)
             return TrimmedBridgeCurveEndpointSource(
                 entity: .spline(split.new),
                 endpointReference: .splineControlPoint(entity: entityID, index: 0)

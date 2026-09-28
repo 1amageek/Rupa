@@ -21,6 +21,9 @@ extension DesignDocument {
                 message: "Sketch curve rebuild currently requires an open spline curve."
             )
         }
+        // Rebuild reads its input span by span as a cubic chain; any other form is refused
+        // rather than read as one.
+        try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild")
         guard productMetadata.bridgeCurveSources.values.contains(where: { source in
             source.featureID == selection.featureID && source.entityID == selection.entityID
         }) == false else {

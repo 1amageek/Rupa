@@ -403,17 +403,17 @@ extension DesignDocument {
 
         var updated = spline
         if shape == .natural {
-            try validateCubicBezierChainSpline(spline, owner: owner)
-            // Swift-CAD continues the end span's own cubic by the arc length.
-            let points = try spline.controlPoints.map { point -> Point2D in
-                let resolved = try resolvedSketchPoint(point, owner: "\(owner) control point")
-                return Point2D(x: resolved.x, y: resolved.y)
+            // Swift-CAD continues the end segment's own polynomial, whatever its degree, by the arc
+            // length; the new span is a Bezier of the same degree after a C0 joint.
+            let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+            guard let segment = isStart ? curve.segments.first : curve.segments.last else {
+                throw EditorError(code: .commandInvalid, message: "\(owner) has no end segment.")
             }
             let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
             let continued: [SketchPoint]
             do {
                 continued = try CubicBezierChainExtension(tolerance: .standard).naturalSpan(
-                    of: points, at: isStart ? .start : .end, length: length
+                    ofSegment: segment.controlPoints, at: isStart ? .start : .end, length: length
                 ).map { sketchPoint(x: $0.x, y: $0.y) }
             } catch let error as KernelError {
                 throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
