@@ -1194,6 +1194,12 @@ could otherwise be taken as the nearest. The extension is `extendSketchCurve`'s,
 so its constraint and Bridge Curve refusals apply and a failed end leaves the
 document unchanged; no reachable crossing is a command-invalid error.
 
+`offsetCurve` on a line moves its ends along the line's left normal and Offset Vertex
+places its new vertices along the adjacent line, both directions expressions of the line's
+own ends (`unitDirectionExpressions`), so the result keeps its distance and stays on its
+line when those ends change through their parameters
+(`ParameterDependentLineDirectionTests`).
+
 `offsetCurve` on a sketch spline (Offset Planar Curve) makes a new curve sketch of
 the spline Swift-CAD's `CubicBezierChainOffset` fits within the modeling distance
 of the exact offset, on both sides when symmetric; a corner is joined by the

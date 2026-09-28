@@ -138,9 +138,11 @@ extension DesignDocument {
                 message: "\(owner) distance must be smaller than the adjacent line length."
             )
         }
+        // Along the line as an expression of its ends, so the new vertex stays on the line.
+        let direction = unitDirectionExpressions(from: vertex, to: far)
         return SketchPoint(
-            x: .add(vertex.x, .multiply(distance, .scalar(deltaX / length))),
-            y: .add(vertex.y, .multiply(distance, .scalar(deltaY / length)))
+            x: .add(vertex.x, .multiply(distance, direction.x)),
+            y: .add(vertex.y, .multiply(distance, direction.y))
         )
     }
 

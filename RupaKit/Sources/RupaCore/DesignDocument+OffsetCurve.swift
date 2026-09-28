@@ -706,6 +706,9 @@ extension DesignDocument {
         .multiply(expression, .constant(.scalar(-1.0)))
     }
 
+    /// The line moved by `distance` along its left normal (the direction turned a quarter turn
+    /// counterclockwise), the normal an expression of the line's own ends, so the offset keeps
+    /// its distance when the source line turns.
     private func offsetLine(
         _ line: SketchLine,
         distance: CADExpression,
@@ -715,42 +718,28 @@ extension DesignDocument {
         let startY = try resolvedLengthValue(line.start.y, owner: "\(owner) line start y")
         let endX = try resolvedLengthValue(line.end.x, owner: "\(owner) line end x")
         let endY = try resolvedLengthValue(line.end.y, owner: "\(owner) line end y")
-        let deltaX = endX - startX
-        let deltaY = endY - startY
-        let length = sqrt(deltaX * deltaX + deltaY * deltaY)
-        guard length > 1.0e-12 else {
+        guard hypot(endX - startX, endY - startY) > 1.0e-12 else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(owner) requires a line with non-zero length."
             )
         }
-        let normalX = -deltaY / length
-        let normalY = deltaX / length
+        let direction = unitDirectionExpressions(from: line.start, to: line.end)
+        let normal = (x: CADExpression.multiply(direction.y, .scalar(-1)), y: direction.x)
         return SketchLine(
-            start: offsetPoint(
-                line.start,
-                distance: distance,
-                normalX: normalX,
-                normalY: normalY
-            ),
-            end: offsetPoint(
-                line.end,
-                distance: distance,
-                normalX: normalX,
-                normalY: normalY
-            )
+            start: offsetPoint(line.start, distance: distance, normal: normal),
+            end: offsetPoint(line.end, distance: distance, normal: normal)
         )
     }
 
     private func offsetPoint(
         _ point: SketchPoint,
         distance: CADExpression,
-        normalX: Double,
-        normalY: Double
+        normal: (x: CADExpression, y: CADExpression)
     ) -> SketchPoint {
         SketchPoint(
-            x: .add(point.x, .multiply(distance, .scalar(normalX))),
-            y: .add(point.y, .multiply(distance, .scalar(normalY)))
+            x: .add(point.x, .multiply(distance, normal.x)),
+            y: .add(point.y, .multiply(distance, normal.y))
         )
     }
 

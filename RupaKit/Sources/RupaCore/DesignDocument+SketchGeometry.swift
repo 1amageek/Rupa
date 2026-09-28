@@ -55,6 +55,16 @@ extension DesignDocument {
         }
     }
 
+    /// The unit vector from `from` toward `to` as expressions of the two points: a point placed
+    /// along a line's direction or normal keeps following the line when its ends move through
+    /// their parameters. A line whose ends meet has no direction, and evaluating it then fails.
+    func unitDirectionExpressions(from: SketchPoint, to: SketchPoint) -> (x: CADExpression, y: CADExpression) {
+        let deltaX = CADExpression.subtract(to.x, from.x)
+        let deltaY = CADExpression.subtract(to.y, from.y)
+        let length = CADExpression.hypot(deltaX, deltaY)
+        return (.divide(deltaX, length), .divide(deltaY, length))
+    }
+
     func translatedSketchPoint(
         _ point: SketchPoint,
         directionX: Double,
