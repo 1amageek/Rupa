@@ -247,4 +247,53 @@ import Testing
         }
         #expect(resolved.contains([0, 0]))
     }
+
+    /// The new points are expressions of the curve's points and the distance: changing a
+    /// parameter the end or the distance references moves the extension with them, and the
+    /// joint keeps its curvature.
+    @Test(arguments: [ExtendCurveShape.soft, .arc, .reflective])
+    func theExtensionFollowsTheCurveAndDistanceParameters(shape: ExtendCurveShape) throws {
+        var document = DesignDocument.empty()
+        let tipID = ParameterID(), reachID = ParameterID()
+        document.cadDocument.parameters.parameters[tipID] = Parameter(id: tipID, name: "tip", expression: mm(3), kind: .length)
+        document.cadDocument.parameters.parameters[reachID] = Parameter(id: reachID, name: "reach", expression: mm(4), kind: .length)
+        var parametric = spline
+        parametric.controlPoints[3] = SketchPoint(x: mm(10), y: .reference(tipID))
+        let featureID = try document.createSplineSketch(name: "Extend", plane: .xy, spline: parametric)
+        guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[featureID]?.operation,
+              let entityID = sketch.entities.keys.first,
+              let sceneNodeID = document.productMetadata.sceneNodes.first(where: { $0.value.reference?.featureID == featureID })?.key else {
+            throw EditorError(code: .referenceUnresolved, message: "The sketch is missing.")
+        }
+        try document.extendSketchCurve(
+            target: SelectionTarget(sceneNodeID: sceneNodeID, component: .sketchEntity(.sketchControlPoint(featureID: featureID, entityID: entityID, index: 3))),
+            distance: .reference(reachID),
+            shape: shape
+        )
+        guard case .sketch(let result) = document.cadDocument.designGraph.nodes[featureID]?.operation,
+              case .spline(let extended) = result.entities[entityID] else {
+            throw EditorError(code: .referenceUnresolved, message: "The spline is missing.")
+        }
+        func added(_ document: DesignDocument) throws -> [Point2D] {
+            try extended.controlPoints.dropFirst(4).map {
+                Point2D(x: try document.cadDocument.parameters.resolvedValue(for: $0.x).value,
+                        y: try document.cadDocument.parameters.resolvedValue(for: $0.y).value)
+            }
+        }
+        #expect(extended.controlPoints.dropFirst(4).allSatisfy {
+            if case .bezierShapedExtension = $0.x, case .bezierShapedExtension = $0.y { return true }
+            return false
+        })
+        let before = try added(document)
+
+        document.cadDocument.parameters.parameters[tipID]?.expression = mm(3.4)
+        let moved = try added(document)
+        #expect(zip(before, moved).contains { hypot($0.x - $1.x, $0.y - $1.y) > 1e-6 })
+        let (left, right) = try curvatures(document, extended, at: 1)
+        #expect(abs(left - right) <= 1e-4 * max(1, abs(left)))
+
+        document.cadDocument.parameters.parameters[reachID]?.expression = mm(4.5)
+        let reached = try added(document)
+        #expect(hypot(reached[reached.count - 1].x - moved[moved.count - 1].x, reached[reached.count - 1].y - moved[moved.count - 1].y) > 1e-5)
+    }
 }

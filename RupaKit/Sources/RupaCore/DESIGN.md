@@ -1338,9 +1338,18 @@ Soft eases it to zero), each cubic span elevated to the spline's degree, so the 
 is G2 and needs degree 3 or more; Reflective mirrors the tail of that arc length across
 the end's normal, reversed, so the joint keeps tangent and curvature. A start end
 reverses the spline, extends its end and reverses back. The new control points are
-numeric values and the knots concatenate (chain form when they match it). A line's
+Swift-CAD `bezierShapedExtension` expressions of the curve's own Bezier points (the
+end segment, or for Reflective the segments back to the one its length starts in,
+interior knots raised to full multiplicity as expressions) and of the distance
+expression, so they follow parameter changes of either; the span or segment count
+is fixed when the extension is made, and an input it can no longer represent fails
+evaluation with the kernel's typed error. The new spans join the end at a knot of
+multiplicity `degree`, one knot unit each (chain form when that matches it);
+editable text writes them as `bezierArcExtension`, `bezierSoftExtension` and
+`bezierReflectiveExtension`, which the parser reads back. A line's
 Arc needs a circle a line does not define and an arc's Linear leaves its circle, so
-both stay refused. `SplineProfileExtensionTests` own the spline shapes.
+both stay refused. `SplineProfileExtensionTests` own the spline shapes and
+`PersistentCurveExtensionTests` their expressions.
 `extendSketchCurve` refuses any other shape, and the
 inspector offers only these, keeping the chosen shape when the selected curve
 takes it and otherwise its first (`effectiveExtendShape`), so a spline end no

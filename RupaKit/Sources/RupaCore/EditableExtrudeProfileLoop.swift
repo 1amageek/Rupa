@@ -1987,7 +1987,8 @@ private extension CADExpression {
              .divide(let left, let right),
              .hypot(let left, let right):
             return left.isLiteral && right.isLiteral
-        case .bezierNaturalExtension(let coordinates, let length, _):
+        case .bezierNaturalExtension(let coordinates, let length, _),
+             .bezierShapedExtension(_, let coordinates, let length, _):
             return coordinates.allSatisfy(\.isLiteral) && length.isLiteral
         case .sin(let argument),
              .cos(let argument),

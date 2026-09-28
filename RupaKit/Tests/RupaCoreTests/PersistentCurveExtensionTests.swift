@@ -103,4 +103,32 @@ import Testing
         #expect(abs((b.x - a.x) + (b.y - a.y)) < 1e-10)
         #expect(abs(hypot(b.x - a.x, b.y - a.y) - sqrt(2) - 2) < 1e-10)
     }
+
+    /// Arc, Soft and Reflective extensions persist as shaped expressions that both evaluators
+    /// agree on, that survive JSON and editable text, and that refuse malformed text.
+    @Test(arguments: [BezierExtensionShape.arc(spanCount: 2), .soft(spanCount: 3), .reflective(degree: 3, coversCurve: true)])
+    func shapedExpressionsRoundTripThroughTextAndBothEvaluators(shape: BezierExtensionShape) throws {
+        var document = DesignDocument.empty()
+        try document.upsertParameter(name: "reach", expression: .length(4, .millimeter), kind: .length)
+        let reach = try ParameterExpressionParser().parse("reach", parameters: document.cadDocument.parameters, targetKind: .length)
+        let coordinates: [CADExpression] = [(0.0, 0.0), (3.0, 4.0), (7.0, 5.0), (10.0, 3.0)].flatMap {
+            [CADExpression.length($0.0, .millimeter), .length($0.1, .millimeter)]
+        }
+        let table = document.cadDocument.parameters
+        let resolved = try ParameterResolver().resolve(table)
+        for index in [0, 1, 5] {
+            let expression = CADExpression.bezierShapedExtension(shape: shape, coordinates: coordinates, length: reach, coordinateIndex: index)
+            #expect(try table.inferredKind(for: expression) == .length)
+            let value = try table.resolvedValue(for: expression).value
+            #expect(abs(try ParameterResolver().evaluate(expression, parameters: resolved).value - value) < 1e-15)
+            #expect(try JSONDecoder().decode(CADExpression.self, from: JSONEncoder().encode(expression)) == expression)
+            let text = ParameterExpressionFormatter().format(expression, parameters: table)
+            #expect(try ParameterExpressionParser().parse(text, parameters: table, targetKind: .length) == expression)
+        }
+        for text in ["bezierArcExtension(2, 99, reach, 0mm, 0mm, 3mm, 4mm, 7mm, 5mm, 10mm, 3mm)",
+                     "bezierReflectiveExtension(3, 2, 0, reach, 0mm, 0mm, 3mm, 4mm, 7mm, 5mm, 10mm, 3mm)",
+                     "bezierSoftExtension(1.5, 0, reach, 0mm, 0mm, 3mm, 4mm, 7mm, 5mm, 10mm, 3mm)"] {
+            #expect(throws: Error.self) { try ParameterExpressionParser().parse(text, parameters: table, targetKind: .length) }
+        }
+    }
 }

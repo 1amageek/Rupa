@@ -27,6 +27,8 @@ public struct ParameterExpressionFormatter {
             "hypot(\(format(left, parameters: parameters)), \(format(right, parameters: parameters)))"
         case .bezierNaturalExtension(let coordinates, let length, let index):
             "bezierNaturalExtension(\(index), \(format(length, parameters: parameters)), \(coordinates.map { format($0, parameters: parameters) }.joined(separator: ", ")))"
+        case .bezierShapedExtension(let shape, let coordinates, let length, let index):
+            shapedExtension(shape, index: index, length: length, coordinates: coordinates, parameters: parameters)
         case .sin(let argument):
             "sin(\(format(argument, parameters: parameters)))"
         case .cos(let argument):
@@ -34,6 +36,24 @@ public struct ParameterExpressionFormatter {
         case .tan(let argument):
             "tan(\(format(argument, parameters: parameters)))"
         }
+    }
+
+    /// `bezierArcExtension(spans, index, length, coordinates…)`, `bezierSoftExtension(…)` or
+    /// `bezierReflectiveExtension(degree, coversCurve 0/1, index, length, coordinates…)`.
+    private func shapedExtension(
+        _ shape: BezierExtensionShape,
+        index: Int,
+        length: CADExpression,
+        coordinates: [CADExpression],
+        parameters: ParameterTable
+    ) -> String {
+        let head = switch shape {
+        case .arc(let spanCount): "bezierArcExtension(\(spanCount)"
+        case .soft(let spanCount): "bezierSoftExtension(\(spanCount)"
+        case .reflective(let degree, let coversCurve): "bezierReflectiveExtension(\(degree), \(coversCurve ? 1 : 0)"
+        }
+        let operands = [format(length, parameters: parameters)] + coordinates.map { format($0, parameters: parameters) }
+        return "\(head), \(index), \(operands.joined(separator: ", ")))"
     }
 
     private func binary(

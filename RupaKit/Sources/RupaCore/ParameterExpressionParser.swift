@@ -152,6 +152,38 @@ public struct ParameterExpressionParser {
             return try parsePrimary()
         }
 
+        /// The rest of a shaped extension after its first operand: the integer-literal structure
+        /// operands, the index, the length and the coordinates.
+        mutating func parseShapedExtension(_ name: String, first: CADExpression) throws -> CADExpression {
+            func integer(_ expression: CADExpression) throws -> Int {
+                guard case .constant(let value) = expression, value.kind == .scalar,
+                      let integer = Int(exactly: value.value) else {
+                    throw EditorError(code: .commandInvalid, message: "\(name) structure operands must be integer literals.")
+                }
+                return integer
+            }
+            let shape: BezierExtensionShape
+            if name == "bezierReflectiveExtension" {
+                try consume(.comma, message: "Expected whether the extension covers the curve.")
+                let covers = try integer(try parseExpression())
+                guard covers == 0 || covers == 1 else {
+                    throw EditorError(code: .commandInvalid, message: "\(name) coversCurve must be 0 or 1.")
+                }
+                shape = .reflective(degree: try integer(first), coversCurve: covers == 1)
+            } else {
+                shape = name == "bezierArcExtension" ? .arc(spanCount: try integer(first)) : .soft(spanCount: try integer(first))
+            }
+            try consume(.comma, message: "Expected extension coordinate index.")
+            let coordinateIndex = try integer(try parseExpression())
+            try consume(.comma, message: "Expected extension length.")
+            let length = try parseExpression()
+            var coordinates: [CADExpression] = []
+            while match(.comma) { coordinates.append(try parseExpression()) }
+            try consume(.rightParen, message: "Expected ')' after extension coordinates.")
+            try BezierShapedExtension.validateCoordinateForm(shape: shape, count: coordinates.count, index: coordinateIndex)
+            return .bezierShapedExtension(shape: shape, coordinates: coordinates, length: length, coordinateIndex: coordinateIndex)
+        }
+
         mutating func parsePrimary() throws -> CADExpression {
             switch advance() {
             case .number(let value, _):
@@ -182,6 +214,9 @@ public struct ParameterExpressionParser {
                         try consume(.rightParen, message: "Expected ')' after extension coordinates.")
                         try NaturalBezierContinuation.validateCoordinateForm(count: coordinates.count, index: coordinateIndex)
                         return .bezierNaturalExtension(coordinates: coordinates, length: length, coordinateIndex: coordinateIndex)
+                    }
+                    if ["bezierArcExtension", "bezierSoftExtension", "bezierReflectiveExtension"].contains(name) {
+                        return try parseShapedExtension(name, first: argument)
                     }
                     if name == "hypot" {
                         try consume(.comma, message: "Expected ',' between hypot arguments.")

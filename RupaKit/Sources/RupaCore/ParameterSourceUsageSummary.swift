@@ -33,7 +33,8 @@ struct CADExpressionParameterReferenceCollector {
              .divide(let left, let right),
              .hypot(let left, let right):
             parameterIDs(in: left).union(parameterIDs(in: right))
-        case .bezierNaturalExtension(let coordinates, let length, _):
+        case .bezierNaturalExtension(let coordinates, let length, _),
+             .bezierShapedExtension(_, let coordinates, let length, _):
             coordinates.reduce(parameterIDs(in: length)) { $0.union(parameterIDs(in: $1)) }
         case .sin(let argument),
              .cos(let argument),

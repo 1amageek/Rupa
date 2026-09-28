@@ -518,9 +518,8 @@ extension DesignDocument {
 
         if shape == .soft || shape == .arc || shape == .reflective {
             // Built at the end: a start extension is the end extension of the reversed spline.
-            let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
             let working = isStart ? reversedSketchSpline(spline) : spline
-            let extended = try profileExtendedAtEnd(working, length: length, shape: shape, owner: owner)
+            let extended = try profileExtendedAtEnd(working, distance: distance, shape: shape, owner: owner)
             let result = isStart ? reversedSketchSpline(extended) : extended
             try validateSplineForm(result, owner: owner)
             return result
@@ -579,120 +578,80 @@ extension DesignDocument {
         return reversed
     }
 
-    /// Soft, Arc and Reflective at the spline's end. Arc and Soft follow the end's curvature held
-    /// or fading to zero over the length (Swift-CAD's `CurvatureProfileExtension`, G2 at the end,
-    /// within the modeling distance), as cubic spans raised to the spline's degree; Reflective is
-    /// the last `length` of the curve (all of it if shorter) mirrored across the end's normal, so
-    /// it continues symmetrically with the same tangent and curvature. The new points are values:
-    /// these shapes are computed, not expressions of the original points.
+    /// Soft, Arc and Reflective at the spline's end, persisted as Swift-CAD's
+    /// `bezierShapedExtension` expressions of the curve's own Bezier points and the distance, so
+    /// the extension follows the curve and the distance when their parameters change. Arc and
+    /// Soft follow the end's curvature held or fading to zero (G2 at the end, within the modeling
+    /// distance) as cubic spans raised to the spline's degree, their span count fixed now;
+    /// Reflective mirrors the curve's last `distance` (all of it if shorter) across the end's
+    /// normal, storing the Bezier segments back to the one that length starts in. The new
+    /// points join the end with a knot of multiplicity `degree`, one knot unit per new span.
     private func profileExtendedAtEnd(
         _ spline: SketchSpline,
-        length: Double,
+        distance: CADExpression,
         shape: ExtendCurveShape,
         owner: String
     ) throws -> SketchSpline {
-        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
-        guard let end = SketchCurveSampler().splineSample(for: curve, parameter: 1) else {
-            throw EditorError(code: .commandInvalid, message: "\(owner): the spline's end has no tangent.")
-        }
         let degree = spline.degree
-        let piece: [Point2D]
-        let pieceKnots: [Double]
-        switch shape {
-        case .soft, .arc:
-            guard degree >= 3 else {
-                throw EditorError(code: .commandInvalid, message: "\(owner) \(shape.rawValue) needs a spline of degree 3 or more to keep the end's curvature.")
+        let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
+        let extender = BezierShapedExtension(tolerance: .standard)
+        let stored: [SketchPoint]
+        let persisted: BezierExtensionShape
+        do {
+            switch shape {
+            case .soft, .arc:
+                guard degree >= 3 else {
+                    throw EditorError(code: .commandInvalid, message: "\(owner) \(shape.rawValue) needs a spline of degree 3 or more to keep the end's curvature.")
+                }
+                stored = try expressionEndSegment(of: spline, isStart: false)
+                let profile: CurvatureProfileExtension.Profile = shape == .arc ? .arc : .soft
+                let spanCount = try extender.profileSpanCount(segment: try resolvedPoints(stored, owner: owner), length: length, profile: profile)
+                persisted = shape == .arc ? .arc(spanCount: spanCount) : .soft(spanCount: spanCount)
+            case .reflective:
+                let chain = try expressionBezierChain(of: spline)
+                let span = try extender.reflectiveSegmentCount(segments: try resolvedPoints(chain, owner: owner), degree: degree, length: length)
+                stored = Array(chain.suffix(span.count * degree + 1))
+                persisted = .reflective(degree: degree, coversCurve: span.coversCurve)
+            case .natural, .linear:
+                throw EditorError(code: .commandInvalid, message: "\(owner) builds \(shape.rawValue) elsewhere.")
             }
-            let spans: [Point2D]
-            do {
-                spans = try CurvatureProfileExtension(tolerance: .standard).cubicSpans(
-                    from: end.point, direction: end.tangent, curvature: end.curvature,
-                    length: length, profile: shape == .arc ? .arc : .soft
-                )
-            } catch let error as KernelError {
-                throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
-            }
-            var points = [end.point]
-            for start in stride(from: 0, to: spans.count, by: 3) {
-                var bezier = [points[points.count - 1]] + Array(spans[start..<(start + 3)])
-                while bezier.count - 1 < degree { bezier = elevatedBezier(bezier) }
-                points += bezier.dropFirst()
-            }
-            piece = points
-            let spanCount = spans.count / 3
-            pieceKnots = Array(repeating: 0, count: degree + 1)
-                + (1..<max(spanCount, 1)).flatMap { Array(repeating: Double($0), count: degree) }
-                + Array(repeating: Double(spanCount), count: degree + 1)
-        case .reflective:
-            let (lower, upper) = curve.domain
-            let start = try parameter(atArcLength: length, before: upper, on: curve, lower: lower)
-            let tail: BSplineCurve2D
-            do {
-                tail = start <= lower ? curve.bSpline : try curve.bSpline.trimmed(from: start, to: upper, tolerance: .standard)
-            } catch let error as GeometryError {
-                throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
-            }
-            // Mirror across the line through the end perpendicular to its tangent, backwards.
-            let t = end.tangent, p = end.point
-            piece = tail.controlPoints.reversed().map { q in
-                let along = (q.x - p.x) * t.x + (q.y - p.y) * t.y
-                return Point2D(x: q.x - 2 * along * t.x, y: q.y - 2 * along * t.y)
-            }
-            let a = tail.knots[0], b = tail.knots[tail.knots.count - 1]
-            pieceKnots = tail.knots.reversed().map { a + b - $0 }
-        case .natural, .linear:
-            throw EditorError(code: .commandInvalid, message: "\(owner) builds \(shape.rawValue) elsewhere.")
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
         }
-        // Join at the end with a knot of multiplicity `degree` (C0 in the knots, the shape keeps
-        // the continuity it was built with).
+        let coordinates = stored.flatMap { [$0.x, $0.y] }
+        let newPointCount: Int
+        do {
+            newPointCount = try BezierShapedExtension.newPointCount(shape: persisted, controlPointCount: stored.count)
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
+        }
+        let added = (0..<newPointCount).map { index in
+            SketchPoint(
+                x: .bezierShapedExtension(shape: persisted, coordinates: coordinates, length: distance, coordinateIndex: 2 * index),
+                y: .bezierShapedExtension(shape: persisted, coordinates: coordinates, length: distance, coordinateIndex: 2 * index + 1)
+            )
+        }
+        let pieceCount = newPointCount / degree
         guard let knots = spline.knotVector, let joint = knots.last else {
             throw EditorError(code: .commandInvalid, message: "\(owner): the spline's knots could not be resolved.")
         }
-        let shift = joint - pieceKnots[0]
-        let combinedKnots = Array(knots.dropLast()) + pieceKnots.dropFirst(degree + 1).map { $0 + shift }
+        let combinedKnots = Array(knots.dropLast())
+            + (1..<max(pieceCount, 1)).flatMap { Array(repeating: joint + Double($0), count: degree) }
+            + Array(repeating: joint + Double(pieceCount), count: degree + 1)
         var extended = spline
-        extended.controlPoints = spline.controlPoints + piece.dropFirst().map { sketchPoint(x: $0.x, y: $0.y) }
+        extended.controlPoints = spline.controlPoints + added
         let chain = SketchSpline(controlPoints: extended.controlPoints, isClosed: false, degree: degree)
         extended.knots = chain.knotVector == combinedKnots ? nil : combinedKnots
         return extended
     }
 
-    private func elevatedBezier(_ p: [Point2D]) -> [Point2D] {
-        let n = Double(p.count - 1)
-        var q = [p[0]]
-        for i in 1..<p.count {
-            let a = Double(i) / (n + 1)
-            q.append(Point2D(x: a * p[i - 1].x + (1 - a) * p[i].x, y: a * p[i - 1].y + (1 - a) * p[i].y))
+    private func resolvedPoints(_ points: [SketchPoint], owner: String) throws -> [Point2D] {
+        try points.map {
+            Point2D(
+                x: try resolvedLengthValue($0.x, owner: owner),
+                y: try resolvedLengthValue($0.y, owner: owner)
+            )
         }
-        q.append(p[p.count - 1])
-        return q
-    }
-
-    /// The parameter `length` of arc before `upper` on `curve` (its lower end if the curve is
-    /// shorter), by bisection on arc length integrated by Gauss–Legendre.
-    private func parameter(atArcLength length: Double, before upper: Double, on curve: SketchSplineCurve, lower: Double) throws -> Double {
-        func speed(_ u: Double) throws -> Double {
-            let d = try curve.bSpline.differentialGeometry(at: u, tolerance: .standard).firstDerivative
-            return hypot(d.x, d.y)
-        }
-        func arcLength(from u: Double) throws -> Double {
-            let nodes = [0.0, -0.538_469_310_105_683_1, 0.538_469_310_105_683_1, -0.906_179_845_938_664, 0.906_179_845_938_664]
-            let weights = [0.568_888_888_888_888_9, 0.478_628_670_499_366_5, 0.478_628_670_499_366_5, 0.236_926_885_056_189_1, 0.236_926_885_056_189_1]
-            let pieces = 64, width = (upper - u) / Double(pieces)
-            var total = 0.0
-            for piece in 0..<pieces {
-                let middle = u + (Double(piece) + 0.5) * width
-                for (node, weight) in zip(nodes, weights) { total += weight * (try speed(middle + node * width / 2)) }
-            }
-            return total * width / 2
-        }
-        guard try arcLength(from: lower) > length else { return lower }
-        var low = lower, high = upper
-        for _ in 0..<80 {
-            let middle = (low + high) / 2
-            if try arcLength(from: middle) > length { low = middle } else { high = middle }
-        }
-        return (low + high) / 2
     }
 
     private func pointExtendedLinearly(
@@ -713,30 +672,57 @@ extension DesignDocument {
     private func expressionEndSegment(of spline: SketchSpline, isStart: Bool) throws -> [SketchPoint] {
         let degree = spline.degree
         var points = spline.controlPoints
-        if var knots = spline.knots {
+        if let knots = spline.knots {
             let interior = knots.dropFirst(degree + 1).dropLast(degree + 1)
             if let boundary = isStart ? interior.first : interior.last {
-                let multiplicity = knots.filter { $0 == boundary }.count
-                for count in multiplicity..<degree {
-                    guard let span = knots.lastIndex(where: { $0 <= boundary }) else {
-                        throw EditorError(code: .commandInvalid, message: "Natural extension cannot resolve its end span.")
-                    }
-                    var next = Array(points.prefix(span - degree + 1))
-                    for index in (span - degree + 1)...(span - count) {
-                        let denominator = knots[index + degree] - knots[index]
-                        guard denominator > 0 else {
-                            throw EditorError(code: .commandInvalid, message: "Natural extension has a degenerate knot interval.")
-                        }
-                        next.append(interpolatedSketchPoint(points[index - 1], points[index],
-                            fraction: .scalar((boundary - knots[index]) / denominator)))
-                    }
-                    next.append(contentsOf: points[(span - count)...])
-                    knots.insert(boundary, at: span + 1)
-                    points = next
-                }
+                points = try raisedToFullMultiplicity(points: points, knots: knots, at: boundary, degree: degree).points
             }
         }
         return isStart ? Array(points.prefix(degree + 1)) : Array(points.suffix(degree + 1))
+    }
+
+    /// The spline's Bezier segments in curve order, sharing their joints: every interior knot
+    /// raised to multiplicity `degree`, the points expressions of the original points.
+    private func expressionBezierChain(of spline: SketchSpline) throws -> [SketchPoint] {
+        let degree = spline.degree
+        guard var knots = spline.knots else { return spline.controlPoints }
+        var points = spline.controlPoints
+        var boundaries: [Double] = []
+        for knot in knots.dropFirst(degree + 1).dropLast(degree + 1) where boundaries.last != knot {
+            boundaries.append(knot)
+        }
+        for boundary in boundaries {
+            (points, knots) = try raisedToFullMultiplicity(points: points, knots: knots, at: boundary, degree: degree)
+        }
+        return points
+    }
+
+    /// Boehm insertion of `boundary` until its multiplicity is `degree`, with the new points
+    /// interpolated as expressions of the old.
+    private func raisedToFullMultiplicity(
+        points: [SketchPoint], knots: [Double], at boundary: Double, degree: Int
+    ) throws -> (points: [SketchPoint], knots: [Double]) {
+        var points = points, knots = knots
+        let multiplicity = knots.filter { $0 == boundary }.count
+        guard multiplicity < degree else { return (points, knots) }
+        for count in multiplicity..<degree {
+            guard let span = knots.lastIndex(where: { $0 <= boundary }) else {
+                throw EditorError(code: .commandInvalid, message: "The extension cannot resolve its end span.")
+            }
+            var next = Array(points.prefix(span - degree + 1))
+            for index in (span - degree + 1)...(span - count) {
+                let denominator = knots[index + degree] - knots[index]
+                guard denominator > 0 else {
+                    throw EditorError(code: .commandInvalid, message: "The extension has a degenerate knot interval.")
+                }
+                next.append(interpolatedSketchPoint(points[index - 1], points[index],
+                    fraction: .scalar((boundary - knots[index]) / denominator)))
+            }
+            next.append(contentsOf: points[(span - count)...])
+            knots.insert(boundary, at: span + 1)
+            points = next
+        }
+        return (points, knots)
     }
 
     private func sketchCurveExtendBlocksConstraint(
