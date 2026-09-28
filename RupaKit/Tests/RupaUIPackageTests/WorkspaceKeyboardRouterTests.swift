@@ -533,6 +533,22 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: context) == .trimBridgeSources)
 }
 
+@Test func workspaceKeyboardRouterTypesASelectedBridgeCurvesG1TensionOnD() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) != .focusBridgeTension)
+    context.hasSelectedBridgeCurve = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .focusBridgeTension)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) != .applyBridgeTension)
+    context.isBridgeTensionInputActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: context) == .applyBridgeTension)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: context) == .cancelBridgeTension)
+    // A running Offset keeps D for its own distance.
+    context.isBridgeTensionInputActive = false
+    context.isSlotProfileCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) != .focusBridgeTension)
+}
+
 @Test func workspaceKeyboardRouterProjectsTheSelectionWithOptionD() {
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()

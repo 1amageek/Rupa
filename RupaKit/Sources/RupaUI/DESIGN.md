@@ -649,7 +649,12 @@ one G1 `createBridgeCurve` joining the ends Core reads from the selection
 and selects the new curve, whose inspector edits its continuity, tension and
 trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
 → G3 → G0 and Q (or the inspector's Trim/Untrim Sources) turns trimming the
-curves it bridges on and off. Option-D projects the selected
+curves it bridges on and off. Its context panel holds the G1 tension field
+(`WorkspaceCommandScalarInput`): D focuses it, Return or the panel's apply gives
+both ends that first tension as one `setBridgeCurveParameters` (Core refuses one
+that is not positive and the typed value stays), and Escape drops it; the typed
+value belongs to the bridge it was typed for, and a running Offset keeps D.
+Option-D projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
 with bodies selected, their outlines (Project Outline), then selects what it
 created with a Move running so it is placed, as Duplicate and Create Instance do

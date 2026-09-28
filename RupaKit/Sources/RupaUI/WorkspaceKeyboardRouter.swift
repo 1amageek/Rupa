@@ -214,6 +214,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case cycleBridgeContinuity
     /// Q on a selected Bridge Curve: trims the curves it bridges.
     case trimBridgeSources
+    /// D on a selected Bridge Curve: types the G1 tension both ends take.
+    case focusBridgeTension
+    /// Return while the Bridge Curve's G1 tension is typed: both ends take it, as one step.
+    case applyBridgeTension
+    /// Escape while the Bridge Curve's G1 tension is typed: leave it unchanged.
+    case cancelBridgeTension
     /// J: Join Curves on the two selected sketch curves.
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
@@ -280,6 +286,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasBridgeableSelection: Bool = false
     /// Whether one Bridge Curve is selected, whose continuity Tab cycles and Q trims.
     var hasSelectedBridgeCurve: Bool = false
+    /// Whether D started typing the selected Bridge Curve's G1 tension.
+    var isBridgeTensionInputActive: Bool = false
     /// Whether the selection is a curve end and the end Align Vertex aligns it with.
     var hasAlignableVertexPair: Bool = false
     /// Whether anything is selected that Option-D can project onto the construction plane.
@@ -772,8 +780,14 @@ struct WorkspaceKeyboardRouter: Sendable {
             return .cycleAlignContinuity
         }
         if context.hasSelectedBridgeCurve {
+            if context.isBridgeTensionInputActive {
+                if input.isReturn { return .applyBridgeTension }
+                if input.isEscape { return .cancelBridgeTension }
+            }
             if input.isTab { return .cycleBridgeContinuity }
             if key == "q" { return .trimBridgeSources }
+            // A running Offset keeps D for its own distance.
+            if key == "d", !context.isSlotProfileCommandActive { return .focusBridgeTension }
         }
         switch key {
         case "c": return .beginCutCurve

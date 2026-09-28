@@ -188,6 +188,8 @@ private struct ProjectMainViewContent: View {
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
     @State private var filletSession: WorkspaceFilletSession?
+    /// The G1 tension typed for a Bridge Curve (D), until Return applies it or Escape drops it.
+    @State private var bridgeTensionInput: (sourceID: BridgeCurveSourceID, value: Double)?
     @State private var isCommandPaletteOpen = false
     @State private var isTextDialogPresented = false
     @State private var textDialogText = ""
@@ -4609,6 +4611,11 @@ private struct ProjectMainViewContent: View {
             slotProfileContextPanelContent(slotTarget)
         }
 
+        if let bridgeCurve = selectedBridgeCurve {
+            workspaceContextDivider
+            bridgeTensionContextPanelContent(bridgeCurve)
+        }
+
         if slotProfileCommandState.isVertexOffsetActive,
            let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
            selectedSketchVertexOffsetHandle(entity) != nil {
@@ -5804,6 +5811,7 @@ private struct ProjectMainViewContent: View {
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
+            isBridgeTensionInputActive: selectedBridgeCurve.map { bridgeTensionInput?.sourceID == $0.sourceID } ?? false,
             hasAlignableVertexPair: alignVertexAction != nil,
             hasProjectableSelection: !snapshot.selection.selectedTargets.isEmpty,
             selectedSketchTargetCount: selectedSketchTargets.count,
@@ -6197,6 +6205,19 @@ private struct ProjectMainViewContent: View {
         case .trimBridgeSources:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
             trimBridgeCurveSources(bridgeCurve)
+            return .handled
+        case .focusBridgeTension:
+            guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
+            bridgeTensionInput = (bridgeCurve.sourceID, bridgeTensionValue(for: bridgeCurve))
+            focusedCommandDistance = .bridgeTension
+            reportToolStatus("Bridge: type the G1 tension; Return applies it to both ends.")
+            return .handled
+        case .applyBridgeTension:
+            guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
+            applyBridgeG1Tension(bridgeCurve)
+            return .handled
+        case .cancelBridgeTension:
+            bridgeTensionInput = nil
             return .handled
         case .bridgeSelection:
             guard let bridgeAction else {
@@ -11515,6 +11536,62 @@ private struct ProjectMainViewContent: View {
                     continuity: nil
                 ),
             ]
+        }
+    }
+
+    /// The G1 tension the Bridge Curve's field shows: the one typed for it, or its start's first
+    /// tension.
+    private func bridgeTensionValue(for bridgeCurve: InspectorBridgeCurve) -> Double {
+        guard let input = bridgeTensionInput, input.sourceID == bridgeCurve.sourceID else {
+            return bridgeCurve.firstTension.first
+        }
+        return input.value
+    }
+
+    @ViewBuilder
+    private func bridgeTensionContextPanelContent(_ bridgeCurve: InspectorBridgeCurve) -> some View {
+        WorkspaceCommandScalarInput(
+            title: "G1 Tension (D)",
+            value: Binding(
+                get: { bridgeTensionValue(for: bridgeCurve) },
+                set: { bridgeTensionInput = (bridgeCurve.sourceID, $0) }
+            ),
+            field: .bridgeTension,
+            focus: $focusedCommandDistance,
+            accessibilityIdentifier: "WorkspaceBridge.g1Tension"
+        )
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Apply G1 Tension to both ends",
+            accessibilityIdentifier: "WorkspaceBridge.applyTension",
+            action: { applyBridgeG1Tension(bridgeCurve) }
+        )
+    }
+
+    /// Return or the panel's apply: both ends of the Bridge Curve take the typed G1 tension (its
+    /// first tension, the one G1 continuity uses) as one step; Core refuses one that is not
+    /// positive, and the typed value stays for another try.
+    private func applyBridgeG1Tension(_ bridgeCurve: InspectorBridgeCurve) {
+        let sourceID = bridgeCurve.sourceID
+        let tension = bridgeTensionValue(for: bridgeCurve)
+        submitSource(name: "setBridgeCurveTension", commands: { current in
+            guard let source = current.document.document.productMetadata.bridgeCurveSources[sourceID] else {
+                throw EditorError(code: .referenceUnresolved, message: "Bridge curve source no longer exists.")
+            }
+            var firstEndpoint = source.firstEndpoint
+            var secondEndpoint = source.secondEndpoint
+            firstEndpoint.tension.first = .scalar(tension)
+            secondEndpoint.tension.first = .scalar(tension)
+            return [
+                .setBridgeCurveParameters(
+                    sourceID: sourceID,
+                    firstEndpoint: firstEndpoint,
+                    secondEndpoint: secondEndpoint,
+                    continuity: nil
+                ),
+            ]
+        }) { _ in
+            bridgeTensionInput = nil
         }
     }
 
