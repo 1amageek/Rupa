@@ -3142,7 +3142,7 @@ import SwiftCAD
         .lineStart(setup.firstLineID)
     )))
     #expect(sketch.constraints.contains(.coincident(
-        .splineControlPoint(entity: source.entityID, index: 6),
+        .splineControlPoint(entity: source.entityID, index: 3),
         .lineEnd(setup.secondLineID)
     )))
     // The bridge leaves the first line's start and arrives at the second
@@ -3158,21 +3158,17 @@ import SwiftCAD
         line: setup.secondLineID,
         orientation: .opposed
     ))))
-    #expect(controlPoints.count == 7)
+    // G1 at both ends is one cubic span whose end speeds are the chord length.
+    let chord = hypot(0.0025, 0.0075)
+    #expect(controlPoints.count == 4)
     #expect(nearlyEqualAutomation(controlPoints[0].x, 0.0025))
     #expect(nearlyEqualAutomation(controlPoints[0].y, 0.0))
-    #expect(nearlyEqualAutomation(controlPoints[1].x, 0.001182384266129633))
+    #expect(nearlyEqualAutomation(controlPoints[1].x, 0.0025 - chord / 3))
     #expect(nearlyEqualAutomation(controlPoints[1].y, 0.0))
-    #expect(nearlyEqualAutomation(controlPoints[2].x, 0.0016666666666666668))
-    #expect(nearlyEqualAutomation(controlPoints[2].y, 0.0025))
-    #expect(nearlyEqualAutomation(controlPoints[3].x, 0.00125))
-    #expect(nearlyEqualAutomation(controlPoints[3].y, 0.00375))
-    #expect(nearlyEqualAutomation(controlPoints[4].x, 0.0008333333333333334))
-    #expect(nearlyEqualAutomation(controlPoints[4].y, 0.005))
-    #expect(nearlyEqualAutomation(controlPoints[5].x, 0.0))
-    #expect(nearlyEqualAutomation(controlPoints[5].y, 0.008817615733870367))
-    #expect(nearlyEqualAutomation(controlPoints[6].x, 0.0))
-    #expect(nearlyEqualAutomation(controlPoints[6].y, 0.0075))
+    #expect(nearlyEqualAutomation(controlPoints[2].x, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[2].y, 0.0075 + chord / 3))
+    #expect(nearlyEqualAutomation(controlPoints[3].x, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[3].y, 0.0075))
     #expect(session.evaluationStatus == .valid)
 }
 

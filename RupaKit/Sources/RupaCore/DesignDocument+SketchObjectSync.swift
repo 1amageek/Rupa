@@ -9,6 +9,8 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry,
         errorOwner: String
     ) throws {
+        var sketch = sketch
+        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch)
         feature.operation = .sketch(sketch)
         var updatedCADDocument = cadDocument
         do {

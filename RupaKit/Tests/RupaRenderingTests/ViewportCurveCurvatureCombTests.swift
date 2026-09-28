@@ -119,3 +119,42 @@ import Testing
         #expect(turn <= Double.pi / 36 + 1e-12)
     }
 }
+
+/// Teeth point toward the center of curvature, so a tooth longer than the local radius crosses
+/// its neighbours. On the tight hook the size-based scale would do that, so the scale is capped:
+/// every tooth stays within its own radius, the longest reaching it, and the teeth remain in
+/// proportion to the curvature.
+@Test func viewportCurveCurvatureCombTeethStayWithinTheirRadius() throws {
+    let controlPoints = [(0.0, 0.0), (-14.142, 0.0), (6.667, 6.667), (10.0, 10.0), (13.333, 13.333), (20.0, 34.142), (20.0, 20.0)]
+        .map { CGPoint(x: $0.0 / 1000, y: $0.1 / 1000) }
+    let comb = try #require(
+        try ViewportCurveCurvatureComb(
+            primitive: .cubicSpline(entityID: SketchEntityID(), points: [], controlPoints: controlPoints, sketchPlane: .xy)
+        )
+    )
+    let scale = comb.displayScale()
+    let diagonal = Double(hypot(comb.modelBounds.width, comb.modelBounds.height))
+    #expect(scale < diagonal * CurveCurvatureDisplay.defaultCombScale / comb.maxAbsCurvature)
+    for sample in comb.samples {
+        #expect(abs(sample.curvature) * scale <= 1 / abs(sample.curvature) * (1 + 1e-12))
+    }
+    #expect(abs(comb.maxAbsCurvature * scale - 1 / comb.maxAbsCurvature) <= 1e-12)
+}
+
+/// A gentle curve keeps the size-based scale: its longest tooth is a tenth of its diagonal.
+@Test func viewportCurveCurvatureCombKeepsTheSizeScaleOnAGentleCurve() throws {
+    let comb = try #require(
+        try ViewportCurveCurvatureComb(
+            primitive: .arc(
+                entityID: SketchEntityID(),
+                center: CGPoint(x: 0.0, y: 0.0),
+                radiusMeters: 0.006,
+                startAngleRadians: 0.0,
+                endAngleRadians: Double.pi / 2.0,
+                segmentCount: 24
+            )
+        )
+    )
+    let diagonal = Double(hypot(comb.modelBounds.width, comb.modelBounds.height))
+    #expect(abs(comb.displayScale() - diagonal * CurveCurvatureDisplay.defaultCombScale / comb.maxAbsCurvature) <= 1e-18)
+}

@@ -19,6 +19,7 @@ extension DesignDocument {
         )
         cadDocument = updatedCADDocument
         do {
+            try regenerateAllBridgeCurves()
             try regeneratePatternArrays(objectRegistry: objectRegistry)
         } catch {
             cadDocument = previousCADDocument
@@ -51,6 +52,7 @@ extension DesignDocument {
         }
         cadDocument = updatedCADDocument
         do {
+            try regenerateAllBridgeCurves()
             try regeneratePatternArrays(objectRegistry: objectRegistry)
         } catch {
             cadDocument = previousCADDocument
@@ -92,6 +94,7 @@ extension DesignDocument {
         }
         cadDocument = updatedCADDocument
         do {
+            try regenerateAllBridgeCurves()
             try regeneratePatternArrays(objectRegistry: objectRegistry)
         } catch {
             cadDocument = previousCADDocument

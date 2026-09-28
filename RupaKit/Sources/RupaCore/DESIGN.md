@@ -993,6 +993,34 @@ places a new control point on an open spline through the fraction-based
 insertion, keeping the shape. `SketchCurveTrimTests` also own the split and
 insert cases.
 
+### Bridge generation contract
+
+A Bridge Curve is derived geometry: `BridgeCurveSource` (its two ends, their
+continuities and tensions) is the authority, and the spline in the sketch is
+Swift-CAD's `CurveBridgeSolver` result for it. `bridgeSpline` hands each resolved
+end to the solver as exact curve geometry (a line, an arc's circle on its angle,
+a spline on its own knots) oriented along the bridge's travel, with the required
+level G0–G3 and the end's three tensions (the first scales the end speed from the
+chord length). The result is one Bezier span of degree k₁ + k₂ + 1 in chain form;
+Rupa Core does not construct bridge control points itself.
+
+| Event | Owner | Effect |
+|---|---|---|
+| create / `setBridgeCurveParameters` | `createBridgeCurve`, `setBridgeCurveParameters` | bridge solved from the new source |
+| any sketch commit | `commitSketchEntityEdit`, `addSketchConstraint` | every bridge of the sketch regenerated from its sources |
+| document parameter change | `upsertParameter`, `deleteParameter`, `renameParameter` | `regenerateAllBridgeCurves` before pattern arrays |
+| control point move / slide on a bridge | `validateNotGeneratedBridgeCurve` | refused: shape a bridge by its parameters |
+
+Every level is accepted at any position of a line, an arc or a spline; the solver
+refuses what it cannot meet with a typed error, and the edit fails with the
+document unchanged. The constraints a bridge owns (its end control points on
+point-referenced ends and the G1/G2 end relations a sketch constraint expresses)
+are rewritten on every regeneration, since the last control point index follows
+the degree; they keep a live drag preview following the sources until the commit
+regenerates the bridge. A document written by the earlier cubic-chain generator
+keeps its stored bridge until its sketch is next committed.
+`BridgeCurveCommandTests` own creation, regeneration and the refusals.
+
 ### Bridge trim contract
 
 A Bridge Curve's Trim rewrites its source curves at its ends. The trim is recorded

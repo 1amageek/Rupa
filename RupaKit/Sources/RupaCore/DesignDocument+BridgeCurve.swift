@@ -12,14 +12,6 @@ extension DesignDocument {
         trimsSourceCurves: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> SketchEntityID {
-        let firstTension = try resolvedBridgeTension(
-            firstEndpoint.tension,
-            owner: "Bridge curve first tension"
-        )
-        let secondTension = try resolvedBridgeTension(
-            secondEndpoint.tension,
-            owner: "Bridge curve second tension"
-        )
         let resolver = SketchCurveEndpointResolver()
         guard var feature = cadDocument.designGraph.nodes[featureID],
               case var .sketch(sketch) = feature.operation else {
@@ -53,27 +45,22 @@ extension DesignDocument {
             )
         }
         try validateDistinctBridgeEndpointSamples(first: firstSample, second: secondSample)
-        try validateBridgeContinuitySupport(
-            first: firstSample,
-            second: secondSample,
-            continuity: continuity
-        )
 
-        let controlPoints = bridgeControlPoints(
+        let spline = try bridgeSpline(
             first: firstSample,
-            firstTension: firstTension,
             second: secondSample,
-            secondTension: secondTension
+            continuity: continuity,
+            firstTension: nextFirstEndpoint.tension,
+            secondTension: nextSecondEndpoint.tension,
+            sketch: sketch
         )
-        let spline = SketchSpline(controlPoints: controlPoints)
-        try validateCubicBezierChainSpline(spline, owner: "Bridge curve")
+        try validateSplineForm(spline, owner: "Bridge curve")
 
         let bridgeID = SketchEntityID()
         sketch.entities[bridgeID] = .spline(spline)
         for constraint in bridgeOwnedConstraints(
             bridgeID: bridgeID,
-            firstEndpoint: nextFirstEndpoint,
-            secondEndpoint: nextSecondEndpoint,
+            lastControlPointIndex: spline.controlPoints.count - 1,
             firstSample: firstSample,
             secondSample: secondSample,
             continuity: continuity
@@ -146,14 +133,6 @@ extension DesignDocument {
             trimsSourceCurves: trimsSourceCurves ?? source.trimsSourceCurves,
             trimRecord: source.trimRecord
         )
-        let firstTension = try resolvedBridgeTension(
-            nextSource.firstEndpoint.tension,
-            owner: "Bridge curve first tension"
-        )
-        let secondTension = try resolvedBridgeTension(
-            nextSource.secondEndpoint.tension,
-            owner: "Bridge curve second tension"
-        )
         let resolver = SketchCurveEndpointResolver()
         guard bridgeEndpointReferencesEntity(nextSource.firstEndpoint, entityID: source.entityID) == false,
               bridgeEndpointReferencesEntity(nextSource.secondEndpoint, entityID: source.entityID) == false else {
@@ -164,7 +143,7 @@ extension DesignDocument {
         }
         guard var feature = cadDocument.designGraph.nodes[source.featureID],
               case var .sketch(sketch) = feature.operation,
-              case .spline = sketch.entities[source.entityID] else {
+              case .spline(let previousBridge) = sketch.entities[source.entityID] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Bridge curve source must point to an editable generated spline."
@@ -187,8 +166,7 @@ extension DesignDocument {
         }
         let previousConstraints = bridgeOwnedConstraints(
             bridgeID: source.entityID,
-            firstEndpoint: source.firstEndpoint,
-            secondEndpoint: source.secondEndpoint,
+            lastControlPointIndex: previousBridge.controlPoints.count - 1,
             firstSample: previousFirstSample,
             secondSample: previousSecondSample,
             continuity: source.continuity
@@ -230,25 +208,21 @@ extension DesignDocument {
             )
         }
         try validateDistinctBridgeEndpointSamples(first: firstSample, second: secondSample)
-        try validateBridgeContinuitySupport(
-            first: firstSample,
-            second: secondSample,
-            continuity: resolvedNextSource.continuity
-        )
 
-        let spline = SketchSpline(controlPoints: bridgeControlPoints(
+        let spline = try bridgeSpline(
             first: firstSample,
-            firstTension: firstTension,
             second: secondSample,
-            secondTension: secondTension
-        ))
-        try validateCubicBezierChainSpline(spline, owner: "Bridge curve")
+            continuity: resolvedNextSource.continuity,
+            firstTension: resolvedNextSource.firstEndpoint.tension,
+            secondTension: resolvedNextSource.secondEndpoint.tension,
+            sketch: sketch
+        )
+        try validateSplineForm(spline, owner: "Bridge curve")
 
         sketch.entities[source.entityID] = .spline(spline)
         for constraint in bridgeOwnedConstraints(
             bridgeID: source.entityID,
-            firstEndpoint: resolvedNextSource.firstEndpoint,
-            secondEndpoint: resolvedNextSource.secondEndpoint,
+            lastControlPointIndex: spline.controlPoints.count - 1,
             firstSample: firstSample,
             secondSample: secondSample,
             continuity: resolvedNextSource.continuity
@@ -274,75 +248,6 @@ extension DesignDocument {
             errorOwner: "Bridge curve parameter update"
         )
         didCommitBridgeCurveUpdate = true
-    }
-
-    private func bridgeControlPoints(
-        first: SketchCurveEndpointSample,
-        firstTension: ResolvedBridgeCurveTension,
-        second: SketchCurveEndpointSample,
-        secondTension: ResolvedBridgeCurveTension
-    ) -> [SketchPoint] {
-        let p0 = first.sample.point
-        let p6 = second.sample.point
-        let chord = CADCore.Point2D(
-            x: p6.x - p0.x,
-            y: p6.y - p0.y
-        )
-        let chordLength = max(sqrt(chord.x * chord.x + chord.y * chord.y), 1.0e-9)
-        let chordTangent = CADCore.Point2D(
-            x: chord.x / chordLength,
-            y: chord.y / chordLength
-        )
-        let jointFraction = firstTension.third / (firstTension.third + secondTension.third)
-        let p3 = CADCore.Point2D(
-            x: p0.x + chord.x * jointFraction,
-            y: p0.y + chord.y * jointFraction
-        )
-        let p1 = CADCore.Point2D(
-            x: p0.x + first.outgoingTangent.x * chordLength * firstTension.first / 6.0,
-            y: p0.y + first.outgoingTangent.y * chordLength * firstTension.first / 6.0
-        )
-        let p2 = CADCore.Point2D(
-            x: p3.x - chordTangent.x * chordLength * firstTension.second / 6.0,
-            y: p3.y - chordTangent.y * chordLength * firstTension.second / 6.0
-        )
-        let p4 = CADCore.Point2D(
-            x: p3.x + chordTangent.x * chordLength * secondTension.second / 6.0,
-            y: p3.y + chordTangent.y * chordLength * secondTension.second / 6.0
-        )
-        let p5 = CADCore.Point2D(
-            x: p6.x + second.outgoingTangent.x * chordLength * secondTension.first / 6.0,
-            y: p6.y + second.outgoingTangent.y * chordLength * secondTension.first / 6.0
-        )
-        return [
-            sketchPoint(x: p0.x, y: p0.y),
-            sketchPoint(x: p1.x, y: p1.y),
-            sketchPoint(x: p2.x, y: p2.y),
-            sketchPoint(x: p3.x, y: p3.y),
-            sketchPoint(x: p4.x, y: p4.y),
-            sketchPoint(x: p5.x, y: p5.y),
-            sketchPoint(x: p6.x, y: p6.y),
-        ]
-    }
-
-    private struct ResolvedBridgeCurveTension {
-        var first: Double
-        var second: Double
-        var third: Double
-    }
-
-    private func resolvedBridgeTension(
-        _ tension: BridgeCurveTension,
-        owner: String
-    ) throws -> ResolvedBridgeCurveTension {
-        let first = try resolvedPositiveScalarValue(tension.first, owner: "\(owner) 1")
-        let second = try resolvedPositiveScalarValue(tension.second, owner: "\(owner) 2")
-        let third = try resolvedPositiveScalarValue(tension.third, owner: "\(owner) 3")
-        return ResolvedBridgeCurveTension(
-            first: first,
-            second: second,
-            third: third
-        )
     }
 
     private func bridgeContinuityConstraints(
@@ -457,10 +362,12 @@ extension DesignDocument {
         }
     }
 
-    private func bridgeOwnedConstraints(
+    /// The constraints a bridge owns: its end control points on point-referenced source ends and
+    /// the continuity a sketch constraint can express, which keep a live preview following its
+    /// sources until the commit regenerates the bridge.
+    func bridgeOwnedConstraints(
         bridgeID: SketchEntityID,
-        firstEndpoint: BridgeCurveEndpoint,
-        secondEndpoint: BridgeCurveEndpoint,
+        lastControlPointIndex: Int,
         firstSample: SketchCurveEndpointSample,
         secondSample: SketchCurveEndpointSample,
         continuity: BridgeCurveContinuity
@@ -474,7 +381,7 @@ extension DesignDocument {
         }
         if let secondReference = secondSample.pointReference {
             constraints.append(.coincident(
-                .splineControlPoint(entity: bridgeID, index: 6),
+                .splineControlPoint(entity: bridgeID, index: lastControlPointIndex),
                 secondReference
             ))
         }
@@ -485,74 +392,6 @@ extension DesignDocument {
             continuity: continuity
         )
         return constraints
-    }
-
-    private func validateBridgeContinuitySupport(
-        first: SketchCurveEndpointSample,
-        second: SketchCurveEndpointSample,
-        continuity: BridgeCurveContinuity
-    ) throws {
-        try validateBridgeEndpointContinuitySupport(
-            first,
-            continuity: continuity.first,
-            owner: "Bridge curve first continuity"
-        )
-        try validateBridgeEndpointContinuitySupport(
-            second,
-            continuity: continuity.second,
-            owner: "Bridge curve second continuity"
-        )
-    }
-
-    private func validateBridgeEndpointContinuitySupport(
-        _ sample: SketchCurveEndpointSample,
-        continuity: BridgeCurveEndpointContinuity,
-        owner: String
-    ) throws {
-        switch continuity {
-        case .g0:
-            return
-        case .g1:
-            guard supportsPersistentBridgeTangency(sample) else {
-                throw unsupportedBridgeContinuity(
-                    "\(owner) G1 currently requires a line or spline endpoint."
-                )
-            }
-        case .g2:
-            guard supportsPersistentBridgeSmoothness(sample) else {
-                throw unsupportedBridgeContinuity(
-                    "\(owner) G2 currently requires a spline endpoint."
-                )
-            }
-        case .g3:
-            throw unsupportedBridgeContinuity(
-                "\(owner) G3 requires a higher-order bridge constraint that is not implemented yet."
-            )
-        }
-    }
-
-    private func supportsPersistentBridgeTangency(
-        _ sample: SketchCurveEndpointSample
-    ) -> Bool {
-        switch sample.kind {
-        case .line:
-            sample.pointReference != nil
-        case .spline(let sourceReference):
-            sourceReference != nil && sample.pointReference != nil
-        case .arc:
-            false
-        }
-    }
-
-    private func supportsPersistentBridgeSmoothness(
-        _ sample: SketchCurveEndpointSample
-    ) -> Bool {
-        switch sample.kind {
-        case .spline(let sourceReference):
-            sourceReference != nil && sample.pointReference != nil
-        case .line, .arc:
-            false
-        }
     }
 
     private func validateDistinctBridgeEndpointSamples(
@@ -817,13 +656,6 @@ extension DesignDocument {
         }
     }
 
-    private func unsupportedBridgeContinuity(_ message: String) -> EditorError {
-        EditorError(
-            code: .commandInvalid,
-            message: message
-        )
-    }
-
     func bridgeEndpointReferencesEntity(
         _ reference: SketchReference,
         entityID: SketchEntityID
@@ -850,7 +682,7 @@ extension DesignDocument {
         bridgeEndpointReferencesEntity(endpoint.reference, entityID: entityID)
     }
 
-    private func appendBridgeConstraint(
+    func appendBridgeConstraint(
         _ constraint: SketchConstraint,
         to sketch: inout Sketch
     ) {

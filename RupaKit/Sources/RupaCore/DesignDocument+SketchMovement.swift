@@ -234,6 +234,11 @@ extension DesignDocument {
         }
 
         let selection = try editableSketchEntity(for: target, operationName: "Sketch spline control point move")
+        try validateNotGeneratedBridgeCurve(
+            featureID: selection.featureID,
+            entityID: selection.entityID,
+            operationName: "Sketch spline control point move"
+        )
         guard case .spline(var spline) = selection.entity else {
             throw EditorError(
                 code: .commandInvalid,
@@ -316,6 +321,11 @@ extension DesignDocument {
         }
 
         let selection = try editableSketchEntity(for: target, operationName: "Sketch spline control point slide")
+        try validateNotGeneratedBridgeCurve(
+            featureID: selection.featureID,
+            entityID: selection.entityID,
+            operationName: "Sketch spline control point slide"
+        )
         guard case .spline(var spline) = selection.entity else {
             throw EditorError(
                 code: .commandInvalid,

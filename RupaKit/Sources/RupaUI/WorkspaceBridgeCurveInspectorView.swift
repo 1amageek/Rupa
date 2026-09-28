@@ -262,6 +262,14 @@ struct WorkspaceBridgeCurveInspectorView: View {
                 current: bridgeCurve.continuity.first,
                 accessibilityIdentifier: "InspectorCurve.bridge.startContinuityG2"
             )
+            continuityButton(
+                title: "Start G3",
+                systemImage: "point.3.filled.connected.trianglepath.dotted",
+                endpoint: .first,
+                continuity: .g3,
+                current: bridgeCurve.continuity.first,
+                accessibilityIdentifier: "InspectorCurve.bridge.startContinuityG3"
+            )
         }
     }
 
@@ -290,6 +298,14 @@ struct WorkspaceBridgeCurveInspectorView: View {
                 continuity: .g2,
                 current: bridgeCurve.continuity.second,
                 accessibilityIdentifier: "InspectorCurve.bridge.endContinuityG2"
+            )
+            continuityButton(
+                title: "End G3",
+                systemImage: "point.3.filled.connected.trianglepath.dotted",
+                endpoint: .second,
+                continuity: .g3,
+                current: bridgeCurve.continuity.second,
+                accessibilityIdentifier: "InspectorCurve.bridge.endContinuityG3"
             )
         }
     }
