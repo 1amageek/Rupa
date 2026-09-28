@@ -72,6 +72,7 @@
     - [ ] SK5.3 Join Curves endpoint feedback: coincident and separate ends drawn in distinct colors. `depends:SK5.2` `parallel:none`
     - [x] SK5.4 Fillet Vertex on several selected vertices at once (B; each corner once, as one step). `depends:none` `parallel:none`
     - [x] SK5.5 Join Curves on two or more curves and onto already-joined curves (one joined curve per result, every joint recorded), two corner lines held together instead of refused, and Unjoin after edits removing only what each joint added; a collinear line merge still refuses Unjoin once its line moved. `depends:none` `parallel:none`
+    - [x] SK5.6 Fillet Curve and Fillet Vertex take curves drawn to touch (ends within the modeling distance, no coincident constraint) as a corner. `depends:none` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:none` `parallel:none`
     - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
     - [ ] SK6.2 Offset Planar Curve on joined curve chains (lines, arcs and splines joined by Join) and Natural gap fill; splines, cornered splines with Round and Linear gap fill and V to step it are done (swift-CAD 34d284f, a2faa31). `depends:SK6.1` `parallel:none`

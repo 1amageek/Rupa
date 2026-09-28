@@ -1020,6 +1020,10 @@ several selected curve ends: each corner once, even when both of its ends are
 selected, in selection order, since a treatment shortens its two curves only at
 the treated ends. A corner that cannot take it fails the whole command and the
 document is unchanged.
+A corner is two line or arc ends held together by a coincident constraint or
+meeting within the modeling distance, as curves drawn to touch do, for both Fillet
+Curve's curve pair and Fillet Vertex's selected end; ends with a gap are not a
+corner. `SketchCornerTreatmentTouchingCurvesTests` own this.
 
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,

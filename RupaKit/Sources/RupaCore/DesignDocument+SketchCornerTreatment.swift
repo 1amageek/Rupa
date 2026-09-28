@@ -178,10 +178,9 @@ extension DesignDocument {
                 message: "Sketch corner treatment currently supports connected line or arc endpoints."
             )
         }
-        let adjacent = try adjacentSketchCurveEndpoint(
+        let adjacent = try sketchCornerAdjacentEndpoint(
             to: selectedEndpoint.reference,
-            in: selection.sketch,
-            owner: "Sketch corner treatment"
+            in: selection.sketch
         )
         guard adjacent.endpoint.entityID != selectedEndpoint.entityID else {
             throw EditorError(
@@ -228,7 +227,7 @@ extension DesignDocument {
         )
         var matches: [(selected: SketchCurveEndpoint, adjacent: SketchCurveEndpoint)] = []
         for selectedEndpoint in selectedEndpoints {
-            for adjacentEndpoint in adjacentEndpoints where sketchCornerTreatmentReferencesAreCoincident(
+            for adjacentEndpoint in adjacentEndpoints where try sketchCornerTreatmentReferencesAreCoincident(
                 selectedEndpoint.reference,
                 adjacentEndpoint.reference,
                 in: selection.sketch
@@ -330,17 +329,65 @@ extension DesignDocument {
         }
     }
 
+    /// Two curve ends form a corner when a coincident constraint holds them together or when
+    /// they meet within the modeling distance, as curves drawn to touch do.
     private func sketchCornerTreatmentReferencesAreCoincident(
         _ first: SketchReference,
         _ second: SketchReference,
         in sketch: Sketch
-    ) -> Bool {
-        sketch.constraints.contains { constraint in
+    ) throws -> Bool {
+        let constrained = sketch.constraints.contains { constraint in
             guard case .coincident(let lhs, let rhs) = constraint else {
                 return false
             }
             return (lhs == first && rhs == second) || (lhs == second && rhs == first)
         }
+        if constrained {
+            return true
+        }
+        guard let firstPoint = try resolvedPoint(first, in: sketch, owner: "Sketch corner treatment endpoint"),
+              let secondPoint = try resolvedPoint(second, in: sketch, owner: "Sketch corner treatment endpoint") else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Sketch corner treatment requires source curve endpoint references."
+            )
+        }
+        let distance = hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y)
+        return distance <= ModelingTolerance.standard.distance
+    }
+
+    /// The one line or arc end forming a corner with `reference`: held to it by a coincident
+    /// constraint or meeting it within the modeling distance.
+    private func sketchCornerAdjacentEndpoint(
+        to reference: SketchReference,
+        in sketch: Sketch
+    ) throws -> (reference: SketchReference, endpoint: SketchCurveEndpoint, entity: SketchEntity) {
+        guard let selectedEndpoint = sketchCurveEndpoint(for: reference) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch corner treatment requires a line or arc endpoint."
+            )
+        }
+        var candidates: [(reference: SketchReference, endpoint: SketchCurveEndpoint, entity: SketchEntity)] = []
+        for (entityID, entity) in sketch.entities where entityID != selectedEndpoint.entityID {
+            let ends: [SketchReference] = switch entity {
+            case .line: [.lineStart(entityID), .lineEnd(entityID)]
+            case .arc: [.arcStart(entityID), .arcEnd(entityID)]
+            case .point, .circle, .spline: []
+            }
+            for end in ends where try sketchCornerTreatmentReferencesAreCoincident(reference, end, in: sketch) {
+                guard let endpoint = sketchCurveEndpoint(for: end),
+                      isSupportedOffsetVertexCurveEntity(entity, endpoint: endpoint) else { continue }
+                candidates.append((end, endpoint, entity))
+            }
+        }
+        guard candidates.count == 1, let match = candidates.first else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch corner treatment requires exactly one adjacent line or arc endpoint at the selected vertex."
+            )
+        }
+        return match
     }
 
     private func validateSketchCornerTreatment(
