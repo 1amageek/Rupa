@@ -1222,6 +1222,20 @@ bounds. Document summaries still include authored hidden sources; visibility is
 not an instruction to discard source measurements. Section analysis separately
 selects visible occurrences, using the same resolved placements.
 
+Section analysis enumerates visible scene occurrences and each object's selected
+presentation representation. CAD meshes and authored meshes share triangle
+classification, contour assembly, interference and payload limits. Authored
+n-gons use RupaGeometry's validated presentation triangulator, once per asset per
+analysis; instances reuse that immutable triangulation and apply their own world
+transform. Results identify authored geometry as `mesh:<source ID>` and carry the
+scene occurrence, without fabricating a CAD BodyID. Retained representations and
+unpresented CAD history are not additional scene bodies. Missing sources, invalid
+indices and triangulation failures propagate rather than report an empty success.
+SectionAnalysisAuthoredMeshTests owns mesh-only, mixed CAD/mesh, occurrence,
+visibility, source-switch and bounded-payload behavior; existing CAD section
+checks remain regression evidence. Native clipping consumes the same plane and
+result contours; no renderer-specific geometry authority is added.
+
 Section analysis also sections at a selected planar face (`.face`): the face's
 plane from the generated topology, placed by the selected node's world
 transform and facing out of the body, then moved by the query's offset and flip

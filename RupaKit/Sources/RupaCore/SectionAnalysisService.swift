@@ -2,6 +2,7 @@ import Foundation
 import RupaCoreTypes
 import CADTopology
 import SwiftCAD
+import RupaGeometry
 
 public struct SectionAnalysisService: Sendable {
     private struct ResolvedPlane {
@@ -62,76 +63,87 @@ public struct SectionAnalysisService: Sendable {
             currentGeneration: currentGeneration
         )
 
-        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
-            return SectionAnalysisResult(
-                displayUnit: displayUnit,
-                plane: plane.resultPlane,
-                toleranceMeters: tolerance,
-                bodies: [],
-                intersectionSegments: [],
-                truncatedIntersectionSegments: false,
-                diagnostics: [
-                    EditorDiagnostic(
-                        severity: .info,
-                        message: "Section analysis completed with no generated body meshes."
-                    ),
-                ]
-            )
-        }
-
-        let evaluatedDocument = try DocumentEvaluationContextResolver(
-            pipeline: pipelineOverride
-        ).evaluatedDocument(
-            document: document,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: currentGeneration,
-            failurePrefix: "Document must evaluate successfully before section analysis"
-        )
-
         var bodies: [SectionAnalysisResult.Body] = []
         var segments: [SectionAnalysisResult.IntersectionSegment] = []
         var truncatedSegments = false
-        let identitiesByBodyID = identityResolver.bodyIdentityByBodyID(
-            in: evaluatedDocument.subshapes
-        )
-
         let occurrences = try hierarchy.resolvedOccurrences()
-        for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
-            let body = evaluatedDocument.brep.bodies[bodyID]
-            let identity = identitiesByBodyID[bodyID]
-            // A body is sectioned at every visible occurrence of its presenting scene node. A body
-            // with no presenting node has no product placement and is sectioned once in the world
-            // frame, the same rule the viewport and measurement apply.
-            let placements: [(sceneNodeID: SceneNodeID?, occurrenceID: SceneOccurrenceID?, transform: Transform3D)]
-            if let identity, hierarchy.presentingSceneNodeID(for: identity.sourceFeatureID) != nil {
-                placements = hierarchy.presentationOccurrences(of: identity.sourceFeatureID, in: occurrences)
-                    .filter(\.isVisible)
-                    .map { ($0.sceneNodeID, $0.id, $0.worldTransform) }
+
+        if document.cadDocument.hasActiveRenderableTopologyFeatures {
+            let evaluatedDocument = try DocumentEvaluationContextResolver(
+                pipeline: pipelineOverride
+            ).evaluatedDocument(
+                document: document, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                failurePrefix: "Document must evaluate successfully before section analysis"
+            )
+            let identitiesByBodyID = identityResolver.bodyIdentityByBodyID(
+                in: evaluatedDocument.subshapes
+            )
+
+            for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
+                let body = evaluatedDocument.brep.bodies[bodyID]
+                guard let identity = identitiesByBodyID[bodyID] else {
+                    throw EditorError(code: .referenceUnresolved, message: "Section analysis cannot identify an evaluated CAD body.")
+                }
+                let placements = hierarchy.presentationOccurrences(of: identity.sourceFeatureID, in: occurrences)
+                    .filter { occurrence in
+                        guard occurrence.isVisible,
+                              let set = document.productMetadata.sceneNodes[occurrence.sourceSceneNodeID]?.object?.geometryRepresentations,
+                              let selected = set.selection,
+                              case .cad(_, let outputID) = set.representations[selected.presentation]?.source else { return false }
+                        return outputID == identity.sourceFeatureID.description
+                    }
+                for placement in placements {
+                    let sceneNodeID = placement.sceneNodeID
+                    let occurrenceID = placement.id
+                    let transform = placement.worldTransform
+                    let analysis = try analyzeBody(
+                        bodyID: bodyID.description,
+                        sceneNodeID: sceneNodeID,
+                        occurrenceID: occurrenceID,
+                        transform: transform,
+                        identity: identity,
+                        body: body,
+                        mesh: mesh,
+                        plane: plane.coordinateSystem,
+                        tolerance: tolerance,
+                        includesIntersectionSegments: query.includesIntersectionSegments,
+                        remainingSegmentCapacity: max(0, maximumSegments - segments.count)
+                    )
+                    bodies.append(analysis.body)
+                    segments.append(contentsOf: analysis.segments)
+                    truncatedSegments = truncatedSegments || analysis.truncatedSegments
+                }
+            }
+        }
+
+        var authoredMeshes: [GeometrySourceID: Mesh] = [:]
+        for occurrence in occurrences where occurrence.isVisible {
+            try Task.checkCancellation()
+            guard let node = document.productMetadata.sceneNodes[occurrence.sourceSceneNodeID],
+                  let set = node.object?.geometryRepresentations, let selected = set.selection,
+                  case .authoredMesh(let sourceID) = set.representations[selected.presentation]?.source else { continue }
+            let mesh: Mesh
+            if let cached = authoredMeshes[sourceID] {
+                mesh = cached
             } else {
-                placements = [(nil, nil, .identity)]
+                guard let source = document.authoredMeshAssets[sourceID]?.source else {
+                    throw EditorError(code: .referenceUnresolved, message: "Section analysis cannot resolve mesh \(sourceID.rawValue).")
+                }
+                mesh = try triangulatedMesh(source, tolerance: tolerance)
+                authoredMeshes[sourceID] = mesh
             }
-            for placement in placements {
-                let sceneNodeID = placement.sceneNodeID
-                let occurrenceID = placement.occurrenceID
-                let transform = placement.transform
-                let analysis = try analyzeBody(
-                    bodyID: bodyID,
-                    sceneNodeID: sceneNodeID,
-                    occurrenceID: occurrenceID,
-                    transform: transform,
-                    identity: identity,
-                    body: body,
-                    mesh: mesh,
-                    plane: plane.coordinateSystem,
-                    tolerance: tolerance,
-                    includesIntersectionSegments: query.includesIntersectionSegments,
-                    remainingSegmentCapacity: max(0, maximumSegments - segments.count)
-                )
-                bodies.append(analysis.body)
-                segments.append(contentsOf: analysis.segments)
-                truncatedSegments = truncatedSegments || analysis.truncatedSegments
-            }
+            var analysis = try analyzeBody(
+                bodyID: "mesh:\(sourceID.rawValue)", sceneNodeID: occurrence.sceneNodeID,
+                occurrenceID: occurrence.id, transform: occurrence.worldTransform, identity: nil, body: nil,
+                mesh: mesh, plane: plane.coordinateSystem, tolerance: tolerance,
+                includesIntersectionSegments: query.includesIntersectionSegments,
+                remainingSegmentCapacity: max(maximumSegments - segments.count, 0)
+            )
+            analysis.body.name = node.name
+            bodies.append(analysis.body)
+            segments.append(contentsOf: analysis.segments)
+            truncatedSegments = truncatedSegments || analysis.truncatedSegments
         }
 
         let diagnostics = diagnostics(
@@ -464,8 +476,27 @@ public struct SectionAnalysisService: Sendable {
         )
     }
 
+    /// Adapts source geometry once per asset for the common section triangle classifier.
+    /// Triangulation and index validity are owned by the same geometry API used for presentation.
+    private func triangulatedMesh(_ source: MeshSource, tolerance: Double) throws -> Mesh {
+        let index = try source.makeTriangulationIndex()
+        var indices: [UInt32] = []
+        var telemetry = MeshTriangulationTelemetry()
+        for face in source.faceIDs.indices {
+            for triangle in try source.triangulate(faceIndex: face, using: index, tolerance: tolerance, telemetry: &telemetry) {
+                for vertex in [triangle.vertexIDs.0, triangle.vertexIDs.1, triangle.vertexIDs.2] {
+                    guard let position = index.positionIndex(for: vertex), let value = UInt32(exactly: position) else {
+                        throw EditorError(code: .evaluationFailed, message: "Section mesh triangle has an invalid vertex index.")
+                    }
+                    indices.append(value)
+                }
+            }
+        }
+        return Mesh(positions: source.vertexPositions.map { Point3D(x: $0.x, y: $0.y, z: $0.z) }, indices: indices)
+    }
+
     private func analyzeBody(
-        bodyID: BodyID,
+        bodyID: String,
         sceneNodeID: SceneNodeID?,
         occurrenceID: SceneOccurrenceID?,
         transform: Transform3D,
@@ -511,8 +542,7 @@ public struct SectionAnalysisService: Sendable {
             guard firstIndex < mesh.positions.count,
                   secondIndex < mesh.positions.count,
                   thirdIndex < mesh.positions.count else {
-                triangleIndex += 3
-                continue
+                throw EditorError(code: .evaluationFailed, message: "Section mesh triangle references a missing vertex.")
             }
 
             let trianglePoints = [
@@ -576,7 +606,7 @@ public struct SectionAnalysisService: Sendable {
             intersectingTriangleCount: intersectingTriangleCount
         )
         let resultBody = SectionAnalysisResult.Body(
-            bodyID: bodyID.description,
+            bodyID: bodyID,
             sceneNodeID: sceneNodeID,
             occurrenceID: occurrenceID,
             sourceFeatureID: identity?.sourceFeatureID.description,
@@ -662,7 +692,7 @@ public struct SectionAnalysisService: Sendable {
     }
 
     private func intersectionSegment(
-        bodyID: BodyID,
+        bodyID: String,
         sceneNodeID: SceneNodeID?,
         occurrenceID: SceneOccurrenceID?,
         points: [Point3D],
@@ -705,7 +735,7 @@ public struct SectionAnalysisService: Sendable {
             return nil
         }
         return SectionAnalysisResult.IntersectionSegment(
-            bodyID: bodyID.description,
+            bodyID: bodyID,
             sceneNodeID: sceneNodeID,
                     occurrenceID: occurrenceID,
             start: start,
