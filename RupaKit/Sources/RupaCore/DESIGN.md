@@ -1257,6 +1257,12 @@ one nearest the viewer on the plane normal's side; pieces meeting end to end are
 into one Bezier spatial path with corner joints (`chainedOutlineSpans`), closed when the
 chain returns to its start, one object per path. `CreateOutlineTests` own this.
 
+`projectBodyIntersection(first:second:)` is Project Body Body: the pieces where the two
+bodies' faces meet (Swift-CAD's `BodySectionCurveEvaluator`, trimmed to both faces;
+coincident faces give none, faces touching along an edge give that edge), fitted within
+ten modeling distances and joined like Create Outline's into spatial paths; bodies that
+do not meet are refused. `ProjectBodyBodyTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

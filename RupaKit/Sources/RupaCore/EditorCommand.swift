@@ -343,6 +343,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
     /// Dependent Curve Extend: the target end extends in `shape` until it meets `limit`.
     case extendSketchCurveToCurve(target: SelectionTarget, limit: SelectionTarget, shape: ExtendCurveShape)
+    /// Project Body Body: the curves where two bodies meet.
+    case projectBodyIntersection(first: SelectionTarget, second: SelectionTarget)
     /// Create Outline: the bodies' silhouette along the plane's normal, left on the bodies as 3D curves.
     case createBodyOutlines(targets: [SelectionTarget], plane: SketchPlane)
     /// Project Curve Body along a direction onto one face (both ways when bidirectional).
@@ -808,6 +810,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "projectCurvesAlongDirection"
         case .createBodyOutlines:
             "createBodyOutlines"
+        case .projectBodyIntersection:
+            "projectBodyIntersection"
         case .alignSketchCurveEnds:
             "alignSketchCurveEnds"
         case .extendSketchCurve:
@@ -1056,6 +1060,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .deformCurves,
              .projectCurvesAlongDirection,
              .createBodyOutlines,
+             .projectBodyIntersection,
              .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,

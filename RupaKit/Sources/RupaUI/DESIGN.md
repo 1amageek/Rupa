@@ -676,9 +676,10 @@ created with a Move running so it is placed, as Duplicate and Create Instance do
 and one face selected opens Project Curve Body's dialog (`WorkspaceProjectSession`):
 Normal projects along the active construction plane's +Z, Vector along the typed
 direction (both ways with Bidirectional), and OK, Return or right-click submits
-`.projectCurvesAlongDirection` while Escape ends it (`WorkspaceProjectSessionTests`). I on any other
-selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until the
-kernel's intersection curve serves Project Body Body and Project Curve Curve. With the select tool and sketch curves or vertices selected, B starts Fillet's
+`.projectCurvesAlongDirection` while Escape ends it (`WorkspaceProjectSessionTests`). I on two
+selected bodies submits `.projectBodyIntersection` (Project Body Body). I on any other
+selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until Project Curve
+Curve routes two curves through their extrusions' intersection. With the select tool and sketch curves or vertices selected, B starts Fillet's
 dialog (`WorkspaceFilletSession`): selected curve ends take Fillet Vertex through
 `applySketchCornerTreatments` (every corner once, as one step), otherwise the first
 two selected curves take Fillet Curve; D types the distance, C switches Fillet

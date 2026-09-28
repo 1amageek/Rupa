@@ -6280,6 +6280,15 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .projectCurvesOntoFace:
             let selected = snapshot.selection.selectedTargets
+            // Two whole bodies: Project Body Body, the curves where they meet.
+            let bodyIntersectionTargets = selected.filter { target in
+                target.component == .object
+                    && snapshot.document.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.kind == .body
+            }
+            if bodyIntersectionTargets.count == 2, selected.count == 2 {
+                submitSource(.projectBodyIntersection(first: bodyIntersectionTargets[0], second: bodyIntersectionTargets[1]))
+                return .handled
+            }
             let faces = selected.filter { if case .face = $0.component { return true }; return false }
             let curves = selected.filter { target in
                 switch target.component {
@@ -6288,11 +6297,11 @@ private struct ProjectMainViewContent: View {
                 }
             }
             guard faces.count == 1, !curves.isEmpty else {
-                // FIXME(INCOMPLETE_IMPLEMENTATION): Project routes curves onto one face only;
-                // Project Body Body and Project Curve Curve need a kernel intersection curve.
-                // Production path: I on any other selection reports this refusal. Done when those
-                // selections project through the kernel with their own tests.
-                reportToolStatus("Project: select curves and one face to project them onto.", severity: .warning)
+                // FIXME(INCOMPLETE_IMPLEMENTATION): Project routes curves onto one face and two
+                // bodies to their intersection; Project Curve Curve (two curves) is not routed yet.
+                // Production path: I on any other selection reports this refusal. Done when two
+                // curves project through their extrusions' intersection with its own tests.
+                reportToolStatus("Project: select curves and one face, or two bodies.", severity: .warning)
                 return .handled
             }
             guard let project = WorkspaceProjectSession(curves: curves, face: faces[0]) else { return .handled }

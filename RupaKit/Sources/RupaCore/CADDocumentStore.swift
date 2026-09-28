@@ -2558,6 +2558,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .projectBodyIntersection(first, second):
+            var updatedDocument = document
+            try updatedDocument.projectBodyIntersection(first: first, second: second, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createBodyOutlines(targets, plane):
             var updatedDocument = document
             try updatedDocument.createBodyOutlines(targets: targets, plane: plane, objectRegistry: objectRegistry)
