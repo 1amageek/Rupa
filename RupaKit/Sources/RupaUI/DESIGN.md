@@ -653,7 +653,8 @@ curves it bridges on and off. Its context panel holds the G1 tension field
 (`WorkspaceCommandScalarInput`): D focuses it, Return or the panel's apply gives
 both ends that first tension as one `setBridgeCurveParameters` (Core refuses one
 that is not positive and the typed value stays), and Escape drops it; the typed
-value belongs to the bridge it was typed for, and a running Offset keeps D.
+value belongs to the bridge selection it was typed for and is dropped unapplied
+once another selection replaces it, and a running Offset keeps D.
 Option-D projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
 with bodies selected, their outlines (Project Outline), then selects what it

@@ -2120,6 +2120,12 @@ private struct ProjectMainViewContent: View {
                Set(targets) != Set(transformSession.topologyTargets) {
                 self.transformSession = nil
             }
+            // A G1 tension typed for a Bridge Curve belongs to that selection: once another
+            // selection replaces it, the unapplied value is dropped, so reselecting the bridge
+            // shows its actual tension.
+            if let input = bridgeTensionInput, selectedBridgeCurve?.sourceID != input.sourceID {
+                bridgeTensionInput = nil
+            }
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs, initial: true) { _, _ in
             refreshSelectionMass()
