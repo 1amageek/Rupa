@@ -652,7 +652,12 @@ one G1 `createBridgeCurve` joining the ends Core reads from the selection
 ([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
 and selects the new curve, whose inspector edits its continuity (G0 to G3 at
 each end), tension and trim; its curve analysis lists each end as a join that
-requires that continuity (G3 shown as such). A spline's control-point inspector
+requires that continuity (G3 shown as such). With curves of two sketches or two body
+edges selected, Bridge submits one G1 `.createBridgeCurveBetweenEnds` at their nearest
+ends (Core's `spatialBridgeEnds`); with nothing selected it starts a curve pick
+(`WorkspaceCurvePickCommand.bridge`): the first click places the starting point on a
+sketch curve (Core's `sketchCurveFraction` along the pick ray), the second the ending
+point, and the G1 bridge is made. A spline's control-point inspector
 offers Smooth only at the interior joints its own degree and knots place
 (`SketchSpline.jointIndices`). Raise Curve Degree (Shift-S, Edit menu, palette) raises the
 selected sketch curves and selects the raised curves' control points; Convert

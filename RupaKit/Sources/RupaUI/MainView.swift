@@ -8552,6 +8552,25 @@ private struct ProjectMainViewContent: View {
                 submitSource(.splitSketchCurveAtPoint(target: curve, point: point))
             case .insertKnot:
                 submitSource(.insertSketchSplineControlPointAtPoint(target: curve, point: point))
+            case .bridge(let first):
+                // The whole curve under the pointer, at the clicked fraction of it.
+                let whole: SelectionTarget
+                if case .sketchEntity(let componentID) = curve.component, let entity = componentID.sketchEntityReference {
+                    whole = SelectionTarget(sceneNodeID: curve.sceneNodeID, component: .sketchEntity(.sketchEntity(featureID: entity.featureID, entityID: entity.entityID)))
+                } else {
+                    whole = curve
+                }
+                let end = SpatialBridgeEnd(
+                    target: whole,
+                    fraction: try snapshot.document.document.sketchCurveFraction(alongRay: ray.origin, direction: ray.direction, on: whole)
+                )
+                guard let first else {
+                    curvePickCommand = .bridge(first: end)
+                    reportToolStatus(WorkspaceCurvePickCommand.bridge(first: end).prompt)
+                    return
+                }
+                curvePickCommand = nil
+                submitSource(.createBridgeCurveBetweenEnds(first: first, second: end, continuity: .g1))
             }
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
@@ -8798,11 +8817,29 @@ private struct ProjectMainViewContent: View {
     /// Bridge on two selected sketch curves or curve ends (Edit menu and L).
     private var bridgeAction: (@MainActor () -> Void)? {
         let targets = snapshot.selection.selectedTargets
-        guard selectedTool == .select, targets.count == 2, targets.allSatisfy({ target in
-            if case .sketchEntity = target.component { return true }
-            return false
+        guard selectedTool == .select else { return nil }
+        // Nothing selected: the ends are placed by clicking.
+        if targets.isEmpty {
+            return { beginCurvePickCommand(.bridge(first: nil)) }
+        }
+        guard targets.count == 2 else { return nil }
+        if targets.allSatisfy({ if case .sketchEntity = $0.component { return true }; return false }),
+           targets[0].sceneNodeID == targets[1].sceneNodeID {
+            return { createBridge(joining: targets) }
+        }
+        // Curves of different sketches, or body edges: a spatial bridge at their nearest ends.
+        guard targets.allSatisfy({ target in
+            switch target.component {
+            case .sketchEntity, .edge: return true
+            default: return false
+            }
         }) else { return nil }
-        return { createBridge(joining: targets) }
+        return {
+            submitSource(name: "Bridge", commands: { current in
+                let ends = try current.document.document.spatialBridgeEnds(joining: targets)
+                return [.createBridgeCurveBetweenEnds(first: ends.0, second: ends.1, continuity: .g1)]
+            })
+        }
     }
 
     /// Joins two curves at their nearest ends, or two curve ends, with a G1 Bridge Curve and selects

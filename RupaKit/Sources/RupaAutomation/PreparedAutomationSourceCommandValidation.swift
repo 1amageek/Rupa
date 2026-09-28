@@ -136,6 +136,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createBodyOutlines,
              .projectBodyIntersection,
              .projectCurveIntersection,
+             .createBridgeCurveBetweenEnds,
              .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,

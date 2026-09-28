@@ -41,11 +41,11 @@
   - [ ] SK1 Bridge and Connect: Bridge, Bridge Curve, Bridge Edge, Bridge Vertex. `depends:none` `parallel:none`
     - [x] SK1.1 Bridge Vertex (L): two selected curve ends joined by a G1 Bridge Curve whose inspector edits continuity, tension and trim; Bridge Curve itself is now created from two selected curves at their nearest ends. `depends:none` `parallel:none`
     - [x] SK1.2 Bridge (Edit menu) chooses Bridge Curve or Bridge Vertex from the selection; Bridge Edge joins it with SK1.3. `depends:SK1.1` `parallel:none`
-    - [ ] SK1.3 Bridge Edge: two body edge ends (Side 1/2) bridged with G0–G3 and tension, through a kernel bridge endpoint on a body edge. `depends:SK1.2` `parallel:none`
+    - [ ] SK1.3 Bridge Edge: two body edge ends (Side 1/2) bridged with G0–G3 and tension, through a kernel bridge endpoint on a body edge: G1 at the nearest ends is done (spatial bridge, L); choosing Side, G0–G3 and tension for an edge bridge is open. `depends:SK1.2` `parallel:none`
     - [x] SK1.4 Bridge keys on a selected Bridge Curve: Tab steps both ends' continuity G0 → G3, Q trims the bridged curves. `depends:SK1.2` `parallel:none`
     - [ ] SK1.5 Bridge keys while a Bridge Curve is selected: D types the G1 tension both ends take (done); X/Y/Z constraint waits for its definition, which the official page does not give. `depends:SK1.4` `parallel:none`
     - [x] SK1.6 Bridge Curve Trim is a real on/off toggle in its inspector and on Q (the trim is recorded and undone when turned off). `depends:none` `parallel:none`
-    - [ ] SK1.7 Bridge Curve interaction: ends placed by clicking with nothing selected, and bridges between curves of different sketches. `depends:none` `parallel:none`
+    - [x] SK1.7 Bridge Curve interaction: ends placed by clicking with nothing selected, and bridges between curves of different sketches. `depends:none` `parallel:none`
     - [x] SK1.8 G3 continuity on Bridge Curve and Bridge Vertex through the kernel bridge (SK13); Bridge Edge's G0–G3 belongs to SK1.3. `depends:SK13` `parallel:none`
   - [ ] SK2 Cut and Trim: Cut Curve, Trim, Split Segment (Split Curve At Point, Insert CV At Point). `depends:none` `parallel:none`
     - [x] SK2.1 Trim (T): a click removes the curve segment bounded by the curve's ends, its crossings with the sketch's other curves and a spline's span joints; a circle keeps the arc away from the click. `depends:none` `parallel:none`

@@ -343,6 +343,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
     /// Dependent Curve Extend: the target end extends in `shape` until it meets `limit`.
     case extendSketchCurveToCurve(target: SelectionTarget, limit: SelectionTarget, shape: ExtendCurveShape)
+    /// Bridge Curve between two ends on curves or edges that need not share a sketch.
+    case createBridgeCurveBetweenEnds(first: SpatialBridgeEnd, second: SpatialBridgeEnd, continuity: BridgeCurveContinuity)
     /// Project Curve Curve: where two sketch curves' extrusions meet.
     case projectCurveIntersection(first: SelectionTarget, second: SelectionTarget)
     /// Project Body Body: the curves where two bodies meet.
@@ -816,6 +818,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "projectBodyIntersection"
         case .projectCurveIntersection:
             "projectCurveIntersection"
+        case .createBridgeCurveBetweenEnds:
+            "createBridgeCurveBetweenEnds"
         case .alignSketchCurveEnds:
             "alignSketchCurveEnds"
         case .extendSketchCurve:
@@ -1066,6 +1070,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createBodyOutlines,
              .projectBodyIntersection,
              .projectCurveIntersection,
+             .createBridgeCurveBetweenEnds,
              .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,

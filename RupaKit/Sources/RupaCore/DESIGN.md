@@ -1294,6 +1294,19 @@ space, its node's placement cancelling its parent's. A circle edge stays an arc 
 through a rigid placement. `WorldPlacedCurveCommandTests` move the inputs and find the
 results moved with them.
 
+`createSpatialBridgeCurve(first:second:continuity:)` bridges ends that do not share a
+sketch (`SpatialBridgeEnd`: a sketch curve or generated edge at a fraction of its
+parameter, leaving outward) through Swift-CAD's `CurveBridgeSolver` in world space: a
+sketch curve as its exact local curve (line on arc length, arc or circle on angle, spline
+on its knots) under an affine image of its placed plane, an edge's curve under its body's
+placement. A bridge whose control points share a plane is a sketch spline of the
+bridge's degree on that plane (exact); one off every plane is a one-span cubic spatial
+path, exact up to G1 at both ends, and higher continuities there are refused. It is not
+associative. `createBridgeCurve(clicked:_:continuity:)` makes an associative sketch
+Bridge Curve when both clicked ends are on one sketch and the spatial one otherwise;
+`spatialBridgeEnds(joining:)` picks two curves' nearest ends. `SpatialBridgeCurveTests`
+own these.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

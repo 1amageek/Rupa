@@ -2558,6 +2558,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .createBridgeCurveBetweenEnds(first, second, continuity):
+            var updatedDocument = document
+            try updatedDocument.createBridgeCurve(clicked: first, second, continuity: continuity, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .projectCurveIntersection(first, second):
             var updatedDocument = document
             try updatedDocument.projectCurveIntersection(first: first, second: second, objectRegistry: objectRegistry)
