@@ -433,10 +433,12 @@ extension DesignDocument {
         self = candidate
     }
 
-    /// Combines the target bodies with the tool bodies where they are displayed. The result lives
-    /// in the first target's frame and is shown where that target is; every other operand is
-    /// handed to the kernel with its rigid placement relative to it, and kept tools stay where
-    /// they are. Placements are Core's to derive, so references must arrive without one.
+    /// Combines the target bodies with the tool bodies, solids or sheets, where they are
+    /// displayed. The result lives in the first target's frame and is shown where that target is;
+    /// every other operand is handed to the kernel with its rigid placement relative to it, and
+    /// kept tools stay where they are. Placements are Core's to derive, so references must arrive
+    /// without one. The materials say how each side's material is taken; the result is a sheet or
+    /// a solid as Swift-CAD's `resultPort` says.
     @discardableResult
     public mutating func createBoolean(
         name: String,
@@ -444,6 +446,8 @@ extension DesignDocument {
         tools: [BooleanToolReference],
         operation: BooleanOperation,
         keepTools: Bool = false,
+        targetMaterial: BooleanMaterial = .default,
+        toolMaterial: BooleanMaterial = .default,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Boolean")
@@ -483,7 +487,9 @@ extension DesignDocument {
             targets: placedTargets,
             tools: placedTools,
             operation: operation,
-            keepTools: keepTools
+            keepTools: keepTools,
+            targetMaterial: targetMaterial,
+            toolMaterial: toolMaterial
         )
         do {
             try boolean.validate()
@@ -493,11 +499,15 @@ extension DesignDocument {
                 message: "Boolean command is invalid: \(error)."
             )
         }
-        for target in targets {
-            try requireBodyFeature(target.featureID, owner: "Boolean target")
-        }
+        let targetPorts = try targets.map { try bodyOrSheetPort(of: $0.featureID, owner: "Boolean target") }
         for tool in tools {
-            try requireBodyFeature(tool.featureID, owner: "Boolean tool")
+            _ = try bodyOrSheetPort(of: tool.featureID, owner: "Boolean tool")
+        }
+        let resultPort: FeaturePort
+        do {
+            resultPort = try boolean.resultPort(targetPorts: targetPorts)
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "Boolean command is invalid: \(error).")
         }
 
         let featureID = FeatureID()
@@ -511,7 +521,7 @@ extension DesignDocument {
             name: trimmedName,
             operation: .boolean(boolean),
             inputs: inputs,
-            outputs: [FeatureOutput(role: .body)]
+            outputs: [FeatureOutput(role: resultPort)]
         )
 
         let previousCADDocument = cadDocument
@@ -530,7 +540,7 @@ extension DesignDocument {
             documentID: cadDocument.id,
             sourceSection: nil,
             typeID: nil,
-            geometryRole: .solid,
+            geometryRole: resultPort == .sheet ? .surface : .solid,
             objectRegistry: objectRegistry
         )
         if let targetNodeID = targets.first.flatMap({ hierarchy.presentingSceneNodeID(for: $0.featureID) }),
@@ -620,6 +630,17 @@ extension DesignDocument {
                 message: "\(owner) must reference an existing curve-producing feature."
             )
         }
+    }
+
+    /// Whether a Boolean operand's source publishes a solid (`body`) or a sheet.
+    private func bodyOrSheetPort(of featureID: FeatureID, owner: String) throws -> FeaturePort {
+        guard let port = cadDocument.designGraph.nodes[featureID]?.bodyOrSheetOutput else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) must reference an existing solid- or sheet-producing feature."
+            )
+        }
+        return port
     }
 
     private func requireBodyFeature(

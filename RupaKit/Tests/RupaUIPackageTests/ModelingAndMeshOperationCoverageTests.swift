@@ -81,7 +81,7 @@ struct ModelingAndMeshOperationCoverageTests {
         )
         boolean.booleanOperation = .union
         let booleanCommand = try boolean.command(in: booleanDocument)
-        guard case .createBoolean(_, let targets, let tools, let operation, let keepTools) = booleanCommand else {
+        guard case .createBoolean(_, let targets, let tools, let operation, let keepTools, _, _) = booleanCommand else {
             Issue.record("Boolean draft must use the existing Boolean command.")
             return
         }

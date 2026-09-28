@@ -412,7 +412,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         targets: [BooleanTargetReference],
         tools: [BooleanToolReference],
         operation: BooleanOperation,
-        keepTools: Bool
+        keepTools: Bool,
+        targetMaterial: BooleanMaterial = .default,
+        toolMaterial: BooleanMaterial = .default
     )
     case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
     case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)

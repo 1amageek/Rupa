@@ -107,9 +107,13 @@ hands Swift-CAD every operand's rigid placement relative to the first target
 (`BooleanTargetReference.placement`, `BooleanToolReference.placement`), which
 Core derives from the scene and so refuses on incoming references; a relative
 placement that scales, shears or mirrors is refused. Keep Tools keeps every
-tool where it is displayed, placed or not. The result node is inserted beside the
-first target with the target's local transform, so it appears where the target
-was. `PlacedBooleanTests` own this.
+tool where it is displayed, placed or not. Operands are solids or sheets (the
+targets all one or the other), and `targetMaterial`/`toolMaterial` say how each
+side's material is taken (Swift-CAD's `BooleanMaterial`); the result's output and
+object role follow Swift-CAD's `resultPort`: a sheet shown as a surface, otherwise
+a solid. The result node is inserted beside the first target with the target's
+local transform, so it appears where the target was. `PlacedBooleanTests` own
+placement and `SheetBooleanCommandTests` sheet operands and materials.
 
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on

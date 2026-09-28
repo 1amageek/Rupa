@@ -150,7 +150,7 @@
 - [ ] SO Complete every Plasticity Solid command (https://doc.plasticity.xyz/solid) to its official page, with the same audit, Swift-CAD/Rupa split and verification; the eleven surface-creation commands are owned by SC1 and verified here as part of the Solid set. Started before SK10's integration at the user's request (2026-09-28). `depends:SK16` `parallel:none`
   - [ ] SO1 Boolean and Cut. `depends:none` `parallel:none`
     - [x] SO1.1 Boolean takes several tools acting as their union, every operand at its displayed placement, and kept placed tools; the result replaces its targets and Keep Tools keeps only tools. Kernel 2b5ba3e, 29335a7. `depends:none` `parallel:none`
-    - [ ] SO1.2 Solid and Sheet operands with Target and Tool Material (Default, Empty, Inside, Outside). `depends:SO1.1` `parallel:none`
+    - [x] SO1.2 Solid and Sheet operands with Target and Tool Material (Default, Empty, Inside, Outside); Default sheet is Inside only as a tool facing solid targets, otherwise an empty shell. Kernel ec98cdf. `depends:SO1.1` `parallel:none`
     - [ ] SO1.3 Region: solids from the regions the operands enclose. `depends:SO1.2` `parallel:none`
     - [ ] SO1.4 Cut: solids and sheets cut by curves (Extend, view direction) and faces. `depends:SO1.2` `parallel:none`
     - [ ] SO1.5 Boolean and Cut dialogs: target and tool pickers, Q/W/Shift-E/Shift-Q/T, tool G/R/S during the operation, palette entries. `depends:SO1.3,SO1.4` `parallel:none`

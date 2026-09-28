@@ -2484,7 +2484,7 @@ public struct AutomationRunner: Sendable {
             return try run()
         case .createBoolean:
             func run() throws -> AutomationResult {
-                guard case .createBoolean(let name, let targets, let tools, let operation, let keepTools) = command else {
+                guard case .createBoolean(let name, let targets, let tools, let operation, let keepTools, let targetMaterial, let toolMaterial) = command else {
                     throw invalidExecutionDomainError()
                 }
                 let result = try session.execute(
@@ -2493,7 +2493,9 @@ public struct AutomationRunner: Sendable {
                         targets: targets,
                         tools: tools,
                         operation: operation,
-                        keepTools: keepTools
+                        keepTools: keepTools,
+                        targetMaterial: targetMaterial,
+                        toolMaterial: toolMaterial
                     )
                 )
                 return commandAutomationResult(

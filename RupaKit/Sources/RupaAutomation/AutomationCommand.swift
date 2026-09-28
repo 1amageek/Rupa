@@ -253,7 +253,9 @@ public indirect enum AutomationCommand: Codable, Equatable, Sendable {
         targets: [BooleanTargetReference],
         tools: [BooleanToolReference],
         operation: BooleanOperation,
-        keepTools: Bool
+        keepTools: Bool,
+        targetMaterial: BooleanMaterial,
+        toolMaterial: BooleanMaterial
     )
     case createBSplineSurface(
         name: String,

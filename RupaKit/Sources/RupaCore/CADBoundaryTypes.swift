@@ -47,6 +47,7 @@ public typealias BooleanEvaluationTopologyCounts = SwiftCAD.BooleanEvaluationTop
 public typealias BooleanEvaluationTopologySlot = SwiftCAD.BooleanEvaluationTopologySlot
 public typealias BooleanFeature = SwiftCAD.BooleanFeature
 public typealias BooleanOperation = SwiftCAD.BooleanOperation
+public typealias BooleanMaterial = SwiftCAD.BooleanMaterial
 public typealias BooleanTargetReference = SwiftCAD.BooleanTargetReference
 public typealias BooleanToolReference = SwiftCAD.BooleanToolReference
 public typealias CurveEvaluationSample = SwiftCAD.CurveEvaluationSample

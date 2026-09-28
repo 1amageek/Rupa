@@ -2763,7 +2763,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createBoolean:
             func run() throws {
-                guard case .createBoolean(let name, let targets, let tools, let operation, let keepTools) = command else {
+                guard case .createBoolean(let name, let targets, let tools, let operation, let keepTools, let targetMaterial, let toolMaterial) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected createBoolean."
@@ -2776,6 +2776,8 @@ public final class CADDocumentStore {
                     tools: tools,
                     operation: operation,
                     keepTools: keepTools,
+                    targetMaterial: targetMaterial,
+                    toolMaterial: toolMaterial,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument
