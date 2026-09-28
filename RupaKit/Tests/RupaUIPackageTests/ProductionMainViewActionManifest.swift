@@ -128,6 +128,8 @@ enum ProductionMainViewActionManifest {
         "deleteMaterial",
         "deleteParameter",
         "deleteRedundantSketchSplineJoints",
+        "raiseSketchCurveDegree",
+        "convertSketchSplineVertex",
         "draftBodyFaces",
         "duplicateSceneNodes",
         "extendSketchCurve",

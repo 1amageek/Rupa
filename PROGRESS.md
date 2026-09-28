@@ -91,7 +91,7 @@
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
     - [x] SK8.1 Delete Redundant Topology (Edit menu, palette): joints of a spline that one cubic spans are removed without changing its shape (swift-CAD 36b13c4 CubicBezierChainJoints); constrained joints stay. `depends:SK8.2` `parallel:none`
     - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`
-    - [ ] SK8.3 Raise Curve Degree (Shift-S) and Convert Vertex, which need splines beyond cubic Bezier chains in the sketch model. `depends:SK8.2,SK12` `parallel:none`
+    - [x] SK8.3 Raise Curve Degree (Shift-S, Edit menu, palette; raised CVs selected) exact on lines and splines through swift-CAD 1c27607, and Convert Vertex (Edit menu, palette, double-click) turning an interior joint into a control point. `depends:SK8.2,SK12` `parallel:none`
     - [ ] SK8.4 Reverse on arcs (needs arc direction in the kernel model) and Rebuild as one dialog with its method, any Points count, OK and right-click; Reverse Curve on several curves from the Edit menu and palette is done. `depends:SK12` `parallel:none`
   - [ ] SK9 Instances, Text and Display: Create Instance, Create Curve Instance, Realize Instances, Realize Curve Instances, Text, Toggle Curve Curvature, Toggle Points. `depends:none` `parallel:none`
     - [x] SK9.1 Realize Instances (Edit menu): a component instance becomes an independent, editable copy of its definition where it was shown. `depends:none` `parallel:none`

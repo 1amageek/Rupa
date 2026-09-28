@@ -955,6 +955,23 @@ Editing commands on any degree and knots:
 
 `GeneralSplineEditingTests` own these.
 
+### Raise Curve Degree and Convert Vertex
+
+`raiseSketchCurveDegree` raises every target curve one degree as one step. A
+spline is raised exactly by Swift-CAD's `SketchSplineCurve.degreeElevated`, the
+same curve on the same parameter, so a bridge end's fraction on it stays; each
+old joint maps to the raised joint at its knot, and every stored reference to it
+(constraints, dimensions, bridge ends and their trim records, measurement
+anchors) follows; a reference to any other control point refuses the step. A
+line becomes the degree-2 spline through its ends and middle (its line-only
+relations refuse). Arcs and circles (no exact spline without weights) and
+generated Bridge Curves (degree set by their continuities) are refused.
+`convertSketchSplineVertex` turns an interior joint into an ordinary control
+point: that knot's multiplicity drops from the degree to one and the d − 1
+points around it that shaped the joint go, so the curve stops passing through it
+by design; ends, non-joints and references to the removed points refuse.
+`SketchCurveDegreeTests` own these.
+
 The constraint propagator reads a spline end through the clamped end conditions
 of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −
 (P1 − P0)/Δ1) in that end's frame (the reversed curve's start at the end), and

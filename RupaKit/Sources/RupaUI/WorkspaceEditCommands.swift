@@ -45,6 +45,10 @@ public struct WorkspaceEditCommands {
     public var realizeInstances: (@MainActor () -> Void)?
     /// Starts Insert Knot: each clicked spline gains a control point where it is clicked.
     public var insertKnot: (@MainActor () -> Void)?
+    /// Raises the degree of every selected sketch line and spline, the same curves.
+    public var raiseCurveDegree: (@MainActor () -> Void)?
+    /// Turns the selected spline vertex into an ordinary control point.
+    public var convertVertex: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -65,7 +69,9 @@ public struct WorkspaceEditCommands {
         reverseCurves: (@MainActor () -> Void)? = nil,
         createInstance: (@MainActor () -> Void)? = nil,
         realizeInstances: (@MainActor () -> Void)? = nil,
-        insertKnot: (@MainActor () -> Void)? = nil
+        insertKnot: (@MainActor () -> Void)? = nil,
+        raiseCurveDegree: (@MainActor () -> Void)? = nil,
+        convertVertex: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -86,6 +92,8 @@ public struct WorkspaceEditCommands {
         self.createInstance = createInstance
         self.realizeInstances = realizeInstances
         self.insertKnot = insertKnot
+        self.raiseCurveDegree = raiseCurveDegree
+        self.convertVertex = convertVertex
     }
 }
 

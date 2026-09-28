@@ -503,6 +503,20 @@ private func keyboardContext(
     #expect(action("j") != .joinSketchCurves)
 }
 
+@Test func workspaceKeyboardRouterRaisesTheSelectedCurvesDegreeOnShiftS() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    #expect(action("S", [.shift]) == nil)
+    context.selectedSketchTargetCount = 1
+    #expect(action("S", [.shift]) == .raiseCurveDegree)
+    #expect(action("s") != .raiseCurveDegree)
+    context.isSelectToolActive = false
+    #expect(action("S", [.shift]) == nil)
+}
+
 @Test func offsetKeyStartsOffsetPlanarCurveThenSlotAndSMakesItSymmetric() {
     var state = SlotProfileCommandState.inactive
     state.pressOffsetKey()

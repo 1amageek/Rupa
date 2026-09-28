@@ -312,6 +312,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case insertSketchSplineControlPointAtPoint(target: SelectionTarget, point: Point2D)
     /// Delete Redundant Topology: the spline's joints one cubic spans are removed, keeping its shape.
     case deleteRedundantSketchSplineJoints(target: SelectionTarget)
+    /// Raise Curve Degree: each target line or spline one degree higher, the same curve.
+    case raiseSketchCurveDegree(targets: [SelectionTarget])
+    /// Convert Vertex: an interior vertex a spline passes through becomes an ordinary control point.
+    case convertSketchSplineVertex(target: SelectionTarget)
     case setSketchCircleParameters(
         target: SelectionTarget,
         center: SketchPoint?,
@@ -812,6 +816,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "insertSketchSplineControlPointAtPoint"
         case .deleteRedundantSketchSplineJoints:
             "deleteRedundantSketchSplineJoints"
+        case .raiseSketchCurveDegree:
+            "raiseSketchCurveDegree"
+        case .convertSketchSplineVertex:
+            "convertSketchSplineVertex"
         case .cutSketchCurve:
             "cutSketchCurve"
         case .cutSketchCurves:
@@ -1036,6 +1044,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .splitSketchCurveAtPoint,
              .insertSketchSplineControlPointAtPoint,
              .deleteRedundantSketchSplineJoints,
+             .raiseSketchCurveDegree,
+             .convertSketchSplineVertex,
              .cutSketchCurve,
              .cutSketchCurves,
              .createExtrusion,

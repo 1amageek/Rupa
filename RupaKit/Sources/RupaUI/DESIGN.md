@@ -650,7 +650,10 @@ and selects the new curve, whose inspector edits its continuity (G0 to G3 at
 each end), tension and trim; its curve analysis lists each end as a join that
 requires that continuity (G3 shown as such). A spline's control-point inspector
 offers Smooth only at the interior joints its own degree and knots place
-(`SketchSpline.jointIndices`). With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
+(`SketchSpline.jointIndices`). Raise Curve Degree (Shift-S, Edit menu, palette) raises the
+selected sketch curves and selects the raised curves' control points; Convert
+Vertex (Edit menu, palette, or a double-click on a spline's interior vertex)
+turns that vertex into a control point. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
 → G3 → G0 and Q (or the inspector's Trim/Untrim Sources) turns trimming the
 curves it bridges on and off. Its context panel holds the G1 tension field
 (`WorkspaceCommandScalarInput`): D focuses it, Return or the panel's apply gives

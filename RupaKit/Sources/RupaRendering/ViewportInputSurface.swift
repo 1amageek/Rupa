@@ -36,6 +36,8 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onShiftTap: (CGPoint, CGSize) -> Bool
     var onCancel: () -> Bool = { false }
     var onDelete: () -> Bool = { false }
+    /// A second click at the same place, after its click was picked.
+    var onDoubleClick: () -> Void = {}
     var inputExclusionRects: [CGRect] = []
 
     func makeNSView(context: Context) -> InputView {
@@ -60,6 +62,7 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onShiftTap = onShiftTap
         nsView.onCancel = onCancel
         nsView.onDelete = onDelete
+        nsView.onDoubleClick = onDoubleClick
         nsView.inputExclusionRects = inputExclusionRects
     }
 }
@@ -78,6 +81,7 @@ extension ViewportInputSurface {
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
+        var onDoubleClick: (() -> Void)?
         var onCancel: (() -> Bool)?
         var onDelete: (() -> Bool)?
         var inputExclusionRects: [CGRect] = [] {
@@ -266,6 +270,9 @@ extension ViewportInputSurface {
             } else {
                 onPick?(end, bounds.size, intent)
                 onDragPreview?(nil, nil, bounds.size)
+                if event.clickCount == 2 {
+                    onDoubleClick?()
+                }
             }
             primaryDragActivated = false
             primaryDragCancelled = false

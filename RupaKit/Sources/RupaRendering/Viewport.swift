@@ -245,6 +245,7 @@ public struct Viewport: View {
     private let onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
     private let onDeleteSelection: (() -> Bool)?
+    private let onDoubleClick: (() -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
@@ -440,6 +441,7 @@ public struct Viewport: View {
         onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
         onDeleteSelection: (() -> Bool)? = nil,
+        onDoubleClick: (() -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
@@ -572,6 +574,7 @@ public struct Viewport: View {
         self.onConstructionPlaneHandleDrag = onConstructionPlaneHandleDrag
         self.onCommandConfirm = onCommandConfirm
         self.onDeleteSelection = onDeleteSelection
+        self.onDoubleClick = onDoubleClick
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
@@ -815,6 +818,7 @@ public struct Viewport: View {
                             return true
                         },
                         onDelete: { onDeleteSelection?() ?? false },
+                        onDoubleClick: { onDoubleClick?() },
                         inputExclusionRects: chromeLayout.inputExclusionRects
                     )
                     .accessibilityHidden(true)

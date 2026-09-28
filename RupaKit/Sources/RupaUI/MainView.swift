@@ -2277,6 +2277,7 @@ private struct ProjectMainViewContent: View {
             onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
             onCommandConfirm: viewportCommandConfirmHandler,
             onDeleteSelection: handleDeleteSelection,
+            onDoubleClick: viewportDoubleClickHandler,
             onHover: viewportHoverHandler,
             onSnapCandidateKindChange: { kind in
                 snapOverrideState.updateHoveredCandidateKind(kind)
@@ -6149,6 +6150,10 @@ private struct ProjectMainViewContent: View {
             guard let target = selectedSketchTargets.first else { return .ignored }
             submitSource(.unjoinSketchCurve(target: target))
             return .handled
+        case .raiseCurveDegree:
+            guard let action = raiseCurveDegreeAction else { return .ignored }
+            action()
+            return .handled
         case .cycleBridgeContinuity:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
             let order = BridgeCurveEndpointContinuity.allCases
@@ -8609,7 +8614,9 @@ private struct ProjectMainViewContent: View {
             reverseCurves: reverseCurvesAction,
             createInstance: createInstanceAction,
             realizeInstances: realizeInstancesAction,
-            insertKnot: selectedTool == .select ? insertKnotAction : nil
+            insertKnot: selectedTool == .select ? insertKnotAction : nil,
+            raiseCurveDegree: raiseCurveDegreeAction,
+            convertVertex: convertVertexAction
         )
     }
 
@@ -8711,6 +8718,80 @@ private struct ProjectMainViewContent: View {
         guard let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
               selectedSketchVertexAlignmentReferenceTarget(for: entity) != nil else { return nil }
         return { alignSelectedSketchVertex(entity) }
+    }
+
+    /// The selected sketch curves themselves, not their vertices or control points.
+    private var selectedSketchCurveTargets: [SelectionTarget] {
+        snapshot.selection.selectedTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component else { return false }
+            return componentID.sketchEntityReference != nil
+                && componentID.sketchPointHandleReference == nil
+                && componentID.sketchControlPointReference == nil
+        }
+    }
+
+    /// Raise Curve Degree on every selected sketch curve (Shift-S, Edit menu, palette), as one step;
+    /// the raised curves' control points are selected, as Plasticity selects the new CVs.
+    private var raiseCurveDegreeAction: (@MainActor () -> Void)? {
+        let curves = selectedSketchCurveTargets
+        guard !curves.isEmpty else { return nil }
+        return {
+            submitSource(.raiseSketchCurveDegree(targets: curves)) { result in
+                guard result?.didMutate == true, let document = workspace.view?.document.document else { return }
+                let raised = Set(curves.compactMap { target -> String? in
+                    guard case .sketchEntity(let componentID) = target.component else { return nil }
+                    return componentID.sketchEntityReference?.entityID.description
+                })
+                let entries: [SketchEntitySummaryResult.EntityEntry]
+                do {
+                    entries = try SketchEntitySnapshotService().snapshot(document: document).entries
+                } catch {
+                    reportToolStatus("Raise Curve Degree: the raised control points could not be read: \(error.localizedDescription)", severity: .warning)
+                    return
+                }
+                let targets = entries.filter { raised.contains($0.entityID) }.flatMap { entry -> [SelectionTarget] in
+                    guard let sceneNodeID = entry.sceneNodeID.flatMap(UUID.init(uuidString:)) else { return [] }
+                    return entry.controlPointTargets.map {
+                        SelectionTarget(
+                            sceneNodeID: SceneNodeID(sceneNodeID),
+                            component: .sketchEntity(SelectionComponentID(rawValue: $0.selectionComponentID))
+                        )
+                    }
+                }
+                if !targets.isEmpty { selectTargets(targets) }
+                reportToolStatus("Raise Curve Degree: \(curves.count) curve\(curves.count == 1 ? "" : "s") one degree up.")
+            }
+        }
+    }
+
+    /// A double-click on a vertex a spline passes through converts it (Convert Vertex); a
+    /// double-click anywhere else does nothing more than its click.
+    private func viewportDoubleClickHandler() {
+        guard selectedTool == .select,
+              let vertex = snapshot.selection.selectedTargets.first,
+              snapshot.selection.selectedTargets.count == 1,
+              case .sketchEntity(let componentID) = vertex.component,
+              let reference = componentID.sketchControlPointReference,
+              let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
+              entity.entityKind == "spline",
+              reference.index > 0, reference.index < entity.controlPoints.count - 1,
+              entity.splineJointIndexes.contains(reference.index),
+              let convert = convertVertexAction else { return }
+        convert()
+    }
+
+    /// Convert Vertex on the selected spline vertex (Edit menu, palette).
+    private var convertVertexAction: (@MainActor () -> Void)? {
+        let vertices = snapshot.selection.selectedTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component else { return false }
+            return componentID.sketchControlPointReference != nil
+        }
+        guard vertices.count == 1, let vertex = vertices.first else { return nil }
+        return {
+            submitSource(.convertSketchSplineVertex(target: vertex)) { result in
+                if result?.didMutate == true { reportToolStatus("Convert Vertex: the curve no longer passes through it.") }
+            }
+        }
     }
 
     /// Reverse Curve on every selected sketch curve (Edit menu, palette), as one step; Core refuses

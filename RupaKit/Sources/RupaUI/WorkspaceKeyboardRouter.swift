@@ -220,6 +220,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case applyBridgeTension
     /// Escape while the Bridge Curve's G1 tension is typed: leave it unchanged.
     case cancelBridgeTension
+    /// Shift-S: Raise Curve Degree on the selected sketch curves.
+    case raiseCurveDegree
     /// J: Join Curves on the two selected sketch curves.
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
@@ -774,6 +776,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if input.modifiers == [.option], key == "d" || key == "∂" {
             return context.hasProjectableSelection ? .projectToConstructionPlane : nil
+        }
+        if input.modifiers == [.shift], key == "s" {
+            return context.selectedSketchTargetCount > 0 ? .raiseCurveDegree : nil
         }
         guard input.modifiers.isEmpty else { return nil }
         if input.isTab, context.hasAlignableVertexPair, !context.hasSelectedBridgeCurve {

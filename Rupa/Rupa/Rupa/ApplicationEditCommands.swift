@@ -73,6 +73,14 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.reverseCurves?()
             }
             .disabled(editCommands?.reverseCurves == nil)
+            Button("Raise Curve Degree") {
+                editCommands?.raiseCurveDegree?()
+            }
+            .disabled(editCommands?.raiseCurveDegree == nil)
+            Button("Convert Vertex") {
+                editCommands?.convertVertex?()
+            }
+            .disabled(editCommands?.convertVertex == nil)
             Button("Create Instance") {
                 editCommands?.createInstance?()
             }
