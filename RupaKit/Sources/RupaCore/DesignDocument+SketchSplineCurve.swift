@@ -59,20 +59,15 @@ extension DesignDocument {
         guard spline.isClosed == false else {
             throw EditorError(code: .commandInvalid, message: "\(owner) requires an open spline; open a closed one first.")
         }
-        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
-        let (lower, upper) = curve.domain
-        let parameter = curve.parameter(ofFraction: fraction)
-        let tolerance = 1.0e-9 * max(upper - lower, 1)
-        guard parameter > lower + tolerance, parameter < upper - tolerance else {
-            throw EditorError(code: .commandInvalid, message: "\(owner) fraction must fall inside the spline.")
+        try validateSplineForm(spline, owner: owner)
+        guard let knots = spline.knotVector, fraction.isFinite, fraction > 0, fraction < 1 else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) requires an interior fraction.")
         }
+        let lower = knots[spline.degree], upper = knots[knots.count - spline.degree - 1]
         do {
-            let retained = try curve.bSpline.trimmed(from: lower, to: parameter, tolerance: .standard)
-            let next = try curve.bSpline.trimmed(from: parameter, to: upper, tolerance: .standard)
-            return (sketchSpline(from: retained), sketchSpline(from: next))
-        } catch let error as KernelError {
-            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
-        } catch let error as GeometryError {
+            let split = try SketchSplineRefinement().split(spline, at: lower + fraction * (upper - lower))
+            return (split.lower, split.upper)
+        } catch let error as SketchError {
             throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
         }
     }

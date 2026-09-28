@@ -77,12 +77,9 @@ extension DesignDocument {
                     message: "\(owner): a sketch spline's degree is at most \(SketchSpline.maximumDegree)."
                 )
             }
-            let curve = try resolvedSketchSplineCurve(spline, owner: owner)
             let raised: SketchSpline
             do {
-                raised = sketchSpline(from: try curve.degreeElevated(tolerance: .standard), isClosed: spline.isClosed)
-            } catch let error as GeometryError {
-                throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
+                raised = try SketchSplineRefinement().degreeElevated(spline)
             } catch let error as SketchError {
                 throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
             }
@@ -125,7 +122,7 @@ extension DesignDocument {
             // A line is a degree-1 curve; raised, it is the degree-2 Bezier with its middle as the
             // control point, on the same parameter.
             sketch.entities[entityID] = .spline(SketchSpline(
-                controlPoints: [line.start, sketchPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2), line.end],
+                controlPoints: [line.start, interpolatedSketchPoint(line.start, line.end, fraction: .scalar(0.5)), line.end],
                 degree: 2
             ))
             try rewriteSketchReferences(featureID: featureID, sketch: &sketch, metadata: &metadata) { reference in

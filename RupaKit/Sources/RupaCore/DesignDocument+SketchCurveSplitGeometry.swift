@@ -146,10 +146,7 @@ extension DesignDocument {
                 message: "\(owner) requires a line with non-zero length."
             )
         }
-        return sketchPoint(
-            x: startX + deltaX * fraction,
-            y: startY + deltaY * fraction
-        )
+        return interpolatedSketchPoint(line.start, line.end, fraction: .scalar(fraction))
     }
 
     func splitSpline(

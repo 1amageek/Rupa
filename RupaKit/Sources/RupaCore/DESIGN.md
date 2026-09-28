@@ -2286,3 +2286,29 @@ distributions, placement, identity reuse, source changes, cleanup and undo/redo.
 Natural extension stores CAD expressions containing the oriented end Bezier control-point expressions, distance expression and output coordinate. CADCore owns the shared numeric continuation; both evaluators resolve current inputs, preserve length units and propagate invalid geometry. Explicit-knot end spans are extracted by Boehm insertion in expression space. Line extension uses expression-valued endpoint differences and their norm. Serialization, dependency discovery, editable text and both evaluators must agree. Numeric control points are evaluation results, never the authority for a parameterized extension. Existing literal-only documents remain readable; older readers reject unknown expression kinds.
 
 Section endpoints are welded per occurrence using Euclidean distance, independent of cell boundaries. Sorted endpoints choose deterministic representatives; every member is within tolerance of its representative (no transitive widening). Cell indexing is only an accelerator; out-of-range coordinates use the same distance predicate without integer saturation. Edges and emitted points use the same representative. Verification covers neighboring cells, diagonal non-neighbors, permutations, translations, closed contours and interference.
+
+### Sketch P1 editing invariants
+
+Raise Degree and general spline Split consume CADIR's symbolic refinement contract;
+line splits and raised midpoints also retain coordinate expressions. Parameter
+changes must commute with these geometry-preserving edits; snapshots of evaluated
+coordinates are not persistent source replacements. Core owns reference migration,
+source metadata and atomic commit, while swift-CAD owns spline refinement algebra.
+
+Projection and Cut resolve the selected scene node hierarchy once per source/target
+pair. Source plane -> source world placement -> target inverse placement -> target
+plane is the common coordinate flow. Projection discards depth intentionally;
+planar Cut requires coplanarity before interpreting intersections. Affine line and
+spline placement is exact; circular entities require an in-plane similarity and
+refuse an unrepresentable ellipse explicitly. Reflections preserve the represented
+arc interval by reversing its parameter sense. Source documents remain unchanged
+when any selected cutter, placement or geometry operation fails.
+
+Trim includes closed splines as intersection boundaries. A closed target's editing
+capability is separate from a closed cutter's intersection capability. An unsupported
+or uncertifiable cutter fails the operation; it is never silently treated as absent.
+
+Verification: focused SketchP1 regression tests exercise changed source parameters,
+explicit knots and multiple degrees, translated/rotated/scaled/reflected sketches,
+parent placements, off-plane refusal, closed boundaries and atomic failures. Final
+integration uses the rebuilt application's linked implementation.

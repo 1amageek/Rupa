@@ -96,26 +96,12 @@ extension DesignDocument {
                   !sourceKnots.contains(parameter) else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) needs a point inside a knot span.")
             }
-            var knots = sourceKnots
-            var points = spline.controlPoints
-            // Boehm insertion in expression space retains parameter dependencies. At degree
-            // multiplicity the inserted point is on the curve, as the Insert CV contract requires.
-            for multiplicity in 0..<degree {
-                let currentSpan = span + multiplicity
-                var next = Array(points.prefix(currentSpan - degree + 1))
-                for index in (currentSpan - degree + 1)...(currentSpan - multiplicity) {
-                    let denominator = knots[index + degree] - knots[index]
-                    guard denominator > 0 else {
-                        throw EditorError(code: .commandInvalid, message: "\(owner) has a degenerate knot interval.")
-                    }
-                    next.append(interpolatedSketchPoint(points[index - 1], points[index],
-                        fraction: .scalar((parameter - knots[index]) / denominator)))
-                }
-                next.append(contentsOf: points[(currentSpan - multiplicity)...])
-                knots.insert(parameter, at: currentSpan + 1)
-                points = next
+            let updated: SketchSpline
+            do {
+                updated = try SketchSplineRefinement().insertingKnot(in: spline, at: parameter, multiplicity: degree)
+            } catch let error as SketchError {
+                throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
             }
-            let updated = SketchSpline(controlPoints: points, isClosed: spline.isClosed, degree: degree, knots: knots)
             try validateSplineForm(updated, owner: owner)
             return SketchSplineControlPointInsertion(
                 spline: updated, originalControlPointCount: spline.controlPoints.count,
