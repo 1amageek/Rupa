@@ -47,6 +47,19 @@ struct SceneMirrorTests {
         return Body(volume: volume, minX: xs.min() ?? .nan, maxX: xs.max() ?? .nan)
     }
 
+    @Test func mirrorCopiesAnExactCurveWithoutSharingItsFeature() throws {
+        var document = DesignDocument.empty()
+        let feature = try document.createCircleSketch(name: "Circle", plane: .xy,
+            center: SketchPoint(x: .length(0.02, .meter), y: .length(0.01, .meter)), radius: .length(0.01, .meter))
+        let source = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == feature }).id
+        let plane = try SceneMirrorPlane(origin: .origin, normal: .unitX)
+        let copy = try #require(try document.mirrorSceneNodes(ids: [source], plane: plane, options: .init()).first)
+        #expect(document.productMetadata.sceneNodes[copy]?.reference?.featureID != feature)
+        let transform = try SceneNodeHierarchy(metadata: document.productMetadata).worldTransform(of: copy)
+        #expect(try transform.applied(to: Point3D(x: 0.02, y: 0.01, z: 0)) == Point3D(x: -0.02, y: 0.01, z: 0))
+        _ = try document.validate()
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func mirrorCopiesTheObjectToTheSideTheNormalPointsTo() throws {
         var (document, box) = try box()
@@ -173,7 +186,7 @@ struct SceneMirrorTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func aSheetIsCopiedAndJoinedAcrossThePlaneAndACutIsRefused() throws {
+    func aSheetIsCopiedJoinedAndCutAcrossThePlane() throws {
         let plane = try SceneMirrorPlane(origin: .origin, normal: .unitX)
 
         var (copied, source) = try sheet(x0: 0.01)
@@ -191,11 +204,13 @@ struct SceneMirrorTests {
         #expect(abs(union.maxX - 0.04) < 1e-9)
 
         var (cut, crossing) = try sheet(x0: -0.01)
-        let before = cut
-        #expect(throws: EditorError.self) {
-            try cut.mirrorSceneNodes(ids: [crossing], plane: plane, options: .init(cutsAtPlane: true))
-        }
-        #expect(cut.cadDocument.designGraph == before.cadDocument.designGraph)
+        let mirrored = try #require(try cut.mirrorSceneNodes(
+            ids: [crossing], plane: plane, options: .init(cutsAtPlane: true)).first)
+        let kept = try sheetFaces(crossing, in: cut)
+        let reflected = try sheetFaces(mirrored, in: cut)
+        #expect(abs(kept.minX + 0.01) < 1e-8 && abs(kept.maxX) < 1e-8)
+        #expect(abs(reflected.minX) < 1e-8 && abs(reflected.maxX - 0.01) < 1e-8)
+
     }
 
     @Test func mirrorRefusesConflictingOptionsLockedObjectsAndShearedPlacements() throws {

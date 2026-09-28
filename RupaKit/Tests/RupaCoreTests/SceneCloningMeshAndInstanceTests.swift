@@ -38,6 +38,18 @@ import Testing
         return (document, node, asset.id)
     }
 
+    @Test func mirrorCopiesAMeshAtTheWorldReflectionWithIndependentAsset() throws {
+        var (document, node, source) = try meshDocument()
+        let plane = try SceneMirrorPlane(origin: Point3D(x: 2, y: 0, z: 0), normal: .unitX)
+        let copyID = try #require(try document.mirrorSceneNodes(ids: [node], plane: plane, options: .init()).first)
+        let copy = try #require(document.productMetadata.sceneNodes[copyID])
+        #expect(copy.reference?.geometrySourceID != source)
+        let world = try SceneNodeHierarchy(metadata: document.productMetadata).worldTransform(of: copyID)
+        #expect(try world.applied(to: Point3D(x: 1, y: 0, z: 0)) == Point3D(x: 3, y: 0, z: 0))
+        #expect(document.authoredMeshAssets[source]?.source.vertexPositions == document.authoredMeshAssets[try #require(copy.reference?.geometrySourceID)]?.source.vertexPositions)
+        _ = try document.validate()
+    }
+
     @Test func placingAMeshCopiesItsAssetUnderANewIdentity() throws {
         var (document, node, source) = try meshDocument()
         #expect(document.productMetadata.sceneCopyRefusal(for: [node]) == nil)

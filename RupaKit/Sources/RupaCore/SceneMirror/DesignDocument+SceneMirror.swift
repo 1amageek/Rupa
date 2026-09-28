@@ -34,8 +34,14 @@ extension DesignDocument {
                 )
                 continue
             }
+            if !options.cutsAtPlane && !options.unionsHalves,
+               node.reference?.kind != .body && node.reference?.kind != .feature {
+                results += try updated.placeSceneNodes(
+                    ids: [root], placements: [try plane.reflection()], objectRegistry: objectRegistry)
+                continue
+            }
             let local = try mirrorPlane(plane, placedBy: world)
-            try mirrorableBody(node, cuts: options.cutsAtPlane)
+            try mirrorableBody(node)
             if options.makesInstances {
                 try updated.appendMirror(to: root, plane: local, output: .kept, cuts: true, objectRegistry: objectRegistry)
                 results += try updated.placeSceneNodes(
@@ -67,23 +73,12 @@ extension DesignDocument {
     }
 
     /// Refuses objects Swift-CAD cannot mirror as a feature.
-    private func mirrorableBody(_ node: SceneNode, cuts: Bool) throws {
+    private func mirrorableBody(_ node: SceneNode) throws {
         guard let reference = node.reference, reference.kind == .body || reference.kind == .feature,
               reference.featureID != nil, node.object != nil else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Mirror cuts, joins and copies bodies; other objects can be mirrored as instances."
-            )
-        }
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Swift-CAD mirrors sheets, joining a sheet to its
-        // reflection where it keeps to one side of the plane, but cannot yet cut a sheet at the
-        // plane, so a sheet is refused here whenever the mirror cuts. Mirror of sheets is not
-        // complete until the kernel splits a sheet at the plane and this refusal is replaced by
-        // that path with its own tests.
-        guard !(cuts && node.object?.geometryRole == .surface) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Mirror cannot cut a surface body at the plane yet."
+                message: "Mirror cuts and joins bodies; other objects support reflected copies or instances."
             )
         }
     }

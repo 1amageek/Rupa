@@ -24,7 +24,7 @@ panel (RupaUI), copying objects (SceneCloning).
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
-| [RupaCore](../DESIGN.md) | parent | `SceneNodeHierarchy`, `appendTopologyEdit` | Each object's feature is replaced by its mirror feature | Locked, instance-owned and non-body objects are refused |
+| [RupaCore](../DESIGN.md) | parent | `SceneNodeHierarchy`, `appendTopologyEdit` | Each object's feature is replaced by its mirror feature | Cut and Union require bodies; ordinary copies include curves and meshes |
 | [SceneCloning](../SceneCloning/DESIGN.md) | depends on | `placeSceneNodes` | Copies an object in place, or places an instance at the reflection | Instances may carry a reflecting placement |
 | [RupaUI](../../RupaUI/DESIGN.md) | used by | plane builders, options, command | The Mirror session keys and panel | Freestyle points are world points |
 
@@ -53,13 +53,11 @@ options ──per object──▶ MirrorFeature(output, cutsAtPlane) and/or copy
   Make Instances together are refused.
 - A body placement that shears or scales unevenly has no mirror plane in the
   body's coordinates and is refused; so are locked objects, objects owned by an
-  instance and non-body objects outside Make Instances.
+  instance and non-body objects when Cut or Union requires body topology. Non-body independent reflections use SceneCloning with the world reflection, preserving exact curves and mesh assets.
 - A sheet body mirrors to a sheet: the mirror feature takes its target's output
   role from `FeatureNodeFactory`. Union halves sews a sheet meeting the plane
   along an edge to its reflection, and keeps a sheet clear of the plane beside
-  its reflection. Swift-CAD refuses a sheet that may cross the plane, and Rupa
-  refuses cutting a sheet, since the kernel cannot split a sheet at the plane
-  yet (`FIXME(INCOMPLETE_IMPLEMENTATION)` in `mirrorableBody`).
+  its reflection. Swift-CAD splits a cut sheet with its existing exact intersection and face arrangement pipeline, retains the negative half-space and sews connected retained patches. Crossing sheets without Cut remain subject to the sheet joining contract.
 - The command returns the new objects (copies or instances) or, for Union
   halves, the mirrored objects, and is one undoable source command.
 
@@ -68,5 +66,5 @@ options ──per object──▶ MirrorFeature(output, cutsAtPlane) and/or copy
 `SceneMirrorTests` prove each plane builder, the copy, cut, union and instance
 outputs by the evaluated volumes and bounds of the result bodies, a placed
 object mirrored across a world plane, a sheet copied and joined across the
-plane with its cut refused, and the refusals. A change re-checks the
+plane with exact cutting, reflected curves and meshes, and the refusals. A change re-checks the
 Mirror session (RupaUI) and Swift-CAD's mirror feature contract.
