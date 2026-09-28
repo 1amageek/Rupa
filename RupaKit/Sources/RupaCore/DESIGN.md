@@ -1205,6 +1205,12 @@ span, an arc Swift-CAD's `CubicBezierArcApproximation` chain, a spline its own
 segments) that `offset(spans:distance:gapFill:)` offsets, a chain returning to its
 start staying closed; the result is one cubic chain spline.
 `OffsetCurveSplineGapFillTests` cover the fills and the joined chain.
+`freestyleOffsetDistance(target:through:)` is Freestyle's distance: the point, taken
+into the sketch's own coordinates through its placement, measured to the nearest
+point of the curve (a line, spline or joined chain as Bezier spans sampled and
+refined by golden section) with `offsetCurve`'s sign: a line, spline and joined chain
+(in the chain's own direction) positive on the left, an arc or circle outside it.
+`FreestyleOffsetTests` own this.
 
 `applySketchCornerTreatments(vertices:distance:treatment:)` fillets or chamfers
 several selected curve ends: each corner once, even when both of its ends are

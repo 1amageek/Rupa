@@ -188,6 +188,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateSlotWidthInput
     /// S in Offset Planar Curve: copies on both sides.
     case toggleCurveOffsetSymmetric
+    /// F in Offset Planar Curve: Freestyle, a click setting the distance.
+    case toggleCurveOffsetFreestyle
     case activateEdgeOffsetDistanceInput
     case activateRegionOffsetDistanceInput
     case cycleEdgeOffsetGapFill
@@ -767,6 +769,8 @@ struct WorkspaceKeyboardRouter: Sendable {
             return context.isRegionOffsetCommandActive ? .toggleRegionOffsetLockedDistance : nil
         case "i":
             return context.isRegionOffsetCommandActive ? .toggleCombinedRegions : nil
+        case "f":
+            return context.isCurveOffsetCommandActive ? .toggleCurveOffsetFreestyle : nil
         default:
             return nil
         }

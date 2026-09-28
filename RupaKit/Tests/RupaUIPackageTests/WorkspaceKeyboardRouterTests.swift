@@ -541,6 +541,19 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelProject)
 }
 
+@Test func fInACurveOffsetTogglesFreestyleAndEndingOffsetClearsIt() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext(isSlotProfileCommandActive: true)
+    context.isCurveOffsetCommandActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "f"), context: context) == .toggleCurveOffsetFreestyle)
+    var state = SlotProfileCommandState()
+    state.pressOffsetKey()
+    state.toggleFreestyle()
+    #expect(state.isFreestyle)
+    state.deactivate()
+    #expect(!state.isFreestyle)
+}
+
 @Test func theRebuildDialogAsksCoreForItsMethodsValues() throws {
     let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
     var session = try #require(WorkspaceRebuildSession(

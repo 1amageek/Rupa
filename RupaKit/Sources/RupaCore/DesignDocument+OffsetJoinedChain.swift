@@ -18,6 +18,25 @@ extension DesignDocument {
     func offsetJoinedChain(
         _ group: JoinedCurveGroupSource, sketch: Sketch, distance: Double, gapFill: OffsetCurveGapFill
     ) throws -> SketchSpline {
+        let spans = try joinedChainSpans(group, sketch: sketch)
+        let kernelGapFill: CubicBezierChainOffset.GapFill = switch gapFill {
+        case .round: .round
+        case .linear: .linear
+        case .natural: .natural
+        }
+        let chain: [Point2D]
+        do {
+            chain = try CubicBezierChainOffset(tolerance: .standard).offset(spans: spans, distance: distance, gapFill: kernelGapFill)
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)")
+        }
+        let isClosed = hypot(chain[0].x - chain[chain.count - 1].x, chain[0].y - chain[chain.count - 1].y) <= modelingSettings.tolerance.distance
+        return SketchSpline(controlPoints: chain.map { sketchPoint(x: $0.x, y: $0.y) }, isClosed: isClosed)
+    }
+
+    /// The joined chain as one run of Bezier spans in sketch coordinates, each member turned to
+    /// run on from the one before.
+    func joinedChainSpans(_ group: JoinedCurveGroupSource, sketch: Sketch) throws -> [[Point2D]] {
         let owner = "Offset Planar Curve"
         // Each end of a member, 0 its start and 1 its end, and the end it is joined to.
         struct End: Hashable { var entity: SketchEntityID; var isEnd: Bool }
@@ -66,23 +85,11 @@ extension DesignDocument {
         guard visited.count == members.count else {
             throw EditorError(code: .commandInvalid, message: "\(owner): the joined curve's members do not form one chain.")
         }
-        let kernelGapFill: CubicBezierChainOffset.GapFill = switch gapFill {
-        case .round: .round
-        case .linear: .linear
-        case .natural: .natural
-        }
-        let chain: [Point2D]
-        do {
-            chain = try CubicBezierChainOffset(tolerance: .standard).offset(spans: spans, distance: distance, gapFill: kernelGapFill)
-        } catch let error as KernelError {
-            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
-        }
-        let isClosed = hypot(chain[0].x - chain[chain.count - 1].x, chain[0].y - chain[chain.count - 1].y) <= modelingSettings.tolerance.distance
-        return SketchSpline(controlPoints: chain.map { sketchPoint(x: $0.x, y: $0.y) }, isClosed: isClosed)
+        return spans
     }
 
     /// A line, arc or spline as Bezier spans in its own direction.
-    private func bezierSpans(of entity: SketchEntity, owner: String) throws -> [[Point2D]] {
+    func bezierSpans(of entity: SketchEntity, owner: String) throws -> [[Point2D]] {
         switch entity {
         case .line(let line):
             let start = try resolvedProjectionPoint(line.start, owner: "\(owner) line start")

@@ -21,6 +21,8 @@ struct SlotProfileCommandState: Equatable {
     var output: Output
     /// Offset Planar Curve's Symmetric option: copies on both sides.
     var isSymmetric: Bool
+    /// Offset Planar Curve's Freestyle (F): a click sets the distance to where the offset passes.
+    var isFreestyle = false
 
     init(inputMode: InputMode = .inactive, output: Output = .slot, isSymmetric: Bool = false) {
         self.inputMode = inputMode
@@ -69,6 +71,7 @@ struct SlotProfileCommandState: Equatable {
             output = .offset
             isSymmetric = false
         }
+        isFreestyle = false
         inputMode = .width
     }
 
@@ -76,6 +79,7 @@ struct SlotProfileCommandState: Equatable {
     mutating func beginVertexOffset() {
         output = .vertexOffset
         isSymmetric = false
+        isFreestyle = false
         inputMode = .width
     }
 
@@ -87,7 +91,13 @@ struct SlotProfileCommandState: Equatable {
         isSymmetric.toggle()
     }
 
+    /// F in Offset Planar Curve.
+    mutating func toggleFreestyle() {
+        isFreestyle.toggle()
+    }
+
     mutating func deactivate() {
         inputMode = .inactive
+        isFreestyle = false
     }
 }

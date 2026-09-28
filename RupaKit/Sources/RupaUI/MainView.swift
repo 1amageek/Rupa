@@ -5638,6 +5638,10 @@ private struct ProjectMainViewContent: View {
             pickDeformFace(at: target)
             return
         }
+        if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle, selectedTool == .select {
+            pickFreestyleOffset(at: target)
+            return
+        }
 
         if modelingDraft?.kind == .constrainedSurface {
             let plane = effectiveSketchPlane(fallback: target.sketchPlane)
@@ -6127,6 +6131,12 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .toggleCurveOffsetSymmetric:
             slotProfileCommandState.toggleSymmetric()
+            return .handled
+        case .toggleCurveOffsetFreestyle:
+            slotProfileCommandState.toggleFreestyle()
+            reportToolStatus(slotProfileCommandState.isFreestyle
+                ? "Offset Freestyle: click where the offset passes, then Return or right-click."
+                : "Offset: type the distance.")
             return .handled
         case .activateEdgeOffsetDistanceInput:
             edgeOffsetCommandState.activateDistanceInput()
@@ -9050,6 +9060,29 @@ private struct ProjectMainViewContent: View {
             rebuildSession = nil
             deformSession = deform
             reportToolStatus(deform.prompt)
+        }
+    }
+
+    /// A click in Offset's Freestyle: the distance (with its side) that puts the offset through
+    /// the snapped point, set as Offset's distance; Return or right-click creates it.
+    private func pickFreestyleOffset(at target: ViewportCanvasTarget) {
+        guard let curve = selectedCurveOffsetTarget else {
+            reportToolStatus("Offset Freestyle: select one sketch curve.", severity: .warning)
+            return
+        }
+        let plane = effectiveSketchPlane(fallback: target.sketchPlane)
+        guard let input = mappedCanvasInput(modelPoint: target.modelPoint,
+            modelWorldPoint: target.modelWorldPoint,
+            viewRayAnchorWorldPoint: target.viewRayAnchorWorldPoint, sketchPlane: plane) else { return }
+        let snapped = snappedModelInput(input.point, modifierFlags: target.modifierFlags)
+        guard let point = resolvedCanvasWorldPoint(for: snapped.point,
+            snappedWorldPoint: snapped.worldPoint, fallbackWorldPoint: input.worldPoint,
+            sketchPlane: plane) else { return }
+        do {
+            slotProfileWidthMeters = try snapshot.document.document.freestyleOffsetDistance(target: curve, through: point)
+            reportToolStatus("Offset Freestyle: Return or right-click creates it.")
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
         }
     }
 
