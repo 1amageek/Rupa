@@ -991,6 +991,15 @@ no sketch reference names a point inside a curve, so this alignment is made once
 Bridge Curves are refused as targets of a one-time alignment.
 `SketchVertexAlignmentFrameTests` own these.
 
+Align on two curves (`alignSketchCurveEnds`) aligns the second curve's end nearest
+the first with the first's nearest end, by the same nearest-end rule as Bridge.
+Dependent Curve Extend (`extendSketchCurve(target:until:shape:)`) extends the end
+in its shape long enough to pass every point of the limit curve (an arc only until
+it would close), finds the crossings with Swift-CAD's intersector, and splits the
+extension exactly at the crossing nearest the end, so the new end lies on the limit
+curve; a limit it never meets refuses the command. `DependentExtendAndAlignTests`
+own these.
+
 The constraint propagator reads a spline end through the clamped end conditions
 of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −
 (P1 − P0)/Δ1) in that end's frame (the reversed curve's start at the end), and

@@ -67,6 +67,123 @@ extension DesignDocument {
         didCommitExtend = true
     }
 
+    /// Dependent Curve Extend: the target end extends in `shape` until it meets the curve
+    /// `limit` names, at the crossing nearest the end. The extension is first made long enough to
+    /// reach past `limit`, then split exactly at that crossing (Swift-CAD's intersector and the
+    /// sketch split), so the new end lies on `limit`. A limit it never meets refuses the command.
+    public mutating func extendSketchCurve(
+        target: SelectionTarget,
+        until limit: SelectionTarget,
+        shape: ExtendCurveShape = .natural,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let owner = "Extend Curve to a curve"
+        let selection = try editableSketchEntityBase(for: target, operationName: owner)
+        let endpoint = try extendCurveEndpoint(for: target, selection: selection, operationName: owner)
+        try validateSketchCurveCanExtend(selection: selection, endpoint: endpoint, shape: shape)
+        let limitSelection = try editableSketchEntity(for: limit, operationName: owner)
+        guard limitSelection.featureID == selection.featureID else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) needs the limit curve in the same sketch.")
+        }
+        guard limitSelection.entityID != selection.entityID else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) needs another curve as its limit.")
+        }
+        let limitGeometry = try cutCurveGeometry(limitSelection.entity, role: .cutter)
+        guard let endPoint = try resolvedPoint(endpoint.reference, in: selection.sketch, owner: owner) else {
+            throw EditorError(code: .referenceUnresolved, message: "\(owner) could not resolve the curve end.")
+        }
+        // Long enough to pass every point of the limit curve.
+        let limitSamples = try sketchCurveSamplePoints(limitSelection.entity, owner: owner)
+        var reach = 2 * (limitSamples.map { hypot($0.x - endPoint.x, $0.y - endPoint.y) }.max() ?? 0) + 1.0e-3
+        if case .arc(let arc) = selection.entity {
+            // An arc may grow only until it closes.
+            let radius = try resolvedPositiveLengthValue(arc.radius, owner: owner)
+            let sweep = positiveArcSpan(
+                startAngle: try resolvedAngleValue(arc.startAngle, owner: owner),
+                endAngle: try resolvedAngleValue(arc.endAngle, owner: owner)
+            )
+            reach = min(reach, radius * (2 * Double.pi - sweep) * 0.999)
+        }
+        let probe = try extendedSketchCurveEntity(
+            selection.entity,
+            endpoint: endpoint,
+            distance: .length(reach, .meter),
+            resolvedDistance: reach,
+            shape: shape,
+            owner: owner
+        )
+        let probeGeometry = try cutCurveGeometry(probe, role: .target)
+        let original = try sketchCurveSplitParameter(of: probe, nearestTo: Point2D(x: endPoint.x, y: endPoint.y))
+        let hits: [SketchCurveIntersection2D]
+        do {
+            hits = try SketchCurveIntersector(tolerance: .standard).intersections(of: probeGeometry, with: limitGeometry)
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
+        }
+        let margin = 1.0e-9
+        let beyond = hits.map { splitParameter(ofNatural: $0.firstParameter, on: probeGeometry) }
+            .filter { endpoint.isStart ? $0 < original - margin : $0 > original + margin }
+        guard let crossing = endpoint.isStart ? beyond.max() : beyond.min() else {
+            throw EditorError(code: .commandInvalid, message: "\(owner): the extension does not reach the limit curve.")
+        }
+        let split = try splitSketchCurveEntity(
+            probe,
+            entityID: selection.entityID,
+            newEntityID: SketchEntityID(),
+            fraction: crossing,
+            owner: owner
+        )
+        let extendedEntity = endpoint.isStart ? split.newEntity : split.retainedEntity
+
+        var feature = selection.feature
+        var sketch = selection.sketch
+        sketch.entities[selection.entityID] = extendedEntity
+        if case .spline(let originalSpline) = selection.entity, endpoint.isStart,
+           case .spline(let extended) = extendedEntity {
+            let shift = extended.controlPoints.count - originalSpline.controlPoints.count
+            sketch.remapSplineControlPoints(entity: selection.entityID) { $0 + shift }
+        }
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        if selection.sketch.entities.count == 1 {
+            try markSketchObjectAsSourceEdited(featureID: selection.featureID)
+        }
+        try commitSketchEntityEdit(featureID: selection.featureID, feature: &feature, sketch: sketch, objectRegistry: objectRegistry, errorOwner: owner)
+        didCommit = true
+    }
+
+    /// Points along a curve, to bound how far an extension must reach.
+    private func sketchCurveSamplePoints(_ entity: SketchEntity, owner: String) throws -> [Point2D] {
+        switch entity {
+        case .line(let line):
+            let start = try resolvedSketchPoint(line.start, owner: owner), end = try resolvedSketchPoint(line.end, owner: owner)
+            return [Point2D(x: start.x, y: start.y), Point2D(x: end.x, y: end.y)]
+        case .circle(let circle):
+            let center = try resolvedSketchPoint(circle.center, owner: owner)
+            let radius = try resolvedPositiveLengthValue(circle.radius, owner: owner)
+            return [Point2D(x: center.x + radius, y: center.y + radius), Point2D(x: center.x - radius, y: center.y - radius)]
+        case .arc(let arc):
+            let center = try resolvedSketchPoint(arc.center, owner: owner)
+            let radius = try resolvedPositiveLengthValue(arc.radius, owner: owner)
+            return [Point2D(x: center.x + radius, y: center.y + radius), Point2D(x: center.x - radius, y: center.y - radius)]
+        case .spline(let spline):
+            return try spline.controlPoints.map { point in
+                let resolved = try resolvedSketchPoint(point, owner: owner)
+                return Point2D(x: resolved.x, y: resolved.y)
+            }
+        case .point(let point):
+            let resolved = try resolvedSketchPoint(point, owner: owner)
+            return [Point2D(x: resolved.x, y: resolved.y)]
+        }
+    }
+
     private enum ExtendCurveEndpoint {
         case line(LineEndpoint)
         case arc(ArcEndpoint)

@@ -133,6 +133,8 @@ enum ProductionMainViewActionManifest {
         "draftBodyFaces",
         "duplicateSceneNodes",
         "extendSketchCurve",
+        "extendSketchCurveToCurve",
+        "alignSketchCurveEnds",
         "completeSketchCurve",
         "insertSketchSplineControlPointAtPoint",
         "realizeComponentInstances",

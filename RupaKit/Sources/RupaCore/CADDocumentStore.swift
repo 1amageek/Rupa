@@ -2552,6 +2552,18 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .extendSketchCurveToCurve(target, limit, shape):
+            var updatedDocument = document
+            try updatedDocument.extendSketchCurve(target: target, until: limit, shape: shape, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .alignSketchCurveEnds(first, second, options):
+            var updatedDocument = document
+            try updatedDocument.alignSketchCurveEnds(first: first, second: second, options: options, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .raiseSketchCurveDegree(targets):
             var updatedDocument = document
             try updatedDocument.raiseSketchCurveDegree(targets: targets, objectRegistry: objectRegistry)

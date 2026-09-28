@@ -19,6 +19,8 @@ struct WorkspaceSketchCurveOperationControlsView: View {
     var vertexAlignmentParameter: Binding<Double>?
     var sliderMetersRange: (Double) -> ClosedRange<Double>
     var onExtend: (SelectionTarget, ExtendCurveShape) -> Void
+    /// Dependent Curve Extend to the other selected curve, when one is selected.
+    var onExtendToCurve: ((SelectionTarget, ExtendCurveShape) -> Void)? = nil
     var onOffsetVertex: (InspectorSketchEntity) -> Void
     var onApplyCornerTreatment: (SelectionTarget) -> Void
     var onJoin: (InspectorSketchEntity) -> Void
@@ -209,6 +211,18 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             }
             .disabled(state.canExtend == false || state.extendShapes.isEmpty)
             .accessibilityIdentifier("InspectorCurve.extend")
+            if let onExtendToCurve {
+                Button {
+                    if let shape = state.effectiveExtendShape(extendShape) {
+                        onExtendToCurve(entity.target, shape)
+                    }
+                } label: {
+                    Label("To Curve", systemImage: "arrow.right.to.line")
+                        .contentShape(Rectangle())
+                }
+                .disabled(state.canExtend == false || state.extendShapes.isEmpty)
+                .accessibilityIdentifier("InspectorCurve.extendToCurve")
+            }
         }
     }
 

@@ -122,7 +122,7 @@ extension DesignDocument {
         }
     }
 
-    private enum CutCurveRole {
+    enum CutCurveRole {
         case target
         case cutter
 
@@ -244,7 +244,7 @@ extension DesignDocument {
     }
 
     /// The authored entity as exact planar geometry in its sketch plane.
-    private func cutCurveGeometry(
+    func cutCurveGeometry(
         _ entity: SketchEntity,
         role: CutCurveRole
     ) throws -> SketchCurveGeometry2D {

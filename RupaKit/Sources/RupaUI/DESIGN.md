@@ -615,7 +615,9 @@ selected end at the inspector's continuity; with two alignable ends selected, Ta
 steps that continuity G0 → G1 → G2 → G0 (a selected Bridge Curve keeps Tab for
 its own continuity). With a whole curve selected as the reference instead of an end,
 the inspector shows a Parameter (0 to 1 over that curve's parameter) and the end
-is placed there.
+is placed there. With two whole curves selected, Align aligns their nearest ends.
+With a curve end and another whole curve selected, Extend's inspector offers To
+Curve, which extends the end in the chosen shape until it meets that curve.
 
 Reverse Curve (Edit menu, palette) reverses every selected sketch curve as one
 step through `reverseSketchCurve`; Core refuses the step when one of them has no

@@ -130,6 +130,8 @@ enum PreparedAutomationSourceCommandValidation {
              .reverseSketchCurve,
              .rebuildSketchCurve,
              .extendSketchCurve,
+             .extendSketchCurveToCurve,
+             .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,
              .subdivideSurface,

@@ -3,6 +3,36 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    /// Align on two curves: the second curve's end nearest the first is aligned with the first's
+    /// nearest end, as Align Vertex on those two ends.
+    public mutating func alignSketchCurveEnds(
+        first: SelectionTarget,
+        second: SelectionTarget,
+        options: SketchVertexAlignmentOptions = SketchVertexAlignmentOptions(),
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let ends = try bridgeEndpoints(for: [first, second])
+        func endTarget(_ reference: SketchReference, of target: SelectionTarget) throws -> SelectionTarget {
+            let component: SelectionComponentID = switch reference {
+            case .lineStart(let id): .sketchPointHandle(featureID: ends.featureID, entityID: id, handle: .lineStart)
+            case .lineEnd(let id): .sketchPointHandle(featureID: ends.featureID, entityID: id, handle: .lineEnd)
+            case .arcStart(let id): .sketchPointHandle(featureID: ends.featureID, entityID: id, handle: .arcStart)
+            case .arcEnd(let id): .sketchPointHandle(featureID: ends.featureID, entityID: id, handle: .arcEnd)
+            case .splineControlPoint(let id, let index): .sketchControlPoint(featureID: ends.featureID, entityID: id, index: index)
+            case .entity(let id): .sketchPointHandle(featureID: ends.featureID, entityID: id, handle: .point)
+            case .circleCenter, .circleRadius, .arcCenter, .arcRadius:
+                throw EditorError(code: .commandInvalid, message: "Align aligns curve ends.")
+            }
+            return SelectionTarget(sceneNodeID: target.sceneNodeID, component: .sketchEntity(component))
+        }
+        try alignSketchVertex(
+            target: endTarget(ends.second.reference, of: second),
+            reference: endTarget(ends.first.reference, of: first),
+            options: options,
+            objectRegistry: objectRegistry
+        )
+    }
+
     public mutating func alignSketchVertex(
         target: SelectionTarget,
         reference: SelectionTarget,

@@ -8736,6 +8736,17 @@ private struct ProjectMainViewContent: View {
     /// Align Vertex on the selected curve end and the other selected end (Edit menu, palette), at
     /// the inspector's continuity, which Tab steps.
     private var alignVertexAction: (@MainActor () -> Void)? {
+        let curves = selectedSketchCurveTargets
+        if curves.count == 2, snapshot.selection.selectedTargets.count == 2 {
+            // Align on two curves: their nearest ends, the second aligned with the first.
+            return {
+                submitSource(.alignSketchCurveEnds(
+                    first: curves[0],
+                    second: curves[1],
+                    options: SketchVertexAlignmentOptions(continuity: sketchVertexAlignmentContinuity)
+                ))
+            }
+        }
         guard let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
               selectedSketchVertexAlignmentReferenceTarget(for: entity) != nil else { return nil }
         return { alignSelectedSketchVertex(entity) }
@@ -8783,6 +8794,16 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Raise Curve Degree: \(curves.count) curve\(curves.count == 1 ? "" : "s") one degree up.")
             }
         }
+    }
+
+    /// The one other whole curve selected beside a curve end, which Extend can reach.
+    private func extendLimitCurveTarget(for entity: InspectorSketchEntity) -> SelectionTarget? {
+        let others = selectedSketchCurveTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component,
+                  let reference = componentID.sketchEntityReference else { return false }
+            return reference.entityID != entity.entityID
+        }
+        return others.count == 1 ? others.first : nil
     }
 
     /// Rebuild Curve's dialog on the selected splines (Edit menu, palette).
@@ -9994,6 +10015,11 @@ private struct ProjectMainViewContent: View {
                 lengthSliderMetersRange(for: meters)
             },
             onExtend: extendSelectedSketchCurve,
+            onExtendToCurve: extendLimitCurveTarget(for: entity).map { limit in
+                { target, shape in
+                    submitSource(.extendSketchCurveToCurve(target: target, limit: limit, shape: shape))
+                }
+            },
             onOffsetVertex: offsetSelectedSketchVertex,
             onApplyCornerTreatment: applySelectedSketchCornerTreatment,
             onJoin: joinSelectedSketchCurves,

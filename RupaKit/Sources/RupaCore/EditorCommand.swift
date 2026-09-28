@@ -341,6 +341,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case reverseSketchCurve(target: SelectionTarget)
     case rebuildSketchCurve(target: SelectionTarget, options: CurveRebuildOptions)
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
+    /// Dependent Curve Extend: the target end extends in `shape` until it meets `limit`.
+    case extendSketchCurveToCurve(target: SelectionTarget, limit: SelectionTarget, shape: ExtendCurveShape)
+    /// Align on two curves: the second curve's nearest end aligned with the first's.
+    case alignSketchCurveEnds(first: SelectionTarget, second: SelectionTarget, options: SketchVertexAlignmentOptions)
     /// Complete Edge: extends a sketch curve's open ends to the nearest curve its extension meets.
     case completeSketchCurve(target: SelectionTarget)
     /// Subdivide: splits every span of a sketch spline at its middle.
@@ -790,6 +794,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "reverseSketchCurve"
         case .rebuildSketchCurve:
             "rebuildSketchCurve"
+        case .extendSketchCurveToCurve:
+            "extendSketchCurveToCurve"
+        case .alignSketchCurveEnds:
+            "alignSketchCurveEnds"
         case .extendSketchCurve:
             "extendSketchCurve"
         case .completeSketchCurve:
@@ -1032,6 +1040,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .reverseSketchCurve,
              .rebuildSketchCurve,
              .extendSketchCurve,
+             .extendSketchCurveToCurve,
+             .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,
              .subdivideSurface,
