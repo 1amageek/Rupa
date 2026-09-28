@@ -232,6 +232,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case confirmDeform
     /// Escape while Deform Curve's dialog runs: end it without a change.
     case cancelDeform
+    /// Return while Bridge Edge's dialog runs: bridge.
+    case confirmBridgeEdge
+    /// Escape while Bridge Edge's dialog runs: end it without a change.
+    case cancelBridgeEdge
     /// Return while Project Curve Body's dialog runs: project.
     case confirmProject
     /// Escape while Project Curve Body's dialog runs: end it without a change.
@@ -304,6 +308,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isDeformSessionActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
+    /// Whether Bridge Edge's dialog runs.
+    var isBridgeEdgeSessionActive: Bool = false
     /// Whether the Command Palette is open, whose field owns every key but Escape.
     var isCommandPaletteOpen: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
@@ -393,6 +399,11 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.ownsTextEditingKeys {
             if input.isReturn { return .confirmProject }
             if input.isEscape { return .cancelProject }
+        }
+        if context.isBridgeEdgeSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys {
+            if input.isReturn { return .confirmBridgeEdge }
+            if input.isEscape { return .cancelBridgeEdge }
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction

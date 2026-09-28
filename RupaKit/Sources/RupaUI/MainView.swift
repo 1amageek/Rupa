@@ -191,6 +191,7 @@ private struct ProjectMainViewContent: View {
     @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var deformSession: WorkspaceDeformSession?
     @State private var projectSession: WorkspaceProjectSession?
+    @State private var bridgeEdgeSession: WorkspaceBridgeEdgeSession?
     @State private var filletSession: WorkspaceFilletSession?
     /// The G1 tension typed for a Bridge Curve (D), until Return applies it or Escape drops it.
     @State private var bridgeTensionInput: (sourceID: BridgeCurveSourceID, value: Double)?
@@ -2833,6 +2834,7 @@ private struct ProjectMainViewContent: View {
             || rebuildSession != nil
             || deformSession != nil
             || projectSession != nil
+            || bridgeEdgeSession != nil
             || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
@@ -2860,6 +2862,10 @@ private struct ProjectMainViewContent: View {
         }
         if projectSession != nil {
             confirmProject()
+            return true
+        }
+        if bridgeEdgeSession != nil {
+            confirmBridgeEdge()
             return true
         }
         if slideCommandState.isCurveControlVerticesActive {
@@ -4017,6 +4023,7 @@ private struct ProjectMainViewContent: View {
         if rebuildSession != nil { inputs.insert(.rebuild) }
         if deformSession != nil { inputs.insert(.deform) }
         if projectSession != nil { inputs.insert(.project) }
+        if bridgeEdgeSession != nil { inputs.insert(.bridgeEdge) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4124,6 +4131,10 @@ private struct ProjectMainViewContent: View {
             if let projectSession {
                 workspaceContextDivider
                 projectContextPanelContent(projectSession)
+            }
+            if let bridgeEdgeSession {
+                workspaceContextDivider
+                bridgeEdgeContextPanelContent(bridgeEdgeSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -5882,6 +5893,7 @@ private struct ProjectMainViewContent: View {
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
             isProjectSessionActive: projectSession != nil,
+            isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
@@ -6247,6 +6259,13 @@ private struct ProjectMainViewContent: View {
         case .cancelProject:
             projectSession = nil
             reportToolStatus("Project ended.")
+            return .handled
+        case .confirmBridgeEdge:
+            confirmBridgeEdge()
+            return .handled
+        case .cancelBridgeEdge:
+            bridgeEdgeSession = nil
+            reportToolStatus("Bridge Edge ended.")
             return .handled
         case .cycleBridgeContinuity:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
@@ -8847,7 +8866,20 @@ private struct ProjectMainViewContent: View {
            targets[0].sceneNodeID == targets[1].sceneNodeID {
             return { createBridge(joining: targets) }
         }
-        // Curves of different sketches, or body edges: a spatial bridge at their nearest ends.
+        // Two body edges: Bridge Edge's dialog, seeded with their nearest ends.
+        if targets.allSatisfy({ if case .edge = $0.component { return true }; return false }) {
+            return {
+                do {
+                    bridgeEdgeSession = WorkspaceBridgeEdgeSession(
+                        nearest: try snapshot.document.document.spatialBridgeEnds(joining: targets)
+                    )
+                    reportToolStatus("Bridge Edge: choose the sides, continuity and tension, then OK, Return or right-click.")
+                } catch {
+                    reportToolStatus(error.localizedDescription, severity: .warning)
+                }
+            }
+        }
+        // Curves of different sketches: a spatial bridge at their nearest ends.
         guard targets.allSatisfy({ target in
             switch target.component {
             case .sketchEntity, .edge: return true
@@ -9171,6 +9203,52 @@ private struct ProjectMainViewContent: View {
             deformSession = nil
             reportToolStatus("Deform: \(deform.curves.count) curve\(deform.curves.count == 1 ? "" : "s") deformed.")
         }
+    }
+
+    /// Makes the dialog's edge bridge as one step; the dialog stays for another try when Core
+    /// refuses.
+    private func confirmBridgeEdge() {
+        guard let bridge = bridgeEdgeSession else { return }
+        submitSource(bridge.command) { result in
+            guard result?.didMutate == true else { return }
+            bridgeEdgeSession = nil
+            reportToolStatus("Bridge Edge done.")
+        }
+    }
+
+    /// Bridge Edge's dialog: Side 1 and 2, each end's continuity and tension, and OK.
+    @ViewBuilder
+    private func bridgeEdgeContextPanelContent(_ bridge: WorkspaceBridgeEdgeSession) -> some View {
+        workspaceStatusChip("Bridge Edge", systemImage: "point.topleft.down.to.point.bottomright.curvepath", tint: .accentColor)
+        ForEach([(title: "Side 1", path: \WorkspaceBridgeEdgeSession.firstAtEnd), (title: "Side 2", path: \.secondAtEnd)], id: \.title) { side in
+            Picker(side.title, selection: Binding(get: { bridge[keyPath: side.path] }, set: { bridgeEdgeSession?[keyPath: side.path] = $0 })) {
+                Text("Start").tag(false)
+                Text("End").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceBridgeEdge.\(side.title)")
+        }
+        ForEach([(title: "Continuity 1", path: \WorkspaceBridgeEdgeSession.continuity.first), (title: "Continuity 2", path: \.continuity.second)], id: \.title) { end in
+            Picker(end.title, selection: Binding(get: { bridge[keyPath: end.path] }, set: { bridgeEdgeSession?[keyPath: end.path] = $0 })) {
+                ForEach(BridgeCurveEndpointContinuity.allCases, id: \.self) { level in
+                    Text(level.rawValue.uppercased()).tag(level)
+                }
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceBridgeEdge.\(end.title)")
+        }
+        ForEach([(title: "Tension 1", path: \WorkspaceBridgeEdgeSession.tensions.first), (title: "Tension 2", path: \.tensions.second)], id: \.title) { end in
+            TextField(end.title, value: Binding(get: { bridge[keyPath: end.path] }, set: { bridgeEdgeSession?[keyPath: end.path] = $0 }), format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceBridgeEdge.\(end.title)")
+        }
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Bridge",
+            accessibilityIdentifier: "WorkspaceBridgeEdge.apply",
+            action: { confirmBridgeEdge() }
+        )
     }
 
     /// Projects the dialog's curves onto its face as one step; the dialog stays for another try

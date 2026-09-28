@@ -2558,9 +2558,11 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case let .createBridgeCurveBetweenEnds(first, second, continuity):
+        case let .createBridgeCurveBetweenEnds(first, second, continuity, tensions):
             var updatedDocument = document
-            try updatedDocument.createBridgeCurve(clicked: first, second, continuity: continuity, objectRegistry: objectRegistry)
+            try updatedDocument.createBridgeCurve(
+                clicked: first, second, continuity: continuity, tensions: tensions, objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()

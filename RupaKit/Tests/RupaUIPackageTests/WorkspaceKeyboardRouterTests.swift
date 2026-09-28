@@ -554,6 +554,14 @@ private func keyboardContext(
     #expect(!state.isFreestyle)
 }
 
+@Test func workspaceKeyboardRouterConfirmsAndEndsTheBridgeEdgeDialog() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isBridgeEdgeSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmBridgeEdge)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelBridgeEdge)
+}
+
 @Test func theRebuildDialogAsksCoreForItsMethodsValues() throws {
     let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
     var session = try #require(WorkspaceRebuildSession(

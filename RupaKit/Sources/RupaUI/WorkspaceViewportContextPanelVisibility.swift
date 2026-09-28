@@ -22,6 +22,7 @@ enum WorkspaceViewportContextPanelVisibility {
         case rebuild
         case deform
         case project
+        case bridgeEdge
     }
 
     static func isVisible(

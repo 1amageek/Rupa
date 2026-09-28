@@ -344,7 +344,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Dependent Curve Extend: the target end extends in `shape` until it meets `limit`.
     case extendSketchCurveToCurve(target: SelectionTarget, limit: SelectionTarget, shape: ExtendCurveShape)
     /// Bridge Curve between two ends on curves or edges that need not share a sketch.
-    case createBridgeCurveBetweenEnds(first: SpatialBridgeEnd, second: SpatialBridgeEnd, continuity: BridgeCurveContinuity)
+    case createBridgeCurveBetweenEnds(
+        first: SpatialBridgeEnd, second: SpatialBridgeEnd, continuity: BridgeCurveContinuity,
+        tensions: SpatialBridgeTensions = SpatialBridgeTensions()
+    )
     /// Project Curve Curve: where two sketch curves' extrusions meet.
     case projectCurveIntersection(first: SelectionTarget, second: SelectionTarget)
     /// Project Body Body: the curves where two bodies meet.

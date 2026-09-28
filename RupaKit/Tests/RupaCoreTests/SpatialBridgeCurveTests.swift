@@ -122,4 +122,23 @@ import Testing
         #expect(id != featureID)
         #expect(document.productMetadata.bridgeCurveSources.count == sources + 1)
     }
+
+    /// A tension scales its end's speed: doubling it doubles the first handle's length.
+    @Test func tensionScalesTheEndHandle() throws {
+        func handle(_ tension: Double) throws -> Double {
+            var document = DesignDocument.empty()
+            let first = try line(&document, .xy, (0, 0), (10, 0))
+            let second = try line(&document, .xy, (20, 5), (30, 5))
+            let id = try document.createSpatialBridgeCurve(
+                first: SpatialBridgeEnd(target: first, fraction: 1), second: SpatialBridgeEnd(target: second, fraction: 0),
+                continuity: g1, tensions: (tension, 1)
+            )
+            guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[id]?.operation,
+                  case .spline(let spline) = try #require(sketch.entities.values.first) else { throw EditorError(code: .referenceUnresolved, message: "missing") }
+            let x = try spline.controlPoints.prefix(2).map { try document.cadDocument.parameters.resolvedValue(for: $0.x).value }
+            return x[1] - x[0]
+        }
+        #expect(abs(try handle(2) - 2 * (try handle(1))) < 1.0e-12)
+    }
 }
+

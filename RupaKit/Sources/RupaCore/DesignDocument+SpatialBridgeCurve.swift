@@ -17,16 +17,21 @@ extension DesignDocument {
         first: SpatialBridgeEnd,
         second: SpatialBridgeEnd,
         continuity: BridgeCurveContinuity,
+        tensions: (first: Double, second: Double) = (1, 1),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let owner = "Bridge Curve"
+        guard [tensions.first, tensions.second].allSatisfy({ $0.isFinite && $0 > 0 }) else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) tension must be positive.")
+        }
         let tolerance = modelingSettings.tolerance
         let start = try spatialBridgeFrame(first, owner: owner)
         let end = try spatialBridgeFrame(second, owner: owner)
         let chord = (end.point - start.point).length
+        // Each end's tension scales its end speed from the chord length.
         func constraint(
             _ frame: (curve: Curve3D, parameter: Double, point: Point3D, outward: Vector3D, derivative: Vector3D),
-            direction: Vector3D, level: BridgeCurveEndpointContinuity
+            direction: Vector3D, level: BridgeCurveEndpointContinuity, tension: Double
         ) -> CurveBridgeEndpointConstraint {
             CurveBridgeEndpointConstraint(
                 target: CurveContinuityTarget(
@@ -34,12 +39,12 @@ extension DesignDocument {
                     orientation: frame.derivative.dot(direction) >= 0 ? .forward : .reversed
                 ),
                 requiredLevel: spatialContinuityLevel(level),
-                derivativeMagnitude: level == .g0 ? nil : chord
+                derivativeMagnitude: level == .g0 ? nil : chord * tension
             )
         }
         let request = CurveBridgeRequest(
-            start: constraint(start, direction: start.outward, level: continuity.first),
-            end: constraint(end, direction: end.outward * -1, level: continuity.second),
+            start: constraint(start, direction: start.outward, level: continuity.first, tension: tensions.first),
+            end: constraint(end, direction: end.outward * -1, level: continuity.second, tension: tensions.second),
             continuityTolerances: .standard(modelingTolerance: tolerance)
         )
         let result: CurveBridgeResult
@@ -246,6 +251,7 @@ extension DesignDocument {
         clicked first: SpatialBridgeEnd,
         _ second: SpatialBridgeEnd,
         continuity: BridgeCurveContinuity,
+        tensions: SpatialBridgeTensions = SpatialBridgeTensions(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         if case .sketchEntity(let a) = first.target.component, case .sketchEntity(let b) = second.target.component,
@@ -260,6 +266,20 @@ extension DesignDocument {
             )
             return firstReference.featureID
         }
-        return try createSpatialBridgeCurve(first: first, second: second, continuity: continuity, objectRegistry: objectRegistry)
+        return try createSpatialBridgeCurve(
+            first: first, second: second, continuity: continuity,
+            tensions: (tensions.first, tensions.second), objectRegistry: objectRegistry
+        )
+    }
+}
+
+/// Bridge Edge's tensions for `createBridgeCurveBetweenEnds`, one per end.
+public struct SpatialBridgeTensions: Codable, Equatable, Sendable {
+    public var first: Double
+    public var second: Double
+
+    public init(first: Double = 1, second: Double = 1) {
+        self.first = first
+        self.second = second
     }
 }

@@ -1302,7 +1302,8 @@ on its knots) under an affine image of its placed plane, an edge's curve under i
 placement. A bridge whose control points share a plane is a sketch spline of the
 bridge's degree on that plane (exact); one off every plane is a one-span cubic spatial
 path, exact up to G1 at both ends, and higher continuities there are refused. It is not
-associative. `createBridgeCurve(clicked:_:continuity:)` makes an associative sketch
+associative; each end's tension scales its end speed from the chord length.
+`createBridgeCurve(clicked:_:continuity:tensions:)` makes an associative sketch
 Bridge Curve when both clicked ends are on one sketch and the spatial one otherwise;
 `spatialBridgeEnds(joining:)` picks two curves' nearest ends. `SpatialBridgeCurveTests`
 own these.
