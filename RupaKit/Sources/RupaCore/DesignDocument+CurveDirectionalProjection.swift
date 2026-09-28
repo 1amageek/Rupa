@@ -8,8 +8,9 @@ extension DesignDocument {
     /// curve becomes a spatial path, one per curve, in one step. Each point must meet the face
     /// within its trim, or the command fails and nothing changes. A planar face met square on
     /// (direction along its normal) takes the curves as a sketch on its plane, as
-    /// `projectCurvesToGeneratedFace` makes it. Faces and curves are read in the evaluated
-    /// document's frame. Returns the created features.
+    /// `projectCurvesToGeneratedFace` makes it. Curves, the face and the direction follow the
+    /// shared world-placed coordinate flow (`DesignDocument+WorldPlacedCurves`). Returns the
+    /// created features.
     @discardableResult
     public mutating func projectCurvesAlongDirection(
         targets: [SelectionTarget],
@@ -38,8 +39,12 @@ extension DesignDocument {
               let stableReference = entry.stableReference else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) face is not a face of an evaluated body.")
         }
+        // The face is read in its body's source frame, placed by the body's world placement.
+        let placement = try worldPlacement(of: face.sceneNodeID)
+        let inverse = try placement.inverse()
+        let bodyDirection = try inverse.applyingLinearPart(to: unit).normalized(tolerance: tolerance.distance)
         if entry.surfaceKind == "plane", let normal = entry.normal,
-           abs(abs(unit.dot(Vector3D(x: normal.x, y: normal.y, z: normal.z))) - 1) <= tolerance.angle {
+           abs(abs(bodyDirection.dot(Vector3D(x: normal.x, y: normal.y, z: normal.z))) - 1) <= tolerance.angle {
             return [try projectCurvesToGeneratedFace(targets: targets, face: face, objectRegistry: objectRegistry)]
         }
         let surface = SurfaceReference(subshape: stableReference)
@@ -55,11 +60,15 @@ extension DesignDocument {
             guard seen.insert(selection.entityID).inserted else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) received the same curve more than once.")
             }
-            let source = try spatialSourceCurve(selection.entity, plane: selection.sketch.plane, owner: owner)
+            let source = try spatialSourceCurve(
+                selection.entity, system: try placedSketchSystem(for: target, plane: selection.sketch.plane), owner: owner
+            )
             let fitted = try fitter.fit(breakpoints: source.breakpoints, isClosed: source.isClosed, tolerance: tolerance) { w in
-                try evaluator.project(try source.point(w), along: unit, onto: surface, in: evaluated, options: options).projectedPoint
+                let origin = try inverse.applied(to: try source.point(w))
+                let hit = try evaluator.project(origin, along: bodyDirection, onto: surface, in: evaluated, options: options)
+                return try placement.applied(to: hit.projectedPoint)
             }
-            paths.append(try candidate.createSpatialPath(
+            paths.append(try candidate.createWorldSpatialPath(
                 name: "\(selection.feature.name ?? "Curve") Face Projection", path: fitted.path, objectRegistry: objectRegistry
             ))
         }

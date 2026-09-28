@@ -1219,8 +1219,8 @@ Join's own endpoint tolerance (`joinCurveEndpointsAreAligned`); other components
 no part and fewer than two curves give none (`SketchCurveJoinEndpointFeedbackTests`).
 
 `deformCurves(targets:referenceFace:targetFace:options:)` is Deform Curve. Each
-selected sketch line, arc, circle or spline, read in the evaluated document's frame as
-Project Curve Body reads faces, is carried point by point through Swift-CAD's
+selected sketch line, arc, circle or spline, read on its sketch's placed plane, is carried
+point by point through Swift-CAD's
 `FaceUVNChart` of the reference face, `CurveDeformationOptions.mapped` (UV swap,
 Mirror s → 1 − s, U/V scale about the face's middle plus a fractional offset, N scale
 plus a length offset, Normal flip) and the target face's chart, and Swift-CAD's
@@ -1261,7 +1261,9 @@ chain returns to its start, one object per path. `CreateOutlineTests` own this.
 bodies' faces meet (Swift-CAD's `BodySectionCurveEvaluator`, trimmed to both faces;
 coincident faces give none, faces touching along an edge give that edge), fitted within
 ten modeling distances and joined like Create Outline's into spatial paths; bodies that
-do not meet are refused. `ProjectBodyBodyTests` own this.
+do not meet are refused; bodies placed differently are refused too (marked
+`FIXME(INCOMPLETE_IMPLEMENTATION)`), since their evaluated faces lie in different source
+frames. `ProjectBodyBodyTests` own this.
 
 `projectCurveIntersection(first:second:)` is Project Curve Curve: the curve where two
 sketch curves' extrusions meet, each along its own sketch plane's normal (Swift-CAD's
@@ -1269,6 +1271,16 @@ sketch curves' extrusions meet, each along its own sketch plane's normal (Swift-
 first crossing), fitted within ten modeling distances at the first curve's own span ends
 as one spatial path. Curves on parallel planes, or whose extrusions part partway, are
 refused with nothing changed. `ProjectCurveCurveTests` own this.
+
+Deform Curve, Project Curve Body along a direction, Project Outline's silhouette,
+Create Outline, Project Body Body and Project Curve Curve follow Projection's coordinate
+flow (`DesignDocument+WorldPlacedCurves`): a sketch curve is read on its sketch's plane
+through its scene node's world placement, a body's evaluated faces and edges in the
+body's source frame placed by its node's world placement (points and directions carried
+through the placement and its inverse), and a created spatial path is authored in world
+space, its node's placement cancelling its parent's. A circle edge stays an arc only
+through a rigid placement. `WorldPlacedCurveCommandTests` move the inputs and find the
+results moved with them.
 
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,

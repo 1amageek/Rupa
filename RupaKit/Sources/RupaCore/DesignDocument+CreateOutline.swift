@@ -38,7 +38,8 @@ extension DesignDocument {
                 }
                 return SurfaceReference(subshape: reference)
             }
-            // Every outline piece of every edge, as fitted 3D spans. Pieces that project onto the
+            let placement = try worldPlacement(of: target)
+            // Every outline piece of every edge, as fitted 3D spans in world space. Pieces that project onto the
             // same curve (a box's top and bottom rims seen from above) keep the one nearest the
             // viewer on the normal's side.
             var spansByProjection: [String: (height: Double, spans: [(p0: Point3D, p1: Point3D, p2: Point3D, p3: Point3D)])] = [:]
@@ -47,16 +48,16 @@ extension DesignDocument {
                     throw EditorError(code: .referenceUnresolved, message: "\(owner) body edge has no stable reference.")
                 }
                 let edge = try edgeEvaluator.resolve(EdgeReference(subshape: reference), in: evaluated)
-                for piece in try outlinePieces(edge: edge, faces: faces, in: evaluated, system: system) {
+                for piece in try outlinePieces(edge: edge, faces: faces, placement: placement, in: evaluated, system: system) {
                     let fitted = try fitter.fit(breakpoints: [piece.lower, piece.upper], isClosed: false, tolerance: tolerance) { t in
-                        try edge.curve.point(at: t, tolerance: tolerance)
+                        try placement.applied(to: try edge.curve.point(at: t, tolerance: tolerance))
                     }
                     let knots = fitted.path.knots
                     let pieceSpans = (0..<fitted.path.segmentCount).map { index in
                         (p0: knots[index].position, p1: knots[index].position + knots[index].outgoing,
                          p2: knots[index + 1].position + knots[index + 1].incoming, p3: knots[index + 1].position)
                     }
-                    let middle = try edge.curve.point(at: (piece.lower + piece.upper) / 2, tolerance: tolerance)
+                    let middle = try placement.applied(to: try edge.curve.point(at: (piece.lower + piece.upper) / 2, tolerance: tolerance))
                     let ends = [knots[0].position, knots[knots.count - 1].position]
                         .map { quantizedPointKey(system.project($0).point) }.sorted()
                     let key = ends.joined(separator: "|") + "|" + quantizedPointKey(system.project(middle).point)
@@ -70,7 +71,7 @@ extension DesignDocument {
                 throw EditorError(code: .commandInvalid, message: "\(owner) found no outline on \(node.name) along the plane's normal.")
             }
             for (index, chain) in Self.chainedOutlineSpans(spans, tolerance: tolerance.distance).enumerated() {
-                paths.append(try candidate.createSpatialPath(
+                paths.append(try candidate.createWorldSpatialPath(
                     name: "\(node.name) Outline\(index == 0 ? "" : " \(index + 1)")",
                     path: chain, objectRegistry: objectRegistry
                 ))

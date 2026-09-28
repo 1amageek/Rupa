@@ -5,8 +5,8 @@ import RupaCoreTypes
 extension DesignDocument {
     /// Deform Curve: each selected sketch curve is carried from the reference face onto the
     /// target face by `options` (see `CurveDeformationOptions`) and becomes a spatial path, as
-    /// one step. Faces and curves are read in the evaluated document's frame, as Project Curve
-    /// Body reads them. Without Keep Tools the source curves are removed. Returns the paths.
+    /// one step, in the shared world-placed coordinate flow (`DesignDocument+WorldPlacedCurves`).
+    /// Without Keep Tools the source curves are removed. Returns the paths.
     @discardableResult
     public mutating func deformCurves(
         targets: [SelectionTarget],
@@ -26,13 +26,17 @@ extension DesignDocument {
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }
-        func chart(_ face: SelectionTarget, role: String) throws -> FaceUVNChart {
+        // A face's chart is in its body's source frame; the body's world placement carries
+        // points between that frame and the world.
+        func chart(_ face: SelectionTarget, role: String) throws -> (chart: FaceUVNChart, placement: Transform3D, inverse: Transform3D) {
             guard case .face = face.component,
                   let entry = topology.entries.first(where: { $0.kind == .face && $0.selectionTarget() == face }),
                   let reference = entry.stableReference else {
                 throw EditorError(code: .referenceUnresolved, message: "\(owner) \(role) face is not a face of an evaluated body.")
             }
-            return try FaceUVNChart(face: SurfaceReference(subshape: reference), in: evaluated, tolerance: tolerance)
+            let placement = try worldPlacement(of: face.sceneNodeID)
+            return (try FaceUVNChart(face: SurfaceReference(subshape: reference), in: evaluated, tolerance: tolerance),
+                    placement, try placement.inverse())
         }
         let from = try chart(referenceFace, role: "reference")
         let to = try chart(targetFace, role: "target")
@@ -46,11 +50,15 @@ extension DesignDocument {
             guard seen.insert(selection.entityID).inserted else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) received the same curve more than once.")
             }
-            let source = try spatialSourceCurve(selection.entity, plane: selection.sketch.plane, owner: owner)
+            let source = try spatialSourceCurve(
+                selection.entity, system: try placedSketchSystem(for: target, plane: selection.sketch.plane), owner: owner
+            )
             let fitted = try fitter.fit(breakpoints: source.breakpoints, isClosed: source.isClosed, tolerance: tolerance) { w in
-                try to.point(at: options.mapped(from.coordinate(of: source.point(w)), offsetN: offsetN))
+                let onReference = try from.inverse.applied(to: try source.point(w))
+                let onTarget = try to.chart.point(at: options.mapped(try from.chart.coordinate(of: onReference), offsetN: offsetN))
+                return try to.placement.applied(to: onTarget)
             }
-            paths.append(try candidate.createSpatialPath(
+            paths.append(try candidate.createWorldSpatialPath(
                 name: "\(selection.feature.name ?? "Curve") Deformed", path: fitted.path, objectRegistry: objectRegistry
             ))
         }
@@ -100,10 +108,9 @@ extension DesignDocument {
         var point: (Double) throws -> Point3D
     }
 
-    /// A sketch curve as a function of one parameter into the sketch's 3D frame, with the
-    /// parameters where it may turn a corner.
-    func spatialSourceCurve(_ entity: SketchEntity, plane: SketchPlane, owner: String) throws -> SpatialSourceCurve {
-        let system = try SketchPlaneCoordinateSystem(plane: plane)
+    /// A sketch curve as a function of one parameter into the frame of `system` (the sketch's
+    /// placed plane), with the parameters where it may turn a corner.
+    func spatialSourceCurve(_ entity: SketchEntity, system: SketchPlaneCoordinateSystem, owner: String) throws -> SpatialSourceCurve {
         switch entity {
         case .line(let line):
             let start = try resolvedProjectionPoint(line.start, owner: "\(owner) line start")

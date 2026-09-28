@@ -14,22 +14,27 @@ extension DesignDocument {
     func outlineSketchEntities(
         edge: ResolvedEdge,
         faces: [SurfaceReference],
+        placement: Transform3D,
         in evaluated: EvaluatedDocument,
         system: SketchPlaneCoordinateSystem,
         owner: String
     ) throws -> [SketchEntity] {
-        try outlinePieces(edge: edge, faces: faces, in: evaluated, system: system).compactMap { piece in
-            try outlinePieceEntity(edge: edge, from: piece.lower, to: piece.upper, system: system)
+        try outlinePieces(edge: edge, faces: faces, placement: placement, in: evaluated, system: system).compactMap { piece in
+            try outlinePieceEntity(edge: edge, from: piece.lower, to: piece.upper, placement: placement, system: system)
         }
     }
 
-    /// The parameter ranges of `edge` that bound the body's shadow on the plane of `system`.
+    /// The parameter ranges of `edge` that bound the body's shadow on the plane of `system` (in
+    /// world space); the edge and faces are in the body's source frame, placed by `placement`.
     func outlinePieces(
         edge: ResolvedEdge,
         faces: [SurfaceReference],
+        placement: Transform3D,
         in evaluated: EvaluatedDocument,
         system: SketchPlaneCoordinateSystem
     ) throws -> [(lower: Double, upper: Double)] {
+        let inverse = try placement.inverse()
+        let bodyNormal = try inverse.applyingLinearPart(to: system.normal).normalized(tolerance: 1.0e-12)
         let tolerance = modelingSettings.tolerance
         let evaluator = SurfaceQueryEvaluator(tolerance: tolerance)
         let lower = edge.startParameter, upper = edge.endParameter
@@ -38,14 +43,14 @@ extension DesignDocument {
 
         func projected(_ t: Double) throws -> (point: Point2D, tangent: Point2D) {
             let geometry = try edge.curve.differentialGeometry(at: t, tolerance: tolerance)
-            let d = geometry.firstDerivative
-            return (system.project(geometry.position).point, Point2D(x: d.dot(system.u), y: d.dot(system.v)))
+            let d = try placement.applyingLinearPart(to: geometry.firstDerivative)
+            return (system.project(try placement.applied(to: geometry.position)).point, Point2D(x: d.dot(system.u), y: d.dot(system.v)))
         }
         func covers(_ point: Point2D) throws -> Bool {
-            let origin = system.point(from: point)
+            let origin = try inverse.applied(to: system.point(from: point))
             for face in faces {
                 do {
-                    _ = try evaluator.project(origin, along: system.normal, onto: face, in: evaluated,
+                    _ = try evaluator.project(origin, along: bodyNormal, onto: face, in: evaluated,
                                               options: SurfaceDirectionalProjectionOptions(range: .line))
                     return true
                 } catch FeatureEvaluationError.emptyResult {
@@ -101,24 +106,38 @@ extension DesignDocument {
     /// to the plane an arc (a circle when the piece is the whole of a closed edge), and any
     /// other curve a cubic chain fitted within ten modeling distances.
     private func outlinePieceEntity(
-        edge: ResolvedEdge, from a: Double, to b: Double, system: SketchPlaneCoordinateSystem
+        edge: ResolvedEdge, from a: Double, to b: Double, placement: Transform3D, system: SketchPlaneCoordinateSystem
     ) throws -> SketchEntity? {
         let tolerance = modelingSettings.tolerance
-        let start = system.project(try edge.curve.point(at: a, tolerance: tolerance)).point
-        let end = system.project(try edge.curve.point(at: b, tolerance: tolerance)).point
+        func world(_ t: Double) throws -> Point3D { try placement.applied(to: try edge.curve.point(at: t, tolerance: tolerance)) }
+        let start = system.project(try world(a)).point
+        let end = system.project(try world(b)).point
+        // A circle stays a circle only through a rigid placement.
+        let isRigid: Bool
+        do {
+            _ = try placement.rigidPlacement(tolerance: tolerance)
+            isRigid = true
+        } catch {
+            isRigid = false
+        }
         let isWholeClosedEdge = a == edge.startParameter && b == edge.endParameter
             && (edge.startPoint - edge.endPoint).length <= tolerance.distance
+        var isParallelCircle = false
+        if case .circle(let circle) = edge.curve, isRigid {
+            let normal = try placement.applyingLinearPart(to: circle.normal).normalized(tolerance: 1.0e-15)
+            isParallelCircle = abs(abs(normal.dot(system.normal)) - 1) <= tolerance.angle
+        }
         switch edge.curve {
         case .line:
             guard hypot(end.x - start.x, end.y - start.y) > tolerance.distance else { return nil }
             return .line(SketchLine(start: sketchPoint(from: start), end: sketchPoint(from: end)))
-        case .circle(let circle) where abs(abs(try circle.normal.normalized(tolerance: 1.0e-15).dot(system.normal)) - 1) <= tolerance.angle:
-            let center = system.project(circle.center).point
+        case .circle(let circle) where isParallelCircle:
+            let center = system.project(try placement.applied(to: circle.center)).point
             if isWholeClosedEdge {
                 return .circle(SketchCircle(center: sketchPoint(from: center), radius: .length(circle.radius, .meter)))
             }
             // A sketch arc runs counterclockwise: the piece's own sense decides which end starts.
-            let tangent = try edge.curve.differentialGeometry(at: a, tolerance: tolerance).firstDerivative
+            let tangent = try placement.applyingLinearPart(to: edge.curve.differentialGeometry(at: a, tolerance: tolerance).firstDerivative)
             let sense = (start.x - center.x) * tangent.dot(system.v) - (start.y - center.y) * tangent.dot(system.u)
             let startAngle = atan2(start.y - center.y, start.x - center.x)
             let endAngle = atan2(end.y - center.y, end.x - center.x)
@@ -132,7 +151,7 @@ extension DesignDocument {
             let fitted = try SpatialCurveFitter(deviation: tolerance.distance * Self.spatialFitDeviationFactor).fit(
                 breakpoints: [a, b], isClosed: isWholeClosedEdge, tolerance: tolerance
             ) { t in
-                system.point(from: system.project(try edge.curve.point(at: t, tolerance: tolerance)).point)
+                system.point(from: system.project(try world(t)).point)
             }
             // The fitted path lies in the plane: its Bezier control points are the chain's.
             var points: [Point2D] = []

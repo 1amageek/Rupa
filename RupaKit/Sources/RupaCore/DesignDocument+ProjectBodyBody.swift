@@ -37,6 +37,16 @@ extension DesignDocument {
         guard first.sceneNodeID != second.sceneNodeID else {
             throw EditorError(code: .commandInvalid, message: "\(owner) takes two different bodies.")
         }
+        // Both bodies' evaluated faces are in their source frames; one shared placement carries
+        // their section into the world.
+        let placement = try worldPlacement(of: first.sceneNodeID)
+        guard placementsMatch(placement, try worldPlacement(of: second.sceneNodeID)) else {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): bodies placed differently need one body's faces
+            // carried into the other's frame before the kernel section. Production path: Project
+            // Body Body (I on two bodies) refuses them here. Done when differently placed bodies
+            // are sectioned with their own tests.
+            throw EditorError(code: .commandInvalid, message: "\(owner) needs the two bodies to share one placement; they have been moved apart.")
+        }
         let evaluator = BodySectionCurveEvaluator(tolerance: tolerance)
         let fitter = try SpatialCurveFitter(deviation: tolerance.distance * Self.spatialFitDeviationFactor)
         var pieces: [[(p0: Point3D, p1: Point3D, p2: Point3D, p3: Point3D)]] = []
@@ -44,7 +54,7 @@ extension DesignDocument {
             for secondBody in b.ids {
                 for section in try evaluator.sections(between: firstBody, and: secondBody, in: evaluated.brep) {
                     let fitted = try fitter.fit(breakpoints: [section.lower, section.upper], isClosed: false, tolerance: tolerance) { t in
-                        try section.curve.point(at: t, tolerance: tolerance)
+                        try placement.applied(to: try section.curve.point(at: t, tolerance: tolerance))
                     }
                     let knots = fitted.path.knots
                     pieces.append((0..<fitted.path.segmentCount).map { index in
@@ -60,7 +70,7 @@ extension DesignDocument {
         var candidate = self
         var paths: [FeatureID] = []
         for (index, chain) in Self.chainedOutlineSpans(pieces, tolerance: tolerance.distance).enumerated() {
-            paths.append(try candidate.createSpatialPath(
+            paths.append(try candidate.createWorldSpatialPath(
                 name: "\(a.name) \(b.name) Intersection\(index == 0 ? "" : " \(index + 1)")",
                 path: chain, objectRegistry: objectRegistry
             ))

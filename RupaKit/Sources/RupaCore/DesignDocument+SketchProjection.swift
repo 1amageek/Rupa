@@ -302,6 +302,7 @@ extension DesignDocument {
                 }
                 return SurfaceReference(subshape: reference)
             }
+            let bodyPlacement = try worldPlacement(of: target.sceneNodeID)
             for edge in bodyEdges {
                 guard let reference = edge.stableReference else {
                     throw EditorError(code: .referenceUnresolved, message: "\(operationName) body edge has no stable reference.")
@@ -309,6 +310,7 @@ extension DesignDocument {
                 let entities = try outlineSketchEntities(
                     edge: try edgeEvaluator.resolve(EdgeReference(subshape: reference), in: evaluated),
                     faces: faces,
+                    placement: bodyPlacement,
                     in: evaluated,
                     system: targetSystem,
                     owner: operationName

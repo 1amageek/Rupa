@@ -20,36 +20,55 @@ extension DesignDocument {
         guard a.featureID != b.featureID || a.entityID != b.entityID else {
             throw EditorError(code: .commandInvalid, message: "\(owner) takes two different curves.")
         }
-        let firstCurve = try planarFrameCurve(a.entity, plane: a.sketch.plane, owner: owner)
+        // Both curves in world space, through their sketches' placed planes.
+        let firstSystem = try placedSketchSystem(for: first, plane: a.sketch.plane)
+        let secondSystem = try placedSketchSystem(for: second, plane: b.sketch.plane)
         let trace: PlanarCurveExtrusionIntersector.Trace
         do {
             trace = try PlanarCurveExtrusionIntersector(tolerance: tolerance).trace(
-                first: firstCurve, second: try planarFrameCurve(b.entity, plane: b.sketch.plane, owner: owner)
+                first: try planarFrameCurve(a.entity, system: firstSystem, owner: owner),
+                second: try planarFrameCurve(b.entity, system: secondSystem, owner: owner)
             )
         } catch let error as KernelError {
             throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
         }
-        let breakpoints = try spatialSourceCurve(a.entity, plane: a.sketch.plane, owner: owner).breakpoints
+        let breakpoints = try spatialSourceCurve(a.entity, system: firstSystem, owner: owner).breakpoints
         let fitted = try SpatialCurveFitter(deviation: tolerance.distance * Self.spatialFitDeviationFactor).fit(
             breakpoints: breakpoints, isClosed: false, tolerance: tolerance, point: trace.point(at:)
         )
-        return try createSpatialPath(
+        return try createWorldSpatialPath(
             name: "\(a.feature.name ?? "Curve") \(b.feature.name ?? "Curve") Projection",
             path: fitted.path, objectRegistry: objectRegistry
         )
     }
 
-    /// A sketch curve in its plane's frame, over the same parameter `spatialSourceCurve` uses,
-    /// with its first derivative.
-    private func planarFrameCurve(_ entity: SketchEntity, plane: SketchPlane, owner: String) throws -> PlanarFrameCurve {
-        let system = try SketchPlaneCoordinateSystem(plane: plane)
+    /// A sketch curve over the same parameter `spatialSourceCurve` uses, with its first
+    /// derivative, in an orthonormal frame of its placed plane: a placement may scale or shear
+    /// the sketch's own axes, so its points and derivatives are carried through them into the
+    /// world and read back along orthonormal axes of the same plane.
+    private func planarFrameCurve(_ entity: SketchEntity, system: SketchPlaneCoordinateSystem, owner: String) throws -> PlanarFrameCurve {
+        let tolerance = modelingSettings.tolerance.distance
+        let axisU = try system.u.normalized(tolerance: tolerance)
+        let axisV = try system.normal.cross(axisU).normalized(tolerance: tolerance)
+        let placedU = system.u, placedV = system.v
         func frame(
             _ lower: Double, _ upper: Double,
             _ point: @escaping @Sendable (Double) throws -> Point2D,
             _ derivative: @escaping @Sendable (Double) throws -> Point2D
         ) -> PlanarFrameCurve {
-            PlanarFrameCurve(origin: system.origin, u: system.u, v: system.v, normal: system.normal,
-                             lower: lower, upper: upper, point: point, derivative: derivative)
+            PlanarFrameCurve(
+                origin: system.origin, u: axisU, v: axisV, normal: system.normal, lower: lower, upper: upper,
+                point: { w in
+                    let local = try point(w)
+                    let offset = placedU * local.x + placedV * local.y
+                    return Point2D(x: offset.dot(axisU), y: offset.dot(axisV))
+                },
+                derivative: { w in
+                    let local = try derivative(w)
+                    let offset = placedU * local.x + placedV * local.y
+                    return Point2D(x: offset.dot(axisU), y: offset.dot(axisV))
+                }
+            )
         }
         switch entity {
         case .line(let line):
