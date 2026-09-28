@@ -2558,6 +2558,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .deformCurves(targets, referenceFace, targetFace, options):
+            var updatedDocument = document
+            try updatedDocument.deformCurves(
+                targets: targets, referenceFace: referenceFace, targetFace: targetFace,
+                options: options, objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .alignSketchCurveEnds(first, second, options):
             var updatedDocument = document
             try updatedDocument.alignSketchCurveEnds(first: first, second: second, options: options, objectRegistry: objectRegistry)

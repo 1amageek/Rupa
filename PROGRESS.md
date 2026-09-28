@@ -56,8 +56,8 @@
     - [x] SK2.6 Split Segment on closed splines opens the loop at the click (a circle is refused: the sketch model has no circle seam). `depends:none` `parallel:none`
   - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [x] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
-    - [ ] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
-    - [ ] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection. `depends:SK3.2` `parallel:none`
+    - [x] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
+    - [ ] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection: curves take Deform Curve (done); bodies and sheets wait for SO3's Deform Solid and Sheet. `depends:SK3.2` `parallel:none`
   - [ ] SK4 Align and Extend: Align, Align Vertex, Extend, Extend Curve. `depends:none` `parallel:none`
     - [x] SK4.1 Align Vertex dialog: one CV distance for both aligned ends, set once G1 or G2 is chosen, through Core's continuity distances. `depends:none` `parallel:none`
     - [x] SK4.2 Align Vertex Parameter: with a whole reference curve, the end is placed at the inspector's Parameter of it and takes its frame there, once. `depends:SK4.1` `parallel:none`

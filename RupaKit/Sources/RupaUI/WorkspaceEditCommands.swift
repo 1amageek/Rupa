@@ -51,6 +51,8 @@ public struct WorkspaceEditCommands {
     public var convertVertex: (@MainActor () -> Void)?
     /// Opens Rebuild Curve's dialog on the selected splines.
     public var rebuild: (@MainActor () -> Void)?
+    /// Opens Deform Curve's dialog on the selected sketch curves.
+    public var deform: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -74,7 +76,8 @@ public struct WorkspaceEditCommands {
         insertKnot: (@MainActor () -> Void)? = nil,
         raiseCurveDegree: (@MainActor () -> Void)? = nil,
         convertVertex: (@MainActor () -> Void)? = nil,
-        rebuild: (@MainActor () -> Void)? = nil
+        rebuild: (@MainActor () -> Void)? = nil,
+        deform: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -98,6 +101,7 @@ public struct WorkspaceEditCommands {
         self.raiseCurveDegree = raiseCurveDegree
         self.convertVertex = convertVertex
         self.rebuild = rebuild
+        self.deform = deform
     }
 }
 
