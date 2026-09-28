@@ -1018,6 +1018,23 @@ two sketches or one end twice are refused. The ends carry no parameter, so the
 Bridge Curve source keeps joining the curve ends as they move.
 `BridgeSelectionTests` own these cases.
 
+### Spline refinement contract
+
+Insertion and Subdivide retain a sketch spline's degree and explicit knot domain.
+Bezier chains split with de Casteljau on their own degree; explicit B-splines use
+Boehm insertion up to degree multiplicity at each split. Coordinates remain CAD
+expressions so later parameter edits still update the refined curve. Closed
+curves retain their coincident end points. Refinement owns unchanged-point index
+migration; a constraint or dimension naming a replaced handle is refused before
+publication. Generated Bridge sources remain owned by Bridge regeneration.
+
+Subdivide splits every original nonempty knot span at its midpoint. Core owns
+both the split parameters and resulting CV selection indices; UI consumes that
+plan rather than assuming cubic 3n+1 storage. Existing cubic selections remain
+compatible. One source command owns all splits and restores the previous document
+on any failure. Verification samples degree 1/3/6 and explicit nonuniform knots,
+closed curves, parameter expressions, reference migration, refusal and undo/redo.
+
 ### Complete Edge and Subdivide
 
 `completeSketchCurve` extends each open end of a sketch line, arc or open spline
@@ -1095,15 +1112,14 @@ dimension names is kept, references past a removed joint move back three
 indices, and a spline with nothing to remove is refused with the document
 unchanged. `SplineRedundantJointsTests` own these.
 
-`subdivideSketchSpline` splits every cubic span of an open spline at its middle
-through `insertSketchSplineControlPoint`, from the last span back, so n spans
-become 2n with the same shape and joint constraints follow their joints. Span k's
-new control points are 6k+2, 6k+3 and 6k+4. `subdivideSurface` raises a
+`subdivideSketchSpline` follows the [spline refinement contract](#spline-refinement-contract)
+for open and closed curves of any supported degree and knot form. `subdivideSurface` raises a
 B-spline surface's degree in u and v with Swift-CAD's exact
 `BSplineSurface3D.elevatingDegree`, inserts a knot at the middle of the widest
 span in each direction and updates the degree and control-point properties.
 `CurveRefinementTests` owns the line, arc, spline, unreached, spline subdivision
-and surface subdivision cases.
+and surface subdivision cases. `GeneralSplineRefinementTests` owns arbitrary-degree,
+nonuniform-knot, closed-curve and atomic refusal coverage.
 
 ### Evaluated primitive measurement contract
 

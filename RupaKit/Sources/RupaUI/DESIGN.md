@@ -547,7 +547,7 @@ Complete Edge and Subdivide (Edit menu) act on the selection through
 selected sketch object each of its curves, and a selected B-spline surface
 object or face its surface. Each item offers its action only when the selection
 holds something it changes. Complete Edge submits one `completeSketchCurve` per
-line, arc or open spline; Subdivide submits `subdivideSketchSpline` per open
+line, arc or open spline; Subdivide submits `subdivideSketchSpline` per selected
 spline and `subdivideSurface` per surface as one undo step, then selects the
 control points the spline splits made. `WorkspaceCurveRefinementPlannerTests`
 owns what the selection yields.
@@ -1537,3 +1537,10 @@ distance between two points on a body. The CAD-to-mesh route opens
 `Modeling.mesh` with an element selected and commits one mesh operation. Each
 is stated so that it can be built from the shipped chrome, so claiming it needs
 no launch fixture.
+
+### Refinement selection contract
+
+WorkspaceCurveRefinementPlanner consumes Core's spline subdivision index plan.
+It offers open and closed source splines, keeps surface selection when no curve
+CVs are produced, and reports an invalid plan through the command action. It
+never derives control-point identities using a fixed degree.

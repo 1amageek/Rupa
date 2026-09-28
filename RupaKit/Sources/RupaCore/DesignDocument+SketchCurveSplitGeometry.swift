@@ -282,7 +282,7 @@ extension DesignDocument {
         )
     }
 
-    private func interpolatedSketchPoint(
+    func interpolatedSketchPoint(
         _ first: SketchPoint,
         _ second: SketchPoint,
         fraction: CADExpression

@@ -27,26 +27,23 @@ struct WorkspaceCurveRefinementPlanner {
         .map { curve in EditorCommand.completeSketchCurve(target: curve.target) }
     }
 
-    /// One Subdivide per selected open spline and B-spline surface.
-    func subdivision(for targets: [SelectionTarget]) -> Subdivision {
+    /// One Subdivide per selected spline and B-spline surface.
+    func subdivision(for targets: [SelectionTarget]) throws -> Subdivision {
         var commands: [EditorCommand] = []
         var created: [SelectionTarget] = []
         for curve in curves(in: targets) {
-            guard case .spline(let spline) = curve.entity, !spline.isClosed else { continue }
+            guard case .spline(let spline) = curve.entity else { continue }
             commands.append(.subdivideSketchSpline(target: curve.target))
-            let spanCount = (spline.controlPoints.count - 1) / 3
-            // Original span k becomes spans 2k and 2k + 1, split at control point 6k + 3.
-            for span in 0..<spanCount {
-                for index in [6 * span + 2, 6 * span + 3, 6 * span + 4] {
-                    created.append(SelectionTarget(
-                        sceneNodeID: curve.target.sceneNodeID,
-                        component: .sketchEntity(.sketchControlPoint(
-                            featureID: curve.featureID, entityID: curve.entityID, index: index
-                        ))
+            for index in try document.sketchSplineSubdivisionControlPointIndices(spline) {
+                created.append(SelectionTarget(
+                    sceneNodeID: curve.target.sceneNodeID,
+                    component: .sketchEntity(.sketchControlPoint(
+                        featureID: curve.featureID, entityID: curve.entityID, index: index
                     ))
-                }
+                ))
             }
         }
+
         var surfaceFeatures: Set<FeatureID> = []
         for target in targets {
             switch target.component {

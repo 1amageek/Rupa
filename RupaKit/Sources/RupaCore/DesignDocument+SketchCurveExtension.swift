@@ -39,6 +39,11 @@ extension DesignDocument {
         var feature = selection.feature
         var sketch = selection.sketch
         sketch.entities[selection.entityID] = extendedEntity
+        if case .spline(let original) = selection.entity, endpoint.isStart,
+           case .spline(let extended) = extendedEntity {
+            let shift = extended.controlPoints.count - original.controlPoints.count
+            sketch.remapSplineControlPoints(entity: selection.entityID) { $0 + shift }
+        }
 
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata
@@ -394,10 +399,11 @@ extension DesignDocument {
                 message: "\(owner) requires an open spline curve."
             )
         }
-        try validateCubicBezierChainSpline(spline, owner: owner)
+        try validateSplineForm(spline, owner: owner)
 
         var updated = spline
         if shape == .natural {
+            try validateCubicBezierChainSpline(spline, owner: owner)
             // Swift-CAD continues the end span's own cubic by the arc length.
             let points = try spline.controlPoints.map { point -> Point2D in
                 let resolved = try resolvedSketchPoint(point, owner: "\(owner) control point")
@@ -421,11 +427,10 @@ extension DesignDocument {
                 to: first,
                 owner: "\(owner) start tangent"
             )
-            updated.controlPoints = [
-                translatedSketchPoint(first, directionX: direction.x, directionY: direction.y, distance: distance),
-                translatedSketchPoint(first, directionX: direction.x, directionY: direction.y, distance: distance, scale: 2.0 / 3.0),
-                translatedSketchPoint(first, directionX: direction.x, directionY: direction.y, distance: distance, scale: 1.0 / 3.0),
-            ] + spline.controlPoints
+            updated.controlPoints = (0..<spline.degree).map { index in
+                translatedSketchPoint(first, directionX: direction.x, directionY: direction.y,
+                    distance: distance, scale: Double(spline.degree - index) / Double(spline.degree))
+            } + spline.controlPoints
         } else {
             let count = spline.controlPoints.count
             let previous = spline.controlPoints[count - 2]
@@ -435,17 +440,27 @@ extension DesignDocument {
                 to: last,
                 owner: "\(owner) end tangent"
             )
-            updated.controlPoints.append(
-                translatedSketchPoint(last, directionX: direction.x, directionY: direction.y, distance: distance, scale: 1.0 / 3.0)
-            )
-            updated.controlPoints.append(
-                translatedSketchPoint(last, directionX: direction.x, directionY: direction.y, distance: distance, scale: 2.0 / 3.0)
-            )
-            updated.controlPoints.append(
-                translatedSketchPoint(last, directionX: direction.x, directionY: direction.y, distance: distance)
-            )
+            updated.controlPoints.append(contentsOf: (1...spline.degree).map { index in
+                translatedSketchPoint(last, directionX: direction.x, directionY: direction.y,
+                    distance: distance, scale: Double(index) / Double(spline.degree))
+            })
         }
-        try validateCubicBezierChainSpline(updated, owner: owner)
+        if let knots = spline.knots {
+            let degree = spline.degree
+            let first = knots[degree], last = knots[knots.count - degree - 1]
+            if isStart {
+                guard let next = knots.first(where: { $0 > first }) else {
+                    throw EditorError(code: .commandInvalid, message: "\(owner) has no first knot span.")
+                }
+                updated.knots = Array(repeating: first - (next - first), count: degree + 1) + knots.dropFirst()
+            } else {
+                guard let previous = knots.last(where: { $0 < last }) else {
+                    throw EditorError(code: .commandInvalid, message: "\(owner) has no last knot span.")
+                }
+                updated.knots = knots.dropLast() + Array(repeating: last + (last - previous), count: degree + 1)
+            }
+        }
+        try validateSplineForm(updated, owner: owner)
         return updated
     }
 

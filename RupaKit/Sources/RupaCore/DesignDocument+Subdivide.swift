@@ -3,7 +3,7 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    /// Subdivide on a sketch spline: every cubic span is split at its middle, so an n-span curve
+    /// Subdivide on a sketch spline: every nonempty knot span is split at its middle, so an n-span curve
     /// becomes 2n spans with the same shape. Returns the indices of the control points the splits
     /// created (each split's new joint and the handles beside it), which Subdivide selects.
     ///
@@ -18,10 +18,7 @@ extension DesignDocument {
         guard case .spline(let spline) = selection.entity else {
             throw EditorError(code: .commandInvalid, message: "Subdivide doubles the control points of a spline curve.")
         }
-        let spanCount = (spline.controlPoints.count - 1) / 3
-        guard spanCount >= 1, (spline.controlPoints.count - 1).isMultiple(of: 3) else {
-            throw EditorError(code: .commandInvalid, message: "Subdivide requires a cubic Bezier spline.")
-        }
+        let plan = try splineSubdivisionPlan(spline)
         let splineTarget = SelectionTarget(
             sceneNodeID: target.sceneNodeID,
             component: .sketchEntity(.sketchEntity(featureID: selection.featureID, entityID: selection.entityID))
@@ -30,18 +27,54 @@ extension DesignDocument {
         let previous = self
         var didCommit = false
         defer { if !didCommit { self = previous } }
-        // From the last span back, so the spans still to split keep their indices.
-        for span in stride(from: spanCount - 1, through: 0, by: -1) {
-            let currentSpanCount = spanCount + (spanCount - 1 - span)
+        for fraction in plan.fractions {
             try insertSketchSplineControlPoint(
-                target: splineTarget,
-                fraction: .scalar((Double(span) + 0.5) / Double(currentSpanCount)),
-                objectRegistry: objectRegistry
+                target: splineTarget, fraction: .scalar(fraction), objectRegistry: objectRegistry
             )
         }
         didCommit = true
-        // Original span k is now spans 2k and 2k + 1, joined at control point 6k + 3.
-        return (0..<spanCount).flatMap { span in [6 * span + 2, 6 * span + 3, 6 * span + 4] }
+        return plan.indices
+    }
+
+    /// The CV selection produced by the same refinement plan that Subdivide executes.
+    public func sketchSplineSubdivisionControlPointIndices(_ spline: SketchSpline) throws -> [Int] {
+        try splineSubdivisionPlan(spline).indices
+    }
+
+    private func splineSubdivisionPlan(_ spline: SketchSpline) throws -> (fractions: [Double], indices: [Int]) {
+        try spline.validateForm()
+        let degree = spline.degree
+        var fractions: [Double] = []
+        var joints: [Int] = []
+        if var knots = spline.knots {
+            let lower = knots[degree], upper = knots[knots.count - degree - 1]
+            let midpoints = zip(knots, knots.dropFirst()).compactMap { a, b in a < b ? a + (b - a) / 2 : nil }
+            fractions = midpoints.reversed().map { ($0 - lower) / (upper - lower) }
+            for midpoint in midpoints {
+                guard let index = knots.firstIndex(where: { $0 > midpoint }) else {
+                    throw EditorError(code: .commandInvalid, message: "Subdivide could not resolve a knot span.")
+                }
+                knots.insert(contentsOf: repeatElement(midpoint, count: degree), at: index)
+            }
+            joints = try midpoints.map { midpoint in
+                guard let index = knots.firstIndex(of: midpoint) else {
+                    throw EditorError(code: .commandInvalid, message: "Subdivide lost an inserted knot.")
+                }
+                return index - 1
+            }
+        } else {
+            guard let count = spline.spanCount else {
+                throw EditorError(code: .commandInvalid, message: "Subdivide requires a valid spline.")
+            }
+            fractions = (0..<count).reversed().map { span in
+                (Double(span) + 0.5) / Double(count + count - 1 - span)
+            }
+            joints = (0..<count).map { 2 * degree * $0 + degree }
+        }
+        let indices = joints.flatMap { joint in
+            Array((joint - degree / 2)..<(joint - degree / 2 + degree))
+        }
+        return (fractions, indices)
     }
 
     /// Subdivide on a B-spline surface: its degree rises by one and it gains one span in each

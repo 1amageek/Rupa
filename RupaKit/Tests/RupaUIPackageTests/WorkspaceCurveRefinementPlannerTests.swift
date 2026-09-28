@@ -31,7 +31,7 @@ import Testing
         #expect(complete.count == 2, "The line and the spline; a circle has no ends.")
         #expect(complete.allSatisfy { $0.name == "completeSketchCurve" })
 
-        let subdivision = planner.subdivision(for: targets)
+        let subdivision = try planner.subdivision(for: targets)
         #expect(subdivision.commands.map(\.name) == ["subdivideSketchSpline", "subdivideSurface"])
         guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[spline]?.operation,
               let entityID = sketch.entityOrder.first else {
@@ -43,7 +43,7 @@ import Testing
                 featureID: spline, entityID: entityID, index: index
             )))
         })
-        #expect(planner.subdivision(for: [targets[0], targets[2]]).commands.isEmpty)
+        #expect(try planner.subdivision(for: [targets[0], targets[2]]).commands.isEmpty)
     }
 }
 

@@ -31,12 +31,6 @@ extension DesignDocument {
                 message: "Sketch spline control point insertion requires a spline entity."
             )
         }
-        guard spline.isClosed == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch spline control point insertion requires an open spline curve."
-            )
-        }
         guard productMetadata.bridgeCurveSources.values.contains(where: { source in
             source.featureID == selection.featureID && source.entityID == selection.entityID
         }) == false else {
@@ -91,65 +85,77 @@ extension DesignDocument {
         fraction: Double,
         owner: String
     ) throws -> SketchSplineControlPointInsertion {
-        let controlPoints = spline.controlPoints
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires a cubic Bezier spline."
+        try validateSplineForm(spline, owner: owner)
+        let degree = spline.degree
+        if let sourceKnots = spline.knots {
+            let lower = sourceKnots[degree]
+            let upper = sourceKnots[sourceKnots.count - degree - 1]
+            let parameter = lower + fraction * (upper - lower)
+            guard let span = sourceKnots.lastIndex(where: { $0 <= parameter }),
+                  span < sourceKnots.count - degree - 1,
+                  !sourceKnots.contains(parameter) else {
+                throw EditorError(code: .commandInvalid, message: "\(owner) needs a point inside a knot span.")
+            }
+            var knots = sourceKnots
+            var points = spline.controlPoints
+            // Boehm insertion in expression space retains parameter dependencies. At degree
+            // multiplicity the inserted point is on the curve, as the Insert CV contract requires.
+            for multiplicity in 0..<degree {
+                let currentSpan = span + multiplicity
+                var next = Array(points.prefix(currentSpan - degree + 1))
+                for index in (currentSpan - degree + 1)...(currentSpan - multiplicity) {
+                    let denominator = knots[index + degree] - knots[index]
+                    guard denominator > 0 else {
+                        throw EditorError(code: .commandInvalid, message: "\(owner) has a degenerate knot interval.")
+                    }
+                    next.append(interpolatedSketchPoint(points[index - 1], points[index],
+                        fraction: .scalar((parameter - knots[index]) / denominator)))
+                }
+                next.append(contentsOf: points[(currentSpan - multiplicity)...])
+                knots.insert(parameter, at: currentSpan + 1)
+                points = next
+            }
+            let updated = SketchSpline(controlPoints: points, isClosed: spline.isClosed, degree: degree, knots: knots)
+            try validateSplineForm(updated, owner: owner)
+            return SketchSplineControlPointInsertion(
+                spline: updated, originalControlPointCount: spline.controlPoints.count,
+                segmentStartIndex: span - degree, segmentEndIndex: span,
+                insertedControlPointIndex: span
             )
         }
-        let segmentCount = (controlPoints.count - 1) / 3
-        let scaledParameter = fraction * Double(segmentCount)
-        let segmentIndex = Int(floor(scaledParameter))
-        let localFraction = scaledParameter - Double(segmentIndex)
-        let tolerance = 1.0e-9
-        guard localFraction > tolerance,
-              localFraction < 1.0 - tolerance else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) fraction must resolve inside a cubic spline span, not on an existing knot."
-            )
+
+        let count = try requireSplineSpanCount(spline, owner: owner)
+        let scaled = fraction * Double(count)
+        let span = Int(floor(scaled))
+        let local = scaled - Double(span)
+        guard local > 1e-9, local < 1 - 1e-9 else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) needs a point inside a Bezier span.")
         }
-
-        let segmentStart = segmentIndex * 3
-        let p0 = controlPoints[segmentStart]
-        let p1 = controlPoints[segmentStart + 1]
-        let p2 = controlPoints[segmentStart + 2]
-        let p3 = controlPoints[segmentStart + 3]
-        let split = splitCubicBezier(
-            p0,
-            p1,
-            p2,
-            p3,
-            fraction: .scalar(localFraction)
-        )
-
-        var next = Array(controlPoints[0 ... segmentStart])
-        next.append(contentsOf: [
-            split.left.1,
-            split.left.2,
-            split.left.3,
-            split.right.1,
-            split.right.2,
-            split.right.3,
-        ])
-        if segmentStart + 4 < controlPoints.count {
-            next.append(contentsOf: controlPoints[(segmentStart + 4)...])
+        let start = span * degree
+        var row = Array(spline.controlPoints[start...(start + degree)])
+        var left = [row[0]]
+        var right = [row[degree]]
+        while row.count > 1 {
+            row = zip(row, row.dropFirst()).map { interpolatedSketchPoint($0, $1, fraction: .scalar(local)) }
+            left.append(row[0])
+            right.append(row[row.count - 1])
         }
-
-        let updatedSpline = SketchSpline(
-            controlPoints: next,
-            isClosed: spline.isClosed
-        )
-        try validateCubicBezierChainSpline(updatedSpline, owner: owner)
+        let next = Array(spline.controlPoints.prefix(start)) + left + right.dropLast().reversed()
+            + spline.controlPoints.dropFirst(start + degree + 1)
+        let updated = SketchSpline(controlPoints: next, isClosed: spline.isClosed, degree: degree)
+        try validateSplineForm(updated, owner: owner)
         return SketchSplineControlPointInsertion(
-            spline: updatedSpline,
-            originalControlPointCount: controlPoints.count,
-            segmentStartIndex: segmentStart,
-            segmentEndIndex: segmentStart + 3,
-            insertedControlPointIndex: segmentStart + 3
+            spline: updated, originalControlPointCount: spline.controlPoints.count,
+            segmentStartIndex: start, segmentEndIndex: start + degree,
+            insertedControlPointIndex: start + degree
         )
+    }
+
+    private func requireSplineSpanCount(_ spline: SketchSpline, owner: String) throws -> Int {
+        guard let count = spline.spanCount else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) has an invalid Bezier chain.")
+        }
+        return count
     }
 
     private func constraintsAfterSketchSplineControlPointInsertion(
@@ -333,14 +339,13 @@ extension DesignDocument {
         _ index: Int,
         insertion: SketchSplineControlPointInsertion
     ) throws -> Int {
-        if index == insertion.segmentStartIndex + 1 ||
-            index == insertion.segmentStartIndex + 2 {
+        if index > insertion.segmentStartIndex && index < insertion.segmentEndIndex {
             throw sketchSplineControlPointInsertionUnsupportedReference(
                 "references to replaced spline handles"
             )
         }
         if index >= insertion.segmentEndIndex {
-            return index + 3
+            return index + insertion.spline.controlPoints.count - insertion.originalControlPointCount
         }
         return index
     }

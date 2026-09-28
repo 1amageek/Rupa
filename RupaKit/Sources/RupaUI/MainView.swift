@@ -8792,15 +8792,19 @@ private struct ProjectMainViewContent: View {
     /// Subdivide on the selected splines and surfaces, or `nil` when none is selected. The control
     /// points it creates on curves become the selection.
     private var subdivideAction: (@MainActor () -> Void)? {
-        let subdivision = curveRefinementPlanner.subdivision(for: snapshot.selection.selectedTargets)
-        guard !subdivision.commands.isEmpty else { return nil }
-        return {
-            submitSource(subdivision.commands, name: "Subdivide") { _ in
-                if !subdivision.createdControlPoints.isEmpty {
-                    selectTargets(subdivision.createdControlPoints)
+        do {
+            let subdivision = try curveRefinementPlanner.subdivision(for: snapshot.selection.selectedTargets)
+            guard !subdivision.commands.isEmpty else { return nil }
+            return {
+                submitSource(subdivision.commands, name: "Subdivide") { _ in
+                    if !subdivision.createdControlPoints.isEmpty {
+                        selectTargets(subdivision.createdControlPoints)
+                    }
+                    reportToolStatus("Subdivided.")
                 }
-                reportToolStatus("Subdivided.")
             }
+        } catch {
+            return { reportToolStatus(error.localizedDescription, severity: .warning) }
         }
     }
 

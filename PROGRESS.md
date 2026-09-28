@@ -311,3 +311,8 @@
 - [x] CO1 Support reflected curve/mesh copies and exact sheet mirror cuts; kernel `4302111`, Rupa `a2f1aa31`. `depends:none` `parallel:none`
 - [x] CO2 Support independent arrays of nested instances; placement, ownership, regeneration, cleanup and undo/redo verified. Commit: `5aa59a50`. `depends:CO1` `parallel:none`
 - [x] CO3 Merged task commits into both main branches; 33 kernel and 78 RupaCore checks passed; signed app built and restarted with the same saved project and verified executable. Unrelated viewport overlay-limit failure reported separately; push withheld because unrelated unpublished commits exist. `depends:CO1,CO2` `parallel:none`
+
+- [x] MR1 Preserve spline degree, knot domain, expressions, shape and reference ownership in insertion, subdivision and linear completion; 18 focused tests passed, including 7 parameterized degree/closure cases and undo/redo; UI planner typechecked. Baseline Rupa f758d228 and swift-CAD dd08175. `depends:none` `parallel:none`
+- [ ] MR2 Include authored mesh presentation occurrences in section contours and interference with CAD and mesh bodies; preserve visibility, placement, identity and bounded payload semantics. `depends:MR1` `parallel:none`
+- [ ] MR3 Resolve and implement BRep completion and cross-object dimension edit semantics with user; maintain source ownership and undoable atomic publication. `depends:MR2` `parallel:none`
+- [ ] MR4 Review and verify cumulative changes, merge into latest main while preserving concurrent work, rebuild and restart the signed app with its saved document; do not push unrelated commits. `depends:MR1,MR2,MR3` `parallel:none`
