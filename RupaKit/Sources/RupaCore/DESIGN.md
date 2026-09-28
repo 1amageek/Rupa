@@ -1237,6 +1237,19 @@ curve; a point that misses fails the command with nothing changed. A planar face
 square on (the direction along its normal) takes the curves as a sketch on its plane,
 the `projectCurvesToGeneratedFace` result. `CurveDirectionalProjectionTests` own this.
 
+`projectBodyOutlinesToConstructionPlane` (Project Outline) keeps the silhouette: an
+edge, or the part of it, whose projection bounds the body's shadow on the plane, where
+the body covers the plane on one side of it only (`outlineSketchEntities`). Each edge's
+exact curve (Swift-CAD's `EdgeQueryEvaluator.resolve`) is read at eight interior
+parameters; a point a step (twenty modeling distances) to each side of its projection is
+covered when the line through it along the plane's normal meets one of the body's faces
+inside the trim (Swift-CAD's directional projection, a miss being its empty result), and
+a change between outline and interior is bisected. Edges inside the shadow and edges
+seen end-on are left out. A line piece stays a line, a circle parallel to the plane an
+arc (a circle when whole), and any other curve (B-spline, ellipse) a cubic chain fitted
+within ten modeling distances; coincident lines, arcs and circles are kept once.
+`ProjectOutlineSilhouetteTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

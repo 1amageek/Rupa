@@ -88,7 +88,7 @@
     - [ ] SK7.3 Project Body Body and Project Curve Curve through a kernel intersection curve. `depends:SK7.2` `parallel:none`
     - [ ] SK7.4 Create Outline as 3D boundary curves at the body. `depends:SK7.3` `parallel:none`
     - [x] SK7.5 Alternative Duplicate, Project Outline and Create Outline select their result with Move running to place it. `depends:none` `parallel:none`
-    - [ ] SK7.6 Project Outline keeps the silhouette: interior edges left out and B-spline edges projected instead of failing the command. `depends:none` `parallel:none`
+    - [x] SK7.6 Project Outline keeps the silhouette: interior edges left out and B-spline edges projected instead of failing the command. `depends:none` `parallel:none`
   - [ ] SK8 Rebuild and Refine: Convert Vertex, Delete Redundant Topology, Insert Knot, Raise Curve Degree, Raise Degree, Rebuild, Rebuild Curve, Reverse, Reverse Curve. `depends:none` `parallel:none`
     - [x] SK8.1 Delete Redundant Topology (Edit menu, palette): joints of a spline that one cubic spans are removed without changing its shape (swift-CAD 36b13c4 CubicBezierChainJoints); constrained joints stay. `depends:SK8.2` `parallel:none`
     - [x] SK8.2 Insert Knot (Edit menu): each click inserts a control point at the spline's projected foot, keeping its shape. `depends:none` `parallel:none`

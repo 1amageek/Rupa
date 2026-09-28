@@ -3,55 +3,6 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    func projectedOutlineSketchEntity(
-        _ entry: TopologySummaryResult.Entry,
-        to targetSystem: SketchPlaneCoordinateSystem,
-        owner: String
-    ) throws -> SketchEntity? {
-        switch entry.curveKind {
-        case "line":
-            return try projectedOutlineLineEdge(
-                entry,
-                to: targetSystem,
-                owner: owner
-            )
-        case "circle":
-            return try projectedGeneratedCircularEdge(
-                entry,
-                to: targetSystem,
-                owner: owner
-            )
-        default:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) currently supports outline projection for generated line and circular edges; B-spline or unknown edge outlines require exact trim-curve source support."
-            )
-        }
-    }
-
-    func projectedOutlineLineEdge(
-        _ entry: TopologySummaryResult.Entry,
-        to targetSystem: SketchPlaneCoordinateSystem,
-        owner: String
-    ) throws -> SketchEntity? {
-        guard let start = entry.start,
-              let end = entry.end else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(owner) generated line edge has no resolved endpoints."
-            )
-        }
-        let projectedStart = targetSystem.project(point3D(start)).point
-        let projectedEnd = targetSystem.project(point3D(end)).point
-        guard hypot(projectedEnd.x - projectedStart.x, projectedEnd.y - projectedStart.y) > 1.0e-12 else {
-            return nil
-        }
-        return .line(SketchLine(
-            start: sketchPoint(from: projectedStart),
-            end: sketchPoint(from: projectedEnd)
-        ))
-    }
-
     func projectedSketchEntityKey(_ entity: SketchEntity) throws -> String {
         switch entity {
         case .line(let line):

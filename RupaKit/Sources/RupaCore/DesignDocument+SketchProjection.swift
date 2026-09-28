@@ -255,6 +255,10 @@ extension DesignDocument {
             document: self,
             objectRegistry: objectRegistry
         )
+        guard let evaluated = topology.evaluatedDocument else {
+            throw EditorError(code: .referenceUnresolved, message: "\(operationName) needs the evaluated document.")
+        }
+        let edgeEvaluator = EdgeQueryEvaluator(tolerance: modelingSettings.tolerance)
         var projectedEntities: [SketchEntityID: SketchEntity] = [:]
         var seenEntities = Set<String>()
         var sourceNames: [String] = []
@@ -290,17 +294,33 @@ extension DesignDocument {
                     message: "\(operationName) target body has no generated edge topology to outline."
                 )
             }
-            for edge in bodyEdges {
-                guard let entity = try projectedOutlineSketchEntity(
-                    edge,
-                    to: targetSystem,
-                    owner: operationName
-                ) else {
-                    continue
+            let faces = try topology.entries.filter {
+                $0.kind == .face && $0.sceneNodeID == target.sceneNodeID.description
+            }.map { entry in
+                guard let reference = entry.stableReference else {
+                    throw EditorError(code: .referenceUnresolved, message: "\(operationName) body face has no stable reference.")
                 }
-                let key = try projectedSketchEntityKey(entity)
-                if seenEntities.insert(key).inserted {
-                    projectedEntities[SketchEntityID()] = entity
+                return SurfaceReference(subshape: reference)
+            }
+            for edge in bodyEdges {
+                guard let reference = edge.stableReference else {
+                    throw EditorError(code: .referenceUnresolved, message: "\(operationName) body edge has no stable reference.")
+                }
+                let entities = try outlineSketchEntities(
+                    edge: try edgeEvaluator.resolve(EdgeReference(subshape: reference), in: evaluated),
+                    faces: faces,
+                    in: evaluated,
+                    system: targetSystem,
+                    owner: operationName
+                )
+                for entity in entities {
+                    // Coincident outlines (a box's top and bottom seen from above) are kept once;
+                    // fitted splines are not compared.
+                    if case .spline = entity {
+                        projectedEntities[SketchEntityID()] = entity
+                    } else if seenEntities.insert(try projectedSketchEntityKey(entity)).inserted {
+                        projectedEntities[SketchEntityID()] = entity
+                    }
                 }
             }
         }
