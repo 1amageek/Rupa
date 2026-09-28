@@ -65,7 +65,8 @@ import SwiftCAD
     try document.validate()
 }
 
-@Test func createBooleanCanKeepTargetAndToolBodies() throws {
+/// Keep Tools keeps the tool beside the result, which replaces its target.
+@Test func createBooleanCanKeepToolBodies() throws {
     var document = DesignDocument.empty()
     let targetID = try createBooleanBox(
         in: &document,
@@ -93,10 +94,10 @@ import SwiftCAD
     )
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
 
-    #expect(evaluated.brep.bodies.count == 3)
+    #expect(evaluated.brep.bodies.count == 2)
     #expect(evaluated.subshapes.entries.keys.contains {
         $0.featureID == targetID
-    })
+    } == false)
     #expect(evaluated.subshapes.entries.keys.contains {
         $0.featureID == toolID
             && $0.role == GeneratedSubshapeRole.body.rawValue
