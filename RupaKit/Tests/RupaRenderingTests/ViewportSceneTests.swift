@@ -1987,7 +1987,7 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     }
 
     #expect(primitives.contains { primitive in
-        if case .spline(_, let points, let controlPoints, let sketchPlane) = primitive {
+        if case .spline(_, let points, let controlPoints, _, _, let sketchPlane) = primitive {
             return points.count == 33
                 && controlPoints.count == 4
                 && sketchPlane == .xy

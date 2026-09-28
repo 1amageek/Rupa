@@ -119,7 +119,10 @@ extension DesignDocument {
                 endAngle: try resolvedAngleValue(arc.endAngle, owner: "\(owner) end angle")
             )
         case .spline(let spline):
-            return .cubicBezierChain(controlPoints: try spline.controlPoints.map { try completionPoint($0, owner: owner) })
+            if spline.isCubicBezierChain {
+                return .cubicBezierChain(controlPoints: try spline.controlPoints.map { try completionPoint($0, owner: owner) })
+            }
+            return .sketchSpline(try resolvedSketchSplineCurve(spline, owner: owner))
         }
     }
 
@@ -293,6 +296,17 @@ extension DesignDocument {
                     case let .cubicBezierChain(points):
                         // Bezier control points follow any affine placement exactly.
                         if let mapped = try inPlane(points) { result.append(.cubicBezierChain(controlPoints: mapped)) }
+                    case let .sketchSpline(curve):
+                        // So do a B-spline's; its knots are unchanged.
+                        if let mapped = try inPlane(curve.bSpline.controlPoints) {
+                            do {
+                                result.append(.sketchSpline(try SketchSplineCurve(
+                                    degree: curve.degree, knots: curve.bSpline.knots, controlPoints: mapped, tolerance: .standard
+                                )))
+                            } catch let error as SketchError {
+                                throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
+                            }
+                        }
                     case let .circle(center, radius):
                         if let placedCircle = try placedCircle(center: center, radius: radius, start: 0, end: 0, through: inPlane, owner: owner) {
                             result.append(.circle(center: placedCircle.center, radius: placedCircle.radius))

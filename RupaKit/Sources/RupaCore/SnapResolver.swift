@@ -669,7 +669,7 @@ public struct SnapResolver: Sendable {
                 )
                 snapEntities.append(snapEntity)
                 candidates += snapEntity.discreteCandidates
-                if let closestCandidate = closestCandidate(near: point, entity: snapEntity) {
+                if let closestCandidate = try closestCandidate(near: point, entity: snapEntity) {
                     candidates.append(closestCandidate)
                 }
                 if let referencePoint {
@@ -1310,9 +1310,12 @@ public struct SnapResolver: Sendable {
                     source: indexedSource
                 )
             }
+            // B-spline control points follow the placement into the snapping plane exactly.
             return SnapEntity(
                 source: source,
-                geometry: .spline(controlPoints: controlPoints),
+                geometry: .spline(try SketchSplineCurve(
+                    degree: spline.degree, knots: spline.knots, controlPoints: controlPoints, tolerance: .standard
+                )),
                 axisDirections: axisDirections,
                 coordinatePlaneDirections: coordinatePlaneDirections,
                 discreteCandidates: discreteCandidates
@@ -1323,7 +1326,7 @@ public struct SnapResolver: Sendable {
     private func closestCandidate(
         near point: Point2D,
         entity: SnapEntity
-    ) -> PrioritizedSnapCandidate? {
+    ) throws -> PrioritizedSnapCandidate? {
         let snapPoint: Point2D
         let kind: SnapCandidateKind
         switch entity.geometry {
@@ -1347,11 +1350,8 @@ public struct SnapResolver: Sendable {
                 near: point
             )
             kind = .arcClosest
-        case .spline(let controlPoints):
-            guard let projected = closestPoint(onSplineControlPoints: controlPoints, near: point) else {
-                return nil
-            }
-            snapPoint = projected
+        case .spline(let curve):
+            snapPoint = try closestPoint(onSpline: curve, near: point)
             kind = .splineClosest
         case .polyline(let points):
             guard let projected = closestPoint(onPolyline: points, near: point) else {
@@ -1501,10 +1501,10 @@ public struct SnapResolver: Sendable {
                         endAngle: endAngle
                     )
                 }
-        case .spline(let controlPoints):
+        case .spline(let curve):
             return splineRelationPoints(
                 from: referencePoint,
-                controlPoints: controlPoints,
+                curve: curve,
                 relation: .perpendicular
             )
         case .polyline(let points):
@@ -1536,10 +1536,10 @@ public struct SnapResolver: Sendable {
                         endAngle: endAngle
                     )
                 }
-        case .spline(let controlPoints):
+        case .spline(let curve):
             return splineRelationPoints(
                 from: referencePoint,
-                controlPoints: controlPoints,
+                curve: curve,
                 relation: .tangent
             )
         case .polyline(let points):
@@ -1587,11 +1587,11 @@ public struct SnapResolver: Sendable {
                     endAngle: endAngle
                 )
             }
-        case .spline(let controlPoints):
+        case .spline(let curve):
             return splineAxisPoints(
                 referencePoint: referencePoint,
                 direction: direction,
-                controlPoints: controlPoints
+                curve: curve
             )
         case .polyline(let points):
             return polylineAxisPoints(
@@ -2467,29 +2467,17 @@ public struct SnapResolver: Sendable {
         return distance(point, start) <= distance(point, end) ? start : end
     }
 
+    /// The spline's point nearest `point`, projected exactly onto its own B-spline by
+    /// Swift-CAD's projector, so a snapped point lies on the curve rather than on a chord.
     private func closestPoint(
-        onSplineControlPoints controlPoints: [Point2D],
+        onSpline curve: SketchSplineCurve,
         near point: Point2D
-    ) -> Point2D? {
-        let samples = curveSampler.splineSamples(for: controlPoints).map(\.point)
-        guard samples.count >= 2 else {
-            return nil
+    ) throws -> Point2D {
+        do {
+            return try SketchCurveProjector(tolerance: .standard).nearest(on: .sketchSpline(curve), to: point).point
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "Snapping could not project onto the spline: \(error.message)")
         }
-        var closestPoint = samples[0]
-        var closestDistance = distance(point, closestPoint)
-        for index in 1 ..< samples.count {
-            let projected = self.closestPoint(
-                onSegmentFrom: samples[index - 1],
-                to: samples[index],
-                near: point
-            )
-            let projectedDistance = distance(point, projected)
-            if projectedDistance < closestDistance {
-                closestPoint = projected
-                closestDistance = projectedDistance
-            }
-        }
-        return closestPoint
     }
 
     private func closestPoint(
@@ -2608,21 +2596,17 @@ public struct SnapResolver: Sendable {
 
     private func splineRelationPoints(
         from referencePoint: Point2D,
-        controlPoints: [Point2D],
+        curve: SketchSplineCurve,
         relation: SnapCurveRelation
     ) -> [Point2D] {
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
-        let segmentCount = (controlPoints.count - 1) / 3
+        let segmentCount = curve.segments.count
         let sampleCount = max(curveSampler.samplesPerSegment * 2, 32)
         var points: [Point2D] = []
 
         for segmentIndex in 0 ..< segmentCount {
             guard var previous = splineRelationValue(
                 referencePoint: referencePoint,
-                controlPoints: controlPoints,
+                curve: curve,
                 segmentIndex: segmentIndex,
                 t: 0.0,
                 relation: relation
@@ -2636,7 +2620,7 @@ public struct SnapResolver: Sendable {
                 let t = Double(sampleIndex) / Double(sampleCount)
                 guard let current = splineRelationValue(
                     referencePoint: referencePoint,
-                    controlPoints: controlPoints,
+                    curve: curve,
                     segmentIndex: segmentIndex,
                     t: t,
                     relation: relation
@@ -2648,7 +2632,7 @@ public struct SnapResolver: Sendable {
                 } else if previous.value * current.value < 0.0,
                           let root = splineRelationRoot(
                               referencePoint: referencePoint,
-                              controlPoints: controlPoints,
+                              curve: curve,
                               segmentIndex: segmentIndex,
                               lowerT: previous.t,
                               lowerValue: previous.value,
@@ -2667,13 +2651,9 @@ public struct SnapResolver: Sendable {
     private func splineAxisPoints(
         referencePoint: Point2D,
         direction: Point2D,
-        controlPoints: [Point2D]
+        curve: SketchSplineCurve
     ) -> [Point2D] {
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
-        let segmentCount = (controlPoints.count - 1) / 3
+        let segmentCount = curve.segments.count
         let sampleCount = max(curveSampler.samplesPerSegment * 2, 32)
         var points: [Point2D] = []
 
@@ -2681,7 +2661,7 @@ public struct SnapResolver: Sendable {
             guard var previous = splineAxisValue(
                 referencePoint: referencePoint,
                 direction: direction,
-                controlPoints: controlPoints,
+                curve: curve,
                 segmentIndex: segmentIndex,
                 t: 0.0
             ) else {
@@ -2695,7 +2675,7 @@ public struct SnapResolver: Sendable {
                 guard let current = splineAxisValue(
                     referencePoint: referencePoint,
                     direction: direction,
-                    controlPoints: controlPoints,
+                    curve: curve,
                     segmentIndex: segmentIndex,
                     t: t
                 ) else {
@@ -2707,7 +2687,7 @@ public struct SnapResolver: Sendable {
                           let root = splineAxisRoot(
                               referencePoint: referencePoint,
                               direction: direction,
-                              controlPoints: controlPoints,
+                              curve: curve,
                               segmentIndex: segmentIndex,
                               lowerT: previous.t,
                               lowerValue: previous.value,
@@ -2725,7 +2705,7 @@ public struct SnapResolver: Sendable {
     private func splineAxisRoot(
         referencePoint: Point2D,
         direction: Point2D,
-        controlPoints: [Point2D],
+        curve: SketchSplineCurve,
         segmentIndex: Int,
         lowerT: Double,
         lowerValue: Double,
@@ -2741,7 +2721,7 @@ public struct SnapResolver: Sendable {
             guard let mid = splineAxisValue(
                 referencePoint: referencePoint,
                 direction: direction,
-                controlPoints: controlPoints,
+                curve: curve,
                 segmentIndex: segmentIndex,
                 t: midT
             ) else {
@@ -2765,12 +2745,12 @@ public struct SnapResolver: Sendable {
     private func splineAxisValue(
         referencePoint: Point2D,
         direction: Point2D,
-        controlPoints: [Point2D],
+        curve: SketchSplineCurve,
         segmentIndex: Int,
         t: Double
     ) -> SplineRelationValue? {
         guard let sample = curveSampler.splineSegmentSample(
-            for: controlPoints,
+            for: curve,
             segmentIndex: segmentIndex,
             t: t
         ) else {
@@ -2789,7 +2769,7 @@ public struct SnapResolver: Sendable {
 
     private func splineRelationRoot(
         referencePoint: Point2D,
-        controlPoints: [Point2D],
+        curve: SketchSplineCurve,
         segmentIndex: Int,
         lowerT: Double,
         lowerValue: Double,
@@ -2805,7 +2785,7 @@ public struct SnapResolver: Sendable {
             let midT = (lowT + highT) / 2.0
             guard let mid = splineRelationValue(
                 referencePoint: referencePoint,
-                controlPoints: controlPoints,
+                curve: curve,
                 segmentIndex: segmentIndex,
                 t: midT,
                 relation: relation
@@ -2829,13 +2809,13 @@ public struct SnapResolver: Sendable {
 
     private func splineRelationValue(
         referencePoint: Point2D,
-        controlPoints: [Point2D],
+        curve: SketchSplineCurve,
         segmentIndex: Int,
         t: Double,
         relation: SnapCurveRelation
     ) -> SplineRelationValue? {
         guard let sample = curveSampler.splineSegmentSample(
-            for: controlPoints,
+            for: curve,
             segmentIndex: segmentIndex,
             t: t
         ) else {
@@ -3298,7 +3278,8 @@ private enum SnapGeometry: Equatable {
     case line(start: Point2D, end: Point2D)
     case circle(center: Point2D, radius: Double)
     case arc(center: Point2D, radius: Double, startAngle: Double, endAngle: Double)
-    case spline(controlPoints: [Point2D])
+    /// The spline on its own degree and knots, its control points in the snapping plane.
+    case spline(SketchSplineCurve)
     case polyline(points: [Point2D])
 }
 

@@ -394,7 +394,7 @@ extension DesignDocument {
                 message: "\(owner) requires an open spline curve."
             )
         }
-        try validateSpline(spline, owner: owner)
+        try validateCubicBezierChainSpline(spline, owner: owner)
 
         var updated = spline
         if shape == .natural {
@@ -445,7 +445,7 @@ extension DesignDocument {
                 translatedSketchPoint(last, directionX: direction.x, directionY: direction.y, distance: distance)
             )
         }
-        try validateSpline(updated, owner: owner)
+        try validateCubicBezierChainSpline(updated, owner: owner)
         return updated
     }
 

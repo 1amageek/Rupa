@@ -161,17 +161,10 @@ struct SketchCurveEndpointResolver: Sendable {
             guard case .spline(let spline) = sketch.entities[entityID] else {
                 return nil
             }
-            let controlPoints = try spline.controlPoints.map { point in
-                try resolvedPoint(point, document: document)
-            }
-            guard controlPoints.count >= 4,
-                  (controlPoints.count - 1).isMultiple(of: 3) else {
-                return nil
-            }
-            let segmentCount = (controlPoints.count - 1) / 3
+            let curve = try splineCurve(spline, document: document)
             if index == 0 {
                 guard let sample = sampler.splineSegmentSample(
-                    for: controlPoints,
+                    for: curve,
                     segmentIndex: 0,
                     t: 0.0
                 ) else {
@@ -187,10 +180,10 @@ struct SketchCurveEndpointResolver: Sendable {
                     outgoingTangent: reversed(sample.tangent)
                 )
             }
-            if index == controlPoints.count - 1 {
+            if index == spline.controlPoints.count - 1 {
                 guard let sample = sampler.splineSegmentSample(
-                    for: controlPoints,
-                    segmentIndex: segmentCount - 1,
+                    for: curve,
+                    segmentIndex: curve.segments.count - 1,
                     t: 1.0
                 ) else {
                     return nil
@@ -315,10 +308,15 @@ struct SketchCurveEndpointResolver: Sendable {
         parameter: Double,
         document: DesignDocument
     ) throws -> CurveEvaluationSample? {
+        sampler.splineSample(for: try splineCurve(spline, document: document), parameter: parameter)
+    }
+
+    /// The spline on its own degree and knots, its control points resolved.
+    private func splineCurve(_ spline: SketchSpline, document: DesignDocument) throws -> SketchSplineCurve {
         let controlPoints = try spline.controlPoints.map { point in
             try resolvedPoint(point, document: document)
         }
-        return sampler.splineSample(for: controlPoints, parameter: parameter)
+        return try SketchSplineCurve(spline: spline, controlPoints: controlPoints, tolerance: .standard)
     }
 
     private func resolvedPoint(

@@ -922,6 +922,27 @@ rule), each cutter cutting the pieces the earlier cutters left. A target no
 cutter crosses, an empty list, or a curve in both lists fails the whole cut and
 the document is unchanged.
 
+### Sketch splines of any degree and knots
+
+A sketch spline carries its degree and, unless it is in Bezier-chain form, its
+knots ([Sketch spline form](../../../swift-CAD/Sources/CADIR/DESIGN.md#sketch-spline-form)).
+Every reader that evaluates one goes through `resolvedSketchSplineCurve` or
+`sketchSplineGeometry2D` (`DesignDocument+SketchSplineCurve.swift`), which resolve
+its control points and hand Swift-CAD's `SketchSplineCurve` to the kernel's
+sampler, projector and intersector; a cubic chain keeps the chain geometry and so
+its exact earlier results. The display snapshot and the viewport primitive carry
+`degree` and `knots` beside the control points, and the display samples, the
+sketch bounds, curve analysis (joints at knots of multiplicity `degree`, named by
+`SketchSpline.jointIndices`), snapping (an exact projection, so a snapped point
+lies on the curve), measurement, bridge endpoint parameters and the endpoint
+resolver all read that curve. A spline's fraction, the parameter
+`splitSketchCurve` and the bridge endpoints take, is the parameter normalized
+over its knot domain, which for a chain is the span parameter over the span
+count as before. `validateSplineForm` admits any form; a command that still reads
+a spline span by span calls `validateCubicBezierChainSpline`, which refuses any
+other degree or explicit knots by name until that command reads the general form
+(SK12.3). `GeneralSplineReadersTests` own the readers.
+
 ### Split Segment on a closed spline
 
 `splitSketchCurve(target:at:)` on a closed spline opens the loop where the point

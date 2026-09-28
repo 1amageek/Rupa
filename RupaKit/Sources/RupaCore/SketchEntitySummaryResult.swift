@@ -141,6 +141,9 @@ public struct SketchEntitySummaryResult: Codable, Equatable, Sendable {
         public var end: Point?
         public var center: Point?
         public var controlPoints: [Point]
+        /// A spline's degree, and its explicit knots when it is not in chain form.
+        public var degree: Int?
+        public var knots: [Double]?
         public var radius: Double?
         public var startAngle: Double?
         public var endAngle: Double?
@@ -167,6 +170,8 @@ public struct SketchEntitySummaryResult: Codable, Equatable, Sendable {
             end: Point? = nil,
             center: Point? = nil,
             controlPoints: [Point] = [],
+            degree: Int? = nil,
+            knots: [Double]? = nil,
             radius: Double? = nil,
             startAngle: Double? = nil,
             endAngle: Double? = nil,
@@ -192,6 +197,8 @@ public struct SketchEntitySummaryResult: Codable, Equatable, Sendable {
             self.end = end
             self.center = center
             self.controlPoints = controlPoints
+            self.degree = degree
+            self.knots = knots
             self.radius = radius
             self.startAngle = startAngle
             self.endAngle = endAngle

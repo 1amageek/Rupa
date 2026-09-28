@@ -282,7 +282,7 @@ enum ViewportNativeOverlayHitResolver {
         for primitive in primitives {
             let entityID = primitive.entityID
             if admitsControlPoints,
-               case .spline(_, _, let controlPoints, _) = primitive,
+               case .spline(_, _, let controlPoints, _, _, _) = primitive,
                sketchControlPointHitPolicy.allows(
                    featureID: item.featureID,
                    entityID: entityID
@@ -389,7 +389,7 @@ enum ViewportNativeOverlayHitResolver {
         for primitive in primitives {
             let entityID = primitive.entityID
             if admitsControlPoints,
-               case .spline(_, _, let controlPoints, _) = primitive,
+               case .spline(_, _, let controlPoints, _, _, _) = primitive,
                sketchControlPointHitPolicy.allows(
                    featureID: item.featureID,
                    entityID: entityID

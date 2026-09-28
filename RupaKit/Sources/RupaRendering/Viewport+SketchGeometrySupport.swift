@@ -48,12 +48,7 @@ extension Array where Element == ViewportSketchPrimitive {
         sketchPlane: SketchPlane
     )? {
         for primitive in self {
-            guard case .spline(
-                let primitiveEntityID,
-                let points,
-                let controlPoints,
-                let sketchPlane
-            ) = primitive,
+            guard case .spline(let primitiveEntityID, let points, let controlPoints, _, _, let sketchPlane) = primitive,
                   primitiveEntityID == entityID else {
                 continue
             }

@@ -18,7 +18,7 @@ extension DesignDocument {
             splineControlPointCount = nil
         case .spline(var spline):
             spline.controlPoints = Array(spline.controlPoints.reversed())
-            try validateSpline(spline, owner: "Sketch curve reverse")
+            try validateCubicBezierChainSpline(spline, owner: "Sketch curve reverse")
             reversedEntity = .spline(spline)
             splineControlPointCount = spline.controlPoints.count
         case .arc:

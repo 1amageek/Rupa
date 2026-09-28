@@ -296,6 +296,8 @@ public struct SketchEntitySnapshotService: Sendable {
                 start: controlPoints.first,
                 end: controlPoints.last,
                 controlPoints: controlPoints,
+                degree: spline.degree,
+                knots: spline.knots,
                 startExpression: spline.controlPoints.first.map(expressionPoint),
                 endExpression: spline.controlPoints.last.map(expressionPoint),
                 controlPointExpressions: spline.controlPoints.map(expressionPoint),

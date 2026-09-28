@@ -144,7 +144,7 @@ extension DesignDocument {
     private func cutCurveCanExtend(_ cutter: SketchCurveGeometry2D) -> Bool {
         switch cutter {
         case .line, .arc: true
-        case .circle, .cubicBezierChain: false
+        case .circle, .cubicBezierChain, .sketchSpline: false
         }
     }
 
@@ -195,6 +195,8 @@ extension DesignDocument {
                 positiveArcSpan(startAngle: startAngle, endAngle: endAngle)
         case let .cubicBezierChain(controlPoints):
             return parameter / Double((controlPoints.count - 1) / 3)
+        case let .sketchSpline(curve):
+            return curve.fraction(ofParameter: parameter)
         }
     }
 
@@ -215,7 +217,11 @@ extension DesignDocument {
         cutter: SketchCurveGeometry2D,
         extendsCutter: Bool
     ) throws -> [SketchCurveIntersection2D] {
-        if extendsCutter, case .cubicBezierChain = cutter {
+        let cutterIsSpline: Bool = switch cutter {
+        case .cubicBezierChain, .sketchSpline: true
+        case .line, .circle, .arc: false
+        }
+        if extendsCutter, cutterIsSpline {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Cut Curve spline cutter extension is not represented in the current source subset."
@@ -265,13 +271,7 @@ extension DesignDocument {
             guard spline.isClosed == false else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) requires an open spline curve.")
             }
-            guard spline.controlPoints.count >= 4,
-                  (spline.controlPoints.count - 1).isMultiple(of: 3) else {
-                throw EditorError(code: .commandInvalid, message: "\(owner) requires a cubic Bezier spline.")
-            }
-            return .cubicBezierChain(controlPoints: try spline.controlPoints.map { point in
-                try resolvedCutCurvePoint(point, owner: owner)
-            })
+            return try sketchSplineGeometry2D(spline, owner: owner)
         case .point:
             throw EditorError(
                 code: .commandInvalid,

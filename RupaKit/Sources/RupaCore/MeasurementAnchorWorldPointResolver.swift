@@ -444,26 +444,10 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         let controlPoints = try spline.controlPoints.map { point in
             try localPoint(from: point, parameters: parameters)
         }
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return nil
-        }
-        let segmentCount = (controlPoints.count - 1) / 3
-        let scaledParameter = parameter * Double(segmentCount)
-        let segmentIndex: Int
-        let localParameter: Double
-        if parameter >= 1.0 {
-            segmentIndex = segmentCount - 1
-            localParameter = 1.0
-        } else {
-            segmentIndex = min(max(Int(floor(scaledParameter)), 0), segmentCount - 1)
-            localParameter = scaledParameter - Double(segmentIndex)
-        }
-        return curveSampler.splineSegmentSample(
-            for: controlPoints,
-            segmentIndex: segmentIndex,
-            t: localParameter
-        )?.point
+        // The parameter is normalized over the spline's knot domain, the convention a cubic
+        // chain's span parameter already follows.
+        let curve = try SketchSplineCurve(spline: spline, controlPoints: controlPoints, tolerance: .standard)
+        return curveSampler.splineSample(for: curve, parameter: parameter)?.point
     }
 
     private func arcEndpoint(

@@ -518,10 +518,19 @@ source is observed, following the existing object-transform handoff contract
 below. Point/tangent source edits are a separate, unfinished preview migration.
 
 A highlighted or curvature-toggled sketch curve draws its curvature comb from
-`ViewportCurveCurvatureComb`. A curve with no curvature to comb — a spline of
-straight spans, or one curved sample only — draws no comb and keeps its other
-affordances; only an invalid comb scale fails the overlay
-(`aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles`).
+`ViewportCurveCurvatureComb`. A spline is combed on its own degree and knots
+(`ViewportSketchPrimitive.spline` carries them) from turn-bounded samples: steps
+are halved until the tangent turns by at most 5° from one tooth to the next, so
+the comb follows a tight bend instead of joining distant teeth across it. The
+teeth point toward the center of curvature and keep one linear scale, as
+Plasticity's comb does, so a bend tighter than its teeth still shows crossing
+teeth; the comb scale shortens them. A curve with no curvature to comb — a spline
+of straight spans, or one curved sample only — draws no comb and keeps its other
+affordances; only an invalid comb scale or a spline that cannot be evaluated
+fails the overlay (`aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles`,
+`viewportCurveCurvatureCombFollowsATightHook`). Spline handles are drawn as boxes
+at the control points the curve passes through (`SketchSpline.jointIndices`) and
+as spheres elsewhere.
 
 ### Source, frame, and provenance
 

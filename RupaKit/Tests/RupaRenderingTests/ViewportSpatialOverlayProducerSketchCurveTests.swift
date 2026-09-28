@@ -723,7 +723,7 @@ func rawWorkerCoversCircleArcSplineAndOffsetRoutes() throws {
                     endAngleRadians: .pi * 0.75,
                     segmentCount: 24
                 ),
-                .spline(
+                .cubicSpline(
                     entityID: splineID,
                     points: [
                         CGPoint(x: 0, y: 1),
@@ -1236,7 +1236,7 @@ func toggledPointsWinOverSelectionForASplinesControlPoints() throws {
             sceneNodeID: nodeID,
             modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             kind: .sketch(primitives: [
-                .spline(
+                .cubicSpline(
                     entityID: splineID,
                     points: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0.25), CGPoint(x: 1, y: 0)],
                     controlPoints: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0.5), CGPoint(x: 1, y: 0)],
@@ -1294,7 +1294,7 @@ func aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles() throws {
             sceneNodeID: nodeID,
             modelBounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             kind: .sketch(primitives: [
-                .spline(
+                .cubicSpline(
                     entityID: splineID,
                     points: [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0), CGPoint(x: 1, y: 0)],
                     controlPoints: [CGPoint(x: 0, y: 0), CGPoint(x: 0.25, y: 0), CGPoint(x: 0.75, y: 0), CGPoint(x: 1, y: 0)],

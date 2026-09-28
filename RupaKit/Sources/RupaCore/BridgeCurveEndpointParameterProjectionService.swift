@@ -207,126 +207,29 @@ public struct BridgeCurveEndpointParameterProjectionService: Sendable {
             : 1.0
     }
 
+    /// The fraction over the spline's knot domain of its point nearest `point`, from Swift-CAD's
+    /// projector on the spline's own degree and knots.
     private func splineParameter(
         _ spline: SketchSpline,
         near point: Point2D,
         document: DesignDocument
     ) throws -> Double {
-        let controlPoints = try spline.controlPoints.map { try resolvedPoint($0, document: document) }
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
+        let geometry = try document.sketchSplineGeometry2D(spline, owner: "Bridge curve endpoint parameter projection")
+        let projection: SketchCurveProjector.Projection
+        do {
+            projection = try SketchCurveProjector(tolerance: .standard).nearest(
+                on: geometry,
+                to: CADCore.Point2D(x: point.x, y: point.y)
+            )
+        } catch let error as KernelError {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Bridge curve endpoint parameter projection requires a cubic Bezier spline."
+                message: "Bridge curve endpoint parameter projection could not project onto the spline: \(error.message)"
             )
         }
-        let segmentCount = (controlPoints.count - 1) / 3
-        var best: (segment: Int, t: Double, distanceSquared: Double)?
-        let coarseSteps = 12
-        for segment in 0 ..< segmentCount {
-            var previousT = 0.0
-            var previousDistance = distanceSquared(
-                from: point,
-                to: splinePoint(controlPoints: controlPoints, segment: segment, t: previousT)
-            )
-            for step in 1 ... coarseSteps {
-                let currentT = Double(step) / Double(coarseSteps)
-                let currentDistance = distanceSquared(
-                    from: point,
-                    to: splinePoint(controlPoints: controlPoints, segment: segment, t: currentT)
-                )
-                let localBest = refinedSplineParameter(
-                    controlPoints: controlPoints,
-                    segment: segment,
-                    lower: previousT,
-                    upper: currentT,
-                    near: point
-                )
-                if best.map({ localBest.distanceSquared < $0.distanceSquared }) ?? true {
-                    best = (segment, localBest.t, localBest.distanceSquared)
-                }
-                if previousDistance < currentDistance,
-                   (best.map({ previousDistance < $0.distanceSquared }) ?? true) {
-                    best = (segment, previousT, previousDistance)
-                }
-                previousT = currentT
-                previousDistance = currentDistance
-            }
-        }
-        guard let best else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Bridge curve endpoint parameter projection could not sample the spline."
-            )
-        }
-        return clampedUnit((Double(best.segment) + best.t) / Double(segmentCount))
+        return clampedUnit(document.splitParameter(ofNatural: projection.parameter, on: geometry))
     }
 
-    private func refinedSplineParameter(
-        controlPoints: [Point2D],
-        segment: Int,
-        lower: Double,
-        upper: Double,
-        near point: Point2D
-    ) -> (t: Double, distanceSquared: Double) {
-        var low = lower
-        var high = upper
-        for _ in 0 ..< 32 {
-            let first = low + (high - low) / 3.0
-            let second = high - (high - low) / 3.0
-            let firstDistance = distanceSquared(
-                from: point,
-                to: splinePoint(controlPoints: controlPoints, segment: segment, t: first)
-            )
-            let secondDistance = distanceSquared(
-                from: point,
-                to: splinePoint(controlPoints: controlPoints, segment: segment, t: second)
-            )
-            if firstDistance < secondDistance {
-                high = second
-            } else {
-                low = first
-            }
-        }
-        let t = (low + high) / 2.0
-        return (
-            t,
-            distanceSquared(from: point, to: splinePoint(controlPoints: controlPoints, segment: segment, t: t))
-        )
-    }
-
-    private func splinePoint(
-        controlPoints: [Point2D],
-        segment: Int,
-        t: Double
-    ) -> Point2D {
-        let start = segment * 3
-        return cubicBezierPoint(
-            controlPoints[start],
-            controlPoints[start + 1],
-            controlPoints[start + 2],
-            controlPoints[start + 3],
-            t: clampedUnit(t)
-        )
-    }
-
-    private func cubicBezierPoint(
-        _ p0: Point2D,
-        _ p1: Point2D,
-        _ p2: Point2D,
-        _ p3: Point2D,
-        t: Double
-    ) -> Point2D {
-        let inverse = 1.0 - t
-        let b0 = inverse * inverse * inverse
-        let b1 = 3.0 * inverse * inverse * t
-        let b2 = 3.0 * inverse * t * t
-        let b3 = t * t * t
-        return Point2D(
-            x: p0.x * b0 + p1.x * b1 + p2.x * b2 + p3.x * b3,
-            y: p0.y * b0 + p1.y * b1 + p2.y * b2 + p3.y * b3
-        )
-    }
 
     private func distanceSquared(from first: Point2D, to second: Point2D) -> Double {
         let dx = first.x - second.x

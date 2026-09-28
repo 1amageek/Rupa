@@ -2281,17 +2281,21 @@ public struct MeasurementService {
         _ spline: SketchSpline,
         parameters: ParameterTable
     ) throws -> [MeasurementPoint2D] {
-        guard spline.controlPoints.count >= 4,
-              (spline.controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
         let controlPoints = try spline.controlPoints.map { point in
             try resolvedPoint(point, parameters: parameters)
         }
         let kernelControlPoints: [CADCore.Point2D] = controlPoints.map { point in
             CADCore.Point2D(x: point.x, y: point.y)
         }
-        return try splineTessellator.points(for: kernelControlPoints).map { point in
+        let points: [CADCore.Point2D]
+        if spline.isCubicBezierChain {
+            points = try splineTessellator.points(for: kernelControlPoints)
+        } else {
+            // Any other degree or knots flattens its own B-spline to the same tolerance.
+            let curve = try SketchSplineCurve(spline: spline, controlPoints: kernelControlPoints, tolerance: tolerance)
+            points = try SketchSplineTessellator(tolerance: tolerance).samples(for: curve).map(\.point)
+        }
+        return points.map { point in
             MeasurementPoint2D(x: point.x, y: point.y)
         }
     }

@@ -37,12 +37,36 @@ public struct SketchDisplaySnapshot: Codable, Equatable, Sendable {
             startAngleRadians: Double,
             endAngleRadians: Double
         )
+        /// `points` are display samples; `controlPoints`, `degree` and `knots` (the resolved clamped
+        /// knot vector) are the spline itself, for readers that evaluate or edit it.
         case spline(
             entityID: SketchEntityID,
             points: [Point2D],
             controlPoints: [Point2D],
+            degree: Int,
+            knots: [Double],
             sketchPlane: SketchPlane
         )
+
+        /// A cubic Bezier chain spline primitive: 3n + 1 control points, knots of multiplicity 3
+        /// at every joint. A count that is not 3n + 1 has no chain knots; reading its curve fails.
+        public static func cubicSpline(
+            entityID: SketchEntityID,
+            points: [Point2D],
+            controlPoints: [Point2D],
+            sketchPlane: SketchPlane
+        ) -> Primitive {
+            let placeholder = SketchPoint(x: .length(0, .meter), y: .length(0, .meter))
+            let chain = SketchSpline(controlPoints: Array(repeating: placeholder, count: controlPoints.count))
+            return .spline(
+                entityID: entityID,
+                points: points,
+                controlPoints: controlPoints,
+                degree: 3,
+                knots: chain.knotVector ?? [],
+                sketchPlane: sketchPlane
+            )
+        }
 
         public var entityID: SketchEntityID {
             switch self {
@@ -50,7 +74,7 @@ public struct SketchDisplaySnapshot: Codable, Equatable, Sendable {
                  .line(let entityID, _, _),
                  .circle(let entityID, _, _),
                  .arc(let entityID, _, _, _, _),
-                 .spline(let entityID, _, _, _):
+                 .spline(let entityID, _, _, _, _, _):
                 entityID
             }
         }

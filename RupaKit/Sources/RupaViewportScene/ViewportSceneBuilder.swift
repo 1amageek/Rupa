@@ -1636,11 +1636,13 @@ public struct ViewportSceneBuilder {
                         spanning: endAngleRadians - startAngleRadians
                     )
                 )
-            case .spline(let entityID, let points, let controlPoints, let sketchPlane):
+            case .spline(let entityID, let points, let controlPoints, let degree, let knots, let sketchPlane):
                 return .spline(
                     entityID: entityID,
                     points: points.map(viewportPoint),
                     controlPoints: controlPoints.map(viewportPoint),
+                    degree: degree,
+                    knots: knots,
                     sketchPlane: sketchPlane
                 )
             }

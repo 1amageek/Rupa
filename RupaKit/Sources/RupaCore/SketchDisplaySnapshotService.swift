@@ -221,7 +221,11 @@ public struct SketchDisplaySnapshotService: Sendable {
                     plane: sketch.plane,
                     parameters: parameters
                 )
-                let points = splineSamplePoints(controlPoints: controlPoints)
+                guard controlPoints.count == spline.controlPoints.count,
+                      let knots = spline.knotVector else {
+                    return nil
+                }
+                let points = splineDisplayPoints(spline, controlPoints: controlPoints)
                 guard points.count >= 2 else {
                     return nil
                 }
@@ -229,6 +233,8 @@ public struct SketchDisplaySnapshotService: Sendable {
                     entityID: entityID,
                     points: points,
                     controlPoints: controlPoints,
+                    degree: spline.degree,
+                    knots: knots,
                     sketchPlane: sketch.plane
                 )
             }
@@ -349,7 +355,8 @@ public struct SketchDisplaySnapshotService: Sendable {
                 endAngleRadians: endAngle
             )
         case .spline(let spline):
-            return splineSamplePoints(
+            return splineDisplayPoints(
+                spline,
                 controlPoints: resolvedSplineControlPoints(
                     spline,
                     plane: plane,
@@ -359,13 +366,34 @@ public struct SketchDisplaySnapshotService: Sendable {
         }
     }
 
+    /// A spline's display samples, the same for its primitive and the sketch bounds: a cubic
+    /// chain through its own evaluator, any other degree or knots its B-spline at the same density
+    /// per segment. Like every other entity here, one that cannot be evaluated has none and is
+    /// left out of the display; document evaluation reports why.
+    private func splineDisplayPoints(_ spline: SketchSpline, controlPoints: [Point2D]) -> [Point2D] {
+        guard controlPoints.count == spline.controlPoints.count, controlPoints.isEmpty == false else {
+            return []
+        }
+        if spline.isCubicBezierChain {
+            return splineSamplePoints(controlPoints: controlPoints)
+        }
+        do {
+            let curve = try SketchSplineCurve(spline: spline, controlPoints: controlPoints, tolerance: .standard)
+            return SketchCurveSampler(samplesPerSegment: 32).splineSamples(for: curve).map(\.point)
+        } catch {
+            return []
+        }
+    }
+
     private func resolvedSplineControlPoints(
         _ spline: SketchSpline,
         plane: SketchPlane,
         parameters: ParameterTable
     ) -> [Point2D] {
-        guard spline.controlPoints.count >= 4,
-              (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+        do {
+            try spline.validateForm()
+        } catch {
+            // A spline of invalid form is left out of the display; evaluation reports it.
             return []
         }
         let controlPoints = spline.controlPoints.compactMap { point in

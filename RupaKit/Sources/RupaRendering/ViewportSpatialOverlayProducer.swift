@@ -2441,7 +2441,7 @@ enum ViewportSpatialOverlayProducer {
                     y: center.y + CGFloat(sin(angle) * radius)
                 ))
             }
-        case .spline(_, let points, _, _):
+        case .spline(_, let points, _, _, _, _):
             guard points.count >= 2 else { return [] }
             return points.map { Self.point($0) }
         }

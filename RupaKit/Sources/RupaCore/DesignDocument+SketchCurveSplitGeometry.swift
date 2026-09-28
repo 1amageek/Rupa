@@ -52,8 +52,8 @@ extension DesignDocument {
                 fraction: fraction,
                 owner: owner
             )
-            try validateSpline(split.retained, owner: owner)
-            try validateSpline(split.new, owner: owner)
+            try validateCubicBezierChainSpline(split.retained, owner: owner)
+            try validateCubicBezierChainSpline(split.new, owner: owner)
             return SketchCurveSegmentSplitResult(
                 originalEntityID: entityID,
                 newEntityID: newEntityID,

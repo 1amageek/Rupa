@@ -66,7 +66,7 @@ extension DesignDocument {
             secondTension: secondTension
         )
         let spline = SketchSpline(controlPoints: controlPoints)
-        try validateSpline(spline, owner: "Bridge curve")
+        try validateCubicBezierChainSpline(spline, owner: "Bridge curve")
 
         let bridgeID = SketchEntityID()
         sketch.entities[bridgeID] = .spline(spline)
@@ -242,7 +242,7 @@ extension DesignDocument {
             second: secondSample,
             secondTension: secondTension
         ))
-        try validateSpline(spline, owner: "Bridge curve")
+        try validateCubicBezierChainSpline(spline, owner: "Bridge curve")
 
         sketch.entities[source.entityID] = .spline(spline)
         for constraint in bridgeOwnedConstraints(
@@ -770,7 +770,7 @@ extension DesignDocument {
         case .spline(let spline):
             let split = try splitSpline(spline, fraction: parameter, owner: owner)
             if trimSide.keepsLowerParameterSide {
-                try validateSpline(split.retained, owner: owner)
+                try validateCubicBezierChainSpline(split.retained, owner: owner)
                 return TrimmedBridgeCurveEndpointSource(
                     entity: .spline(split.retained),
                     endpointReference: .splineControlPoint(
@@ -779,7 +779,7 @@ extension DesignDocument {
                     )
                 )
             }
-            try validateSpline(split.new, owner: owner)
+            try validateCubicBezierChainSpline(split.new, owner: owner)
             return TrimmedBridgeCurveEndpointSource(
                 entity: .spline(split.new),
                 endpointReference: .splineControlPoint(entity: entityID, index: 0)

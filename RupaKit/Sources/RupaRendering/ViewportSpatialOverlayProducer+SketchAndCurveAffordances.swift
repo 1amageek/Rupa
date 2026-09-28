@@ -1127,7 +1127,7 @@ extension ViewportSpatialOverlayProducer {
                     }
 
                     if source.enabledRoutes.contains(.splineSlide),
-                       case .spline(let entityID, _, let controlPoints, _) = effectivePrimitive,
+                       case .spline(let entityID, _, let controlPoints, _, _, _) = effectivePrimitive,
                        let indexes = slideControlPointIndexes(
                            featureID: item.featureID,
                            entityID: entityID,
@@ -1339,7 +1339,7 @@ extension ViewportSpatialOverlayProducer {
     }
 
     private static func sketchPlane(for primitive: ViewportSketchPrimitive) -> SketchPlane {
-        if case .spline(_, _, _, let plane) = primitive {
+        if case .spline(_, _, _, _, _, let plane) = primitive {
             return plane
         }
         return .defaultWorkspacePlane
@@ -1355,7 +1355,7 @@ extension ViewportSpatialOverlayProducer {
             49
         case .arc:
             25
-        case .spline(_, let points, let controlPoints, _):
+        case .spline(_, let points, let controlPoints, _, _, _):
             points.count + controlPoints.count
         }
     }
@@ -1633,11 +1633,14 @@ extension ViewportSpatialOverlayProducer {
                 endAngle: end,
                 parameter: parameter
             )
-        case .spline(_, _, let controlPoints, _):
-            sample = sampler.splineSample(
-                for: controlPoints.map { Point2D(x: Double($0.x), y: Double($0.y)) },
-                parameter: parameter
+        case .spline(_, _, let controlPoints, let degree, let knots, _):
+            let curve = try SketchSplineCurve(
+                degree: degree,
+                knots: knots,
+                controlPoints: controlPoints.map { Point2D(x: Double($0.x), y: Double($0.y)) },
+                tolerance: .standard
             )
+            sample = sampler.splineSample(for: curve, parameter: parameter)
         case .point, .circle:
             return nil
         }
@@ -1810,7 +1813,7 @@ extension ViewportSpatialOverlayProducer {
                 segmentCount: segmentCount
             )
 
-        case .spline(let entityID, let points, let controlPoints, let sketchPlane):
+        case .spline(let entityID, let points, let controlPoints, let degree, let knots, let sketchPlane):
             var resolvedControlPoints = controlPoints
             var resolvedPoints = points
             for index in controlPoints.indices {
@@ -1834,6 +1837,8 @@ extension ViewportSpatialOverlayProducer {
                 entityID: entityID,
                 points: resolvedPoints,
                 controlPoints: resolvedControlPoints,
+                degree: degree,
+                knots: knots,
                 sketchPlane: sketchPlane
             )
         }
@@ -1967,7 +1972,7 @@ extension ViewportSpatialOverlayProducer {
                 ))
                 .normalized(tolerance: 1.0e-12)
             return (world(point, by: modelTransform), direction)
-        case .spline(_, let points, let controlPoints, _):
+        case .spline(_, let points, let controlPoints, _, _, _):
             let samples = points.count >= 2 ? points : controlPoints
             guard samples.count >= 2 else { return nil }
             let midpointIndex = max((samples.count - 1) / 2, 0)
@@ -2225,7 +2230,7 @@ extension ViewportSpatialOverlayProducer {
         transform: ScenePlacement
     ) -> [Point3D]? {
         guard let primitive,
-              case .spline(_, _, let controlPoints, _) = primitive else {
+              case .spline(_, _, let controlPoints, _, _, _) = primitive else {
             return nil
         }
         return controlPoints.map { world($0, by: transform) }
@@ -2821,12 +2826,14 @@ extension ViewportSpatialOverlayProducer {
                 }
             }
 
-        case .spline(_, let points, let controlPoints, _):
+        case .spline(_, let points, let controlPoints, let degree, let knots, _):
             guard controlPoints.count >= 2 else {
                 throw RealityViewportSpatialBatch.invalid(
                     "Spline affordance source requires at least two control points."
                 )
             }
+            // The control points the curve passes through are drawn as boxes, the others as spheres.
+            let joints = Set(SketchSpline.jointIndices(controlPointCount: controlPoints.count, degree: degree, knots: knots))
             let worldControlPoints = controlPoints.map(world)
             if primitive.showsPointHandles {
                 result.append(.init(
@@ -2846,7 +2853,7 @@ extension ViewportSpatialOverlayProducer {
                             controlPointIndex: index
                         )),
                         markers: [.init(anchor: point, diameterPoints: 8,
-                                        shape: index.isMultiple(of: 3) ? .box : .sphere)],
+                                        shape: joints.contains(index) ? .box : .sphere)],
                         preparedTarget: splinePointTarget(index, at: controlPoints[index])
                     ))
                 }
@@ -2888,7 +2895,7 @@ extension ViewportSpatialOverlayProducer {
         }
         // A curve without curvature (a spline of straight spans, or one curved sample only) has
         // no comb to draw; that is its comb, not a failure of the overlay.
-        guard let comb = ViewportCurveCurvatureComb(primitive: primitive), comb.samples.count >= 2 else {
+        guard let comb = try ViewportCurveCurvatureComb(primitive: primitive), comb.samples.count >= 2 else {
             return nil
         }
         let displayScale = comb.displayScale(scaleFactor: scaleFactor)

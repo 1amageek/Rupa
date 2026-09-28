@@ -237,7 +237,7 @@ extension DesignDocument {
             controlPoints: rebuiltControlPoints,
             isClosed: spline.isClosed
         )
-        try validateSpline(rebuiltSpline, owner: owner)
+        try validateCubicBezierChainSpline(rebuiltSpline, owner: owner)
         let rebuiltControlPointValues = try resolvedSplineControlPoints(
             rebuiltSpline,
             owner: owner

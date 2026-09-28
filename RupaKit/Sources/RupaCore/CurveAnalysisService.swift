@@ -79,14 +79,12 @@ public struct CurveAnalysisService: Sendable {
                 curves.append(entry)
 
                 if case .spline(let spline) = entity {
-                    let controlPoints = try spline.controlPoints.map { point in
-                        try resolvedPoint(point, document: document)
-                    }
                     continuityJoins.append(
                         contentsOf: splineContinuityJoins(
                             featureID: featureID,
                             entityID: entityID,
-                            controlPoints: controlPoints
+                            spline: spline,
+                            curve: try splineCurve(spline, document: document)
                         )
                     )
                 }
@@ -142,14 +140,12 @@ public struct CurveAnalysisService: Sendable {
         let entityDescription = entityID.description
         var continuityJoins: [CurveAnalysisResult.ContinuityJoin] = []
         if case .spline(let spline) = entity {
-            let controlPoints = try spline.controlPoints.map { point in
-                try resolvedPoint(point, document: document)
-            }
             continuityJoins.append(
                 contentsOf: splineContinuityJoins(
                     featureID: featureID,
                     entityID: entityID,
-                    controlPoints: controlPoints
+                    spline: spline,
+                    curve: try splineCurve(spline, document: document)
                 )
             )
         }
@@ -246,10 +242,7 @@ public struct CurveAnalysisService: Sendable {
             )
             curveKind = .arc
         case .spline(let spline):
-            let controlPoints = try spline.controlPoints.map { point in
-                try resolvedPoint(point, document: document)
-            }
-            samples = sampler.splineSamples(for: controlPoints)
+            samples = sampler.splineSamples(for: try splineCurve(spline, document: document))
             curveKind = .spline
         }
         guard samples.isEmpty == false else {
@@ -268,26 +261,50 @@ public struct CurveAnalysisService: Sendable {
         )
     }
 
+    /// The spline on its own degree and knots, its control points resolved.
+    private func splineCurve(_ spline: SketchSpline, document: DesignDocument) throws -> SketchSplineCurve {
+        let controlPoints = try spline.controlPoints.map { point in
+            try resolvedPoint(point, document: document)
+        }
+        return try SketchSplineCurve(spline: spline, controlPoints: controlPoints, tolerance: .standard)
+    }
+
+    /// The interior joint control point at each knot value: joint j's knot run starts at knot
+    /// index j + 1 (`SketchSpline.jointIndices`).
+    private func splineJointControlPointIndexes(_ spline: SketchSpline) -> [Double: Int] {
+        guard let knots = spline.knotVector else { return [:] }
+        var result: [Double: Int] = [:]
+        for joint in spline.jointIndices.dropFirst().dropLast() {
+            result[knots[joint + 1]] = joint
+        }
+        return result
+    }
+
     private func splineContinuityJoins(
         featureID: FeatureID,
         entityID: SketchEntityID,
-        controlPoints: [CADCore.Point2D]
+        spline: SketchSpline,
+        curve: SketchSplineCurve
     ) -> [CurveAnalysisResult.ContinuityJoin] {
-        guard controlPoints.count >= 7,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
+        let segmentCount = curve.segments.count
+        guard segmentCount >= 2 else {
             return []
         }
-        let segmentCount = (controlPoints.count - 1) / 3
+        // The joints are the segment boundaries at a knot of multiplicity `degree`, where the
+        // curve passes through a control point: every boundary of a chain; elsewhere the segments
+        // meet smoothly by construction and are not reported.
+        let jointIndexByKnot = splineJointControlPointIndexes(spline)
         var joins: [CurveAnalysisResult.ContinuityJoin] = []
-        joins.reserveCapacity(max(segmentCount - 1, 0))
+        joins.reserveCapacity(segmentCount - 1)
         for segmentIndex in 0 ..< (segmentCount - 1) {
-            guard let first = sampler.splineSegmentSample(
-                for: controlPoints,
+            guard let jointIndex = jointIndexByKnot[curve.segments[segmentIndex].upperParameter],
+                  let first = sampler.splineSegmentSample(
+                for: curve,
                 segmentIndex: segmentIndex,
                 t: 1.0
             ),
             let second = sampler.splineSegmentSample(
-                for: controlPoints,
+                for: curve,
                 segmentIndex: segmentIndex + 1,
                 t: 0.0
             ) else {
@@ -301,10 +318,10 @@ public struct CurveAnalysisService: Sendable {
                     sourceFeatureID: featureID.description,
                     joinKind: .internalSplineKnot,
                     firstEntityID: entityID.description,
-                    firstReference: "splineControlPoint:\(entityID.description):\(segmentIndex * 3 + 3)",
+                    firstReference: "splineControlPoint:\(entityID.description):\(jointIndex)",
                     firstParameter: first.parameter,
                     secondEntityID: entityID.description,
-                    secondReference: "splineControlPoint:\(entityID.description):\(segmentIndex * 3 + 3)",
+                    secondReference: "splineControlPoint:\(entityID.description):\(jointIndex)",
                     secondParameter: second.parameter,
                     constraintKinds: ["splineKnot"],
                     requiredContinuity: nil,
@@ -526,27 +543,12 @@ public struct CurveAnalysisService: Sendable {
             guard case .spline(let spline) = sketch.entities[entityID] else {
                 return nil
             }
-            let controlPoints = try spline.controlPoints.map { point in
-                try resolvedPoint(point, document: document)
-            }
-            guard controlPoints.count >= 4,
-                  (controlPoints.count - 1).isMultiple(of: 3) else {
-                return nil
-            }
-            let segmentCount = (controlPoints.count - 1) / 3
+            let curve = try splineCurve(spline, document: document)
             let sample: CurveEvaluationSample?
             if index == 0 {
-                sample = sampler.splineSegmentSample(
-                    for: controlPoints,
-                    segmentIndex: 0,
-                    t: 0.0
-                )
-            } else if index == controlPoints.count - 1 {
-                sample = sampler.splineSegmentSample(
-                    for: controlPoints,
-                    segmentIndex: segmentCount - 1,
-                    t: 1.0
-                )
+                sample = sampler.splineSegmentSample(for: curve, segmentIndex: 0, t: 0.0)
+            } else if index == spline.controlPoints.count - 1 {
+                sample = sampler.splineSegmentSample(for: curve, segmentIndex: curve.segments.count - 1, t: 1.0)
             } else {
                 return nil
             }

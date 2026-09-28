@@ -59,7 +59,7 @@ extension DesignDocument {
         }
         var feature = selection.feature
         sketch.entities[selection.entityID] = .spline(spline)
-        try validateSpline(spline, owner: "Delete Redundant Topology")
+        try validateCubicBezierChainSpline(spline, owner: "Delete Redundant Topology")
         try commitSketchEntityEdit(
             featureID: selection.featureID,
             feature: &feature,

@@ -159,7 +159,7 @@ extension DesignDocument {
         spline: SketchSpline,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
-        try validateSpline(spline, owner: "Spline sketch")
+        try validateSplineForm(spline, owner: "Spline sketch")
 
         var builder = SketchBuilder(on: plane)
         builder.spline(spline)

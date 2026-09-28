@@ -142,7 +142,7 @@ extension DesignDocument {
             controlPoints: next,
             isClosed: spline.isClosed
         )
-        try validateSpline(updatedSpline, owner: owner)
+        try validateCubicBezierChainSpline(updatedSpline, owner: owner)
         return SketchSplineControlPointInsertion(
             spline: updatedSpline,
             originalControlPointCount: controlPoints.count,

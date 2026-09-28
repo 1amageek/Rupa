@@ -280,10 +280,43 @@ extension DesignDocument {
         )
     }
 
-    func validateSpline(
+    /// Any valid spline form: its degree and knots (`SketchSpline.validateForm`) and no Bezier
+    /// segment whose ends meet, for commands that hold for every degree and knot vector.
+    func validateSplineForm(
         _ spline: SketchSpline,
         owner: String
     ) throws {
+        do {
+            try spline.validateForm()
+        } catch let error as SketchError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
+        }
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        for (index, segment) in curve.segments.enumerated() {
+            let start = segment.controlPoints[0], end = segment.controlPoints[segment.controlPoints.count - 1]
+            guard hypot(end.x - start.x, end.y - start.y) > ModelingTolerance.standard.distance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) segment \(index) must not collapse to a point."
+                )
+            }
+        }
+    }
+
+    /// The cubic Bezier chain a command reads span by span: any other degree or explicit knots
+    /// is refused, naming what the spline is, until the command reads the general form.
+    func validateCubicBezierChainSpline(
+        _ spline: SketchSpline,
+        owner: String
+    ) throws {
+        guard spline.isCubicBezierChain else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: spline.knots == nil
+                    ? "\(owner) takes a cubic spline; this one has degree \(spline.degree)."
+                    : "\(owner) takes a cubic spline in chain form; this one has explicit knots."
+            )
+        }
         let count = spline.controlPoints.count
         guard count >= 4, (count - 1).isMultiple(of: 3) else {
             throw EditorError(
@@ -291,24 +324,7 @@ extension DesignDocument {
                 message: "\(owner) control point count must be 3n + 1 and at least 4."
             )
         }
-        let resolvedPoints = try spline.controlPoints.enumerated().map { index, point in
-            (
-                x: try resolvedLengthValue(point.x, owner: "\(owner) control point \(index) x"),
-                y: try resolvedLengthValue(point.y, owner: "\(owner) control point \(index) y")
-            )
-        }
-        for segmentIndex in stride(from: 0, to: resolvedPoints.count - 1, by: 3) {
-            let start = resolvedPoints[segmentIndex]
-            let end = resolvedPoints[segmentIndex + 3]
-            let deltaX = end.x - start.x
-            let deltaY = end.y - start.y
-            guard sqrt(deltaX * deltaX + deltaY * deltaY) > ModelingTolerance.standard.distance else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) cubic segment \(segmentIndex / 3) must not collapse to a point."
-                )
-            }
-        }
+        try validateSplineForm(spline, owner: owner)
     }
 
     func normalizedPartialArcSpan(

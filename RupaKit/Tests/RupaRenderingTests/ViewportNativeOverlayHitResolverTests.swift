@@ -674,7 +674,7 @@ private func sketchSpline(
     _ entityID: SketchEntityID,
     controlPoints: [CGPoint] = [CGPoint(x: 0.5, y: 0)]
 ) -> ViewportSketchPrimitive {
-    .spline(
+    .cubicSpline(
         entityID: entityID,
         points: [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0)],
         controlPoints: controlPoints,
@@ -1933,7 +1933,7 @@ func nativeOverlayRectangleAdmitsASketchPolylineThroughAClearWindow() throws {
 @Test
 func nativeOverlayRectangleNamesASketchEntityOnceAcrossItsSpans() throws {
     let entityID = SketchEntityID()
-    let hits = try sketchRectangleHits([.spline(
+    let hits = try sketchRectangleHits([.cubicSpline(
         entityID: entityID,
         points: [
             CGPoint(x: 0, y: 0),

@@ -74,7 +74,7 @@ extension DesignDocument {
         var updatedSketch = sketch
         updatedSketch.remapSplineControlPoints(entity: entityID, newIndex)
         let openedSpline = SketchSpline(controlPoints: opened, isClosed: false)
-        try validateSpline(openedSpline, owner: "Split Segment")
+        try validateCubicBezierChainSpline(openedSpline, owner: "Split Segment")
         updatedSketch.entities[entityID] = .spline(openedSpline)
         var feature = selection.feature
         try commitSketchEntityEdit(

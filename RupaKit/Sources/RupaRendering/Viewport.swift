@@ -2922,7 +2922,7 @@ public struct Viewport: View {
                 continue
             }
             for primitive in primitives {
-                guard case .spline(let entityID, _, _, _) = primitive,
+                guard case .spline(let entityID, _, _, _, _, _) = primitive,
                       allowsPointHandleInteraction(
                         featureID: item.featureID,
                         entityID: entityID

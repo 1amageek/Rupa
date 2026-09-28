@@ -279,13 +279,9 @@ extension DesignDocument {
             )
         }
 
-        let controlPoints = try spline.controlPoints.map { point in
-            let resolved = try resolvedSlotPoint(point, owner: "Slot source spline")
-            return Point2D(x: resolved.x, y: resolved.y)
-        }
         let samplesPerSegment = SlotProfileBuilder.defaultSplineSamplesPerSegment
         let samples = SketchCurveSampler(samplesPerSegment: samplesPerSegment)
-            .splineSamples(for: controlPoints)
+            .splineSamples(for: try resolvedSketchSplineCurve(spline, owner: "Slot source spline"))
         var points: [Point2D] = []
         points.reserveCapacity(samples.count)
         for sample in samples {
