@@ -617,7 +617,8 @@ its own continuity). With a whole curve selected as the reference instead of an 
 the inspector shows a Parameter (0 to 1 over that curve's parameter) and the end
 is placed there. With two whole curves selected, Align aligns their nearest ends.
 With a curve end and another whole curve selected, Extend's inspector offers To
-Curve, which extends the end in the chosen shape until it meets that curve.
+Curve, which extends the end in the chosen shape until it meets that curve; with a
+curve end and one whole body selected, the same button extends it to the body.
 
 Reverse Curve (Edit menu, palette) reverses every selected sketch curve as one
 step through `reverseSketchCurve`; Core refuses the step when one of them has no

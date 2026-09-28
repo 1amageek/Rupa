@@ -77,6 +77,10 @@ extension DesignDocument {
         shape: ExtendCurveShape = .natural,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        if limit.component == .object, productMetadata.sceneNodes[limit.sceneNodeID]?.reference?.kind == .body {
+            try extendSketchCurve(target: target, untilBody: limit, shape: shape, objectRegistry: objectRegistry)
+            return
+        }
         let owner = "Extend Curve to a curve"
         let selection = try editableSketchEntityBase(for: target, operationName: owner)
         let endpoint = try extendCurveEndpoint(for: target, selection: selection, operationName: owner)
@@ -797,5 +801,82 @@ extension DesignDocument {
             }
             return id == entityID
         }
+    }
+}
+
+extension DesignDocument {
+    /// Dependent Curve Extend to a sheet or solid: the end extends by `shape` until it meets the
+    /// body. A probe extension long enough to pass the whole body is crossed with each of the
+    /// body's faces in world space (`faceCrossingFractions`), and the extended curve ends at the
+    /// first crossing past the original end; an extension that meets no face is refused.
+    mutating func extendSketchCurve(
+        target: SelectionTarget, untilBody body: SelectionTarget, shape: ExtendCurveShape, objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let owner = "Extend Curve to a body"
+        let selection = try editableSketchEntityBase(for: target, operationName: owner)
+        let endpoint = try extendCurveEndpoint(for: target, selection: selection, operationName: owner)
+        try validateSketchCurveCanExtend(selection: selection, endpoint: endpoint, shape: shape)
+        guard let endPoint = try resolvedPoint(endpoint.reference, in: selection.sketch, owner: owner) else {
+            throw EditorError(code: .referenceUnresolved, message: "\(owner) could not resolve the curve end.")
+        }
+        let system = try placedSketchSystem(for: target, plane: selection.sketch.plane)
+        let topology = try TopologySnapshotService().snapshot(document: self)
+        guard let evaluated = topology.evaluatedDocument else {
+            throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
+        }
+        let placement = try worldPlacement(of: body.sceneNodeID)
+        let entries = topology.entries.filter { $0.sceneNodeID == body.sceneNodeID.description }
+        let faces = try entries.filter { $0.kind == .face }.map { entry in
+            guard let reference = entry.stableReference else {
+                throw EditorError(code: .referenceUnresolved, message: "\(owner) body face has no stable reference.")
+            }
+            return SurfaceReference(subshape: reference)
+        }
+        // Long enough to pass every vertex of the body.
+        let worldEnd = system.point(from: Point2D(x: endPoint.x, y: endPoint.y))
+        let corners = try entries.filter { $0.kind == .edge }.flatMap { [$0.start, $0.end].compactMap { $0 } }
+            .map { try placement.applied(to: Point3D(x: $0.x, y: $0.y, z: $0.z)) }
+        guard !faces.isEmpty, !corners.isEmpty else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) needs a body with faces.")
+        }
+        let reach = 2 * (corners.map { ($0 - worldEnd).length }.max() ?? 0) + 1.0e-3
+        let probe = try extendedSketchCurveEntity(
+            selection.entity, endpoint: endpoint, distance: .length(reach, .meter), resolvedDistance: reach, shape: shape, owner: owner
+        )
+        let original = try sketchCurveSplitParameter(of: probe, nearestTo: Point2D(x: endPoint.x, y: endPoint.y))
+        var crossings: [Double] = []
+        for face in faces {
+            crossings += try faceCrossingFractions(of: probe, system: system, face: face, facePlacement: placement, in: evaluated, owner: owner)
+        }
+        let margin = 1.0e-9
+        let beyond = crossings.filter { endpoint.isStart ? $0 < original - margin : $0 > original + margin }
+        guard let crossing = endpoint.isStart ? beyond.max() : beyond.min() else {
+            throw EditorError(code: .commandInvalid, message: "\(owner): the extension does not reach the body.")
+        }
+        let split = try splitSketchCurveEntity(
+            probe, entityID: selection.entityID, newEntityID: SketchEntityID(), fraction: crossing, owner: owner
+        )
+        let extendedEntity = endpoint.isStart ? split.newEntity : split.retainedEntity
+        var feature = selection.feature
+        var sketch = selection.sketch
+        sketch.entities[selection.entityID] = extendedEntity
+        if case .spline(let originalSpline) = selection.entity, endpoint.isStart, case .spline(let extended) = extendedEntity {
+            let shift = extended.controlPoints.count - originalSpline.controlPoints.count
+            sketch.remapSplineControlPoints(entity: selection.entityID) { $0 + shift }
+        }
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        if selection.sketch.entities.count == 1 {
+            try markSketchObjectAsSourceEdited(featureID: selection.featureID)
+        }
+        try commitSketchEntityEdit(featureID: selection.featureID, feature: &feature, sketch: sketch, objectRegistry: objectRegistry, errorOwner: owner)
+        didCommit = true
     }
 }

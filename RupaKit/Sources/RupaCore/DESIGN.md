@@ -998,7 +998,11 @@ in its shape long enough to pass every point of the limit curve (an arc only unt
 it would close), finds the crossings with Swift-CAD's intersector, and splits the
 extension exactly at the crossing nearest the end, so the new end lies on the limit
 curve; a limit it never meets refuses the command. `DependentExtendAndAlignTests`
-own these.
+own these. A whole body as the limit (a sheet or solid) extends the end until it meets
+the body: a probe extension long enough to pass every vertex of the body is crossed
+with each face in world space (`faceCrossingFractions`, as Cut Curve's face cutter
+reads a face), and the extension ends at the first crossing past the original end
+(`ExtendCurveToBodyTests`).
 
 The constraint propagator reads a spline end through the clamped end conditions
 of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −

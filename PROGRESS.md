@@ -63,7 +63,7 @@
     - [x] SK4.2 Align Vertex Parameter: with a whole reference curve, the end is placed at the inspector's Parameter of it and takes its frame there, once. `depends:SK4.1` `parallel:none`
     - [x] SK4.3 Align Vertex G1/G2 between arcs, arc and spline and every pair no constraint expresses: the end aligned once to the reference frame, its position held. `depends:SK4.2` `parallel:none`
     - [x] SK4.4 Align on two curves (their nearest ends), and Extend Curve to a chosen target curve (Dependent Curve Extend, split exactly at the nearest crossing). `depends:SK4.3` `parallel:none`
-    - [ ] SK4.8 Dependent Curve Extend to a sheet or solid: needs the body's exact section by the sketch plane as the limit. `depends:SK4.4` `parallel:none`
+    - [x] SK4.8 Dependent Curve Extend to a sheet or solid. `depends:SK4.4` `parallel:none`
     - [x] SK4.5 Extend Curve shapes: spline Natural, Linear, Soft, Reflective and Arc (swift-CAD 8392fb3); line Arc and arc Linear refused by definition. `depends:SK4.4` `parallel:none`
     - [x] SK4.6 Align Vertex as a command (Edit menu, palette) with Tab stepping its continuity; Show Curvature stays with the curve inspector. `depends:none` `parallel:none`
     - [x] SK4.7 Extend Curve offers and accepts only the shapes the curve kind takes (one Core rule), keeping a valid default; D and cursor length stay with the Extend dialog work (SK4.5). `depends:none` `parallel:none`

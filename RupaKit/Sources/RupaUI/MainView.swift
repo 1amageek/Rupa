@@ -9033,7 +9033,13 @@ private struct ProjectMainViewContent: View {
                   let reference = componentID.sketchEntityReference else { return false }
             return reference.entityID != entity.entityID
         }
-        return others.count == 1 ? others.first : nil
+        if others.count == 1 { return others.first }
+        // Extend to a sheet or solid: one whole body selected beside the curve end.
+        let extendLimitBodies = snapshot.selection.selectedTargets.filter { target in
+            target.component == .object
+                && snapshot.document.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.kind == .body
+        }
+        return others.isEmpty && extendLimitBodies.count == 1 ? extendLimitBodies.first : nil
     }
 
     /// Rebuild Curve's dialog on the selected splines (Edit menu, palette).

@@ -355,23 +355,41 @@ extension DesignDocument {
     /// changes and bisected, each crossing kept when it lies inside the face's trim.
     func faceCutFractions(target: SelectionTarget, face: SelectionTarget) throws -> [Double] {
         let owner = "Cut Curve"
-        let tolerance = modelingSettings.tolerance
         let selection = try editableSketchEntity(for: target, operationName: "\(owner) target")
         if case .circle = selection.entity {
             throw EditorError(code: .commandInvalid, message: "\(owner): a face cuts lines, arcs and open splines.")
         }
-        let source = try spatialSourceCurve(
-            selection.entity, system: try placedSketchSystem(for: target, plane: selection.sketch.plane), owner: owner
-        )
         let topology = try TopologySnapshotService().snapshot(document: self)
         guard let evaluated = topology.evaluatedDocument,
               let entry = topology.entries.first(where: { $0.kind == .face && $0.selectionTarget() == face }),
               let reference = entry.stableReference else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) cutter face is not a face of an evaluated body.")
         }
-        let surface = SurfaceReference(subshape: reference)
+        return try faceCrossingFractions(
+            of: selection.entity,
+            system: try placedSketchSystem(for: target, plane: selection.sketch.plane),
+            face: SurfaceReference(subshape: reference),
+            facePlacement: try worldPlacement(of: face.sceneNodeID),
+            in: evaluated,
+            owner: owner
+        )
+    }
+
+    /// Where a sketch curve on the placed plane `system` crosses a face (its body placed by
+    /// `facePlacement`) inside the face's trim, as sorted interior fractions (a spline's over its
+    /// normalized knot domain).
+    func faceCrossingFractions(
+        of entity: SketchEntity,
+        system: SketchPlaneCoordinateSystem,
+        face surface: SurfaceReference,
+        facePlacement: Transform3D,
+        in evaluated: EvaluatedDocument,
+        owner: String
+    ) throws -> [Double] {
+        let tolerance = modelingSettings.tolerance
+        let source = try spatialSourceCurve(entity, system: system, owner: owner)
         let chart = try FaceUVNChart(face: surface, in: evaluated, tolerance: tolerance)
-        let inverse = try worldPlacement(of: face.sceneNodeID).inverse()
+        let inverse = try facePlacement.inverse()
         let lower = source.breakpoints[0], upper = source.breakpoints[source.breakpoints.count - 1]
         func height(_ w: Double) throws -> Double {
             try chart.coordinate(of: try inverse.applied(to: try source.point(w))).n
