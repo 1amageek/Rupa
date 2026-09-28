@@ -213,8 +213,42 @@ extension DesignDocument {
             }
             instanceNodeIDs.append(nodeID)
         }
+        // An instance of a group sits outside the group, under the document's Instances category.
+        if roots.contains(where: { productMetadata.sceneNodes[$0]?.isGroupingNode == true }) {
+            try updated.fileInstancesUnderCategory(instanceNodeIDs, definitionRoots: roots, documentRootID: documentRootID)
+        }
         self = updated
         return instanceNodeIDs
+    }
+
+    /// The name of the document root's group that collects instances of groups.
+    static let instancesCategoryName = "Instances"
+
+    /// Moves `instanceNodeIDs` into the Instances category: the document root's grouping child
+    /// named `instancesCategoryName` with an identity transform, created at the root's end when
+    /// there is none (so the instances keep their world placement). A category inside the
+    /// instanced roots would put an instance inside its own definition, so the instances then
+    /// stay where they are.
+    private mutating func fileInstancesUnderCategory(
+        _ instanceNodeIDs: [SceneNodeID], definitionRoots: [SceneNodeID], documentRootID: SceneNodeID
+    ) throws {
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let categoryID: SceneNodeID
+        if let existing = productMetadata.sceneNodes[documentRootID]?.childIDs.first(where: { id in
+            guard let node = productMetadata.sceneNodes[id] else { return false }
+            return node.isGroupingNode && node.name == Self.instancesCategoryName && node.localTransform == .identity
+        }) {
+            if definitionRoots.contains(where: { hierarchy.subtreeIDs(of: $0).contains(existing) }) { return }
+            categoryID = existing
+        } else {
+            let category = SceneNode(name: Self.instancesCategoryName)
+            let count = productMetadata.sceneNodes[documentRootID]?.childIDs.count ?? 0
+            try productMetadata.insertSceneNode(category, under: documentRootID, at: count)
+            categoryID = category.id
+        }
+        for id in instanceNodeIDs {
+            try productMetadata.moveSceneNode(id, under: categoryID, at: nil)
+        }
     }
 
     private mutating func insertCopies(

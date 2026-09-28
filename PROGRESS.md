@@ -100,7 +100,7 @@
     - [x] SK9.2 Create Instance (Edit menu): an instance of the selected bodies, sheets or curves appears where they are, linked as their component definition, and is selected with Move running to place it. `depends:SK9.1` `parallel:none`
     - [x] SK9.3 Text (Edit menu, palette): a dialog of text, font and size makes one closed spline per glyph contour on the active construction plane through CoreText outlines. `depends:SK9.2` `parallel:none`
     - [x] SK9.4 Toggle Points hides a selected curve's control points (its choice wins over selection and hover). `depends:none` `parallel:none`
-    - [ ] SK9.5 Instances of a group are listed under an Instances category in the Outliner. `depends:none` `parallel:none`
+    - [x] SK9.5 Instances of a group are listed under an Instances category in the Outliner. `depends:none` `parallel:none`
     - [x] SK9.6 Curvature comb of a selected curve without curvature (a spline of straight spans) draws nothing instead of failing the sketch overlay and the status. `depends:none` `parallel:none`
   - [x] SK11 Command Palette (F): every Sketch command with a key or an Edit menu item is found by its name or its pages' other names and runs that same path; shortcut assignment and favorites are not offered. `depends:none` `parallel:none`
   - [x] SK12 Sketch splines of any degree and knots: the model the kernel bridge, Raise Degree, Rebuild Points and Convert Vertex need, and the root of the Bridge Curve hooks. `depends:none` `parallel:none`

@@ -109,7 +109,13 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   Objects under different parents are refused: one instance has one frame.
   Create Instance is this output at the identity placement, so the instance
   shows the objects exactly where they are; `CreateInstanceTests` cover a body
-  and a sketch curve.
+  and a sketch curve. An instance of a group is filed outside the group under
+  the document's Instances category: the document root's grouping child named
+  `instancesCategoryName` with an identity transform (created at the root's end
+  when absent), so its world placement is unchanged; an instance whose
+  definition contains that category stays at the root, since filing it there
+  would put an instance inside its own definition. `InstancesCategoryTests`
+  own this.
 - A placement Boolean makes each placed copy the tool of a `createBoolean`
   with the body the destination lies on (the first copy with the target, each
   later copy with the previous result); a copy must contain exactly one body,

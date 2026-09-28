@@ -152,8 +152,10 @@ Outliner projection tests verify this mapping and unchanged row identity/state.
    not mutate the workspace ruler, Product source, undo history, persistence,
    or projection mode.
 9. Component instances appear at their scene-tree positions rather than in a
-   duplicate editable instance list. Component definitions and assets may remain
-   read-only reference groups below the tree.
+   duplicate editable instance list; an instance of a group is placed by Core
+   under the document's Instances group, which is how the Instances category
+   appears. Component definitions and assets may remain read-only reference
+   groups below the tree.
 10. Native drag/drop is scoped to one mounted Outliner. A drag stores the
     current selection, `DocumentGeneration`, and an in-memory per-drag nonce;
     the `NSItemProvider` contains only that nonce. The enclosing document
