@@ -16,7 +16,7 @@ import Testing
         let points = [(0.0, 0.0), (1, 1), (2, 1), (3, 0)].map { SketchPoint(x: mm($0.0), y: mm($0.1)) }
         #expect(ExtendCurveShape.supported(for: line) == [.natural, .linear, .soft, .reflective])
         #expect(ExtendCurveShape.supported(for: arc) == [.natural, .soft, .reflective, .arc])
-        #expect(ExtendCurveShape.supported(for: .spline(SketchSpline(controlPoints: points))) == [.natural, .linear])
+        #expect(ExtendCurveShape.supported(for: .spline(SketchSpline(controlPoints: points))) == [.natural, .linear, .soft, .reflective, .arc])
         #expect(ExtendCurveShape.supported(for: .circle(SketchCircle(center: SketchPoint(x: mm(0), y: mm(0)), radius: mm(1)))).isEmpty)
     }
 

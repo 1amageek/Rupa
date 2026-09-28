@@ -1215,8 +1215,17 @@ kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all
 along its circle), an open spline Natural (Swift-CAD's
 `CubicBezierChainExtension.naturalSpan` continues its end span's own cubic by the
-arc length, as one new span) and Linear; the spline's Soft, Reflective and Arc
-wait for their definitions (SK4.5). `extendSketchCurve` refuses any other shape, and the
+arc length, as one new span), Linear, Soft, Reflective and Arc. A spline's Soft and
+Arc are Swift-CAD's `CurvatureProfileExtension.cubicSpans` from the end's point,
+tangent and signed curvature over the arc length (Arc keeps that curvature, a circle;
+Soft eases it to zero), each cubic span elevated to the spline's degree, so the joint
+is G2 and needs degree 3 or more; Reflective mirrors the tail of that arc length across
+the end's normal, reversed, so the joint keeps tangent and curvature. A start end
+reverses the spline, extends its end and reverses back. The new control points are
+numeric values and the knots concatenate (chain form when they match it). A line's
+Arc needs a circle a line does not define and an arc's Linear leaves its circle, so
+both stay refused. `SplineProfileExtensionTests` own the spline shapes.
+`extendSketchCurve` refuses any other shape, and the
 inspector offers only these, keeping the chosen shape when the selected curve
 takes it and otherwise its first (`effectiveExtendShape`), so a spline end no
 longer fails on the Natural default. `ExtendCurveShapeTests` cover both.

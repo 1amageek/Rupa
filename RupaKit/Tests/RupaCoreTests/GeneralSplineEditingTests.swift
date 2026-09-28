@@ -171,3 +171,83 @@ import Testing
         #expect(document.cadDocument.designGraph == before)
     }
 }
+
+/// Extend Curve's Soft, Arc and Reflective shapes on a spline end.
+@MainActor
+@Suite struct SplineProfileExtensionTests {
+    private func mm(_ value: Double) -> CADExpression { .length(value, .millimeter) }
+    private func point(_ x: Double, _ y: Double) -> SketchPoint { SketchPoint(x: mm(x), y: mm(y)) }
+
+    private let spline = SketchSpline(controlPoints: [(0.0, 0.0), (3.0, 4.0), (7.0, 5.0), (10.0, 3.0)].map { (x: Double, y: Double) in
+        SketchPoint(x: .length(x, .millimeter), y: .length(y, .millimeter))
+    })
+
+    private func extended(_ shape: ExtendCurveShape, atStart: Bool = false, length: Double = 4) throws -> (DesignDocument, SketchSpline) {
+        var document = DesignDocument.empty()
+        let featureID = try document.createSplineSketch(name: "Extend", plane: .xy, spline: spline)
+        guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[featureID]?.operation,
+              let entityID = sketch.entities.keys.first,
+              let sceneNodeID = document.productMetadata.sceneNodes.first(where: { $0.value.reference?.featureID == featureID })?.key else {
+            throw EditorError(code: .referenceUnresolved, message: "The sketch is missing.")
+        }
+        try document.extendSketchCurve(
+            target: SelectionTarget(sceneNodeID: sceneNodeID, component: .sketchEntity(.sketchControlPoint(featureID: featureID, entityID: entityID, index: atStart ? 0 : 3))),
+            distance: mm(length),
+            shape: shape
+        )
+        guard case .sketch(let result) = document.cadDocument.designGraph.nodes[featureID]?.operation,
+              case .spline(let extended) = result.entities[entityID] else {
+            throw EditorError(code: .referenceUnresolved, message: "The spline is missing.")
+        }
+        return (document, extended)
+    }
+
+    /// Signed curvature on each side of the joint knot `u`.
+    private func curvatures(_ document: DesignDocument, _ spline: SketchSpline, at u: Double) throws -> (Double, Double) {
+        let curve = try document.resolvedSketchSplineCurve(spline, owner: "Test").bSpline
+        func k(_ v: Double) throws -> Double {
+            let g = try curve.differentialGeometry(at: v, tolerance: .standard)
+            return (g.firstDerivative.x * g.secondDerivative.y - g.firstDerivative.y * g.secondDerivative.x) / pow(hypot(g.firstDerivative.x, g.firstDerivative.y), 3)
+        }
+        return (try k(u - 1e-9), try k(u + 1e-9))
+    }
+
+    @Test(arguments: [ExtendCurveShape.soft, .arc, .reflective])
+    func theEndKeepsItsTangentAndCurvature(shape: ExtendCurveShape) throws {
+        let (document, result) = try extended(shape)
+        #expect(result.controlPoints.count > 4)
+        let (before, after) = try curvatures(document, result, at: 1)
+        #expect(abs(before - after) <= 1e-4 * max(1, abs(before)))
+    }
+
+    @Test func anArcExtensionRunsAlongTheEndsCircle() throws {
+        let (document, result) = try extended(.arc, length: 4)
+        let curve = try document.resolvedSketchSplineCurve(result, owner: "Test")
+        let (before, _) = try curvatures(document, result, at: 1)
+        // Every point past the joint lies on the osculating circle at the end.
+        let g = try curve.bSpline.differentialGeometry(at: 1, tolerance: .standard)
+        let t = Point2D(x: g.firstDerivative.x / hypot(g.firstDerivative.x, g.firstDerivative.y), y: g.firstDerivative.y / hypot(g.firstDerivative.x, g.firstDerivative.y))
+        let center = Point2D(x: g.position.x - t.y / before, y: g.position.y + t.x / before)
+        let (_, upper) = curve.domain
+        for i in 1...20 {
+            let p = try curve.bSpline.point(at: 1 + (upper - 1) * Double(i) / 20, tolerance: .standard)
+            #expect(abs(hypot(p.x - center.x, p.y - center.y) - abs(1 / before)) <= 2e-6)
+        }
+    }
+
+    @Test func aReflectiveExtensionMirrorsTheEnd() throws {
+        let (document, result) = try extended(.reflective, atStart: true, length: 3)
+        // The start was extended: the original start (0, 0) is now interior, and the new start
+        // mirrors a point of the original across the start's normal.
+        let first = result.controlPoints[0]
+        let x = try document.cadDocument.parameters.resolvedValue(for: first.x).value
+        let y = try document.cadDocument.parameters.resolvedValue(for: first.y).value
+        // The start tangent is along (3, 4)/5; the mirror keeps the distance to the normal line.
+        let along = (x * 0.6 + y * 0.8) * 1000
+        #expect(along < 0)
+        let resolved = try result.controlPoints.map { point in
+            [try document.cadDocument.parameters.resolvedValue(for: point.x).value, try document.cadDocument.parameters.resolvedValue(for: point.y).value]
+        }
+        #expect(resolved.contains([0, 0]))
+    }
+}

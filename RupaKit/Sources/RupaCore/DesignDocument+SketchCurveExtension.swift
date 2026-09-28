@@ -512,6 +512,16 @@ extension DesignDocument {
         }
         try validateSplineForm(spline, owner: owner)
 
+        if shape == .soft || shape == .arc || shape == .reflective {
+            // Built at the end: a start extension is the end extension of the reversed spline.
+            let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
+            let working = isStart ? reversedSketchSpline(spline) : spline
+            let extended = try profileExtendedAtEnd(working, length: length, shape: shape, owner: owner)
+            let result = isStart ? reversedSketchSpline(extended) : extended
+            try validateSplineForm(result, owner: owner)
+            return result
+        }
+
         var updated = spline
         if shape == .natural {
             let segment = try expressionEndSegment(of: spline, isStart: isStart)
@@ -553,6 +563,132 @@ extension DesignDocument {
         }
         try validateSplineForm(updated, owner: owner)
         return updated
+    }
+
+    /// The same curve traversed backwards: points reversed, knots mirrored (u ↦ a + b − u).
+    private func reversedSketchSpline(_ spline: SketchSpline) -> SketchSpline {
+        var reversed = spline
+        reversed.controlPoints = Array(spline.controlPoints.reversed())
+        if let knots = spline.knots, let lower = knots.first, let upper = knots.last {
+            reversed.knots = knots.reversed().map { lower + upper - $0 }
+        }
+        return reversed
+    }
+
+    /// Soft, Arc and Reflective at the spline's end. Arc and Soft follow the end's curvature held
+    /// or fading to zero over the length (Swift-CAD's `CurvatureProfileExtension`, G2 at the end,
+    /// within the modeling distance), as cubic spans raised to the spline's degree; Reflective is
+    /// the last `length` of the curve (all of it if shorter) mirrored across the end's normal, so
+    /// it continues symmetrically with the same tangent and curvature. The new points are values:
+    /// these shapes are computed, not expressions of the original points.
+    private func profileExtendedAtEnd(
+        _ spline: SketchSpline,
+        length: Double,
+        shape: ExtendCurveShape,
+        owner: String
+    ) throws -> SketchSpline {
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        guard let end = SketchCurveSampler().splineSample(for: curve, parameter: 1) else {
+            throw EditorError(code: .commandInvalid, message: "\(owner): the spline's end has no tangent.")
+        }
+        let degree = spline.degree
+        let piece: [Point2D]
+        let pieceKnots: [Double]
+        switch shape {
+        case .soft, .arc:
+            guard degree >= 3 else {
+                throw EditorError(code: .commandInvalid, message: "\(owner) \(shape.rawValue) needs a spline of degree 3 or more to keep the end's curvature.")
+            }
+            let spans: [Point2D]
+            do {
+                spans = try CurvatureProfileExtension(tolerance: .standard).cubicSpans(
+                    from: end.point, direction: end.tangent, curvature: end.curvature,
+                    length: length, profile: shape == .arc ? .arc : .soft
+                )
+            } catch let error as KernelError {
+                throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
+            }
+            var points = [end.point]
+            for start in stride(from: 0, to: spans.count, by: 3) {
+                var bezier = [points[points.count - 1]] + Array(spans[start..<(start + 3)])
+                while bezier.count - 1 < degree { bezier = elevatedBezier(bezier) }
+                points += bezier.dropFirst()
+            }
+            piece = points
+            let spanCount = spans.count / 3
+            pieceKnots = Array(repeating: 0, count: degree + 1)
+                + (1..<max(spanCount, 1)).flatMap { Array(repeating: Double($0), count: degree) }
+                + Array(repeating: Double(spanCount), count: degree + 1)
+        case .reflective:
+            let (lower, upper) = curve.domain
+            let start = try parameter(atArcLength: length, before: upper, on: curve, lower: lower)
+            let tail: BSplineCurve2D
+            do {
+                tail = start <= lower ? curve.bSpline : try curve.bSpline.trimmed(from: start, to: upper, tolerance: .standard)
+            } catch let error as GeometryError {
+                throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
+            }
+            // Mirror across the line through the end perpendicular to its tangent, backwards.
+            let t = end.tangent, p = end.point
+            piece = tail.controlPoints.reversed().map { q in
+                let along = (q.x - p.x) * t.x + (q.y - p.y) * t.y
+                return Point2D(x: q.x - 2 * along * t.x, y: q.y - 2 * along * t.y)
+            }
+            let a = tail.knots[0], b = tail.knots[tail.knots.count - 1]
+            pieceKnots = tail.knots.reversed().map { a + b - $0 }
+        case .natural, .linear:
+            throw EditorError(code: .commandInvalid, message: "\(owner) builds \(shape.rawValue) elsewhere.")
+        }
+        // Join at the end with a knot of multiplicity `degree` (C0 in the knots, the shape keeps
+        // the continuity it was built with).
+        guard let knots = spline.knotVector, let joint = knots.last else {
+            throw EditorError(code: .commandInvalid, message: "\(owner): the spline's knots could not be resolved.")
+        }
+        let shift = joint - pieceKnots[0]
+        let combinedKnots = Array(knots.dropLast()) + pieceKnots.dropFirst(degree + 1).map { $0 + shift }
+        var extended = spline
+        extended.controlPoints = spline.controlPoints + piece.dropFirst().map { sketchPoint(x: $0.x, y: $0.y) }
+        let chain = SketchSpline(controlPoints: extended.controlPoints, isClosed: false, degree: degree)
+        extended.knots = chain.knotVector == combinedKnots ? nil : combinedKnots
+        return extended
+    }
+
+    private func elevatedBezier(_ p: [Point2D]) -> [Point2D] {
+        let n = Double(p.count - 1)
+        var q = [p[0]]
+        for i in 1..<p.count {
+            let a = Double(i) / (n + 1)
+            q.append(Point2D(x: a * p[i - 1].x + (1 - a) * p[i].x, y: a * p[i - 1].y + (1 - a) * p[i].y))
+        }
+        q.append(p[p.count - 1])
+        return q
+    }
+
+    /// The parameter `length` of arc before `upper` on `curve` (its lower end if the curve is
+    /// shorter), by bisection on arc length integrated by Gauss–Legendre.
+    private func parameter(atArcLength length: Double, before upper: Double, on curve: SketchSplineCurve, lower: Double) throws -> Double {
+        func speed(_ u: Double) throws -> Double {
+            let d = try curve.bSpline.differentialGeometry(at: u, tolerance: .standard).firstDerivative
+            return hypot(d.x, d.y)
+        }
+        func arcLength(from u: Double) throws -> Double {
+            let nodes = [0.0, -0.538_469_310_105_683_1, 0.538_469_310_105_683_1, -0.906_179_845_938_664, 0.906_179_845_938_664]
+            let weights = [0.568_888_888_888_888_9, 0.478_628_670_499_366_5, 0.478_628_670_499_366_5, 0.236_926_885_056_189_1, 0.236_926_885_056_189_1]
+            let pieces = 64, width = (upper - u) / Double(pieces)
+            var total = 0.0
+            for piece in 0..<pieces {
+                let middle = u + (Double(piece) + 0.5) * width
+                for (node, weight) in zip(nodes, weights) { total += weight * (try speed(middle + node * width / 2)) }
+            }
+            return total * width / 2
+        }
+        guard try arcLength(from: lower) > length else { return lower }
+        var low = lower, high = upper
+        for _ in 0..<80 {
+            let middle = (low + high) / 2
+            if try arcLength(from: middle) > length { low = middle } else { high = middle }
+        }
+        return (low + high) / 2
     }
 
     private func pointExtendedLinearly(
