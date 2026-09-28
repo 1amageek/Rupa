@@ -1082,6 +1082,23 @@ Bridge Curve source keeps joining the curve ends as they move.
 
 ### Spline refinement contract
 
+Insertion admission uses a finite fraction strictly inside (0, 1), followed by
+a representable parameter strictly inside its knot span. Physical distance
+thresholds do not apply to dimensionless fractions or knot parameters. Subdivide
+must accept positive nonuniform spans independently of the global knot range.
+Linear spline extension retains endpoint differences and their normalization as
+CAD expressions using the kernel's `hypot` contract. Changing referenced
+parameters updates direction while retaining the requested extension distance;
+a collapsed tangent causes explicit expression evaluation failure. JSON and
+editable expression text retain this dependency, including parameter usage.
+
+Section triangulation uses the source-coordinate presentation triangulation defaults;
+the query's world-space distance tolerance applies only to plane classification
+and contour assembly. Section contour assembly traces both ends of an open chain. Input segment order
+and direction must not split a connected, non-branching chain or change its
+length. Closed-loop behavior and per-occurrence ownership are preserved.
+
+
 Insertion and Subdivide retain a sketch spline's degree and explicit knot domain.
 Bezier chains split with de Casteljau on their own degree; explicit B-splines use
 Boehm insertion up to degree multiplicity at each split. Coordinates remain CAD

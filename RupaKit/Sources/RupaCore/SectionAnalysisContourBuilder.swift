@@ -146,41 +146,49 @@ struct SectionAnalysisContourBuilder: Sendable {
         let firstEdge = edges[startIndex]
         usedEdges.insert(startIndex)
 
-        let startKey = firstEdge.startKey
+        var startKey = firstEdge.startKey
         var currentKey = firstEdge.endKey
         var points = [firstEdge.start, firstEdge.end]
         var points2D = [firstEdge.start2D, firstEdge.end2D]
         var segmentCount = 1
 
-        while currentKey != startKey {
-            guard let nextIndex = nextUnusedEdgeIndex(
-                at: currentKey,
-                adjacency: adjacency,
-                usedEdges: usedEdges
-            ) else {
-                break
-            }
-            let nextEdge = edges[nextIndex]
-            usedEdges.insert(nextIndex)
-            segmentCount += 1
+        // A face may contribute the middle segment of an open chain first.
+        // Trace its two ends so input triangle order cannot fragment the contour.
+        for direction in 0..<2 {
+            while currentKey != startKey {
+                guard let nextIndex = nextUnusedEdgeIndex(
+                    at: currentKey,
+                    adjacency: adjacency,
+                    usedEdges: usedEdges
+                ) else {
+                    break
+                }
+                let nextEdge = edges[nextIndex]
+                usedEdges.insert(nextIndex)
+                segmentCount += 1
 
-            if nextEdge.startKey == currentKey {
-                append(
-                    point: nextEdge.end,
-                    point2D: nextEdge.end2D,
-                    to: &points,
-                    points2D: &points2D
-                )
-                currentKey = nextEdge.endKey
-            } else {
-                append(
-                    point: nextEdge.start,
-                    point2D: nextEdge.start2D,
-                    to: &points,
-                    points2D: &points2D
-                )
-                currentKey = nextEdge.startKey
+                if nextEdge.startKey == currentKey {
+                    append(
+                        point: nextEdge.end,
+                        point2D: nextEdge.end2D,
+                        to: &points,
+                        points2D: &points2D
+                    )
+                    currentKey = nextEdge.endKey
+                } else {
+                    append(
+                        point: nextEdge.start,
+                        point2D: nextEdge.start2D,
+                        to: &points,
+                        points2D: &points2D
+                    )
+                    currentKey = nextEdge.startKey
+                }
             }
+            if currentKey == startKey || direction == 1 { break }
+            points.reverse()
+            points2D.reverse()
+            swap(&startKey, &currentKey)
         }
 
         let isClosed = currentKey == startKey && points2D.count >= 3

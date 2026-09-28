@@ -129,6 +129,15 @@ conditionals, arbitrary code, or forward output references.
 
 ### Presentation triangulation
 
+The caller's `tolerance` is a source-coordinate **distance** used for planarity.
+Polygon normal, area and ear-containment predicates use local edge scale and
+floating-point resolution in squared coordinate units; they never compare an
+area with a distance. Translate polygon coordinates to a local origin before
+normal/projection accumulation. Tiny valid faces and translated copies must
+produce the same connectivity, while collinear and non-planar faces fail.
+The focused owner is `MeshTriangulationToleranceTests` in the RupaGeometryTests target.
+
+
 `MeshSourceTriangulationIndex` is an immutable source-bound index. It stores
 the source identity, vertex count, exact immutable vertex-ID buffer storage
 identity, and one bounded dictionary from each `MeshVertexID` to its

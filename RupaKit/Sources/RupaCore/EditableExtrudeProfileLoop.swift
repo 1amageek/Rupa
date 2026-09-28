@@ -1984,7 +1984,8 @@ private extension CADExpression {
         case .add(let left, let right),
              .subtract(let left, let right),
              .multiply(let left, let right),
-             .divide(let left, let right):
+             .divide(let left, let right),
+             .hypot(let left, let right):
             return left.isLiteral && right.isLiteral
         case .sin(let argument),
              .cos(let argument),

@@ -30,7 +30,8 @@ struct CADExpressionParameterReferenceCollector {
         case .add(let left, let right),
              .subtract(let left, let right),
              .multiply(let left, let right),
-             .divide(let left, let right):
+             .divide(let left, let right),
+             .hypot(let left, let right):
             parameterIDs(in: left).union(parameterIDs(in: right))
         case .sin(let argument),
              .cos(let argument),

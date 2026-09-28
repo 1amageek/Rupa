@@ -70,6 +70,7 @@ public struct ParameterExpressionParser {
         case minus
         case star
         case slash
+        case comma
         case leftParen
         case rightParen
         case end
@@ -169,6 +170,12 @@ public struct ParameterExpressionParser {
             case .identifier(let name):
                 if match(.leftParen) {
                     let argument = try parseExpression()
+                    if name == "hypot" {
+                        try consume(.comma, message: "Expected ',' between hypot arguments.")
+                        let second = try parseExpression()
+                        try consume(.rightParen, message: "Expected ')' after hypot arguments.")
+                        return .hypot(argument, second)
+                    }
                     try consume(.rightParen, message: "Expected ')' after \(name) argument.")
                     switch name {
                     case "sin":
@@ -314,6 +321,9 @@ public struct ParameterExpressionParser {
                 case "/":
                     result.append(.slash)
                     source.formIndex(after: &index)
+                case ",":
+                    result.append(.comma)
+                    index = source.index(after: index)
                 case "(":
                     result.append(.leftParen)
                     source.formIndex(after: &index)

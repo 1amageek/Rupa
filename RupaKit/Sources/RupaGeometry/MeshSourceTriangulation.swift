@@ -201,7 +201,16 @@ public extension MeshSource {
             points.append(vertexPositions[vertex.position])
         }
 
-        let normal = try polygonNormal(points: points, tolerance: tolerance)
+        // Geometric predicates operate near the face origin, in squared units.
+        // The caller's distance tolerance controls planarity only.
+        let origin = points[0]
+        for index in points.indices { points[index] = subtract(points[index], origin) }
+        let scale = points.reduce(0.0) { max($0, max(abs($1.x), max(abs($1.y), abs($1.z)))) }
+        let areaTolerance = 64.0 * Double.ulpOfOne * scale * scale
+        guard areaTolerance.isFinite else {
+            throw MeshTriangulationError(code: .failed, message: "Mesh polygon scale is not finite.")
+        }
+        let normal = try polygonNormal(points: points, areaTolerance: areaTolerance)
         for point in points.dropFirst() {
             let distance = dot(normal, subtract(point, points[0]))
             guard distance.isFinite, abs(distance) <= tolerance else {
@@ -220,7 +229,7 @@ public extension MeshSource {
                 message: "Mesh n-gon projected area is not finite."
             )
         }
-        guard abs(area) > tolerance else {
+        guard abs(area) > areaTolerance else {
             throw MeshTriangulationError(
                 code: .degenerate,
                 message: "Mesh n-gon faces must enclose a non-zero projected area."
@@ -247,7 +256,6 @@ public extension MeshSource {
             vertexIDs: vertexIDs,
             projected: projected,
             orientation: orientation,
-            tolerance: tolerance,
             limits: limits,
             telemetry: &telemetry
         )
@@ -446,7 +454,6 @@ private extension MeshSource {
         vertexIDs: [MeshVertexID],
         projected: [ProjectedPoint],
         orientation: Double,
-        tolerance: Double,
         limits: MeshTriangulationLimits,
         telemetry: inout MeshTriangulationTelemetry
     ) throws -> [MeshTriangle] {
@@ -491,13 +498,12 @@ private extension MeshSource {
                     try telemetry.recordNonConvexWork(
                         limit: limits.maxNonConvexWorkUnits
                     )
-                    if pointInTriangle(
+                    if try pointInTriangle(
                         projected[pointIndex],
                         projected[previous],
                         projected[current],
                         projected[next],
-                        orientation: orientation,
-                        tolerance: tolerance
+                        orientation: orientation
                     ) {
                         containsOtherPoint = true
                         break
@@ -562,7 +568,7 @@ private func dot(_ lhs: GeometryPoint3D, _ rhs: GeometryPoint3D) -> Double {
 
 private func polygonNormal(
     points: [GeometryPoint3D],
-    tolerance: Double
+    areaTolerance: Double
 ) throws -> GeometryPoint3D {
     var normal = GeometryPoint3D(x: 0, y: 0, z: 0)
     for index in points.indices {
@@ -573,7 +579,7 @@ private func polygonNormal(
         normal.z += (current.x - next.x) * (current.y + next.y)
     }
     let length = sqrt(dot(normal, normal))
-    guard length.isFinite, length > tolerance else {
+    guard length.isFinite, length > areaTolerance else {
         throw MeshTriangulationError(
             code: .degenerate,
             message: "Mesh polygon normal could not be determined."
@@ -658,11 +664,13 @@ private func pointInTriangle(
     _ first: ProjectedPoint,
     _ second: ProjectedPoint,
     _ third: ProjectedPoint,
-    orientation: Double,
-    tolerance: Double
-) -> Bool {
+    orientation: Double
+) throws -> Bool {
     let firstCross = orientation * cross(first, second, point)
     let secondCross = orientation * cross(second, third, point)
     let thirdCross = orientation * cross(third, first, point)
-    return firstCross >= -tolerance && secondCross >= -tolerance && thirdCross >= -tolerance
+    let firstEpsilon = try turnEpsilon(first, second, point)
+    let secondEpsilon = try turnEpsilon(second, third, point)
+    let thirdEpsilon = try turnEpsilon(third, first, point)
+    return firstCross >= -firstEpsilon && secondCross >= -secondEpsilon && thirdCross >= -thirdEpsilon
 }

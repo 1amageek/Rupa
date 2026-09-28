@@ -13,8 +13,8 @@ extension DesignDocument {
             fraction,
             owner: "Sketch spline control point insertion fraction"
         )
-        guard resolvedFraction > ModelingTolerance.standard.distance,
-              resolvedFraction < 1.0 - ModelingTolerance.standard.distance else {
+        guard resolvedFraction.isFinite, resolvedFraction > 0,
+              resolvedFraction < 1 else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sketch spline control point insertion fraction must be greater than zero and less than one."
@@ -128,7 +128,7 @@ extension DesignDocument {
         let scaled = fraction * Double(count)
         let span = Int(floor(scaled))
         let local = scaled - Double(span)
-        guard local > 1e-9, local < 1 - 1e-9 else {
+        guard local > 0, local < 1 else {
             throw EditorError(code: .commandInvalid, message: "\(owner) needs a point inside a Bezier span.")
         }
         let start = span * degree

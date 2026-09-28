@@ -130,7 +130,7 @@ public struct SectionAnalysisService: Sendable {
                 guard let source = document.authoredMeshAssets[sourceID]?.source else {
                     throw EditorError(code: .referenceUnresolved, message: "Section analysis cannot resolve mesh \(sourceID.rawValue).")
                 }
-                mesh = try triangulatedMesh(source, tolerance: tolerance)
+                mesh = try triangulatedMesh(source)
                 authoredMeshes[sourceID] = mesh
             }
             var analysis = try analyzeBody(
@@ -478,12 +478,12 @@ public struct SectionAnalysisService: Sendable {
 
     /// Adapts source geometry once per asset for the common section triangle classifier.
     /// Triangulation and index validity are owned by the same geometry API used for presentation.
-    private func triangulatedMesh(_ source: MeshSource, tolerance: Double) throws -> Mesh {
+    private func triangulatedMesh(_ source: MeshSource) throws -> Mesh {
         let index = try source.makeTriangulationIndex()
         var indices: [UInt32] = []
         var telemetry = MeshTriangulationTelemetry()
         for face in source.faceIDs.indices {
-            for triangle in try source.triangulate(faceIndex: face, using: index, tolerance: tolerance, telemetry: &telemetry) {
+            for triangle in try source.triangulate(faceIndex: face, using: index, telemetry: &telemetry) {
                 for vertex in [triangle.vertexIDs.0, triangle.vertexIDs.1, triangle.vertexIDs.2] {
                     guard let position = index.positionIndex(for: vertex), let value = UInt32(exactly: position) else {
                         throw EditorError(code: .evaluationFailed, message: "Section mesh triangle has an invalid vertex index.")

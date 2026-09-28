@@ -419,31 +419,27 @@ extension DesignDocument {
                 throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
             }
             updated.controlPoints = isStart ? continued + spline.controlPoints : spline.controlPoints + continued
-        } else if isStart {
-            let first = spline.controlPoints[0]
-            let next = spline.controlPoints[1]
-            let direction = try normalizedDirection(
-                from: next,
-                to: first,
-                owner: "\(owner) start tangent"
-            )
-            updated.controlPoints = (0..<spline.degree).map { index in
-                translatedSketchPoint(first, directionX: direction.x, directionY: direction.y,
-                    distance: distance, scale: Double(spline.degree - index) / Double(spline.degree))
-            } + spline.controlPoints
         } else {
             let count = spline.controlPoints.count
-            let previous = spline.controlPoints[count - 2]
-            let last = spline.controlPoints[count - 1]
-            let direction = try normalizedDirection(
-                from: previous,
-                to: last,
-                owner: "\(owner) end tangent"
-            )
-            updated.controlPoints.append(contentsOf: (1...spline.degree).map { index in
-                translatedSketchPoint(last, directionX: direction.x, directionY: direction.y,
-                    distance: distance, scale: Double(index) / Double(spline.degree))
-            })
+            let origin = spline.controlPoints[isStart ? 0 : count - 1]
+            let adjacent = spline.controlPoints[isStart ? 1 : count - 2]
+            // Validate the current tangent, then retain its full dependency graph.
+            _ = try normalizedDirection(from: adjacent, to: origin, owner: "\(owner) tangent")
+            let dx = CADExpression.subtract(origin.x, adjacent.x)
+            let dy = CADExpression.subtract(origin.y, adjacent.y)
+            let magnitude = CADExpression.hypot(dx, dy)
+            let directionX = CADExpression.divide(dx, magnitude)
+            let directionY = CADExpression.divide(dy, magnitude)
+            let added = (1...spline.degree).map { index in
+                let step = CADExpression.multiply(distance, .scalar(Double(index) / Double(spline.degree)))
+                return SketchPoint(
+                    x: .add(origin.x, .multiply(step, directionX)),
+                    y: .add(origin.y, .multiply(step, directionY))
+                )
+            }
+            updated.controlPoints = isStart
+                ? Array(added.reversed()) + spline.controlPoints
+                : spline.controlPoints + added
         }
         if let knots = spline.knots {
             let degree = spline.degree

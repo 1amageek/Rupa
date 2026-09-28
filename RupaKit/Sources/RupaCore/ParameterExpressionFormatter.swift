@@ -23,6 +23,8 @@ public struct ParameterExpressionFormatter {
             binary("*", left, right, parameters)
         case .divide(let left, let right):
             binary("/", left, right, parameters)
+        case .hypot(let left, let right):
+            "hypot(\(format(left, parameters: parameters)), \(format(right, parameters: parameters)))"
         case .sin(let argument):
             "sin(\(format(argument, parameters: parameters)))"
         case .cos(let argument):
