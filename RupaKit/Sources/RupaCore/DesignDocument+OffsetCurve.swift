@@ -51,6 +51,18 @@ extension DesignDocument {
                 return [selection.featureID]
             }
             let name = "\(selection.feature.name ?? "Sketch Curve") Offset"
+            // A joined curve offsets as one curve, whichever of its members is selected.
+            if let group = joinedCurveGroup(featureID: selection.featureID, entityID: selection.entityID) {
+                let positive = try offsetJoinedChain(group, sketch: selection.sketch, distance: distanceMeters, gapFill: options.gapFill)
+                if options.isSymmetric {
+                    let negative = try offsetJoinedChain(group, sketch: selection.sketch, distance: -distanceMeters, gapFill: options.gapFill)
+                    return [
+                        try createSplineSketch(name: "\(name) Positive", plane: selection.sketch.plane, spline: positive, objectRegistry: objectRegistry),
+                        try createSplineSketch(name: "\(name) Negative", plane: selection.sketch.plane, spline: negative, objectRegistry: objectRegistry),
+                    ]
+                }
+                return [try createSplineSketch(name: name, plane: selection.sketch.plane, spline: positive, objectRegistry: objectRegistry)]
+            }
             switch selection.entity {
             case .line(let line):
                 let shiftedLine = try offsetLine(
@@ -181,18 +193,17 @@ extension DesignDocument {
                 let curve = try resolvedSketchSplineCurve(spline, owner: "Curve offset spline")
                 let offsetter = CubicBezierChainOffset(tolerance: .standard)
                 func offsetSpline(_ signedDistance: Double) throws -> SketchSpline {
-                    // Corners join by the gap fill; Natural waits for its definition on splines.
-                    let gapFill: CubicBezierChainOffset.GapFill? = switch options.gapFill {
+                    // Corners join by the gap fill.
+                    let gapFill: CubicBezierChainOffset.GapFill = switch options.gapFill {
                     case .round: .round
                     case .linear: .linear
-                    case .natural: nil
+                    case .natural: .natural
                     }
                     let chain: [Point2D]
                     do {
                         chain = try offsetter.offset(of: curve, distance: signedDistance, gapFill: gapFill)
                     } catch let error as KernelError {
-                        let hint = options.gapFill == .natural ? " Natural gap fill is not available on a spline's corners; use Round or Linear." : ""
-                        throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)\(hint)")
+                        throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)")
                     }
                     return SketchSpline(
                         controlPoints: chain.map { sketchPoint(x: $0.x, y: $0.y) },

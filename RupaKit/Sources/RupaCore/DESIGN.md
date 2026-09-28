@@ -1193,12 +1193,18 @@ document unchanged; no reachable crossing is a command-invalid error.
 `offsetCurve` on a sketch spline (Offset Planar Curve) makes a new curve sketch of
 the spline Swift-CAD's `CubicBezierChainOffset` fits within the modeling distance
 of the exact offset, on both sides when symmetric; a corner is joined by the
-options' gap fill (Round or Linear through `offset(of:distance:gapFill:)`, the
-inside of a turn trimmed where the offsets cross). Natural gap fill at a spline
-corner waits for its definition and is refused naming Round and Linear; a fold
-(the distance reaching the radius of curvature on the inside) refuses the
-command with the kernel's message. The document is unchanged on refusal.
-`OffsetCurveSplineGapFillTests` cover the fills and the refusal.
+options' gap fill (Round, Linear or Natural through `offset(of:distance:gapFill:)`,
+the inside of a turn trimmed where the offsets cross; Natural continues both end
+cubics along their own polynomials until they meet); a fold (the distance reaching
+the radius of curvature on the inside) refuses the command with the kernel's
+message. The document is unchanged on refusal. A curve that belongs to a joined
+curve (Join's `JoinedCurveGroupSource`) offsets the whole chain as one curve
+(`offsetJoinedChain`): its members, each turned to run on from the one before
+through the group's joints, become one run of Bezier spans (a line one straight
+span, an arc Swift-CAD's `CubicBezierArcApproximation` chain, a spline its own
+segments) that `offset(spans:distance:gapFill:)` offsets, a chain returning to its
+start staying closed; the result is one cubic chain spline.
+`OffsetCurveSplineGapFillTests` cover the fills and the joined chain.
 
 `applySketchCornerTreatments(vertices:distance:treatment:)` fillets or chamfers
 several selected curve ends: each corner once, even when both of its ends are

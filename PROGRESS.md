@@ -76,7 +76,7 @@
     - [x] SK5.6 Fillet Curve and Fillet Vertex take curves drawn to touch (ends within the modeling distance, no coincident constraint) as a corner. `depends:none` `parallel:none`
   - [ ] SK6 Offset: Offset Curve, Offset Planar Curve, Offset Region, Offset Vertex, Slot. `depends:none` `parallel:none`
     - [x] SK6.1 Offset Planar Curve (O on one open sketch curve): distance, Symmetric (S), and O again turning it into Slot. `depends:none` `parallel:none`
-    - [ ] SK6.2 Offset Planar Curve on joined curve chains (lines, arcs and splines joined by Join) and Natural gap fill; splines, cornered splines with Round and Linear gap fill and V to step it are done (swift-CAD 34d284f, a2faa31). `depends:SK6.1` `parallel:none`
+    - [x] SK6.2 Offset Planar Curve on joined curve chains (lines, arcs and splines joined by Join) and Natural gap fill; splines, cornered splines with Round and Linear gap fill and V to step it are done (swift-CAD 34d284f, a2faa31). `depends:SK6.1` `parallel:none`
     - [ ] SK6.3 Freestyle Offset Planar Curve (F). `depends:SK6.2` `parallel:none`
     - [x] SK6.7 Command dialogs pass the typed distance to Core as typed: a negative Offset Planar Curve distance offsets to the other side, and a non-positive Slot, Offset Vertex, Offset Edge or Fillet value is refused instead of becoming 1 nm. `depends:none` `parallel:none`
     - [x] SK6.4 O on a selected curve end starts Offset Vertex, and D sets its distance. `depends:none` `parallel:none`

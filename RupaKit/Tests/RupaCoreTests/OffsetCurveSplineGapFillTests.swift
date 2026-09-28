@@ -45,17 +45,36 @@ import Testing
         #expect(try newestSpline(inside).contains { abs($0.0 - 25) < 1e-6 && abs($0.1 - 5) < 1e-6 })
     }
 
-    @Test func naturalGapFillAtASplineCornerIsRefusedWithTheWayOut() throws {
+    /// Straight spans continue straight: the natural fill meets where the linear one does.
+    @Test func naturalGapFillAtAStraightSplineCornerMeetsLikeLinear() throws {
         let (session, target) = try lSpline()
-        let generation = session.generation
-        do {
-            _ = try session.execute(.offsetCurve(
-                target: target, distance: mm(-5), options: OffsetCurveOptions(gapFill: .natural), vertexHandle: nil
-            ))
-            Issue.record("Natural gap fill at a spline corner is refused.")
-        } catch let error as EditorError {
-            #expect(error.message.contains("Round or Linear"))
+        _ = try session.execute(.offsetCurve(
+            target: target, distance: mm(-5), options: OffsetCurveOptions(gapFill: .natural), vertexHandle: nil
+        ))
+        #expect(try newestSpline(session).contains { abs($0.0 - 35) < 1e-6 && abs($0.1 + 5) < 1e-6 })
+    }
+
+    /// Two lines joined at a corner offset as one curve through the corner's fill.
+    @Test func aJoinedChainOffsetsAsOneCurve() throws {
+        let session = EditorSession()
+        let firstID = SketchEntityID(), secondID = SketchEntityID()
+        _ = try session.execute(.createSketch(name: "Chain", sketch: Sketch(plane: .xy, entities: [
+            firstID: .line(SketchLine(start: SketchPoint(x: mm(0), y: mm(0)), end: SketchPoint(x: mm(30), y: mm(0)))),
+            secondID: .line(SketchLine(start: SketchPoint(x: mm(30), y: mm(30)), end: SketchPoint(x: mm(30), y: mm(0)))),
+        ]), geometryRole: .curve))
+        let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let node = try #require(session.document.productMetadata.sceneNodes.first { $0.value.reference?.featureID == featureID }?.key)
+        func curve(_ id: SketchEntityID) -> SelectionTarget {
+            SelectionTarget(sceneNodeID: node, component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: id)))
         }
-        #expect(session.generation == generation)
+        _ = try session.execute(.joinSketchCurveChain(targets: [curve(firstID), curve(secondID)]))
+        // The second line runs down into the corner: the chain turns it to run on from the first.
+        _ = try session.execute(.offsetCurve(
+            target: curve(secondID), distance: mm(-5), options: OffsetCurveOptions(gapFill: .natural), vertexHandle: nil
+        ))
+        let points = try newestSpline(session)
+        #expect(points.contains { abs($0.0 - 35) < 1e-6 && abs($0.1 + 5) < 1e-6 })
+        #expect(abs(points[0].0) < 1e-6 && abs(points[0].1 + 5) < 1e-6)
+        #expect(abs(points[points.count - 1].0 - 35) < 1e-6 && abs(points[points.count - 1].1 - 30) < 1e-6)
     }
 }
