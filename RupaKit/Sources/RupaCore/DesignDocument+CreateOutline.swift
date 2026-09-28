@@ -42,7 +42,7 @@ extension DesignDocument {
             // Every outline piece of every edge, as fitted 3D spans in world space. Pieces that project onto the
             // same curve (a box's top and bottom rims seen from above) keep the one nearest the
             // viewer on the normal's side.
-            var spansByProjection: [String: (height: Double, spans: [(p0: Point3D, p1: Point3D, p2: Point3D, p3: Point3D)])] = [:]
+            var pieces: [(identity: OutlineCurveIdentity, height: Double, spans: [(p0: Point3D, p1: Point3D, p2: Point3D, p3: Point3D)])] = []
             for entry in entries where entry.kind == .edge {
                 guard let reference = entry.stableReference else {
                     throw EditorError(code: .referenceUnresolved, message: "\(owner) body edge has no stable reference.")
@@ -58,15 +58,20 @@ extension DesignDocument {
                          p2: knots[index + 1].position + knots[index + 1].incoming, p3: knots[index + 1].position)
                     }
                     let middle = try placement.applied(to: try edge.curve.point(at: (piece.lower + piece.upper) / 2, tolerance: tolerance))
-                    let ends = [knots[0].position, knots[knots.count - 1].position]
-                        .map { quantizedPointKey(system.project($0).point) }.sorted()
-                    let key = ends.joined(separator: "|") + "|" + quantizedPointKey(system.project(middle).point)
+                    // The piece as seen on the plane: its ends and middle, in either direction.
+                    let identity = OutlineCurveIdentity(kind: "piece", knots: nil, points: [
+                        system.project(knots[0].position).point, system.project(middle).point,
+                        system.project(knots[knots.count - 1].position).point,
+                    ])
                     let height = (middle - system.origin).dot(system.normal)
-                    if let kept = spansByProjection[key], kept.height >= height { continue }
-                    spansByProjection[key] = (height, pieceSpans)
+                    if let index = pieces.firstIndex(where: { $0.identity.matches(identity, tolerance: tolerance.distance) }) {
+                        if pieces[index].height < height { pieces[index] = (identity, height, pieceSpans) }
+                    } else {
+                        pieces.append((identity, height, pieceSpans))
+                    }
                 }
             }
-            let spans = spansByProjection.keys.sorted().compactMap { spansByProjection[$0]?.spans }
+            let spans = pieces.map(\.spans)
             guard !spans.isEmpty else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) found no outline on \(node.name) along the plane's normal.")
             }

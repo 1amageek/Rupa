@@ -1269,13 +1269,18 @@ inside the trim (Swift-CAD's directional projection, a miss being its empty resu
 a change between outline and interior is bisected. Edges inside the shadow and edges
 seen end-on are left out. A line piece stays a line, a circle parallel to the plane an
 arc (a circle when whole), and any other curve (B-spline, ellipse) a cubic chain fitted
-within ten modeling distances; coincident lines, arcs and circles are kept once.
+within ten modeling distances; a curve coincident with one already kept is dropped, two
+curves being the same when `OutlineCurveIdentity` finds their identifying points (a line's
+ends, a circle's center and rim point, an arc's ends and middle so the two halves of a
+circle differ, a spline's degree, knots and control points) within the modeling distance,
+in either direction; no coordinate is quantized (`OutlineCurveIdentityTests`).
 `ProjectOutlineSilhouetteTests` own this.
 
 `createBodyOutlines(targets:plane:)` is Create Outline: the same silhouette pieces
 (`outlinePieces`), left on the body as 3D curves fitted within ten modeling distances.
-Pieces projecting onto one curve (a box's top and bottom rims seen from above) keep the
-one nearest the viewer on the plane normal's side; pieces meeting end to end are joined
+Pieces projecting onto one curve (a box's top and bottom rims seen from above, the same
+`OutlineCurveIdentity` of their projected ends and middle) keep the one nearest the viewer
+on the plane normal's side; pieces meeting end to end are joined
 into one Bezier spatial path with corner joints (`chainedOutlineSpans`), closed when the
 chain returns to its start, one object per path. `CreateOutlineTests` own this.
 

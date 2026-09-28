@@ -260,7 +260,7 @@ extension DesignDocument {
         }
         let edgeEvaluator = EdgeQueryEvaluator(tolerance: modelingSettings.tolerance)
         var projectedEntities: [SketchEntityID: SketchEntity] = [:]
-        var seenEntities = Set<String>()
+        var acceptedOutlines: [OutlineCurveIdentity] = []
         var sourceNames: [String] = []
         var seenTargets = Set<SceneNodeID>()
         for target in targets {
@@ -316,13 +316,13 @@ extension DesignDocument {
                     owner: operationName
                 )
                 for entity in entities {
-                    // Coincident outlines (a box's top and bottom seen from above) are kept once;
-                    // fitted splines are not compared.
-                    if case .spline = entity {
-                        projectedEntities[SketchEntityID()] = entity
-                    } else if seenEntities.insert(try projectedSketchEntityKey(entity)).inserted {
-                        projectedEntities[SketchEntityID()] = entity
+                    // Coincident outlines (a box's top and bottom seen from above) are kept once.
+                    let identity = try outlineCurveIdentity(entity)
+                    guard !acceptedOutlines.contains(where: { $0.matches(identity, tolerance: modelingSettings.tolerance.distance) }) else {
+                        continue
                     }
+                    acceptedOutlines.append(identity)
+                    projectedEntities[SketchEntityID()] = entity
                 }
             }
         }

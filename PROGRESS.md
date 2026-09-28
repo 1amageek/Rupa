@@ -114,7 +114,7 @@
   - [x] SK15 Bridge Curve review fixes: bridges stay derived where they are edited and read (regeneration order and references, Reverse, projection, Offset, curve analysis); Rupa rebuilt, restarted and verified live (swift-CAD c923081, Rupa cb8ce37a). `depends:SK13,SK14.1` `parallel:none`
   - [ ] SK16 Review root fixes: derived sketch geometry stays parameter dependent, outline identity is geometric, and Rebuild's methods take every spline its dialog offers. `depends:none` `parallel:none`
     - [x] SK16.1 Line Offset and Offset Vertex take their direction from the source line's endpoint expressions, not a number. `depends:none` `parallel:none`
-    - [ ] SK16.2 Outline de-duplication compares curves geometrically within tolerance (an arc by its side), with no quantized integer keys. `depends:SK16.1` `parallel:none`
+    - [x] SK16.2 Outline de-duplication compares curves geometrically within tolerance (an arc by its side), with no quantized integer keys. `depends:SK16.1` `parallel:none`
     - [ ] SK16.3 Rebuild Refit and Explicit Control on splines of any degree and knots, Explicit Control's degree range the one Core builds. `depends:SK16.2` `parallel:none`
     - [ ] SK16.4 Extend Curve Soft, Arc and Reflective persisted as Swift-CAD extension expressions of the end control points, like Natural. `depends:SK16.3` `parallel:none`
   - [ ] SK10 Integrate every Sketch command, rebuild and restart Rupa, and verify each against its official page. `depends:SK1,SK2,SK3,SK4,SK5,SK6,SK7,SK8,SK9,SK11,SK12,SK13,SK14,SK16` `parallel:none`
