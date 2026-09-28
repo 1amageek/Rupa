@@ -8744,7 +8744,8 @@ private struct ProjectMainViewContent: View {
             raiseCurveDegree: raiseCurveDegreeAction,
             convertVertex: convertVertexAction,
             rebuild: rebuildAction,
-            deform: deformAction
+            deform: deformAction,
+            createOutline: createOutlineAction
         )
     }
 
@@ -9010,6 +9011,21 @@ private struct ProjectMainViewContent: View {
         }
         Button("OK") { confirmRebuild() }
             .accessibilityIdentifier("WorkspaceRebuild.ok")
+    }
+
+    /// Create Outline on the selected bodies (palette): the outlines are selected with a Move
+    /// running so they are placed, as Project Outline's are.
+    private var createOutlineAction: (@MainActor () -> Void)? {
+        let bodies = snapshot.selection.selectedTargets.filter { target in
+            target.component == .object
+                && snapshot.document.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.kind == .body
+        }
+        guard selectedTool == .select, !bodies.isEmpty else { return nil }
+        return {
+            submitSource(.createBodyOutlines(targets: bodies, plane: activeSketchPlane())) { result in
+                moveCreatedObjects(of: result)
+            }
+        }
     }
 
     /// Deform Curve's dialog on the selected sketch curves (palette).

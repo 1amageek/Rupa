@@ -1250,6 +1250,13 @@ arc (a circle when whole), and any other curve (B-spline, ellipse) a cubic chain
 within ten modeling distances; coincident lines, arcs and circles are kept once.
 `ProjectOutlineSilhouetteTests` own this.
 
+`createBodyOutlines(targets:plane:)` is Create Outline: the same silhouette pieces
+(`outlinePieces`), left on the body as 3D curves fitted within ten modeling distances.
+Pieces projecting onto one curve (a box's top and bottom rims seen from above) keep the
+one nearest the viewer on the plane normal's side; pieces meeting end to end are joined
+into one Bezier spatial path with corner joints (`chainedOutlineSpans`), closed when the
+chain returns to its start, one object per path. `CreateOutlineTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

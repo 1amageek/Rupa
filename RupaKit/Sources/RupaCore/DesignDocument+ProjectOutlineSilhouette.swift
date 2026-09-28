@@ -18,6 +18,18 @@ extension DesignDocument {
         system: SketchPlaneCoordinateSystem,
         owner: String
     ) throws -> [SketchEntity] {
+        try outlinePieces(edge: edge, faces: faces, in: evaluated, system: system).compactMap { piece in
+            try outlinePieceEntity(edge: edge, from: piece.lower, to: piece.upper, system: system)
+        }
+    }
+
+    /// The parameter ranges of `edge` that bound the body's shadow on the plane of `system`.
+    func outlinePieces(
+        edge: ResolvedEdge,
+        faces: [SurfaceReference],
+        in evaluated: EvaluatedDocument,
+        system: SketchPlaneCoordinateSystem
+    ) throws -> [(lower: Double, upper: Double)] {
         let tolerance = modelingSettings.tolerance
         let evaluator = SurfaceQueryEvaluator(tolerance: tolerance)
         let lower = edge.startParameter, upper = edge.endParameter
@@ -75,9 +87,7 @@ extension DesignDocument {
             }
         }
         if let start = pieceStart { pieces.append((start, upper)) }
-        return try pieces.compactMap { piece in
-            try outlinePieceEntity(edge: edge, from: piece.0, to: piece.1, system: system)
-        }
+        return pieces.map { (lower: $0.0, upper: $0.1) }
     }
 
     /// Sample count along each edge for the outline test.

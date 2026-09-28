@@ -53,6 +53,8 @@ public struct WorkspaceEditCommands {
     public var rebuild: (@MainActor () -> Void)?
     /// Opens Deform Curve's dialog on the selected sketch curves.
     public var deform: (@MainActor () -> Void)?
+    /// Creates the selected bodies' outlines along the construction plane's normal as 3D curves.
+    public var createOutline: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -77,7 +79,8 @@ public struct WorkspaceEditCommands {
         raiseCurveDegree: (@MainActor () -> Void)? = nil,
         convertVertex: (@MainActor () -> Void)? = nil,
         rebuild: (@MainActor () -> Void)? = nil,
-        deform: (@MainActor () -> Void)? = nil
+        deform: (@MainActor () -> Void)? = nil,
+        createOutline: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -102,6 +105,7 @@ public struct WorkspaceEditCommands {
         self.convertVertex = convertVertex
         self.rebuild = rebuild
         self.deform = deform
+        self.createOutline = createOutline
     }
 }
 
