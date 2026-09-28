@@ -23,6 +23,7 @@ extension ViewportSpatialOverlayProducer {
         case sketchCornerTreatment
         case splineSlide
         case bridgeCurveEndpoint
+        case joinEndpointFeedback
     }
 
     enum SketchCurveAffordanceState: String, CaseIterable, Hashable, Sendable {
@@ -294,6 +295,7 @@ extension ViewportSpatialOverlayProducer {
             let sketchVertexOffsetDistanceMeters: Double
             let edgeOffsetDistanceMeters: Double
             let cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
+            let joinEndpointFeedback: [SketchCurveJoinEndpointFeedback]
 
             init(
                 document: DesignDocument,
@@ -310,7 +312,8 @@ extension ViewportSpatialOverlayProducer {
                 slotWidthMeters: Double? = nil,
                 sketchVertexOffsetDistanceMeters: Double? = nil,
                 edgeOffsetDistanceMeters: Double? = nil,
-                cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? = nil
+                cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? = nil,
+                joinEndpointFeedback: [SketchCurveJoinEndpointFeedback] = []
             ) {
                 self.document = document
                 self.scene = scene
@@ -330,6 +333,7 @@ extension ViewportSpatialOverlayProducer {
                 self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
                     ?? interactionDefaults.operationStepMeters
                 self.cornerTreatmentHandle = cornerTreatmentHandle
+                self.joinEndpointFeedback = joinEndpointFeedback
             }
         }
 
@@ -442,7 +446,8 @@ extension ViewportSpatialOverlayProducer {
                     .curve
                 case .lineDimension, .circleDimension, .arcDimension,
                      .splineControl, .regionOffset, .slotWidth,
-                     .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
+                     .sketchVertexOffset, .sketchCornerTreatment, .splineSlide,
+                     .joinEndpointFeedback:
                     .sketch
                 }
             }
@@ -469,6 +474,7 @@ extension ViewportSpatialOverlayProducer {
         var sketchVertexOffsetDistanceMeters: Double { input.sketchVertexOffsetDistanceMeters }
         var edgeOffsetDistanceMeters: Double { input.edgeOffsetDistanceMeters }
         var cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? { input.cornerTreatmentHandle }
+        var joinEndpointFeedback: [SketchCurveJoinEndpointFeedback] { input.joinEndpointFeedback }
     }
 
     /// Builds the immutable worker source from raw document state.  The
@@ -680,21 +686,21 @@ extension ViewportSpatialOverlayProducer {
         case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
             true
         case .lineDimension, .circleDimension, .arcDimension, .curvePointControl,
-             .splineControl, .curvatureComb, .bridgeCurveEndpoint:
+             .splineControl, .curvatureComb, .bridgeCurveEndpoint, .joinEndpointFeedback:
             false
         }
         let isDimensionRoute: Bool = switch entry.route {
         case .lineDimension, .circleDimension, .arcDimension: true
         case .curvePointControl, .splineControl, .curvatureComb, .regionOffset,
              .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide,
-             .bridgeCurveEndpoint: false
+             .bridgeCurveEndpoint, .joinEndpointFeedback: false
         }
         let markerTolerance: Float? = switch entry.route {
         case .curvePointControl, .splineControl, .bridgeCurveEndpoint:
             handleIndex == nil ? nil : 12.0
         case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
             handleIndex == nil ? nil : 14.0
-        case .lineDimension, .circleDimension, .arcDimension, .curvatureComb:
+        case .lineDimension, .circleDimension, .arcDimension, .curvatureComb, .joinEndpointFeedback:
             nil
         }
 
@@ -1231,6 +1237,15 @@ extension ViewportSpatialOverlayProducer {
                         )
                         try append(entry, to: &result, limits: limits)
                     }
+                }
+
+                if source.enabledRoutes.contains(.joinEndpointFeedback),
+                   let entry = try joinEndpointFeedbackEntry(
+                       feedback: source.joinEndpointFeedback.filter { $0.featureID == item.featureID },
+                       primitives: primitives,
+                       modelTransform: item.modelTransform
+                   ) {
+                    try append(entry, to: &result, limits: limits)
                 }
 
                 if source.enabledRoutes.contains(.sketchCornerTreatment),
@@ -3135,6 +3150,47 @@ extension ViewportSpatialOverlayProducer {
         )
     }
 
+    /// Join Curves' endpoint feedback in one sketch: each end of a selected curve is blue-green
+    /// when it meets an end of another selected curve as Join requires and purple when it does
+    /// not. The markers take no input.
+    private static func joinEndpointFeedbackEntry(
+        feedback: [SketchCurveJoinEndpointFeedback],
+        primitives: [ViewportSketchPrimitive],
+        modelTransform: ScenePlacement
+    ) throws -> SketchCurveAffordanceSource.Entry? {
+        var markers: [SketchCurveMarkerSource] = []
+        for end in feedback {
+            guard let primitive = primitives.first(where: { $0.entityID == end.entityID }) else { continue }
+            let point: CGPoint
+            switch end.end {
+            case .handle(let handle):
+                guard let geometry = try sketchVertexGeometry(for: primitive, handle: handle, modelTransform: modelTransform) else {
+                    continue
+                }
+                point = geometry.point
+            case .controlPoint(let index):
+                guard case .spline(_, _, let controlPoints, _, _, _) = primitive,
+                      controlPoints.indices.contains(index) else { continue }
+                point = controlPoints[index]
+            }
+            markers.append(SketchCurveMarkerSource(
+                anchor: world(point, by: modelTransform),
+                diameterPoints: 11.0,
+                color: end.isAligned ? joinAlignedColor : joinSeparateColor
+            ))
+        }
+        guard !markers.isEmpty else { return nil }
+        return SketchCurveAffordanceSource.Entry(
+            route: .joinEndpointFeedback,
+            role: .curvePoint,
+            state: .normal,
+            markers: markers
+        )
+    }
+
+    static let joinAlignedColor = SIMD4<Float>(0.10, 0.80, 0.72, 1)
+    static let joinSeparateColor = SIMD4<Float>(0.62, 0.30, 0.92, 1)
+
     /// Fillet's radius handle at the corner `corner.ends` names: anchored at the selected end
     /// and pointing between the two curves (the sum of the directions each curve leaves the
     /// corner in), so dragging inward is a Fillet radius and outward a Chamfer distance. A
@@ -3460,7 +3516,7 @@ extension ViewportSpatialOverlayProducer {
             }
         case .lineDimension, .circleDimension, .arcDimension,
              .curvePointControl, .splineControl, .curvatureComb,
-             .bridgeCurveEndpoint:
+             .bridgeCurveEndpoint, .joinEndpointFeedback:
             throw RealityViewportSpatialBatch.invalid(
                 "Sketch/curve offset route is not an offset affordance."
             )

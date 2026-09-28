@@ -2228,6 +2228,7 @@ private struct ProjectMainViewContent: View {
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
             sketchCornerTreatmentHandle: viewportSketchCornerTreatmentHandle,
+            sketchJoinEndpointFeedback: viewportSketchJoinEndpointFeedback,
             transformGizmo: transformSession?.gizmo(
                 distanceStepMeters: WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
                     .operationStepMeters
@@ -8695,6 +8696,18 @@ private struct ProjectMainViewContent: View {
         snapshot.selection.selectedTargets.filter { target in
             if case .sketchEntity = target.component { return true }
             return false
+        }
+    }
+
+    /// Join Curves' endpoint feedback on the selected sketch curves, where J joins them: ends
+    /// that meet another selected curve's end blue-green, the others purple. A selection Core
+    /// cannot read shows none; J reports why.
+    private var viewportSketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback] {
+        guard selectedTool == .select, selectionScope == .sketchEntity else { return [] }
+        do {
+            return try snapshot.document.document.sketchCurveJoinEndpointFeedback(targets: selectedSketchTargets)
+        } catch {
+            return []
         }
     }
 

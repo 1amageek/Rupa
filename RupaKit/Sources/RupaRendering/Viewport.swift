@@ -197,6 +197,7 @@ public struct Viewport: View {
     private let sketchVertexOffsetDistanceMeters: Double
     private let edgeOffsetDistanceMeters: Double
     private let sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
+    private let sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback]
     private let transformGizmo: ViewportTransformGizmoConfiguration?
     private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
     private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
@@ -397,6 +398,7 @@ public struct Viewport: View {
         sketchVertexOffsetDistanceMeters: Double? = nil,
         edgeOffsetDistanceMeters: Double? = nil,
         sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? = nil,
+        sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback] = [],
         transformGizmo: ViewportTransformGizmoConfiguration? = nil,
         presentationCADInteractionSceneNodeIDs: Set<SceneNodeID> = [],
         selectedPresentationHasExactCADContext: Bool,
@@ -531,6 +533,7 @@ public struct Viewport: View {
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
         self.sketchCornerTreatmentHandle = sketchCornerTreatmentHandle
+        self.sketchJoinEndpointFeedback = sketchJoinEndpointFeedback
         self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
         self.transformGizmo = transformGizmo
@@ -1610,6 +1613,7 @@ public struct Viewport: View {
         key.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
         key.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
         key.sketchCornerTreatmentHandle = sketchCornerTreatmentHandle
+        key.sketchJoinEndpointFeedback = sketchJoinEndpointFeedback
         key.transformGizmo = transformGizmo
         // Fixed route bits avoid an array allocation on every camera frame.
         if onRegionOffsetDrag != nil { key.availableRoutes |= 1 << 0 }
@@ -5904,7 +5908,7 @@ extension Viewport {
     ) throws -> ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.RawInput {
         typealias Route = ViewportSpatialOverlayProducer.SketchCurveAffordanceRoute
         typealias Override = ViewportSpatialOverlayProducer.SketchCurveAffordanceSource.ActiveOverride
-        var routes: Set<Route> = [.curvatureComb]
+        var routes: Set<Route> = [.curvatureComb, .joinEndpointFeedback]
         if onSketchDimensionDrag != nil {
             routes.formUnion([.lineDimension, .circleDimension, .arcDimension])
         }
@@ -5963,7 +5967,8 @@ extension Viewport {
             slotWidthMeters: slotWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
-            cornerTreatmentHandle: sketchCornerTreatmentHandle
+            cornerTreatmentHandle: sketchCornerTreatmentHandle,
+            joinEndpointFeedback: sketchJoinEndpointFeedback
         )
     }
 

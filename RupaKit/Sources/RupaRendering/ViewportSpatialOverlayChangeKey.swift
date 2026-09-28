@@ -47,6 +47,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var sketchVertexOffsetDistanceMeters: Double = 0
     var edgeOffsetDistanceMeters: Double = 0
     var sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
+    var sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback] = []
     var transformGizmo: ViewportTransformGizmoConfiguration?
     // The producer has a fixed set of callback routes; only availability matters.
     var availableRoutes: UInt32 = 0

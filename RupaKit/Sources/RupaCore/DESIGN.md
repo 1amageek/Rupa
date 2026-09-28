@@ -1213,6 +1213,10 @@ corner. `SketchCornerTreatmentTouchingCurvesTests` own this.
 that selection would take, as its two ends (`SketchCornerTreatmentEnds`), without
 changing the document, through the same corner resolution; Fillet's viewport handle
 reads it (`SketchCornerTreatmentEndsTests`).
+`sketchCurveJoinEndpointFeedback(targets:)` gives every end of each selected line, arc
+and spline, aligned when it meets an end of another selected curve of its sketch by
+Join's own endpoint tolerance (`joinCurveEndpointsAreAligned`); other components take
+no part and fewer than two curves give none (`SketchCurveJoinEndpointFeedbackTests`).
 
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
