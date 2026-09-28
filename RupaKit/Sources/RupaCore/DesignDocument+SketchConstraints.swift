@@ -47,6 +47,7 @@ extension DesignDocument {
             in: &sketch,
             owner: "Sketch constraint"
         )
+        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch)
         feature.operation = .sketch(sketch)
 
         var updatedCADDocument = cadDocument

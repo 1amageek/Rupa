@@ -646,8 +646,8 @@ control point is one undo step. Core owns which segment the point chooses and wh
 Bridge (Edit menu, and L with two sketch curves or curve ends selected) submits
 one G1 `createBridgeCurve` joining the ends Core reads from the selection
 ([Bridge selection contract](../RupaCore/DESIGN.md#bridge-selection-contract))
-and selects the new curve, whose inspector edits its continuity, tension and
-trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
+and selects the new curve, whose inspector edits its continuity (G0 to G3 at
+each end), tension and trim. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
 → G3 → G0 and Q (or the inspector's Trim/Untrim Sources) turns trimming the
 curves it bridges on and off. Its context panel holds the G1 tension field
 (`WorkspaceCommandScalarInput`): D focuses it, Return or the panel's apply gives

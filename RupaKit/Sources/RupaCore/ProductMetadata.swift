@@ -865,10 +865,9 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Bridge curve source entities must point to spline sketch entities."
                 )
             }
-            guard spline.controlPoints.count >= 7,
-                  (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+            guard spline.isClosed == false else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Bridge curve source entities must be multi-span cubic Bezier splines with 3n + 1 control points."
+                    "Bridge curve source entities must be open splines."
                 )
             }
             guard bridgeEndpointLocationSignature(source.firstEndpoint) !=
@@ -877,27 +876,17 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Bridge curve source endpoints must be distinct."
                 )
             }
-            let firstEndpointKind = try validateBridgeEndpoint(
+            try validateBridgeEndpoint(
                 source.firstEndpoint,
                 source: source,
                 sketch: sketch,
                 cadDocument: cadDocument
             )
-            let secondEndpointKind = try validateBridgeEndpoint(
+            try validateBridgeEndpoint(
                 source.secondEndpoint,
                 source: source,
                 sketch: sketch,
                 cadDocument: cadDocument
-            )
-            try validateBridgeEndpointContinuity(
-                source.continuity.first,
-                endpointKind: firstEndpointKind,
-                owner: "Bridge curve first continuity"
-            )
-            try validateBridgeEndpointContinuity(
-                source.continuity.second,
-                endpointKind: secondEndpointKind,
-                owner: "Bridge curve second continuity"
             )
             try validateBridgeTension(
                 source.firstEndpoint.tension,
@@ -1433,23 +1422,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
-    private enum BridgeEndpointKind {
-        case lineEndpoint
-        case lineInterior
-        case arcEndpoint
-        case arcInterior
-        case splineEndpoint
-        case splineInterior
-    }
-
     private func validateBridgeEndpoint(
         _ endpoint: BridgeCurveEndpoint,
         source: BridgeCurveSource,
         sketch: Sketch,
         cadDocument: CADDocument
-    ) throws -> BridgeEndpointKind {
+    ) throws {
         if let parameter = endpoint.parameter {
-            let resolvedParameter = try validateBridgeParameter(
+            _ = try validateBridgeParameter(
                 parameter,
                 owner: "Bridge curve endpoint parameter",
                 cadDocument: cadDocument
@@ -1460,12 +1440,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 throw invalidBridgeEndpointReference()
             }
             switch entity {
-            case .line:
-                return isEndpointParameter(resolvedParameter) ? .lineEndpoint : .lineInterior
-            case .arc:
-                return isEndpointParameter(resolvedParameter) ? .arcEndpoint : .arcInterior
-            case .spline:
-                return isEndpointParameter(resolvedParameter) ? .splineEndpoint : .splineInterior
+            case .line, .arc, .spline:
+                return
             case .point,
                  .circle:
                 throw invalidBridgeEndpointReference()
@@ -1478,21 +1454,21 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                       case .line = sketch.entities[entityID] else {
                     throw invalidBridgeEndpointReference()
                 }
-                return .lineEndpoint
+                return
             case let .arcStart(entityID),
                  let .arcEnd(entityID):
                 guard entityID != source.entityID,
                       case .arc = sketch.entities[entityID] else {
                     throw invalidBridgeEndpointReference()
                 }
-                return .arcEndpoint
+                return
             case let .splineControlPoint(entityID, index):
                 guard entityID != source.entityID,
                       case .spline(let spline) = sketch.entities[entityID],
                       index == 0 || index == spline.controlPoints.count - 1 else {
                     throw invalidBridgeEndpointReference()
                 }
-                return .splineEndpoint
+                return
             case .entity,
                  .circleCenter,
                  .circleRadius,
@@ -1500,33 +1476,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                  .arcRadius:
                 throw invalidBridgeEndpointReference()
             }
-        }
-    }
-
-    private func validateBridgeEndpointContinuity(
-        _ continuity: BridgeCurveEndpointContinuity,
-        endpointKind: BridgeEndpointKind,
-        owner: String
-    ) throws {
-        switch continuity {
-        case .g0:
-            return
-        case .g1:
-            guard endpointKind == .lineEndpoint || endpointKind == .splineEndpoint else {
-                throw invalidBridgeContinuity(
-                    "\(owner) G1 sources must use line or spline endpoints."
-                )
-            }
-        case .g2:
-            guard endpointKind == .splineEndpoint else {
-                throw invalidBridgeContinuity(
-                    "\(owner) G2 sources must use spline endpoints."
-                )
-            }
-        case .g3:
-            throw invalidBridgeContinuity(
-                "\(owner) G3 is not supported by the current bridge source model."
-            )
         }
     }
 
@@ -1605,18 +1554,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         "\(endpoint.reference)|\(String(describing: endpoint.parameter))"
     }
 
-    private func isEndpointParameter(_ parameter: Double) -> Bool {
-        parameter <= 1.0e-12 || parameter >= 1.0 - 1.0e-12
-    }
-
     private func invalidBridgeEndpointReference() -> DocumentValidationError {
         DocumentValidationError.invalidProductMetadata(
             "Bridge curve endpoints must reference line, arc, or external spline curve positions in the same sketch."
         )
-    }
-
-    private func invalidBridgeContinuity(_ message: String) -> DocumentValidationError {
-        DocumentValidationError.invalidProductMetadata(message)
     }
 
     private func visitSceneNode(

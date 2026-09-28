@@ -30,13 +30,22 @@ import SwiftCAD
     #expect(source.firstEndpoint.reference == .lineEnd(setup.firstLineID))
     #expect(source.secondEndpoint.reference == .lineStart(setup.secondLineID))
     #expect(source.continuity == .g1)
-    #expect(spline.controlPoints.count == 7)
+    // G1 at both ends is one cubic span (degree 1 + 1 + 1) leaving along the first line and
+    // arriving along the second, each end speed the chord length.
+    #expect(spline.degree == 3 && spline.knots == nil)
+    let controlPoints = try spline.controlPoints.map { try bridgeCurveResolvedPoint($0, in: document) }
+    #expect(controlPoints.count == 4)
+    let chord = hypot(0.003, 0.003)
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.003 + chord / 3))
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].y, 0.0))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].x, 0.006))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].y, 0.003 - chord / 3))
     #expect(sketch.constraints.contains(.coincident(
         .splineControlPoint(entity: bridgeID, index: 0),
         .lineEnd(setup.firstLineID)
     )))
     #expect(sketch.constraints.contains(.coincident(
-        .splineControlPoint(entity: bridgeID, index: 6),
+        .splineControlPoint(entity: bridgeID, index: 3),
         .lineStart(setup.secondLineID)
     )))
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
@@ -57,10 +66,10 @@ import SwiftCAD
         displayUnit: .millimeter
     )
     #expect(analysis.counts.curveCount == 1)
-    #expect(analysis.counts.continuityJoinCount == 3)
+    #expect(analysis.counts.continuityJoinCount == 2)
     #expect(analysis.curves.first?.curveKind == .spline)
     #expect(analysis.continuityJoins.filter { $0.joinKind == .constrainedEndpoint }.count == 2)
-    #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.count == 1)
+    #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.isEmpty)
 }
 
 @Test func bridgeCurveEndpointSelectionResolverResolvesSelectedLineEndpoint() throws {
@@ -318,40 +327,55 @@ import SwiftCAD
     #expect(source.secondEndpoint.reference == .entity(setup.secondLineID))
     #expect(source.secondEndpoint.parameter == .scalar(0.25))
     #expect(sketch.constraints.isEmpty)
-    #expect(controlPoints.count == 7)
+    // G0 at both ends fixes only the end points: a degree-1 bridge.
+    #expect(spline.degree == 1)
+    #expect(controlPoints.count == 2)
     #expect(bridgeCurveNearlyEqual(controlPoints[0].x, 0.0015))
     #expect(bridgeCurveNearlyEqual(controlPoints[0].y, 0.0))
-    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.0005237187905116682))
-    #expect(bridgeCurveNearlyEqual(controlPoints[1].y, 0.0))
-    #expect(bridgeCurveNearlyEqual(controlPoints[6].x, 0.006))
-    #expect(bridgeCurveNearlyEqual(controlPoints[6].y, 0.00375))
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.006))
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].y, 0.00375))
 }
 
-@Test func createBridgeCurveRejectsParametricG1WithoutPersistentEndpointConstraint() throws {
+/// G1 at a position inside a line is met by the bridge itself, leaving along the chosen sense;
+/// only the point-referenced end carries sketch constraints.
+@Test func createBridgeCurveMeetsParametricG1AlongTheSense() throws {
     let setup = try bridgeCurveTwoLineDocument()
     var document = setup.document
 
-    do {
-        try document.createBridgeCurve(
-            featureID: setup.featureID,
-            firstEndpoint: BridgeCurveEndpoint(
-                reference: .entity(setup.firstLineID),
-                parameter: .scalar(0.5)
-            ),
-            secondEndpoint: BridgeCurveEndpoint(
-                reference: .lineStart(setup.secondLineID)
-            ),
-            continuity: .g1
-        )
-        Issue.record("Parametric Bridge Curve G1 must fail until a persistent point-on-curve tangent constraint exists.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("G1"))
-    }
+    let bridgeID = try document.createBridgeCurve(
+        featureID: setup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(
+            reference: .entity(setup.firstLineID),
+            parameter: .scalar(0.5),
+            reversesSense: true
+        ),
+        secondEndpoint: BridgeCurveEndpoint(
+            reference: .lineStart(setup.secondLineID)
+        ),
+        continuity: .g1
+    )
 
     let sketch = try #require(bridgeCurveSketch(in: document, featureID: setup.featureID))
-    #expect(sketch.entities.count == 2)
-    #expect(document.productMetadata.bridgeCurveSources.isEmpty)
+    guard case .spline(let spline) = try #require(sketch.entities[bridgeID]) else {
+        Issue.record("Bridge curve should create a spline entity.")
+        return
+    }
+    let controlPoints = try spline.controlPoints.map { try bridgeCurveResolvedPoint($0, in: document) }
+    let chord = hypot(0.0045, 0.003)
+    #expect(controlPoints.count == 4)
+    #expect(bridgeCurveNearlyEqual(controlPoints[0].x, 0.0015))
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.0015 - chord / 3))
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].y, 0.0))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].x, 0.006))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].y, 0.003 - chord / 3))
+    #expect(sketch.constraints.contains(.coincident(
+        .splineControlPoint(entity: bridgeID, index: 3),
+        .lineStart(setup.secondLineID)
+    )))
+    #expect(sketch.constraints.contains { constraint in
+        if case .coincident(.splineControlPoint(bridgeID, 0), _) = constraint { return true }
+        return false
+    } == false)
 }
 
 @Test func createBridgeCurveTrimsParametricLineSourcesAndAllowsG1() throws {
@@ -400,7 +424,7 @@ import SwiftCAD
         .lineEnd(setup.firstLineID)
     )))
     #expect(sketch.constraints.contains(.coincident(
-        .splineControlPoint(entity: bridgeID, index: 6),
+        .splineControlPoint(entity: bridgeID, index: 3),
         .lineStart(setup.secondLineID)
     )))
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
@@ -430,7 +454,7 @@ import SwiftCAD
         secondEndpoint: BridgeCurveEndpoint(
             reference: .lineStart(startSideSetup.secondLineID)
         ),
-        continuity: .g0,
+        continuity: .g1,
         trimsSourceCurves: true
     )
 
@@ -468,7 +492,7 @@ import SwiftCAD
         secondEndpoint: BridgeCurveEndpoint(
             reference: .lineStart(endSideSetup.secondLineID)
         ),
-        continuity: .g0,
+        continuity: .g1,
         trimsSourceCurves: true
     )
 
@@ -531,12 +555,17 @@ import SwiftCAD
         entityID: bridgeID,
         displayUnit: .millimeter
     )
+    guard case .spline(let spline) = try #require(sketch.entities[bridgeID]) else {
+        Issue.record("Bridge curve should create a spline entity.")
+        return
+    }
+    #expect(spline.degree == 5 && spline.controlPoints.count == 6)
     #expect(analysis.counts.curveCount == 1)
-    #expect(analysis.counts.continuityJoinCount == 3)
+    #expect(analysis.counts.continuityJoinCount == 2)
     let constrainedJoins = analysis.continuityJoins.filter { $0.joinKind == .constrainedEndpoint }
     #expect(constrainedJoins.count == 2)
     #expect(constrainedJoins.allSatisfy { $0.requiredContinuity == .g2 })
-    #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.count == 1)
+    #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.isEmpty)
 }
 
 @Test func bridgeCurveSourceValidationRejectsBrokenGeneratedEntity() throws {
@@ -622,17 +651,14 @@ import SwiftCAD
     }
     #expect(updatedSource.entityID == bridgeID)
     #expect(updatedSource.continuity == .g1)
-    #expect(controlPoints.count == 7)
-    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.003848528137423857))
+    // A G1 end fixes one point beyond the end: only the first tension (the end speed as a
+    // multiple of the chord) shapes it.
+    let chord = hypot(0.003, 0.003)
+    #expect(controlPoints.count == 4)
+    #expect(bridgeCurveNearlyEqual(controlPoints[1].x, 0.003 + 1.2 * chord / 3))
     #expect(bridgeCurveNearlyEqual(controlPoints[1].y, 0.0))
-    #expect(bridgeCurveNearlyEqual(controlPoints[2].x, 0.0046))
-    #expect(bridgeCurveNearlyEqual(controlPoints[2].y, 0.0016))
-    #expect(bridgeCurveNearlyEqual(controlPoints[3].x, 0.005))
-    #expect(bridgeCurveNearlyEqual(controlPoints[3].y, 0.002))
-    #expect(bridgeCurveNearlyEqual(controlPoints[4].x, 0.00555))
-    #expect(bridgeCurveNearlyEqual(controlPoints[4].y, 0.00255))
-    #expect(bridgeCurveNearlyEqual(controlPoints[5].x, 0.006))
-    #expect(bridgeCurveNearlyEqual(controlPoints[5].y, 0.002646446609406726))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].x, 0.006))
+    #expect(bridgeCurveNearlyEqual(controlPoints[2].y, 0.003 - 0.5 * chord / 3))
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         line: setup.firstLineID,
@@ -678,30 +704,38 @@ import SwiftCAD
     #expect(sketch.entities[bridgeID] != nil)
 }
 
-@Test func createBridgeCurveRejectsArcTangencyWithoutPersistentConstraint() throws {
+/// An arc end is met exactly: G2 at the arc start leaves the bridge arriving along the arc's
+/// tangent with the arc's curvature (1 / 2 mm, turning left).
+@Test func createBridgeCurveMeetsAnArcAtG2() throws {
     let setup = try bridgeCurveLineArcDocument()
     var document = setup.document
 
-    do {
-        try document.createBridgeCurve(
-            featureID: setup.featureID,
-            firstEndpoint: BridgeCurveEndpoint(
-                reference: .lineEnd(setup.lineID)
-            ),
-            secondEndpoint: BridgeCurveEndpoint(
-                reference: .arcStart(setup.arcID)
-            ),
-            continuity: .g1
-        )
-        Issue.record("Bridge curve tangency to arcs must fail until a persistent arc endpoint tangent constraint exists.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("G1"))
-    }
+    let bridgeID = try document.createBridgeCurve(
+        featureID: setup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(
+            reference: .lineEnd(setup.lineID)
+        ),
+        secondEndpoint: BridgeCurveEndpoint(
+            reference: .arcStart(setup.arcID)
+        ),
+        continuity: BridgeCurveContinuity(first: .g1, second: .g2)
+    )
 
     let sketch = try #require(bridgeCurveSketch(in: document, featureID: setup.featureID))
-    #expect(sketch.entities.count == 2)
-    #expect(document.productMetadata.bridgeCurveSources.isEmpty)
+    guard case .spline(let spline) = try #require(sketch.entities[bridgeID]) else {
+        Issue.record("Bridge curve should create a spline entity.")
+        return
+    }
+    #expect(spline.degree == 4)
+    let points = try spline.controlPoints.map { try bridgeCurveResolvedPoint($0, in: document) }
+    let knots = try #require(spline.knotVector)
+    let curve = BSplineCurve2D(degree: 4, knots: knots, controlPoints: points.map { Point2D(x: $0.x, y: $0.y) })
+    let end = try curve.differentialGeometry(at: knots[knots.count - 1], tolerance: .standard)
+    let d1 = end.firstDerivative, d2 = end.secondDerivative
+    let speed = hypot(d1.x, d1.y)
+    #expect(bridgeCurveNearlyEqual(end.position.x, 0.008) && bridgeCurveNearlyEqual(end.position.y, 0.003))
+    #expect(abs(d1.x / speed) <= 1e-9 && d1.y > 0)
+    #expect(abs((d1.x * d2.y - d1.y * d2.x) / pow(speed, 3) - 500) <= 1e-6)
 }
 
 @Test func createBridgeCurveSupportsDifferentEndpointContinuityLevels() throws {
@@ -740,30 +774,36 @@ import SwiftCAD
     ))) == false)
 }
 
-@Test func createBridgeCurveRejectsG3BeforeMutation() throws {
+/// G3 at a straight spline end fixes four control points on its line (zero curvature and
+/// zero curvature change); G2 at the other straight end fixes three.
+@Test func createBridgeCurveMeetsG3BetweenSplines() throws {
     let setup = try bridgeCurveTwoSplineDocument()
     var document = setup.document
 
-    do {
-        try document.createBridgeCurve(
-            featureID: setup.featureID,
-            firstEndpoint: BridgeCurveEndpoint(
-                reference: .splineControlPoint(entity: setup.firstSplineID, index: 3)
-            ),
-            secondEndpoint: BridgeCurveEndpoint(
-                reference: .splineControlPoint(entity: setup.secondSplineID, index: 0)
-            ),
-            continuity: BridgeCurveContinuity(first: .g3, second: .g2)
-        )
-        Issue.record("Bridge Curve must reject G3 until a persistent G3 constraint exists.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("G3"))
-    }
+    let bridgeID = try document.createBridgeCurve(
+        featureID: setup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(
+            reference: .splineControlPoint(entity: setup.firstSplineID, index: 3)
+        ),
+        secondEndpoint: BridgeCurveEndpoint(
+            reference: .splineControlPoint(entity: setup.secondSplineID, index: 0)
+        ),
+        continuity: BridgeCurveContinuity(first: .g3, second: .g2)
+    )
 
     let sketch = try #require(bridgeCurveSketch(in: document, featureID: setup.featureID))
-    #expect(sketch.entities.count == 2)
-    #expect(document.productMetadata.bridgeCurveSources.isEmpty)
+    let source = try #require(document.productMetadata.bridgeCurveSources.values.first)
+    #expect(source.continuity == BridgeCurveContinuity(first: .g3, second: .g2))
+    guard case .spline(let spline) = try #require(sketch.entities[bridgeID]) else {
+        Issue.record("Bridge curve should create a spline entity.")
+        return
+    }
+    #expect(spline.degree == 6)
+    let points = try spline.controlPoints.map { try bridgeCurveResolvedPoint($0, in: document) }
+    #expect(points.count == 7)
+    #expect(points[0...3].allSatisfy { abs($0.y) <= 1e-12 })
+    #expect(points[4...6].allSatisfy { abs($0.y - 0.003) <= 1e-12 })
+    #expect(zip(points[0...3], points[1...3]).allSatisfy { $0.x < $1.x })
 }
 
 /// Trim is a toggle: turning it off puts the trimmed curves back and rejoins the untrimmed ends,
