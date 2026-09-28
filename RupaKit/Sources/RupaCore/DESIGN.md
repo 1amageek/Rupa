@@ -973,6 +973,24 @@ points around it that shaped the joint go, so the curve stops passing through it
 by design; ends, non-joints and references to the removed points refuse.
 `SketchCurveDegreeTests` own these.
 
+### Align Vertex continuity and Parameter
+
+`alignSketchVertex` holds G0 as a coincidence and G1/G2 as the sketch constraint
+that expresses them where one exists (line–line parallel, line–arc tangency,
+spline end tangency and smoothness). Where none does (arc–arc, arc–spline,
+line–spline G1, any G2 but spline–spline), the target end is aligned once to the
+reference end's frame (`alignEnd`): a spline's handle along the tangent and, for
+G2, its next point from the clamped end conditions (`SplineEndScale`); a line
+turned about the end; an arc re-centred keeping its sweep, taking the curvature's
+radius for G2 and refusing a reference that bends against its counterclockwise
+turn. The target leaves the point the way the reference goes on past its end.
+With a Parameter the reference is a curve: the end moves to the point at that
+fraction of its parameter (through a fixed helper point, so every constraint on
+the target follows) and takes its frame there, the way the end already leaves;
+no sketch reference names a point inside a curve, so this alignment is made once.
+Bridge Curves are refused as targets of a one-time alignment.
+`SketchVertexAlignmentFrameTests` own these.
+
 The constraint propagator reads a spline end through the clamped end conditions
 of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −
 (P1 − P0)/Δ1) in that end's frame (the reversed curve's start at the end), and

@@ -29,6 +29,23 @@ import Testing
     #expect(operationState.canProject)
 }
 
+/// A curve end with another whole curve selected aligns to that curve at a Parameter.
+@MainActor
+@Test func workspaceSketchEntityInspectorStateBuilderTakesAWholeCurveAsTheAlignParameterReference() async throws {
+    let fixture = try workspaceSketchEntityInspectorFixture()
+    let referenceCurve = try #require(fixture.referenceLine.selectionTarget())
+    let selectedStart = try pointHandleSelectionTarget(fixture.selectedLine, handle: .lineStart)
+    let builder = WorkspaceSketchEntityInspectorStateBuilder(
+        document: fixture.document,
+        selection: SelectionModel(selectedTargets: [referenceCurve, selectedStart]),
+        displayUnit: .millimeter,
+        objectRegistry: .builtIn
+    )
+    let entity = try #require(try builder.selectedEntity())
+    #expect(builder.vertexAlignmentReferenceTarget(for: entity) == referenceCurve)
+    #expect(builder.vertexAlignmentReferenceIsCurve(for: entity))
+}
+
 @MainActor
 @Test func workspaceSketchEntityInspectorStateBuilderKeepsWholeCurveSelectionForJoinAndCut() async throws {
     let fixture = try workspaceSketchEntityInspectorFixture()

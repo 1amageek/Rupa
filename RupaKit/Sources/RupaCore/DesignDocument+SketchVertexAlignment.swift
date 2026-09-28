@@ -14,6 +14,10 @@ extension DesignDocument {
             for: target,
             role: "target"
         )
+        if let parameter = options.referenceParameter {
+            try alignSketchVertex(targetPoint, toCurve: reference, at: parameter, options: options, objectRegistry: objectRegistry)
+            return
+        }
         let referencePoint = try sketchVertexAlignmentPoint(
             for: reference,
             role: "reference"
@@ -57,12 +61,20 @@ extension DesignDocument {
             )
         }
 
-        if options.continuity != .g0 {
-            let continuityConstraint = try sketchVertexAlignmentContinuityConstraint(
-                target: targetPoint,
-                reference: referencePoint,
-                continuity: options.continuity
-            )
+        if options.continuity != .g0,
+           try sketchVertexAlignmentContinuityConstraint(target: targetPoint, reference: referencePoint, continuity: options.continuity) == nil {
+            // No sketch constraint holds this continuity between these curves: the target end is
+            // aligned to the reference end's tangent and curvature once, its position still held.
+            guard let frame = try sketchAlignmentFrame(atEnd: referencePoint.reference, in: sketch) else {
+                throw unsupportedSketchVertexAlignmentContinuity("G1 and G2 need a reference curve end.")
+            }
+            try alignEnd(targetPoint, to: frame, continuity: options.continuity, handleDistance: options.targetContinuityDistance, in: &sketch, pointPropagator: pointPropagator)
+        } else if options.continuity != .g0,
+                  let continuityConstraint = try sketchVertexAlignmentContinuityConstraint(
+                      target: targetPoint,
+                      reference: referencePoint,
+                      continuity: options.continuity
+                  ) {
             try validateSketchConstraintOnBridgeCurves(
                 continuityConstraint,
                 featureID: targetPoint.featureID,
@@ -195,12 +207,6 @@ extension DesignDocument {
     private func validateSketchVertexAlignmentOptionsSupported(
         _ options: SketchVertexAlignmentOptions
     ) throws {
-        if options.referenceParameter != nil {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Align Vertex reference parameter support requires curve-parameter source targeting that is not implemented yet."
-            )
-        }
         if (options.targetContinuityDistance != nil || options.referenceContinuityDistance != nil) &&
             options.continuity == .g0 {
             throw EditorError(
@@ -413,11 +419,13 @@ extension DesignDocument {
         }
     }
 
+    /// The sketch constraint that holds `continuity` between the two ends, or nil when none
+    /// expresses it for these curves (their ends are then aligned once by `alignEnd`).
     private func sketchVertexAlignmentContinuityConstraint(
         target: SketchVertexAlignmentPoint,
         reference: SketchVertexAlignmentPoint,
         continuity: SketchVertexAlignmentContinuity
-    ) throws -> SketchConstraint {
+    ) throws -> SketchConstraint? {
         switch continuity {
         case .g0:
             return .coincident(reference.reference, target.reference)
@@ -469,9 +477,7 @@ extension DesignDocument {
                  (.circular, .circular),
                  (.circular, .spline),
                  (.spline, .circular):
-                throw unsupportedSketchVertexAlignmentContinuity(
-                    "G1 continuity currently supports target line to reference line or arc, target arc to reference line, target spline endpoint to reference line, and target spline endpoint to reference spline endpoint."
-                )
+                return nil
             }
         case .g2:
             guard let targetEndpoint = target.endpoint,
@@ -493,11 +499,182 @@ extension DesignDocument {
                  (.circular, _),
                  (.spline, .line),
                  (.spline, .circular):
-                throw unsupportedSketchVertexAlignmentContinuity(
-                    "G2 continuity currently requires target and reference spline endpoints."
-                )
+                return nil
             }
         }
+    }
+
+    /// Where and how a reference curve runs at the point a target end aligns to: its point, unit
+    /// tangent, curvature vector (direction-free) and, at a curve end, the direction pointing past
+    /// that end.
+    private struct SketchAlignmentFrame {
+        var point: Point2D
+        var tangent: Point2D
+        var curvatureVector: Point2D
+        var outgoing: Point2D?
+    }
+
+    private func sketchAlignmentFrame(atEnd reference: SketchReference, in sketch: Sketch) throws -> SketchAlignmentFrame? {
+        guard let sample = try SketchCurveEndpointResolver().sample(for: reference, sketch: sketch, document: self) else {
+            return nil
+        }
+        return SketchAlignmentFrame(
+            point: sample.sample.point,
+            tangent: sample.sample.tangent,
+            curvatureVector: Point2D(x: sample.sample.curvature * sample.sample.normal.x, y: sample.sample.curvature * sample.sample.normal.y),
+            outgoing: sample.outgoingTangent
+        )
+    }
+
+    /// Align Vertex with a Parameter: the target end moves to the point at `parameter` (the
+    /// fraction over the reference curve's parameter, so 0.5 is not always its middle) and, for
+    /// G1 or G2, takes the curve's tangent and curvature there. No sketch reference names a point
+    /// inside a curve, so the alignment is made once and not held.
+    private mutating func alignSketchVertex(
+        _ targetPoint: SketchVertexAlignmentPoint,
+        toCurve reference: SelectionTarget,
+        at parameter: CADExpression,
+        options: SketchVertexAlignmentOptions,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let owner = "Align Vertex"
+        guard case .sketchEntity(let componentID) = reference.component,
+              let curve = componentID.sketchEntityReference,
+              componentID.sketchPointHandleReference == nil,
+              componentID.sketchControlPointReference == nil else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) with a Parameter takes a reference curve.")
+        }
+        guard curve.featureID == targetPoint.featureID, curve.entityID != targetPoint.entityID else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) aligns to another curve of the same sketch.")
+        }
+        try validateNotGeneratedBridgeCurve(featureID: targetPoint.featureID, entityID: targetPoint.entityID, operationName: owner)
+        var sketch = targetPoint.sketch
+        guard let sample = try SketchCurveEndpointResolver().sample(
+            for: BridgeCurveEndpoint(reference: .entity(curve.entityID), parameter: parameter),
+            sketch: sketch,
+            document: self
+        ) else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) aligns to a line, arc or spline.")
+        }
+        let frame = SketchAlignmentFrame(
+            point: sample.sample.point,
+            tangent: sample.sample.tangent,
+            curvatureVector: Point2D(x: sample.sample.curvature * sample.sample.normal.x, y: sample.sample.curvature * sample.sample.normal.y),
+            outgoing: nil
+        )
+        let pointPropagator = SketchPointConstraintPropagator(parameters: cadDocument.parameters)
+        // Moved as a coincidence with a fixed point there would move it, through every constraint
+        // on the target; the helper point and its constraints then go.
+        let helperID = SketchEntityID()
+        let helper = SketchReference.entity(helperID)
+        sketch.entities[helperID] = .point(sketchPoint(x: frame.point.x, y: frame.point.y))
+        sketch.constraints.append(.fixed(helper))
+        try pointPropagator.satisfyAddingConstraint(.coincident(helper, targetPoint.reference), in: &sketch, owner: owner)
+        sketch.constraints.removeAll { $0 == .fixed(helper) || $0 == .coincident(helper, targetPoint.reference) }
+        sketch.entities[helperID] = nil
+        if options.continuity != .g0 {
+            try alignEnd(targetPoint, to: frame, continuity: options.continuity, handleDistance: options.targetContinuityDistance, in: &sketch, pointPropagator: pointPropagator)
+        }
+        var feature = targetPoint.feature
+        try commitSketchEntityEdit(featureID: targetPoint.featureID, feature: &feature, sketch: sketch, objectRegistry: objectRegistry, errorOwner: owner)
+    }
+
+    /// Gives the target end the reference's tangent (G1) and curvature (G2) at `frame`, once: a
+    /// spline's handle along the tangent and, for G2, its next point from the clamped end
+    /// conditions; a line turned about the end; an arc re-centred keeping its sweep (and, for G2,
+    /// taking the curvature's radius). The target leaves the point the way the reference goes on
+    /// past its end, or, inside a curve, the way the target already leaves.
+    private func alignEnd(
+        _ target: SketchVertexAlignmentPoint,
+        to frame: SketchAlignmentFrame,
+        continuity: SketchVertexAlignmentContinuity,
+        handleDistance: CADExpression?,
+        in sketch: inout Sketch,
+        pointPropagator: SketchPointConstraintPropagator
+    ) throws {
+        let owner = "Align Vertex"
+        try validateNotGeneratedBridgeCurve(featureID: target.featureID, entityID: target.entityID, operationName: owner)
+        guard let endpoint = target.endpoint,
+              let current = try SketchCurveEndpointResolver().sample(for: target.reference, sketch: sketch, document: self) else {
+            throw unsupportedSketchVertexAlignmentContinuity("G1 and G2 need a target curve end.")
+        }
+        let point = current.sample.point
+        let inward: Point2D
+        if let outgoing = frame.outgoing {
+            inward = outgoing
+        } else {
+            let currentInward = Point2D(x: -current.outgoingTangent.x, y: -current.outgoingTangent.y)
+            let sign: Double = currentInward.x * frame.tangent.x + currentInward.y * frame.tangent.y >= 0 ? 1 : -1
+            inward = Point2D(x: sign * frame.tangent.x, y: sign * frame.tangent.y)
+        }
+        let k = frame.curvatureVector
+        let curvature = hypot(k.x, k.y)
+        switch endpoint {
+        case .spline(let reference):
+            guard case .spline(var spline) = sketch.entities[reference.splineID] else { return }
+            let count = spline.controlPoints.count
+            let (handle, next) = reference.endpoint == .start ? (1, 2) : (count - 2, count - 3)
+            let handlePoint = try resolvedPoint(.splineControlPoint(entity: reference.splineID, index: handle), in: sketch, owner: owner)
+            guard let handlePoint else { return }
+            let length = try handleDistance.map { try resolvedPositiveLengthValue($0, owner: "\(owner) continuity distance") }
+                ?? hypot(handlePoint.x - point.x, handlePoint.y - point.y)
+            let p1 = Point2D(x: point.x + inward.x * length, y: point.y + inward.y * length)
+            spline.controlPoints[handle] = sketchPoint(x: p1.x, y: p1.y)
+            if continuity == .g2 {
+                guard spline.degree >= 2, next != handle, next > 0, next < count - 1 else {
+                    throw unsupportedSketchVertexAlignmentContinuity("G2 needs a spline of degree 2 or more with room for its curvature point.")
+                }
+                let scale = try SketchPointConstraintPropagator.SplineEndScale(spline: spline, endpoint: reference.endpoint)
+                let firstDerivative = Point2D(x: scale.a * (p1.x - point.x), y: scale.a * (p1.y - point.y))
+                let speedSquared = firstDerivative.x * firstDerivative.x + firstDerivative.y * firstDerivative.y
+                let second = Point2D(x: speedSquared * k.x, y: speedSquared * k.y)
+                let p2 = Point2D(
+                    x: p1.x + scale.delta2 * (second.x / scale.b + (p1.x - point.x) / scale.delta1),
+                    y: p1.y + scale.delta2 * (second.y / scale.b + (p1.y - point.y) / scale.delta1)
+                )
+                spline.controlPoints[next] = sketchPoint(x: p2.x, y: p2.y)
+            }
+            try validateSplineForm(spline, owner: owner)
+            sketch.entities[reference.splineID] = .spline(spline)
+        case .line(let lineID):
+            guard case .line(var line) = sketch.entities[lineID] else { return }
+            if continuity == .g2, curvature > 1.0e-9 {
+                throw unsupportedSketchVertexAlignmentContinuity("G2 on a line needs a straight reference there.")
+            }
+            let start = try resolvedSketchPoint(line.start, owner: owner), end = try resolvedSketchPoint(line.end, owner: owner)
+            let length = hypot(end.x - start.x, end.y - start.y)
+            let far = sketchPoint(x: point.x + inward.x * length, y: point.y + inward.y * length)
+            if case .lineStart = target.reference { line.end = far } else { line.start = far }
+            sketch.entities[lineID] = .line(line)
+        case .circular(let arcID):
+            guard case .arc(var arc) = sketch.entities[arcID] else {
+                throw unsupportedSketchVertexAlignmentContinuity("G1 and G2 need an arc end.")
+            }
+            let isStart: Bool
+            if case .arcStart = target.reference { isStart = true } else { isStart = false }
+            let startAngle = try resolvedAngleValue(arc.startAngle, owner: owner)
+            let endAngle = try resolvedAngleValue(arc.endAngle, owner: owner)
+            let sweep = positiveArcSpan(startAngle: startAngle, endAngle: endAngle)
+            // An arc runs counterclockwise: at its start it travels inward, at its end against it,
+            // and its center lies to the left of its travel.
+            let travel = isStart ? inward : Point2D(x: -inward.x, y: -inward.y)
+            let left = Point2D(x: -travel.y, y: travel.x)
+            var radius = try resolvedPositiveLengthValue(arc.radius, owner: owner)
+            if continuity == .g2 {
+                guard curvature > 1.0e-9, k.x * left.x + k.y * left.y > 0 else {
+                    throw unsupportedSketchVertexAlignmentContinuity("G2 on an arc needs the reference to bend the way the arc turns.")
+                }
+                radius = 1 / curvature
+            }
+            let center = Point2D(x: point.x + left.x * radius, y: point.y + left.y * radius)
+            let angle = atan2(point.y - center.y, point.x - center.x)
+            arc.center = sketchPoint(x: center.x, y: center.y)
+            arc.radius = .length(radius, .meter)
+            arc.startAngle = .angle(isStart ? angle : angle - sweep, .radian)
+            arc.endAngle = .angle(isStart ? angle + sweep : angle, .radian)
+            sketch.entities[arcID] = .arc(arc)
+        }
+        try pointPropagator.propagate(from: target.reference, in: &sketch, owner: owner)
     }
 
     /// The solver treats `.left` as the circle center lying on the positive

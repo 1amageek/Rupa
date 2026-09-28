@@ -15,6 +15,8 @@ struct WorkspaceSketchCurveOperationControlsView: View {
     @Binding var vertexAlignmentContinuity: SketchVertexAlignmentContinuity
     /// The G1/G2 continuity distance both aligned ends take, or `nil` to keep their control points.
     @Binding var vertexAlignmentDistanceMeters: Double?
+    /// The Parameter on the reference curve the end is placed at, when the reference is a curve.
+    var vertexAlignmentParameter: Binding<Double>?
     var sliderMetersRange: (Double) -> ClosedRange<Double>
     var onExtend: (SelectionTarget, ExtendCurveShape) -> Void
     var onOffsetVertex: (InspectorSketchEntity) -> Void
@@ -72,6 +74,16 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             .labelsHidden()
             .pickerStyle(.segmented)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignContinuity")
+        }
+        if let parameter = vertexAlignmentParameter {
+            numericControl(
+                "Parameter",
+                values: [parameter.wrappedValue],
+                sliderRange: 0.0 ... 1.0
+            ) { value in
+                parameter.wrappedValue = min(max(value, 0.0), 1.0)
+            }
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignParameter")
         }
         if vertexAlignmentContinuity != .g0 {
             inspectorControlRow("Distance") {

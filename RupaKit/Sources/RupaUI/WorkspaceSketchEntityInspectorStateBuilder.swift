@@ -274,10 +274,36 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
             }
             return isVertexAlignmentTarget(target, entityKind: entityKind)
         }
-        guard referenceTargets.count == 1 else {
+        if referenceTargets.count == 1 {
+            return referenceTargets.first
+        }
+        guard referenceTargets.isEmpty else {
             return nil
         }
-        return referenceTargets.first
+        // With no reference vertex, one other curve is the reference Align Vertex places the end
+        // on at a Parameter.
+        let referenceCurves = selection.selectedTargets.filter { target in
+            guard target != entity.target,
+                  case .sketchEntity(let componentID) = target.component,
+                  let reference = componentID.sketchEntityReference,
+                  componentID.sketchPointHandleReference == nil,
+                  componentID.sketchControlPointReference == nil,
+                  reference.entityID != entity.entityID,
+                  let kind = baseEntityKind(for: target) else {
+                return false
+            }
+            return ["line", "arc", "spline"].contains(kind)
+        }
+        return referenceCurves.count == 1 ? referenceCurves.first : nil
+    }
+
+    /// Whether Align Vertex's reference is a whole curve, which takes a Parameter.
+    func vertexAlignmentReferenceIsCurve(for entity: InspectorSketchEntity) -> Bool {
+        guard let reference = vertexAlignmentReferenceTarget(for: entity),
+              case .sketchEntity(let componentID) = reference.component else {
+            return false
+        }
+        return componentID.sketchPointHandleReference == nil && componentID.sketchControlPointReference == nil
     }
 
     func curveProjectionTargets(for entity: InspectorSketchEntity) -> [SelectionTarget] {

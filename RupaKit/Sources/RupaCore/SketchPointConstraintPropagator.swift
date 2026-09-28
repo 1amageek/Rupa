@@ -53,7 +53,8 @@ struct SketchPointConstraintPropagator: Sendable {
     /// curve's start at the end): C′ = a·(P1 − P0) and
     /// C″ = b·((P2 − P1)/delta2 − (P1 − P0)/delta1), with P0 the end, P1 its handle and P2 its
     /// curvature point. A cubic chain of unit spans has a = 3, b = 6 and unit deltas.
-    private struct SplineEndScale: Sendable {
+    /// The clamped end conditions of a spline end: C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 − (P1 − P0)/Δ1).
+    struct SplineEndScale: Sendable {
         var a: Double
         var b: Double
         var delta1: Double

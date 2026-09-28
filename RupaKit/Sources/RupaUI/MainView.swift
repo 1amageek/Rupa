@@ -214,6 +214,7 @@ private struct ProjectMainViewContent: View {
     @State private var sketchCurveJoinContinuity: SketchCurveJoinContinuity
     @State private var sketchVertexAlignmentContinuity: SketchVertexAlignmentContinuity
     @State private var sketchVertexAlignmentDistanceMeters: Double?
+    @State private var sketchVertexAlignmentParameter: Double = 0.5
     @State private var regionOffsetDistanceMeters: Double
     @State private var regionOffsetGapFill: OffsetCurveGapFill
     @State private var regionOffsetCommandState: RegionOffsetCommandState
@@ -9987,6 +9988,8 @@ private struct ProjectMainViewContent: View {
             joinContinuity: $sketchCurveJoinContinuity,
             vertexAlignmentContinuity: $sketchVertexAlignmentContinuity,
             vertexAlignmentDistanceMeters: $sketchVertexAlignmentDistanceMeters,
+            vertexAlignmentParameter: sketchEntityInspectorStateBuilder.vertexAlignmentReferenceIsCurve(for: entity)
+                ? $sketchVertexAlignmentParameter : nil,
             sliderMetersRange: { meters in
                 lengthSliderMetersRange(for: meters)
             },
@@ -12317,6 +12320,8 @@ private struct ProjectMainViewContent: View {
                 reference: referenceTarget,
                 options: SketchVertexAlignmentOptions(
                     continuity: sketchVertexAlignmentContinuity,
+                    referenceParameter: sketchEntityInspectorStateBuilder.vertexAlignmentReferenceIsCurve(for: entity)
+                        ? .scalar(sketchVertexAlignmentParameter) : nil,
                     targetContinuityDistance: sketchVertexAlignmentContinuity == .g0
                         ? nil : sketchVertexAlignmentDistanceMeters.map { .length($0, .meter) },
                     referenceContinuityDistance: sketchVertexAlignmentContinuity == .g0

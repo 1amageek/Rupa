@@ -410,7 +410,8 @@ import Testing
 }
 
 @MainActor
-@Test func alignSketchVertexRejectsUnsupportedReferenceParameterBeforeMutation() async throws {
+/// A Parameter places the end on a reference curve, so a reference vertex is refused.
+@Test func alignSketchVertexRejectsAParameterOnAReferenceVertexBeforeMutation() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createLineSketch(
@@ -434,10 +435,10 @@ import Testing
                 )
             )
         )
-        Issue.record("Align Vertex reference parameter must fail before mutation.")
+        Issue.record("Align Vertex with a Parameter on a vertex must fail before mutation.")
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("reference parameter"))
+        #expect(error.message.contains("reference curve"))
     }
 
     let after = try SketchEntitySnapshotService().snapshot(document: session.document)

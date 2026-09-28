@@ -613,7 +613,9 @@ Delete Redundant Topology (Edit menu, palette) submits one
 Align Vertex (Edit menu, palette) aligns the selected curve end with the other
 selected end at the inspector's continuity; with two alignable ends selected, Tab
 steps that continuity G0 → G1 → G2 → G0 (a selected Bridge Curve keeps Tab for
-its own continuity).
+its own continuity). With a whole curve selected as the reference instead of an end,
+the inspector shows a Parameter (0 to 1 over that curve's parameter) and the end
+is placed there.
 
 Reverse Curve (Edit menu, palette) reverses every selected sketch curve as one
 step through `reverseSketchCurve`; Core refuses the step when one of them has no
