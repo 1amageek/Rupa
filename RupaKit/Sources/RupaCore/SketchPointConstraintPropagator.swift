@@ -46,6 +46,41 @@ struct SketchPointConstraintPropagator: Sendable {
         var endpointReference: SketchReference
         var handleReference: SketchReference
         var curvatureReference: SketchReference
+        var scale: SplineEndScale
+    }
+
+    /// The clamped end conditions of one spline end, read in that end's own frame (the reversed
+    /// curve's start at the end): C′ = a·(P1 − P0) and
+    /// C″ = b·((P2 − P1)/delta2 − (P1 − P0)/delta1), with P0 the end, P1 its handle and P2 its
+    /// curvature point. A cubic chain of unit spans has a = 3, b = 6 and unit deltas.
+    private struct SplineEndScale: Sendable {
+        var a: Double
+        var b: Double
+        var delta1: Double
+        var delta2: Double
+
+        init(spline: SketchSpline, endpoint: SketchSplineEndpoint) throws {
+            try spline.validateForm()
+            guard spline.degree >= 2, spline.controlPoints.count >= 3, var knots = spline.knotVector else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Spline end conditions need a spline of degree 2 or more with three control points."
+                )
+            }
+            if endpoint == .end {
+                let lower = knots[0], upper = knots[knots.count - 1]
+                knots = knots.reversed().map { lower + upper - $0 }
+            }
+            let p = Double(spline.degree), d = spline.degree
+            delta1 = knots[d + 1] - knots[1]
+            delta2 = knots[d + 2] - knots[2]
+            let curvatureSpan = knots[d + 1] - knots[2]
+            guard delta1 > 0, delta2 > 0, curvatureSpan > 0 else {
+                throw EditorError(code: .commandInvalid, message: "Spline end conditions need knot spans of positive length.")
+            }
+            a = p / delta1
+            b = p * (p - 1) / curvatureSpan
+        }
     }
 
     private struct TangentSplineEndpointPairReferences: Sendable {
@@ -2154,26 +2189,29 @@ struct SketchPointConstraintPropagator: Sendable {
         }
     }
 
+    /// A spline of any degree and knots whose Bezier segments do not collapse to a point.
     private func validateSpline(_ spline: SketchSpline, owner: String) throws {
-        let count = spline.controlPoints.count
-        guard count >= 4, (count - 1).isMultiple(of: 3) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) spline control point count must be 3n + 1 and at least 4."
-            )
+        do {
+            try spline.validateForm()
+        } catch let error as SketchError {
+            throw EditorError(code: .commandInvalid, message: "\(owner) spline: \(error)")
         }
-        let points = try spline.controlPoints.map { point in
-            try resolvedPoint(point, owner: owner)
+        let points = try spline.controlPoints.map { point -> CADCore.Point2D in
+            let resolved = try resolvedPoint(point, owner: owner)
+            return CADCore.Point2D(x: resolved.x, y: resolved.y)
         }
-        for segmentIndex in stride(from: 0, to: points.count - 1, by: 3) {
-            let start = points[segmentIndex]
-            let end = points[segmentIndex + 3]
-            let deltaX = end.x - start.x
-            let deltaY = end.y - start.y
-            guard sqrt(deltaX * deltaX + deltaY * deltaY) > tolerance else {
+        let curve: SketchSplineCurve
+        do {
+            curve = try SketchSplineCurve(spline: spline, controlPoints: points, tolerance: .standard)
+        } catch let error as SketchError {
+            throw EditorError(code: .commandInvalid, message: "\(owner) spline: \(error)")
+        }
+        for (index, segment) in curve.segments.enumerated() {
+            let start = segment.controlPoints[0], end = segment.controlPoints[segment.controlPoints.count - 1]
+            guard hypot(end.x - start.x, end.y - start.y) > tolerance else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "\(owner) spline cubic segment \(segmentIndex / 3) must not collapse to a point."
+                    message: "\(owner) spline segment \(index) must not collapse to a point."
                 )
             }
         }
@@ -2433,8 +2471,9 @@ struct SketchPointConstraintPropagator: Sendable {
         }
         guard let entity = sketch.entities[entityID],
               case let .spline(spline) = entity,
+              spline.isBezierChain,
               index < spline.controlPoints.count - 1,
-              index.isMultiple(of: 3) else {
+              index.isMultiple(of: spline.degree) else {
             throw invalidSmoothSplineControlPointConstraint(owner)
         }
         return SmoothSplineControlPointReferences(
@@ -2593,12 +2632,13 @@ struct SketchPointConstraintPropagator: Sendable {
     ) throws -> TangentSplineEndpointReferences {
         guard let entity = sketch.entities[reference.splineID],
               case let .spline(spline) = entity,
-              spline.controlPoints.count >= 4 else {
+              spline.controlPoints.count >= 3 else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "\(owner) tangent spline endpoints constraint requires spline entities."
             )
         }
+        let scale = try SplineEndScale(spline: spline, endpoint: reference.endpoint)
         let endpointReference: SketchReference
         let handleReference: SketchReference
         let curvatureReference: SketchReference
@@ -2616,7 +2656,8 @@ struct SketchPointConstraintPropagator: Sendable {
             endpoint: reference,
             endpointReference: endpointReference,
             handleReference: handleReference,
-            curvatureReference: curvatureReference
+            curvatureReference: curvatureReference,
+            scale: scale
         )
     }
 
@@ -2677,8 +2718,8 @@ struct SketchPointConstraintPropagator: Sendable {
         guard pointsDiffer(firstEndpoint, secondEndpoint) == false else {
             return false
         }
-        let firstVector = try tangentSplineEndpointVector(pair.first, in: sketch, owner: owner)
-        let secondVector = try tangentSplineEndpointVector(pair.second, in: sketch, owner: owner)
+        let firstVector = try splineEndpointFirstDerivative(pair.first, in: sketch, owner: owner)
+        let secondVector = try splineEndpointFirstDerivative(pair.second, in: sketch, owner: owner)
         guard pointsDiffer(firstVector, secondVector) == false else {
             return false
         }
@@ -2762,10 +2803,21 @@ struct SketchPointConstraintPropagator: Sendable {
         let endpointPoint = try point(for: references.endpointReference, in: sketch, owner: owner)
         let handlePoint = try point(for: references.handleReference, in: sketch, owner: owner)
         let curvaturePoint = try point(for: references.curvatureReference, in: sketch, owner: owner)
+        let scale = references.scale
         return Point(
-            x: endpointPoint.x - 2.0 * handlePoint.x + curvaturePoint.x,
-            y: endpointPoint.y - 2.0 * handlePoint.y + curvaturePoint.y
+            x: scale.b * ((curvaturePoint.x - handlePoint.x) / scale.delta2 - (handlePoint.x - endpointPoint.x) / scale.delta1),
+            y: scale.b * ((curvaturePoint.y - handlePoint.y) / scale.delta2 - (handlePoint.y - endpointPoint.y) / scale.delta1)
         )
+    }
+
+    /// C′ at the end along the curve's parameter: the end's leg scaled by its degree and knots.
+    private func splineEndpointFirstDerivative(
+        _ references: TangentSplineEndpointReferences,
+        in sketch: Sketch,
+        owner: String
+    ) throws -> Point {
+        let vector = try tangentSplineEndpointVector(references, in: sketch, owner: owner)
+        return Point(x: vector.x * references.scale.a, y: vector.y * references.scale.a)
     }
 
     private func alignedSplineEndpointHandlePoint(
@@ -3132,18 +3184,20 @@ struct SketchPointConstraintPropagator: Sendable {
         in sketch: Sketch,
         owner: String
     ) throws -> Point {
+        // The target's leg that gives it the source's C′: P1 = P0 ± C′ / a.
         let targetEndpointPoint = try point(for: target.endpointReference, in: sketch, owner: owner)
-        let sourceVector = try tangentSplineEndpointVector(source, in: sketch, owner: owner)
+        let sourceDerivative = try splineEndpointFirstDerivative(source, in: sketch, owner: owner)
+        let leg = Point(x: sourceDerivative.x / target.scale.a, y: sourceDerivative.y / target.scale.a)
         switch target.endpoint.endpoint {
         case .start:
             return Point(
-                x: targetEndpointPoint.x + sourceVector.x,
-                y: targetEndpointPoint.y + sourceVector.y
+                x: targetEndpointPoint.x + leg.x,
+                y: targetEndpointPoint.y + leg.y
             )
         case .end:
             return Point(
-                x: targetEndpointPoint.x - sourceVector.x,
-                y: targetEndpointPoint.y - sourceVector.y
+                x: targetEndpointPoint.x - leg.x,
+                y: targetEndpointPoint.y - leg.y
             )
         }
     }
@@ -3161,9 +3215,14 @@ struct SketchPointConstraintPropagator: Sendable {
             in: sketch,
             owner: owner
         )
+        // The target's curvature point that gives it the source's C″, in the target end's frame:
+        // P2 = P1 + delta2·(C″ / b + (P1 − P0) / delta1).
+        let scale = target.scale
         return Point(
-            x: sourceSecondDerivative.x - targetEndpointPoint.x + 2.0 * targetHandlePoint.x,
-            y: sourceSecondDerivative.y - targetEndpointPoint.y + 2.0 * targetHandlePoint.y
+            x: targetHandlePoint.x + scale.delta2 * (sourceSecondDerivative.x / scale.b
+                + (targetHandlePoint.x - targetEndpointPoint.x) / scale.delta1),
+            y: targetHandlePoint.y + scale.delta2 * (sourceSecondDerivative.y / scale.b
+                + (targetHandlePoint.y - targetEndpointPoint.y) / scale.delta1)
         )
     }
 

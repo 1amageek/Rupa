@@ -943,6 +943,17 @@ a spline span by span calls `validateCubicBezierChainSpline`, which refuses any
 other degree or explicit knots by name until that command reads the general form
 (SK12.3). `GeneralSplineReadersTests` own the readers.
 
+The constraint propagator reads a spline end through the clamped end conditions
+of its own degree and knots, C′ = a·(P1 − P0) and C″ = b·((P2 − P1)/Δ2 −
+(P1 − P0)/Δ1) in that end's frame (the reversed curve's start at the end), and
+inverts them to place the handle and curvature points that match the other
+curve: tangent endpoints align C′, smooth endpoints match C′ and C″ (C2, which
+satisfies the kernel's G2). A cubic chain of unit spans has a = 3, b = 6 and unit
+spans, so its results are unchanged. Joint smoothness names an interior joint of a
+chain of any degree; a spline with explicit knots has no such joint. Moving and
+sliding control points take any form. `GeneralSplineConstraintPropagationTests`
+own these.
+
 ### Split Segment on a closed spline
 
 `splitSketchCurve(target:at:)` on a closed spline opens the loop where the point

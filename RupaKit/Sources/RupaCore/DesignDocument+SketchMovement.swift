@@ -266,7 +266,7 @@ extension DesignDocument {
             deltaXMeters: deltaXMeters,
             deltaYMeters: deltaYMeters
         )
-        try validateCubicBezierChainSpline(spline, owner: "Sketch spline")
+        try validateSplineForm(spline, owner: "Sketch spline")
         sketch.entities[selection.entityID] = .spline(spline)
         try pointPropagator.propagate(
             from: movedReference,
@@ -361,7 +361,7 @@ extension DesignDocument {
                 distance: distance
             )
         }
-        try validateCubicBezierChainSpline(spline, owner: "Sketch spline")
+        try validateSplineForm(spline, owner: "Sketch spline")
         sketch.entities[selection.entityID] = .spline(spline)
         for reference in movedReferences {
             try pointPropagator.propagate(
