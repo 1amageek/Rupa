@@ -156,6 +156,43 @@ import SwiftCAD
     #expect(abs(join.curvatureGap ?? -1.0) < 1.0e-12)
 }
 
+/// Two ends that meet along one tangent and bend by the same amount in opposite directions are
+/// G1: the curvature vectors differ even though the curvatures have the same size.
+@Test func curveAnalysisServiceTellsOppositeBendsApart() throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createSplineSketch(
+        name: "Opposite Bends",
+        plane: .xy,
+        spline: SketchSpline(controlPoints: [
+            curveAnalysisPoint(x: 0.000, y: 0.001),
+            curveAnalysisPoint(x: 0.001, y: 0.001),
+            curveAnalysisPoint(x: 0.002, y: 0.0),
+            curveAnalysisPoint(x: 0.003, y: 0.0),
+        ])
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let firstID = sketch.entities.keys.first else {
+        Issue.record("The spline sketch is missing.")
+        return
+    }
+    let secondID = SketchEntityID()
+    sketch.entities[secondID] = .spline(SketchSpline(controlPoints: [
+        curveAnalysisPoint(x: 0.003, y: 0.0),
+        curveAnalysisPoint(x: 0.004, y: 0.0),
+        curveAnalysisPoint(x: 0.005, y: -0.001),
+        curveAnalysisPoint(x: 0.006, y: -0.001),
+    ]))
+    sketch.constraints = [.coincident(.splineControlPoint(entity: firstID, index: 3), .splineControlPoint(entity: secondID, index: 0))]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+
+    let join = try #require(try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document, displayUnit: .millimeter).continuityJoins.first)
+    #expect(join.continuity == .g1)
+    #expect((join.curvatureGap ?? 0) > 1)
+}
+
 @Test func curveAnalysisResultDecodesMissingDisplayValues() throws {
     var document = DesignDocument.empty()
     _ = try document.createLineSketch(

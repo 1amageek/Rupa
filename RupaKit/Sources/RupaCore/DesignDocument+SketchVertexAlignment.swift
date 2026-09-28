@@ -37,6 +37,12 @@ extension DesignDocument {
             referencePoint.reference,
             targetPoint.reference
         )
+        try validateSketchConstraintOnBridgeCurves(
+            coincidentConstraint,
+            featureID: targetPoint.featureID,
+            sketch: sketch,
+            owner: "Align Vertex"
+        )
         if sketchAlignmentConstraintExists(coincidentConstraint, in: sketch.constraints) {
             try pointPropagator.propagate(
                 from: referencePoint.reference,
@@ -56,6 +62,12 @@ extension DesignDocument {
                 target: targetPoint,
                 reference: referencePoint,
                 continuity: options.continuity
+            )
+            try validateSketchConstraintOnBridgeCurves(
+                continuityConstraint,
+                featureID: targetPoint.featureID,
+                sketch: sketch,
+                owner: "Align Vertex"
             )
             if sketchAlignmentConstraintExists(continuityConstraint, in: sketch.constraints) == false {
                 try pointPropagator.satisfyAddingConstraint(

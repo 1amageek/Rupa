@@ -10,7 +10,8 @@ extension DesignDocument {
         errorOwner: String
     ) throws {
         var sketch = sketch
-        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch)
+        var metadata = productMetadata
+        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch, metadata: &metadata)
         feature.operation = .sketch(sketch)
         var updatedCADDocument = cadDocument
         do {
@@ -23,6 +24,7 @@ extension DesignDocument {
         }
 
         cadDocument = updatedCADDocument
+        productMetadata = metadata
         try synchronizeSketchObjectProperties(
             featureID: featureID,
             sketch: sketch,

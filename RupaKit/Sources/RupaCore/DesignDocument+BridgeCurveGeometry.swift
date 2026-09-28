@@ -124,105 +124,69 @@ extension DesignDocument {
         )
     }
 
-    /// Rebuilds every Bridge Curve of `featureID` from its sources' current geometry and
-    /// tensions, so a bridge keeps its continuity at every level whatever edit moved its sources.
-    /// The constraints the bridge owns are rewritten with it, since their last control point
-    /// index follows the regenerated degree. A bridge whose ends no longer resolve, or that its
-    /// sources can no longer take, fails the edit.
-    func regenerateBridgeCurves(featureID: FeatureID, sketch: inout Sketch) throws {
+    /// A Bridge Curve end's declared continuity and the continuity Swift-CAD measures between the
+    /// source and the bridge's own curve there.
+    struct BridgeEndContinuity: Sendable {
+        var bridgeReference: SketchReference
+        var sourceReference: SketchReference
+        var required: BridgeCurveEndpointContinuity
+        var achieved: CurveContinuityLevel?
+        var positionGap: Double
+        var tangentAngle: Double
+        var curvatureGap: Double
+    }
+
+    /// The continuity at each point-referenced end of the bridge `source` builds: required as the
+    /// source declares it, achieved as `CurveContinuityEvaluator` measures it on the exact source
+    /// curve and the stored bridge, G3 included.
+    func bridgeEndContinuities(source: BridgeCurveSource, sketch: Sketch) throws -> [BridgeEndContinuity] {
+        guard case .spline(let bridge) = sketch.entities[source.entityID] else {
+            throw EditorError(code: .referenceUnresolved, message: "Bridge curve source must point to a generated spline.")
+        }
         let resolver = SketchCurveEndpointResolver()
-        let sources = productMetadata.bridgeCurveSources.values
-            .filter { $0.featureID == featureID }
-            .sorted { $0.id.description < $1.id.description }
-        for source in sources {
-            guard case .spline(let previous) = sketch.entities[source.entityID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Bridge curve source must point to a generated spline."
-                )
-            }
-            guard let first = try resolver.sample(for: source.firstEndpoint, sketch: sketch, document: self),
-                  let second = try resolver.sample(for: source.secondEndpoint, sketch: sketch, document: self) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Bridge curve endpoints must resolve to line, arc, or spline curve positions."
-                )
-            }
-            let spline = try bridgeSpline(
-                first: first,
-                second: second,
-                continuity: source.continuity,
-                firstTension: source.firstEndpoint.tension,
-                secondTension: source.secondEndpoint.tension,
-                sketch: sketch
-            )
-            try validateSplineForm(spline, owner: "Bridge curve")
-            let previousConstraints = bridgeOwnedConstraints(
-                bridgeID: source.entityID,
-                lastControlPointIndex: previous.controlPoints.count - 1,
-                firstSample: first,
-                secondSample: second,
-                continuity: source.continuity
-            )
-            sketch.constraints.removeAll { previousConstraints.contains($0) }
-            sketch.entities[source.entityID] = .spline(spline)
-            for constraint in bridgeOwnedConstraints(
-                bridgeID: source.entityID,
-                lastControlPointIndex: spline.controlPoints.count - 1,
-                firstSample: first,
-                secondSample: second,
-                continuity: source.continuity
-            ) {
-                appendBridgeConstraint(constraint, to: &sketch)
-            }
-        }
-    }
-
-    /// Rebuilds the Bridge Curves of every sketch after a change outside any one sketch (a
-    /// document parameter can move a source or set a tension), replacing only the sketches whose
-    /// bridges changed.
-    mutating func regenerateAllBridgeCurves() throws {
-        let featureIDs = Set(productMetadata.bridgeCurveSources.values.map(\.featureID))
-            .sorted { $0.description < $1.description }
-        guard featureIDs.isEmpty == false else {
-            return
-        }
-        var updatedCADDocument = cadDocument
-        for featureID in featureIDs {
-            guard var feature = updatedCADDocument.designGraph.nodes[featureID],
-                  case .sketch(let sketch) = feature.operation else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Bridge curve sources must point to existing sketch features."
-                )
-            }
-            var regenerated = sketch
-            try regenerateBridgeCurves(featureID: featureID, sketch: &regenerated)
-            guard regenerated != sketch else {
-                continue
-            }
-            feature.operation = .sketch(regenerated)
-            do {
-                try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
-            } catch {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Bridge curve regeneration produced invalid sketch geometry: \(error)."
-                )
-            }
-        }
-        cadDocument = updatedCADDocument
-    }
-
-    /// A Bridge Curve is derived from its sources: an edit of its control points would be undone
-    /// by the next regeneration, so it is refused and the bridge is shaped by its parameters.
-    func validateNotGeneratedBridgeCurve(featureID: FeatureID, entityID: SketchEntityID, operationName: String) throws {
-        guard productMetadata.bridgeCurveSources.values.contains(where: {
-            $0.featureID == featureID && $0.entityID == entityID
-        }) == false else {
+        guard let first = try resolver.sample(for: source.firstEndpoint, sketch: sketch, document: self),
+              let second = try resolver.sample(for: source.secondEndpoint, sketch: sketch, document: self) else {
             throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) cannot edit a generated Bridge Curve; change its tensions or continuity instead."
+                code: .referenceUnresolved,
+                message: "Bridge curve endpoints must resolve to line, arc, or spline curve positions."
+            )
+        }
+        let planar = try resolvedSketchSplineCurve(bridge, owner: "Bridge curve")
+        let knots = planar.bSpline.knots
+        let curve = Curve3D.bSpline(BSplineCurve3D(
+            degree: planar.degree,
+            knots: knots,
+            controlPoints: planar.bSpline.controlPoints.map { Point3D(x: $0.x, y: $0.y, z: 0) }
+        ))
+        let arrival = CADCore.Point2D(x: -second.outgoingTangent.x, y: -second.outgoingTangent.y)
+        let ends: [(sample: SketchCurveEndpointSample, direction: CADCore.Point2D, continuity: BridgeCurveEndpointContinuity, parameter: Double, index: Int)] = [
+            (first, first.outgoingTangent, source.continuity.first, knots[0], 0),
+            (second, arrival, source.continuity.second, knots[knots.count - 1], bridge.controlPoints.count - 1),
+        ]
+        let evaluator = CurveContinuityEvaluator(modelingTolerance: .standard)
+        return try ends.compactMap { end in
+            guard let sourceReference = end.sample.pointReference else {
+                return nil
+            }
+            let result: CurveContinuityResult
+            do {
+                result = try evaluator.evaluate(CurveContinuityRequest(
+                    first: try bridgeContinuityTarget(end.sample, direction: end.direction, sketch: sketch),
+                    second: CurveContinuityTarget(curve: curve, parameter: end.parameter),
+                    requiredLevel: curveContinuityLevel(end.continuity),
+                    tolerances: .standard(modelingTolerance: .standard)
+                ))
+            } catch let error as KernelError {
+                throw EditorError(code: .evaluationFailed, message: "Bridge curve continuity: \(error.message)")
+            }
+            return BridgeEndContinuity(
+                bridgeReference: .splineControlPoint(entity: source.entityID, index: end.index),
+                sourceReference: sourceReference,
+                required: end.continuity,
+                achieved: result.achievedLevel,
+                positionGap: result.deviation.positionDistance,
+                tangentAngle: result.deviation.tangentAngle,
+                curvatureGap: result.deviation.curvatureVectorDistance
             )
         }
     }

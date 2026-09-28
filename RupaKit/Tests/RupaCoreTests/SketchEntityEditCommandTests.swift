@@ -7060,13 +7060,16 @@ import Testing
         .splineControlPoint(entity: source.entityID, index: 0),
         .lineStart(firstLineID)
     )))
-    #expect(updatedSketch.constraints.contains { constraint in
-        guard case .splineEndpointTangent(let tangency) = constraint else {
-            return false
-        }
-        return tangency.splineEndpoint == SketchSplineEndpointReference(splineID: source.entityID, endpoint: .start)
-            && tangency.line == firstLineID
-    })
+    // The reversed line's start is still the point the bridge leaves along +x: the regenerated
+    // bridge keeps its shape.
+    guard case .spline(let bridge) = updatedSketch.entities[source.entityID] else {
+        Issue.record("The bridge must remain a spline.")
+        return
+    }
+    let parameters = session.document.cadDocument.parameters
+    let second = try parameters.resolvedValue(for: bridge.controlPoints[1].x).value
+    #expect(abs(try parameters.resolvedValue(for: bridge.controlPoints[1].y).value) <= 1.0e-12)
+    #expect(second > 0.003)
     #expect(session.evaluationStatus == .valid)
 }
 

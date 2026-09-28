@@ -130,6 +130,7 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
                 end: controlPoints.last,
                 controlPoints: controlPoints,
                 smoothSplineControlPointIndexes: smoothIndexes,
+                splineJointIndexes: Set(spline.jointIndices),
                 tangentLineCandidates: try lineCandidates(in: sketch, excluding: reference.entityID),
                 tangentSplineEndpointCandidates: try splineEndpointCandidates(in: sketch, excluding: reference.entityID),
                 startTangentLineIDs: splineEndpointTangentLineIDs(

@@ -62,8 +62,7 @@ extension DesignDocument {
             bridgeID: bridgeID,
             lastControlPointIndex: spline.controlPoints.count - 1,
             firstSample: firstSample,
-            secondSample: secondSample,
-            continuity: continuity
+            secondSample: secondSample
         ) {
             appendBridgeConstraint(constraint, to: &sketch)
         }
@@ -164,14 +163,13 @@ extension DesignDocument {
                 message: "Bridge curve endpoints must resolve to line, arc, or spline curve positions."
             )
         }
-        let previousConstraints = bridgeOwnedConstraints(
+        removeBridgeOwnedConstraints(
             bridgeID: source.entityID,
             lastControlPointIndex: previousBridge.controlPoints.count - 1,
             firstSample: previousFirstSample,
             secondSample: previousSecondSample,
-            continuity: source.continuity
+            from: &sketch
         )
-        sketch.constraints.removeAll { previousConstraints.contains($0) }
         if untrims {
             try restoreBridgeCurveSources(of: &nextSource, in: &sketch)
         }
@@ -208,27 +206,8 @@ extension DesignDocument {
             )
         }
         try validateDistinctBridgeEndpointSamples(first: firstSample, second: secondSample)
-
-        let spline = try bridgeSpline(
-            first: firstSample,
-            second: secondSample,
-            continuity: resolvedNextSource.continuity,
-            firstTension: resolvedNextSource.firstEndpoint.tension,
-            secondTension: resolvedNextSource.secondEndpoint.tension,
-            sketch: sketch
-        )
-        try validateSplineForm(spline, owner: "Bridge curve")
-
-        sketch.entities[source.entityID] = .spline(spline)
-        for constraint in bridgeOwnedConstraints(
-            bridgeID: source.entityID,
-            lastControlPointIndex: spline.controlPoints.count - 1,
-            firstSample: firstSample,
-            secondSample: secondSample,
-            continuity: resolvedNextSource.continuity
-        ) {
-            appendBridgeConstraint(constraint, to: &sketch)
-        }
+        // The commit regenerates the bridge from the updated source: its spline, the constraints
+        // it owns and the references to its ends follow from the control points stored now.
 
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata
@@ -250,127 +229,15 @@ extension DesignDocument {
         didCommitBridgeCurveUpdate = true
     }
 
-    private func bridgeContinuityConstraints(
-        bridgeID: SketchEntityID,
-        first: SketchCurveEndpointSample,
-        second: SketchCurveEndpointSample,
-        continuity: BridgeCurveContinuity
-    ) -> [SketchConstraint] {
-        return bridgeEndpointContinuityConstraints(
-            bridgeID: bridgeID,
-            bridgeEndpoint: .start,
-            source: first,
-            continuity: continuity.first
-        ) + bridgeEndpointContinuityConstraints(
-            bridgeID: bridgeID,
-            bridgeEndpoint: .end,
-            source: second,
-            continuity: continuity.second
-        )
-    }
-
-    private func bridgeEndpointContinuityConstraints(
-        bridgeID: SketchEntityID,
-        bridgeEndpoint: SketchSplineEndpoint,
-        source: SketchCurveEndpointSample,
-        continuity: BridgeCurveEndpointContinuity
-    ) -> [SketchConstraint] {
-        guard continuity != .g0 else {
-            return []
-        }
-        let bridgeReference = SketchSplineEndpointReference(
-            splineID: bridgeID,
-            endpoint: bridgeEndpoint
-        )
-        switch source.kind {
-        case .line(let lineID):
-            switch continuity {
-            case .g0:
-                return []
-            case .g1:
-                guard let sourceEndpoint = lineEndpoint(of: source.reference) else {
-                    return []
-                }
-                return [
-                    .splineEndpointTangent(SketchSplineLineTangencyConstraint(
-                        splineEndpoint: bridgeReference,
-                        line: lineID,
-                        orientation: tangentOrientation(
-                            bridgeEndpoint: bridgeEndpoint,
-                            sourceEndpoint: sourceEndpoint
-                        )
-                    )),
-                ]
-            case .g2, .g3:
-                return []
-            }
-        case .spline(let sourceReference):
-            guard let sourceReference else {
-                return []
-            }
-            switch continuity {
-            case .g0:
-                return []
-            case .g1:
-                return [
-                    .tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
-                        first: bridgeReference,
-                        second: sourceReference,
-                        orientation: tangentOrientation(
-                            bridgeEndpoint: bridgeEndpoint,
-                            sourceEndpoint: sourceReference.endpoint
-                        )
-                    )),
-                ]
-            case .g2:
-                return [
-                    .smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
-                        first: bridgeReference,
-                        second: sourceReference,
-                        orientation: tangentOrientation(
-                            bridgeEndpoint: bridgeEndpoint,
-                            sourceEndpoint: sourceReference.endpoint
-                        )
-                    )),
-                ]
-            case .g3:
-                return []
-            }
-        case .arc:
-            return []
-        }
-    }
-
-    /// Parameter-direction tangents are parallel with the same sign exactly
-    /// when one curve ends where the other starts, so joints between equal
-    /// endpoint kinds are opposed.
-    private func tangentOrientation(
-        bridgeEndpoint: SketchSplineEndpoint,
-        sourceEndpoint: SketchSplineEndpoint
-    ) -> SketchTangentOrientation {
-        bridgeEndpoint == sourceEndpoint ? .opposed : .aligned
-    }
-
-    private func lineEndpoint(of reference: SketchReference) -> SketchSplineEndpoint? {
-        switch reference {
-        case .lineStart:
-            return .start
-        case .lineEnd:
-            return .end
-        default:
-            return nil
-        }
-    }
-
-    /// The constraints a bridge owns: its end control points on point-referenced source ends and
-    /// the continuity a sketch constraint can express, which keep a live preview following its
-    /// sources until the commit regenerates the bridge.
+    /// The constraints a bridge owns: its end control points coincident with point-referenced
+    /// source ends. Its continuity is not restated as sketch constraints: the source is its one
+    /// authority, and a propagated continuity constraint would reshape the sources to fit the
+    /// bridge instead of the bridge to fit them.
     func bridgeOwnedConstraints(
         bridgeID: SketchEntityID,
         lastControlPointIndex: Int,
         firstSample: SketchCurveEndpointSample,
-        secondSample: SketchCurveEndpointSample,
-        continuity: BridgeCurveContinuity
+        secondSample: SketchCurveEndpointSample
     ) -> [SketchConstraint] {
         var constraints: [SketchConstraint] = []
         if let firstReference = firstSample.pointReference {
@@ -385,13 +252,42 @@ extension DesignDocument {
                 secondReference
             ))
         }
-        constraints += bridgeContinuityConstraints(
-            bridgeID: bridgeID,
-            first: firstSample,
-            second: secondSample,
-            continuity: continuity
-        )
         return constraints
+    }
+
+    /// Removes what a bridge owned: its end coincidences at `lastControlPointIndex` and every
+    /// endpoint continuity constraint on it, which earlier generators added and a sketch
+    /// constraint can no longer declare (`validateSketchConstraintOnBridgeCurves`).
+    func removeBridgeOwnedConstraints(
+        bridgeID: SketchEntityID,
+        lastControlPointIndex: Int,
+        firstSample: SketchCurveEndpointSample,
+        secondSample: SketchCurveEndpointSample,
+        from sketch: inout Sketch
+    ) {
+        let owned = bridgeOwnedConstraints(
+            bridgeID: bridgeID,
+            lastControlPointIndex: lastControlPointIndex,
+            firstSample: firstSample,
+            secondSample: secondSample
+        )
+        sketch.constraints.removeAll { constraint in
+            owned.contains(constraint) || constraintStatesBridgeContinuity(constraint, bridgeID: bridgeID)
+        }
+    }
+
+    func constraintStatesBridgeContinuity(_ constraint: SketchConstraint, bridgeID: SketchEntityID) -> Bool {
+        switch constraint {
+        case .splineEndpointTangent(let tangency):
+            tangency.splineEndpoint.splineID == bridgeID
+        case .tangentSplineEndpoints(let pair), .smoothSplineEndpoints(let pair):
+            pair.first.splineID == bridgeID || pair.second.splineID == bridgeID
+        case .smoothSplineControlPoint(let entity, _):
+            entity == bridgeID
+        case .coincident, .horizontal, .vertical, .parallel, .perpendicular, .equalLength, .tangent,
+             .concentric, .equalRadius, .fixed:
+            false
+        }
     }
 
     private func validateDistinctBridgeEndpointSamples(

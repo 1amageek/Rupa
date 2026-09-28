@@ -108,6 +108,8 @@ extension DesignDocument {
                 owner: owner
             ))
         case .spline(let spline):
+            // Projection between planes is affine, so the projected control points on the same
+            // degree, knots and closure are exactly the projected curve.
             return .spline(SketchSpline(
                 controlPoints: try spline.controlPoints.enumerated().map { index, point in
                     try projectedSketchPoint(
@@ -116,7 +118,10 @@ extension DesignDocument {
                         to: targetSystem,
                         owner: "\(owner) spline control point \(index)"
                     )
-                }
+                },
+                isClosed: spline.isClosed,
+                degree: spline.degree,
+                knots: spline.knots
             ))
         }
     }

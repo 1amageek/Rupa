@@ -29,6 +29,9 @@ public struct CurveAnalysisService: Sendable {
         var second: EndpointSample
         var constraintKinds: Set<String>
         var requiredContinuity: CurveAnalysisResult.ContinuityLevel
+        /// A Bridge Curve end's continuity measured by Swift-CAD on the exact curves, which
+        /// replaces the sampled measure for that join.
+        var exact: DesignDocument.BridgeEndContinuity?
     }
 
     private let sampler: SketchCurveSampler
@@ -386,6 +389,20 @@ public struct CurveAnalysisService: Sendable {
                 continue
             }
         }
+        // A Bridge Curve declares its end continuity on its source; its point-referenced ends are
+        // joins that require it, measured on the exact curves (G3 included).
+        for source in document.productMetadata.bridgeCurveSources.values where source.featureID == featureID {
+            for end in try document.bridgeEndContinuities(source: source, sketch: sketch) {
+                try mergeEndpointJoin(
+                    first: endpointSample(for: end.bridgeReference, sketch: sketch, document: document),
+                    second: endpointSample(for: end.sourceReference, sketch: sketch, document: document),
+                    constraintKind: "bridgeCurve",
+                    requiredContinuity: curveAnalysisContinuityLevel(end.required),
+                    exact: end,
+                    into: &pendingByPair
+                )
+            }
+        }
         for source in document.productMetadata.joinedCurveGroupSources.values where source.featureID == featureID {
             for joint in source.joints {
                 try mergeEndpointJoin(
@@ -418,6 +435,7 @@ public struct CurveAnalysisService: Sendable {
         second: EndpointSample?,
         constraintKind: String,
         requiredContinuity: CurveAnalysisResult.ContinuityLevel,
+        exact: DesignDocument.BridgeEndContinuity? = nil,
         into pendingByPair: inout [EndpointPairKey: PendingEndpointJoin]
     ) throws {
         guard let first, let second else {
@@ -427,6 +445,7 @@ public struct CurveAnalysisService: Sendable {
         if var existing = pendingByPair[key] {
             existing.constraintKinds.insert(constraintKind)
             existing.requiredContinuity = maxContinuity(existing.requiredContinuity, requiredContinuity)
+            existing.exact = existing.exact ?? exact
             pendingByPair[key] = existing
             return
         }
@@ -434,7 +453,8 @@ public struct CurveAnalysisService: Sendable {
             first: first,
             second: second,
             constraintKinds: [constraintKind],
-            requiredContinuity: requiredContinuity
+            requiredContinuity: requiredContinuity,
+            exact: exact
         )
     }
 
@@ -442,17 +462,29 @@ public struct CurveAnalysisService: Sendable {
         featureID: FeatureID,
         pending: PendingEndpointJoin
     ) -> CurveAnalysisResult.ContinuityJoin {
-        let positionGap = distance(pending.first.sample.point, pending.second.sample.point)
-        let tangentAngle = angleBetween(
-            pending.first.sample.tangent,
-            pending.second.sample.tangent,
-            allowsReversedDirection: true
-        )
-        let curvatureGap = curvatureDifference(
-            pending.first.sample.curvature,
-            pending.second.sample.curvature,
-            allowsReversedDirection: true
-        )
+        let positionGap: Double
+        let tangentAngle: Double
+        let curvatureGap: Double
+        let continuity: CurveAnalysisResult.ContinuityLevel
+        if let exact = pending.exact {
+            positionGap = exact.positionGap
+            tangentAngle = exact.tangentAngle
+            curvatureGap = exact.curvatureGap
+            continuity = curveAnalysisContinuityLevel(exact.achieved)
+        } else {
+            positionGap = distance(pending.first.sample.point, pending.second.sample.point)
+            tangentAngle = angleBetween(
+                pending.first.sample.tangent,
+                pending.second.sample.tangent,
+                allowsReversedDirection: true
+            )
+            curvatureGap = curvatureVectorDifference(pending.first.sample, pending.second.sample)
+            continuity = continuityLevel(
+                positionGap: positionGap,
+                tangentAngle: tangentAngle,
+                curvatureGap: curvatureGap
+            )
+        }
         return CurveAnalysisResult.ContinuityJoin(
             sourceFeatureID: featureID.description,
             joinKind: .constrainedEndpoint,
@@ -464,11 +496,7 @@ public struct CurveAnalysisService: Sendable {
             secondParameter: pending.second.sample.parameter,
             constraintKinds: pending.constraintKinds.sorted(),
             requiredContinuity: pending.requiredContinuity,
-            continuity: continuityLevel(
-                positionGap: positionGap,
-                tangentAngle: tangentAngle,
-                curvatureGap: curvatureGap
-            ),
+            continuity: continuity,
             positionGap: positionGap,
             tangentAngle: tangentAngle,
             curvatureGap: curvatureGap
@@ -695,6 +723,29 @@ public struct CurveAnalysisService: Sendable {
         }
     }
 
+    private func curveAnalysisContinuityLevel(
+        _ continuity: BridgeCurveEndpointContinuity
+    ) -> CurveAnalysisResult.ContinuityLevel {
+        switch continuity {
+        case .g0: .g0
+        case .g1: .g1
+        case .g2: .g2
+        case .g3: .g3
+        }
+    }
+
+    private func curveAnalysisContinuityLevel(
+        _ level: CurveContinuityLevel?
+    ) -> CurveAnalysisResult.ContinuityLevel {
+        switch level {
+        case nil: .disconnected
+        case .positional: .g0
+        case .tangent: .g1
+        case .curvature: .g2
+        case .curvatureVariation: .g3
+        }
+    }
+
     private func maxContinuity(
         _ lhs: CurveAnalysisResult.ContinuityLevel,
         _ rhs: CurveAnalysisResult.ContinuityLevel
@@ -712,6 +763,8 @@ public struct CurveAnalysisService: Sendable {
             return 2
         case .g2:
             return 3
+        case .g3:
+            return 4
         }
     }
 
@@ -732,14 +785,12 @@ public struct CurveAnalysisService: Sendable {
         return min(angle, abs(Double.pi - angle))
     }
 
-    private func curvatureDifference(
-        _ lhs: Double,
-        _ rhs: Double,
-        allowsReversedDirection: Bool
-    ) -> Double {
-        if allowsReversedDirection {
-            return abs(abs(lhs) - abs(rhs))
-        }
-        return abs(lhs - rhs)
+    /// |κ₁N₁ − κ₂N₂|: the curvature vectors do not depend on either curve's direction, so ends
+    /// that bend opposite ways differ even when their curvatures have the same size.
+    private func curvatureVectorDifference(_ lhs: CurveEvaluationSample, _ rhs: CurveEvaluationSample) -> Double {
+        hypot(
+            lhs.curvature * lhs.normal.x - rhs.curvature * rhs.normal.x,
+            lhs.curvature * lhs.normal.y - rhs.curvature * rhs.normal.y
+        )
     }
 }

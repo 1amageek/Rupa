@@ -3145,19 +3145,12 @@ import SwiftCAD
         .splineControlPoint(entity: source.entityID, index: 3),
         .lineEnd(setup.secondLineID)
     )))
-    // The bridge leaves the first line's start and arrives at the second
-    // line's end, so a smooth traversal reverses the spline tangent against
-    // each line direction and both tangency constraints are opposed.
-    #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
-        splineEndpoint: SketchSplineEndpointReference(splineID: source.entityID, endpoint: .start),
-        line: setup.firstLineID,
-        orientation: .opposed
-    ))))
-    #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
-        splineEndpoint: SketchSplineEndpointReference(splineID: source.entityID, endpoint: .end),
-        line: setup.secondLineID,
-        orientation: .opposed
-    ))))
+    // The bridge's G1 is met by its regeneration from the source, not restated as tangency
+    // constraints (checked on the control points below).
+    #expect(sketch.constraints.contains { constraint in
+        if case .splineEndpointTangent = constraint { return true }
+        return false
+    } == false)
     // G1 at both ends is one cubic span whose end speeds are the chord length.
     let chord = hypot(0.0025, 0.0075)
     #expect(controlPoints.count == 4)

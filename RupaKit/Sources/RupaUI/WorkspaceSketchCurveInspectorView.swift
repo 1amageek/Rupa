@@ -207,6 +207,8 @@ struct WorkspaceSketchCurveInspectorView: View {
             return "G1"
         case .g2:
             return "G2"
+        case .g3:
+            return "G3"
         }
     }
 
@@ -221,6 +223,8 @@ struct WorkspaceSketchCurveInspectorView: View {
                 return "Smooth"
             case "splineKnot":
                 return "Spline knot"
+            case "bridgeCurve":
+                return "Bridge"
             default:
                 return kind
             }

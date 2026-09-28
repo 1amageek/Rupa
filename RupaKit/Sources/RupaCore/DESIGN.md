@@ -1006,20 +1006,54 @@ Rupa Core does not construct bridge control points itself.
 
 | Event | Owner | Effect |
 |---|---|---|
-| create / `setBridgeCurveParameters` | `createBridgeCurve`, `setBridgeCurveParameters` | bridge solved from the new source |
-| any sketch commit | `commitSketchEntityEdit`, `addSketchConstraint` | every bridge of the sketch regenerated from its sources |
+| create | `createBridgeCurve` | bridge solved from the new source |
+| `setBridgeCurveParameters` | the commit's regeneration | the old owned constraints go; the bridge is solved from the updated source |
+| any sketch commit | `commitSketchEntityEdit`, `addSketchConstraint` | every bridge of the sketch regenerated from its source |
 | document parameter change | `upsertParameter`, `deleteParameter`, `renameParameter` | `regenerateAllBridgeCurves` before pattern arrays |
 | control point move / slide on a bridge | `validateNotGeneratedBridgeCurve` | refused: shape a bridge by its parameters |
+| constraint naming a bridge's continuity or interior point | `validateSketchConstraintOnBridgeCurves` (`addSketchConstraint`, Align Vertex) | refused |
 
 Every level is accepted at any position of a line, an arc or a spline; the solver
 refuses what it cannot meet with a typed error, and the edit fails with the
-document unchanged. The constraints a bridge owns (its end control points on
-point-referenced ends and the G1/G2 end relations a sketch constraint expresses)
-are rewritten on every regeneration, since the last control point index follows
-the degree; they keep a live drag preview following the sources until the commit
-regenerates the bridge. A document written by the earlier cubic-chain generator
-keeps its stored bridge until its sketch is next committed.
-`BridgeCurveCommandTests` own creation, regeneration and the refusals.
+document unchanged.
+
+The source is the bridge's one authority. The only constraints a bridge owns are
+its end control points coincident with point-referenced source ends; its
+continuity is not restated as sketch constraints, because the constraint
+propagator satisfies a constraint by moving either side and would reshape a
+source (or the other source of a bridge on a bridge) to fit the bridge. Drag
+previews run the same commands on a copy, so they regenerate too. Constraints on
+a bridge from earlier generators (end tangency, smoothness, joint smoothness) are
+removed when it is regenerated.
+
+`regenerateBridgeCurves` works on copies of the sketch and the product metadata,
+committed together with the sketch:
+
+```text
+order sources: each after the bridges its ends lie on (cycle → typed error)
+  └ per bridge: solve → drop its owned constraints (old last index)
+               → remap references to its end points: 0 → 0, old last → new last
+                 (sketch constraints, dimensions, other bridges' ends, measurement anchors;
+                  a reference to an interior point → typed error)
+               → store the spline → re-add its owned constraints (new last index)
+```
+
+A degree set by the continuities makes the last index change with them, so every
+reference follows it; an interior control point is rebuilt from the source and
+cannot carry a reference. A document written by the earlier cubic-chain
+generator keeps its stored bridge until its sketch is next committed.
+
+Commands that read a bridge read its own degree and knots: Reverse mirrors the
+knots and swaps the source's ends, continuities and trim record ends, so the
+regenerated bridge is the same curve backwards (trim records of every bridge
+follow a reversed source curve); projection keeps degree, knots and closure
+(projection between planes is affine); Offset uses Swift-CAD's spline offset over
+the bridge's own Bezier segments. Curve analysis reports each point-referenced
+bridge end as a join requiring the declared continuity, measured by
+`CurveContinuityEvaluator` on the exact curves (G3 included), and compares other
+joins' curvature as vectors. `BridgeCurveCommandTests` own creation and
+parameters; `BridgeCurveRegenerationTests` and `BridgeCurveDerivationTests` own
+regeneration, references, ordering, the refusals and the readers.
 
 ### Bridge trim contract
 

@@ -176,11 +176,9 @@ extension DesignDocument {
                     message: "Curve offset source point entities do not identify the adjacent curve sides required by Offset Vertex. Select a source line or arc endpoint with a vertex handle."
                 )
             case .spline(let spline):
-                // Swift-CAD fits the offset of the spline's cubic chain within the modeling distance.
-                let points = try spline.controlPoints.map { point -> Point2D in
-                    let resolved = try resolvedSketchPoint(point, owner: "Curve offset spline control point")
-                    return Point2D(x: resolved.x, y: resolved.y)
-                }
+                // Swift-CAD fits the offset of the spline's own curve, segment by segment whatever its
+                // degree and knots, as a cubic chain within the modeling distance.
+                let curve = try resolvedSketchSplineCurve(spline, owner: "Curve offset spline")
                 let offsetter = CubicBezierChainOffset(tolerance: .standard)
                 func offsetSpline(_ signedDistance: Double) throws -> SketchSpline {
                     // Corners join by the gap fill; Natural waits for its definition on splines.
@@ -191,7 +189,7 @@ extension DesignDocument {
                     }
                     let chain: [Point2D]
                     do {
-                        chain = try offsetter.offset(of: points, distance: signedDistance, gapFill: gapFill)
+                        chain = try offsetter.offset(of: curve, distance: signedDistance, gapFill: gapFill)
                     } catch let error as KernelError {
                         let hint = options.gapFill == .natural ? " Natural gap fill is not available on a spline's corners; use Round or Linear." : ""
                         throw EditorError(code: .commandInvalid, message: "Offset Planar Curve: \(error.message)\(hint)")

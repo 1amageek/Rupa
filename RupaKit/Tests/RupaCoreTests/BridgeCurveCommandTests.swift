@@ -3,6 +3,8 @@ import Testing
 import SwiftCAD
 @testable import RupaCore
 
+/// A Bridge Curve's continuity is owned by its source and met by regeneration: it is not
+/// restated as sketch constraints, which the propagator would satisfy by reshaping the sources.
 @Test func createBridgeCurveAddsTangentConstrainedSplineBetweenLineEndpoints() throws {
     let setup = try bridgeCurveTwoLineDocument()
     var document = setup.document
@@ -52,12 +54,12 @@ import SwiftCAD
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         line: setup.firstLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         line: setup.secondLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
 
     let analysis = try CurveAnalysisService(samplesPerSegment: 8).analyze(
         document: document,
@@ -70,6 +72,7 @@ import SwiftCAD
     #expect(analysis.curves.first?.curveKind == .spline)
     #expect(analysis.continuityJoins.filter { $0.joinKind == .constrainedEndpoint }.count == 2)
     #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.isEmpty)
+    #expect(analysis.continuityJoins.allSatisfy { $0.requiredContinuity == .g1 && $0.continuity == .g1 })
 }
 
 @Test func bridgeCurveEndpointSelectionResolverResolvesSelectedLineEndpoint() throws {
@@ -431,12 +434,12 @@ import SwiftCAD
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         line: setup.firstLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         line: setup.secondLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
 }
 
 @Test func createBridgeCurveTrimSideIsIndependentFromSense() throws {
@@ -542,12 +545,12 @@ import SwiftCAD
         first: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         second: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
         orientation: .aligned
-    ))))
+    ))) == false)
 
     let analysis = try CurveAnalysisService(samplesPerSegment: 8).analyze(
         document: document,
@@ -663,12 +666,12 @@ import SwiftCAD
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         line: setup.firstLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.splineEndpointTangent(SketchSplineLineTangencyConstraint(
         splineEndpoint: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         line: setup.secondLineID,
         orientation: .aligned
-    ))))
+    ))) == false)
 }
 
 @Test func setBridgeCurveParametersRejectsBridgeSelfReference() throws {
@@ -761,17 +764,24 @@ import SwiftCAD
         first: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .start),
         second: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.tangentSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
         orientation: .aligned
-    ))))
+    ))) == false)
     #expect(sketch.constraints.contains(.smoothSplineEndpoints(SketchSplineEndpointTangencyConstraint(
         first: SketchSplineEndpointReference(splineID: bridgeID, endpoint: .end),
         second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start),
         orientation: .aligned
     ))) == false)
+    let analysis = try CurveAnalysisService(samplesPerSegment: 8).analyze(
+        document: document,
+        featureID: setup.featureID,
+        entityID: bridgeID,
+        displayUnit: .millimeter
+    )
+    #expect(analysis.continuityJoins.map(\.requiredContinuity).compactMap { $0 }.sorted { $0.rawValue < $1.rawValue } == [.g1, .g2])
 }
 
 /// G3 at a straight spline end fixes four control points on its line (zero curvature and

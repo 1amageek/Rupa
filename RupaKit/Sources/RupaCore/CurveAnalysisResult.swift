@@ -30,6 +30,8 @@ public struct CurveAnalysisResult: Codable, Equatable, Sendable {
         case g0
         case g1
         case g2
+        /// Curvature change matched too: only a Bridge Curve end declares or measures it.
+        case g3
     }
 
     public enum ContinuityJoinKind: String, Codable, Equatable, Sendable {

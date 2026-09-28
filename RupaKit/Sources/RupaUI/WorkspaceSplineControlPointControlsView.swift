@@ -58,7 +58,7 @@ struct WorkspaceSplineControlPointControlsView: View {
 
     @ViewBuilder
     private func smoothConstraintControls(controlPointIndex index: Int) -> some View {
-        if isSmoothableSplineControlPoint(index, controlPointCount: entity.controlPoints.count) {
+        if isSmoothableSplineControlPoint(index) {
             if entity.smoothSplineControlPointIndexes.contains(index) {
                 workspaceInspectorValueRow("Smooth", "On")
             } else {
@@ -212,8 +212,10 @@ struct WorkspaceSplineControlPointControlsView: View {
         return "\(indexes.count) CVs: \(labels)"
     }
 
-    private func isSmoothableSplineControlPoint(_ index: Int, controlPointCount: Int) -> Bool {
-        index > 0 && index < controlPointCount - 1 && index.isMultiple(of: 3)
+    /// Smooth applies at an interior joint: a control point the spline passes through, which its
+    /// own degree and knots place (every `degree`-th one in chain form).
+    private func isSmoothableSplineControlPoint(_ index: Int) -> Bool {
+        index > 0 && index < entity.controlPoints.count - 1 && entity.splineJointIndexes.contains(index)
     }
 
     private func sketchPointSummary(_ point: SketchEntitySummaryResult.Point) -> String {

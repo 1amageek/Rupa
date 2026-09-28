@@ -88,6 +88,8 @@ struct InspectorSketchEntity: Equatable {
     var center: SketchEntitySummaryResult.Point?
     var controlPoints: [SketchEntitySummaryResult.Point] = []
     var smoothSplineControlPointIndexes: Set<Int> = []
+    /// The control points a spline passes through, from its own degree and knots.
+    var splineJointIndexes: Set<Int> = []
     var tangentLineCandidates: [InspectorSketchLineCandidate] = []
     var tangentSplineEndpointCandidates: [InspectorSplineEndpointCandidate] = []
     var startTangentLineIDs: Set<SketchEntityID> = []

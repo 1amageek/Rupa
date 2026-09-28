@@ -27,6 +27,12 @@ extension DesignDocument {
             )
         }
 
+        try validateSketchConstraintOnBridgeCurves(
+            constraint,
+            featureID: featureID,
+            sketch: sketch,
+            owner: "Sketch constraint"
+        )
         var candidateSketch = sketch
         candidateSketch.constraints.append(constraint)
         var candidateFeature = feature
@@ -47,7 +53,8 @@ extension DesignDocument {
             in: &sketch,
             owner: "Sketch constraint"
         )
-        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch)
+        var metadata = productMetadata
+        try regenerateBridgeCurves(featureID: featureID, sketch: &sketch, metadata: &metadata)
         feature.operation = .sketch(sketch)
 
         var updatedCADDocument = cadDocument
@@ -61,6 +68,7 @@ extension DesignDocument {
         }
 
         cadDocument = updatedCADDocument
+        productMetadata = metadata
         try synchronizeSketchObjectProperties(
             featureID: featureID,
             sketch: sketch,

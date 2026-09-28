@@ -17,8 +17,12 @@ extension DesignDocument {
             reversedEntity = .line(reversedLine)
             splineControlPointCount = nil
         case .spline(var spline):
+            // The reversed curve runs over the mirrored knots: u becomes a + b − u on [a, b].
             spline.controlPoints = Array(spline.controlPoints.reversed())
-            try validateCubicBezierChainSpline(spline, owner: "Sketch curve reverse")
+            if let knots = spline.knots, let lower = knots.first, let upper = knots.last {
+                spline.knots = knots.reversed().map { lower + upper - $0 }
+            }
+            try validateSplineForm(spline, owner: "Sketch curve reverse")
             reversedEntity = .spline(spline)
             splineControlPointCount = spline.controlPoints.count
         case .arc:
@@ -204,73 +208,48 @@ extension DesignDocument {
         }
     }
 
+    /// Bridge sources after `entityID` is reversed: ends on it follow the reversed parameter
+    /// and sense, including the untrimmed ends a trim record keeps. A reversed bridge runs from
+    /// its second end to its first, so its ends, their continuities and its trim record's ends
+    /// swap and the regenerated bridge is the same curve traversed backwards.
     private func bridgeCurveSourcesAfterSketchCurveReverse(
         _ sources: [BridgeCurveSourceID: BridgeCurveSource],
         featureID: FeatureID,
         entityID: SketchEntityID,
         splineControlPointCount: Int?
     ) -> [BridgeCurveSourceID: BridgeCurveSource] {
-        sources.mapValues { source in
-            let firstEndpoint = BridgeCurveEndpoint(
+        func rewritten(_ endpoint: BridgeCurveEndpoint) -> BridgeCurveEndpoint {
+            BridgeCurveEndpoint(
                 reference: rewriteSketchReferenceAfterCurveReverse(
-                    source.firstEndpoint.reference,
+                    endpoint.reference,
                     entityID: entityID,
                     splineControlPointCount: splineControlPointCount
                 ),
-                parameter: rewriteBridgeEndpointParameterAfterCurveReverse(
-                    source.firstEndpoint,
-                    entityID: entityID
-                ),
-                reversesSense: rewriteBridgeEndpointSenseAfterCurveReverse(
-                    source.firstEndpoint,
-                    entityID: entityID
-                ),
-                trimSide: rewriteBridgeEndpointTrimSideAfterCurveReverse(
-                    source.firstEndpoint,
-                    entityID: entityID
-                ),
-                tension: source.firstEndpoint.tension
+                parameter: rewriteBridgeEndpointParameterAfterCurveReverse(endpoint, entityID: entityID),
+                reversesSense: rewriteBridgeEndpointSenseAfterCurveReverse(endpoint, entityID: entityID),
+                trimSide: rewriteBridgeEndpointTrimSideAfterCurveReverse(endpoint, entityID: entityID),
+                tension: endpoint.tension
             )
-            let secondEndpoint = BridgeCurveEndpoint(
-                reference: rewriteSketchReferenceAfterCurveReverse(
-                    source.secondEndpoint.reference,
-                    entityID: entityID,
-                    splineControlPointCount: splineControlPointCount
-                ),
-                parameter: rewriteBridgeEndpointParameterAfterCurveReverse(
-                    source.secondEndpoint,
-                    entityID: entityID
-                ),
-                reversesSense: rewriteBridgeEndpointSenseAfterCurveReverse(
-                    source.secondEndpoint,
-                    entityID: entityID
-                ),
-                trimSide: rewriteBridgeEndpointTrimSideAfterCurveReverse(
-                    source.secondEndpoint,
-                    entityID: entityID
-                ),
-                tension: source.secondEndpoint.tension
-            )
-            if source.featureID == featureID && source.entityID == entityID {
-                return BridgeCurveSource(
-                    id: source.id,
-                    featureID: source.featureID,
-                    entityID: source.entityID,
-                    firstEndpoint: secondEndpoint,
-                    secondEndpoint: firstEndpoint,
-                    continuity: source.continuity,
-                    trimsSourceCurves: source.trimsSourceCurves
-                )
+        }
+        return sources.mapValues { source in
+            var next = source
+            next.firstEndpoint = rewritten(source.firstEndpoint)
+            next.secondEndpoint = rewritten(source.secondEndpoint)
+            if var record = source.trimRecord {
+                record.untrimmedFirstEndpoint = rewritten(record.untrimmedFirstEndpoint)
+                record.untrimmedSecondEndpoint = rewritten(record.untrimmedSecondEndpoint)
+                next.trimRecord = record
             }
-            return BridgeCurveSource(
-                id: source.id,
-                featureID: source.featureID,
-                entityID: source.entityID,
-                firstEndpoint: firstEndpoint,
-                secondEndpoint: secondEndpoint,
-                continuity: source.continuity,
-                trimsSourceCurves: source.trimsSourceCurves
-            )
+            guard source.featureID == featureID, source.entityID == entityID else {
+                return next
+            }
+            swap(&next.firstEndpoint, &next.secondEndpoint)
+            next.continuity = BridgeCurveContinuity(first: source.continuity.second, second: source.continuity.first)
+            if var record = next.trimRecord {
+                swap(&record.untrimmedFirstEndpoint, &record.untrimmedSecondEndpoint)
+                next.trimRecord = record
+            }
+            return next
         }
     }
 
