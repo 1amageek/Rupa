@@ -1263,6 +1263,13 @@ coincident faces give none, faces touching along an edge give that edge), fitted
 ten modeling distances and joined like Create Outline's into spatial paths; bodies that
 do not meet are refused. `ProjectBodyBodyTests` own this.
 
+`projectCurveIntersection(first:second:)` is Project Curve Curve: the curve where two
+sketch curves' extrusions meet, each along its own sketch plane's normal (Swift-CAD's
+`PlanarCurveExtrusionIntersector` over the first curve, which follows the second curve's
+first crossing), fitted within ten modeling distances at the first curve's own span ends
+as one spatial path. Curves on parallel planes, or whose extrusions part partway, are
+refused with nothing changed. `ProjectCurveCurveTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

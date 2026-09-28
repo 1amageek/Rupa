@@ -6290,6 +6290,12 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             let faces = selected.filter { if case .face = $0.component { return true }; return false }
+            // Two sketch curves and nothing else: Project Curve Curve, where their extrusions meet.
+            let curveIntersectionTargets = selectedSketchCurveTargets
+            if faces.isEmpty, curveIntersectionTargets.count == 2, selected.count == 2 {
+                submitSource(.projectCurveIntersection(first: curveIntersectionTargets[0], second: curveIntersectionTargets[1]))
+                return .handled
+            }
             let curves = selected.filter { target in
                 switch target.component {
                 case .sketchEntity, .edge: return true
@@ -6297,11 +6303,7 @@ private struct ProjectMainViewContent: View {
                 }
             }
             guard faces.count == 1, !curves.isEmpty else {
-                // FIXME(INCOMPLETE_IMPLEMENTATION): Project routes curves onto one face and two
-                // bodies to their intersection; Project Curve Curve (two curves) is not routed yet.
-                // Production path: I on any other selection reports this refusal. Done when two
-                // curves project through their extrusions' intersection with its own tests.
-                reportToolStatus("Project: select curves and one face, or two bodies.", severity: .warning)
+                reportToolStatus("Project: select curves and one face, two bodies or two curves.", severity: .warning)
                 return .handled
             }
             guard let project = WorkspaceProjectSession(curves: curves, face: faces[0]) else { return .handled }
