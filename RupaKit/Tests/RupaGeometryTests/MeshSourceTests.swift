@@ -18,7 +18,7 @@ func meshSourceTriangleTraversalAvoidsPolygonScratchAndRejectsMissingPositions()
     #expect(triangles == [MeshTriangle(faceID: face, vertexIDs: (c, b, a))])
     #expect(telemetry.cornerVisits == 3)
     #expect(telemetry.indexedVertexLookups == 3)
-    #expect(telemetry.positionReads == 0)
+    #expect(telemetry.positionReads == 3)
     #expect(telemetry.scratchPositionValues == 0)
     var payload = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
     payload["vertexPositions"] = []

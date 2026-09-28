@@ -194,8 +194,8 @@ edges, covering every vertex pair without a per-face Set; polygons retain the
 explicit uniqueness Set. Repeated vertices still fail with `invalidFaceLoop`.
 Already-triangular faces validate all three corner/vertex references but return
 their existing winding directly, without allocating polygon scratch positions.
-Polygon planarity and ear-clipping behavior remain unchanged. Triangulation
-telemetry counts actual position reads and scratch values (zero for triangles).
+Polygon planarity remains unchanged; the final ear-clipping triangle is checked for degenerate area. Triangulation
+telemetry counts actual position reads (three for triangles) and scratch values (zero for triangles).
 
 `GeometryBuffer` equality first compares the immutable storage identity. Two
 buffers that share that identity represent the same immutable snapshot and are
@@ -510,3 +510,7 @@ The module proof is T09-A:
 Changes to source buffer layout, ID allocation, attribute handling, or executor
 limits require rechecking the package and system designs and the RupaCore
 assumptions about receipts and asset replacement.
+
+### Triangle validation parity
+
+The three-corner fast path reads its three source positions and rejects zero-area or non-finite geometry using local, scale-normalized cross products before returning a triangle. The final ear-clipping triangle has the same requirement. Renderable counts share this path. Validation keeps source buffers borrowed and does not allocate per-triangle position arrays. Existing position-read telemetry records these necessary reads.

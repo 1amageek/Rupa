@@ -9,9 +9,17 @@ struct SectionAnalysisContourBuilder: Sendable {
         var occurrenceID: SceneOccurrenceID?
     }
 
-    private struct PointKey: Hashable, Sendable {
+    private typealias PointKey = Int
+
+    private struct Cell: Hashable {
         var x: Int64
         var y: Int64
+    }
+
+    private struct Endpoint {
+        var point: Point3D
+        var projected: Point2D
+        var sourceIndex: Int
     }
 
     private struct UndirectedEdgeKey: Hashable, Sendable {
@@ -37,7 +45,7 @@ struct SectionAnalysisContourBuilder: Sendable {
     private var tolerance: Double
 
     init(tolerance: Double) {
-        self.tolerance = max(tolerance, 1.0e-12)
+        self.tolerance = tolerance
     }
 
     func build(
@@ -67,39 +75,90 @@ struct SectionAnalysisContourBuilder: Sendable {
     private func uniqueEdges(
         from segments: [SectionAnalysisResult.IntersectionSegment]
     ) -> [Edge] {
-        var seen = Set<UndirectedEdgeKey>()
+        let groups = Dictionary(grouping: segments) {
+            BodyOccurrence(bodyID: $0.bodyID, sceneNodeID: $0.sceneNodeID, occurrenceID: $0.occurrenceID)
+        }
         var edges: [Edge] = []
         edges.reserveCapacity(segments.count)
-
-        for segment in segments {
-            let startKey = key(for: segment.start2D)
-            let endKey = key(for: segment.end2D)
-            guard startKey != endKey else {
-                continue
+        for (occurrence, segments) in groups {
+            var endpoints: [Endpoint] = []
+            endpoints.reserveCapacity(segments.count * 2)
+            for (index, segment) in segments.enumerated() {
+                endpoints.append(Endpoint(point: segment.start, projected: segment.start2D, sourceIndex: index * 2))
+                endpoints.append(Endpoint(point: segment.end, projected: segment.end2D, sourceIndex: index * 2 + 1))
             }
-            let edgeKey = undirectedEdgeKey(
-                bodyID: segment.bodyID,
-                sceneNodeID: segment.sceneNodeID,
-                occurrenceID: segment.occurrenceID,
-                startKey: startKey,
-                endKey: endKey
-            )
-            guard seen.insert(edgeKey).inserted else {
-                continue
+            endpoints.sort {
+                if $0.projected.x != $1.projected.x { return $0.projected.x < $1.projected.x }
+                if $0.projected.y != $1.projected.y { return $0.projected.y < $1.projected.y }
+                if $0.point.x != $1.point.x { return $0.point.x < $1.point.x }
+                if $0.point.y != $1.point.y { return $0.point.y < $1.point.y }
+                return $0.point.z < $1.point.z
             }
-            edges.append(Edge(
-                bodyID: segment.bodyID,
-                sceneNodeID: segment.sceneNodeID,
-                occurrenceID: segment.occurrenceID,
-                startKey: startKey,
-                endKey: endKey,
-                start: segment.start,
-                end: segment.end,
-                start2D: segment.start2D,
-                end2D: segment.end2D
-            ))
+            guard let origin = endpoints.first?.projected else { continue }
+            var representatives: [Endpoint] = []
+            var cells: [Cell: [Int]] = [:]
+            var unindexed: [Int] = []
+            var indices = Array(repeating: 0, count: endpoints.count)
+            for endpoint in endpoints {
+                let cell = cell(for: endpoint.projected, origin: origin)
+                var candidates = unindexed
+                if let cell {
+                    for dx in -1...1 {
+                        for dy in -1...1 {
+                            candidates.append(contentsOf: cells[Cell(x: cell.x + Int64(dx), y: cell.y + Int64(dy))] ?? [])
+                        }
+                    }
+                } else {
+                    // ponytail: unindexable or imprecise coordinate ranges use O(n²) distance search;
+                    // replace with a spatial tree if such ranges become a measured workload.
+                    var lower = 0, upper = representatives.count
+                    while lower < upper {
+                        let middle = lower + (upper - lower) / 2
+                        if endpoint.projected.x - representatives[middle].projected.x > tolerance { lower = middle + 1 }
+                        else { upper = middle }
+                    }
+                    candidates = Array(lower..<representatives.count)
+                }
+                if let match = candidates.filter({ distance(representatives[$0].projected, endpoint.projected) <= tolerance }).min() {
+                    indices[endpoint.sourceIndex] = match
+                } else {
+                    let index = representatives.count
+                    representatives.append(endpoint)
+                    indices[endpoint.sourceIndex] = index
+                    if let cell { cells[cell, default: []].append(index) }
+                    else { unindexed.append(index) }
+                }
+            }
+            var seen = Set<UndirectedEdgeKey>()
+            var occurrenceEdges: [Edge] = []
+            for index in segments.indices {
+                let first = min(indices[index * 2], indices[index * 2 + 1])
+                let second = max(indices[index * 2], indices[index * 2 + 1])
+                guard first != second else { continue }
+                let key = undirectedEdgeKey(bodyID: occurrence.bodyID, sceneNodeID: occurrence.sceneNodeID,
+                    occurrenceID: occurrence.occurrenceID, startKey: first, endKey: second)
+                guard seen.insert(key).inserted else { continue }
+                let a = representatives[first], b = representatives[second]
+                occurrenceEdges.append(Edge(bodyID: occurrence.bodyID, sceneNodeID: occurrence.sceneNodeID,
+                    occurrenceID: occurrence.occurrenceID, startKey: first, endKey: second,
+                    start: a.point, end: b.point, start2D: a.projected, end2D: b.projected))
+            }
+            occurrenceEdges.sort { $0.startKey != $1.startKey ? $0.startKey < $1.startKey : $0.endKey < $1.endKey }
+            edges.append(contentsOf: occurrenceEdges)
         }
         return edges
+    }
+
+    private func cell(for point: Point2D, origin: Point2D) -> Cell? {
+        let dx = point.x - origin.x, dy = point.y - origin.y
+        // Two-tolerance cells leave room for bounded subtraction/division rounding.
+        // Fall back to distance search before coordinate precision can skip a neighbor cell.
+        let xCell = (dx / tolerance) / 2, yCell = (dy / tolerance) / 2
+        guard dx.ulp <= tolerance / 8, dy.ulp <= tolerance / 8,
+              xCell.ulp <= 0.125, yCell.ulp <= 0.125,
+              let x = Int64(exactly: floor(xCell)), let y = Int64(exactly: floor(yCell)),
+              x > Int64.min, x < Int64.max, y > Int64.min, y < Int64.max else { return nil }
+        return Cell(x: x, y: y)
     }
 
     private func contours(
@@ -231,32 +290,8 @@ struct SectionAnalysisContourBuilder: Sendable {
         to points: inout [Point3D],
         points2D: inout [Point2D]
     ) {
-        guard let last = points2D.last,
-              distance(last, point2D) <= tolerance else {
-            points.append(point)
-            points2D.append(point2D)
-            return
-        }
-        points[points.count - 1] = point
-        points2D[points2D.count - 1] = point2D
-    }
-
-    private func key(for point: Point2D) -> PointKey {
-        PointKey(
-            x: quantized(point.x),
-            y: quantized(point.y)
-        )
-    }
-
-    private func quantized(_ value: Double) -> Int64 {
-        let scaled = (value / tolerance).rounded()
-        if scaled >= Double(Int64.max) {
-            return Int64.max
-        }
-        if scaled <= Double(Int64.min) {
-            return Int64.min
-        }
-        return Int64(scaled)
+        points.append(point)
+        points2D.append(point2D)
     }
 
     private func undirectedEdgeKey(
@@ -273,10 +308,7 @@ struct SectionAnalysisContourBuilder: Sendable {
     }
 
     private func ordered(_ lhs: PointKey, before rhs: PointKey) -> Bool {
-        if lhs.x != rhs.x {
-            return lhs.x < rhs.x
-        }
-        return lhs.y <= rhs.y
+        lhs <= rhs
     }
 
     private func distance(_ lhs: Point2D, _ rhs: Point2D) -> Double {

@@ -182,11 +182,10 @@ public extension MeshSource {
         }
 
         if range.count == 3 {
-            return [MeshTriangle(faceID: faceID, vertexIDs: (
-                try checkedVertex(at: 0).id,
-                try checkedVertex(at: 1).id,
-                try checkedVertex(at: 2).id
-            ))]
+            let a = try checkedVertex(at: 0), b = try checkedVertex(at: 1), c = try checkedVertex(at: 2)
+            for _ in 0..<3 { try telemetry.recordPositionRead() }
+            try validateTriangle(vertexPositions[a.position], vertexPositions[b.position], vertexPositions[c.position])
+            return [MeshTriangle(faceID: faceID, vertexIDs: (a.id, b.id, c.id))]
         }
 
         var vertexIDs: [MeshVertexID] = []
@@ -536,6 +535,10 @@ private extension MeshSource {
             remaining.remove(at: earPosition)
         }
 
+        let a = projected[remaining[0]], b = projected[remaining[1]], c = projected[remaining[2]]
+        guard orientation * cross(a, b, c) > (try turnEpsilon(a, b, c)) else {
+            throw MeshTriangulationError(code: .degenerate, message: "Mesh triangulation left a degenerate triangle.")
+        }
         triangles.append(
             MeshTriangle(
                 faceID: faceID,
@@ -673,4 +676,18 @@ private func pointInTriangle(
     let secondEpsilon = try turnEpsilon(second, third, point)
     let thirdEpsilon = try turnEpsilon(third, first, point)
     return firstCross >= -firstEpsilon && secondCross >= -secondEpsilon && thirdCross >= -thirdEpsilon
+}
+
+/// Normalize local edges before the cross product to avoid area overflow or underflow.
+private func validateTriangle(_ a: GeometryPoint3D, _ b: GeometryPoint3D, _ c: GeometryPoint3D) throws {
+    let u = subtract(b, a), v = subtract(c, a)
+    let scale = max(abs(u.x), abs(u.y), abs(u.z), abs(v.x), abs(v.y), abs(v.z))
+    guard scale.isFinite, scale > 0 else {
+        throw MeshTriangulationError(code: .degenerate, message: "Mesh triangle has no finite local extent.")
+    }
+    let normal = cross(GeometryPoint3D(x: u.x / scale, y: u.y / scale, z: u.z / scale),
+                       GeometryPoint3D(x: v.x / scale, y: v.y / scale, z: v.z / scale))
+    guard hypot(hypot(normal.x, normal.y), normal.z) > 64 * Double.ulpOfOne else {
+        throw MeshTriangulationError(code: .degenerate, message: "Mesh triangle must enclose non-zero area.")
+    }
 }
