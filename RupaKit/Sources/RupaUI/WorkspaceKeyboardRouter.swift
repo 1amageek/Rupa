@@ -222,6 +222,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case cancelBridgeTension
     /// Shift-S: Raise Curve Degree on the selected sketch curves.
     case raiseCurveDegree
+    /// Return while Rebuild Curve's dialog runs: rebuild.
+    case confirmRebuild
+    /// Escape while Rebuild Curve's dialog runs: end it without a change.
+    case cancelRebuild
     /// J: Join Curves on the two selected sketch curves.
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
@@ -282,6 +286,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCutCurveSessionActive: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletSessionActive: Bool = false
+    /// Whether Rebuild Curve's dialog runs.
+    var isRebuildSessionActive: Bool = false
     /// Whether the Command Palette is open, whose field owns every key but Escape.
     var isCommandPaletteOpen: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
@@ -356,6 +362,11 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isFilletSessionActive, let filletAction = filletAction(for: input) {
             return filletAction
+        }
+        if context.isRebuildSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys {
+            if input.isReturn { return .confirmRebuild }
+            if input.isEscape { return .cancelRebuild }
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction

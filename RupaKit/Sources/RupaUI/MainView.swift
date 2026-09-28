@@ -187,6 +187,7 @@ private struct ProjectMainViewContent: View {
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
+    @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var filletSession: WorkspaceFilletSession?
     /// The G1 tension typed for a Bridge Curve (D), until Return applies it or Escape drops it.
     @State private var bridgeTensionInput: (sourceID: BridgeCurveSourceID, value: Double)?
@@ -2804,6 +2805,7 @@ private struct ProjectMainViewContent: View {
     private var hasActiveWorkspaceCommand: Bool {
         cutCurveSession != nil
             || filletSession != nil
+            || rebuildSession != nil
             || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
@@ -2819,6 +2821,10 @@ private struct ProjectMainViewContent: View {
         }
         if filletSession != nil {
             confirmFillet()
+            return true
+        }
+        if rebuildSession != nil {
+            confirmRebuild()
             return true
         }
         if slideCommandState.isCurveControlVerticesActive {
@@ -3973,6 +3979,7 @@ private struct ProjectMainViewContent: View {
         if viewAlignedConstructionPlaneRequest != nil { inputs.insert(.viewAlignedConstructionPlane) }
         if cutCurveSession != nil { inputs.insert(.cutCurve) }
         if filletSession != nil { inputs.insert(.fillet) }
+        if rebuildSession != nil { inputs.insert(.rebuild) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4068,6 +4075,10 @@ private struct ProjectMainViewContent: View {
             if let filletSession {
                 workspaceContextDivider
                 filletContextPanelContent(filletSession)
+            }
+            if let rebuildSession {
+                workspaceContextDivider
+                rebuildContextPanelContent(rebuildSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -5815,6 +5826,7 @@ private struct ProjectMainViewContent: View {
             isCurvePickCommandActive: curvePickCommand != nil,
             isCutCurveSessionActive: cutCurveSession != nil,
             isFilletSessionActive: filletSession != nil,
+            isRebuildSessionActive: rebuildSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
@@ -6153,6 +6165,13 @@ private struct ProjectMainViewContent: View {
         case .raiseCurveDegree:
             guard let action = raiseCurveDegreeAction else { return .ignored }
             action()
+            return .handled
+        case .confirmRebuild:
+            confirmRebuild()
+            return .handled
+        case .cancelRebuild:
+            rebuildSession = nil
+            reportToolStatus("Rebuild ended.")
             return .handled
         case .cycleBridgeContinuity:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
@@ -8616,7 +8635,8 @@ private struct ProjectMainViewContent: View {
             realizeInstances: realizeInstancesAction,
             insertKnot: selectedTool == .select ? insertKnotAction : nil,
             raiseCurveDegree: raiseCurveDegreeAction,
-            convertVertex: convertVertexAction
+            convertVertex: convertVertexAction,
+            rebuild: rebuildAction
         )
     }
 
@@ -8761,6 +8781,104 @@ private struct ProjectMainViewContent: View {
                 if !targets.isEmpty { selectTargets(targets) }
                 reportToolStatus("Raise Curve Degree: \(curves.count) curve\(curves.count == 1 ? "" : "s") one degree up.")
             }
+        }
+    }
+
+    /// Rebuild Curve's dialog on the selected splines (Edit menu, palette).
+    private var rebuildAction: (@MainActor () -> Void)? {
+        let splines = selectedSketchCurveTargets.filter { target in
+            guard case .sketchEntity(let componentID) = target.component,
+                  let reference = componentID.sketchEntityReference,
+                  case .sketch(let sketch)? = snapshot.document.document.cadDocument.designGraph.nodes[reference.featureID]?.operation,
+                  case .spline? = sketch.entities[reference.entityID] else { return false }
+            return true
+        }
+        guard !splines.isEmpty else { return nil }
+        return {
+            rebuildSession = WorkspaceRebuildSession(
+                selectedCurves: splines,
+                method: .points,
+                pointCount: sketchRebuildControlPointCount,
+                toleranceMeters: sketchRebuildToleranceMeters,
+                keepsCorners: sketchRebuildKeepsCorners,
+                degree: sketchRebuildExplicitDegree,
+                spanCount: sketchRebuildExplicitSpanCount,
+                weight: sketchRebuildExplicitWeight
+            )
+            reportToolStatus("Rebuild: choose the method, then OK, Return or right-click.")
+        }
+    }
+
+    /// Rebuild Curve's dialog: Method, that method's values and OK.
+    @ViewBuilder
+    private func rebuildContextPanelContent(_ rebuild: WorkspaceRebuildSession) -> some View {
+        workspaceStatusChip("Rebuild", systemImage: "point.3.filled.connected.trianglepath.dotted", tint: .accentColor)
+        Picker("Method", selection: Binding(
+            get: { rebuild.method },
+            set: { rebuildSession?.method = $0 }
+        )) {
+            ForEach(WorkspaceRebuildSession.Method.allCases, id: \.self) { method in
+                Text(method.title).tag(method)
+            }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceRebuild.method")
+        switch rebuild.method {
+        case .points:
+            Stepper(value: Binding(
+                get: { rebuild.pointCount },
+                set: { rebuildSession?.pointCount = $0 }
+            ), in: WorkspaceRebuildSession.pointCountRange) {
+                Text("Points \(rebuild.pointCount)").monospacedDigit().font(.caption)
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceRebuild.points")
+        case .refit:
+            TextField("Tolerance", value: Binding(
+                get: { rebuild.toleranceMeters * 1000 },
+                set: { rebuildSession?.toleranceMeters = max($0, 1.0e-6) / 1000 }
+            ), format: .number)
+            .frame(width: 64)
+            .accessibilityIdentifier("WorkspaceRebuild.tolerance")
+            Text("mm").font(.caption)
+            Toggle("Keep corners", isOn: Binding(
+                get: { rebuild.keepsCorners },
+                set: { rebuildSession?.keepsCorners = $0 }
+            ))
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .accessibilityIdentifier("WorkspaceRebuild.keepCorners")
+        case .explicitControl:
+            Stepper(value: Binding(get: { rebuild.degree }, set: { rebuildSession?.degree = $0 }), in: 1...7) {
+                Text("Degree \(rebuild.degree)").monospacedDigit().font(.caption)
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceRebuild.degree")
+            Stepper(value: Binding(get: { rebuild.spanCount }, set: { rebuildSession?.spanCount = $0 }), in: 1...64) {
+                Text("Spans \(rebuild.spanCount)").monospacedDigit().font(.caption)
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceRebuild.spans")
+            TextField("Weight", value: Binding(
+                get: { rebuild.weight },
+                set: { rebuildSession?.weight = min(max($0, 0), 1) }
+            ), format: .number)
+            .frame(width: 48)
+            .accessibilityIdentifier("WorkspaceRebuild.weight")
+        }
+        Button("OK") { confirmRebuild() }
+            .accessibilityIdentifier("WorkspaceRebuild.ok")
+    }
+
+    /// Rebuilds every curve of the running dialog as one step; the dialog stays for another try
+    /// when Core refuses.
+    private func confirmRebuild() {
+        guard let rebuild = rebuildSession else { return }
+        submitSource(rebuild.targets.map { .rebuildSketchCurve(target: $0, options: rebuild.options) }, name: "Rebuild") { results in
+            guard results.last?.didMutate == true else { return }
+            rebuildSession = nil
+            reportToolStatus("Rebuild: \(rebuild.targets.count) curve\(rebuild.targets.count == 1 ? "" : "s") rebuilt.")
         }
     }
 

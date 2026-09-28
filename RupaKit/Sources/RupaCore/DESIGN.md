@@ -951,7 +951,8 @@ Editing commands on any degree and knots:
 | Trim bounds | the spline's own joints, joint point j at knot j + 1 |
 | Extend Curve Natural | Swift-CAD's `naturalSpan(ofSegment:)` on the end segment's own polynomial, a same-degree span after a C0 joint |
 | Insert Knot, Subdivide, move, slide, Reverse, projection, Offset | general already |
-| Rebuild input, Delete Redundant Topology, opening a closed spline, spatial conversion | refused by name (`validateCubicBezierChainSpline`): they read cubic spans |
+| Rebuild Points | a cubic chain at a count a chain takes (3k + 1) keeps the chain rebuild, its joints and exact layout; any other count or input is Swift-CAD's least-squares cubic B-spline with that many points (`SketchSplineLeastSquaresFit`), only its ends mapped, its deviation `sampledProjection` |
+| Rebuild Refit and Explicit Control, Delete Redundant Topology, opening a closed spline, spatial conversion | refused by name (`validateCubicBezierChainSpline`): they read cubic spans |
 
 `GeneralSplineEditingTests` own these.
 

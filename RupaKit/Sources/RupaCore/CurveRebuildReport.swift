@@ -9,6 +9,8 @@ public struct CurveRebuildReport: Codable, Equatable, Sendable {
 
     public enum DeviationMeasurement: String, Codable, Equatable, Sendable {
         case analyticCubicBezier
+        /// Dense samples of the original projected exactly onto the rebuilt curve.
+        case sampledProjection
     }
 
     public var sourceFeatureID: String

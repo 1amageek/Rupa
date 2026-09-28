@@ -21,9 +21,6 @@ extension DesignDocument {
                 message: "Sketch curve rebuild currently requires an open spline curve."
             )
         }
-        // Rebuild reads its input span by span as a cubic chain; any other form is refused
-        // rather than read as one.
-        try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild")
         guard productMetadata.bridgeCurveSources.values.contains(where: { source in
             source.featureID == selection.featureID && source.entityID == selection.entityID
         }) == false else {
@@ -35,13 +32,25 @@ extension DesignDocument {
 
         let rebuilt: RebuiltSketchSpline
         switch options.method {
-        case .points(let controlPointCount):
+        case .points(let controlPointCount)
+            where spline.isCubicBezierChain && controlPointCount >= 4 && (controlPointCount - 1).isMultiple(of: 3):
+            // A count a cubic chain takes keeps the chain rebuild, its joints and exact layout.
             rebuilt = try rebuiltSketchSplineByPointCount(
                 spline,
                 controlPointCount: controlPointCount,
                 owner: "Sketch curve rebuild"
             )
+        case .points(let controlPointCount):
+            // Any other count, or a spline of any degree or knots: the least-squares cubic
+            // B-spline with that many points.
+            rebuilt = try rebuiltSketchSplineByLeastSquares(
+                spline,
+                controlPointCount: controlPointCount,
+                owner: "Sketch curve rebuild"
+            )
         case .refit(let tolerance, let keepsCorners):
+            // Refit and Explicit Control read their input span by span as a cubic chain.
+            try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild Refit")
             rebuilt = try rebuiltSketchSplineByRefit(
                 spline,
                 tolerance: tolerance,
@@ -49,6 +58,7 @@ extension DesignDocument {
                 owner: "Sketch curve rebuild"
             )
         case .explicitControl(let degree, let spanCount, let weight):
+            try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild Explicit Control")
             rebuilt = try rebuiltSketchSplineByExplicitControl(
                 spline,
                 degree: degree,
@@ -107,7 +117,7 @@ extension DesignDocument {
             rebuiltControlPointCount: rebuilt.rebuiltControlPointCount,
             originalSpanCount: rebuilt.originalSegmentCount,
             rebuiltSpanCount: rebuilt.rebuiltSegmentCount,
-            deviationMeasurement: .analyticCubicBezier,
+            deviationMeasurement: rebuilt.deviationMeasurement,
             maximumDeviationMeters: rebuilt.deviation.maximumDistance,
             rootMeanSquareDeviationMeters: rebuilt.deviation.rootMeanSquareDistance,
             maximumDeviationFraction: rebuilt.deviation.maximumDistanceFraction,

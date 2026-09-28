@@ -517,6 +517,31 @@ private func keyboardContext(
     #expect(action("S", [.shift]) == nil)
 }
 
+@Test func workspaceKeyboardRouterConfirmsAndEndsTheRebuildDialog() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isRebuildSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmRebuild)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelRebuild)
+}
+
+@Test func theRebuildDialogAsksCoreForItsMethodsValues() throws {
+    let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    var session = try #require(WorkspaceRebuildSession(
+        selectedCurves: [target], method: .points, pointCount: 8, toleranceMeters: 0.0001,
+        keepsCorners: false, degree: 5, spanCount: 3, weight: 1.5
+    ))
+    #expect(session.options == .points(controlPointCount: 8))
+    session.method = .refit
+    #expect(session.options == .refit(tolerance: .length(0.0001, .meter), keepsCorners: false))
+    session.method = .explicitControl
+    #expect(session.options == .explicitControl(degree: 5, spanCount: 3, weight: 1))
+    #expect(WorkspaceRebuildSession(
+        selectedCurves: [], method: .points, pointCount: 8, toleranceMeters: 0.0001,
+        keepsCorners: false, degree: 3, spanCount: 2, weight: 0.5
+    ) == nil)
+}
+
 @Test func offsetKeyStartsOffsetPlanarCurveThenSlotAndSMakesItSymmetric() {
     var state = SlotProfileCommandState.inactive
     state.pressOffsetKey()

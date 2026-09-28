@@ -44,6 +44,43 @@ extension DesignDocument {
         )
     }
 
+    /// Points at any count: Swift-CAD's least-squares cubic B-spline with that many control
+    /// points, its ends the original's; only the ends map, so a reference to an interior point
+    /// refuses the rebuild when the count changes (see the reference rewrite).
+    func rebuiltSketchSplineByLeastSquares(
+        _ spline: SketchSpline,
+        controlPointCount: Int,
+        owner: String
+    ) throws -> RebuiltSketchSpline {
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        let result: SketchSplineLeastSquaresFit.Result
+        do {
+            result = try SketchSplineLeastSquaresFit(tolerance: .standard).fit(curve, degree: 3, controlPointCount: controlPointCount)
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "\(owner) Points: \(error.message)")
+        } catch let error as GeometryError {
+            throw EditorError(code: .commandInvalid, message: "\(owner) Points: \(error)")
+        }
+        let rebuilt = sketchSpline(from: result.curve)
+        try validateSplineForm(rebuilt, owner: owner)
+        return RebuiltSketchSpline(
+            spline: rebuilt,
+            originalControlPointCount: spline.controlPoints.count,
+            rebuiltControlPointCount: controlPointCount,
+            originalSegmentCount: curve.segments.count,
+            rebuiltSegmentCount: controlPointCount - 3,
+            deviation: SketchSplineRebuildDeviation(
+                maximumDistance: result.maximumDeviation,
+                rootMeanSquareDistance: result.rootMeanSquareDeviation,
+                maximumDistanceFraction: result.maximumDeviationFraction,
+                evaluatedIntervalCount: controlPointCount - 3,
+                criticalPointCount: 0
+            ),
+            controlPointIndexMap: [0: 0, spline.controlPoints.count - 1: controlPointCount - 1],
+            deviationMeasurement: .sampledProjection
+        )
+    }
+
     func rebuiltSketchSplineByRefit(
         _ spline: SketchSpline,
         tolerance: CADExpression,

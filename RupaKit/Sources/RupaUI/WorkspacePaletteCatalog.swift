@@ -64,6 +64,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Reverse Curve", aliases: ["Reverse"], invocation: .edit(.reverseCurves)),
         Command(title: "Raise Curve Degree", aliases: ["Raise Degree"], shortcut: "⇧S", invocation: .edit(.raiseCurveDegree)),
         Command(title: "Convert Vertex", invocation: .edit(.convertVertex)),
+        Command(title: "Rebuild", aliases: ["Rebuild Curve"], invocation: .edit(.rebuild)),
         Command(title: "Create Instance", aliases: ["Create Curve Instance"], invocation: .edit(.createInstance)),
         Command(title: "Realize Instances", aliases: ["Realize Curve Instances"], invocation: .edit(.realizeInstances)),
         Command(title: "Measure Distance", aliases: ["Measure"], shortcut: "⌃=", invocation: .keyboard(.activateMeasure)),
@@ -89,7 +90,7 @@ enum WorkspacePaletteEditCommand: Equatable {
     case rectangularArray, radialArray, curveArray
     case completeEdge, subdivide, splitSegment, insertKnot
     case createInstance, realizeInstances, reverseCurves, alignVertex, deleteRedundantTopology, text
-    case raiseCurveDegree, convertVertex
+    case raiseCurveDegree, convertVertex, rebuild
 
     /// The closure the Edit menu runs for this item, nil while the selection leaves it unavailable.
     func action(in commands: WorkspaceEditCommands) -> (@MainActor () -> Void)? {
@@ -114,6 +115,7 @@ enum WorkspacePaletteEditCommand: Equatable {
         case .text: commands.text
         case .raiseCurveDegree: commands.raiseCurveDegree
         case .convertVertex: commands.convertVertex
+        case .rebuild: commands.rebuild
         }
     }
 }

@@ -81,6 +81,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.convertVertex?()
             }
             .disabled(editCommands?.convertVertex == nil)
+            Button("Rebuild…") {
+                editCommands?.rebuild?()
+            }
+            .disabled(editCommands?.rebuild == nil)
             Button("Create Instance") {
                 editCommands?.createInstance?()
             }

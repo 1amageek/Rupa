@@ -142,13 +142,31 @@ import Testing
         #expect(d0.x * d1.x + d0.y * d1.y > 0)
     }
 
+    /// Rebuild's Points refits a sextic as a cubic with the asked number of points, any count.
+    @Test func rebuildingASexticByPointsRefitsItAsACubic() throws {
+        var (document, featureID, entityID) = try document(sextic())
+        let original = try dense(document, sextic(), count: 4000)
+        let report = try document.rebuildSketchCurve(
+            target: target(document, featureID, .sketchEntity(featureID: featureID, entityID: entityID)),
+            options: .points(controlPointCount: 9)
+        )
+        #expect(report.deviationMeasurement == .sampledProjection)
+        #expect(report.rebuiltControlPointCount == 9)
+        guard case .spline(let rebuilt) = try sketch(document, featureID).entities[entityID] else { return }
+        #expect(rebuilt.degree == 3 && rebuilt.controlPoints.count == 9)
+        for p in try dense(document, rebuilt) {
+            #expect(distance(from: p, to: original) <= max(report.maximumDeviationMeters * 1000, 1e-3) + 1e-3)
+        }
+        #expect(report.maximumDeviationMeters < 1e-4)
+    }
+
     @Test func commandsThatReadCubicSpansRefuseASexticByName() throws {
         var (document, featureID, entityID) = try document(sextic())
         let entity = try target(document, featureID, .sketchEntity(featureID: featureID, entityID: entityID))
         let before = document.cadDocument.designGraph
         #expect(throws: EditorError.self) { try document.deleteRedundantSketchSplineJoints(target: entity) }
         #expect(throws: EditorError.self) {
-            _ = try document.rebuildSketchCurve(target: entity, options: CurveRebuildOptions(method: .points(controlPointCount: 7)))
+            _ = try document.rebuildSketchCurve(target: entity, options: .refit(tolerance: mm(0.01), keepsCorners: true))
         }
         #expect(document.cadDocument.designGraph == before)
     }

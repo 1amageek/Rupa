@@ -11,6 +11,7 @@ extension DesignDocument {
         var rebuiltSegmentCount: Int
         var deviation: SketchSplineRebuildDeviation
         var controlPointIndexMap: [Int: Int]
+        var deviationMeasurement: CurveRebuildReport.DeviationMeasurement = .analyticCubicBezier
 
         var changesControlPointCount: Bool {
             originalControlPointCount != rebuiltControlPointCount

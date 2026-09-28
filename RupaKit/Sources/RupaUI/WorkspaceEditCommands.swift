@@ -49,6 +49,8 @@ public struct WorkspaceEditCommands {
     public var raiseCurveDegree: (@MainActor () -> Void)?
     /// Turns the selected spline vertex into an ordinary control point.
     public var convertVertex: (@MainActor () -> Void)?
+    /// Opens Rebuild Curve's dialog on the selected splines.
+    public var rebuild: (@MainActor () -> Void)?
 
     public init(
         duplicate: (@MainActor () -> Void)?,
@@ -71,7 +73,8 @@ public struct WorkspaceEditCommands {
         realizeInstances: (@MainActor () -> Void)? = nil,
         insertKnot: (@MainActor () -> Void)? = nil,
         raiseCurveDegree: (@MainActor () -> Void)? = nil,
-        convertVertex: (@MainActor () -> Void)? = nil
+        convertVertex: (@MainActor () -> Void)? = nil,
+        rebuild: (@MainActor () -> Void)? = nil
     ) {
         self.duplicate = duplicate
         self.mirror = mirror
@@ -94,6 +97,7 @@ public struct WorkspaceEditCommands {
         self.insertKnot = insertKnot
         self.raiseCurveDegree = raiseCurveDegree
         self.convertVertex = convertVertex
+        self.rebuild = rebuild
     }
 }
 
