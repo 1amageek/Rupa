@@ -16,16 +16,30 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
         cadDocument: CADDocument,
         authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset] = [:]
     ) throws -> PatternArrayDefinitionIdentity {
+        try identity(for: definition, metadata: metadata, cadDocument: cadDocument,
+            authoredMeshAssets: authoredMeshAssets, ancestors: [])
+    }
+
+    private func identity(
+        for definition: ComponentDefinition, metadata: ProductMetadata, cadDocument: CADDocument,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset], ancestors: Set<ComponentDefinitionID>
+    ) throws -> PatternArrayDefinitionIdentity {
+        guard !ancestors.contains(definition.id) else {
+            throw EditorError(code: .commandInvalid, message: "Pattern definitions cannot contain recursive instances.")
+        }
+        let ancestors = ancestors.union([definition.id])
         let sourceFeatureIDs = try featureClosure(
             for: definition,
             metadata: metadata,
             cadDocument: cadDocument
         )
         var meshIDs: Set<GeometrySourceID> = []
+        var instanceIDs: Set<ComponentInstanceID> = []
         var pending = definition.rootSceneNodeIDs
         while let id = pending.popLast() {
             guard let node = metadata.sceneNodes[id] else { continue }
             meshIDs.formUnion(PatternArrayIndependentCopyBuilder.authoredMeshIDs(of: node))
+            if let id = node.reference?.componentInstanceID { instanceIDs.insert(id) }
             pending.append(contentsOf: node.childIDs)
         }
         let meshEncoder = JSONEncoder()
@@ -39,7 +53,17 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
             }
             return PatternArrayStableDigest.hexDigest(for: try meshEncoder.encode(asset.source))
         }
-        guard !sourceFeatureIDs.isEmpty || !meshDigests.isEmpty else {
+        let instanceDigests = try instanceIDs.sorted { $0.description < $1.description }.map { id -> String in
+            guard let instance = metadata.componentInstances[id],
+                  let nested = metadata.componentDefinitions[instance.definitionID] else {
+                throw EditorError(code: .referenceUnresolved, message: "A pattern instance has no definition.")
+            }
+            let nestedIdentity = try identity(for: nested, metadata: metadata, cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets, ancestors: ancestors)
+            let instanceDigest = PatternArrayStableDigest.hexDigest(for: try meshEncoder.encode(instance))
+            return instanceDigest + nestedIdentity.value
+        }
+        guard !sourceFeatureIDs.isEmpty || !meshDigests.isEmpty || !instanceDigests.isEmpty else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array definition identity requires cloneable CAD feature scene nodes."
@@ -57,6 +81,7 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
         )
         // Absent for a CAD-only definition, so its identity is unchanged from before meshes counted.
         payload.meshes = meshDigests.isEmpty ? nil : meshDigests
+        payload.instances = instanceDigests.isEmpty ? nil : instanceDigests
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(payload)
@@ -120,12 +145,6 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
                 message: "Pattern array definition identity requires existing scene nodes."
             )
         }
-        if sceneNode.reference?.kind == .componentInstance || sceneNode.object?.category == .componentInstance {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Independent-copy pattern array definitions do not support nested component instances."
-            )
-        }
         if let featureID = sceneNode.reference?.featureID {
             featureIDs.insert(featureID)
         }
@@ -157,6 +176,7 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
     var rootSceneNodes: [PatternArrayDefinitionSceneNodeIdentity]
     var features: [PatternArrayDefinitionFeatureIdentity]
     var meshes: [String]? = nil
+    var instances: [String]? = nil
 
     init(
         definition: ComponentDefinition,
@@ -252,6 +272,7 @@ private struct PatternArrayDefinitionSceneReferenceIdentity: Encodable {
     var kind: SceneNodeReference.Kind
     var featureToken: String?
     var constructionPlaneID: String?
+    var componentInstanceID: String?
 
     init(
         reference: SceneNodeReference,
@@ -262,6 +283,7 @@ private struct PatternArrayDefinitionSceneReferenceIdentity: Encodable {
             try Self.featureToken(for: $0, featureTokenByID: featureTokenByID)
         }
         constructionPlaneID = reference.constructionPlaneID?.description
+        componentInstanceID = reference.componentInstanceID?.description
     }
 
     private static func featureToken(

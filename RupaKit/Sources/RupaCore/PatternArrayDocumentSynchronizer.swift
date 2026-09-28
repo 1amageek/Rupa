@@ -105,16 +105,16 @@ struct PatternArrayDocumentSynchronizer {
                 metadata: &metadata
             )
         case .independentCopy:
+            let definitionIdentity = try PatternArrayDefinitionIdentityService().identity(
+                for: definition, metadata: metadata, cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets)
+            let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
+                definition: definition, metadata: metadata, cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets)
             removePatternArrayComponentInstanceOutputs(
                 source: source,
                 rootNode: rootNode,
                 metadata: &metadata
-            )
-            let definitionIdentity = try PatternArrayDefinitionIdentityService().identity(
-                for: definition,
-                metadata: metadata,
-                cadDocument: cadDocument,
-                authoredMeshAssets: authoredMeshAssets
             )
             let reuseCandidate = previousSource ?? source
             let canReuseIndependentCopies = reuseCandidate.outputMode == .independentCopy &&
@@ -124,7 +124,7 @@ struct PatternArrayDocumentSynchronizer {
                 try synchronizePatternArrayIndependentCopyOutputs(
                     source: &source,
                     rootNode: &rootNode,
-                    definition: definition,
+                    fragment: fragment,
                     transforms: transforms,
                     metadata: &metadata,
                     cadDocument: &cadDocument,
@@ -145,7 +145,7 @@ struct PatternArrayDocumentSynchronizer {
                 )
                 let result = try PatternArrayIndependentCopyBuilder().createOutputs(
                     name: source.name,
-                    definition: definition,
+                    fragment: fragment,
                     transforms: transforms,
                     metadata: &metadata,
                     cadDocument: &cadDocument,
@@ -194,7 +194,7 @@ struct PatternArrayDocumentSynchronizer {
     private func synchronizePatternArrayIndependentCopyOutputs(
         source: inout PatternArraySource,
         rootNode: inout SceneNode,
-        definition: ComponentDefinition,
+        fragment: SceneFragment,
         transforms: [Transform3D],
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
@@ -278,7 +278,7 @@ struct PatternArrayDocumentSynchronizer {
         } else {
             appendedResult = try builder.createOutputs(
                 name: source.name,
-                definition: definition,
+                fragment: fragment,
                 transforms: appendedTransforms,
                 startingOutputIndex: reusedCount,
                 metadata: &metadata,
@@ -430,6 +430,9 @@ struct PatternArrayDocumentSynchronizer {
                     message: "Pattern array explode requires an existing component definition."
                 )
             }
+            let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
+                definition: definition, metadata: metadata, cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets)
             removePatternArrayComponentInstanceOutputs(
                 source: source,
                 rootNode: rootNode,
@@ -437,7 +440,7 @@ struct PatternArrayDocumentSynchronizer {
             )
             let result = try PatternArrayIndependentCopyBuilder().createOutputs(
                 name: source.name,
-                definition: definition,
+                fragment: fragment,
                 transforms: transforms,
                 metadata: &metadata,
                 cadDocument: &cadDocument,

@@ -7,7 +7,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
     /// local transform is that pattern transform.
     func createOutputs(
         name: String,
-        definition: ComponentDefinition,
+        fragment: SceneFragment,
         transforms: [Transform3D],
         startingOutputIndex: Int = 0,
         metadata: inout ProductMetadata,
@@ -15,13 +15,6 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
         tolerance: ModelingTolerance
     ) throws -> PatternArrayIndependentCopyBuildResult {
-        let fragment = try SceneFragmentExtractor().extract(
-            rootSceneNodeIDs: definition.rootSceneNodeIDs,
-            frame: .parentOfFirstRoot,
-            metadata: metadata,
-            cadDocument: cadDocument,
-            authoredMeshAssets: authoredMeshAssets
-        )
         guard !fragment.features.isEmpty || !fragment.authoredMeshes.isEmpty else {
             throw EditorError(
                 code: .commandInvalid,
@@ -63,6 +56,47 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             outputSceneNodeIDs: outputSceneNodeIDs,
             outputFeatureIDs: outputFeatureIDs
         )
+    }
+
+    /// Captures copies in the array frame before stale outputs are removed.
+    func sourceFragment(
+        definition: ComponentDefinition, metadata: ProductMetadata, cadDocument: CADDocument,
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
+    ) throws -> SceneFragment {
+        let hierarchy = try SceneNodeHierarchy(metadata: metadata)
+        let sourceIDs = definition.rootSceneNodeIDs.flatMap { hierarchy.subtreeIDs(of: $0) }
+        guard sourceIDs.contains(where: { metadata.sceneNodes[$0]?.reference?.kind == .componentInstance }) else {
+            return try SceneFragmentExtractor().extract(rootSceneNodeIDs: definition.rootSceneNodeIDs,
+                frame: .parentOfFirstRoot, metadata: metadata, cadDocument: cadDocument,
+                authoredMeshAssets: authoredMeshAssets)
+        }
+        let inverseFrame = try hierarchy.parentWorldTransform(of: definition.rootSceneNodeIDs[0]).inverse()
+        var temporary = DesignDocument(cadDocument: cadDocument, productMetadata: metadata,
+            authoredMeshAssets: authoredMeshAssets)
+        // The temporary copies are not generated outputs. Array metadata may be midway
+        // through creation here; it does not own anything in this private realization.
+        temporary.productMetadata.patternArrays = [:]
+        var roots = try temporary.duplicateSceneNodes(ids: definition.rootSceneNodeIDs)
+        while true {
+            let current = try SceneNodeHierarchy(metadata: temporary.productMetadata)
+            let ids = roots.flatMap { current.subtreeIDs(of: $0) }
+            guard let id = ids.first(where: { temporary.productMetadata.sceneNodes[$0]?.reference?.kind == .componentInstance }),
+                  let node = temporary.productMetadata.sceneNodes[id],
+                  let instanceID = node.reference?.componentInstanceID,
+                  let instance = temporary.productMetadata.componentInstances[instanceID] else { break }
+            let expanded = try temporary.realizeComponentInstances(sceneNodeIDs: [id])
+            for root in expanded {
+                let visible = (temporary.productMetadata.sceneNodes[root]?.isVisible ?? false)
+                    && node.isVisible && instance.isVisible
+                temporary.productMetadata.sceneNodes[root]?.isVisible = visible
+            }
+            if let index = roots.firstIndex(of: id) { roots.replaceSubrange(index...index, with: expanded) }
+        }
+        var fragment = try temporary.sceneFragment(copying: roots)
+        for index in fragment.roots.indices {
+            fragment.roots[index].placement = try inverseFrame.composed(with: fragment.roots[index].placement)
+        }
+        return fragment
     }
 
     func removeOutputs(

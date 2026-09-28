@@ -393,8 +393,11 @@ struct SurfaceFillCommandTests {
         #expect(direct.productMetadata == beforeFailure.productMetadata)
         #expect(direct.cadDocument.designGraph == beforeFailure.cadDocument.designGraph)
         var copied = session.document
-        let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
+        let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
             definition: ComponentDefinition(name: "Sources", rootSceneNodeIDs: boundaries.map(\.sceneNodeID)),
+            metadata: copied.productMetadata, cadDocument: copied.cadDocument, authoredMeshAssets: copied.authoredMeshAssets)
+        let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
+            fragment: fragment,
             transforms: [.translation(Vector3D(x: 1, y: 0, z: 0))],
             metadata: &copied.productMetadata, cadDocument: &copied.cadDocument, authoredMeshAssets: &copied.authoredMeshAssets,
             tolerance: copied.modelingSettings.tolerance)

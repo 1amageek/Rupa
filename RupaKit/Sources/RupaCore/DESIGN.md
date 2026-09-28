@@ -2053,3 +2053,15 @@ Boolean extrusion measurements use evaluated body results rather than the
 uncombined profile area. Consumed targets leave the visible/measurable set;
 Keep Tools retains the native Boolean result ownership. Legacy extrusion commands
 continue to create new bodies. Pattern remapping remaps target references.
+
+### Independent arrays of instances
+
+Rectangular, radial and curve arrays share the same independent-copy path. Before
+output removal, the builder captures the source in the first root's parent frame.
+A temporary document realizes copied instances recursively through Scene Cloning;
+the original instances and definitions remain unchanged. Output features and mesh
+assets have independent identities and the existing array owner removes them.
+Definition identity includes nested definition content and instance placement,
+visibility and properties, rejecting recursive definitions. Instance output keeps
+sharing the definition. `PatternArrayInstanceSourceTests` verifies all three
+distributions, placement, identity reuse, source changes, cleanup and undo/redo.

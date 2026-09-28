@@ -50,6 +50,27 @@ import Testing
         _ = try document.validate()
     }
 
+    @Test func anArrayRealizesMeshInstancesAndRemovesOnlyOwnedAssets() throws {
+        var (document, node, source) = try meshDocument()
+        let selected = try document.placeSceneNodes(ids: [node], placements: [.identity], output: .componentInstance)
+        let distribution = PatternArrayDistribution.rectangular(.init(firstAxis:
+            .init(direction: .unitX, distance: .length(2, .meter), copyCount: 2)))
+        let id = try document.createPatternArray(name: "Meshes", copying: selected,
+            distribution: distribution, outputMode: .independentCopy)
+        let array = try #require(document.productMetadata.patternArrays[id])
+        #expect(array.outputFeatureIDs.isEmpty)
+        #expect(document.authoredMeshAssets.count == 3)
+        #expect(document.productMetadata.componentInstances.count == 1)
+        let owned = Set(document.authoredMeshAssets.keys).subtracting([source])
+        #expect(owned.count == 2)
+        try document.updatePatternArray(id: id, distribution: distribution)
+        #expect(Set(document.authoredMeshAssets.keys).subtracting([source]) == owned)
+        try document.updatePatternArray(id: id, outputMode: .componentInstance)
+        #expect(Set(document.authoredMeshAssets.keys) == [source])
+        #expect(document.productMetadata.componentInstances.count == 3)
+        _ = try document.validate()
+    }
+
     @Test func placingAMeshCopiesItsAssetUnderANewIdentity() throws {
         var (document, node, source) = try meshDocument()
         #expect(document.productMetadata.sceneCopyRefusal(for: [node]) == nil)

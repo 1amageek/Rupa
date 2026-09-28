@@ -301,6 +301,6 @@
 - [x] EN1 Direct Fillet, Chamfer and Boundary Surface handles along combined outward adjacent-face normals; reviewed Core-to-native placement, updated existing assertions and built the signed macOS app successfully. Commit `dcc50460`. Automated/UI tests were not run. `depends:none` `parallel:none`
 - [x] EN2 Signed app rebuilt/restarted as PID 56044; installed executable and debug library hashes match the build. Saved document E7C19606 reopened with six sketches, dirty=false and zero evaluation errors. Code integration reviewed; handle runtime behavior remains untested. No push of unrelated unpublished commits. `depends:EN1` `parallel:none`
 
-- [x] CO1 Support reflected curve/mesh copies and exact sheet mirror cuts; kernel `4302111`, Rupa focused tests passed. `depends:none` `parallel:none`
-- [ ] CO2 Support instance selections in all three array distributions with explicit independent-copy versus shared-instance ownership, source regeneration and output cleanup. Verify geometry, identity, updates, undo/redo and persistence; commit changes. `depends:CO1` `parallel:none`
+- [x] CO1 Support reflected curve/mesh copies and exact sheet mirror cuts; kernel `4302111`, Rupa `a2f1aa31`. `depends:none` `parallel:none`
+- [x] CO2 Support independent arrays of nested instances with source identity, placement, cleanup, and undo/redo; 78 RupaCore checks passed. `depends:CO1` `parallel:none`
 - [ ] CO3 Review the combined changes, run focused integration checks and build the app; merge only task commits into each repository's main, preserve active edits, save/restart the rebuilt Rupa and confirm executable/document identity. Push only if no unrelated unpublished commits would be included. `depends:CO1,CO2` `parallel:none`
