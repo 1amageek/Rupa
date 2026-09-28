@@ -81,12 +81,12 @@ struct ModelingAndMeshOperationCoverageTests {
         )
         boolean.booleanOperation = .union
         let booleanCommand = try boolean.command(in: booleanDocument)
-        guard case .createBoolean(_, let targets, let tool, let operation, let keepTools) = booleanCommand else {
+        guard case .createBoolean(_, let targets, let tools, let operation, let keepTools) = booleanCommand else {
             Issue.record("Boolean draft must use the existing Boolean command.")
             return
         }
         #expect(targets.map(\.featureID) == [targetFeature])
-        #expect(tool.featureID == toolFeature)
+        #expect(tools.map(\.featureID) == [toolFeature])
         #expect(operation == .union)
         #expect(keepTools == false)
         let booleanStore = CADDocumentStore(document: booleanDocument)

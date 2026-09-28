@@ -2484,14 +2484,14 @@ public struct AutomationRunner: Sendable {
             return try run()
         case .createBoolean:
             func run() throws -> AutomationResult {
-                guard case .createBoolean(let name, let targets, let tool, let operation, let keepTools) = command else {
+                guard case .createBoolean(let name, let targets, let tools, let operation, let keepTools) = command else {
                     throw invalidExecutionDomainError()
                 }
                 let result = try session.execute(
                     .createBoolean(
                         name: name,
                         targets: targets,
-                        tool: tool,
+                        tools: tools,
                         operation: operation,
                         keepTools: keepTools
                     )

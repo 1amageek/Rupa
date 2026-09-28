@@ -24,7 +24,7 @@ import SwiftCAD
     let booleanID = try document.createBoolean(
         name: "Boolean Union",
         targets: [BooleanTargetReference(featureID: targetID)],
-        tool: BooleanToolReference(featureID: toolID),
+        tools: [BooleanToolReference(featureID: toolID)],
         operation: .union
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[booleanID])
@@ -48,7 +48,7 @@ import SwiftCAD
         DependencyEdge(source: toolID, target: booleanID)
     ))
     #expect(boolean.targets == [BooleanTargetReference(featureID: targetID)])
-    #expect(boolean.tool == BooleanToolReference(featureID: toolID))
+    #expect(boolean.tools == [BooleanToolReference(featureID: toolID)])
     #expect(boolean.operation == .union)
     #expect(boolean.keepTools == false)
     #expect(evaluated.brep.bodies.count == 1)
@@ -87,7 +87,7 @@ import SwiftCAD
     let booleanID = try document.createBoolean(
         name: "Kept Boolean Union",
         targets: [BooleanTargetReference(featureID: targetID)],
-        tool: BooleanToolReference(featureID: toolID),
+        tools: [BooleanToolReference(featureID: toolID)],
         operation: .union,
         keepTools: true
     )
@@ -127,7 +127,7 @@ import SwiftCAD
     let firstBooleanID = try document.createBoolean(
         name: "First Chained Boolean",
         targets: [BooleanTargetReference(featureID: targetID)],
-        tool: BooleanToolReference(featureID: firstToolID),
+        tools: [BooleanToolReference(featureID: firstToolID)],
         operation: .difference
     )
     let secondToolID = try createBooleanBox(
@@ -142,7 +142,7 @@ import SwiftCAD
     let secondBooleanID = try document.createBoolean(
         name: "Second Chained Boolean",
         targets: [BooleanTargetReference(featureID: firstBooleanID)],
-        tool: BooleanToolReference(featureID: secondToolID),
+        tools: [BooleanToolReference(featureID: secondToolID)],
         operation: .difference
     )
     let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
@@ -178,7 +178,7 @@ import SwiftCAD
         _ = try document.createBoolean(
             name: "Invalid Boolean",
             targets: [BooleanTargetReference(featureID: boxID)],
-            tool: BooleanToolReference(featureID: boxID),
+            tools: [BooleanToolReference(featureID: boxID)],
             operation: .difference
         )
     }
@@ -206,7 +206,7 @@ import SwiftCAD
     let booleanID = try document.createBoolean(
         name: "Boolean Measure Difference",
         targets: [BooleanTargetReference(featureID: targetID)],
-        tool: BooleanToolReference(featureID: toolID),
+        tools: [BooleanToolReference(featureID: toolID)],
         operation: .difference
     )
 

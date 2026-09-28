@@ -680,7 +680,7 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            let sourceFeatureID = boolean.targets.first?.featureID ?? boolean.tool.featureID
+            let sourceFeatureID = boolean.targets.first?.featureID ?? boolean.tools.first?.featureID ?? featureID
             let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
             var evaluatedSkipReason: String?
             let solid = try measureEvaluatedSolid(

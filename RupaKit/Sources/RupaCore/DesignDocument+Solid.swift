@@ -433,47 +433,57 @@ extension DesignDocument {
         self = candidate
     }
 
+    /// Combines the target bodies with the tool bodies where they are displayed. The result lives
+    /// in the first target's frame and is shown where that target is; every other operand is
+    /// handed to the kernel with its rigid placement relative to it, and kept tools stay where
+    /// they are. Placements are Core's to derive, so references must arrive without one.
     @discardableResult
     public mutating func createBoolean(
         name: String,
         targets: [BooleanTargetReference],
-        tool: BooleanToolReference,
+        tools: [BooleanToolReference],
         operation: BooleanOperation,
         keepTools: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Boolean")
-        // The kernel combines bodies in the targets' feature frame; a tool displayed elsewhere is
-        // handed over with its rigid placement relative to the targets, and the result is shown
-        // where the targets are.
+        guard targets.allSatisfy({ $0.placement == nil }), tools.allSatisfy({ $0.placement == nil }) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Boolean operand placements come from where the bodies are displayed; references must not carry one."
+            )
+        }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         func placement(of featureID: FeatureID) throws -> Transform3D {
             try hierarchy.presentingSceneNodeID(for: featureID).map { try hierarchy.worldTransform(of: $0) } ?? .identity
         }
-        let targetPlacements = try targets.map { try placement(of: $0.featureID) }
-        guard let targetPlacement = targetPlacements.first,
-              try targetPlacements.allSatisfy({ try targetPlacement.inverse().composed(with: $0).isApproximatelyIdentity() }) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Boolean targets must be displayed at one placement to be combined into one body."
-            )
+        guard let first = targets.first else {
+            throw EditorError(code: .commandInvalid, message: "Boolean requires at least one target body.")
         }
-        let relativeToolPlacement = try targetPlacement.inverse().composed(with: try placement(of: tool.featureID))
-        let toolPlacement = relativeToolPlacement.isApproximatelyIdentity()
-            ? nil
-            : try relativeToolPlacement.rigidPlacement()
-        guard toolPlacement == nil || keepTools == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Keeping the Boolean tool requires it to be displayed where the targets are."
-            )
+        let resultPlacement = try placement(of: first.featureID)
+        func relativePlacement(of featureID: FeatureID, owner: String) throws -> RigidTransform3D? {
+            let relative = try resultPlacement.inverse().composed(with: try placement(of: featureID))
+            guard relative.isApproximatelyIdentity() == false else { return nil }
+            do {
+                return try relative.rigidPlacement()
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) must be displayed at a rigid placement relative to the first target to be combined: \(error)."
+                )
+            }
+        }
+        let placedTargets = try targets.map {
+            BooleanTargetReference(featureID: $0.featureID, placement: try relativePlacement(of: $0.featureID, owner: "A Boolean target"))
+        }
+        let placedTools = try tools.map {
+            BooleanToolReference(featureID: $0.featureID, placement: try relativePlacement(of: $0.featureID, owner: "A Boolean tool"))
         }
         let boolean = BooleanFeature(
-            targets: targets,
-            tool: tool,
+            targets: placedTargets,
+            tools: placedTools,
             operation: operation,
-            keepTools: keepTools,
-            toolPlacement: toolPlacement
+            keepTools: keepTools
         )
         do {
             try boolean.validate()
@@ -486,14 +496,16 @@ extension DesignDocument {
         for target in targets {
             try requireBodyFeature(target.featureID, owner: "Boolean target")
         }
-        try requireBodyFeature(tool.featureID, owner: "Boolean tool")
+        for tool in tools {
+            try requireBodyFeature(tool.featureID, owner: "Boolean tool")
+        }
 
         let featureID = FeatureID()
         let inputs = targets.map { target in
             FeatureInput(featureID: target.featureID, role: .target)
-        } + [
-            FeatureInput(featureID: tool.featureID, role: .body),
-        ]
+        } + tools.map { tool in
+            FeatureInput(featureID: tool.featureID, role: .body)
+        }
         let feature = FeatureNode(
             id: featureID,
             name: trimmedName,

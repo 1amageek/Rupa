@@ -410,7 +410,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createBoolean(
         name: String,
         targets: [BooleanTargetReference],
-        tool: BooleanToolReference,
+        tools: [BooleanToolReference],
         operation: BooleanOperation,
         keepTools: Bool
     )

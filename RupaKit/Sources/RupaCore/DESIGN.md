@@ -101,13 +101,15 @@ Swift-CAD mirror features, copies and instances they make.
 proportional falloff and construction-plane mirror for B-spline surface control
 points (`moveSurfaceControlPointsProportionally`).
 
-Booleans combine bodies where they are displayed: `createBoolean` hands
-Swift-CAD the tool's rigid placement relative to the targets
-(`BooleanFeature.toolPlacement`), requires the targets to share one placement,
-refuses a relative placement that scales, shears or mirrors, and refuses Keep
-Tools for a tool displayed elsewhere. The result node is inserted beside the
+Booleans combine bodies where they are displayed: `createBoolean` takes one or
+more targets and one or more tools (which Swift-CAD combines as their union) and
+hands Swift-CAD every operand's rigid placement relative to the first target
+(`BooleanTargetReference.placement`, `BooleanToolReference.placement`), which
+Core derives from the scene and so refuses on incoming references; a relative
+placement that scales, shears or mirrors is refused. Keep Tools keeps every
+tool where it is displayed, placed or not. The result node is inserted beside the
 first target with the target's local transform, so it appears where the target
-was.
+was. `PlacedBooleanTests` own this.
 
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on

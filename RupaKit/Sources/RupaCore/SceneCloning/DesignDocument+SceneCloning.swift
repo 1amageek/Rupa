@@ -300,8 +300,8 @@ extension DesignDocument {
         return copiedRootIDs
     }
 
-    /// Combines each placed copy with the body it was placed on, in placement order: the copy's one
-    /// body is the tool, the first copy combines with the target and every later copy with the
+    /// Combines each placed copy with the body it was placed on, in placement order: the copy's
+    /// bodies are the tools, the first copy combines with the target and every later copy with the
     /// previous result. The consumed copies are hidden.
     private mutating func combinePlacedCopies(
         _ copiesByPlacement: [[SceneNodeID]],
@@ -321,16 +321,16 @@ extension DesignDocument {
                       node.reference?.kind == .body else { return nil }
                 return node.reference?.featureID
             }
-            guard toolFeatureIDs.count == 1, let toolFeatureID = toolFeatureIDs.first else {
+            guard toolFeatureIDs.isEmpty == false else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "A placement Boolean needs the placed objects to be exactly one body."
+                    message: "A placement Boolean needs the placed objects to contain a body."
                 )
             }
             targetFeatureID = try createBoolean(
                 name: "Placed \(boolean.operation.rawValue.capitalized)",
                 targets: [BooleanTargetReference(featureID: targetFeatureID)],
-                tool: BooleanToolReference(featureID: toolFeatureID),
+                tools: toolFeatureIDs.map { BooleanToolReference(featureID: $0) },
                 operation: boolean.operation,
                 keepTools: false,
                 objectRegistry: objectRegistry

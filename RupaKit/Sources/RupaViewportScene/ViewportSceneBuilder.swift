@@ -212,7 +212,7 @@ public struct ViewportSceneBuilder {
             case .boolean(let boolean):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
-                    sourceFeatureID: boolean.targets.first?.featureID ?? boolean.tool.featureID,
+                    sourceFeatureID: boolean.targets.first?.featureID ?? boolean.tools.first?.featureID ?? featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,

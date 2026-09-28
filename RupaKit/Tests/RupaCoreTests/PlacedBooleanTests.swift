@@ -43,7 +43,7 @@ import Testing
         let result = try session.execute(.createBoolean(
             name: "Union",
             targets: [BooleanTargetReference(featureID: targetFeature)],
-            tool: BooleanToolReference(featureID: toolFeature),
+            tools: [BooleanToolReference(featureID: toolFeature)],
             operation: .union,
             keepTools: false
         ))
@@ -86,5 +86,74 @@ import Testing
             ))
         }
         #expect(session.document.productMetadata == before.productMetadata)
+    }
+
+    @MainActor
+    private func cubes(_ names: [String], at xs: [Double]) throws -> (EditorSession, [FeatureID]) {
+        let session = EditorSession()
+        var features: [FeatureID] = []
+        for (name, x) in zip(names, xs) {
+            _ = try session.execute(.createExtrudedRectangle(
+                name: name, plane: .xy,
+                width: .length(0.1, .meter), height: .length(0.1, .meter),
+                depth: .length(0.1, .meter), direction: .normal
+            ))
+            let node = try #require(session.document.productMetadata.sceneNodes.values.first {
+                $0.reference?.kind == .body && $0.name.hasPrefix(name)
+            })
+            _ = try session.execute(.setSceneNodeTransform(id: node.id, localTransform: try Transform3D.translation(Vector3D(x: x, y: 0, z: 0))))
+            features.append(try #require(node.reference?.featureID))
+        }
+        return (session, features)
+    }
+
+    /// A kept tool displayed elsewhere stays whole beside the result.
+    @MainActor
+    @Test func aToolDisplayedElsewhereCanBeKept() throws {
+        let (session, features) = try cubes(["Target", "Tool"], at: [0, 0.05])
+        _ = try session.execute(.createBoolean(
+            name: "Difference", targets: [BooleanTargetReference(featureID: features[0])],
+            tools: [BooleanToolReference(featureID: features[1])], operation: .difference, keepTools: true
+        ))
+        #expect(abs(try volume(session.document) - 1.5 * cube) < tolerance)
+    }
+
+    /// Targets displayed at different places combine where they are displayed.
+    @MainActor
+    @Test func targetsDisplayedApartCombineWhereTheyAre() throws {
+        let (session, features) = try cubes(["First", "Second", "Bridge"], at: [0, 0.15, 0.075])
+        _ = try session.execute(.createBoolean(
+            name: "Union",
+            targets: [BooleanTargetReference(featureID: features[0]), BooleanTargetReference(featureID: features[1])],
+            tools: [BooleanToolReference(featureID: features[2])], operation: .union, keepTools: false
+        ))
+        // [0, 0.1] ∪ [0.15, 0.25] ∪ [0.075, 0.175] along x.
+        #expect(abs(try volume(session.document) - 2.5 * cube) < tolerance)
+    }
+
+    /// Several tools act together: both bites leave the target.
+    @MainActor
+    @Test func severalToolsSubtractTogether() throws {
+        let (session, features) = try cubes(["Target", "Left", "Right"], at: [0, -0.075, 0.075])
+        _ = try session.execute(.createBoolean(
+            name: "Difference", targets: [BooleanTargetReference(featureID: features[0])],
+            tools: [BooleanToolReference(featureID: features[1]), BooleanToolReference(featureID: features[2])],
+            operation: .difference, keepTools: false
+        ))
+        #expect(abs(try volume(session.document) - 0.5 * cube) < tolerance)
+    }
+
+    @MainActor
+    @Test func aReferenceCarryingAPlacementIsRefused() throws {
+        let (session, features) = try cubes(["Target", "Tool"], at: [0, 0.05])
+        let before = session.document
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.createBoolean(
+                name: "Union", targets: [BooleanTargetReference(featureID: features[0])],
+                tools: [BooleanToolReference(featureID: features[1], placement: .translated(by: Vector3D(x: 1, y: 0, z: 0)))],
+                operation: .union, keepTools: false
+            ))
+        }
+        #expect(session.document.cadDocument.designGraph == before.cadDocument.designGraph)
     }
 }

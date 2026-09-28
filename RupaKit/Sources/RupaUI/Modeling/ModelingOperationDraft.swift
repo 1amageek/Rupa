@@ -334,7 +334,7 @@ struct ModelingOperationDraft: Equatable {
                   nodes.allSatisfy({ $0.reference?.kind == .body }) else {
                 throw invalid("Select target CAD bodies, then a separate tool body last.")
             }
-            return .createBoolean(name: name, targets: features.dropLast().map { BooleanTargetReference(featureID: $0) }, tool: BooleanToolReference(featureID: tool), operation: booleanOperation, keepTools: keepTools)
+            return .createBoolean(name: name, targets: features.dropLast().map { BooleanTargetReference(featureID: $0) }, tools: [BooleanToolReference(featureID: tool)], operation: booleanOperation, keepTools: keepTools)
         case .shell:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,

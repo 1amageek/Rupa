@@ -160,10 +160,8 @@ extension FeatureOperation {
         case .loft:
             return []
         case .boolean(let feature):
-            guard feature.keepTools == false else {
-                return []
-            }
-            return Set(feature.targets.map(\.featureID) + [feature.tool.featureID])
+            // The result replaces its targets; Keep Tools keeps only the tools.
+            return Set(feature.targets.map(\.featureID) + (feature.keepTools ? [] : feature.tools.map(\.featureID)))
         case .polySpline:
             return []
         case .constrainedSurface, .bSplineSurface:

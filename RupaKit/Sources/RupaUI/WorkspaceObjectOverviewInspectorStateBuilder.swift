@@ -271,7 +271,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     title: "Targets",
                     value: valueSummary(boolean.targets.map { WorkspaceInspectorNumberText.shortID($0.featureID) })
                 ),
-                WorkspaceInspectorTextRow(title: "Tool", value: WorkspaceInspectorNumberText.shortID(boolean.tool.featureID)),
+                WorkspaceInspectorTextRow(
+                    title: "Tools",
+                    value: valueSummary(boolean.tools.map { WorkspaceInspectorNumberText.shortID($0.featureID) })
+                ),
                 WorkspaceInspectorTextRow(
                     title: "Boolean Operation",
                     value: boolean.operation.rawValue.capitalized

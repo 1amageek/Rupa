@@ -118,9 +118,9 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   own this.
 - A placement Boolean makes each placed copy the tool of a `createBoolean`
   with the body the destination lies on (the first copy with the target, each
-  later copy with the previous result); a copy must contain exactly one body,
-  the copies are hidden once consumed, and component-instance output cannot be
-  combined.
+  later copy with the previous result); every body of a copy is a tool, a copy
+  must contain at least one body, the copies are hidden once consumed, and
+  component-instance output cannot be combined.
 - Surface points and normals for placement come from `PlacedSurfacePointResolver`:
   the viewport names the face its pick landed on, the pick is taken into the
   occurrence's source frame, Swift-CAD's `SurfaceQueryEvaluator.outwardFrame`
