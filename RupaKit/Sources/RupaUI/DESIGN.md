@@ -688,7 +688,11 @@ A selection Core cannot resolve to one corner shows no handle and Apply reports 
 With the select tool and two or more sketch curves selected, each end of a selected
 curve is drawn blue-green when it meets another selected curve's end as Join requires
 and purple when it does not (`viewportSketchJoinEndpointFeedback`, from Core's
-`sketchCurveJoinEndpointFeedback`), as the official Join Curves page shows. J joins two or more selected curves with the inspector's continuity
+`sketchCurveJoinEndpointFeedback`), as the official Join Curves page shows. While
+Slide runs, holding Control draws the project as it was when Slide started in place of
+the slid result (`WorkspaceSlideComparison`: its snapshot's document, evaluation and
+scene go to the viewport) and takes no slide drag; releasing Control or ending Slide
+returns to the current project (`WorkspaceSlideComparisonTests`). J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control

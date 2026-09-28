@@ -183,6 +183,7 @@ private struct ProjectMainViewContent: View {
     @State private var surfaceTrimDomainVUpperBound: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
+    @State private var slideComparison = WorkspaceSlideComparison()
     /// Trim (T) or Split Segment is running: each click on a sketch curve removes the segment under
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
@@ -2156,13 +2157,15 @@ private struct ProjectMainViewContent: View {
         let sectionClippingPlan = commandSection.map {
             SectionAnalysisClippingPlan(result: $0, retaining: WorkspaceSectionAnalysisSession.retainedSide)
         } ?? selectedSectionClippingPlan(for: sectionAnalysis)
+        // Slide's Control toggle draws the project as it was when Slide started.
+        let slideComparisonShown = slideComparison.displayed(snapshot)
         return Viewport(
-            document: snapshot.document.document,
-            sourceIdentity: .document(id: snapshot.document.document.id, generation: snapshot.documentGeneration),
+            document: slideComparisonShown.document.document,
+            sourceIdentity: .document(id: slideComparisonShown.document.document.id, generation: slideComparisonShown.documentGeneration),
             displayMode: viewportDisplayMode,
             controlSession: viewportControlSession,
-            presentationScene: snapshot.viewport,
-            presentationSceneNodeIDByOccurrenceID: snapshot.sceneNodeIDByOccurrenceID,
+            presentationScene: slideComparisonShown.viewport,
+            presentationSceneNodeIDByOccurrenceID: slideComparisonShown.sceneNodeIDByOccurrenceID,
             workspaceRenderState: ViewportWorkspaceRenderState(
                 revision: snapshot.workspaceState.revision,
                 ruler: snapshot.workspaceState.ruler,
@@ -2173,9 +2176,9 @@ private struct ProjectMainViewContent: View {
                     surfaceFrameDisplays: snapshot.workspaceState.surfaceFrameDisplays
                 )
             ),
-            currentEvaluation: snapshot.cadInteraction,
+            currentEvaluation: slideComparisonShown.cadInteraction,
             objectRegistry: objectRegistry,
-            renderInvalidation: snapshot.evaluationSnapshot.renderInvalidation,
+            renderInvalidation: slideComparisonShown.evaluationSnapshot.renderInvalidation,
             selection: displaySelection,
             objectSelectionIndex: viewportObjectSelectionIndex,
             selectionDragPreviewTargets: selectionDragPreviewTargets,
@@ -2330,6 +2333,17 @@ private struct ProjectMainViewContent: View {
             },
             onPresentationFailure: reportViewportPresentationFailure
         )
+        .onChange(of: slideCommandState.isActive) { _, isActive in
+            slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)
+        }
+        .onModifierKeysChanged(mask: .control) { _, keys in
+            let wasComparing = slideComparison.isComparing
+            slideComparison.controlChanged(isHeld: keys.contains(.control))
+            guard slideComparison.isComparing != wasComparing else { return }
+            reportToolStatus(slideComparison.isComparing
+                ? "Slide: before sliding; release Control for the result."
+                : "Slide: the result.")
+        }
     }
 
     private func setViewportChromeGeometry(_ geometry: WorkspaceCanvasChromeGeometry) {
@@ -2693,7 +2707,8 @@ private struct ProjectMainViewContent: View {
     private var viewportSplineControlPointSlideDragHandler: ((ViewportSplineControlPointSlideDragTarget) -> Void)? {
         guard selectedTool == .select,
               selectionScope == .sketchEntity,
-              slideCommandState.isCurveControlVerticesActive else {
+              slideCommandState.isCurveControlVerticesActive,
+              !slideComparison.isComparing else {
             return nil
         }
         return { target in
@@ -2762,7 +2777,8 @@ private struct ProjectMainViewContent: View {
         guard selectedTool == .select,
               selectionScope == .vertex,
               selectedPresentationHasExactCADAffordanceContext,
-              slideCommandState.isSurfaceControlVerticesActive else {
+              slideCommandState.isSurfaceControlVerticesActive,
+              !slideComparison.isComparing else {
             return nil
         }
         return { target in
@@ -2774,7 +2790,8 @@ private struct ProjectMainViewContent: View {
         guard selectedTool == .select,
               selectionScope == .vertex,
               selectedPresentationHasExactCADAffordanceContext,
-              slideCommandState.isSurfaceControlVerticesActive else {
+              slideCommandState.isSurfaceControlVerticesActive,
+              !slideComparison.isComparing else {
             return nil
         }
         return { target in
