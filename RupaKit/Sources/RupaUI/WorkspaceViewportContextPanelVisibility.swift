@@ -21,6 +21,7 @@ enum WorkspaceViewportContextPanelVisibility {
         case fillet
         case rebuild
         case deform
+        case project
     }
 
     static func isVisible(

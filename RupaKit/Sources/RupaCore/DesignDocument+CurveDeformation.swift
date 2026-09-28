@@ -36,7 +36,7 @@ extension DesignDocument {
         }
         let from = try chart(referenceFace, role: "reference")
         let to = try chart(targetFace, role: "target")
-        let fitter = try SpatialCurveFitter(deviation: tolerance.distance * Self.deformFitDeviationFactor)
+        let fitter = try SpatialCurveFitter(deviation: tolerance.distance * Self.spatialFitDeviationFactor)
 
         var candidate = self
         var paths: [FeatureID] = []
@@ -46,7 +46,7 @@ extension DesignDocument {
             guard seen.insert(selection.entityID).inserted else {
                 throw EditorError(code: .commandInvalid, message: "\(owner) received the same curve more than once.")
             }
-            let source = try deformSourceCurve(selection.entity, plane: selection.sketch.plane, owner: owner)
+            let source = try spatialSourceCurve(selection.entity, plane: selection.sketch.plane, owner: owner)
             let fitted = try fitter.fit(breakpoints: source.breakpoints, isClosed: source.isClosed, tolerance: tolerance) { w in
                 try to.point(at: options.mapped(from.coordinate(of: source.point(w)), offsetN: offsetN))
             }
@@ -90,11 +90,11 @@ extension DesignDocument {
         }
     }
 
-    /// Deformed paths stay within this many modeling distances of the exact mapped curve at
-    /// the fitter's check parameters.
-    static let deformFitDeviationFactor = 10.0
+    /// Deformed and projected paths stay within this many modeling distances of the exact
+    /// curve at the fitter's check parameters.
+    static let spatialFitDeviationFactor = 10.0
 
-    private struct DeformSourceCurve {
+    struct SpatialSourceCurve {
         var breakpoints: [Double]
         var isClosed: Bool
         var point: (Double) throws -> Point3D
@@ -102,13 +102,13 @@ extension DesignDocument {
 
     /// A sketch curve as a function of one parameter into the sketch's 3D frame, with the
     /// parameters where it may turn a corner.
-    private func deformSourceCurve(_ entity: SketchEntity, plane: SketchPlane, owner: String) throws -> DeformSourceCurve {
+    func spatialSourceCurve(_ entity: SketchEntity, plane: SketchPlane, owner: String) throws -> SpatialSourceCurve {
         let system = try SketchPlaneCoordinateSystem(plane: plane)
         switch entity {
         case .line(let line):
             let start = try resolvedProjectionPoint(line.start, owner: "\(owner) line start")
             let end = try resolvedProjectionPoint(line.end, owner: "\(owner) line end")
-            return DeformSourceCurve(breakpoints: [0, 1], isClosed: false) { w in
+            return SpatialSourceCurve(breakpoints: [0, 1], isClosed: false) { w in
                 system.point(from: Point2D(x: start.x + (end.x - start.x) * w, y: start.y + (end.y - start.y) * w))
             }
         case .arc(let arc):
@@ -119,14 +119,14 @@ extension DesignDocument {
                 startAngle: startAngle,
                 endAngle: try resolvedAngleValue(arc.endAngle, owner: "\(owner) arc end angle")
             )
-            return DeformSourceCurve(breakpoints: [0, 1], isClosed: false) { w in
+            return SpatialSourceCurve(breakpoints: [0, 1], isClosed: false) { w in
                 let angle = startAngle + span * w
                 return system.point(from: Point2D(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
             }
         case .circle(let circle):
             let center = try resolvedProjectionPoint(circle.center, owner: "\(owner) circle center")
             let radius = try resolvedPositiveLengthValue(circle.radius, owner: "\(owner) circle radius")
-            return DeformSourceCurve(breakpoints: [0, 1], isClosed: true) { w in
+            return SpatialSourceCurve(breakpoints: [0, 1], isClosed: true) { w in
                 let angle = 2 * Double.pi * w
                 return system.point(from: Point2D(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
             }
@@ -134,7 +134,7 @@ extension DesignDocument {
             let curve = try resolvedSketchSplineCurve(spline, owner: owner)
             var breakpoints = [curve.segments[0].lowerParameter]
             breakpoints.append(contentsOf: curve.segments.map(\.upperParameter))
-            return DeformSourceCurve(breakpoints: breakpoints, isClosed: spline.isClosed) { w in
+            return SpatialSourceCurve(breakpoints: breakpoints, isClosed: spline.isClosed) { w in
                 system.point(from: try curve.bSpline.point(at: w, tolerance: .standard))
             }
         case .point:

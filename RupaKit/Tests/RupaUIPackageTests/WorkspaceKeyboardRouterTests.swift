@@ -533,6 +533,14 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelDeform)
 }
 
+@Test func workspaceKeyboardRouterConfirmsAndEndsTheProjectDialog() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isProjectSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmProject)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelProject)
+}
+
 @Test func theRebuildDialogAsksCoreForItsMethodsValues() throws {
     let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
     var session = try #require(WorkspaceRebuildSession(

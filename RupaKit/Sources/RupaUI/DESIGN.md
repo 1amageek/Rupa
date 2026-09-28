@@ -672,8 +672,11 @@ Option-D projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
 with bodies selected, their outlines (Project Outline), then selects what it
 created with a Move running so it is placed, as Duplicate and Create Instance do
-(`moveCreatedObjects`: the generated nodes no other generated node holds); I projects selected
-curves onto the one selected face (Project Curve Body). I on any other
+(`moveCreatedObjects`: the generated nodes no other generated node holds); I with curves
+and one face selected opens Project Curve Body's dialog (`WorkspaceProjectSession`):
+Normal projects along the active construction plane's +Z, Vector along the typed
+direction (both ways with Bidirectional), and OK, Return or right-click submits
+`.projectCurvesAlongDirection` while Escape ends it (`WorkspaceProjectSessionTests`). I on any other
 selection is refused and marked `FIXME(INCOMPLETE_IMPLEMENTATION)` until the
 kernel's intersection curve serves Project Body Body and Project Curve Curve. With the select tool and sketch curves or vertices selected, B starts Fillet's
 dialog (`WorkspaceFilletSession`): selected curve ends take Fillet Vertex through

@@ -190,6 +190,7 @@ private struct ProjectMainViewContent: View {
     @State private var cutCurveSession: WorkspaceCutCurveSession?
     @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var deformSession: WorkspaceDeformSession?
+    @State private var projectSession: WorkspaceProjectSession?
     @State private var filletSession: WorkspaceFilletSession?
     /// The G1 tension typed for a Bridge Curve (D), until Return applies it or Escape drops it.
     @State private var bridgeTensionInput: (sourceID: BridgeCurveSourceID, value: Double)?
@@ -2831,6 +2832,7 @@ private struct ProjectMainViewContent: View {
             || filletSession != nil
             || rebuildSession != nil
             || deformSession != nil
+            || projectSession != nil
             || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
@@ -2854,6 +2856,10 @@ private struct ProjectMainViewContent: View {
         }
         if deformSession != nil {
             confirmDeform()
+            return true
+        }
+        if projectSession != nil {
+            confirmProject()
             return true
         }
         if slideCommandState.isCurveControlVerticesActive {
@@ -4010,6 +4016,7 @@ private struct ProjectMainViewContent: View {
         if filletSession != nil { inputs.insert(.fillet) }
         if rebuildSession != nil { inputs.insert(.rebuild) }
         if deformSession != nil { inputs.insert(.deform) }
+        if projectSession != nil { inputs.insert(.project) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4113,6 +4120,10 @@ private struct ProjectMainViewContent: View {
             if let deformSession {
                 workspaceContextDivider
                 deformContextPanelContent(deformSession)
+            }
+            if let projectSession {
+                workspaceContextDivider
+                projectContextPanelContent(projectSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -5866,6 +5877,7 @@ private struct ProjectMainViewContent: View {
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
+            isProjectSessionActive: projectSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
@@ -6219,6 +6231,13 @@ private struct ProjectMainViewContent: View {
             deformSession = nil
             reportToolStatus("Deform ended.")
             return .handled
+        case .confirmProject:
+            confirmProject()
+            return .handled
+        case .cancelProject:
+            projectSession = nil
+            reportToolStatus("Project ended.")
+            return .handled
         case .cycleBridgeContinuity:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
             let order = BridgeCurveEndpointContinuity.allCases
@@ -6276,7 +6295,9 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Project: select curves and one face to project them onto.", severity: .warning)
                 return .handled
             }
-            projectSelectedCurvesToGeneratedFace(curves, face: faces[0])
+            guard let project = WorkspaceProjectSession(curves: curves, face: faces[0]) else { return .handled }
+            projectSession = project
+            reportToolStatus("Project: choose Normal or Vector, then OK, Return or right-click.")
             return .handled
         case .trimBridgeSources:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
@@ -9033,6 +9054,56 @@ private struct ProjectMainViewContent: View {
             deformSession = nil
             reportToolStatus("Deform: \(deform.curves.count) curve\(deform.curves.count == 1 ? "" : "s") deformed.")
         }
+    }
+
+    /// Projects the dialog's curves onto its face as one step; the dialog stays for another try
+    /// when Core refuses.
+    private func confirmProject() {
+        guard let project = projectSession else { return }
+        let normal: Vector3D
+        do {
+            normal = try SketchPlaneCoordinateSystem(plane: activeSketchPlane()).normal
+        } catch {
+            reportToolStatus("Project: the construction plane has no normal: \(error.localizedDescription)", severity: .warning)
+            return
+        }
+        submitSource(project.command(constructionPlaneNormal: normal)) { result in
+            guard result?.didMutate == true else { return }
+            projectSession = nil
+            reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.")
+        }
+    }
+
+    /// Project Curve Body's dialog: Method, Vector's direction and Bidirectional, and OK.
+    @ViewBuilder
+    private func projectContextPanelContent(_ project: WorkspaceProjectSession) -> some View {
+        workspaceStatusChip("Project", systemImage: "arrow.down.to.line", tint: .accentColor)
+        Picker("Method", selection: Binding(get: { project.method }, set: { projectSession?.method = $0 })) {
+            ForEach(WorkspaceProjectSession.Method.allCases, id: \.self) { method in
+                Text(method.title).tag(method)
+            }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceProject.method")
+        if project.method == .vector {
+            ForEach(Array(zip(["X", "Y", "Z"], [\WorkspaceProjectSession.vectorX, \.vectorY, \.vectorZ])), id: \.0) { axis, path in
+                TextField(axis, value: Binding(
+                    get: { project[keyPath: path] },
+                    set: { projectSession?[keyPath: path] = $0 }
+                ), format: .number)
+                .frame(width: 48)
+                .accessibilityIdentifier("WorkspaceProject.vector\(axis)")
+            }
+            Toggle("Bidirectional", isOn: Binding(get: { project.isBidirectional }, set: { projectSession?.isBidirectional = $0 }))
+                .accessibilityIdentifier("WorkspaceProject.bidirectional")
+        }
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Project",
+            accessibilityIdentifier: "WorkspaceProject.apply",
+            action: { confirmProject() }
+        )
     }
 
     /// Deform Curve's dialog: the faces picked so far, U/V/N scale and offset, the flips, Keep

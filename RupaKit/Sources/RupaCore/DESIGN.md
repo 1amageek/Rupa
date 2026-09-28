@@ -1229,6 +1229,14 @@ span ends) makes it a spatial path, one per curve, in one step. Without Keep Too
 sources leave their sketches; a sketch left with no curve is deleted with its object,
 and one other features are built on is refused. `CurveDeformationTests` own this.
 
+`projectCurvesAlongDirection(targets:face:direction:bidirectional:)` is Project Curve
+Body along a direction: each curve point moves along it to the one selected face through
+Swift-CAD's directional projection (a ray, or the whole line when bidirectional), which
+lands only inside the face's trim, and `SpatialCurveFitter` makes a spatial path per
+curve; a point that misses fails the command with nothing changed. A planar face met
+square on (the direction along its normal) takes the curves as a sketch on its plane,
+the `projectCurvesToGeneratedFace` result. `CurveDirectionalProjectionTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

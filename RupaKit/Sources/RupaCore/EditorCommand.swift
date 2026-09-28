@@ -343,6 +343,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
     /// Dependent Curve Extend: the target end extends in `shape` until it meets `limit`.
     case extendSketchCurveToCurve(target: SelectionTarget, limit: SelectionTarget, shape: ExtendCurveShape)
+    /// Project Curve Body along a direction onto one face (both ways when bidirectional).
+    case projectCurvesAlongDirection(targets: [SelectionTarget], face: SelectionTarget, direction: Vector3D, bidirectional: Bool)
     /// Deform Curve: sketch curves carried from a reference face onto a target face as spatial paths.
     case deformCurves(targets: [SelectionTarget], referenceFace: SelectionTarget, targetFace: SelectionTarget, options: CurveDeformationOptions)
     /// Align on two curves: the second curve's nearest end aligned with the first's.
@@ -800,6 +802,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "extendSketchCurveToCurve"
         case .deformCurves:
             "deformCurves"
+        case .projectCurvesAlongDirection:
+            "projectCurvesAlongDirection"
         case .alignSketchCurveEnds:
             "alignSketchCurveEnds"
         case .extendSketchCurve:
@@ -1046,6 +1050,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .extendSketchCurve,
              .extendSketchCurveToCurve,
              .deformCurves,
+             .projectCurvesAlongDirection,
              .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,

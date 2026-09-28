@@ -132,6 +132,7 @@ enum PreparedAutomationSourceCommandValidation {
              .extendSketchCurve,
              .extendSketchCurveToCurve,
              .deformCurves,
+             .projectCurvesAlongDirection,
              .alignSketchCurveEnds,
              .completeSketchCurve,
              .subdivideSketchSpline,
