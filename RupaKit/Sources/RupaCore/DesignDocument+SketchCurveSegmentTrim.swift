@@ -60,9 +60,11 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws {
         var bounds = try trimCrossings(of: selection)
-        if case .spline(let spline) = selection.entity {
-            let spanCount = (spline.controlPoints.count - 1) / 3
-            bounds += (1..<max(spanCount, 1)).map { Double($0) / Double(spanCount) }
+        if case .spline(let spline) = selection.entity, let knots = spline.knotVector {
+            // The spline's interior joints bound segments too: a clamped B-spline passes through
+            // joint control point j at knot j + 1, whatever its degree and knots.
+            let lower = knots[spline.degree], upper = knots[knots.count - spline.degree - 1]
+            bounds += spline.jointIndices.dropFirst().dropLast().map { (knots[$0 + 1] - lower) / (upper - lower) }
         }
         bounds = uniqueInteriorCutFractions(bounds)
         let picked = try sketchCurveSplitParameter(of: selection.entity, nearestTo: point)

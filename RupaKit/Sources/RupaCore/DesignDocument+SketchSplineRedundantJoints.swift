@@ -22,6 +22,7 @@ extension DesignDocument {
         }) == false else {
             throw EditorError(code: .commandInvalid, message: "Delete Redundant Topology cannot edit a generated Bridge Curve.")
         }
+        try validateCubicBezierChainSpline(spline, owner: "Delete Redundant Topology")
         var points = try spline.controlPoints.map { point -> Point2D in
             let resolved = try resolvedSketchPoint(point, owner: "Delete Redundant Topology control point")
             return Point2D(x: resolved.x, y: resolved.y)

@@ -105,6 +105,10 @@ extension DesignDocument {
         entity: SketchEntity
     ) throws -> [Double] {
         switch entity {
+        case .spline(let spline) where spline.isCubicBezierChain == false:
+            // Any other degree or knots splits on its B-spline, whose parts' fractions are linear
+            // in the original's.
+            return try sequentialLinearCutCurveLocalFractions(fractions: fractions)
         case .spline(let spline):
             return try sequentialSplineCutCurveLocalFractions(
                 fractions: fractions,

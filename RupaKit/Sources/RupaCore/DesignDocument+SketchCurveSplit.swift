@@ -19,6 +19,15 @@ extension DesignDocument {
         }
         let selection = try editableSketchEntity(for: target, operationName: "Sketch curve split")
         try validateSketchCurveCanSplit(selection: selection)
+        if case .spline(let spline) = selection.entity, spline.isCubicBezierChain == false {
+            // Splitting a spline of another degree or knots rebuilds every interior control point.
+            try validateNoInteriorSplineReferences(
+                entityID: selection.entityID,
+                controlPointCount: spline.controlPoints.count,
+                in: selection.sketch,
+                owner: "Sketch curve split"
+            )
+        }
 
         let newEntityID = SketchEntityID()
         let split = try splitSketchCurveEntity(
@@ -67,6 +76,41 @@ extension DesignDocument {
         )
         didCommitSplit = true
         return newEntityID
+    }
+
+    /// Refuses an edit that rebuilds a spline's interior control points while a constraint or
+    /// dimension names one of them, instead of leaving it naming another point.
+    func validateNoInteriorSplineReferences(
+        entityID: SketchEntityID,
+        controlPointCount: Int,
+        in sketch: Sketch,
+        owner: String
+    ) throws {
+        func interior(_ reference: SketchReference) -> Bool {
+            guard case .splineControlPoint(entityID, let index) = reference else { return false }
+            return index != 0 && index != controlPointCount - 1
+        }
+        let constrained = sketch.constraints.contains { constraint in
+            switch constraint {
+            case .coincident(let first, let second): interior(first) || interior(second)
+            case .fixed(let reference): interior(reference)
+            case .smoothSplineControlPoint(let id, _): id == entityID
+            case .horizontal, .vertical, .parallel, .perpendicular, .equalLength, .tangent, .concentric,
+                 .equalRadius, .splineEndpointTangent, .tangentSplineEndpoints, .smoothSplineEndpoints: false
+            }
+        }
+        let dimensioned = sketch.dimensions.contains { dimension in
+            switch dimension {
+            case .distance(let from, let to, _), .angle(let from, let to, _): interior(from) || interior(to)
+            case .radius, .diameter: false
+            }
+        }
+        guard constrained == false, dimensioned == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) rebuilds this spline's interior control points; remove the constraints and dimensions on them first."
+            )
+        }
     }
 
     private func validateSketchCurveCanSplit(

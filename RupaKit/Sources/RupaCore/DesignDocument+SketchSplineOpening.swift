@@ -14,6 +14,7 @@ extension DesignDocument {
         at point: Point2D,
         objectRegistry: ObjectTypeRegistry
     ) throws {
+        try validateCubicBezierChainSpline(spline, owner: "Split Segment on a closed spline")
         let points = try spline.controlPoints.map { controlPoint -> Point2D in
             let resolved = try resolvedSketchPoint(controlPoint, owner: "Split Segment control point")
             return Point2D(x: resolved.x, y: resolved.y)

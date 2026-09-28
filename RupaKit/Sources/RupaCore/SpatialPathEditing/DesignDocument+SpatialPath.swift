@@ -19,6 +19,8 @@ extension DesignDocument {
         }
         let path: SpatialPathFeature
         if sketch.entities.count == 1, case let .spline(spline)? = sketch.entities.values.first {
+            // A spatial path's knots are a cubic chain's joints and handles.
+            try validateCubicBezierChainSpline(spline, owner: "Spatial conversion")
             let controls = try spline.controlPoints.map(point)
             guard controls.count >= 4, (controls.count - 1).isMultiple(of: 3) else {
                 throw EditorError(code: .commandInvalid, message: "Spatial conversion requires a cubic spline.")

@@ -37,6 +37,45 @@ extension DesignDocument {
         }
         return .sketchSpline(try resolvedSketchSplineCurve(spline, owner: owner))
     }
+
+    /// The sketch spline of a kernel B-spline: its control points as literal lengths, its degree,
+    /// and its knots, left implicit when they are exactly the chain form's.
+    func sketchSpline(from curve: BSplineCurve2D, isClosed: Bool = false) -> SketchSpline {
+        let points = curve.controlPoints.map { sketchPoint(x: $0.x, y: $0.y) }
+        let chain = SketchSpline(controlPoints: points, isClosed: isClosed, degree: curve.degree)
+        return chain.knotVector == curve.knots
+            ? chain
+            : SketchSpline(controlPoints: points, isClosed: isClosed, degree: curve.degree, knots: curve.knots)
+    }
+
+    /// An open spline of any degree or knots split at `fraction` of its knot domain: both parts
+    /// keep its degree and carry the B-spline's knots over their own intervals, so a fraction on
+    /// either part is linear in the original's. Other commands read the parts through their knots.
+    func splitGeneralSpline(
+        _ spline: SketchSpline,
+        fraction: Double,
+        owner: String
+    ) throws -> (retained: SketchSpline, new: SketchSpline) {
+        guard spline.isClosed == false else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) requires an open spline; open a closed one first.")
+        }
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        let (lower, upper) = curve.domain
+        let parameter = curve.parameter(ofFraction: fraction)
+        let tolerance = 1.0e-9 * max(upper - lower, 1)
+        guard parameter > lower + tolerance, parameter < upper - tolerance else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) fraction must fall inside the spline.")
+        }
+        do {
+            let retained = try curve.bSpline.trimmed(from: lower, to: parameter, tolerance: .standard)
+            let next = try curve.bSpline.trimmed(from: parameter, to: upper, tolerance: .standard)
+            return (sketchSpline(from: retained), sketchSpline(from: next))
+        } catch let error as KernelError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
+        } catch let error as GeometryError {
+            throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
+        }
+    }
 }
 
 extension SketchSplineCurve {

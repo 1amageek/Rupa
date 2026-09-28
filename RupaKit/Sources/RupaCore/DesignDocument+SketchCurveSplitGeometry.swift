@@ -52,8 +52,8 @@ extension DesignDocument {
                 fraction: fraction,
                 owner: owner
             )
-            try validateCubicBezierChainSpline(split.retained, owner: owner)
-            try validateCubicBezierChainSpline(split.new, owner: owner)
+            try validateSplineForm(split.retained, owner: owner)
+            try validateSplineForm(split.new, owner: owner)
             return SketchCurveSegmentSplitResult(
                 originalEntityID: entityID,
                 newEntityID: newEntityID,
@@ -156,7 +156,13 @@ extension DesignDocument {
         _ spline: SketchSpline,
         fraction: Double,
         owner: String
-    ) throws -> (retained: SketchSpline, new: SketchSpline, resolution: SketchSplineSplitResolution) {
+    ) throws -> (retained: SketchSpline, new: SketchSpline, resolution: SketchSplineSplitResolution?) {
+        guard spline.isCubicBezierChain else {
+            // Any other degree or knots splits on its B-spline, whose parts' fractions are linear
+            // in the original's, so no chain resolution is needed to remap parameters.
+            let split = try splitGeneralSpline(spline, fraction: fraction, owner: owner)
+            return (split.retained, split.new, nil)
+        }
         let controlPoints = spline.controlPoints
         guard controlPoints.count >= 4,
               (controlPoints.count - 1).isMultiple(of: 3) else {
