@@ -302,5 +302,5 @@
 - [x] EN2 Signed app rebuilt/restarted as PID 56044; installed executable and debug library hashes match the build. Saved document E7C19606 reopened with six sketches, dirty=false and zero evaluation errors. Code integration reviewed; handle runtime behavior remains untested. No push of unrelated unpublished commits. `depends:EN1` `parallel:none`
 
 - [x] CO1 Support reflected curve/mesh copies and exact sheet mirror cuts; kernel `4302111`, Rupa `a2f1aa31`. `depends:none` `parallel:none`
-- [x] CO2 Support independent arrays of nested instances with source identity, placement, cleanup, and undo/redo; 78 RupaCore checks passed. `depends:CO1` `parallel:none`
-- [ ] CO3 Review the combined changes, run focused integration checks and build the app; merge only task commits into each repository's main, preserve active edits, save/restart the rebuilt Rupa and confirm executable/document identity. Push only if no unrelated unpublished commits would be included. `depends:CO1,CO2` `parallel:none`
+- [x] CO2 Support independent arrays of nested instances; placement, ownership, regeneration, cleanup and undo/redo verified. Commit: `5aa59a50`. `depends:CO1` `parallel:none`
+- [x] CO3 Merged task commits into both main branches; 33 kernel and 78 RupaCore checks passed; signed app built and restarted with the same saved project and verified executable. Unrelated viewport overlay-limit failure reported separately; push withheld because unrelated unpublished commits exist. `depends:CO1,CO2` `parallel:none`
