@@ -226,6 +226,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case confirmRebuild
     /// Escape while Rebuild Curve's dialog runs: end it without a change.
     case cancelRebuild
+    /// Return while Deform Curve's dialog runs: deform.
+    case confirmDeform
+    /// Escape while Deform Curve's dialog runs: end it without a change.
+    case cancelDeform
     /// J: Join Curves on the two selected sketch curves.
     case joinSketchCurves
     /// Option-J: Unjoin Curve on the selected sketch curve.
@@ -288,6 +292,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isFilletSessionActive: Bool = false
     /// Whether Rebuild Curve's dialog runs.
     var isRebuildSessionActive: Bool = false
+    /// Whether Deform Curve's dialog runs.
+    var isDeformSessionActive: Bool = false
     /// Whether the Command Palette is open, whose field owns every key but Escape.
     var isCommandPaletteOpen: Bool = false
     /// Whether the selection is two sketch curves or curve ends Bridge can join.
@@ -367,6 +373,11 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.ownsTextEditingKeys {
             if input.isReturn { return .confirmRebuild }
             if input.isEscape { return .cancelRebuild }
+        }
+        if context.isDeformSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys {
+            if input.isReturn { return .confirmDeform }
+            if input.isEscape { return .cancelDeform }
         }
         if let trimAction = trimAction(for: input, context: context) {
             return trimAction

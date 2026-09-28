@@ -692,7 +692,12 @@ and purple when it does not (`viewportSketchJoinEndpointFeedback`, from Core's
 Slide runs, holding Control draws the project as it was when Slide started in place of
 the slid result (`WorkspaceSlideComparison`: its snapshot's document, evaluation and
 scene go to the viewport) and takes no slide drag; releasing Control or ending Slide
-returns to the current project (`WorkspaceSlideComparisonTests`). J joins two or more selected curves with the inspector's continuity
+returns to the current project (`WorkspaceSlideComparisonTests`). Deform in the palette,
+with sketch curves selected, starts Deform Curve's dialog (`WorkspaceDeformSession`): a
+click picks the reference face, the next the target face (a later click replaces the
+target), the dialog then takes U/V/N scale and offset, Mirror, UV, Normal and Keep Tools,
+and OK, Return or right-click submits `.deformCurves` while Escape ends it unchanged
+(`WorkspaceDeformSessionTests`). J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control

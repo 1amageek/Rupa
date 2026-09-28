@@ -525,6 +525,14 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelRebuild)
 }
 
+@Test func workspaceKeyboardRouterConfirmsAndEndsTheDeformDialog() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isDeformSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmDeform)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelDeform)
+}
+
 @Test func theRebuildDialogAsksCoreForItsMethodsValues() throws {
     let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
     var session = try #require(WorkspaceRebuildSession(

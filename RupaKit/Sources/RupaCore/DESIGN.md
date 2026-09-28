@@ -1218,6 +1218,17 @@ and spline, aligned when it meets an end of another selected curve of its sketch
 Join's own endpoint tolerance (`joinCurveEndpointsAreAligned`); other components take
 no part and fewer than two curves give none (`SketchCurveJoinEndpointFeedbackTests`).
 
+`deformCurves(targets:referenceFace:targetFace:options:)` is Deform Curve. Each
+selected sketch line, arc, circle or spline, read in the evaluated document's frame as
+Project Curve Body reads faces, is carried point by point through Swift-CAD's
+`FaceUVNChart` of the reference face, `CurveDeformationOptions.mapped` (UV swap,
+Mirror s → 1 − s, U/V scale about the face's middle plus a fractional offset, N scale
+plus a length offset, Normal flip) and the target face's chart, and Swift-CAD's
+`SpatialCurveFitter` (deviation ten modeling distances, corners at the curve's own
+span ends) makes it a spatial path, one per curve, in one step. Without Keep Tools the
+sources leave their sketches; a sketch left with no curve is deleted with its object,
+and one other features are built on is refused. `CurveDeformationTests` own this.
+
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
 Soft and Reflective (all straight), an arc Natural, Soft, Reflective and Arc (all

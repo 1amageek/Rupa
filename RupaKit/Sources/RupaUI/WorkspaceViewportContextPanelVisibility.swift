@@ -20,6 +20,7 @@ enum WorkspaceViewportContextPanelVisibility {
         case cutCurve
         case fillet
         case rebuild
+        case deform
     }
 
     static func isVisible(

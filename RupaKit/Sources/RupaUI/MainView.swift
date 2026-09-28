@@ -189,6 +189,7 @@ private struct ProjectMainViewContent: View {
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
     @State private var rebuildSession: WorkspaceRebuildSession?
+    @State private var deformSession: WorkspaceDeformSession?
     @State private var filletSession: WorkspaceFilletSession?
     /// The G1 tension typed for a Bridge Curve (D), until Return applies it or Escape drops it.
     @State private var bridgeTensionInput: (sourceID: BridgeCurveSourceID, value: Double)?
@@ -2829,6 +2830,7 @@ private struct ProjectMainViewContent: View {
         cutCurveSession != nil
             || filletSession != nil
             || rebuildSession != nil
+            || deformSession != nil
             || regionOffsetCommandState.isActive
             || edgeOffsetCommandState.isActive
             || slotProfileCommandState.isActive
@@ -2848,6 +2850,10 @@ private struct ProjectMainViewContent: View {
         }
         if rebuildSession != nil {
             confirmRebuild()
+            return true
+        }
+        if deformSession != nil {
+            confirmDeform()
             return true
         }
         if slideCommandState.isCurveControlVerticesActive {
@@ -4003,6 +4009,7 @@ private struct ProjectMainViewContent: View {
         if cutCurveSession != nil { inputs.insert(.cutCurve) }
         if filletSession != nil { inputs.insert(.fillet) }
         if rebuildSession != nil { inputs.insert(.rebuild) }
+        if deformSession != nil { inputs.insert(.deform) }
         if dimensionCommandState.isActive { inputs.insert(.dimension) }
         if placeSession != nil { inputs.insert(.place) }
         if transformSession != nil { inputs.insert(.transform) }
@@ -4102,6 +4109,10 @@ private struct ProjectMainViewContent: View {
             if let rebuildSession {
                 workspaceContextDivider
                 rebuildContextPanelContent(rebuildSession)
+            }
+            if let deformSession {
+                workspaceContextDivider
+                deformContextPanelContent(deformSession)
             }
             if let placeSession {
                 workspaceContextDivider
@@ -5612,6 +5623,10 @@ private struct ProjectMainViewContent: View {
             pickCutCurve(at: target)
             return
         }
+        if deformSession != nil, selectedTool == .select {
+            pickDeformFace(at: target)
+            return
+        }
 
         if modelingDraft?.kind == .constrainedSurface {
             let plane = effectiveSketchPlane(fallback: target.sketchPlane)
@@ -5850,6 +5865,7 @@ private struct ProjectMainViewContent: View {
             isCutCurveSessionActive: cutCurveSession != nil,
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
+            isDeformSessionActive: deformSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
             hasBridgeableSelection: bridgeAction != nil,
             hasSelectedBridgeCurve: selectedBridgeCurve != nil,
@@ -6195,6 +6211,13 @@ private struct ProjectMainViewContent: View {
         case .cancelRebuild:
             rebuildSession = nil
             reportToolStatus("Rebuild ended.")
+            return .handled
+        case .confirmDeform:
+            confirmDeform()
+            return .handled
+        case .cancelDeform:
+            deformSession = nil
+            reportToolStatus("Deform ended.")
             return .handled
         case .cycleBridgeContinuity:
             guard let bridgeCurve = selectedBridgeCurve else { return .ignored }
@@ -8699,7 +8722,8 @@ private struct ProjectMainViewContent: View {
             insertKnot: selectedTool == .select ? insertKnotAction : nil,
             raiseCurveDegree: raiseCurveDegreeAction,
             convertVertex: convertVertexAction,
-            rebuild: rebuildAction
+            rebuild: rebuildAction,
+            deform: deformAction
         )
     }
 
@@ -8965,6 +8989,96 @@ private struct ProjectMainViewContent: View {
         }
         Button("OK") { confirmRebuild() }
             .accessibilityIdentifier("WorkspaceRebuild.ok")
+    }
+
+    /// Deform Curve's dialog on the selected sketch curves (palette).
+    private var deformAction: (@MainActor () -> Void)? {
+        let curves = selectedSketchCurveTargets
+        guard selectedTool == .select, !curves.isEmpty else { return nil }
+        return {
+            guard let deform = WorkspaceDeformSession(selectedCurves: curves) else { return }
+            cutCurveSession = nil
+            filletSession = nil
+            rebuildSession = nil
+            deformSession = deform
+            reportToolStatus(deform.prompt)
+        }
+    }
+
+    /// A click while Deform runs: the face under the pointer becomes the reference face, then
+    /// the target face.
+    private func pickDeformFace(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .face
+        guard var deform = deformSession, let hit = target.hit, let face = resolver.selectionTarget(for: hit),
+              case .face = face.component else {
+            reportToolStatus("Deform: click on a face of a body.", severity: .warning)
+            return
+        }
+        deform.pick(face: face)
+        deformSession = deform
+        reportToolStatus(deform.prompt)
+    }
+
+    /// Deforms the dialog's curves as one step once both faces are picked; the dialog stays for
+    /// another try when Core refuses.
+    private func confirmDeform() {
+        guard let deform = deformSession else { return }
+        guard let command = deform.command else {
+            reportToolStatus(deform.prompt, severity: .warning)
+            return
+        }
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            deformSession = nil
+            reportToolStatus("Deform: \(deform.curves.count) curve\(deform.curves.count == 1 ? "" : "s") deformed.")
+        }
+    }
+
+    /// Deform Curve's dialog: the faces picked so far, U/V/N scale and offset, the flips, Keep
+    /// Tools and OK.
+    @ViewBuilder
+    private func deformContextPanelContent(_ deform: WorkspaceDeformSession) -> some View {
+        workspaceStatusChip("Deform", systemImage: "wand.and.rays", tint: .accentColor)
+        Text(deform.step == .referenceFace ? "Reference face" : deform.step == .targetFace ? "Target face" : "Faces picked")
+            .font(.caption)
+            .accessibilityIdentifier("WorkspaceDeform.step")
+        if deform.step == .options {
+            ForEach(Array(zip(["U", "V", "N"], [\CurveDeformationOptions.scaleU, \.scaleV, \.scaleN])), id: \.0) { axis, path in
+                TextField("Scale \(axis)", value: Binding(
+                    get: { deform.options[keyPath: path] },
+                    set: { deformSession?.options[keyPath: path] = $0 }
+                ), format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceDeform.scale\(axis)")
+            }
+            ForEach(Array(zip(["U", "V"], [\CurveDeformationOptions.offsetU, \.offsetV])), id: \.0) { axis, path in
+                TextField("Offset \(axis)", value: Binding(
+                    get: { deform.options[keyPath: path] },
+                    set: { deformSession?.options[keyPath: path] = $0 }
+                ), format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceDeform.offset\(axis)")
+            }
+            commandDistanceInput(
+                "Offset N", meters: Binding(get: { deform.offsetNMeters }, set: { deformSession?.offsetNMeters = $0 }),
+                field: .deformOffset, accessibilityIdentifier: "WorkspaceDeform.offsetN"
+            )
+            Toggle("Mirror", isOn: Binding(get: { deform.options.mirrors }, set: { deformSession?.options.mirrors = $0 }))
+                .accessibilityIdentifier("WorkspaceDeform.mirror")
+            Toggle("UV", isOn: Binding(get: { deform.options.flipsUV }, set: { deformSession?.options.flipsUV = $0 }))
+                .accessibilityIdentifier("WorkspaceDeform.flipUV")
+            Toggle("Normal", isOn: Binding(get: { deform.options.flipsNormal }, set: { deformSession?.options.flipsNormal = $0 }))
+                .accessibilityIdentifier("WorkspaceDeform.flipNormal")
+            Toggle("Keep Tools", isOn: Binding(get: { deform.options.keepsTools }, set: { deformSession?.options.keepsTools = $0 }))
+                .accessibilityIdentifier("WorkspaceDeform.keepTools")
+            workspaceIconButton(
+                systemImage: "checkmark",
+                help: "Deform",
+                accessibilityIdentifier: "WorkspaceDeform.apply",
+                action: { confirmDeform() }
+            )
+        }
     }
 
     /// Rebuilds every curve of the running dialog as one step; the dialog stays for another try

@@ -11,6 +11,8 @@ enum WorkspaceCommandDistanceField: Hashable {
     case cornerTreatment
     /// A Bridge Curve's G1 tension, a plain number.
     case bridgeTension
+    /// Deform Curve's N offset.
+    case deformOffset
 }
 
 /// A command dialog's typed distance, in the display unit. The value it holds is the command's own
