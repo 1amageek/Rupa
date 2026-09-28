@@ -706,7 +706,8 @@ as spheres elsewhere.
    distance by itself.
    The incremental native cutover for `splineControlPointSlide`,
    `polySplineSurfaceVertexSlide`, `surfaceControlPointSlide`, `surfaceFrame`,
-   `regionOffset`, `edgeOffset`, `slotWidth`, and `sketchVertexOffset` starts
+   `regionOffset`, `edgeOffset`, `slotWidth`, `sketchVertexOffset`, and
+   `sketchCornerTreatment` starts
    from the ordered native handle result and retains that exact prepared record,
    occurrence/source baseline, and press point through finish or cancellation.
    Each update queries the current exact-ready mounted revision for the signed
@@ -1091,6 +1092,13 @@ as spheres elsewhere.
    edit box point the handle is drawn on, both stated without asking the
    frame anything.
    Each action names the one query its role owns.
+   `sketchCornerTreatment` is Fillet's radius handle: the producer anchors it at
+   the selected end of the `ViewportSketchCornerTreatmentHandle` corner and points
+   it along the sum of the directions the two curves leave the corner in (no
+   handle when they leave in opposite directions). Its value is signed like
+   `sectionAnalysisDistance`: positive is a Fillet radius, negative a Chamfer
+   distance, and zero or the unchanged baseline commits nothing.
+   `ViewportSketchCornerTreatmentHandleTests` own this.
 
    | Action | Query | Retained geometry |
    |---|---|---|

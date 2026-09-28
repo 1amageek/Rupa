@@ -50,6 +50,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case slotWidth(featureID: FeatureID, entityID: SketchEntityID, target: SelectionTarget, axis: Axis)
     case sketchVertexOffset(featureID: FeatureID, entityID: SketchEntityID, target: SelectionTarget,
                             handle: SketchEntityPointHandle, axis: Axis)
+    case sketchCornerTreatment(featureID: FeatureID, entityID: SketchEntityID, target: SelectionTarget,
+                               handle: SketchEntityPointHandle, axis: Axis)
     case patternArrayLinearAxis(ViewportPatternAffordanceSource.LinearAxisHandle)
     case independentCopyExtrudeDistance(ViewportPatternAffordanceSource.IndependentCopyExtrudeHandle)
     case independentCopyBodyDimension(ViewportPatternAffordanceSource.IndependentCopyDimensionHandle)
@@ -97,6 +99,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
             case .slotWidth(let featureID, let entityID, _, _): .slotWidth(.init(featureID: featureID, entityID: entityID))
             case .sketchVertexOffset(let featureID, let entityID, _, let handle, _):
                 .sketchVertexOffset(.init(featureID: featureID, entityID: entityID, handle: handle))
+            case .sketchCornerTreatment(let featureID, let entityID, _, let handle, _):
+                .sketchCornerTreatment(.init(featureID: featureID, entityID: entityID, handle: handle))
             case .patternArrayLinearAxis(let value): .patternArrayLinearAxis(.init(sourceID: value.sourceID, axisSlot: value.axisSlot))
             case .independentCopyExtrudeDistance(let value):
                 .independentCopyExtrudeDistance(.init(sourceID: value.sourceID, outputIndex: value.outputIndex, featureID: value.featureID))

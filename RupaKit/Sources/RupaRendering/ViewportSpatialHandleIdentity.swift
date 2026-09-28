@@ -35,6 +35,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case edgeOffset(ViewportEdgeOffsetHandleIdentity)
     case slotWidth(ViewportSlotWidthHandleIdentity)
     case sketchVertexOffset(ViewportSketchVertexOffsetHandleIdentity)
+    case sketchCornerTreatment(ViewportSketchCornerTreatmentHandleIdentity)
     case patternArrayLinearAxis(ViewportPatternArrayLinearAxisHandleIdentity)
     case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceHandleIdentity)
     case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionHandleIdentity)
@@ -122,7 +123,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                      .uniformScale, .rotateScreen, .scalePlane, .vertexMove, .faceMove: break
                 }
             case .sketchCurveHandle, .sketchDimension, .sketchPointHandle, .bridgeCurveEndpoint,
-                 .splineControlPoint, .edgeOffset, .slotWidth, .sketchVertexOffset,
+                 .splineControlPoint, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment,
                  .patternArrayLinearAxis, .independentCopyExtrudeDistance, .independentCopyBodyDimension,
                  .patternArrayRadialAngle, .patternArrayCopyCount, .patternArrayCurveExtent,
                  .patternArrayCurvePathPoint, .patternArrayOutputMode,

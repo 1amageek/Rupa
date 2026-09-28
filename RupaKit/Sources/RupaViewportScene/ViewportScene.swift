@@ -2953,6 +2953,33 @@ public struct ViewportSketchVertexOffsetDragTarget: Equatable, Sendable {
     }
 }
 
+/// Fillet's radius handle while its dialog runs: it sits at the corner `ends` names and points
+/// between the two curves. `signedDistance` is the dialog's distance, positive for Fillet and
+/// negative for Chamfer, so the drag direction chooses the treatment.
+public struct ViewportSketchCornerTreatmentHandle: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var ends: SketchCornerTreatmentEnds
+    public var signedDistance: Double
+
+    public init(target: SelectionTarget, ends: SketchCornerTreatmentEnds, signedDistance: Double) {
+        self.target = target
+        self.ends = ends
+        self.signedDistance = signedDistance
+    }
+}
+
+/// A drag of Fillet's radius handle: a positive `signedDistance` is a Fillet radius, a negative
+/// one a Chamfer distance.
+public struct ViewportSketchCornerTreatmentDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var signedDistance: Double
+
+    public init(target: SelectionTarget, signedDistance: Double) {
+        self.target = target
+        self.signedDistance = signedDistance
+    }
+}
+
 public struct ViewportEdgeChamferDragTarget: Equatable, Sendable {
     public var target: SelectionTarget
     public var distance: Double

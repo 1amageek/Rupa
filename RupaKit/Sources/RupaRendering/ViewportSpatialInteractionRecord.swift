@@ -117,7 +117,8 @@ struct ViewportSpatialInteractionRecord: Sendable {
             case .surfaceControlPointSlide(let targets, _, _), .surfaceFrame(let targets, _, _, _, _):
                 try array(targets)
             case .regionOffset(_, _, let target, _), .slotWidth(_, _, let target, _),
-                 .edgeOffset(_, _, let target, _, _, _), .sketchVertexOffset(_, _, let target, _, _):
+                 .edgeOffset(_, _, let target, _, _, _), .sketchVertexOffset(_, _, let target, _, _),
+                 .sketchCornerTreatment(_, _, let target, _, _):
                 try selection(target)
             case .patternArrayLinearAxis(let value): try string(value.title)
             case .independentCopyExtrudeDistance(let value): try string(value.title)

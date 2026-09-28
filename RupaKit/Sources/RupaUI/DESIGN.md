@@ -680,8 +680,11 @@ dialog (`WorkspaceFilletSession`): selected curve ends take Fillet Vertex throug
 `applySketchCornerTreatments` (every corner once, as one step), otherwise the first
 two selected curves take Fillet Curve; D types the distance, C switches Fillet
 and Chamfer, and Return, right-click or Apply applies it at the inspector's shared
-distance, while Escape ends it unchanged. The radius handle drag the official page
-shows is not offered yet (SK5.2). J joins two or more selected curves with the inspector's continuity
+distance, while Escape ends it unchanged. While it runs the viewport shows a radius
+handle (`viewportSketchCornerTreatmentHandle`) at the corner Core's
+`sketchCornerTreatmentEnds` names for the first selected end or the two curves; dragging
+it inward sets a Fillet radius and outward a Chamfer distance, and Return still applies.
+A selection Core cannot resolve to one corner shows no handle and Apply reports why. J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and
 Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control

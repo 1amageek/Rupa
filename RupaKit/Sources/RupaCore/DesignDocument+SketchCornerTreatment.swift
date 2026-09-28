@@ -103,6 +103,33 @@ extension DesignDocument {
         return insertedEntityID
     }
 
+    /// The corner `applySketchCornerTreatment(target:adjacentTarget:...)` would treat, without
+    /// changing the document: a selected curve end and the end it meets, or the shared corner of
+    /// two selected curves.
+    public func sketchCornerTreatmentEnds(
+        target: SelectionTarget,
+        adjacentTarget: SelectionTarget? = nil
+    ) throws -> SketchCornerTreatmentEnds {
+        let selection = try editableSketchEntityBase(for: target, operationName: "Sketch corner treatment")
+        let corner = try sketchCornerTreatmentSelection(
+            target: target,
+            adjacentTarget: adjacentTarget,
+            selection: selection
+        )
+        func end(_ endpoint: SketchCurveEndpoint) -> SketchCornerTreatmentEnds.End {
+            let handle: SketchEntityPointHandle = switch endpoint {
+            case .line(let value): value.isStart ? .lineStart : .lineEnd
+            case .arc(let value): value.isStart ? .arcStart : .arcEnd
+            }
+            return .init(entityID: endpoint.entityID, handle: handle)
+        }
+        return SketchCornerTreatmentEnds(
+            featureID: selection.featureID,
+            selected: end(corner.selectedEndpoint),
+            adjacent: end(corner.adjacentEndpoint)
+        )
+    }
+
     private struct SketchCornerTreatmentSelection {
         var selectedEndpoint: SketchCurveEndpoint
         var adjacentEndpoint: SketchCurveEndpoint

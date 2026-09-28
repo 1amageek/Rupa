@@ -196,6 +196,7 @@ public struct Viewport: View {
     private let slotWidthMeters: Double
     private let sketchVertexOffsetDistanceMeters: Double
     private let edgeOffsetDistanceMeters: Double
+    private let sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
     private let transformGizmo: ViewportTransformGizmoConfiguration?
     private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
     private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
@@ -220,6 +221,7 @@ public struct Viewport: View {
     private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
+    private let onSketchCornerTreatmentDrag: ((ViewportSketchCornerTreatmentDragTarget) -> Void)?
     private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
     private let onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)?
     private let onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)?
@@ -394,6 +396,7 @@ public struct Viewport: View {
         slotWidthMeters: Double? = nil,
         sketchVertexOffsetDistanceMeters: Double? = nil,
         edgeOffsetDistanceMeters: Double? = nil,
+        sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? = nil,
         transformGizmo: ViewportTransformGizmoConfiguration? = nil,
         presentationCADInteractionSceneNodeIDs: Set<SceneNodeID> = [],
         selectedPresentationHasExactCADContext: Bool,
@@ -416,6 +419,7 @@ public struct Viewport: View {
         onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
+        onSketchCornerTreatmentDrag: ((ViewportSketchCornerTreatmentDragTarget) -> Void)? = nil,
         onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
         onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)? = nil,
         onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? = nil,
@@ -526,6 +530,7 @@ public struct Viewport: View {
         self.slotWidthMeters = slotWidthMeters ?? interactionScaleDefaults.slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
+        self.sketchCornerTreatmentHandle = sketchCornerTreatmentHandle
         self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
         self.transformGizmo = transformGizmo
@@ -549,6 +554,7 @@ public struct Viewport: View {
         self.onEdgeOffsetDrag = onEdgeOffsetDrag
         self.onSlotWidthDrag = onSlotWidthDrag
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
+        self.onSketchCornerTreatmentDrag = onSketchCornerTreatmentDrag
         self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
         self.onSectionAnalysisDistanceDrag = onSectionAnalysisDistanceDrag
         self.onIndependentCopyExtrudeDistanceDrag = onIndependentCopyExtrudeDistanceDrag
@@ -986,9 +992,7 @@ public struct Viewport: View {
             .onChange(of: bodyTransformRouteEnabled) { _, enabled in
                 if !enabled, case .bodyTransform = nativeInputGesture { cancelNativeInputGesture() }
             }
-            .onChange(of: slotWidthMeters) { _, _ in cancelChangedNativeAxisBaseline() }
-            .onChange(of: edgeOffsetDistanceMeters) { _, _ in cancelChangedNativeAxisBaseline() }
-            .onChange(of: sketchVertexOffsetDistanceMeters) { _, _ in cancelChangedNativeAxisBaseline() }
+            .onChange(of: nativeAxisBaselines) { _, _ in cancelChangedNativeAxisBaseline() }
             .onChange(of: selection.selectedSceneNodeIDs) { _, _ in
                 resetMeasurement()
             }
@@ -1605,6 +1609,7 @@ public struct Viewport: View {
         key.slotWidthMeters = slotWidthMeters
         key.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
         key.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
+        key.sketchCornerTreatmentHandle = sketchCornerTreatmentHandle
         key.transformGizmo = transformGizmo
         // Fixed route bits avoid an array allocation on every camera frame.
         if onRegionOffsetDrag != nil { key.availableRoutes |= 1 << 0 }
@@ -1636,6 +1641,7 @@ public struct Viewport: View {
         if onBodyPlacementCommit != nil { key.availableRoutes |= 1 << 26 }
         if onBodyResizeCommit != nil { key.availableRoutes |= 1 << 27 }
         if onBoundarySurface != nil { key.availableRoutes |= 1 << 28 }
+        if onSketchCornerTreatmentDrag != nil { key.availableRoutes |= 1 << 29 }
         return key
     }
 
@@ -3742,6 +3748,7 @@ public struct Viewport: View {
         case .edgeOffset: onEdgeOffsetDrag != nil
         case .slotWidth: onSlotWidthDrag != nil
         case .sketchVertexOffset: onSketchVertexOffsetDrag != nil
+        case .sketchCornerTreatment: onSketchCornerTreatmentDrag != nil
         case .patternArrayLinearAxis: onPatternArrayLinearAxisDrag != nil
         case .sectionAnalysisDistance: onSectionAnalysisDistanceDrag != nil
         case .independentCopyExtrudeDistance: onIndependentCopyExtrudeDistanceDrag != nil
@@ -3839,8 +3846,27 @@ public struct Viewport: View {
         case .slotWidth: input.axis.baseValue == slotWidthMeters
         case .edgeOffset: input.axis.baseValue == edgeOffsetDistanceMeters
         case .sketchVertexOffset: input.axis.baseValue == sketchVertexOffsetDistanceMeters
+        case .sketchCornerTreatment: input.axis.baseValue == sketchCornerTreatmentHandle?.signedDistance
         default: true
         }
+    }
+
+    /// The values the axis routes' handles start from; a change to any of them ends a drag
+    /// that started from the old one.
+    private struct NativeAxisBaselines: Equatable {
+        var slotWidthMeters: Double
+        var edgeOffsetDistanceMeters: Double
+        var sketchVertexOffsetDistanceMeters: Double
+        var sketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
+    }
+
+    private var nativeAxisBaselines: NativeAxisBaselines {
+        NativeAxisBaselines(
+            slotWidthMeters: slotWidthMeters,
+            edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
+            sketchCornerTreatmentHandle: sketchCornerTreatmentHandle
+        )
     }
 
     private func cancelChangedNativeAxisBaseline() {
@@ -4101,6 +4127,7 @@ public struct Viewport: View {
         case .edgeOffset(let target): onEdgeOffsetDrag?(target)
         case .slotWidth(let target): onSlotWidthDrag?(target)
         case .sketchVertexOffset(let target): onSketchVertexOffsetDrag?(target)
+        case .sketchCornerTreatment(let target): onSketchCornerTreatmentDrag?(target)
         case .patternArrayLinearAxis(let target): onPatternArrayLinearAxisDrag?(target)
         case .sectionAnalysisDistance(let target): onSectionAnalysisDistanceDrag?(target)
         case .independentCopyExtrudeDistance(let target): onIndependentCopyExtrudeDistanceDrag?(target)
@@ -5890,11 +5917,12 @@ extension Viewport {
         if onEdgeOffsetDrag != nil { routes.insert(.edgeOffset) }
         if onSlotWidthDrag != nil { routes.insert(.slotWidth) }
         if onSketchVertexOffsetDrag != nil { routes.insert(.sketchVertexOffset) }
+        if onSketchCornerTreatmentDrag != nil { routes.insert(.sketchCornerTreatment) }
         if onSplineControlPointSlideDrag != nil { routes.insert(.splineSlide) }
         var overrides: [Override] = []
         if case .active(let press) = nativeInputGesture, let value = press.value {
             switch press.input.record.target {
-            case .regionOffset, .edgeOffset, .sketchVertexOffset, .splineControlPointSlide:
+            case .regionOffset, .edgeOffset, .sketchVertexOffset, .sketchCornerTreatment, .splineControlPointSlide:
                 overrides.append(.init(identity: press.input.record.identity, distanceMeters: value))
             case .slotWidth:
                 overrides.append(.init(identity: press.input.record.identity, widthMeters: value))
@@ -5934,7 +5962,8 @@ extension Viewport {
             includeSelectedBridgeEndpoints: true,
             slotWidthMeters: slotWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
-            edgeOffsetDistanceMeters: edgeOffsetDistanceMeters
+            edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            cornerTreatmentHandle: sketchCornerTreatmentHandle
         )
     }
 

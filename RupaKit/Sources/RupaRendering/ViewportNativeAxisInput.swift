@@ -14,6 +14,7 @@ struct ViewportNativeAxisInput: Sendable {
         case edgeOffset(ViewportEdgeOffsetDragTarget)
         case slotWidth(ViewportSlotWidthDragTarget)
         case sketchVertexOffset(ViewportSketchVertexOffsetDragTarget)
+        case sketchCornerTreatment(ViewportSketchCornerTreatmentDragTarget)
         case patternArrayLinearAxis(ViewportPatternArrayLinearAxisDragTarget)
         case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceDragTarget)
         case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionDragTarget)
@@ -51,6 +52,8 @@ struct ViewportNativeAxisInput: Sendable {
         case .slotWidth(_, _, _, let value):
             axis = value
         case .sketchVertexOffset(_, _, _, _, let value):
+            axis = value
+        case .sketchCornerTreatment(_, _, _, _, let value):
             axis = value
         case .sectionAnalysisDistance(let value):
             axis = value
@@ -129,8 +132,9 @@ struct ViewportNativeAxisInput: Sendable {
             return sourceDelta
         case .edgeOffset, .sketchVertexOffset:
             return try Self.positiveValue(axis.baseValue, adding: sourceDelta)
-        case .sectionAnalysisDistance:
-            // A signed offset: the plane may move to either side of its source.
+        case .sectionAnalysisDistance, .sketchCornerTreatment:
+            // A signed offset: the plane may move to either side of its source, and Fillet's
+            // handle is a Fillet radius on its inside and a Chamfer distance outside.
             let result = axis.baseValue + sourceDelta
             guard result.isFinite else {
                 throw RealityViewportSpatialBatch.invalid("The native section distance overflowed.")
@@ -228,6 +232,11 @@ struct ViewportNativeAxisInput: Sendable {
             }
             guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
             return .sketchVertexOffset(.init(target: target, handle: handle, distance: value))
+
+        case .sketchCornerTreatment(_, _, let target, _, _):
+            // A distance of zero treats nothing, so a drag back to the corner is no change.
+            guard abs(value) > 1.0e-12, abs(value - axis.baseValue) > 1.0e-12 else { return nil }
+            return .sketchCornerTreatment(.init(target: target, signedDistance: value))
 
         case .polySplineSurfaceVertex(let handle):
             guard let delta = localDelta(for: value) else {

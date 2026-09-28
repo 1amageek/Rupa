@@ -414,6 +414,13 @@ struct ViewportSketchVertexOffsetHandleIdentity: Equatable, Sendable {
     var handle: SketchEntityPointHandle
 }
 
+/// Fillet's radius handle, named by the corner's selected end.
+struct ViewportSketchCornerTreatmentHandleIdentity: Equatable, Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var handle: SketchEntityPointHandle
+}
+
 struct ViewportAffordanceTarget: Equatable, Sendable {
     var featureID: FeatureID
     var selectionTarget: SelectionTarget?

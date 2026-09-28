@@ -20,6 +20,7 @@ extension ViewportSpatialOverlayProducer {
         case edgeOffset
         case slotWidth
         case sketchVertexOffset
+        case sketchCornerTreatment
         case splineSlide
         case bridgeCurveEndpoint
     }
@@ -292,6 +293,7 @@ extension ViewportSpatialOverlayProducer {
             let slotWidthMeters: Double
             let sketchVertexOffsetDistanceMeters: Double
             let edgeOffsetDistanceMeters: Double
+            let cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle?
 
             init(
                 document: DesignDocument,
@@ -307,7 +309,8 @@ extension ViewportSpatialOverlayProducer {
                 bridgeGuideLengthMeters: Double = 0.034,
                 slotWidthMeters: Double? = nil,
                 sketchVertexOffsetDistanceMeters: Double? = nil,
-                edgeOffsetDistanceMeters: Double? = nil
+                edgeOffsetDistanceMeters: Double? = nil,
+                cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? = nil
             ) {
                 self.document = document
                 self.scene = scene
@@ -326,6 +329,7 @@ extension ViewportSpatialOverlayProducer {
                     ?? interactionDefaults.operationStepMeters
                 self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
                     ?? interactionDefaults.operationStepMeters
+                self.cornerTreatmentHandle = cornerTreatmentHandle
             }
         }
 
@@ -438,7 +442,7 @@ extension ViewportSpatialOverlayProducer {
                     .curve
                 case .lineDimension, .circleDimension, .arcDimension,
                      .splineControl, .regionOffset, .slotWidth,
-                     .sketchVertexOffset, .splineSlide:
+                     .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
                     .sketch
                 }
             }
@@ -464,6 +468,7 @@ extension ViewportSpatialOverlayProducer {
         var slotWidthMeters: Double { input.slotWidthMeters }
         var sketchVertexOffsetDistanceMeters: Double { input.sketchVertexOffsetDistanceMeters }
         var edgeOffsetDistanceMeters: Double { input.edgeOffsetDistanceMeters }
+        var cornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? { input.cornerTreatmentHandle }
     }
 
     /// Builds the immutable worker source from raw document state.  The
@@ -672,7 +677,7 @@ extension ViewportSpatialOverlayProducer {
         var descriptorCount = 0
 
         let isOffsetRoute: Bool = switch entry.route {
-        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide:
+        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
             true
         case .lineDimension, .circleDimension, .arcDimension, .curvePointControl,
              .splineControl, .curvatureComb, .bridgeCurveEndpoint:
@@ -681,13 +686,13 @@ extension ViewportSpatialOverlayProducer {
         let isDimensionRoute: Bool = switch entry.route {
         case .lineDimension, .circleDimension, .arcDimension: true
         case .curvePointControl, .splineControl, .curvatureComb, .regionOffset,
-             .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide,
+             .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide,
              .bridgeCurveEndpoint: false
         }
         let markerTolerance: Float? = switch entry.route {
         case .curvePointControl, .splineControl, .bridgeCurveEndpoint:
             handleIndex == nil ? nil : 12.0
-        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .splineSlide:
+        case .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment, .splineSlide:
             handleIndex == nil ? nil : 14.0
         case .lineDimension, .circleDimension, .arcDimension, .curvatureComb:
             nil
@@ -1226,6 +1231,19 @@ extension ViewportSpatialOverlayProducer {
                         )
                         try append(entry, to: &result, limits: limits)
                     }
+                }
+
+                if source.enabledRoutes.contains(.sketchCornerTreatment),
+                   let corner = source.cornerTreatmentHandle,
+                   corner.ends.featureID == item.featureID,
+                   let entry = try sketchCornerTreatmentEntry(
+                       corner: corner,
+                       primitives: primitives,
+                       modelTransform: item.modelTransform,
+                       ruler: source.ruler,
+                       overrides: source.activeOverrides
+                   ) {
+                    try append(entry, to: &result, limits: limits)
                 }
 
             case .body(let component):
@@ -3117,6 +3135,58 @@ extension ViewportSpatialOverlayProducer {
         )
     }
 
+    /// Fillet's radius handle at the corner `corner.ends` names: anchored at the selected end
+    /// and pointing between the two curves (the sum of the directions each curve leaves the
+    /// corner in), so dragging inward is a Fillet radius and outward a Chamfer distance. A
+    /// corner whose curves leave it in opposite directions has no inside and shows no handle.
+    private static func sketchCornerTreatmentEntry(
+        corner: ViewportSketchCornerTreatmentHandle,
+        primitives: [ViewportSketchPrimitive],
+        modelTransform: ScenePlacement,
+        ruler: RulerConfiguration,
+        overrides: [SketchCurveAffordanceSource.ActiveOverride]
+    ) throws -> SketchCurveAffordanceSource.Entry? {
+        func geometry(_ end: SketchCornerTreatmentEnds.End) throws -> (point: CGPoint, direction: Vector3D)? {
+            guard let primitive = primitives.first(where: { $0.entityID == end.entityID }) else { return nil }
+            return try sketchVertexGeometry(for: primitive, handle: end.handle, modelTransform: modelTransform)
+        }
+        guard let selected = try geometry(corner.ends.selected),
+              let adjacent = try geometry(corner.ends.adjacent) else {
+            return nil
+        }
+        let sum = selected.direction + adjacent.direction
+        guard sum.length > 1.0e-9 else { return nil }
+        let bisector = try sum.normalized(tolerance: 1.0e-12)
+        let identity = ViewportSpatialHandleIdentity.sketchCornerTreatment(.init(
+            featureID: corner.ends.featureID,
+            entityID: corner.ends.selected.entityID,
+            handle: corner.ends.selected.handle
+        ))
+        let override = activeOverride(identity, in: overrides)
+        let distance = override?.distanceMeters ?? corner.signedDistance
+        let length = ViewportLengthLabelFormatter.string(fromMeters: abs(distance), preferredUnit: ruler.displayUnit)
+        let base = world(selected.point, by: modelTransform)
+        return try offsetEntry(
+            route: .sketchCornerTreatment,
+            identity: identity,
+            anchor: base,
+            direction: bisector,
+            distanceMeters: distance,
+            modelTransform: modelTransform,
+            minimumLengthPoints: 64.0,
+            label: "\(distance < 0 ? "Chamfer" : "Fillet") \(length)",
+            state: override?.state ?? .pending,
+            family: .sketch,
+            preparedTarget: .sketchCornerTreatment(
+                featureID: corner.ends.featureID,
+                entityID: corner.ends.selected.entityID,
+                target: corner.target,
+                handle: corner.ends.selected.handle,
+                axis: .init(origin: base, direction: bisector, baseValue: corner.signedDistance)
+            )
+        )
+    }
+
     static func makeSplineSlideEntries(
         featureID: FeatureID,
         entityID: SketchEntityID,
@@ -3372,7 +3442,7 @@ extension ViewportSpatialOverlayProducer {
                     parallel: minimumLengthPoints
                 )
             }
-        case .edgeOffset, .slotWidth, .sketchVertexOffset:
+        case .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment:
             // These routes use the native projected minimum for a nonzero
             // world distance and a directed idle guide at exactly zero.
             if abs(distanceMeters) > 1.0e-12 {

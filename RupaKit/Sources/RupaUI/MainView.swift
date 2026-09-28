@@ -2227,6 +2227,7 @@ private struct ProjectMainViewContent: View {
             slotWidthMeters: slotProfileWidthMeters,
             sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
             edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            sketchCornerTreatmentHandle: viewportSketchCornerTreatmentHandle,
             transformGizmo: transformSession?.gizmo(
                 distanceStepMeters: WorkspaceInteractionScaleDefaults(ruler: snapshot.workspaceState.ruler)
                     .operationStepMeters
@@ -2252,6 +2253,9 @@ private struct ProjectMainViewContent: View {
             onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
             onSlotWidthDrag: viewportSlotWidthDragHandler,
             onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
+            onSketchCornerTreatmentDrag: filletSession == nil ? nil : { target in
+                handleViewportSketchCornerTreatmentDrag(target)
+            },
             onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
             onSectionAnalysisDistanceDrag: sectionAnalysisSession == nil ? nil : { target in
                 sectionAnalysisSession?.distanceMeters = target.distanceMeters
@@ -8295,6 +8299,46 @@ private struct ProjectMainViewContent: View {
             filletSession = nil
             reportToolStatus("\(fillet.title) done.")
         }
+    }
+
+    /// Fillet's radius handle while its dialog runs, at the corner Core resolves for the first
+    /// selected end or the two selected curves. A selection Core cannot resolve to one corner
+    /// shows no handle; Apply reports why.
+    private var viewportSketchCornerTreatmentHandle: ViewportSketchCornerTreatmentHandle? {
+        guard let fillet = filletSession else { return nil }
+        let target: SelectionTarget
+        let adjacent: SelectionTarget?
+        switch fillet.targets {
+        case .vertices(let vertices):
+            guard let first = vertices.first else { return nil }
+            target = first
+            adjacent = nil
+        case .curves(let first, let second):
+            target = first
+            adjacent = second
+        }
+        let ends: SketchCornerTreatmentEnds
+        do {
+            ends = try snapshot.document.document.sketchCornerTreatmentEnds(target: target, adjacentTarget: adjacent)
+        } catch {
+            return nil
+        }
+        return ViewportSketchCornerTreatmentHandle(
+            target: target,
+            ends: ends,
+            signedDistance: fillet.treatment == .fillet
+                ? sketchCornerTreatmentDistanceMeters
+                : -sketchCornerTreatmentDistanceMeters
+        )
+    }
+
+    /// A drag of Fillet's radius handle: inward sets a Fillet radius, outward a Chamfer
+    /// distance; Return or right-click still applies it.
+    private func handleViewportSketchCornerTreatmentDrag(_ target: ViewportSketchCornerTreatmentDragTarget) {
+        guard filletSession != nil else { return }
+        sketchCornerTreatmentDistanceMeters = abs(target.signedDistance)
+        filletSession?.treatment = target.signedDistance < 0 ? .chamfer : .fillet
+        if let filletSession { reportToolStatus("\(filletSession.title): Return applies.") }
     }
 
     /// Fillet's dialog: Fillet or Chamfer (C), its distance (D) and Apply.

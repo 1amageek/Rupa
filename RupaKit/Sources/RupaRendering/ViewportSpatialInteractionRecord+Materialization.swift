@@ -134,7 +134,7 @@ extension ViewportSpatialPreparedInteractionTarget {
              .polySplineSurfaceVertex, .polySplineSurfaceVertexSlide,
              .surfaceControlPoint, .surfaceControlPointSlide,
              .surfaceTrimEndpoint, .surfaceTrimControlPoint, .surfaceFrame,
-             .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset,
+             .regionOffset, .edgeOffset, .slotWidth, .sketchVertexOffset, .sketchCornerTreatment,
              .affordance, .objectTransform, .patternArrayLinearAxis,
              .independentCopyExtrudeDistance, .independentCopyBodyDimension,
              .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint,

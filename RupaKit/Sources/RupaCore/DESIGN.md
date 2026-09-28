@@ -1209,6 +1209,10 @@ A corner is two line or arc ends held together by a coincident constraint or
 meeting within the modeling distance, as curves drawn to touch do, for both Fillet
 Curve's curve pair and Fillet Vertex's selected end; ends with a gap are not a
 corner. `SketchCornerTreatmentTouchingCurvesTests` own this.
+`sketchCornerTreatmentEnds(target:adjacentTarget:)` names the corner a treatment at
+that selection would take, as its two ends (`SketchCornerTreatmentEnds`), without
+changing the document, through the same corner resolution; Fillet's viewport handle
+reads it (`SketchCornerTreatmentEndsTests`).
 
 `ExtendCurveShape.supported(for:)` is the one rule for which Extend shapes a curve
 kind takes, in the order the dialog offers them: a line takes Natural, Linear,
