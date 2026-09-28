@@ -5313,23 +5313,21 @@ import Testing
     #expect(report.sourceFeatureID == spline.sourceFeatureID)
     #expect(report.entityID == spline.entityID)
     #expect(report.originalControlPointCount == 7)
-    #expect(report.rebuiltControlPointCount == 7)
+    // Degree 3 with 2 spans is a clamped uniform B-spline of 5 control points; weight 0 lays
+    // them evenly on the chord.
+    #expect(report.rebuiltControlPointCount == 5)
     #expect(report.originalSpanCount == 2)
     #expect(report.rebuiltSpanCount == 2)
-    #expect(report.deviationMeasurement == .analyticCubicBezier)
+    #expect(report.deviationMeasurement == .sampledProjection)
     #expect(report.evaluatedIntervalCount == 2)
-    #expect(report.criticalPointCount >= 0)
     #expect(report.maximumDeviationMeters >= report.rootMeanSquareDeviationMeters)
     #expect(report.maximumDeviationFraction >= 0.0)
     #expect(report.maximumDeviationFraction <= 1.0)
-    #expect(rebuilt.controlPoints.count == 7)
-    #expect(abs(rebuilt.controlPoints[1].x - 0.001) < 1.0e-12)
-    #expect(abs(rebuilt.controlPoints[1].y - 0.000) < 1.0e-12)
-    #expect(abs(rebuilt.controlPoints[2].x - 0.002) < 1.0e-12)
-    #expect(abs(rebuilt.controlPoints[2].y - 0.000) < 1.0e-12)
-    #expect(abs(rebuilt.controlPoints[4].x - (0.003 + 0.004 / 3.0)) < 1.0e-12)
-    #expect(abs(rebuilt.controlPoints[4].y - 0.000) < 1.0e-12)
-    #expect(abs((rebuilt.controlPoints.last?.x ?? -1.0) - 0.007) < 1.0e-12)
+    #expect(rebuilt.controlPoints.count == 5)
+    for (index, point) in rebuilt.controlPoints.enumerated() {
+        #expect(abs(point.x - 0.007 * Double(index) / 4) < 1.0e-12)
+        #expect(abs(point.y) < 1.0e-12)
+    }
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -5357,16 +5355,16 @@ import Testing
             .rebuildSketchCurve(
                 target: target,
                 options: .explicitControl(
-                    degree: 5,
+                    degree: SketchSpline.maximumDegree + 1,
                     spanCount: 2,
                     weight: 0.5
                 )
             )
         )
-        Issue.record("Explicit Control must reject unsupported non-cubic degree output.")
+        Issue.record("Explicit Control must reject a degree a sketch spline cannot store.")
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("degree 5"))
+        #expect(error.message.contains("between 1 and \(SketchSpline.maximumDegree)"))
     }
 
     #expect(session.generation == DocumentGeneration(1))

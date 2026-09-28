@@ -952,9 +952,12 @@ Editing commands on any degree and knots:
 | Extend Curve Natural | Swift-CAD's `naturalSpan(ofSegment:)` on the end segment's own polynomial, a same-degree span after a C0 joint |
 | Insert Knot, Subdivide, move, slide, Reverse, projection, Offset | general already |
 | Rebuild Points | a cubic chain at a count a chain takes (3k + 1) keeps the chain rebuild, its joints and exact layout; any other count or input is Swift-CAD's least-squares cubic B-spline with that many points (`SketchSplineLeastSquaresFit`), only its ends mapped, its deviation `sampledProjection` |
-| Rebuild Refit and Explicit Control, Delete Redundant Topology, opening a closed spline, spatial conversion | refused by name (`validateCubicBezierChainSpline`): they read cubic spans |
+| Rebuild Refit | a cubic chain keeps the chain refit, spans on its own joints and handles along its tangents; any other input is Swift-CAD's `refit(_:deviation:keepsCorners:)`, the fewest cubic control points within the tolerance, cut and rejoined at the curve's own corner knots when corners are kept, only its ends mapped, its deviation `sampledProjection` |
+| Rebuild Explicit Control | every input is Swift-CAD's clamped uniform B-spline of the chosen degree with spans + degree control points, the weight its `shapeWeight` (1 closest to the original, 0 the evenest polygon on the chord); the degree range is Core's `CurveRebuildOptions.explicitControlDegrees` (1 through `SketchSpline.maximumDegree`), which the Rebuild dialog and inspector read |
+| Delete Redundant Topology, opening a closed spline, spatial conversion | refused by name (`validateCubicBezierChainSpline`): they read cubic spans |
 
-`GeneralSplineEditingTests` own these.
+`GeneralSplineEditingTests` own these; `GeneralSplineRebuildTests` own Refit and
+Explicit Control on general splines.
 
 ### Raise Curve Degree and Convert Vertex
 

@@ -53,30 +53,99 @@ extension DesignDocument {
         owner: String
     ) throws -> RebuiltSketchSpline {
         let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        return try rebuiltSketchSpline(fitting: spline, curve: curve, method: "Points", owner: owner) { fitter in
+            try fitter.fit(curve, degree: 3, controlPointCount: controlPointCount)
+        }
+    }
+
+    /// Refit of a spline of any degree or knots: Swift-CAD's fewest cubic control points within
+    /// the tolerance, cut and joined at the curve's own corners when they are kept.
+    func rebuiltSketchSplineByGeneralRefit(
+        _ spline: SketchSpline,
+        tolerance: CADExpression,
+        keepsCorners: Bool,
+        owner: String
+    ) throws -> RebuiltSketchSpline {
+        let toleranceMeters = try resolvedPositiveLengthValue(
+            tolerance,
+            owner: "\(owner) Refit tolerance"
+        )
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        return try rebuiltSketchSpline(fitting: spline, curve: curve, method: "Refit", owner: owner) { fitter in
+            try fitter.refit(curve, deviation: toleranceMeters, keepsCorners: keepsCorners)
+        }
+    }
+
+    /// Explicit Control on a spline of any degree or knots: Swift-CAD's clamped uniform B-spline of
+    /// the chosen degree with `spanCount` spans, fitted with the weight trading closeness to the
+    /// original (1) for an even control polygon (0).
+    func rebuiltSketchSplineByExplicitControl(
+        _ spline: SketchSpline,
+        degree: Int,
+        spanCount: Int,
+        weight: Double,
+        owner: String
+    ) throws -> RebuiltSketchSpline {
+        guard CurveRebuildOptions.explicitControlDegrees.contains(degree) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) Explicit Control degree must be between \(CurveRebuildOptions.explicitControlDegrees.lowerBound) and \(CurveRebuildOptions.explicitControlDegrees.upperBound)."
+            )
+        }
+        guard spanCount > 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) Explicit Control requires at least one span."
+            )
+        }
+        guard weight.isFinite,
+              weight >= 0.0,
+              weight <= 1.0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) Explicit Control weight must be between 0 and 1."
+            )
+        }
+        let curve = try resolvedSketchSplineCurve(spline, owner: owner)
+        return try rebuiltSketchSpline(fitting: spline, curve: curve, method: "Explicit Control", owner: owner) { fitter in
+            try fitter.fit(curve, degree: degree, controlPointCount: spanCount + degree, shapeWeight: weight)
+        }
+    }
+
+    /// The rebuilt spline from one of Swift-CAD's fits; only the ends map to the original's.
+    private func rebuiltSketchSpline(
+        fitting spline: SketchSpline,
+        curve: SketchSplineCurve,
+        method: String,
+        owner: String,
+        _ fit: (SketchSplineLeastSquaresFit) throws -> SketchSplineLeastSquaresFit.Result
+    ) throws -> RebuiltSketchSpline {
         let result: SketchSplineLeastSquaresFit.Result
         do {
-            result = try SketchSplineLeastSquaresFit(tolerance: .standard).fit(curve, degree: 3, controlPointCount: controlPointCount)
+            result = try fit(SketchSplineLeastSquaresFit(tolerance: .standard))
         } catch let error as KernelError {
-            throw EditorError(code: .commandInvalid, message: "\(owner) Points: \(error.message)")
+            throw EditorError(code: .commandInvalid, message: "\(owner) \(method): \(error.message)")
         } catch let error as GeometryError {
-            throw EditorError(code: .commandInvalid, message: "\(owner) Points: \(error)")
+            throw EditorError(code: .commandInvalid, message: "\(owner) \(method): \(error)")
         }
         let rebuilt = sketchSpline(from: result.curve)
         try validateSplineForm(rebuilt, owner: owner)
+        let pointCount = result.curve.controlPoints.count
+        let spanCount = Set(result.curve.knots).count - 1
         return RebuiltSketchSpline(
             spline: rebuilt,
             originalControlPointCount: spline.controlPoints.count,
-            rebuiltControlPointCount: controlPointCount,
+            rebuiltControlPointCount: pointCount,
             originalSegmentCount: curve.segments.count,
-            rebuiltSegmentCount: controlPointCount - 3,
+            rebuiltSegmentCount: spanCount,
             deviation: SketchSplineRebuildDeviation(
                 maximumDistance: result.maximumDeviation,
                 rootMeanSquareDistance: result.rootMeanSquareDeviation,
                 maximumDistanceFraction: result.maximumDeviationFraction,
-                evaluatedIntervalCount: controlPointCount - 3,
+                evaluatedIntervalCount: spanCount,
                 criticalPointCount: 0
             ),
-            controlPointIndexMap: [0: 0, spline.controlPoints.count - 1: controlPointCount - 1],
+            controlPointIndexMap: [0: 0, spline.controlPoints.count - 1: pointCount - 1],
             deviationMeasurement: .sampledProjection
         )
     }
@@ -135,61 +204,6 @@ extension DesignDocument {
             originalControlPoints: originalControlPoints,
             intervals: intervals,
             tangentWeight: 1.0,
-            owner: owner
-        )
-    }
-
-    func rebuiltSketchSplineByExplicitControl(
-        _ spline: SketchSpline,
-        degree: Int,
-        spanCount: Int,
-        weight: Double,
-        owner: String
-    ) throws -> RebuiltSketchSpline {
-        guard degree == 3 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control currently supports degree 3 cubic Bezier output; degree \(degree) requires a B-spline/NURBS source model."
-            )
-        }
-        guard spanCount > 0 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control requires at least one span."
-            )
-        }
-        guard weight.isFinite,
-              weight >= 0.0,
-              weight <= 1.0 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control weight must be between 0 and 1."
-            )
-        }
-
-        let originalControlPoints = try resolvedSplineControlPoints(
-            spline,
-            owner: owner
-        )
-        guard originalControlPoints.count >= 4,
-              (originalControlPoints.count - 1).isMultiple(of: 3) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires a cubic Bezier spline."
-            )
-        }
-
-        return try rebuiltSketchSpline(
-            from: spline,
-            originalControlPoints: originalControlPoints,
-            intervals: [
-                SketchSplineRebuildInterval(
-                    startFraction: 0.0,
-                    endFraction: 1.0,
-                    segmentCount: spanCount
-                ),
-            ],
-            tangentWeight: weight,
             owner: owner
         )
     }

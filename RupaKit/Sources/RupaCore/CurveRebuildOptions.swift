@@ -10,6 +10,9 @@ public struct CurveRebuildOptions: Codable, Equatable, Sendable {
 
     public var method: Method
 
+    /// The degrees Explicit Control builds: every degree a sketch spline stores.
+    public static let explicitControlDegrees: ClosedRange<Int> = 1...SketchSpline.maximumDegree
+
     public init(method: Method) {
         self.method = method
     }

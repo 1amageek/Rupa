@@ -165,9 +165,6 @@ import Testing
         let entity = try target(document, featureID, .sketchEntity(featureID: featureID, entityID: entityID))
         let before = document.cadDocument.designGraph
         #expect(throws: EditorError.self) { try document.deleteRedundantSketchSplineJoints(target: entity) }
-        #expect(throws: EditorError.self) {
-            _ = try document.rebuildSketchCurve(target: entity, options: .refit(tolerance: mm(0.01), keepsCorners: true))
-        }
         #expect(document.cadDocument.designGraph == before)
     }
 }

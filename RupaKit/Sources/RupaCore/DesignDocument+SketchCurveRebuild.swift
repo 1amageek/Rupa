@@ -48,17 +48,23 @@ extension DesignDocument {
                 controlPointCount: controlPointCount,
                 owner: "Sketch curve rebuild"
             )
-        case .refit(let tolerance, let keepsCorners):
-            // Refit and Explicit Control read their input span by span as a cubic chain.
-            try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild Refit")
+        case .refit(let tolerance, let keepsCorners) where spline.isCubicBezierChain && spline.spanCount != nil:
+            // A cubic chain keeps the chain refit: spans placed on its own joints, the handles
+            // along its tangents.
             rebuilt = try rebuiltSketchSplineByRefit(
                 spline,
                 tolerance: tolerance,
                 keepsCorners: keepsCorners,
                 owner: "Sketch curve rebuild"
             )
+        case .refit(let tolerance, let keepsCorners):
+            rebuilt = try rebuiltSketchSplineByGeneralRefit(
+                spline,
+                tolerance: tolerance,
+                keepsCorners: keepsCorners,
+                owner: "Sketch curve rebuild"
+            )
         case .explicitControl(let degree, let spanCount, let weight):
-            try validateCubicBezierChainSpline(spline, owner: "Sketch curve rebuild Explicit Control")
             rebuilt = try rebuiltSketchSplineByExplicitControl(
                 spline,
                 degree: degree,

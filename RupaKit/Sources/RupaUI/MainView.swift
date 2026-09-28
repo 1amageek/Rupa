@@ -9108,7 +9108,7 @@ private struct ProjectMainViewContent: View {
             .font(.caption)
             .accessibilityIdentifier("WorkspaceRebuild.keepCorners")
         case .explicitControl:
-            Stepper(value: Binding(get: { rebuild.degree }, set: { rebuildSession?.degree = $0 }), in: 1...7) {
+            Stepper(value: Binding(get: { rebuild.degree }, set: { rebuildSession?.degree = $0 }), in: CurveRebuildOptions.explicitControlDegrees) {
                 Text("Degree \(rebuild.degree)").monospacedDigit().font(.caption)
             }
             .fixedSize()

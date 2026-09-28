@@ -50,7 +50,7 @@ struct WorkspaceSplineEditOperationsView: View {
         inspectorControlRow("Degree") {
             Stepper(
                 value: $explicitDegree,
-                in: 1 ... 7
+                in: CurveRebuildOptions.explicitControlDegrees
             ) {
                 Text("\(explicitDegree)")
                     .monospacedDigit()
