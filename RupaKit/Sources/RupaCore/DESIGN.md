@@ -2236,3 +2236,9 @@ Definition identity includes nested definition content and instance placement,
 visibility and properties, rejecting recursive definitions. Instance output keeps
 sharing the definition. `PatternArrayInstanceSourceTests` verifies all three
 distributions, placement, identity reuse, source changes, cleanup and undo/redo.
+
+### Persistent curve extension and section identity
+
+Natural extension stores CAD expressions containing the oriented end Bezier control-point expressions, distance expression and output coordinate. CADCore owns the shared numeric continuation; both evaluators resolve current inputs, preserve length units and propagate invalid geometry. Explicit-knot end spans are extracted by Boehm insertion in expression space. Line extension uses expression-valued endpoint differences and their norm. Serialization, dependency discovery, editable text and both evaluators must agree. Numeric control points are evaluation results, never the authority for a parameterized extension. Existing literal-only documents remain readable; older readers reject unknown expression kinds.
+
+Section endpoints are welded per occurrence using Euclidean distance, independent of cell boundaries. Sorted endpoints choose deterministic representatives; every member is within tolerance of its representative (no transitive widening). Cell indexing is only an accelerator; out-of-range coordinates use the same distance predicate without integer saturation. Edges and emitted points use the same representative. Verification covers neighboring cells, diagonal non-neighbors, permutations, translations, closed contours and interference.

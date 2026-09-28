@@ -312,15 +312,9 @@ extension DesignDocument {
                 message: "\(owner) Arc shape for line curves requires arc construction parameters."
             )
         }
-        let metrics = try resolvedLineMetrics(line, owner: owner)
-        let directionX = cos(metrics.angleRadians) * (endpoint.isStart ? -1.0 : 1.0)
-        let directionY = sin(metrics.angleRadians) * (endpoint.isStart ? -1.0 : 1.0)
-        let extendedPoint = translatedSketchPoint(
-            endpoint.isStart ? line.start : line.end,
-            directionX: directionX,
-            directionY: directionY,
-            distance: distance
-        )
+        let origin = endpoint.isStart ? line.start : line.end
+        let adjacent = endpoint.isStart ? line.end : line.start
+        let extendedPoint = try pointExtendedLinearly(from: adjacent, through: origin, distance: distance, owner: owner)
         let extended = endpoint.isStart
             ? SketchLine(start: extendedPoint, end: line.end)
             : SketchLine(start: line.start, end: extendedPoint)
@@ -403,39 +397,23 @@ extension DesignDocument {
 
         var updated = spline
         if shape == .natural {
-            // Swift-CAD continues the end segment's own polynomial, whatever its degree, by the arc
-            // length; the new span is a Bezier of the same degree after a C0 joint.
-            let curve = try resolvedSketchSplineCurve(spline, owner: owner)
-            guard let segment = isStart ? curve.segments.first : curve.segments.last else {
-                throw EditorError(code: .commandInvalid, message: "\(owner) has no end segment.")
+            let segment = try expressionEndSegment(of: spline, isStart: isStart)
+            let oriented = isStart ? Array(segment.reversed()) : segment
+            let coordinates = oriented.flatMap { [$0.x, $0.y] }
+            let continued = (0..<spline.degree).map { index in
+                SketchPoint(
+                    x: .bezierNaturalExtension(coordinates: coordinates, length: distance, coordinateIndex: 2 * index),
+                    y: .bezierNaturalExtension(coordinates: coordinates, length: distance, coordinateIndex: 2 * index + 1)
+                )
             }
-            let length = try resolvedPositiveLengthValue(distance, owner: "\(owner) distance")
-            let continued: [SketchPoint]
-            do {
-                continued = try CubicBezierChainExtension(tolerance: .standard).naturalSpan(
-                    ofSegment: segment.controlPoints, at: isStart ? .start : .end, length: length
-                ).map { sketchPoint(x: $0.x, y: $0.y) }
-            } catch let error as KernelError {
-                throw EditorError(code: .commandInvalid, message: "\(owner): \(error.message)")
-            }
-            updated.controlPoints = isStart ? continued + spline.controlPoints : spline.controlPoints + continued
+            updated.controlPoints = isStart ? Array(continued.reversed()) + spline.controlPoints : spline.controlPoints + continued
         } else {
             let count = spline.controlPoints.count
             let origin = spline.controlPoints[isStart ? 0 : count - 1]
             let adjacent = spline.controlPoints[isStart ? 1 : count - 2]
-            // Validate the current tangent, then retain its full dependency graph.
-            _ = try normalizedDirection(from: adjacent, to: origin, owner: "\(owner) tangent")
-            let dx = CADExpression.subtract(origin.x, adjacent.x)
-            let dy = CADExpression.subtract(origin.y, adjacent.y)
-            let magnitude = CADExpression.hypot(dx, dy)
-            let directionX = CADExpression.divide(dx, magnitude)
-            let directionY = CADExpression.divide(dy, magnitude)
-            let added = (1...spline.degree).map { index in
+            let added = try (1...spline.degree).map { index in
                 let step = CADExpression.multiply(distance, .scalar(Double(index) / Double(spline.degree)))
-                return SketchPoint(
-                    x: .add(origin.x, .multiply(step, directionX)),
-                    y: .add(origin.y, .multiply(step, directionY))
-                )
+                return try pointExtendedLinearly(from: adjacent, through: origin, distance: step, owner: owner)
             }
             updated.controlPoints = isStart
                 ? Array(added.reversed()) + spline.controlPoints
@@ -458,6 +436,50 @@ extension DesignDocument {
         }
         try validateSplineForm(updated, owner: owner)
         return updated
+    }
+
+    private func pointExtendedLinearly(
+        from adjacent: SketchPoint, through origin: SketchPoint, distance: CADExpression, owner: String
+    ) throws -> SketchPoint {
+        _ = try normalizedDirection(from: adjacent, to: origin, owner: "\(owner) tangent")
+        let dx = CADExpression.subtract(origin.x, adjacent.x)
+        let dy = CADExpression.subtract(origin.y, adjacent.y)
+        let magnitude = CADExpression.hypot(dx, dy)
+        return SketchPoint(
+            x: .add(origin.x, .multiply(distance, .divide(dx, magnitude))),
+            y: .add(origin.y, .multiply(distance, .divide(dy, magnitude)))
+        )
+    }
+
+    /// Isolate the end Bezier span by raising its adjacent knot to degree multiplicity.
+    /// Boehm's affine combinations retain the original coordinate expressions.
+    private func expressionEndSegment(of spline: SketchSpline, isStart: Bool) throws -> [SketchPoint] {
+        let degree = spline.degree
+        var points = spline.controlPoints
+        if var knots = spline.knots {
+            let interior = knots.dropFirst(degree + 1).dropLast(degree + 1)
+            if let boundary = isStart ? interior.first : interior.last {
+                let multiplicity = knots.filter { $0 == boundary }.count
+                for count in multiplicity..<degree {
+                    guard let span = knots.lastIndex(where: { $0 <= boundary }) else {
+                        throw EditorError(code: .commandInvalid, message: "Natural extension cannot resolve its end span.")
+                    }
+                    var next = Array(points.prefix(span - degree + 1))
+                    for index in (span - degree + 1)...(span - count) {
+                        let denominator = knots[index + degree] - knots[index]
+                        guard denominator > 0 else {
+                            throw EditorError(code: .commandInvalid, message: "Natural extension has a degenerate knot interval.")
+                        }
+                        next.append(interpolatedSketchPoint(points[index - 1], points[index],
+                            fraction: .scalar((boundary - knots[index]) / denominator)))
+                    }
+                    next.append(contentsOf: points[(span - count)...])
+                    knots.insert(boundary, at: span + 1)
+                    points = next
+                }
+            }
+        }
+        return isStart ? Array(points.prefix(degree + 1)) : Array(points.suffix(degree + 1))
     }
 
     private func sketchCurveExtendBlocksConstraint(

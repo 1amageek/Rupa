@@ -47,8 +47,8 @@ import Testing
         }
     }
 
-    @Test(arguments: [false, true])
-    func extensionTracksParametersAndRetainsLength(atStart: Bool) throws {
+    @Test(arguments: [false, true], [ExtendCurveShape.linear, .natural])
+    func extensionTracksParametersAndRetainsLength(atStart: Bool, shape: ExtendCurveShape) throws {
         var base = DesignDocument.empty()
         try base.upsertParameter(name: "height", expression: .length(0, .meter), kind: .length)
         let height = try ParameterExpressionParser().parse("height", parameters: base.cadDocument.parameters, targetKind: .length)
@@ -56,7 +56,7 @@ import Testing
         var (document, target, feature, entity) = try curve(source, in: base)
         let endTarget = SelectionTarget(sceneNodeID: target.sceneNodeID, component: .sketchEntity(
             .sketchControlPoint(featureID: feature, entityID: entity, index: atStart ? 0 : 1)))
-        try document.extendSketchCurve(target: endTarget, distance: .length(2, .meter), shape: .linear)
+        try document.extendSketchCurve(target: endTarget, distance: .length(2, .meter), shape: shape)
         try document.upsertParameter(name: "height", expression: .length(1, .meter), kind: .length)
         guard case .sketch(let sketch) = document.cadDocument.designGraph.nodes[feature]?.operation,
               case .spline(let spline) = sketch.entities[entity] else {

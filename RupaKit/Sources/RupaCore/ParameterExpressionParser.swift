@@ -170,6 +170,19 @@ public struct ParameterExpressionParser {
             case .identifier(let name):
                 if match(.leftParen) {
                     let argument = try parseExpression()
+                    if name == "bezierNaturalExtension" {
+                        guard case .constant(let coordinate) = argument, coordinate.kind == .scalar,
+                              let coordinateIndex = Int(exactly: coordinate.value) else {
+                            throw EditorError(code: .commandInvalid, message: "Natural extension coordinate index must be an integer literal.")
+                        }
+                        try consume(.comma, message: "Expected extension length.")
+                        let length = try parseExpression()
+                        var coordinates: [CADExpression] = []
+                        while match(.comma) { coordinates.append(try parseExpression()) }
+                        try consume(.rightParen, message: "Expected ')' after extension coordinates.")
+                        try NaturalBezierContinuation.validateCoordinateForm(count: coordinates.count, index: coordinateIndex)
+                        return .bezierNaturalExtension(coordinates: coordinates, length: length, coordinateIndex: coordinateIndex)
+                    }
                     if name == "hypot" {
                         try consume(.comma, message: "Expected ',' between hypot arguments.")
                         let second = try parseExpression()
