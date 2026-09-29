@@ -143,6 +143,8 @@ public struct ParameterSourceUsageService: Sendable {
              .extract,
              .projectCurve:
             break
+        case .wrap(let feature):
+            record(feature.options.offsetN, path: "wrap.options.offsetN")
         case .faceLoopOffset(let feature):
             record(feature.distance, path: "faceLoopOffset.distance")
         case .edgeOffset(let feature):
@@ -370,6 +372,8 @@ public struct ParameterSourceUsageService: Sendable {
             "unjoinBody"
         case .extract:
             "extract"
+        case .wrap:
+            "wrap"
         case .projectCurve:
             "projectCurve"
         }

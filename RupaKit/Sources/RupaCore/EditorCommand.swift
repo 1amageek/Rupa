@@ -358,6 +358,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case projectCurvesAlongDirection(targets: [SelectionTarget], face: SelectionTarget, direction: Vector3D, bidirectional: Bool)
     /// Deform Curve: sketch curves carried from a reference face onto a target face as spatial paths.
     case deformCurves(targets: [SelectionTarget], referenceFace: SelectionTarget, targetFace: SelectionTarget, options: CurveDeformationOptions)
+    /// Deform Solid and Sheet: bodies carried from a reference face onto a target face (Swift-CAD Wrap).
+    case deformBodies(targets: [SceneNodeID], referenceFace: SelectionTarget, targetFace: SelectionTarget, options: CurveDeformationOptions)
     /// Align on two curves: the second curve's nearest end aligned with the first's.
     case alignSketchCurveEnds(first: SelectionTarget, second: SelectionTarget, options: SketchVertexAlignmentOptions)
     /// Complete Edge: extends a sketch curve's open ends to the nearest curve its extension meets.
@@ -817,6 +819,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "extendSketchCurveToCurve"
         case .deformCurves:
             "deformCurves"
+        case .deformBodies:
+            "deformBodies"
         case .projectCurvesAlongDirection:
             "projectCurvesAlongDirection"
         case .createBodyOutlines:
@@ -1077,6 +1081,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .extendSketchCurve,
              .extendSketchCurveToCurve,
              .deformCurves,
+             .deformBodies,
              .projectCurvesAlongDirection,
              .createBodyOutlines,
              .projectBodyIntersection,

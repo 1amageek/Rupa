@@ -52,6 +52,7 @@ extension FeatureOperation {
              .joinBodies,
              .unjoinBody,
              .extract,
+             .wrap,
              .bridgeSurface,
              .surfaceOffset,
              .surfaceTrim,
@@ -128,7 +129,8 @@ extension FeatureOperation {
              .mirror,
              .joinBodies,
              .unjoinBody,
-             .extract:
+             .extract,
+             .wrap:
             return true
         case .curveExtend,
              .curveMatch,
@@ -228,6 +230,9 @@ extension FeatureOperation {
         // only the document's extractions together tell (`MeasurementService`).
         case .extract:
             return []
+        // A wrap replaces its target unless it keeps it beside the deformed copy.
+        case .wrap(let feature):
+            return feature.keepsTarget ? [] : [feature.target.featureID]
         // Mirror rebuilds the identity and reflected instances as one
         // replacement body, so the source body is no longer independently
         // measurable after evaluation.

@@ -9537,12 +9537,16 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Deform Curve's dialog on the selected sketch curves (palette).
+    /// Deform's dialog on the selected sketch curves (Deform Curve) or body objects (Deform Solid
+    /// and Sheet) (palette); a selection holding both offers neither.
     private var deformAction: (@MainActor () -> Void)? {
         let curves = selectedSketchCurveTargets
-        guard selectedTool == .select, !curves.isEmpty else { return nil }
+        let bodies = selectedBodyObjectIDs
+        guard selectedTool == .select, WorkspaceDeformSession(selectedCurves: curves, selectedBodies: bodies) != nil else {
+            return nil
+        }
         return {
-            guard let deform = WorkspaceDeformSession(selectedCurves: curves) else { return }
+            guard let deform = WorkspaceDeformSession(selectedCurves: curves, selectedBodies: bodies) else { return }
             cutCurveSession = nil
             filletSession = nil
             rebuildSession = nil
@@ -9600,7 +9604,7 @@ private struct ProjectMainViewContent: View {
         submitSource(command) { result in
             guard result?.didMutate == true else { return }
             deformSession = nil
-            reportToolStatus("Deform: \(deform.curves.count) curve\(deform.curves.count == 1 ? "" : "s") deformed.")
+            reportToolStatus("Deform: \(deform.subjectDescription) deformed.")
         }
     }
 

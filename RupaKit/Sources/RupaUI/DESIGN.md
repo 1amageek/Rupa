@@ -737,11 +737,12 @@ returns to the current project (`WorkspaceSlideComparisonTests`). Slide's dialog
 curve and surface control points, take the step distance as a typed length
 (`WorkspaceCommandDistanceField.slideDistance`), the same value the keys and handles slide
 by. Deform in the palette,
-with sketch curves selected, starts Deform Curve's dialog (`WorkspaceDeformSession`): a
+with sketch curves or body objects selected (not both), starts Deform's dialog
+(`WorkspaceDeformSession`, Deform Curve or Deform Solid and Sheet by its subject): a
 click picks the reference face, the next the target face (a later click replaces the
 target), the dialog then takes U/V/N scale and offset, Mirror, UV, Normal and Keep Tools,
-and OK, Return or right-click submits `.deformCurves` while Escape ends it unchanged
-(`WorkspaceDeformSessionTests`). Create Outline in the palette, with bodies selected,
+and OK, Return or right-click submits `.deformCurves` or `.deformBodies` while Escape
+ends it unchanged (`WorkspaceDeformSessionTests`). Create Outline in the palette, with bodies selected,
 submits `.createBodyOutlines` on the active construction plane and selects the outlines
 with a Move running (`moveCreatedObjects`). J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and

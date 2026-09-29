@@ -1,8 +1,9 @@
 import SwiftCAD
 
-/// Deform Curve's dialog values. A curve point reads as UVN coordinates on the reference face
-/// (`FaceUVNChart`: s and t across the face's parameter box, n its height along the outward
-/// normal) and is placed at the mapped coordinates on the target face:
+/// Deform's dialog values, for curves and bodies alike. A point reads as UVN coordinates on the
+/// reference face (`FaceUVNChart`: s and t across the face's parameter extent, n its height along
+/// the outward normal) and is placed at the mapped coordinates on the target face, by Swift-CAD's
+/// `WrapOptions` (curves here, bodies in the kernel's Wrap):
 ///
 /// 1. UV swaps s and t; Mirror reflects s across the face's middle (s → 1 − s).
 /// 2. U and V scale about the face's middle and then shift by their offset, a fraction of the
@@ -39,19 +40,22 @@ public struct CurveDeformationOptions: Codable, Equatable, Sendable {
         self.keepsTools = keepsTools
     }
 
-    /// The target coordinate for a reference coordinate; `offsetN` is resolved, in meters.
-    func mapped(_ coordinate: UVNCoordinate, offsetN: Double) -> UVNCoordinate {
-        var s = coordinate.s, t = coordinate.t
-        if flipsUV { swap(&s, &t) }
-        if mirrors { s = 1 - s }
-        let n = coordinate.n * scaleN + offsetN
-        return UVNCoordinate(
-            s: 0.5 + (s - 0.5) * scaleU + offsetU,
-            t: 0.5 + (t - 0.5) * scaleV + offsetV,
-            n: flipsNormal ? -n : n
+    /// The values as Swift-CAD's UVN map.
+    var wrapOptions: WrapOptions {
+        WrapOptions(
+            scaleU: scaleU, scaleV: scaleV, scaleN: scaleN, offsetU: offsetU, offsetV: offsetV, offsetN: offsetN,
+            mirrors: mirrors, flipsUV: flipsUV, flipsNormal: flipsNormal
         )
     }
 
+    /// The target coordinate for a reference coordinate; `offsetN` is resolved, in meters.
+    func mapped(_ coordinate: UVNCoordinate, offsetN: Double) -> UVNCoordinate {
+        let mapped = wrapOptions.mapped(s: coordinate.s, t: coordinate.t, n: coordinate.n, offsetN: offsetN)
+        return UVNCoordinate(s: mapped.s, t: mapped.t, n: mapped.n)
+    }
+
+    /// A curve may be flattened onto the target face (N scale 0); a body may not, which the
+    /// kernel's Wrap refuses.
     func validate() throws {
         guard [scaleU, scaleV, scaleN, offsetU, offsetV].allSatisfy(\.isFinite),
               scaleU != 0, scaleV != 0 else {

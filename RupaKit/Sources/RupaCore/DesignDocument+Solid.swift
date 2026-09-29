@@ -490,6 +490,28 @@ extension DesignDocument {
         return boolean.featureID
     }
 
+    /// Where the object `nodeID` is displayed, in the frame of the object `frame`, as a kernel
+    /// operand placement: `nil` when they are displayed alike, a typed failure when the relation
+    /// is not rigid. A body no object shows (`nil`) is where it was evaluated.
+    func relativeRigidPlacement(
+        of nodeID: SceneNodeID?, inFrameOf frame: SceneNodeID?, owner: String, relation: String
+    ) throws -> RigidTransform3D? {
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        func placement(of nodeID: SceneNodeID?) throws -> Transform3D {
+            try nodeID.map { try hierarchy.worldTransform(of: $0) } ?? .identity
+        }
+        let relative = try placement(of: frame).inverse().composed(with: try placement(of: nodeID))
+        guard relative.isApproximatelyIdentity() == false else { return nil }
+        do {
+            return try relative.rigidPlacement()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) must be displayed at a rigid placement relative to \(relation): \(error)."
+            )
+        }
+    }
+
     /// A Boolean appended to the graph, not yet shown.
     struct AppendedBoolean {
         let featureID: FeatureID
@@ -508,25 +530,15 @@ extension DesignDocument {
         targetMaterial: BooleanMaterial,
         toolMaterial: BooleanMaterial
     ) throws -> AppendedBoolean {
-        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        func placement(of featureID: FeatureID) throws -> Transform3D {
-            try hierarchy.presentingSceneNodeID(for: featureID).map { try hierarchy.worldTransform(of: $0) } ?? .identity
-        }
         guard let first = targets.first else {
             throw EditorError(code: .commandInvalid, message: "Boolean requires at least one target body.")
         }
-        let resultPlacement = try placement(of: first)
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         func relativePlacement(of featureID: FeatureID, owner: String) throws -> RigidTransform3D? {
-            let relative = try resultPlacement.inverse().composed(with: try placement(of: featureID))
-            guard relative.isApproximatelyIdentity() == false else { return nil }
-            do {
-                return try relative.rigidPlacement()
-            } catch {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) must be displayed at a rigid placement relative to the first target to be combined: \(error)."
-                )
-            }
+            try relativeRigidPlacement(
+                of: hierarchy.presentingSceneNodeID(for: featureID), inFrameOf: hierarchy.presentingSceneNodeID(for: first),
+                owner: owner, relation: "the first target to be combined"
+            )
         }
         let boolean = BooleanFeature(
             targets: try targets.map {
@@ -588,15 +600,8 @@ extension DesignDocument {
         let geometryRole: ObjectDescriptor.GeometryRole = boolean.resultPort == .sheet ? .surface : .solid
         let targetNodeID = hierarchy.presentingSceneNodeID(for: target)
         guard asPieces else {
-            if let targetNodeID, var node = productMetadata.sceneNodes[targetNodeID], var object = node.object {
-                node.name = name
-                node.reference = .body(boolean.featureID)
-                try object.retargetModelingCADRepresentation(to: boolean.featureID)
-                object.sourceSection = nil
-                object.typeID = nil
-                object.geometryRole = geometryRole
-                node.object = object
-                productMetadata.sceneNodes[targetNodeID] = node
+            if let targetNodeID, productMetadata.sceneNodes[targetNodeID]?.object != nil {
+                try retargetBodyNode(targetNodeID, to: boolean.featureID, name: name, geometryRole: geometryRole)
             } else {
                 try insertBooleanResultNode(
                     name: name, featureID: boolean.featureID, geometryRole: geometryRole,
@@ -629,9 +634,27 @@ extension DesignDocument {
         try removeSceneNodes(presenting: consumed)
     }
 
+    /// The object `nodeID` takes over showing the body of `featureID`, which replaces the one it
+    /// showed, as a direct edit takes over the object it edits.
+    mutating func retargetBodyNode(
+        _ nodeID: SceneNodeID, to featureID: FeatureID, name: String, geometryRole: ObjectDescriptor.GeometryRole
+    ) throws {
+        guard var node = productMetadata.sceneNodes[nodeID], var object = node.object else {
+            throw EditorError(code: .referenceUnresolved, message: "The object to show the result has no body.")
+        }
+        node.name = name
+        node.reference = .body(featureID)
+        try object.retargetModelingCADRepresentation(to: featureID)
+        object.sourceSection = nil
+        object.typeID = nil
+        object.geometryRole = geometryRole
+        node.object = object
+        productMetadata.sceneNodes[nodeID] = node
+    }
+
     /// Removes every object presenting one of `features`' bodies, which a later feature consumed.
     /// Its children (a body's nested profile sketch) take its place, where they are displayed now.
-    private mutating func removeSceneNodes(presenting features: [FeatureID]) throws {
+    mutating func removeSceneNodes(presenting features: [FeatureID]) throws {
         let consumed = Set(features)
         let nodeIDs = productMetadata.sceneNodes.values.filter { node in
             node.reference?.kind == .body && node.reference?.featureID.map(consumed.contains) == true

@@ -632,6 +632,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(extract.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Selection", value: selection),
             ]
+        case .wrap(let wrap):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Deform Solid and Sheet"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(wrap.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Keep Tools", value: wrap.keepsTarget ? "On" : "Off"),
+            ]
         case .projectCurve(let projectCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Project Curve"),

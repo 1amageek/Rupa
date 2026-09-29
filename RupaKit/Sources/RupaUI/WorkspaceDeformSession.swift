@@ -1,29 +1,49 @@
 import RupaCore
 
-/// Deform Curve's dialog while it runs, on the sketch curves selected when it started: a click
-/// picks the reference face (where the curves lie), the next the target face, and a later click
-/// replaces the target. OK, Return or right-click deforms once both are picked; Escape ends it
-/// without a change.
+/// Deform's dialog while it runs, on what was selected when it started: sketch curves (Deform
+/// Curve) or body objects (Deform Solid and Sheet), never both. A click picks the reference face
+/// (where the curves or bodies lie), the next the target face, and a later click replaces the
+/// target. OK, Return or right-click deforms once both are picked; Escape ends it without a change.
 struct WorkspaceDeformSession: Equatable {
+    enum Subject: Equatable {
+        case curves([SelectionTarget])
+        case bodies([SceneNodeID])
+    }
+
     enum Step: Equatable {
         case referenceFace
         case targetFace
         case options
     }
 
-    let curves: [SelectionTarget]
+    let subject: Subject
     private(set) var referenceFace: SelectionTarget?
     private(set) var targetFace: SelectionTarget?
     var options: CurveDeformationOptions
     /// N offset in meters; the dialog's length field.
     var offsetNMeters: Double
 
-    /// The dialog for the selected curves, or nil when none is selected.
-    init?(selectedCurves: [SelectionTarget], options: CurveDeformationOptions = CurveDeformationOptions()) {
-        guard !selectedCurves.isEmpty else { return nil }
-        curves = selectedCurves
+    /// The dialog for the selected curves or bodies, or nil when neither or both are selected.
+    init?(
+        selectedCurves: [SelectionTarget],
+        selectedBodies: [SceneNodeID] = [],
+        options: CurveDeformationOptions = CurveDeformationOptions()
+    ) {
+        switch (selectedCurves.isEmpty, selectedBodies.isEmpty) {
+        case (false, true): subject = .curves(selectedCurves)
+        case (true, false): subject = .bodies(selectedBodies)
+        default: return nil
+        }
         self.options = options
         offsetNMeters = 0
+    }
+
+    /// What was deformed, for the status line.
+    var subjectDescription: String {
+        switch subject {
+        case .curves(let curves): "\(curves.count) curve\(curves.count == 1 ? "" : "s")"
+        case .bodies(let bodies): "\(bodies.count) bod\(bodies.count == 1 ? "y" : "ies")"
+        }
     }
 
     var step: Step {
@@ -34,7 +54,11 @@ struct WorkspaceDeformSession: Equatable {
 
     var prompt: String {
         switch step {
-        case .referenceFace: "Deform: click the reference face the curves lie on."
+        case .referenceFace:
+            switch subject {
+            case .curves: "Deform: click the reference face the curves lie on."
+            case .bodies: "Deform: click the reference face the bodies lie on."
+            }
         case .targetFace: "Deform: click the target face."
         case .options: "Deform: set the values, then OK, Return or right-click."
         }
@@ -53,6 +77,11 @@ struct WorkspaceDeformSession: Equatable {
         guard let referenceFace, let targetFace else { return nil }
         var resolved = options
         resolved.offsetN = .length(offsetNMeters, .meter)
-        return .deformCurves(targets: curves, referenceFace: referenceFace, targetFace: targetFace, options: resolved)
+        switch subject {
+        case .curves(let curves):
+            return .deformCurves(targets: curves, referenceFace: referenceFace, targetFace: targetFace, options: resolved)
+        case .bodies(let bodies):
+            return .deformBodies(targets: bodies, referenceFace: referenceFace, targetFace: targetFace, options: resolved)
+        }
     }
 }

@@ -1057,6 +1057,13 @@ public struct MeasurementService {
                     sourceFeatureID: extract.target.featureID,
                     operationName: "Extract"
                 )
+            case .wrap(let wrap):
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: wrap.target.featureID,
+                    operationName: "Deform Solid and Sheet"
+                )
             case .importedBRep:
                 try measureEvaluatedBodyOperationCase(
                     node: node,

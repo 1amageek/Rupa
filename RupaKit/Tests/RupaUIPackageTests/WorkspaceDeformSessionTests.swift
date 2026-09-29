@@ -27,3 +27,23 @@ import Testing
     #expect(targets == [curve] && referenceFace == reference && targetFace == second)
     #expect(options.flipsNormal && options.offsetN == .length(0.002, .meter))
 }
+
+/// With body objects selected the same dialog submits Deform Solid and Sheet; a selection of
+/// curves and bodies together opens no dialog.
+@Test func theDeformDialogOnBodiesSubmitsDeformBodies() throws {
+    let body = SceneNodeID()
+    let curve = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    #expect(WorkspaceDeformSession(selectedCurves: [curve], selectedBodies: [body]) == nil)
+    var session = try #require(WorkspaceDeformSession(selectedCurves: [], selectedBodies: [body]))
+    let reference = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    let target = SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)
+    session.pick(face: reference)
+    session.pick(face: target)
+    session.options.keepsTools = true
+    guard case .deformBodies(let targets, let referenceFace, let targetFace, let options)? = session.command else {
+        Issue.record("The dialog submitted no Deform Solid and Sheet.")
+        return
+    }
+    #expect(targets == [body] && referenceFace == reference && targetFace == target && options.keepsTools)
+    #expect(session.subjectDescription == "1 body")
+}

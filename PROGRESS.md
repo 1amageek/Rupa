@@ -54,10 +54,10 @@
     - [x] SK2.4 Cut Curve with Screen space (S) and with a face as the cutter. `depends:SK2.3` `parallel:none`
     - [x] SK2.5 Cut Curve (C): a dialog picking any number of target and cutter curves (splines included), Tab toggling Extend, Return or right-click cutting as one step. `depends:none` `parallel:none`
     - [x] SK2.6 Split Segment on closed splines opens the loop at the click (a circle is refused: the sketch model has no circle seam). `depends:none` `parallel:none`
-  - [ ] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
+  - [x] SK3 Deform and Slide: Deform, Deform Curve, Slide, Slide Curve CV. `depends:none` `parallel:none`
     - [x] SK3.1 Slide: Control toggles preview and active while sliding control points. `depends:none` `parallel:none`
     - [x] SK3.2 Deform Curve: curves wrapped from a reference face onto a target face with U/V/N scale and offset, flips and Keep Tools. `depends:SK3.1` `parallel:none`
-    - [ ] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection: curves take Deform Curve (done); bodies and sheets wait for SO3's Deform Solid and Sheet. `depends:SK3.2` `parallel:none`
+    - [x] SK3.3 Deform chooses Deform Curve or Deform Solid and Sheet from the selection: curves take Deform Curve, bodies and sheets Deform Solid and Sheet (SO3.3). `depends:SK3.2` `parallel:none`
   - [ ] SK4 Align and Extend: Align, Align Vertex, Extend, Extend Curve. `depends:none` `parallel:none`
     - [x] SK4.1 Align Vertex dialog: one CV distance for both aligned ends, set once G1 or G2 is chosen, through Core's continuity distances. `depends:none` `parallel:none`
     - [x] SK4.2 Align Vertex Parameter: with a whole reference curve, the end is placed at the inspector's Parameter of it and takes its frame there, once. `depends:SK4.1` `parallel:none`
@@ -152,8 +152,8 @@
   - [x] SO2 Duplication and Instances: Alternative Duplicate on faces (a solid of faces that close, else a sheet, then Move), Create Instance and Realize Instances for solids, sheets, curves and groups, instances' gray edges, Copy with Placement refusing instances. Kernel 4630363. `depends:SO1` `parallel:none`
   - [ ] SO3 Deform and Slide: Deform, Deform Solid and Sheet, Slide, Slide Surface CV. `depends:SO2` `parallel:none`
     - [x] SO3.1 Slide Surface CV: one Core owner of slide directions that the gizmo reads for PolySpline and B-spline surface CVs alike, a gizmo on B-spline surface CVs, and an editable Distance in the dialog. `depends:none` `parallel:none`
-    - [ ] SO3.2 Kernel Wrap: bodies deformed from a reference face's UVN chart onto a target face's, every face refitted on its own parameters so trims and topology carry over, edges refitted, within a stated fit tolerance; Scale, Offset, Flip and Keep Tools. `depends:SO3.1` `parallel:none`
-    - [ ] SO3.3 Rupa Deform Solid and Sheet: the Deform dialog takes bodies as well as curves (unified Deform), submitting the kernel Wrap. `depends:SO3.2` `parallel:none`
+    - [x] SO3.2 Kernel Wrap: bodies deformed from a reference face's UVN chart onto a target face's, every face refitted on its own parameters so trims and topology carry over, edges refitted, within a stated fit tolerance; Scale, Offset, Flip and Keep Tools; faces placed rigidly in the target's frame. Faces' UVN extent is their trim's own box. Kernel 67fb0fc, 437364c. `depends:SO3.1` `parallel:none`
+    - [x] SO3.3 Rupa Deform Solid and Sheet: the Deform dialog takes bodies as well as curves (unified Deform), submitting the kernel Wrap. `depends:SO3.2` `parallel:none`
   - [ ] SO4 Delete and Remove: Delete Face, Delete Redundant Topology, Remove Fillets from Shell, Remove Nominal Surface. `depends:SO3` `parallel:none`
   - [ ] SO5 Align, Draft and Extend: Align, Align Surface, Draft Face, Extend, Extend Sheet. `depends:SO4` `parallel:none`
   - [ ] SO6 Fillet, Hollow and Thicken: Fillet, Fillet Shell, Hollow, Thicken, Thicken Face. `depends:SO5` `parallel:none`

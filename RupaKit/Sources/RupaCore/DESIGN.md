@@ -1294,13 +1294,25 @@ no part and fewer than two curves give none (`SketchCurveJoinEndpointFeedbackTes
 `deformCurves(targets:referenceFace:targetFace:options:)` is Deform Curve. Each
 selected sketch line, arc, circle or spline, read on its sketch's placed plane, is carried
 point by point through Swift-CAD's
-`FaceUVNChart` of the reference face, `CurveDeformationOptions.mapped` (UV swap,
-Mirror s → 1 − s, U/V scale about the face's middle plus a fractional offset, N scale
-plus a length offset, Normal flip) and the target face's chart, and Swift-CAD's
+`FaceUVNChart` of the reference face, `CurveDeformationOptions.mapped` (Swift-CAD's
+`WrapOptions` map: UV swap, Mirror s → 1 − s, U/V scale about the face's middle plus a
+fractional offset, N scale plus a length offset, Normal flip) and the target face's
+chart, and Swift-CAD's
 `SpatialCurveFitter` (deviation ten modeling distances, corners at the curve's own
 span ends) makes it a spatial path, one per curve, in one step. Without Keep Tools the
 sources leave their sketches; a sketch left with no curve is deleted with its object,
 and one other features are built on is refused. `CurveDeformationTests` own this.
+
+`deformBodies(targets:referenceFace:targetFace:options:)` is Deform Solid and Sheet:
+each selected body object gets one Swift-CAD `wrap` of its body with the same options
+(`CurveDeformationOptions.wrapOptions`; a body may not be flattened, N scale 0), each
+face placed in the body's frame where its object is displayed
+(`relativeRigidPlacement`, the rule Boolean operands follow), in one step. Without Keep
+Tools the Wrap takes over the body's object (`retargetBodyNode`); with it the body stays
+and the copy is shown beside it. A Wrap reads its faces as the model is before it, so a
+replaced body holding a picked face is wrapped last, and replacing two such bodies
+together is refused. Instances and locked objects are refused. `BodyDeformationTests`
+own this.
 
 `projectCurvesAlongDirection(targets:face:direction:bidirectional:)` is Project Curve
 Body along a direction: each curve point moves along it to the one selected face through

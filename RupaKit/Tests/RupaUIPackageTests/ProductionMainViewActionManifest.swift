@@ -246,6 +246,7 @@ enum ProductionMainViewActionManifest {
         "createBodyOutlines",
         "createBridgeCurveBetweenEnds",
         "deformCurves",
+        "deformBodies",
         "projectBodyIntersection",
         "projectCurveIntersection",
         "projectCurvesAlongDirection",
