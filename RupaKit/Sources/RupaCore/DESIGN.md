@@ -120,6 +120,18 @@ beside the target. A component extraction supersedes its source in measurement;
 a face extraction does not. `PlacedBooleanTests` own placement and
 `SheetBooleanCommandTests` sheet operands, materials and slice pieces.
 
+Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
+face and curve cutters and shows every piece as an object of its own. Each
+cutter becomes a sheet kept by a hidden object placed where the cutter is: a face
+through an `extract` of it, curves through a sheet extrusion along their plane's
+normal or `CutOptions.direction` (the view direction), after a `curveExtend` of
+both ends when `extendsCurves`, its extent spanning the targets' enclosing boxes
+along that direction with a margin. The targets are sliced by the first cutter
+with the cutter's material Inside, that slice (a hidden object at the first
+target's placement) by the next, and the last slice's pieces are extracted.
+`CutCommandTests` own normal and slanted curve cuts, Extend, face cutters and
+several cutters in turn.
+
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on
 every construction plane. Cylinder wall offsets retain the center and change the

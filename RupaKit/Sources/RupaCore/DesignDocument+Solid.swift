@@ -438,7 +438,7 @@ extension DesignDocument {
     /// every other operand is handed to the kernel with its rigid placement relative to it, and
     /// kept tools stay where they are. Placements are Core's to derive, so references must arrive
     /// without one. The materials say how each side's material is taken; the result is a sheet or
-    /// a solid as Swift-CAD's `resultPort` says.
+    /// a solid as Swift-CAD's `resultPort` says. A slice shows each piece as an object of its own.
     @discardableResult
     public mutating func createBoolean(
         name: String,
@@ -457,6 +457,55 @@ extension DesignDocument {
                 message: "Boolean operand placements come from where the bodies are displayed; references must not carry one."
             )
         }
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitBoolean = false
+        defer {
+            if didCommitBoolean == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        let boolean = try appendBooleanFeature(
+            name: trimmedName,
+            targets: targets.map(\.featureID),
+            tools: tools.map(\.featureID),
+            operation: operation,
+            keepTools: keepTools,
+            targetMaterial: targetMaterial,
+            toolMaterial: toolMaterial
+        )
+        try publishBooleanResult(
+            boolean,
+            name: trimmedName,
+            asPieces: operation == .slice,
+            besideTarget: boolean.firstTarget,
+            objectRegistry: objectRegistry
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommitBoolean = true
+        return boolean.featureID
+    }
+
+    /// A Boolean appended to the graph, not yet shown.
+    struct AppendedBoolean {
+        let featureID: FeatureID
+        let resultPort: FeaturePort
+        let firstTarget: FeatureID
+    }
+
+    /// Appends a Boolean of the bodies `targets` and `tools` where they are displayed, each
+    /// operand placed relative to the first target, and shows nothing.
+    mutating func appendBooleanFeature(
+        name: String,
+        targets: [FeatureID],
+        tools: [FeatureID],
+        operation: BooleanOperation,
+        keepTools: Bool,
+        targetMaterial: BooleanMaterial,
+        toolMaterial: BooleanMaterial
+    ) throws -> AppendedBoolean {
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         func placement(of featureID: FeatureID) throws -> Transform3D {
             try hierarchy.presentingSceneNodeID(for: featureID).map { try hierarchy.worldTransform(of: $0) } ?? .identity
@@ -464,7 +513,7 @@ extension DesignDocument {
         guard let first = targets.first else {
             throw EditorError(code: .commandInvalid, message: "Boolean requires at least one target body.")
         }
-        let resultPlacement = try placement(of: first.featureID)
+        let resultPlacement = try placement(of: first)
         func relativePlacement(of featureID: FeatureID, owner: String) throws -> RigidTransform3D? {
             let relative = try resultPlacement.inverse().composed(with: try placement(of: featureID))
             guard relative.isApproximatelyIdentity() == false else { return nil }
@@ -477,15 +526,13 @@ extension DesignDocument {
                 )
             }
         }
-        let placedTargets = try targets.map {
-            BooleanTargetReference(featureID: $0.featureID, placement: try relativePlacement(of: $0.featureID, owner: "A Boolean target"))
-        }
-        let placedTools = try tools.map {
-            BooleanToolReference(featureID: $0.featureID, placement: try relativePlacement(of: $0.featureID, owner: "A Boolean tool"))
-        }
         let boolean = BooleanFeature(
-            targets: placedTargets,
-            tools: placedTools,
+            targets: try targets.map {
+                BooleanTargetReference(featureID: $0, placement: try relativePlacement(of: $0, owner: "A Boolean target"))
+            },
+            tools: try tools.map {
+                BooleanToolReference(featureID: $0, placement: try relativePlacement(of: $0, owner: "A Boolean tool"))
+            },
             operation: operation,
             keepTools: keepTools,
             targetMaterial: targetMaterial,
@@ -499,9 +546,9 @@ extension DesignDocument {
                 message: "Boolean command is invalid: \(error)."
             )
         }
-        let targetPorts = try targets.map { try bodyOrSheetPort(of: $0.featureID, owner: "Boolean target") }
+        let targetPorts = try targets.map { try bodyOrSheetPort(of: $0, owner: "Boolean target") }
         for tool in tools {
-            _ = try bodyOrSheetPort(of: tool.featureID, owner: "Boolean tool")
+            _ = try bodyOrSheetPort(of: tool, owner: "Boolean tool")
         }
         let resultPort: FeaturePort
         do {
@@ -509,66 +556,58 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "Boolean command is invalid: \(error).")
         }
-
         let featureID = FeatureID()
-        let inputs = targets.map { target in
-            FeatureInput(featureID: target.featureID, role: .target)
-        } + tools.map { tool in
-            FeatureInput(featureID: tool.featureID, role: .body)
-        }
-        let feature = FeatureNode(
+        try appendFeature(FeatureNode(
             id: featureID,
-            name: trimmedName,
+            name: name,
             operation: .boolean(boolean),
-            inputs: inputs,
+            inputs: targets.map { FeatureInput(featureID: $0, role: .target) }
+                + tools.map { FeatureInput(featureID: $0, role: .body) },
             outputs: [FeatureOutput(role: resultPort)]
-        )
+        ))
+        return AppendedBoolean(featureID: featureID, resultPort: resultPort, firstTarget: first)
+    }
 
-        let previousCADDocument = cadDocument
-        let previousProductMetadata = productMetadata
-        var didCommitBoolean = false
-        defer {
-            if didCommitBoolean == false {
-                cadDocument = previousCADDocument
-                productMetadata = previousProductMetadata
-            }
-        }
-
-        try appendFeature(feature)
-        let geometryRole: ObjectDescriptor.GeometryRole = resultPort == .sheet ? .surface : .solid
-        let firstTargetNodeID = hierarchy.presentingSceneNodeID(for: first.featureID)
-        if operation == .slice {
-            // Every piece of a slice is an object of its own: one extraction per component,
-            // the multi-component result itself shown by none.
-            let pieceCount = try bodyComponentCount(of: featureID, objectRegistry: objectRegistry, owner: "Boolean slice")
-            for index in 0..<pieceCount {
-                let pieceID = FeatureID()
-                let pieceName = "\(trimmedName) \(index + 1)"
-                try appendFeature(FeatureNode(
-                    id: pieceID,
-                    name: pieceName,
-                    operation: .extract(ExtractFeature(
-                        target: PatternTargetReference(featureID: featureID),
-                        selection: .component(index: index, count: pieceCount)
-                    )),
-                    inputs: [FeatureInput(featureID: featureID, role: .target)],
-                    outputs: [FeatureOutput(role: resultPort)]
-                ))
-                try insertBooleanResultNode(
-                    name: pieceName, featureID: pieceID, geometryRole: geometryRole,
-                    besideTargetNode: firstTargetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
-                )
-            }
-        } else {
+    /// Shows an appended Boolean's result beside `target`'s object: as one object, or, as pieces,
+    /// one Swift-CAD extraction and object per component of the evaluated result, the
+    /// multi-component result itself shown by none.
+    mutating func publishBooleanResult(
+        _ boolean: AppendedBoolean,
+        name: String,
+        asPieces: Bool,
+        besideTarget target: FeatureID,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let geometryRole: ObjectDescriptor.GeometryRole = boolean.resultPort == .sheet ? .surface : .solid
+        let targetNodeID = hierarchy.presentingSceneNodeID(for: target)
+        guard asPieces else {
             try insertBooleanResultNode(
-                name: trimmedName, featureID: featureID, geometryRole: geometryRole,
-                besideTargetNode: firstTargetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
+                name: name, featureID: boolean.featureID, geometryRole: geometryRole,
+                besideTargetNode: targetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
+            )
+            return
+        }
+        let pieceCount = try bodyComponentCount(of: boolean.featureID, objectRegistry: objectRegistry, owner: name)
+        for index in 0..<pieceCount {
+            let pieceID = FeatureID()
+            let pieceName = "\(name) \(index + 1)"
+            try appendFeature(FeatureNode(
+                id: pieceID,
+                name: pieceName,
+                operation: .extract(ExtractFeature(
+                    target: PatternTargetReference(featureID: boolean.featureID),
+                    selection: .component(index: index, count: pieceCount)
+                )),
+                inputs: [FeatureInput(featureID: boolean.featureID, role: .target)],
+                outputs: [FeatureOutput(role: boolean.resultPort)]
+            ))
+            try insertBooleanResultNode(
+                name: pieceName, featureID: pieceID, geometryRole: geometryRole,
+                besideTargetNode: targetNodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
+                objectRegistry: objectRegistry
             )
         }
-        try cadDocument.validate(tolerance: modelingSettings.tolerance)
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        didCommitBoolean = true
-        return featureID
     }
 
     private func containsSupportedExtrudeProfile(_ source: FeatureNode) throws -> Bool {
@@ -635,12 +674,13 @@ extension DesignDocument {
 
     /// A Boolean result's object, inserted beside the first target with its local transform so it
     /// appears where the target was, or at the first root when the target is not shown.
-    private mutating func insertBooleanResultNode(
+    mutating func insertBooleanResultNode(
         name: String,
         featureID: FeatureID,
         geometryRole: ObjectDescriptor.GeometryRole,
         besideTargetNode targetNodeID: SceneNodeID?,
         hierarchy: SceneNodeHierarchy,
+        isVisible: Bool = true,
         objectRegistry: ObjectTypeRegistry
     ) throws {
         let object = ObjectDescriptor.body(
@@ -656,12 +696,16 @@ extension DesignDocument {
            let parentID = hierarchy.parentID(of: targetNodeID),
            let index = productMetadata.sceneNodes[parentID]?.childIDs.firstIndex(of: targetNodeID) {
             try productMetadata.insertSceneNode(
-                SceneNode(name: name, reference: .body(featureID), object: object, localTransform: targetNode.localTransform),
+                SceneNode(
+                    name: name, reference: .body(featureID), object: object,
+                    isVisible: isVisible, localTransform: targetNode.localTransform
+                ),
                 under: parentID,
                 at: index + 1
             )
         } else {
-            _ = try productMetadata.appendSceneNodeToFirstRoot(name: name, reference: .body(featureID), object: object)
+            let nodeID = try productMetadata.appendSceneNodeToFirstRoot(name: name, reference: .body(featureID), object: object)
+            productMetadata.sceneNodes[nodeID]?.isVisible = isVisible
         }
     }
 
@@ -684,7 +728,7 @@ extension DesignDocument {
     }
 
     /// Whether a Boolean operand's source publishes a solid (`body`) or a sheet.
-    private func bodyOrSheetPort(of featureID: FeatureID, owner: String) throws -> FeaturePort {
+    func bodyOrSheetPort(of featureID: FeatureID, owner: String) throws -> FeaturePort {
         guard let port = cadDocument.designGraph.nodes[featureID]?.bodyOrSheetOutput else {
             throw EditorError(
                 code: .referenceUnresolved,

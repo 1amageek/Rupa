@@ -2785,6 +2785,14 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .cut(name, targets, cutters, options):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.cut(
+                name: name, targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createConstrainedSurface(name, source):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createConstrainedSurface(

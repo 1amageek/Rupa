@@ -416,6 +416,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         targetMaterial: BooleanMaterial = .default,
         toolMaterial: BooleanMaterial = .default
     )
+    case cut(name: String, targets: [SceneNodeID], cutters: [CutCutter], options: CutOptions)
     case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
     case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)
     case createBSplineSurface(
@@ -881,6 +882,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setLoft"
         case .createBoolean:
             "createBoolean"
+        case .cut:
+            "cut"
         case .createConstrainedSurface:
             "createConstrainedSurface"
         case .setConstrainedSurface:
@@ -1103,6 +1106,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createLoft,
              .setLoft,
              .createBoolean,
+             .cut,
              .createConstrainedSurface,
              .setConstrainedSurface,
              .createBSplineSurface,
