@@ -256,6 +256,56 @@ produce its named result. Successful source changes retain the existing single
 Workspace transaction and Undo behavior. Cancellation before publication does
 not mutate source; an already published command is reversed only through Undo.
 
+### Viewport pointer ownership
+
+`WorkspaceViewportPointerOwner` is the one value that says who a viewport press
+belongs to. MainView resolves it (`viewportPointerOwner`) and reads nothing else
+to decide what a click resolves to (`hitPolicy`, handed to the viewport as
+`selectionHitPolicy`), where `handleViewportPick` sends a click, and whether an
+affordance's handler is offered to the viewport. Every drag handler checks the
+same value again when its drag commits, so a press can never reach an edit the
+click routing would not. Before, each handler repeated its own tool and scope
+test and only the object ones knew about running commands, so with a face
+selected, Deform's face click could start a face offset instead.
+
+```text
+viewAlignedConstructionPlaneRequest ─┐
+select tool: curve pick, Cut Curve,  ├─> .pickingCommand(command, hitPolicy, scope)
+  Boolean, Cut, Deform, Freestyle    │      clicks -> routeViewportPick; affordances stand down
+constrained-surface draft ───────────┘      (except the command's own value handle)
+select tool, nothing picking ───────────> .directEditing(scope)
+                                            clicks -> selection; the scope's affordances
+any other tool ─────────────────────────> .tool(tool, scope): the tool owns the canvas
+```
+
+The picking commands are listed in the order a click reaches them. The command's
+session names its hit policy (Deform faces; Cut and Cut Curve whole objects
+while picking targets, curves and faces while picking cutters); the others hit
+in the selection scope. While one runs, a click on any body, the selected ones included,
+reaches the command.
+
+| Affordance (`WorkspaceViewportAffordance`) | Live in scope | Shown on | A press edits |
+|---|---|---|---|
+| `objectSelection` | Object | every object's presentation | click selects the occurrence; hover highlights it |
+| `objectPlacement` | Object | the selected bodies | move, rotate and scale gizmo; one placement command on release |
+| `objectHandles` | Object | the selected object with an exact CAD context | resize and dimension handles |
+| `faceOffset` | Face | a selected face | drag offsets the face (`offsetBodyFace`) |
+| `edgeTreatment` | Edge, Object | a selected edge whose frame its two faces give | drag makes a fillet or chamfer (`createBodyEdgeTreatment`) |
+| `boundarySurface` | Edge, Object | a selected open boundary edge | click starts a boundary surface draft on it |
+| `bodyVertexEditing` | Vertex | a selected body vertex, poly-spline vertex, surface control point, trim point or surface frame | drag moves it, or slides it while Slide runs |
+| `regionOffset` | Region | the selected regions while Offset Region runs | drag sets the distance and offsets |
+| `edgeOffset` | Edge | the selected edges while Offset Edge runs | drag sets the distance and offsets |
+| `slotWidth` | Curve | the selected curve while Slot or Offset Planar Curve runs, Freestyle included | drag sets the width or distance |
+| `sketchEntityEditing` | Curve | the selected sketch entities | curve and point handles, dimensions, spline control points, bridge-curve ends, Offset Vertex's distance |
+| `featureParameters` | every scope | a selected independent copy or pattern array | extrusion distance, body dimensions, array spacing, count, extent, path, output mode |
+| `constructionPlane` | every scope | the selected construction plane | move and rotate its frame |
+
+Each row's own preconditions (an exact CAD context, the running value command,
+a supported selection) stay with its handler; the owner decides only whether
+the pointer may reach it. `WorkspaceViewportPointerOwnerTests` holds the table:
+each scope reaches exactly its rows, every picking command stands every row
+down except its own value handle, and a creation tool reaches none.
+
 ### The canvas header
 
 One home per concern. The selection scope, the snaps, the working plane, the
@@ -747,15 +797,8 @@ with sketch curves or body objects selected (not both), starts Deform's dialog
 click picks the reference face, the next the target face (a later click replaces the
 target), the dialog then takes U/V/N scale and offset, Mirror, UV, Normal and Keep Tools,
 and OK, Return or right-click submits `.deformCurves` or `.deformBodies` while Escape
-ends it unchanged (`WorkspaceDeformSessionTests`). A running command that takes clicks (Deform, Boolean, Cut,
-Cut Curve, the curve picks, Freestyle Offset, a view-aligned plane) owns the
-viewport's clicks: object selection, the selected bodies' move gizmo and the
-object affordances stand down, so a click on any body, the selected ones
-included, reaches the command, and the command's session names what a click
-resolves to (`viewportHitPolicy`: Deform faces, Cut's cutters curves and faces,
-targets bodies or curves) whatever the selection scope. Before, in Object scope
-a click on a body selected it instead and hits carried no face, so Deform could
-not pick a face at all. Create Outline in the palette, with bodies selected,
+ends it unchanged (`WorkspaceDeformSessionTests`). A running command that takes clicks owns the viewport's pointer, as
+[Viewport pointer ownership](#viewport-pointer-ownership) states. Create Outline in the palette, with bodies selected,
 submits `.createBodyOutlines` on the active construction plane and selects the outlines
 with a Move running (`moveCreatedObjects`). J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and

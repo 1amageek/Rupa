@@ -113,8 +113,4 @@ enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
             return true
         }
     }
-
-    func allowsPresentationOccurrencePick(for tool: ModelingTool) -> Bool {
-        tool == .select && self == .object
-    }
 }

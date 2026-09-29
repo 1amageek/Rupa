@@ -2222,7 +2222,7 @@ private struct ProjectMainViewContent: View {
             canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
             projectionRequest: viewportProjectionRequest,
             cameraFrameRequest: viewportCameraFrameRequest,
-            selectionHitPolicy: viewportSelectionHitPolicy,
+            selectionHitPolicy: viewportPointerOwner.hitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
             canvasOverlayExclusions: viewportChromeGeometry.exclusions,
             gridVisualSpacingMode: snapshot.workspaceState.viewportGridSettings.visualSpacingMode,
@@ -2444,7 +2444,7 @@ private struct ProjectMainViewContent: View {
     /// The selected bodies' move, rotate and scale gizmo; a running command that takes clicks has
     /// none, so a click on a selected body reaches the command.
     private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? {
-        guard selectedTool == .select, selectionScope == .object, !runningCommandTakesViewportClicks else {
+        guard viewportPointerOwner.allows(.objectPlacement) else {
             return nil
         }
         return { target in
@@ -2453,8 +2453,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportVertexDragHandler: ((ViewportVertexDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2464,8 +2463,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportFaceDragHandler: ((ViewportFaceDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .face,
+        guard viewportPointerOwner.allows(.faceOffset),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2475,8 +2473,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportEdgeChamferDragHandler: ((ViewportEdgeChamferDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .edge || selectionScope == .object,
+        guard viewportPointerOwner.allows(.edgeTreatment),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2486,8 +2483,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportEdgeFilletDragHandler: ((ViewportEdgeFilletDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .edge || selectionScope == .object,
+        guard viewportPointerOwner.allows(.edgeTreatment),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2497,8 +2493,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportBoundarySurfaceHandler: ((SelectionTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .edge || selectionScope == .object,
+        guard viewportPointerOwner.allows(.boundarySurface),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2519,8 +2514,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportRegionOffsetDragHandler: ((ViewportRegionOffsetDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .region,
+        guard viewportPointerOwner.allows(.regionOffset),
               regionOffsetCommandState.isActive,
               selectedRegionTargets.isEmpty == false else {
             return nil
@@ -2531,8 +2525,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportEdgeOffsetDragHandler: ((ViewportEdgeOffsetDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .edge,
+        guard viewportPointerOwner.allows(.edgeOffset),
               selectedPresentationHasExactCADAffordanceContext,
               edgeOffsetCommandState.isActive,
               selectedEdgeOffsetSupportResolution.isSupported else {
@@ -2553,8 +2546,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSlotWidthDragHandler: ((ViewportSlotWidthDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity,
+        guard viewportPointerOwner.allows(.slotWidth),
               slotProfileCommandState.isActive,
               selectedSlotSourceCurveTarget != nil else {
             return nil
@@ -2565,8 +2557,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSketchVertexOffsetDragHandler: ((ViewportSketchVertexOffsetDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity,
+        guard viewportPointerOwner.allows(.sketchEntityEditing),
               selectedSketchVertexOffsetTarget != nil else {
             return nil
         }
@@ -2576,7 +2567,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayLinearAxisDragHandler: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
@@ -2587,7 +2578,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportIndependentCopyExtrudeDistanceDragHandler: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2597,7 +2588,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportIndependentCopyBodyDimensionDragHandler: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext else {
             return nil
         }
@@ -2607,7 +2598,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayRadialAngleDragHandler: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
@@ -2618,7 +2609,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayCopyCountDragHandler: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
@@ -2629,13 +2620,13 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayCurveExtentDragHandler: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
         }
         return { target in
-            guard selectedTool == .select,
+            guard viewportPointerOwner.allows(.featureParameters),
                   let state = patternArrayInspectorState(for: selectedSceneNodes),
                   state.sourceID == target.sourceID else {
                 return
@@ -2651,7 +2642,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayCurvePathPointDragHandler: ((ViewportPatternArrayCurvePathPointDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
@@ -2662,7 +2653,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPatternArrayOutputModeChangeHandler: ((ViewportPatternArrayOutputModeTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               selectedPresentationHasExactCADAffordanceContext,
               patternArrayInspectorState(for: selectedSceneNodes) != nil else {
             return nil
@@ -2673,8 +2664,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSketchCurveHandleDragHandler: ((ViewportSketchCurveHandleDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return nil
         }
         return { target in
@@ -2683,8 +2673,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSketchDimensionDragHandler: ((ViewportSketchDimensionDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return nil
         }
         return { target in
@@ -2693,8 +2682,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSketchPointHandleDragHandler: ((ViewportSketchPointHandleDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return nil
         }
         return { target in
@@ -2703,8 +2691,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSplineControlPointDragHandler: ((ViewportSplineControlPointDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return nil
         }
         return { target in
@@ -2713,8 +2700,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportBridgeCurveEndpointDragHandler: ((ViewportBridgeCurveEndpointDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return nil
         }
         return { target in
@@ -2723,8 +2709,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSplineControlPointSlideDragHandler: ((ViewportSplineControlPointSlideDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity,
+        guard viewportPointerOwner.allows(.sketchEntityEditing),
               slideCommandState.isCurveControlVerticesActive,
               !slideComparison.isComparing else {
             return nil
@@ -2744,8 +2729,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPolySplineSurfaceVertexDragHandler: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
@@ -2756,8 +2740,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSurfaceControlPointDragHandler: ((ViewportSurfaceControlPointDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
@@ -2768,8 +2751,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSurfaceTrimEndpointDragHandler: ((ViewportSurfaceTrimEndpointDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
@@ -2780,8 +2762,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSurfaceTrimControlPointDragHandler: ((ViewportSurfaceTrimControlPointDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
@@ -2792,8 +2773,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportPolySplineSurfaceVertexSlideDragHandler: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive,
               !slideComparison.isComparing else {
@@ -2805,8 +2785,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSurfaceControlPointSlideDragHandler: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive,
               !slideComparison.isComparing else {
@@ -2818,8 +2797,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportSurfaceFrameDragHandler: ((ViewportSurfaceFrameDragTarget) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               selectedPresentationHasExactCADAffordanceContext,
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return nil
@@ -2830,7 +2808,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportConstructionPlaneHandleDragHandler: ((ViewportConstructionPlaneDragTarget) -> Void)? {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.constructionPlane),
               selectedConstructionPlaneEntry != nil else {
             return nil
         }
@@ -2960,10 +2938,8 @@ private struct ProjectMainViewContent: View {
     /// The selected object's move and resize handles; a running command that takes clicks has
     /// none, so a click on the object reaches the command and a drag cannot move it midway.
     private var allowsObjectAffordances: Bool {
-        selectedTool == .select
-            && selectionScope == .object
+        viewportPointerOwner.allows(.objectHandles)
             && selectedPresentationHasExactCADAffordanceContext
-            && !runningCommandTakesViewportClicks
     }
 
     private var showsAutomaticBoundsRulers: Bool {
@@ -3025,9 +3001,10 @@ private struct ProjectMainViewContent: View {
     private var presentationOccurrencePickHandler: (
         (SceneOccurrenceID, ViewportSelectionIntent) -> Void
     )? {
-        switch selectedTool {
-        case .select where selectionScope == .object && !runningCommandTakesViewportClicks:
+        if viewportPointerOwner.allows(.objectSelection) {
             return handlePresentationOccurrencePick
+        }
+        switch selectedTool {
         case .mesh:
             return { occurrenceID, _ in
                 routeCanvasMesh(snapshot.sceneNodeID(for: occurrenceID))
@@ -3038,9 +3015,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private var presentationOccurrenceHoverHandler: ((SceneOccurrenceID?) -> Void)? {
-        guard selectedTool == .select,
-              selectionScope == .object,
-              !runningCommandTakesViewportClicks else {
+        guard viewportPointerOwner.allows(.objectSelection) else {
             return nil
         }
         return handlePresentationOccurrenceHover
@@ -5785,61 +5760,63 @@ private struct ProjectMainViewContent: View {
         "CanvasTool.\(tool.rawValue)"
     }
 
-    /// Whether `handleViewportPick` hands clicks to a running command rather than to selection:
-    /// then a click on an object must reach it, not select the object.
-    private var runningCommandTakesViewportClicks: Bool {
-        if viewAlignedConstructionPlaneRequest != nil { return true }
-        guard selectedTool == .select else { return false }
-        return curvePickCommand != nil || cutCurveSession != nil || booleanSession != nil
-            || bodyCutSession != nil || deformSession != nil
-            || (slotProfileCommandState.isCurveOffsetActive && slotProfileCommandState.isFreestyle)
-    }
-
-    /// What a click reaches: a running command that picks by clicking decides it (Deform faces,
-    /// Cut's cutters), in the order `handleViewportPick` hands clicks to them; otherwise the
-    /// selection scope does.
-    private var viewportSelectionHitPolicy: ViewportSelectionHitPolicy {
-        if selectedTool == .select, viewAlignedConstructionPlaneRequest == nil, curvePickCommand == nil {
-            if let cutCurveSession { return cutCurveSession.viewportHitPolicy }
-            if booleanSession == nil {
-                if let bodyCutSession { return bodyCutSession.viewportHitPolicy }
-                if let deformSession { return deformSession.viewportHitPolicy }
+    /// Who a viewport press belongs to: the running command that takes clicks, in the order a
+    /// click reaches it, else direct editing in the selection scope under the select tool.
+    /// `handleViewportPick`, the hit policy and every affordance handler read this one value.
+    private var viewportPointerOwner: WorkspaceViewportPointerOwner {
+        let scopePolicy = selectionScope.viewportSelectionHitPolicy
+        if viewAlignedConstructionPlaneRequest != nil {
+            return .pickingCommand(.viewAlignedConstructionPlane, hitPolicy: scopePolicy, scope: selectionScope)
+        }
+        if selectedTool == .select {
+            if curvePickCommand != nil {
+                return .pickingCommand(.curvePick, hitPolicy: scopePolicy, scope: selectionScope)
+            }
+            if let cutCurveSession {
+                return .pickingCommand(.cutCurve, hitPolicy: cutCurveSession.viewportHitPolicy, scope: selectionScope)
+            }
+            if booleanSession != nil {
+                return .pickingCommand(.boolean, hitPolicy: scopePolicy, scope: selectionScope)
+            }
+            if let bodyCutSession {
+                return .pickingCommand(.bodyCut, hitPolicy: bodyCutSession.viewportHitPolicy, scope: selectionScope)
+            }
+            if let deformSession {
+                return .pickingCommand(.deform, hitPolicy: deformSession.viewportHitPolicy, scope: selectionScope)
+            }
+            if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle {
+                return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope)
             }
         }
-        return selectionScope.viewportSelectionHitPolicy
+        if modelingDraft?.kind == .constrainedSurface {
+            return .pickingCommand(.constrainedSurfacePoints, hitPolicy: scopePolicy, scope: selectionScope)
+        }
+        if selectedTool == .select {
+            return .directEditing(selectionScope)
+        }
+        return .tool(selectedTool, scope: selectionScope)
     }
 
-    private func handleViewportPick(_ target: ViewportCanvasTarget) {
-        if let request = viewAlignedConstructionPlaneRequest {
+    /// Hands a click to the running command that owns the viewport's clicks.
+    private func routeViewportPick(_ target: ViewportCanvasTarget, to command: WorkspaceViewportPickingCommand) {
+        switch command {
+        case .viewAlignedConstructionPlane:
+            guard let request = viewAlignedConstructionPlaneRequest else { return }
             createViewAlignedConstructionPlane(from: target, request: request)
-            return
-        }
-        if let command = curvePickCommand, selectedTool == .select {
-            applyCurvePick(command, at: target)
-            return
-        }
-        if cutCurveSession != nil, selectedTool == .select {
+        case .curvePick:
+            guard let curvePickCommand else { return }
+            applyCurvePick(curvePickCommand, at: target)
+        case .cutCurve:
             pickCutCurve(at: target)
-            return
-        }
-        if booleanSession != nil, selectedTool == .select {
+        case .boolean:
             pickBooleanBody(at: target)
-            return
-        }
-        if bodyCutSession != nil, selectedTool == .select {
+        case .bodyCut:
             pickBodyCutOperand(at: target)
-            return
-        }
-        if deformSession != nil, selectedTool == .select {
+        case .deform:
             pickDeformFace(at: target)
-            return
-        }
-        if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle, selectedTool == .select {
+        case .freestyleOffset:
             pickFreestyleOffset(at: target)
-            return
-        }
-
-        if modelingDraft?.kind == .constrainedSurface {
+        case .constrainedSurfacePoints:
             let plane = effectiveSketchPlane(fallback: target.sketchPlane)
             guard let input = mappedCanvasInput(modelPoint: target.modelPoint,
                 modelWorldPoint: target.modelWorldPoint,
@@ -5850,6 +5827,12 @@ private struct ProjectMainViewContent: View {
                 sketchPlane: plane) else { return }
             do { try modelingDraft?.appendWorldPoint(point, in: snapshot.document.document) }
             catch { reportToolStatus(error.localizedDescription, severity: .warning) }
+        }
+    }
+
+    private func handleViewportPick(_ target: ViewportCanvasTarget) {
+        if let command = viewportPointerOwner.pickingCommand {
+            routeViewportPick(target, to: command)
             return
         }
 
@@ -7569,10 +7552,10 @@ private struct ProjectMainViewContent: View {
     private func handleViewportBodyPlacementCommit(
         _ targets: [ViewportBodyPlacementDragTarget]
     ) async throws -> ViewportSourceIdentity {
-        guard selectedTool == .select, selectionScope == .object else {
+        guard viewportPointerOwner.allows(.objectPlacement) else {
             throw ProjectWorkspaceActionError(
                 code: .actionResultMismatch,
-                message: "Body transforms commit only with the Select tool in object scope."
+                message: "Body transforms commit only while the Select tool edits objects and no command takes the viewport's clicks."
             )
         }
         // A running Move, Rotate or Scale commits its drag as the session's transform, so the
@@ -7594,9 +7577,9 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportBodyResizeCommit(_ target: ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity {
-        guard selectedTool == .select, selectionScope == .object else {
+        guard viewportPointerOwner.allows(.objectHandles) else {
             throw ProjectWorkspaceActionError(code: .actionResultMismatch,
-                                              message: "Box resize requires Select in object scope.")
+                                              message: "Box resize requires the Select tool editing objects, with no command taking the viewport's clicks.")
         }
         return try await runWorkspaceOperation {
             _ = try await executeSource(name: "resizeBody") { current in
@@ -7610,8 +7593,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportVertexDrag(_ target: ViewportVertexDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .vertex else {
+        guard viewportPointerOwner.allows(.bodyVertexEditing) else {
             return
         }
         submitSource(
@@ -7624,8 +7606,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportPolySplineSurfaceVertexDrag(_ target: ViewportPolySplineSurfaceVertexDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .vertex else {
+        guard viewportPointerOwner.allows(.bodyVertexEditing) else {
             return
         }
         submitSource(
@@ -7639,8 +7620,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSurfaceControlPointDrag(_ target: ViewportSurfaceControlPointDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .vertex else {
+        guard viewportPointerOwner.allows(.bodyVertexEditing) else {
             return
         }
         if !surfaceControlPointMoveOptions.isPlainMove {
@@ -7670,8 +7650,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSurfaceTrimEndpointDrag(_ target: ViewportSurfaceTrimEndpointDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .vertex else {
+        guard viewportPointerOwner.allows(.bodyVertexEditing) else {
             return
         }
         submitSource(
@@ -7685,8 +7664,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSurfaceTrimControlPointDrag(_ target: ViewportSurfaceTrimControlPointDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .vertex else {
+        guard viewportPointerOwner.allows(.bodyVertexEditing) else {
             return
         }
         submitSource(
@@ -7702,8 +7680,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportPolySplineSurfaceVertexSlideDrag(
         _ target: ViewportPolySplineSurfaceVertexSlideDragTarget
     ) {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               slideCommandState.isSurfaceControlVerticesActive else {
             return
         }
@@ -7718,8 +7695,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportSurfaceControlPointSlideDrag(
         _ target: ViewportSurfaceControlPointSlideDragTarget
     ) {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               slideCommandState.isSurfaceControlVerticesActive else {
             return
         }
@@ -7734,8 +7710,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportSurfaceFrameDrag(
         _ target: ViewportSurfaceFrameDragTarget
     ) {
-        guard selectedTool == .select,
-              selectionScope == .vertex,
+        guard viewportPointerOwner.allows(.bodyVertexEditing),
               slideCommandState.isSurfaceControlVerticesActive == false else {
             return
         }
@@ -7754,7 +7729,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportConstructionPlaneHandleDrag(
         _ target: ViewportConstructionPlaneDragTarget
     ) {
-        guard selectedTool == .select else {
+        guard viewportPointerOwner.allows(.constructionPlane) else {
             return
         }
 
@@ -7796,8 +7771,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportFaceDrag(_ target: ViewportFaceDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .face else {
+        guard viewportPointerOwner.allows(.faceOffset) else {
             return
         }
         submitSource(
@@ -7809,8 +7783,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportEdgeChamferDrag(_ target: ViewportEdgeChamferDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .edge || selectionScope == .object else {
+        guard viewportPointerOwner.allows(.edgeTreatment) else {
             return
         }
         submitSource(
@@ -7822,8 +7795,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportEdgeFilletDrag(_ target: ViewportEdgeFilletDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .edge || selectionScope == .object else {
+        guard viewportPointerOwner.allows(.edgeTreatment) else {
             return
         }
         submitSource(
@@ -7835,8 +7807,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportRegionOffsetDrag(_ target: ViewportRegionOffsetDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .region else {
+        guard viewportPointerOwner.allows(.regionOffset) else {
             return
         }
         regionOffsetDistanceMeters = max(abs(target.distance), 1.0e-9)
@@ -7850,8 +7821,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportEdgeOffsetDrag(_ target: ViewportEdgeOffsetDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .edge,
+        guard viewportPointerOwner.allows(.edgeOffset),
               edgeOffsetCommandState.isActive else {
             return
         }
@@ -7864,8 +7834,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSlotWidthDrag(_ target: ViewportSlotWidthDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity,
+        guard viewportPointerOwner.allows(.slotWidth),
               slotProfileCommandState.isActive else {
             return
         }
@@ -7874,8 +7843,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSketchVertexOffsetDrag(_ target: ViewportSketchVertexOffsetDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         sketchVertexOffsetDistanceMeters = max(target.distance, 1.0e-9)
@@ -7891,7 +7859,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportPatternArrayLinearAxisDrag(
         _ target: ViewportPatternArrayLinearAxisDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -7916,7 +7884,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportIndependentCopyExtrudeDistanceDrag(
         _ target: ViewportIndependentCopyExtrudeDistanceDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               target.distance.isFinite,
               target.distance > 0.0 else {
             return
@@ -7932,7 +7900,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportIndependentCopyBodyDimensionDrag(
         _ target: ViewportIndependentCopyBodyDimensionDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               target.value.isFinite,
               target.value > 0.0 else {
             return
@@ -7994,7 +7962,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportPatternArrayRadialAngleDrag(
         _ target: ViewportPatternArrayRadialAngleDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -8006,7 +7974,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportPatternArrayCopyCountDrag(
         _ target: ViewportPatternArrayCopyCountDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -8027,7 +7995,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportPatternArrayOutputModeChange(_ target: ViewportPatternArrayOutputModeTarget) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -8038,7 +8006,7 @@ private struct ProjectMainViewContent: View {
     private func handleViewportPatternArrayCurvePathPointDrag(
         _ target: ViewportPatternArrayCurvePathPointDragTarget
     ) {
-        guard selectedTool == .select,
+        guard viewportPointerOwner.allows(.featureParameters),
               let state = patternArrayInspectorState(for: selectedSceneNodes),
               state.sourceID == target.sourceID else {
             return
@@ -8050,8 +8018,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSketchCurveHandleDrag(_ target: ViewportSketchCurveHandleDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         switch target.handle {
@@ -8075,8 +8042,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSketchDimensionDrag(_ target: ViewportSketchDimensionDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         setSelectedSketchEntityDimension(
@@ -8087,8 +8053,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSketchPointHandleDrag(_ target: ViewportSketchPointHandleDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         moveSelectedSketchEntityPoint(
@@ -8100,8 +8065,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSplineControlPointDrag(_ target: ViewportSplineControlPointDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         moveSelectedSplineControlPoint(
@@ -8113,8 +8077,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportBridgeCurveEndpointDrag(_ target: ViewportBridgeCurveEndpointDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         switch target.role {
@@ -8140,8 +8103,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportSplineControlPointSlideDrag(_ target: ViewportSplineControlPointSlideDragTarget) {
-        guard selectedTool == .select,
-              selectionScope == .sketchEntity else {
+        guard viewportPointerOwner.allows(.sketchEntityEditing) else {
             return
         }
         sketchSplineControlPointSlideDistanceMeters = max(abs(target.distance), 1.0e-9)
