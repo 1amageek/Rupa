@@ -438,7 +438,8 @@ extension DesignDocument {
     /// every other operand is handed to the kernel with its rigid placement relative to it, and
     /// kept tools stay where they are. Placements are Core's to derive, so references must arrive
     /// without one. The materials say how each side's material is taken; the result is a sheet or
-    /// a solid as Swift-CAD's `resultPort` says. A slice shows each piece as an object of its own.
+    /// a solid as Swift-CAD's `resultPort` says. A slice or a region shows each piece as an object of
+    /// its own.
     @discardableResult
     public mutating func createBoolean(
         name: String,
@@ -478,7 +479,7 @@ extension DesignDocument {
         try publishBooleanResult(
             boolean,
             name: trimmedName,
-            asPieces: operation == .slice,
+            asPieces: operation == .slice || operation == .region,
             besideTarget: boolean.firstTarget,
             objectRegistry: objectRegistry
         )

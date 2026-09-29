@@ -151,7 +151,7 @@
   - [ ] SO1 Boolean and Cut. `depends:none` `parallel:none`
     - [x] SO1.1 Boolean takes several tools acting as their union, every operand at its displayed placement, and kept placed tools; the result replaces its targets and Keep Tools keeps only tools. Kernel 2b5ba3e, 29335a7. `depends:none` `parallel:none`
     - [x] SO1.2 Solid and Sheet operands with Target and Tool Material (Default, Empty, Inside, Outside); Default sheet is Inside only as a tool facing solid targets, otherwise an empty shell. Kernel ec98cdf. `depends:SO1.1` `parallel:none`
-    - [ ] SO1.3 Region: solids from the regions the operands enclose. `depends:SO1.2` `parallel:none`
+    - [x] SO1.3 Region: every cell the operands enclose, one object per cell. Kernel 539b762. `depends:SO1.2` `parallel:none`
     - [x] SO1.4 Cut: solids and sheets cut by curves (Extend, view direction) and faces, each piece its own object. `depends:SO1.2` `parallel:none`
       - [x] SO1.4.1 Kernel ExtractBodyComponent: one component of a multi-component body copied as its own body, in a deterministic order, refusing a changed component count. Kernel d3fb071. `depends:none` `parallel:none`
       - [x] SO1.4.2 Kernel ExtractFaces: chosen faces of a body copied as a sheet body. Kernel d3fb071 (one `extract` feature, `.faces`). `depends:SO1.4.1` `parallel:none`

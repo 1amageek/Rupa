@@ -263,6 +263,7 @@ struct ModelingOperationView: View {
                 Text("Subtract").tag(BooleanOperation.difference)
                 Text("Intersect").tag(BooleanOperation.intersect)
                 Text("Slice").tag(BooleanOperation.slice)
+                Text("Region").tag(BooleanOperation.region)
             }
             Toggle("Keep tool bodies", isOn: $draft.keepTools)
         case .fillet:

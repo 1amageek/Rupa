@@ -96,4 +96,20 @@ import Testing
         #expect(abs(try volume(session.document) - cube) < 1e-9)
         #expect(session.evaluationStatus == .valid)
     }
+
+    /// A region shows each cell the operands enclose as its own object; the sheet's parts outside
+    /// the box enclose nothing and go.
+    @MainActor
+    @Test func aRegionShowsEachCellAsItsOwnObject() throws {
+        let (session, box, sheet) = try operands()
+        _ = try session.execute(.createBoolean(
+            name: "Region", targets: [BooleanTargetReference(featureID: box)],
+            tools: [BooleanToolReference(featureID: sheet)], operation: .region, keepTools: false
+        ))
+        let pieces = session.document.productMetadata.sceneNodes.values.filter { $0.name.hasPrefix("Region ") }
+        #expect(pieces.count == 2)
+        #expect(pieces.allSatisfy { $0.object?.geometryRole == .solid })
+        #expect(abs(try volume(session.document) - cube) < 1e-9)
+        #expect(session.evaluationStatus == .valid)
+    }
 }
