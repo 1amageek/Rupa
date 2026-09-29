@@ -46,6 +46,9 @@ import Testing
         #expect(abs(try volume(session.document) - 0.75 * cube) < 1e-9)
         #expect(try resultNode(session, result).object?.geometryRole == .solid)
         #expect(session.evaluationStatus == .valid)
+        // The result takes over the box's object; the sheet's object goes with the sheet.
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 1)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 
     @MainActor
@@ -95,6 +98,7 @@ import Testing
         // The pieces are measured, not the slice they came from.
         #expect(abs(try volume(session.document) - cube) < 1e-9)
         #expect(session.evaluationStatus == .valid)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 
     /// A region shows each cell the operands enclose as its own object; the sheet's parts outside

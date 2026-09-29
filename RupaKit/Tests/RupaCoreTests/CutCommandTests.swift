@@ -56,9 +56,11 @@ import Testing
         _ = try session.execute(.cut(name: "Cut", targets: [box], cutters: [.curve(line)], options: CutOptions()))
         #expect(pieces(session, named: "Cut").count == 2)
         #expect(abs(try volume(session.document) - cube) < 1e-9)
-        let cutter = try #require(session.document.productMetadata.sceneNodes.values.first { $0.name == "Cut Cutter 1" })
-        #expect(cutter.isVisible == false)
+        // The box, the cutter sheet it was cut by and every step are consumed: only the pieces
+        // have objects.
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 2)
         #expect(session.evaluationStatus == .valid)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 
     @MainActor
@@ -103,5 +105,6 @@ import Testing
         #expect(pieces(session, named: "Cut").count == 4)
         #expect(abs(try volume(session.document) - cube) < 1e-9)
         #expect(session.evaluationStatus == .valid)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 }

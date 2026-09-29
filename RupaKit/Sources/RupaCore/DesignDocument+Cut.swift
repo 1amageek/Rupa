@@ -96,6 +96,8 @@ extension DesignDocument {
         }
 
         var current = targetFeatures
+        // The targets, the cutters and every intermediate slice are consumed by the next slice.
+        var consumed = targetFeatures + cutterFeatures
         var last: AppendedBoolean?
         for (index, cutter) in cutterFeatures.enumerated() {
             let isLast = index == cutterFeatures.count - 1
@@ -119,13 +121,17 @@ extension DesignDocument {
                     objectRegistry: objectRegistry
                 )
             }
+            if isLast == false { consumed.append(boolean.featureID) }
             current = [boolean.featureID]
             last = boolean
         }
         guard let last else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) produced no slice.")
         }
-        try publishBooleanResult(last, name: trimmedName, asPieces: true, besideTarget: targetFeatures[0], objectRegistry: objectRegistry)
+        try publishBooleanResult(
+            last, name: trimmedName, asPieces: true, besideTarget: targetFeatures[0],
+            consumed: consumed, objectRegistry: objectRegistry
+        )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true

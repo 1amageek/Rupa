@@ -65,12 +65,11 @@ import Testing
             output: .independentCopy,
             boolean: SceneNodePlacementBoolean(operation: .difference, targetSceneNodeID: target)
         ))
-        // The target lost the half the copy overlapped; the original tool is untouched.
+        // The target lost the half the copy overlapped; the original tool is untouched, and the
+        // consumed copy has no object left.
         #expect(abs(try volume(session.document) - 1.5 * cube) < tolerance)
-        let hidden = session.document.productMetadata.sceneNodes.values.filter {
-            $0.reference?.kind == .body && !$0.isVisible
-        }
-        #expect(hidden.count == 1)
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 2)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 
     @MainActor

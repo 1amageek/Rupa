@@ -481,6 +481,7 @@ extension DesignDocument {
             name: trimmedName,
             asPieces: operation == .slice || operation == .region,
             besideTarget: boolean.firstTarget,
+            consumed: targets.map(\.featureID) + (keepTools ? [] : tools.map(\.featureID)),
             objectRegistry: objectRegistry
         )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
@@ -569,24 +570,40 @@ extension DesignDocument {
         return AppendedBoolean(featureID: featureID, resultPort: resultPort, firstTarget: first)
     }
 
-    /// Shows an appended Boolean's result beside `target`'s object: as one object, or, as pieces,
-    /// one Swift-CAD extraction and object per component of the evaluated result, the
-    /// multi-component result itself shown by none.
+    /// Shows an appended Boolean's result where `target`'s object is, and takes away the objects
+    /// of the `consumed` bodies, which the Boolean replaced: every scene node must present a body
+    /// the document still evaluates. One result takes over the target's object, as a direct edit
+    /// takes over the object it edits; as pieces, one Swift-CAD extraction and object per
+    /// component of the evaluated result is shown beside it, the multi-component result itself
+    /// shown by none.
     mutating func publishBooleanResult(
         _ boolean: AppendedBoolean,
         name: String,
         asPieces: Bool,
         besideTarget target: FeatureID,
+        consumed: [FeatureID],
         objectRegistry: ObjectTypeRegistry
     ) throws {
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         let geometryRole: ObjectDescriptor.GeometryRole = boolean.resultPort == .sheet ? .surface : .solid
         let targetNodeID = hierarchy.presentingSceneNodeID(for: target)
         guard asPieces else {
-            try insertBooleanResultNode(
-                name: name, featureID: boolean.featureID, geometryRole: geometryRole,
-                besideTargetNode: targetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
-            )
+            if let targetNodeID, var node = productMetadata.sceneNodes[targetNodeID], var object = node.object {
+                node.name = name
+                node.reference = .body(boolean.featureID)
+                try object.retargetModelingCADRepresentation(to: boolean.featureID)
+                object.sourceSection = nil
+                object.typeID = nil
+                object.geometryRole = geometryRole
+                node.object = object
+                productMetadata.sceneNodes[targetNodeID] = node
+            } else {
+                try insertBooleanResultNode(
+                    name: name, featureID: boolean.featureID, geometryRole: geometryRole,
+                    besideTargetNode: targetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
+                )
+            }
+            try removeSceneNodes(presenting: consumed)
             return
         }
         let pieceCount = try bodyComponentCount(of: boolean.featureID, objectRegistry: objectRegistry, owner: name)
@@ -608,6 +625,33 @@ extension DesignDocument {
                 besideTargetNode: targetNodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
                 objectRegistry: objectRegistry
             )
+        }
+        try removeSceneNodes(presenting: consumed)
+    }
+
+    /// Removes every object presenting one of `features`' bodies, which a later feature consumed.
+    /// Its children (a body's nested profile sketch) take its place, where they are displayed now.
+    private mutating func removeSceneNodes(presenting features: [FeatureID]) throws {
+        let consumed = Set(features)
+        let nodeIDs = productMetadata.sceneNodes.values.filter { node in
+            node.reference?.kind == .body && node.reference?.featureID.map(consumed.contains) == true
+        }.map(\.id)
+        for nodeID in nodeIDs {
+            guard let node = productMetadata.sceneNodes[nodeID] else { continue }
+            if node.childIDs.isEmpty == false {
+                let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+                guard let parentID = hierarchy.parentID(of: nodeID),
+                      let index = productMetadata.sceneNodes[parentID]?.childIDs.firstIndex(of: nodeID) else {
+                    throw EditorError(code: .commandInvalid, message: "A consumed object's children have no place to go.")
+                }
+                for (offset, childID) in node.childIDs.enumerated() {
+                    guard var child = productMetadata.sceneNodes[childID] else { continue }
+                    child.localTransform = try node.localTransform.composed(with: child.localTransform)
+                    productMetadata.sceneNodes[childID] = child
+                    try productMetadata.moveSceneNode(childID, under: parentID, at: index + 1 + offset)
+                }
+            }
+            try productMetadata.removeSceneNode(nodeID)
         }
     }
 

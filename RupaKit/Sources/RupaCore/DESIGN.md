@@ -111,8 +111,12 @@ tool where it is displayed, placed or not. Operands are solids or sheets (the
 targets all one or the other), and `targetMaterial`/`toolMaterial` say how each
 side's material is taken (Swift-CAD's `BooleanMaterial`); the result's output and
 object role follow Swift-CAD's `resultPort`: a sheet shown as a surface, otherwise
-a solid. The result node is inserted beside the first target with the target's
-local transform, so it appears where the target was. A slice, and a region
+a solid. The result takes over the first target's object, retargeted as a direct
+edit retargets the object it edits, so it appears where the target was; the objects
+of every other consumed body (the other targets, and the tools unless kept) are
+removed, their children (a nested profile sketch) taking their place where they are
+displayed. The project evaluates every object, so an object whose body a later
+feature consumed would fail it (`BooleanProjectEvaluationTests`). A slice, and a region
 (every cell the targets and tools enclose, operands taking no material),
 publishes each piece as an object of its own: the Boolean's multi-component result has no
 object, and one Swift-CAD `extract` feature per component (`.component(index:
@@ -129,8 +133,10 @@ normal or `CutOptions.direction` (the view direction), after a `curveExtend` of
 both ends when `extendsCurves`, its extent spanning the targets' enclosing boxes
 along that direction with a margin. The targets are sliced by the first cutter
 with the cutter's material Inside, that slice (a hidden object at the first
-target's placement) by the next, and the last slice's pieces are extracted.
-`CutCommandTests` own normal and slanted curve cuts, Extend, face cutters and
+target's placement) by the next, and the last slice's pieces are extracted. The
+hidden objects only place their bodies while the slices are appended: the targets,
+the cutter sheets and every intermediate slice are consumed, so their objects are
+removed once the pieces are shown. `CutCommandTests` own normal and slanted curve cuts, Extend, face cutters and
 several cutters in turn.
 
 Face offset operates in the source profile frame. Moving the start cap compensates
