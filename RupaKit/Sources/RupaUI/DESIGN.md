@@ -693,7 +693,8 @@ Vertex (Edit menu, palette, or a double-click on a spline's interior vertex)
 turns that vertex into a control point. Rebuild (Edit menu, palette) opens its dialog on the selected
 splines (`WorkspaceRebuildSession`): Method Refit (tolerance, Keep corners), Points
 (any count) or Explicit Control (degree within Core's
-`CurveRebuildOptions.explicitControlDegrees`, spans, weight); OK, Return or right-click
+`CurveRebuildOptions.explicitControlDegrees`, spans within
+`explicitControlSpanCounts(degree:)`, weight); OK, Return or right-click
 rebuilds every curve as one step, and Escape ends it without a change. With a Bridge Curve selected, Tab steps both ends' continuity G0 → G1 → G2
 → G3 → G0 and Q (or the inspector's Trim/Untrim Sources) turns trimming the
 curves it bridges on and off. Its context panel holds the G1 tension field

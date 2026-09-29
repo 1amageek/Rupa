@@ -30,6 +30,7 @@ extension DesignDocument {
             )
         }
 
+        try options.validate(owner: "Sketch curve rebuild")
         let rebuilt: RebuiltSketchSpline
         switch options.method {
         case .points(let controlPointCount)

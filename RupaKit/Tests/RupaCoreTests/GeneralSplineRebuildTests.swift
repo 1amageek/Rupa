@@ -109,4 +109,26 @@ import Testing
         #expect(document.cadDocument.designGraph.revision == revision)
         #expect(try spline(document, featureID, entityID) == quintic)
     }
+
+    /// Counts outside what a rebuild takes are refused before they are used, whoever sends them:
+    /// the largest integers neither overflow nor allocate, and the document stays as it was.
+    @Test func countsOutsideTheCoreRangesAreRefusedBeforeMutation() throws {
+        let quintic = SketchSpline(controlPoints: [point(0, 0), point(1, 2), point(2, -1), point(3, 3), point(4, 1), point(5, 2)], degree: 5)
+        var (document, featureID, entityID) = try document(quintic)
+        let revision = document.cadDocument.designGraph.revision
+        #expect(CurveRebuildOptions.explicitControlSpanCounts(degree: 3) == 1...(SketchSplineLeastSquaresFit.maximumControlPointCount - 3))
+        for options in [
+            CurveRebuildOptions.explicitControl(degree: 3, spanCount: .max, weight: 1),
+            .explicitControl(degree: 3, spanCount: SketchSplineLeastSquaresFit.maximumControlPointCount - 2, weight: 1),
+            .explicitControl(degree: 3, spanCount: 0, weight: 1),
+            .points(controlPointCount: .max),
+            .points(controlPointCount: SketchSplineLeastSquaresFit.maximumControlPointCount + 1),
+        ] {
+            #expect(throws: EditorError.self) {
+                try document.rebuildSketchCurve(target: target(document, featureID, entityID), options: options)
+            }
+        }
+        #expect(document.cadDocument.designGraph.revision == revision)
+        #expect(try spline(document, featureID, entityID) == quintic)
+    }
 }

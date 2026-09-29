@@ -9497,7 +9497,7 @@ private struct ProjectMainViewContent: View {
             }
             .fixedSize()
             .accessibilityIdentifier("WorkspaceRebuild.degree")
-            Stepper(value: Binding(get: { rebuild.spanCount }, set: { rebuildSession?.spanCount = $0 }), in: 1...64) {
+            Stepper(value: Binding(get: { rebuild.spanCount }, set: { rebuildSession?.spanCount = $0 }), in: CurveRebuildOptions.explicitControlSpanCounts(degree: rebuild.degree)) {
                 Text("Spans \(rebuild.spanCount)").monospacedDigit().font(.caption)
             }
             .fixedSize()

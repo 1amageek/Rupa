@@ -86,26 +86,8 @@ extension DesignDocument {
         weight: Double,
         owner: String
     ) throws -> RebuiltSketchSpline {
-        guard CurveRebuildOptions.explicitControlDegrees.contains(degree) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control degree must be between \(CurveRebuildOptions.explicitControlDegrees.lowerBound) and \(CurveRebuildOptions.explicitControlDegrees.upperBound)."
-            )
-        }
-        guard spanCount > 0 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control requires at least one span."
-            )
-        }
-        guard weight.isFinite,
-              weight >= 0.0,
-              weight <= 1.0 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) Explicit Control weight must be between 0 and 1."
-            )
-        }
+        // The degree and spans are in range before their sum is formed.
+        try CurveRebuildOptions.explicitControl(degree: degree, spanCount: spanCount, weight: weight).validate(owner: owner)
         let curve = try resolvedSketchSplineCurve(spline, owner: owner)
         return try rebuiltSketchSpline(fitting: spline, curve: curve, method: "Explicit Control", owner: owner) { fitter in
             try fitter.fit(curve, degree: degree, controlPointCount: spanCount + degree, shapeWeight: weight)

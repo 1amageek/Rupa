@@ -60,7 +60,7 @@ struct WorkspaceSplineEditOperationsView: View {
         inspectorControlRow("Spans") {
             Stepper(
                 value: $explicitSpanCount,
-                in: 1 ... 64
+                in: CurveRebuildOptions.explicitControlSpanCounts(degree: explicitDegree)
             ) {
                 Text("\(explicitSpanCount)")
                     .monospacedDigit()
