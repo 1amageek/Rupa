@@ -14,7 +14,9 @@ struct RealityViewportPreparationRequest: Sendable {
             guard snapshotID?.projectID == other.snapshotID?.projectID,
                   snapshotID?.purpose == other.snapshotID?.purpose else { return false }
             switch (scene.source, other.scene.source) {
-            case let (.document(id, _), .document(otherID, _)):
+            case let (.document(id, _), .document(otherID, _)),
+                 let (.document(id, _), .dragPreview(otherID, _)),
+                 let (.dragPreview(id, _), .document(otherID, _)):
                 return id == otherID
             case let (.presentation(snapshot), .presentation(otherSnapshot)):
                 return snapshot.projectID == otherSnapshot.projectID

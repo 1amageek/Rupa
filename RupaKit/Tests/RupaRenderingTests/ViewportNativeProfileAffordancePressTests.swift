@@ -62,8 +62,8 @@ enum ViewportProfileHandleKind: String {
 ///
 /// The list is explicit rather than a product of handles and cameras. The face
 /// samples a single world axis and includes an axis-front case. The corner
-/// samples the profile sketch plane; edge treatments use horizontal travel in
-/// the mounted view plane. Isometric cases cover both projection modes.
+/// samples the profile sketch plane; edge treatments follow their composed
+/// adjacent-face normal. Isometric cases cover both projection modes.
 enum ViewportProfileHandlePressCase: String, CaseIterable {
     case faceIsometricParallel
     case faceIsometricPerspective
@@ -355,10 +355,7 @@ private struct ProfileHandlePressFixture {
                 objectRegistry: .builtIn,
                 operationName: "Viewport generated topology selection"
             )
-            // The inward direction below is the left bottom corner's, so a
-            // resolver that answers a different edge is reported rather than
-            // silently dragged outward, where every treatment is a valid
-            // nothing-to-commit answer.
+            // Keep the selected topology edge consistent with the fixture.
             guard resolvedEdge == .leftBottom else {
                 throw ProfileAffordancePressFixtureError(
                     message: "The selected edge resolves to \(resolvedEdge) rather than the left bottom edge."
@@ -384,10 +381,7 @@ private struct ProfileHandlePressFixture {
             let placed = try Self.edgeHandleFrame(sourceEdge, item: bodyItem)
             anchor = placed.anchor
             outward = placed.outward
-            // Edge treatments scrub a length horizontally in the mounted view.
-            dragDirection = Vector3D(x: basis.xDirection.dx,
-                                     y: basis.yDirection.dx,
-                                     z: basis.zDirection.dx)
+            dragDirection = placed.outward
         case .boundarySurface:
             guard case .body(let component) = bodyItem.kind,
                   let sourceEdge = component.topology?.edges.first(where: {

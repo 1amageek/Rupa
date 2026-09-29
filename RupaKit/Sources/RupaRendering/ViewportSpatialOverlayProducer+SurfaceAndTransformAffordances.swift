@@ -3153,7 +3153,7 @@ private extension ViewportSpatialOverlayProducer {
                 }
                 guard let direction = normalized(normalSum) else { continue }
                 let anchor = item.modelTransform.point(normalFrame.anchor)
-                let edge = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
+                let edge = ViewportEdgeTreatmentDragFrame(anchor: anchor, direction: direction, modelTransform: item.modelTransform)
                 let edit = input.editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
                 if wantsBoundarySurface, let loopID = sourceEdge.openBoundaryLoopID {
                     let hasCompleteDisplayLoop = topology.edges.allSatisfy { boundaryEdge in

@@ -98,6 +98,26 @@ A post-await frame-identity check is
 required before any candidate is published. Native objects do not cross into
 detached preparation tasks.
 
+### Replacement display continuity
+
+The mount owns one last successfully displayed frame and at most one pending
+replacement. Installing a replacement does not retire the displayed root.
+After the replacement has applied its camera, appearance, previews and spatial
+geometry, the same MainActor turn enables it and unbinds the preceding root.
+Projection readiness waits and failed replacements retain the preceding picture;
+the cache's exact-identity camera gate still rejects stale input. A superseded
+pending replacement is unbound immediately, so repeated updates cannot retain a
+chain of frames. Host detach unbinds both frames and cancels pending work.
+
+The shared native camera uses the candidate's render origin. The retained root
+is translated by its old origin minus the candidate origin before that camera
+is applied; this keeps its world geometry in place during origin changes.
+Reference annotations remain on the existing host-owned root. Verification
+must exercise real mounted replacements during face/edge edits, including a
+changed render origin, and check that no replacement wait empties the geometry.
+[`RealityViewportReplacementContinuityTests`](../../../Tests/RupaRenderingTests/RealityViewportReplacementContinuityTests.swift)
+owns the cache refusal and mounted replacement checks.
+
 ### Mounted camera readiness
 
 The host retains a camera root independently of replaceable spatial frames.
@@ -215,7 +235,8 @@ withdraws its frame for every changed scene key or snapshot ID.
 
 ```text
 frame withdrawn -> the host does nothing; the last root keeps drawing
-frame published -> the previous root leaves as the new one attaches
+frame published -> attach a hidden candidate, retain the displayed root
+candidate camera/spatial frame ready -> enable candidate and retire previous root
 host disappears -> detach the root and unbind; the scene is discarded once
 ```
 

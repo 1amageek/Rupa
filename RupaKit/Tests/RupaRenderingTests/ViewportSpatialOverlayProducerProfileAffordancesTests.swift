@@ -193,11 +193,10 @@ func profileEdgeHandlesExtendAlongCombinedOutwardFaceNormals() throws {
             y: (edge.start.y + edge.end.y) * 0.5, z: (edge.start.z + edge.end.z) * 0.5)
         let normalFrame = try #require(edge.affordanceFrame)
         #expect(normalFrame.adjacentFaceNormals.count == 2)
-        let direction = try #require(ViewportSpatialOverlayProducer.normalized(
-            normalFrame.adjacentFaceNormals.reduce(Vector3D.zero, +)
-        ))
+        let direction = try normalFrame.adjacentFaceNormals.reduce(Vector3D.zero, +)
+            .normalized(tolerance: 1.0e-12)
         #expect(direction.dot(anchor - edit.worldPoint(edit.centerPoint)) > 0)
-        let frame = ViewportEdgeTreatmentDragFrame(anchor: anchor, modelTransform: item.modelTransform)
+        let frame = ViewportEdgeTreatmentDragFrame(anchor: anchor, direction: direction, modelTransform: item.modelTransform)
         let expected: [(ViewportAffordanceAction, CGFloat)] = [
             (.profileEdgeFillet(target, frame), ProfileMetrics.filletOffsetPoints),
             (.profileEdgeChamfer(target, frame), ProfileMetrics.chamferOffsetPoints),
@@ -316,9 +315,8 @@ func selectedBoundaryEdgeShowsSurfaceFillForADeletedFaceOpening() throws {
     let boundaryFrame = try #require(loopEdges[0].affordanceFrame)
     #expect(boundaryFrame.adjacentFaceNormals.count == 1)
     let boundaryDirection = try #require(source.cameraPaths.first?.placement.worldDirection)
-    let expectedBoundaryDirection = try #require(ViewportSpatialOverlayProducer.normalized(
-        item.modelTransform.normal(boundaryFrame.adjacentFaceNormals[0])
-    ))
+    let expectedBoundaryDirection = try item.modelTransform.normal(boundaryFrame.adjacentFaceNormals[0])
+        .normalized(tolerance: 1.0e-12)
     #expect((boundaryDirection - expectedBoundaryDirection).length < 1.0e-10)
     guard case .affordance(let affordance) = try #require(source.cameraPaths.first).identity else {
         Issue.record("The fill glyph must be an addressable affordance.")

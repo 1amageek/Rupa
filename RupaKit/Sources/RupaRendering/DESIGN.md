@@ -301,6 +301,12 @@ An old picture never acquires new-source input authority. If preparation fails,
 the last complete picture in the same document context remains displayed and
 the failure and a visible canvas notice identify it as the previous geometry. All failed-frame
 queries remain refused; a document replacement withdraws the retained picture.
+Retaining a picture includes its enabled root and calibrated camera; source
+preparation must not call camera invalidation for a same-context picture.
+Committed and drag-preview generations of the same document share this display
+context, without sharing query authority. The native host retains the visible
+root until the replacement completes its camera/spatial pass (see
+[replacement display continuity](RealityViewport/DESIGN.md#replacement-display-continuity)).
 Camera and appearance updates remain native-host responsibilities. No cross-document candidate is
 admitted. `planCacheContinuousPropertyUpdatesDoNotCancelRunningFrame` and the
 continuous-progress cache tests own this scheduling contract; native mount and
@@ -959,9 +965,9 @@ as spheres elsewhere.
    disables the entity rather than drawing it somewhere else.
    The two edge treatments instead share one anchor, the midpoint of the
    selected generated edge, independently of its source feature or profile
-   corner classification. Their drag frame scrubs a source-space length using
-   horizontal pointer travel on the mounted frame's view plane at that anchor.
-   Rightward travel increases the amount; leftward travel returns toward zero.
+   corner classification. Their immutable drag frame retains the same composed
+   world normal used to draw the leader. The mounted frame measures signed
+   travel along that axis; outward travel increases the treatment amount.
    The occurrence inverse transform converts world displacement into source
    metres, including scaled/rotated occurrences. No profile or global-axis
    reconstruction participates in preview or release. Both consume the same

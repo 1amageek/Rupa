@@ -304,7 +304,7 @@ func resourceCacheWithdrawsSourceAssetsOnFailureAndTeardown() async throws {
     #expect(cache.surface(for: replacementIdentity) == nil)
     #expect(cache.displaySurface(for: baseIdentity) == nil)
     #expect(cache.displaySurface(for: replacementIdentity) == nil)
-    #expect(baseRoot.isEnabled == false)
+    #expect(baseRoot.isEnabled, "A same-document replacement retains the displayed picture.")
     try await waitForReady(cache)
     try await waitForRelease { weakBaseSurface == nil }
     weak var replacementSurface = cache.surface(for: replacementIdentity)

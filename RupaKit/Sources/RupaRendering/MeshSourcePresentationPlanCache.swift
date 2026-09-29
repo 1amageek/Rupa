@@ -456,12 +456,13 @@ final class MeshSourcePresentationPlanCache {
             self.requestID = nil
         }
         let requestID = UUID()
-        if displaySurface(for: request.identity) == nil {
+        if current?.identity.sharesDisplayContext(with: request.identity) != true {
             if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
             precedingMountedFrame = nil
             current?.surface.invalidateCamera()
-            // The old frame may remain a picture, but cannot answer queries
-            // for the newly requested scene or snapshot.
+            // A different document withdraws the picture as well as input authority.
+            // Same-document source changes retain the displayed camera and geometry;
+            // queryFrame independently refuses their stale scene/snapshot identity.
         }
         state = .preparing(identity: request.identity)
         if buildTask != nil {
@@ -604,7 +605,7 @@ final class MeshSourcePresentationPlanCache {
         buildTask?.cancel()
         pendingRequest = nil
         requestID = nil
-        if displaySurface(for: identity) == nil {
+        if current?.identity.sharesDisplayContext(with: identity) != true {
             if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
             precedingMountedFrame = nil
             current?.surface.invalidateCamera()

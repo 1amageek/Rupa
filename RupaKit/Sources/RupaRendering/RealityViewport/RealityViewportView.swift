@@ -70,8 +70,8 @@ struct RealityViewportView: View {
             viewport.adoptCamera(from: mount.current, parent: mount.cameraRoot)
             viewport.attachReferenceAnnotations(to: mount.referenceAnnotationRoot)
             if let previous = mount.current { viewport.takeReferenceAnnotations(from: previous) }
-            mount.detach(preservingReferenceAnnotations: true)
-            for entity in content.entities where entity !== mount.referenceAnnotationRoot && entity !== mount.cameraRoot { content.remove(entity) }
+            mount.retainDisplayedFrame()
+            viewport.setPresentationEnabled(false)
             if !content.entities.contains(where: { $0 === mount.cameraRoot }) { content.add(mount.cameraRoot) }
             if !content.entities.contains(where: { $0 === mount.referenceAnnotationRoot }) { content.add(mount.referenceAnnotationRoot) }
             mount.referenceAnnotationContent = content
@@ -85,6 +85,7 @@ struct RealityViewportView: View {
             guard gridRuler == nil || onGridUpdateResult != nil else {
                 throw MeshSourcePresentationRenderError(code: .failed, message: "Grid rendering requires a grid-status receiver.")
             }
+            try mount.rebaseRetainedFrame(to: viewport)
             try viewport.applyCamera(layout: layout, displayScale: displayScale, revision: viewportRevision)
             try viewport.applyAppearance(displayMode: displayMode, shading: shading,
                                          occurrenceMaterials: occurrenceMaterials,
@@ -119,6 +120,41 @@ struct RealityViewportView: View {
     @MainActor
     private final class Mount {
         var current: RealityViewport?
+        private var displayed: RealityViewport?
+        private var currentWasDisplayed = false
+
+        /// Keep only the last complete picture; superseded candidates own no display.
+        func retainDisplayedFrame() {
+            cancelPending()
+            reportTask?.cancel()
+            reportTask = nil
+            if currentWasDisplayed {
+                displayed?.unbind(owner: ObjectIdentifier(self))
+                displayed = current
+            } else {
+                current?.unbind(owner: ObjectIdentifier(self))
+            }
+            currentWasDisplayed = false
+        }
+
+        func rebaseRetainedFrame(to candidate: RealityViewport) throws {
+            guard let displayed else { return }
+            let delta = displayed.renderOrigin - candidate.renderOrigin
+            let offset = SIMD3<Float>(Float(delta.x), Float(delta.y), Float(delta.z))
+            guard offset.x.isFinite, offset.y.isFinite, offset.z.isFinite else {
+                throw MeshSourcePresentationRenderError(
+                    code: .failed, message: "The retained frame exceeds native origin precision."
+                )
+            }
+            displayed.root.position = offset
+        }
+
+        private func publish(_ viewport: RealityViewport) {
+            viewport.setPresentationEnabled(true)
+            displayed?.unbind(owner: ObjectIdentifier(self))
+            displayed = nil
+            currentWasDisplayed = true
+        }
         let cameraRoot = Entity()
         let referenceAnnotationRoot = Entity()
         var referenceAnnotationContent: RealityViewCameraContent?
@@ -159,7 +195,7 @@ struct RealityViewportView: View {
                                                      snapshotID: previewSnapshotID)
                     let error = try viewport.updateSpatialCamera(safeRect: safeRect, excludedRects: excludedRects,
                                                                 gridRuler: gridRuler, gridSpacing: gridSpacing)
-                    viewport.setPresentationEnabled(true)
+                    publish(viewport)
                     report(nil, gridError: error, gridReadout: viewport.gridScaleReadout,
                            boundsRulerAxes: viewport.boundsRulerDisabledAxes,
                            appliedRevision: viewport.appliedViewportRevision,
@@ -256,6 +292,9 @@ struct RealityViewportView: View {
             // Owner-checked unbind also removes the root. A retiring mount
             // must not remove a root already adopted by its replacement.
             current?.unbind(owner: ObjectIdentifier(self))
+            displayed?.unbind(owner: ObjectIdentifier(self))
+            displayed = nil
+            currentWasDisplayed = false
             current = nil
             hasReported = false
             reportsStatus = false

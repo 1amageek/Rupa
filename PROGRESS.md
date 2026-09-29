@@ -399,3 +399,6 @@
   - [ ] PF3 Shared-definition selections are built for every definition in one hierarchy and occurrence pass per metadata, not per definition per render. `depends:PF2` `parallel:none`
   - [ ] PF4 The overlay producer indexes scene items and topology once per snapshot instead of scanning them per target. `depends:PF3` `parallel:none`
   - [ ] PF5 Integration: whole package suite, app rebuild and restart. `depends:PF1,PF2,PF3,PF4` `parallel:none`
+
+- [x] UIE1 Preserve native replacement display continuity and measure edge treatments along their displayed normal; focused native camera/gesture and source-unit checks passed. `depends:none` `parallel:none`
+- [ ] UIE2 Build and restart the signed application, reopen the preserved document and verify native edge/surface editing and display continuity; report exact evidence and remaining limits. `depends:UIE1` `parallel:none`
