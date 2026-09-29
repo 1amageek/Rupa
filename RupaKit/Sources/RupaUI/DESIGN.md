@@ -1347,6 +1347,22 @@ transport reads.
 
 ### Failure surfacing
 
+An edit that committed but whose view could not be built
+(`ProjectWorkspacePostCommitError`: the document and Undo hold the edit, the
+published view does not) is never replayed and never reduced to an ordinary
+warning. Both UI entry points to the operation queue, `enqueueWorkspaceOperation`
+and the numeric-input slot, run their operation through
+`WorkspaceCommittedOperationRecovery.run`, which rebuilds the committed view
+(`ProjectWorkspace.recoverCommittedView`, the contract the application's save
+and history paths keep) in the same queue slot, so the next queued operation
+plans against the edit rather than the view before it. The caller receives
+`WorkspaceCommittedOperationError.recovered`: the edit exists, so a command
+that ends on success ends here too. When the view cannot be rebuilt the
+workspace stops editing: `unavailableReason` is set, the queue guard refuses
+every later operation (`workspaceUnavailable`), and an Editing Unavailable
+cover (`Workspace.editingUnavailable`) replaces the workspace with the reason
+until the project is reopened (`WorkspaceCommittedOperationRecoveryTests`).
+
 Every failure a workspace control refuses on is appended to
 `WorkspaceFailureLog` before any view shows it. The log is a process-wide,
 MainActor-isolated, ordered, bounded, non-deduplicating record. Each entry

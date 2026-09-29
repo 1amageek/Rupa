@@ -157,6 +157,8 @@ private struct ProjectMainViewContent: View {
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
     @State private var selectionMassMeasurement = SelectionMassMeasurement()
+    /// Rebuilds the view after an edit that committed but whose view failed, or stops editing.
+    @State private var committedOperationRecovery: WorkspaceCommittedOperationRecovery
     @State private var measurementSeed: ViewportMeasurementSeed?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
@@ -284,6 +286,7 @@ private struct ProjectMainViewContent: View {
         self.onViewportMount = onViewportMount
         self.onViewportUnmount = onViewportUnmount
         self._viewportControlSession = State(initialValue: viewportControlSession)
+        self._committedOperationRecovery = State(initialValue: WorkspaceCommittedOperationRecovery(workspace: workspace))
         self.operationSequencer = operationSequencer
         self.newProject = newProject
         self._selectedTool = State(initialValue: .select)
@@ -415,6 +418,18 @@ private struct ProjectMainViewContent: View {
         .onAppear {
             onViewportMount(snapshot.documentLifetimeID, viewportControlSession)
             reportRetiredObjectProperties()
+        }
+        .overlay {
+            if let reason = committedOperationRecovery.unavailableReason {
+                ContentUnavailableView(
+                    "Editing Unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("An edit was applied, but the project view could not be rebuilt. "
+                        + "Reopen the project to continue. \(reason)")
+                )
+                .background(.background)
+                .accessibilityIdentifier("Workspace.editingUnavailable")
+            }
         }
         .onDisappear {
             modelingTask?.cancel()
@@ -818,6 +833,7 @@ private struct ProjectMainViewContent: View {
         _ operation: @escaping @MainActor @Sendable () async throws -> Result
     ) -> Task<Result, Error> {
         let expectedDocumentLifetimeID = snapshot.documentLifetimeID
+        let recovery = committedOperationRecovery
         return operationSequencer.enqueue(
             operationGuard: {
                 guard workspace.view?.documentLifetimeID == expectedDocumentLifetimeID else {
@@ -826,8 +842,13 @@ private struct ProjectMainViewContent: View {
                         message: "The queued UI operation belongs to a replaced project document."
                     )
                 }
+                try recovery.checkAvailable()
             },
-            operation
+            {
+                // A committed edit whose view failed is recovered in this slot, before the next
+                // queued operation plans against the view.
+                try await recovery.run(operation)
+            }
         )
     }
 
@@ -1079,7 +1100,7 @@ private struct ProjectMainViewContent: View {
                             code: .documentLifetimeMismatch,
                             message: "The edited document is no longer active.")
                     }
-                    try await operation()
+                    try await committedOperationRecovery.run(operation)
                 } catch {
                     reportToolStatus(error.localizedDescription, severity: .warning)
                 }
