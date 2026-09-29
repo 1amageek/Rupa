@@ -418,6 +418,7 @@ private struct ProjectMainViewContent: View {
         }
         .onDisappear {
             modelingTask?.cancel()
+            selectionMassMeasurement.cancel()
             onViewportUnmount(viewportInstanceID)
         }
         .confirmationDialog("Make CAD Editable as Mesh?", isPresented: $showsMakeEditableConfirmation) {
@@ -2262,7 +2263,7 @@ private struct ProjectMainViewContent: View {
             onSelectionDrag: handleViewportSelectionDrag,
             onSelectionDragPreview: viewportSelectionDragPreviewHandler,
             onBodyPlacementCommit: viewportBodyPlacementCommitHandler,
-            onBodyResizeCommit: handleViewportBodyResizeCommit,
+            onBodyResizeCommit: viewportBodyResizeCommitHandler,
             onVertexDrag: viewportVertexDragHandler,
             onFaceDrag: viewportFaceDragHandler,
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -2938,8 +2939,19 @@ private struct ProjectMainViewContent: View {
     /// The selected object's move and resize handles; a running command that takes clicks has
     /// none, so a click on the object reaches the command and a drag cannot move it midway.
     private var allowsObjectAffordances: Bool {
-        viewportPointerOwner.allows(.objectHandles)
+        viewportPointerOwner.allows(.objectPlacement)
             && selectedPresentationHasExactCADAffordanceContext
+    }
+
+    /// The selected box body's resize handles; they stand down with the other object handles
+    /// while a command takes clicks, even when a Move inside it keeps the gizmo live.
+    private var viewportBodyResizeCommitHandler: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)? {
+        guard viewportPointerOwner.allows(.objectHandles) else {
+            return nil
+        }
+        return { target in
+            try await handleViewportBodyResizeCommit(target)
+        }
     }
 
     private var showsAutomaticBoundsRulers: Bool {
@@ -5765,31 +5777,32 @@ private struct ProjectMainViewContent: View {
     /// `handleViewportPick`, the hit policy and every affordance handler read this one value.
     private var viewportPointerOwner: WorkspaceViewportPointerOwner {
         let scopePolicy = selectionScope.viewportSelectionHitPolicy
+        let transforming = transformSession != nil
         if viewAlignedConstructionPlaneRequest != nil {
-            return .pickingCommand(.viewAlignedConstructionPlane, hitPolicy: scopePolicy, scope: selectionScope)
+            return .pickingCommand(.viewAlignedConstructionPlane, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
         }
         if selectedTool == .select {
             if curvePickCommand != nil {
-                return .pickingCommand(.curvePick, hitPolicy: scopePolicy, scope: selectionScope)
+                return .pickingCommand(.curvePick, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
             if let cutCurveSession {
-                return .pickingCommand(.cutCurve, hitPolicy: cutCurveSession.viewportHitPolicy, scope: selectionScope)
+                return .pickingCommand(.cutCurve, hitPolicy: cutCurveSession.viewportHitPolicy, scope: selectionScope, transforming: transforming)
             }
             if booleanSession != nil {
-                return .pickingCommand(.boolean, hitPolicy: scopePolicy, scope: selectionScope)
+                return .pickingCommand(.boolean, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
             if let bodyCutSession {
-                return .pickingCommand(.bodyCut, hitPolicy: bodyCutSession.viewportHitPolicy, scope: selectionScope)
+                return .pickingCommand(.bodyCut, hitPolicy: bodyCutSession.viewportHitPolicy, scope: selectionScope, transforming: transforming)
             }
             if let deformSession {
-                return .pickingCommand(.deform, hitPolicy: deformSession.viewportHitPolicy, scope: selectionScope)
+                return .pickingCommand(.deform, hitPolicy: deformSession.viewportHitPolicy, scope: selectionScope, transforming: transforming)
             }
             if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle {
-                return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope)
+                return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
         }
         if modelingDraft?.kind == .constrainedSurface {
-            return .pickingCommand(.constrainedSurfacePoints, hitPolicy: scopePolicy, scope: selectionScope)
+            return .pickingCommand(.constrainedSurfacePoints, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
         }
         if selectedTool == .select {
             return .directEditing(selectionScope)
@@ -8683,15 +8696,7 @@ private struct ProjectMainViewContent: View {
             guard case .sketchEntity(let componentID) = target.component else { return false }
             return componentID.sketchPointHandleReference == nil && componentID.sketchControlPointReference == nil
         }
-        cancelModelingOperation()
-        pointPickRequest = nil
-        placeSession = nil
-        transformSession = nil
-        mirrorSession = nil
-        arraySession = nil
-        curvePickCommand = nil
-        filletSession = nil
-        endBodyOperationDialogs()
+        endCommandsBeforePickingCommand()
         let cut = WorkspaceCutCurveSession(selectedCurves: curves, extendsCutter: cutCurveExtendsCutter)
         cutCurveSession = cut
         selectTargets(cut.curves)
@@ -8782,17 +8787,26 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Ends the commands holding clicks, so Boolean or Cut takes them.
-    private func clearCommandsForBodyOperation() {
+    /// Ends every command that takes the viewport's clicks, and the modes a new command
+    /// replaces, before a command that takes clicks starts. `viewportPointerOwner` hands a click
+    /// to the first running command in its order, so one left running would take the new
+    /// command's clicks (a Boolean left under Deform took Deform's face picks).
+    private func endCommandsBeforePickingCommand() {
         cancelModelingOperation()
         pointPickRequest = nil
         placeSession = nil
         transformSession = nil
         mirrorSession = nil
         arraySession = nil
+        viewAlignedConstructionPlaneRequest = nil
         curvePickCommand = nil
         cutCurveSession = nil
         filletSession = nil
+        rebuildSession = nil
+        deformSession = nil
+        if slotProfileCommandState.isFreestyle {
+            slotProfileCommandState.deactivate()
+        }
         endBodyOperationDialogs()
         if selectedTool != .select { _ = setActiveTool(.select) }
     }
@@ -8801,7 +8815,7 @@ private struct ProjectMainViewContent: View {
     /// or remove from the list the dialog picks.
     private func beginBoolean() {
         let bodies = selectedBodyObjectIDs
-        clearCommandsForBodyOperation()
+        endCommandsBeforePickingCommand()
         let boolean = WorkspaceBooleanSession(selectedBodies: bodies)
         booleanSession = boolean
         selectTargets(boolean.operands.map { SelectionTarget(sceneNodeID: $0) })
@@ -8859,7 +8873,7 @@ private struct ProjectMainViewContent: View {
         let cut = WorkspaceBodyCutSession(
             selection: snapshot.selection.selectedTargets, in: snapshot.document.document
         )
-        clearCommandsForBodyOperation()
+        endCommandsBeforePickingCommand()
         bodyCutSession = cut
         reportToolStatus(cut.prompt)
     }
@@ -8937,16 +8951,7 @@ private struct ProjectMainViewContent: View {
 
     /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
     private func beginCurvePickCommand(_ command: WorkspaceCurvePickCommand) {
-        cancelModelingOperation()
-        pointPickRequest = nil
-        placeSession = nil
-        transformSession = nil
-        mirrorSession = nil
-        arraySession = nil
-        cutCurveSession = nil
-        filletSession = nil
-        endBodyOperationDialogs()
-        if selectedTool != .select { _ = setActiveTool(.select) }
+        endCommandsBeforePickingCommand()
         curvePickCommand = command
         reportToolStatus(command.prompt)
     }
@@ -9541,9 +9546,7 @@ private struct ProjectMainViewContent: View {
         }
         return {
             guard let deform = WorkspaceDeformSession(selectedCurves: curves, selectedBodies: bodies) else { return }
-            cutCurveSession = nil
-            filletSession = nil
-            rebuildSession = nil
+            endCommandsBeforePickingCommand()
             deformSession = deform
             reportToolStatus(deform.prompt)
         }

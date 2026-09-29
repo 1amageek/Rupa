@@ -55,7 +55,9 @@ import Testing
     @Test func aPickingCommandStandsDownEverySelectionAffordance() {
         for command in Self.pickingCommands {
             for scope in WorkspaceSelectionScope.allCases {
-                let owner = WorkspaceViewportPointerOwner.pickingCommand(command, hitPolicy: .face, scope: scope)
+                let owner = WorkspaceViewportPointerOwner.pickingCommand(
+                    command, hitPolicy: .face, scope: scope, transforming: false
+                )
                 #expect(owner.pickingCommand == command)
                 #expect(owner.hitPolicy == .face)
                 for affordance in WorkspaceViewportAffordance.allCases
@@ -68,15 +70,17 @@ import Testing
 
     @Test func freestyleOffsetKeepsItsOwnDistanceHandleOnTheSelectedCurve() {
         let onCurve = WorkspaceViewportPointerOwner.pickingCommand(
-            .freestyleOffset, hitPolicy: .sketchEntity, scope: .sketchEntity
+            .freestyleOffset, hitPolicy: .sketchEntity, scope: .sketchEntity, transforming: false
         )
         #expect(onCurve.allows(.slotWidth))
         #expect(!onCurve.allows(.sketchEntityEditing))
         let inObjectScope = WorkspaceViewportPointerOwner.pickingCommand(
-            .freestyleOffset, hitPolicy: .object, scope: .object
+            .freestyleOffset, hitPolicy: .object, scope: .object, transforming: false
         )
         #expect(!inObjectScope.allows(.slotWidth))
-        let deform = WorkspaceViewportPointerOwner.pickingCommand(.deform, hitPolicy: .face, scope: .sketchEntity)
+        let deform = WorkspaceViewportPointerOwner.pickingCommand(
+            .deform, hitPolicy: .face, scope: .sketchEntity, transforming: false
+        )
         #expect(!deform.allows(.slotWidth))
     }
 
@@ -89,5 +93,22 @@ import Testing
                 #expect(!owner.allows(affordance), "\(tool) \(affordance)")
             }
         }
+    }
+
+    /// Boolean's G, R and S move its tools while its dialog keeps the clicks: the running move
+    /// owns the gizmo, so the drag commits, while the resize handles and selection stay down.
+    @Test func aMoveInsideBooleanKeepsItsGizmo() {
+        let owner = WorkspaceViewportPointerOwner.pickingCommand(
+            .boolean, hitPolicy: .object, scope: .object, transforming: true
+        )
+        #expect(owner.pickingCommand == .boolean)
+        #expect(owner.allows(.objectPlacement))
+        for affordance in WorkspaceViewportAffordance.allCases where affordance != .objectPlacement {
+            #expect(!owner.allows(affordance), "\(affordance)")
+        }
+        let inFaceScope = WorkspaceViewportPointerOwner.pickingCommand(
+            .boolean, hitPolicy: .face, scope: .face, transforming: true
+        )
+        #expect(!inFaceScope.allows(.objectPlacement))
     }
 }

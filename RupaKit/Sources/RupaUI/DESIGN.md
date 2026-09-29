@@ -270,9 +270,10 @@ selected, Deform's face click could start a face offset instead.
 
 ```text
 viewAlignedConstructionPlaneRequest ─┐
-select tool: curve pick, Cut Curve,  ├─> .pickingCommand(command, hitPolicy, scope)
+select tool: curve pick, Cut Curve,  ├─> .pickingCommand(command, hitPolicy, scope, transforming)
   Boolean, Cut, Deform, Freestyle    │      clicks -> routeViewportPick; affordances stand down
-constrained-surface draft ───────────┘      (except the command's own value handle)
+constrained-surface draft ───────────┘      (except the command's own value handle, and the
+                                             gizmo of a Move running inside it)
 select tool, nothing picking ───────────> .directEditing(scope)
                                             clicks -> selection; the scope's affordances
 any other tool ─────────────────────────> .tool(tool, scope): the tool owns the canvas
@@ -282,13 +283,24 @@ The picking commands are listed in the order a click reaches them. The command's
 session names its hit policy (Deform faces; Cut and Cut Curve whole objects
 while picking targets, curves and faces while picking cutters); the others hit
 in the selection scope. While one runs, a click on any body, the selected ones included,
-reaches the command.
+reaches the command. A Move, Rotate or Scale may run inside a picking command
+(Boolean's G, R and S move its tools while its dialog keeps the clicks); the
+move owns the placement gizmo, so the gizmo stays live while the resize handles
+and selection stay down.
+
+Starting a command that takes clicks ends every other one first
+(`endCommandsBeforePickingCommand`: Boolean, Cut, Cut Curve, the curve picks,
+Deform, Freestyle Offset, a view-aligned plane, a constrained-surface draft, and
+the Move, Place, Mirror, Array, Fillet and Rebuild modes they replace). Clicks
+go to the first running command in the order above, so a command left running
+would take the new one's clicks: Deform started over a Boolean handed its face
+picks to the Boolean's list.
 
 | Affordance (`WorkspaceViewportAffordance`) | Live in scope | Shown on | A press edits |
 |---|---|---|---|
 | `objectSelection` | Object | every object's presentation | click selects the occurrence; hover highlights it |
-| `objectPlacement` | Object | the selected bodies | move, rotate and scale gizmo; one placement command on release |
-| `objectHandles` | Object | the selected object with an exact CAD context | resize and dimension handles |
+| `objectPlacement` | Object; also under a picking command while a Move inside it runs | the selected bodies with an exact CAD context | move, rotate and scale gizmo; one placement command on release |
+| `objectHandles` | Object | the selected box body | resize handles (`WorkspaceBodyResizeCommandPlanner`) |
 | `faceOffset` | Face | a selected face | drag offsets the face (`offsetBodyFace`) |
 | `edgeTreatment` | Edge, Object | a selected edge whose frame its two faces give | drag makes a fillet or chamfer (`createBodyEdgeTreatment`) |
 | `boundarySurface` | Edge, Object | a selected open boundary edge | click starts a boundary surface draft on it |
@@ -304,7 +316,8 @@ Each row's own preconditions (an exact CAD context, the running value command,
 a supported selection) stay with its handler; the owner decides only whether
 the pointer may reach it. `WorkspaceViewportPointerOwnerTests` holds the table:
 each scope reaches exactly its rows, every picking command stands every row
-down except its own value handle, and a creation tool reaches none.
+down except its own value handle and a running Move's gizmo, and a creation
+tool reaches none.
 
 ### The canvas header
 
@@ -623,7 +636,11 @@ or the document changes, off the main actor (`SelectionMassMeasurement`): one
 measurement runs at a time, a newer request replaces a waiting one and makes the
 running one's result stale, and no mass shows until the current selection's
 arrives, so an exact volume that takes long never stalls the workspace
-(`SelectionMassMeasurementTests`). A transform's bounding-box pivot and a
+(`SelectionMassMeasurementTests`). The delivery closure, which captures the
+workspace view that holds the measurement, is held only until it is called or
+superseded; `cancel()`, which the view calls when it disappears, drops it at
+once. A measurement already running finishes holding only its own request,
+since `MeasurementService` has no cancellation point. A transform's bounding-box pivot and a
 rectangular array's spacing measure bounds with mesh volumes. Core's
 [MaterialAssignment](../RupaCore/MaterialAssignment/DESIGN.md) owns what each
 does.

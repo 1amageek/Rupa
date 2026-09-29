@@ -26,9 +26,10 @@ enum WorkspaceViewportPickingCommand: Equatable, Sendable {
 enum WorkspaceViewportAffordance: CaseIterable, Sendable {
     /// A click on an object's presentation selects it; hovering highlights it.
     case objectSelection
-    /// The selected bodies' move, rotate and scale gizmo.
+    /// The selected bodies' move, rotate and scale gizmo. A running Move, Rotate or Scale owns
+    /// it, so it stays live under a command that takes clicks (Boolean moving its tools).
     case objectPlacement
-    /// The selected object's resize and dimension handles.
+    /// The selected box body's resize handles.
     case objectHandles
     /// A selected face's arrow: dragging offsets the face.
     case faceOffset
@@ -96,11 +97,14 @@ enum WorkspaceViewportAffordance: CaseIterable, Sendable {
 /// reach (`allows(_:)`), so the hit test, the selection and the handles cannot disagree: while a
 /// command takes the clicks, a click on a selected body reaches the command rather than a handle.
 enum WorkspaceViewportPointerOwner: Equatable, Sendable {
-    /// A command takes every click, resolved by the command's hit policy.
+    /// A command takes every click, resolved by the command's hit policy. `transforming` says a
+    /// Move, Rotate or Scale runs inside it (Boolean's G, R and S move its tools), whose gizmo
+    /// stays live.
     case pickingCommand(
         WorkspaceViewportPickingCommand,
         hitPolicy: ViewportSelectionHitPolicy,
-        scope: WorkspaceSelectionScope
+        scope: WorkspaceSelectionScope,
+        transforming: Bool
     )
     /// The select tool with no picking command: a click selects in the scope and the
     /// scope's affordances edit the selection.
@@ -109,7 +113,7 @@ enum WorkspaceViewportPointerOwner: Equatable, Sendable {
     case tool(ModelingTool, scope: WorkspaceSelectionScope)
 
     var pickingCommand: WorkspaceViewportPickingCommand? {
-        guard case .pickingCommand(let command, _, _) = self else {
+        guard case .pickingCommand(let command, _, _, _) = self else {
             return nil
         }
         return command
@@ -118,7 +122,7 @@ enum WorkspaceViewportPointerOwner: Equatable, Sendable {
     /// What a viewport hit resolves to.
     var hitPolicy: ViewportSelectionHitPolicy {
         switch self {
-        case .pickingCommand(_, let hitPolicy, _):
+        case .pickingCommand(_, let hitPolicy, _, _):
             return hitPolicy
         case .directEditing(let scope), .tool(_, let scope):
             return scope.viewportSelectionHitPolicy
@@ -130,8 +134,12 @@ enum WorkspaceViewportPointerOwner: Equatable, Sendable {
         switch self {
         case .directEditing(let scope):
             return affordance.scopes.contains(scope)
-        case .pickingCommand(let command, _, let scope):
-            return affordance.owningPickingCommand == command && affordance.scopes.contains(scope)
+        case .pickingCommand(let command, _, let scope, let transforming):
+            guard affordance.scopes.contains(scope) else { return false }
+            if affordance == .objectPlacement {
+                return transforming
+            }
+            return affordance.owningPickingCommand == command
         case .tool:
             return false
         }

@@ -69,4 +69,45 @@ import Testing
         }
         #expect(deliveries == 0)
     }
+
+    /// Stands for the workspace view a delivery closure captures.
+    private final class Owner {}
+
+    /// A delivered result releases its closure, so the view it captures can go when the
+    /// workspace closes.
+    @Test(.timeLimit(.minutes(1)))
+    func aDeliveredResultReleasesItsClosure() async throws {
+        let session = try session()
+        let measurement = SelectionMassMeasurement()
+        weak var released: Owner?
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let owner = Owner()
+            released = owner
+            do {
+                measurement.measure(try request(for: session, selecting: ["Small"])) { _ in
+                    _ = owner
+                    continuation.resume()
+                }
+            } catch {
+                continuation.resume()
+            }
+        }
+        #expect(released == nil)
+    }
+
+    /// Cancelling releases the closure at once, while the measurement may still be running.
+    @Test(.timeLimit(.minutes(1)))
+    func cancellingReleasesTheClosureAtOnce() throws {
+        let session = try session()
+        let measurement = SelectionMassMeasurement()
+        weak var released: Owner?
+        do {
+            let owner = Owner()
+            released = owner
+            measurement.measure(try request(for: session, selecting: ["Small", "Large"])) { _ in _ = owner }
+        }
+        #expect(released != nil)
+        measurement.cancel()
+        #expect(released == nil)
+    }
 }
