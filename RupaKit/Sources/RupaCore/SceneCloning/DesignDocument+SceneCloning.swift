@@ -302,7 +302,9 @@ extension DesignDocument {
 
     /// Combines each placed copy with the body it was placed on, in placement order: the copy's
     /// bodies are the tools, the first copy combines with the target and every later copy with the
-    /// previous result. The consumed copies are hidden.
+    /// previous result. A slice's pieces are objects of their own that keep reading its result, so
+    /// a slice takes every copy's bodies as the tools of one Boolean instead. The consumed copies
+    /// are hidden.
     private mutating func combinePlacedCopies(
         _ copiesByPlacement: [[SceneNodeID]],
         rootIDs: [SceneNodeID],
@@ -315,7 +317,7 @@ extension DesignDocument {
               var targetFeatureID = reference.featureID else {
             throw EditorError(code: .referenceUnresolved, message: "A placement Boolean needs a body to combine with.")
         }
-        for copiedNodeIDs in copiesByPlacement {
+        let toolsByPlacement = try copiesByPlacement.map { copiedNodeIDs in
             let toolFeatureIDs = copiedNodeIDs.compactMap { id -> FeatureID? in
                 guard let node = productMetadata.sceneNodes[id], node.isVisible,
                       node.reference?.kind == .body else { return nil }
@@ -327,6 +329,10 @@ extension DesignDocument {
                     message: "A placement Boolean needs the placed objects to contain a body."
                 )
             }
+            return toolFeatureIDs
+        }
+        let passes = boolean.operation == .slice ? [toolsByPlacement.flatMap { $0 }] : toolsByPlacement
+        for toolFeatureIDs in passes {
             targetFeatureID = try createBoolean(
                 name: "Placed \(boolean.operation.rawValue.capitalized)",
                 targets: [BooleanTargetReference(featureID: targetFeatureID)],

@@ -152,7 +152,11 @@
     - [x] SO1.1 Boolean takes several tools acting as their union, every operand at its displayed placement, and kept placed tools; the result replaces its targets and Keep Tools keeps only tools. Kernel 2b5ba3e, 29335a7. `depends:none` `parallel:none`
     - [x] SO1.2 Solid and Sheet operands with Target and Tool Material (Default, Empty, Inside, Outside); Default sheet is Inside only as a tool facing solid targets, otherwise an empty shell. Kernel ec98cdf. `depends:SO1.1` `parallel:none`
     - [ ] SO1.3 Region: solids from the regions the operands enclose. `depends:SO1.2` `parallel:none`
-    - [ ] SO1.4 Cut: solids and sheets cut by curves (Extend, view direction) and faces. `depends:SO1.2` `parallel:none`
+    - [ ] SO1.4 Cut: solids and sheets cut by curves (Extend, view direction) and faces, each piece its own object. `depends:SO1.2` `parallel:none`
+      - [x] SO1.4.1 Kernel ExtractBodyComponent: one component of a multi-component body copied as its own body, in a deterministic order, refusing a changed component count. Kernel d3fb071. `depends:none` `parallel:none`
+      - [x] SO1.4.2 Kernel ExtractFaces: chosen faces of a body copied as a sheet body. Kernel d3fb071 (one `extract` feature, `.faces`). `depends:SO1.4.1` `parallel:none`
+      - [x] SO1.4.3 Rupa pieces: Boolean Slice and Cut publish one object per piece through ExtractBodyComponent, the multi-component source hidden. `depends:SO1.4.2` `parallel:none`
+      - [ ] SO1.4.4 Rupa Cut: face cutters and curve cutters extruded along the curve's plane normal or the view direction, Extend, sliced with the cutter as Inside. `depends:SO1.4.3` `parallel:none`
     - [ ] SO1.5 Boolean and Cut dialogs: target and tool pickers, Q/W/Shift-E/Shift-Q/T, tool G/R/S during the operation, palette entries. `depends:SO1.3,SO1.4` `parallel:none`
   - [ ] SO2 Duplication and Instances: Alternative Duplicate, Create Instance, Create Solid and Sheet Instance, Realize Instances, Realize Solid and Sheet Instances. `depends:SO1` `parallel:none`
   - [ ] SO3 Deform and Slide: Deform, Deform Solid and Sheet, Slide, Slide Surface CV. `depends:SO2` `parallel:none`

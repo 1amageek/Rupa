@@ -354,7 +354,7 @@ public struct ViewportSceneBuilder {
                  .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
                  .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
                  .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch,
-                 .mirror, .joinBodies, .unjoinBody:
+                 .mirror, .joinBodies, .unjoinBody, .extract:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
                     sourceFeatureID: nil,

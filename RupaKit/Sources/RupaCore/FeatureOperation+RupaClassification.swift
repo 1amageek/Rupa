@@ -51,6 +51,7 @@ extension FeatureOperation {
              .mirror,
              .joinBodies,
              .unjoinBody,
+             .extract,
              .bridgeSurface,
              .surfaceOffset,
              .surfaceTrim,
@@ -126,7 +127,8 @@ extension FeatureOperation {
              .surfaceFill,
              .mirror,
              .joinBodies,
-             .unjoinBody:
+             .unjoinBody,
+             .extract:
             return true
         case .curveExtend,
              .curveMatch,
@@ -221,6 +223,13 @@ extension FeatureOperation {
             return Set(feature.targets.map(\.featureID))
         case .unjoinBody(let feature):
             return [feature.target.featureID]
+        // A component extraction publishes one piece of a body whose pieces are all extracted,
+        // so the source leaves the measurable set; extracted faces copy a body that stays.
+        case .extract(let feature):
+            switch feature.selection {
+            case .component: return [feature.target.featureID]
+            case .faces: return []
+            }
         // Mirror rebuilds the identity and reflected instances as one
         // replacement body, so the source body is no longer independently
         // measurable after evaluation.

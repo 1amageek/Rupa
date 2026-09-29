@@ -621,6 +621,16 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Unjoin Body"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(unjoin.target.featureID)),
             ]
+        case .extract(let extract):
+            let selection = switch extract.selection {
+            case let .component(index, count): "Piece \(index + 1) of \(count)"
+            case let .faces(faces): "\(faces.count) faces"
+            }
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Extract"),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(extract.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Selection", value: selection),
+            ]
         case .projectCurve(let projectCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Project Curve"),

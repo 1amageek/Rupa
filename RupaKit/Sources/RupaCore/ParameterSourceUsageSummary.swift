@@ -140,6 +140,7 @@ public struct ParameterSourceUsageService: Sendable {
              .mirror,
              .joinBodies,
              .unjoinBody,
+             .extract,
              .projectCurve:
             break
         case .faceLoopOffset(let feature):
@@ -367,6 +368,8 @@ public struct ParameterSourceUsageService: Sendable {
             "joinBodies"
         case .unjoinBody:
             "unjoinBody"
+        case .extract:
+            "extract"
         case .projectCurve:
             "projectCurve"
         }

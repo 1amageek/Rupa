@@ -112,8 +112,13 @@ targets all one or the other), and `targetMaterial`/`toolMaterial` say how each
 side's material is taken (Swift-CAD's `BooleanMaterial`); the result's output and
 object role follow Swift-CAD's `resultPort`: a sheet shown as a surface, otherwise
 a solid. The result node is inserted beside the first target with the target's
-local transform, so it appears where the target was. `PlacedBooleanTests` own
-placement and `SheetBooleanCommandTests` sheet operands and materials.
+local transform, so it appears where the target was. A slice publishes each
+piece as an object of its own: the Boolean's multi-component result has no
+object, and one Swift-CAD `extract` feature per component (`.component(index:
+count:)`, the count read from the evaluated result) carries each piece's object
+beside the target. A component extraction supersedes its source in measurement;
+a face extraction does not. `PlacedBooleanTests` own placement and
+`SheetBooleanCommandTests` sheet operands, materials and slice pieces.
 
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on

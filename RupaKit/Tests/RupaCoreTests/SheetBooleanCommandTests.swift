@@ -72,4 +72,28 @@ import Testing
         #expect(session.document.cadDocument.designGraph.nodes[feature]?.outputs.map(\.role) == [.sheet])
         #expect(session.evaluationStatus == .valid)
     }
+
+    /// A slice publishes each piece as its own object, through one extraction per piece.
+    @MainActor
+    @Test func aSliceShowsEachPieceAsItsOwnObject() throws {
+        let (session, box, sheet) = try operands()
+        _ = try session.execute(.createBoolean(
+            name: "Slice", targets: [BooleanTargetReference(featureID: box)],
+            tools: [BooleanToolReference(featureID: sheet)], operation: .slice, keepTools: false
+        ))
+        let pieces = session.document.productMetadata.sceneNodes.values.filter { $0.name.hasPrefix("Slice ") }
+        #expect(pieces.count == 2)
+        #expect(pieces.allSatisfy { $0.object?.geometryRole == .solid })
+        let extractions = try pieces.map { node -> ExtractFeature in
+            let feature = try #require(node.reference?.featureID)
+            guard case let .extract(extract) = session.document.cadDocument.designGraph.nodes[feature]?.operation else {
+                throw EditorError(code: .referenceUnresolved, message: "Not an extraction.")
+            }
+            return extract
+        }
+        #expect(Set(extractions.map(\.selection)) == [.component(index: 0, count: 2), .component(index: 1, count: 2)])
+        // The pieces are measured, not the slice they came from.
+        #expect(abs(try volume(session.document) - cube) < 1e-9)
+        #expect(session.evaluationStatus == .valid)
+    }
 }

@@ -156,4 +156,21 @@ import Testing
         }
         #expect(session.document.cadDocument.designGraph == before.cadDocument.designGraph)
     }
+
+    /// Placing copies with a slice cuts the target once by all of them, each piece its own object.
+    @MainActor
+    @Test func placingWithASliceCutsOnceByEveryCopy() throws {
+        let (session, target, tool) = try twoCubes()
+        _ = try session.execute(.placeSceneNodes(
+            ids: [tool],
+            placements: [try Transform3D.translation(Vector3D(x: 0.075, y: 0, z: 0)), try Transform3D.translation(Vector3D(x: -0.075, y: 0, z: 0))],
+            output: .independentCopy,
+            boolean: SceneNodePlacementBoolean(operation: .slice, targetSceneNodeID: target)
+        ))
+        let pieces = session.document.productMetadata.sceneNodes.values.filter { $0.name.hasPrefix("Placed Slice ") && $0.isVisible }
+        #expect(pieces.count == 3)
+        // The target's volume is kept, cut into pieces; the original tool is untouched.
+        #expect(abs(try volume(session.document) - 2 * cube) < tolerance)
+        #expect(session.evaluationStatus == .valid)
+    }
 }

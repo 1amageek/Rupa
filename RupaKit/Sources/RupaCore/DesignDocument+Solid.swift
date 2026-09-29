@@ -535,33 +535,34 @@ extension DesignDocument {
         }
 
         try appendFeature(feature)
-        let resultObject = ObjectDescriptor.body(
-            featureID: featureID,
-            documentID: cadDocument.id,
-            sourceSection: nil,
-            typeID: nil,
-            geometryRole: resultPort == .sheet ? .surface : .solid,
-            objectRegistry: objectRegistry
-        )
-        if let targetNodeID = targets.first.flatMap({ hierarchy.presentingSceneNodeID(for: $0.featureID) }),
-           let targetNode = productMetadata.sceneNodes[targetNodeID],
-           let parentID = hierarchy.parentID(of: targetNodeID),
-           let index = productMetadata.sceneNodes[parentID]?.childIDs.firstIndex(of: targetNodeID) {
-            try productMetadata.insertSceneNode(
-                SceneNode(
-                    name: trimmedName,
-                    reference: .body(featureID),
-                    object: resultObject,
-                    localTransform: targetNode.localTransform
-                ),
-                under: parentID,
-                at: index + 1
-            )
+        let geometryRole: ObjectDescriptor.GeometryRole = resultPort == .sheet ? .surface : .solid
+        let firstTargetNodeID = hierarchy.presentingSceneNodeID(for: first.featureID)
+        if operation == .slice {
+            // Every piece of a slice is an object of its own: one extraction per component,
+            // the multi-component result itself shown by none.
+            let pieceCount = try bodyComponentCount(of: featureID, objectRegistry: objectRegistry, owner: "Boolean slice")
+            for index in 0..<pieceCount {
+                let pieceID = FeatureID()
+                let pieceName = "\(trimmedName) \(index + 1)"
+                try appendFeature(FeatureNode(
+                    id: pieceID,
+                    name: pieceName,
+                    operation: .extract(ExtractFeature(
+                        target: PatternTargetReference(featureID: featureID),
+                        selection: .component(index: index, count: pieceCount)
+                    )),
+                    inputs: [FeatureInput(featureID: featureID, role: .target)],
+                    outputs: [FeatureOutput(role: resultPort)]
+                ))
+                try insertBooleanResultNode(
+                    name: pieceName, featureID: pieceID, geometryRole: geometryRole,
+                    besideTargetNode: firstTargetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
+                )
+            }
         } else {
-            _ = try productMetadata.appendSceneNodeToFirstRoot(
-                name: trimmedName,
-                reference: .body(featureID),
-                object: resultObject
+            try insertBooleanResultNode(
+                name: trimmedName, featureID: featureID, geometryRole: geometryRole,
+                besideTargetNode: firstTargetNodeID, hierarchy: hierarchy, objectRegistry: objectRegistry
             )
         }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
@@ -629,6 +630,56 @@ extension DesignDocument {
                 code: .referenceUnresolved,
                 message: "\(owner) must reference an existing curve-producing feature."
             )
+        }
+    }
+
+    /// A Boolean result's object, inserted beside the first target with its local transform so it
+    /// appears where the target was, or at the first root when the target is not shown.
+    private mutating func insertBooleanResultNode(
+        name: String,
+        featureID: FeatureID,
+        geometryRole: ObjectDescriptor.GeometryRole,
+        besideTargetNode targetNodeID: SceneNodeID?,
+        hierarchy: SceneNodeHierarchy,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let object = ObjectDescriptor.body(
+            featureID: featureID,
+            documentID: cadDocument.id,
+            sourceSection: nil,
+            typeID: nil,
+            geometryRole: geometryRole,
+            objectRegistry: objectRegistry
+        )
+        if let targetNodeID,
+           let targetNode = productMetadata.sceneNodes[targetNodeID],
+           let parentID = hierarchy.parentID(of: targetNodeID),
+           let index = productMetadata.sceneNodes[parentID]?.childIDs.firstIndex(of: targetNodeID) {
+            try productMetadata.insertSceneNode(
+                SceneNode(name: name, reference: .body(featureID), object: object, localTransform: targetNode.localTransform),
+                under: parentID,
+                at: index + 1
+            )
+        } else {
+            _ = try productMetadata.appendSceneNodeToFirstRoot(name: name, reference: .body(featureID), object: object)
+        }
+    }
+
+    /// How many components (solids with their voids, or sheet shells) the body `featureID`
+    /// evaluates to now.
+    func bodyComponentCount(of featureID: FeatureID, objectRegistry: ObjectTypeRegistry, owner: String) throws -> Int {
+        let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
+            document: self,
+            objectRegistry: objectRegistry,
+            failurePrefix: "\(owner) requires its result evaluated"
+        )
+        guard case let .body(bodyID) = evaluated.subshapes[SubshapeID(featureID: featureID, role: GeneratedSubshapeRole.body.rawValue, ordinal: 0)],
+              let body = evaluated.brep.bodies[bodyID] else {
+            throw EditorError(code: .referenceUnresolved, message: "\(owner) result has no evaluated body.")
+        }
+        switch body.topology {
+        case let .solid(components): return components.count
+        case let .sheet(shellIDs): return shellIDs.count
         }
     }
 

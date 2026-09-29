@@ -120,7 +120,9 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   with the body the destination lies on (the first copy with the target, each
   later copy with the previous result); every body of a copy is a tool, a copy
   must contain at least one body, the copies are hidden once consumed, and
-  component-instance output cannot be combined.
+  component-instance output cannot be combined. A slice's pieces keep reading its
+  result, so a placement slice cuts the target once with every copy's bodies as
+  its tools.
 - Surface points and normals for placement come from `PlacedSurfacePointResolver`:
   the viewport names the face its pick landed on, the pick is taken into the
   occurrence's source frame, Swift-CAD's `SurfaceQueryEvaluator.outwardFrame`
