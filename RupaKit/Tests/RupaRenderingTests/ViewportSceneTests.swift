@@ -1647,7 +1647,8 @@ func viewportSceneBuilderEvaluatesAndDisplaysKernelProjectedCurveWithoutCache() 
     }
 
     #expect(caught?.code == .evaluationFailed)
-    #expect(caught?.message.contains("sweepTwistUnavailable") == true)
+    // The kernel's own reason, which is what the refusal reads as (not a dump of its code).
+    #expect(caught?.message.contains("Sweep twist requires an exact rotational section law") == true)
     #expect(session.document.cadDocument.designGraph.order == [profileID, pathID])
 
     let scene = ViewportSceneBuilder().build(document: session.document, ruler: session.workspaceState.ruler)

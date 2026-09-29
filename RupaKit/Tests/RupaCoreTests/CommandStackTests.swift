@@ -1174,7 +1174,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         Issue.record("Exact kernel must reject sweep twist without an exact rotational section law.")
     } catch let error as EditorError {
         #expect(error.code == .evaluationFailed)
-        #expect(error.message.contains("sweepTwistUnavailable"))
+        // The kernel's own reason, which is what the refusal reads as (not a dump of its code).
+        #expect(error.message.contains("Sweep twist requires an exact rotational section law"))
     }
 }
 
@@ -1321,7 +1322,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         Issue.record("Exact kernel must reject multi-guide sweeps without exact guide-solved surfaces.")
     } catch let error as EditorError {
         #expect(error.code == .evaluationFailed)
-        #expect(error.message.contains("sweepGuideConstraintUnavailable"))
+        // The kernel's own reason, which is what the refusal reads as (not a dump of its code).
+        #expect(error.message.contains("Guide-constrained sweep sections require exact guide-solved surfaces"))
     }
 }
 
