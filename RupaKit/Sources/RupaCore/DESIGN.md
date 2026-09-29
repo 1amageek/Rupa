@@ -941,6 +941,20 @@ document the caller did not ask about. `SnapResolver.init` takes the
 evaluator refuses to run and read the difference between a matching context and
 no context as success against failure.
 
+A matching context also spares the validation: it was made from this very
+document at this generation once it validated, so `TopologySnapshotService` (and
+`SurfaceFrameService.resolveFrames`) validate the whole document only when no
+context matches. A caller that resolves several generated-topology targets of one
+generation shares one snapshot: `GeneratedTopologySelectionResolver.bodyFace`,
+`cornerEdge` and `cornerVertex` each accept a `topology:` snapshot the caller
+holds, and a command's batch (the edge treatment's profile-loop indices, Cut's
+face cutters) builds it once through `TopologySnapshotMemo`, where it had
+evaluated the document once per selected target. The resolver still checks a
+target and its body before any snapshot is built, so a target no corner can
+name costs no evaluation (`TopologySnapshotReuseTests`). `EditorSession` hands
+its current evaluation to `WorkspaceState.pruneMissingReferences`, so surface
+frame displays are checked without evaluating the document per display.
+
 ### Snap placement contract
 
 Snap candidates are offered where the geometry is displayed. Each source is

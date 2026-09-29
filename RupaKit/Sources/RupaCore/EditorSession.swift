@@ -594,7 +594,7 @@ public final class EditorSession {
                 expectedGeneration: expectedGeneration
             )
             selection.pruneMissingReferences(in: document)
-            workspaceState.pruneMissingReferences(in: document)
+            workspaceState.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             return result
         }
 
@@ -633,7 +633,7 @@ public final class EditorSession {
                 in: store
             )
             selection.pruneMissingReferences(in: document)
-            workspaceState.pruneMissingReferences(in: document)
+            workspaceState.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             return result
         }
 

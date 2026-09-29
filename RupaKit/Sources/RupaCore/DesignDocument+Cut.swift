@@ -82,11 +82,16 @@ extension DesignDocument {
         let reach = try targetReach(targets: targets, features: targetFeatures, in: evaluated, owner: operationName)
 
         var cutterFeatures: [FeatureID] = []
+        // Face cutters name faces of the document as it stood before any cutter was appended, so
+        // one snapshot of that document serves them all.
+        let cutterTopology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
         for (index, cutter) in cutters.enumerated() {
             let cutterName = "\(trimmedName) Cutter \(index + 1)"
             switch cutter {
             case let .face(target):
-                cutterFeatures.append(try appendFaceCutter(target, name: cutterName, owner: operationName, objectRegistry: objectRegistry))
+                cutterFeatures.append(try appendFaceCutter(
+                    target, name: cutterName, owner: operationName, objectRegistry: objectRegistry, topology: cutterTopology
+                ))
             case let .curve(nodeID):
                 cutterFeatures.append(try appendCurveCutter(
                     nodeID, name: cutterName, reach: reach, options: options,
@@ -112,11 +117,12 @@ extension DesignDocument {
             )
             if isLast == false {
                 // The next slice places this one's pieces where the first target is.
+                let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
                 try insertBooleanResultNode(
                     name: "\(trimmedName) Step \(index + 1)", featureID: boolean.featureID,
                     geometryRole: boolean.resultPort == FeaturePort.sheet ? ObjectDescriptor.GeometryRole.surface : .solid,
-                    besideTargetNode: try SceneNodeHierarchy(metadata: productMetadata).presentingSceneNodeID(for: targetFeatures[0]),
-                    hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
+                    besideTargetNode: hierarchy.presentingSceneNodeID(for: targetFeatures[0]),
+                    hierarchy: hierarchy,
                     isVisible: false,
                     objectRegistry: objectRegistry
                 )
@@ -173,7 +179,8 @@ extension DesignDocument {
         _ target: SelectionTarget,
         name: String,
         owner: String,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        topology: TopologySnapshotMemo
     ) throws -> FeatureID {
         guard case .face(let componentID) = target.component,
               let subshapeID = componentID.generatedTopologySubshapeID else {
@@ -181,8 +188,7 @@ extension DesignDocument {
         }
         let resolved = try editableBodyTargetResolution(for: target, operationName: owner)
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
-        guard let entry = topology.entries.first(where: { $0.subshapeID == identity }), entry.kind == .face,
+        guard let entry = try topology.get().entries.first(where: { $0.subshapeID == identity }), entry.kind == .face,
               let stableReference = entry.stableReference else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) face cutter is not in the current evaluation.")
         }

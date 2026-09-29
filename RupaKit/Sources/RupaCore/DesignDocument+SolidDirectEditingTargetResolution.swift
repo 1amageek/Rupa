@@ -67,7 +67,8 @@ extension DesignDocument {
     func editableBodyEdge(
         for target: SelectionTarget,
         operationName: String = "Edge chamfer",
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        topology: TopologySnapshotMemo? = nil
     ) throws -> EditableBodyEdge {
         guard case .edge(let componentID) = target.component else {
             throw EditorError(
@@ -76,12 +77,12 @@ extension DesignDocument {
             )
         }
         if componentID.generatedTopologySubshapeID != nil {
-            let cornerEdge = try GeneratedTopologySelectionResolver().cornerEdge(
-                for: target,
-                in: self,
-                objectRegistry: objectRegistry,
-                operationName: operationName
-            )
+            let resolver = GeneratedTopologySelectionResolver()
+            let cornerEdge = if let topology {
+                try resolver.cornerEdge(for: target, in: self, topology: try topology.get(), operationName: operationName)
+            } else {
+                try resolver.cornerEdge(for: target, in: self, objectRegistry: objectRegistry, operationName: operationName)
+            }
             return editableBodyEdge(for: cornerEdge)
         }
         switch componentID {

@@ -3413,147 +3413,6 @@ public struct Viewport: View {
         )
     }
 
-    private func viewportBodyFace(
-        for componentID: SelectionComponentID,
-        target: SelectionTarget
-    ) -> ViewportBodyFace? {
-        switch componentID {
-        case .bodyFaceFront:
-            return .front
-        case .bodyFaceBack:
-            return .back
-        case .bodyFaceTop:
-            return .top
-        case .bodyFaceBottom:
-            return .bottom
-        case .bodyFaceLeft:
-            return .left
-        case .bodyFaceRight:
-            return .right
-        case .bodyFaceSide:
-            return .side
-        default:
-            guard componentID.generatedTopologySubshapeID != nil else {
-                return nil
-            }
-            do {
-                let bodyFace = try GeneratedTopologySelectionResolver().bodyFace(
-                    for: target,
-                    in: document,
-                    objectRegistry: objectRegistry,
-                    operationName: "Viewport generated topology selection"
-                )
-                return viewportBodyFace(for: bodyFace)
-            } catch {
-                return nil
-            }
-        }
-    }
-
-    private func viewportBodyFace(for bodyFace: BodyFace) -> ViewportBodyFace {
-        switch bodyFace {
-        case .front:
-            return .front
-        case .back:
-            return .back
-        case .top:
-            return .top
-        case .bottom:
-            return .bottom
-        case .left:
-            return .left
-        case .right:
-            return .right
-        case .side:
-            return .side
-        }
-    }
-
-    private func viewportBodyEdge(
-        for componentID: SelectionComponentID,
-        target: SelectionTarget
-    ) -> ViewportBodyEdge? {
-        switch componentID {
-        case .bodyEdgeLeftBottom:
-            return .leftBottom
-        case .bodyEdgeRightBottom:
-            return .rightBottom
-        case .bodyEdgeRightTop:
-            return .rightTop
-        case .bodyEdgeLeftTop:
-            return .leftTop
-        default:
-            guard componentID.generatedTopologySubshapeID != nil else {
-                return nil
-            }
-            do {
-                let cornerEdge = try GeneratedTopologySelectionResolver().cornerEdge(
-                    for: target,
-                    in: document,
-                    objectRegistry: objectRegistry,
-                    operationName: "Viewport generated topology selection"
-                )
-                return viewportBodyEdge(for: cornerEdge)
-            } catch {
-                return nil
-            }
-        }
-    }
-
-    private func viewportBodyEdge(for cornerEdge: BodyCornerEdge) -> ViewportBodyEdge {
-        switch cornerEdge {
-        case .leftBottom:
-            return .leftBottom
-        case .rightBottom:
-            return .rightBottom
-        case .rightTop:
-            return .rightTop
-        case .leftTop:
-            return .leftTop
-        }
-    }
-
-    private func viewportBodyVertex(
-        for componentID: SelectionComponentID,
-        target: SelectionTarget
-    ) -> ViewportBodyVertex? {
-        guard componentID.generatedTopologySubshapeID != nil else {
-            return nil
-        }
-        do {
-            let cornerVertex = try GeneratedTopologySelectionResolver().cornerVertex(
-                for: target,
-                in: document,
-                objectRegistry: objectRegistry,
-                operationName: "Viewport generated topology selection"
-            )
-            return viewportBodyVertex(for: cornerVertex)
-        } catch {
-            return nil
-        }
-    }
-
-    private func viewportBodyVertex(for cornerVertex: BodyCornerVertex) -> ViewportBodyVertex {
-        switch cornerVertex {
-        case .frontBottomLeft:
-            return .frontBottomLeft
-        case .frontBottomRight:
-            return .frontBottomRight
-        case .frontTopRight:
-            return .frontTopRight
-        case .frontTopLeft:
-            return .frontTopLeft
-        case .backBottomLeft:
-            return .backBottomLeft
-        case .backBottomRight:
-            return .backBottomRight
-        case .backTopRight:
-            return .backTopRight
-        case .backTopLeft:
-            return .backTopLeft
-        }
-    }
-
     private func bodyEditStates(for bodyItems: [ViewportSceneItem]) -> [FeatureID: ViewportObjectEditState] {
         Dictionary(
             uniqueKeysWithValues: bodyItems.map { item in
@@ -6127,6 +5986,8 @@ extension Viewport {
         if rendersDragPreviewDocument {
             result.selectionScene = cachedScene(usesDragPreviewDocument: false)
         }
+        result.evaluation = currentEvaluation
+        result.evaluationGeneration = sceneDocumentGeneration
         result.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         result.allowsBodyResize = onBodyResizeCommit != nil
         result.transformGizmo = transformGizmo

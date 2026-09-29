@@ -915,6 +915,11 @@ as spheres elsewhere.
    length, or an arc span at or beyond a full turn, is refused for the same
    reason -- the legacy geometry clamped both classes to `1.0e-9` and kept
    drawing a handle whose committed value no longer followed it.
+   The producer resolves selected generated-topology vertices and faces
+   against one topology snapshot per build, made from the published
+   evaluation the viewport hands it (`RawInput.evaluation` and
+   `evaluationGeneration`); it had evaluated the whole document once per
+   selected target on every hover.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

@@ -159,6 +159,11 @@ extension ViewportSpatialOverlayProducer {
             let modifierControl: Bool
             let objectRegistry: ObjectTypeRegistry
             let constructionFaceTarget: SelectionTarget?
+            /// The evaluation `document` was published with, and its generation: generated-topology
+            /// targets resolve against it, once per build, instead of evaluating the document again
+            /// for every selected target.
+            var evaluation: DocumentEvaluationContext?
+            var evaluationGeneration: DocumentGeneration?
 
             init(
                 document: DesignDocument,
@@ -3043,6 +3048,21 @@ private extension ViewportSpatialOverlayProducer {
         cameraPaths: inout [SurfaceTransformAffordanceSource.CameraPath],
         markers: inout [SurfaceTransformAffordanceSource.Marker]
     ) throws {
+        // One topology snapshot serves every selected generated-topology target of this build,
+        // made from the published evaluation when it is current.
+        var topology: TopologySnapshot?
+        func currentTopology() throws -> TopologySnapshot {
+            if let topology { return topology }
+            let built = try TopologySnapshotService().snapshot(
+                document: input.document,
+                objectRegistry: input.objectRegistry,
+                currentEvaluation: input.evaluation,
+                currentGeneration: input.evaluationGeneration,
+                metricPolicy: .omit
+            )
+            topology = built
+            return built
+        }
         for target in input.selection.selectedTargets {
             switch target.component {
             case .vertex(let componentID):
@@ -3053,7 +3073,7 @@ private extension ViewportSpatialOverlayProducer {
                     for: componentID,
                     target: target,
                     document: input.document,
-                    objectRegistry: input.objectRegistry
+                    topology: currentTopology
                 ) else { continue }
                 guard let item = sceneItem(for: target, input: input),
                       case .body = item.kind else { continue }
@@ -3080,7 +3100,7 @@ private extension ViewportSpatialOverlayProducer {
                     for: componentID,
                     target: target,
                     document: input.document,
-                    objectRegistry: input.objectRegistry
+                    topology: currentTopology
                 ) else { continue }
                 guard ViewportProfileFaceDragMapping.supports(face) else { continue }
                 guard let item = sceneItem(for: target, input: input),
@@ -3334,44 +3354,6 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
-    static func viewportBodyEdge(for componentID: SelectionComponentID) -> ViewportBodyEdge? {
-        switch componentID {
-        case .bodyEdgeLeftBottom: .leftBottom
-        case .bodyEdgeRightBottom: .rightBottom
-        case .bodyEdgeRightTop: .rightTop
-        case .bodyEdgeLeftTop: .leftTop
-        default: nil
-        }
-    }
-
-    static func viewportBodyEdge(
-        for componentID: SelectionComponentID,
-        target: SelectionTarget,
-        document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
-    ) -> ViewportBodyEdge? {
-        if let direct = viewportBodyEdge(for: componentID) {
-            return direct
-        }
-        guard componentID.generatedTopologySubshapeID != nil else { return nil }
-        do {
-            let resolved = try GeneratedTopologySelectionResolver().cornerEdge(
-                for: target,
-                in: document,
-                objectRegistry: objectRegistry,
-                operationName: "Viewport generated topology selection"
-            )
-            switch resolved {
-            case .leftBottom: return .leftBottom
-            case .rightBottom: return .rightBottom
-            case .rightTop: return .rightTop
-            case .leftTop: return .leftTop
-            }
-        } catch {
-            return nil
-        }
-    }
-
     static func viewportBodyFace(for componentID: SelectionComponentID) -> ViewportBodyFace? {
         switch componentID {
         case .bodyFaceFront: .front
@@ -3389,7 +3371,7 @@ private extension ViewportSpatialOverlayProducer {
         for componentID: SelectionComponentID,
         target: SelectionTarget,
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        topology: () throws -> TopologySnapshot
     ) -> ViewportBodyFace? {
         if let direct = viewportBodyFace(for: componentID) {
             return direct
@@ -3399,7 +3381,7 @@ private extension ViewportSpatialOverlayProducer {
             let resolved = try GeneratedTopologySelectionResolver().bodyFace(
                 for: target,
                 in: document,
-                objectRegistry: objectRegistry,
+                topology: try topology(),
                 operationName: "Viewport generated topology selection"
             )
             switch resolved {
@@ -3420,14 +3402,14 @@ private extension ViewportSpatialOverlayProducer {
         for componentID: SelectionComponentID,
         target: SelectionTarget,
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        topology: () throws -> TopologySnapshot
     ) -> ViewportBodyVertex? {
         guard componentID.generatedTopologySubshapeID != nil else { return nil }
         do {
             let resolved = try GeneratedTopologySelectionResolver().cornerVertex(
                 for: target,
                 in: document,
-                objectRegistry: objectRegistry,
+                topology: try topology(),
                 operationName: "Viewport generated topology selection"
             )
             switch resolved {

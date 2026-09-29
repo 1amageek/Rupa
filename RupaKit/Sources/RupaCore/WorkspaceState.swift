@@ -62,7 +62,14 @@ public struct WorkspaceState: Sendable {
         }
     }
 
-    public mutating func pruneMissingReferences(in document: DesignDocument) {
+    /// Drops displays and references the document no longer backs. `evaluation`, the document's
+    /// current evaluation at `generation`, lets every surface frame display check against it
+    /// instead of evaluating the document again per display.
+    public mutating func pruneMissingReferences(
+        in document: DesignDocument,
+        evaluation: DocumentEvaluationContext? = nil,
+        generation: DocumentGeneration? = nil
+    ) {
         if let activeConstructionPlaneID,
            document.productMetadata.constructionPlanes[activeConstructionPlaneID] == nil {
             self.activeConstructionPlaneID = nil
@@ -81,7 +88,9 @@ public struct WorkspaceState: Sendable {
                 try display.validate()
                 _ = try SurfaceFrameService().resolveFrames(
                     document: document,
-                    queries: [display.query]
+                    queries: [display.query],
+                    currentEvaluation: evaluation,
+                    currentGeneration: generation
                 )
             }
         }

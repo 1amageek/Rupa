@@ -29,11 +29,13 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws -> Set<Int> {
         var targetIndices = Set<Int>()
+        let topology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
         for target in targets {
             let edge = try editableBodyEdge(
                 for: target,
                 operationName: operationName,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                topology: topology
             )
             let vertex = rectangleProfilePoint(for: edge, bounds: bounds)
             guard let index = profileLoop.closestVertexIndex(to: vertex) else {
@@ -72,6 +74,7 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws -> Set<Int> {
         var targetIndices = Set<Int>()
+        let topology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
         for target in targets {
             let index = try profileLoopVertexIndex(
                 for: target,
@@ -79,7 +82,8 @@ extension DesignDocument {
                 sketchPlane: sketchPlane,
                 expectedKind: expectedKind,
                 operationName: operationName,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                topology: topology
             )
             targetIndices.insert(index)
         }
@@ -92,7 +96,8 @@ extension DesignDocument {
         sketchPlane: SketchPlane,
         expectedKind: TopologySummaryResult.Entry.Kind,
         operationName: String,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        topology: TopologySnapshotMemo? = nil
     ) throws -> Int {
         let componentID: SelectionComponentID
         switch (expectedKind, target.component) {
@@ -112,11 +117,8 @@ extension DesignDocument {
                 message: "\(operationName) requires generated topology targets for non-rectangle profile loops."
             )
         }
-        let topology = try TopologySnapshotService().snapshot(
-            document: self,
-            objectRegistry: objectRegistry
-        )
-        guard let entry = topology.entries.first(where: {
+        let snapshot = try (topology ?? TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)).get()
+        guard let entry = snapshot.entries.first(where: {
             $0.subshapeID == GeneratedSubshapeIdentity.string(for: subshapeID)
         }) else {
             throw EditorError(

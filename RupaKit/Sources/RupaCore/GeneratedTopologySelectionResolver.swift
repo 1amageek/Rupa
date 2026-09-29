@@ -215,28 +215,31 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         operationName: String = "Generated topology edge"
     ) throws -> BodyCornerEdge {
-        guard case .edge(let componentID) = target.component,
-              let subshapeID = componentID.generatedTopologySubshapeID else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) requires a generated topology edge target."
-            )
-        }
-        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
-        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
-            for: target.sceneNodeID,
-            preferredFeatureID: subshapeID.featureID,
-            in: document,
-            operationName: operationName
-        )
-        let context = try rectangleExtrudeContext(
-            for: resolvedSceneNodeID,
-            in: document,
-            operationName: operationName
-        )
+        // The target and its body are checked before the snapshot is built, so a target no
+        // corner can name costs no evaluation.
+        _ = try cornerTarget(target, .edge, in: document, operationName: operationName)
         let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
+        )
+        return try cornerEdge(
+            for: target,
+            in: document,
+            topology: topology,
+            operationName: operationName
+        )
+    }
+
+    /// Resolves `target` against a topology snapshot the caller already holds, so resolving
+    /// several targets of one document generation evaluates and summarizes it once.
+    public func cornerEdge(
+        for target: SelectionTarget,
+        in document: DesignDocument,
+        topology: TopologySnapshot,
+        operationName: String = "Generated topology edge"
+    ) throws -> BodyCornerEdge {
+        let (identity, resolvedSceneNodeID, context) = try cornerTarget(
+            target, .edge, in: document, operationName: operationName
         )
         guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
@@ -258,28 +261,31 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         operationName: String = "Generated topology vertex"
     ) throws -> BodyCornerVertex {
-        guard case .vertex(let componentID) = target.component,
-              let subshapeID = componentID.generatedTopologySubshapeID else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) requires a generated topology vertex target."
-            )
-        }
-        let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
-        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
-            for: target.sceneNodeID,
-            preferredFeatureID: subshapeID.featureID,
-            in: document,
-            operationName: operationName
-        )
-        let context = try rectangleExtrudeContext(
-            for: resolvedSceneNodeID,
-            in: document,
-            operationName: operationName
-        )
+        // The target and its body are checked before the snapshot is built, so a target no
+        // corner can name costs no evaluation.
+        _ = try cornerTarget(target, .vertex, in: document, operationName: operationName)
         let topology = try topologyService.snapshot(
             document: document,
             objectRegistry: objectRegistry
+        )
+        return try cornerVertex(
+            for: target,
+            in: document,
+            topology: topology,
+            operationName: operationName
+        )
+    }
+
+    /// Resolves `target` against a topology snapshot the caller already holds, so resolving
+    /// several targets of one document generation evaluates and summarizes it once.
+    public func cornerVertex(
+        for target: SelectionTarget,
+        in document: DesignDocument,
+        topology: TopologySnapshot,
+        operationName: String = "Generated topology vertex"
+    ) throws -> BodyCornerVertex {
+        let (identity, resolvedSceneNodeID, context) = try cornerTarget(
+            target, .vertex, in: document, operationName: operationName
         )
         guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
@@ -453,6 +459,42 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             )
         }
         return resolvedSceneNodeID
+    }
+
+    /// A corner edge or vertex target's generated identity, its body's scene node and that body's
+    /// rectangle extrusion, or the typed reason the target names no corner.
+    private enum CornerTargetKind: String {
+        case edge
+        case vertex
+    }
+
+    private func cornerTarget(
+        _ target: SelectionTarget,
+        _ kind: CornerTargetKind,
+        in document: DesignDocument,
+        operationName: String
+    ) throws -> (identity: String, sceneNodeID: SceneNodeID, context: RectangleExtrudeContext) {
+        let componentID: SelectionComponentID?
+        switch (target.component, kind) {
+        case (.edge(let id), .edge), (.vertex(let id), .vertex):
+            componentID = id
+        default:
+            componentID = nil
+        }
+        guard let subshapeID = componentID?.generatedTopologySubshapeID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) requires a generated topology \(kind.rawValue) target."
+            )
+        }
+        let sceneNodeID = try resolvedBodySceneNodeID(
+            for: target.sceneNodeID,
+            preferredFeatureID: subshapeID.featureID,
+            in: document,
+            operationName: operationName
+        )
+        let context = try rectangleExtrudeContext(for: sceneNodeID, in: document, operationName: operationName)
+        return (GeneratedSubshapeIdentity.string(for: subshapeID), sceneNodeID, context)
     }
 
     private func rectangleExtrudeContext(

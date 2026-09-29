@@ -71,13 +71,17 @@ public struct SurfaceFrameService: Sendable {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> [SurfaceFrameResult.Frame] {
-        do {
-            try document.validate(objectRegistry: objectRegistry)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must validate before surface frame resolution: \(String(describing: error))"
-            )
+        // A current evaluation of this generation was made from this very document once it
+        // validated; only a document without one is validated here.
+        if currentEvaluation?.matches(document: document, generation: currentGeneration) != true {
+            do {
+                try document.validate(objectRegistry: objectRegistry)
+            } catch {
+                throw EditorError(
+                    code: .evaluationFailed,
+                    message: "Document must validate before surface frame resolution: \(String(describing: error))"
+                )
+            }
         }
 
         guard queries.isEmpty == false else {
