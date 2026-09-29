@@ -156,6 +156,7 @@ private struct ProjectMainViewContent: View {
     @State private var placedSectionQuery: SectionAnalysisQuery?
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
+    @State private var selectionMassMeasurement = SelectionMassMeasurement()
     @State private var measurementSeed: ViewportMeasurementSeed?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
@@ -9900,7 +9901,8 @@ private struct ProjectMainViewContent: View {
         switch kind {
         case .rectangular:
             do {
-                let measurement = try MeasurementService().measure(
+                // Only the bounds space the array: the mesh volume spares an exact one.
+                let measurement = try MeasurementService(volumeSource: .tessellatedMesh).measure(
                     document: document,
                     selection: snapshot.selection,
                     ruler: snapshot.workspaceState.ruler,
@@ -10174,23 +10176,24 @@ private struct ProjectMainViewContent: View {
     /// the document changes; a selection that cannot be measured shows no mass.
     private func refreshSelectionMass() {
         guard !snapshot.selection.wholeSceneNodeIDs.isEmpty else {
-            selectionMass = nil
+            selectionMassMeasurement.cancel()
             return
         }
-        do {
-            let document = snapshot.document.document
-            let measurement = try MeasurementService().measure(
-                document: document,
-                selection: snapshot.selection,
-                ruler: snapshot.workspaceState.ruler,
-                objectRegistry: objectRegistry,
-                currentEvaluation: snapshot.cadInteraction,
-                currentGeneration: snapshot.documentGeneration
-            )
-            selectionMass = try document.mass(of: measurement)
-        } catch {
-            selectionMass = nil
-            reportToolStatus("The selection's mass could not be measured: \(error.localizedDescription)", severity: .warning)
+        selectionMassMeasurement.measure(SelectionMassMeasurement.Request(
+            document: snapshot.document.document,
+            selection: snapshot.selection,
+            ruler: snapshot.workspaceState.ruler,
+            objectRegistry: objectRegistry,
+            evaluation: snapshot.cadInteraction,
+            generation: snapshot.documentGeneration
+        )) { result in
+            switch result {
+            case .success(let mass):
+                selectionMass = mass
+            case .failure(let error):
+                selectionMass = nil
+                reportToolStatus("The selection's mass could not be measured: \(error.localizedDescription)", severity: .warning)
+            }
         }
     }
 
@@ -10317,7 +10320,8 @@ private struct ProjectMainViewContent: View {
                     moved = SelectionModel()
                     try moved.selectTargets(transform.sceneNodeIDs.map { SelectionTarget(sceneNodeID: $0) }, in: document)
                 }
-                bounds = try MeasurementService().measure(
+                // Only the bounds place the pivot: the mesh volume spares an exact one.
+                bounds = try MeasurementService(volumeSource: .tessellatedMesh).measure(
                     document: document,
                     selection: moved,
                     ruler: view.workspaceState.ruler,

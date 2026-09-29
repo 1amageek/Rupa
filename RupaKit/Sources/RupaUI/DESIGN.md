@@ -569,7 +569,12 @@ group with clearcoat, sheen, specular, iridescence, thickness, transmission and
 density, Fork, Remove and New buttons, and Name and Delete for a material the
 whole selection shares. The section shows the selection's mass from its
 materials' densities (`DesignDocument.mass(of:)`), measured when the selection
-or the document changes. Core's
+or the document changes, off the main actor (`SelectionMassMeasurement`): one
+measurement runs at a time, a newer request replaces a waiting one and makes the
+running one's result stale, and no mass shows until the current selection's
+arrives, so an exact volume that takes long never stalls the workspace
+(`SelectionMassMeasurementTests`). A transform's bounding-box pivot and a
+rectangular array's spacing measure bounds with mesh volumes. Core's
 [MaterialAssignment](../RupaCore/MaterialAssignment/DESIGN.md) owns what each
 does.
 

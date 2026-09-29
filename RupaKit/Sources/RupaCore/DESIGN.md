@@ -1524,7 +1524,11 @@ relative to a node frame without identifying geometry. Stale or mismatched
 references fail explicitly before a measurement is published.
 
 `MeasurementService` measures every solid volume from the evaluated B-rep
-(`exactBRep`) with Mesh-derived surface area and bounds (`tessellatedMesh`);
+(`exactBRep`) with Mesh-derived surface area and bounds (`tessellatedMesh`); a
+service made with `volumeSource: .tessellatedMesh` takes volumes from the display
+mesh instead and says so in each volume's method, for callers that need only
+bounds (a transform pivot, an array's spacing), since an exact volume of a body of
+many spline spans can take long (`MeasurementVolumeSourceTests`);
 extrusion heights and straight-sweep normal heights and path lengths are
 authored dimensions read from source parameters, never a volume factor. A
 profile the kernel does not close yields no solid and reports the kernel's

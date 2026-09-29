@@ -3,17 +3,28 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct MeasurementService {
+    /// Where a solid's volume comes from. The exact B-rep volume can take long on bodies of many
+    /// spline spans; a caller that needs only bounds (a pivot, an array's spacing) measures from
+    /// the display mesh, which the result states as the volume's method.
+    public enum VolumeSource: Sendable {
+        case exactBRep
+        case tessellatedMesh
+    }
+
     private let pipelineOverride: CADPipeline?
     private let tolerance: ModelingTolerance
     private let splineTessellator: CubicBezierSplineTessellator
+    private let volumeSource: VolumeSource
 
     public init(
         pipeline: CADPipeline? = nil,
-        tolerance: ModelingTolerance = .standard
+        tolerance: ModelingTolerance = .standard,
+        volumeSource: VolumeSource = .exactBRep
     ) {
         self.pipelineOverride = pipeline
         self.tolerance = tolerance
         self.splineTessellator = CubicBezierSplineTessellator(tolerance: tolerance)
+        self.volumeSource = volumeSource
     }
 
     public func measure(
@@ -1731,14 +1742,15 @@ public struct MeasurementService {
                 return nil
             }
             let meshMeasurement = try evaluatedMeshMeasurement(mesh)
-            guard let volumeCubicMeters = try evaluatedBRepVolume(
+            guard let volume = try solidVolume(
                 bodyID: bodyReference.bodyID,
                 in: evaluatedDocument.brep,
+                mesh: meshMeasurement,
                 unsupportedReason: &unsupportedReason
             ) else {
                 return nil
             }
-            guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+            guard volume.value > tolerance.distance * tolerance.distance * tolerance.distance else {
                 unsupportedReason = "An evaluated sweep solid volume is below tolerance."
                 return nil
             }
@@ -1754,7 +1766,7 @@ public struct MeasurementService {
                             meters: pathLength * distanceFraction
                         ),
                     ],
-                    volume: .init(value: volumeCubicMeters, method: .exactBRep),
+                    volume: volume,
                     surfaceArea: .init(
                         value: meshMeasurement.surfaceAreaSquareMeters,
                         method: .tessellatedMesh
@@ -1891,14 +1903,15 @@ public struct MeasurementService {
             return nil
         }
         let meshMeasurement = try evaluatedMeshMeasurement(mesh)
-        guard let volumeCubicMeters = try evaluatedBRepVolume(
+        guard let volume = try solidVolume(
             bodyID: bodyID,
             in: evaluatedDocument.brep,
+            mesh: meshMeasurement,
             unsupportedReason: &unsupportedReason
         ) else {
             return nil
         }
-        guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+        guard volume.value > tolerance.distance * tolerance.distance * tolerance.distance else {
             unsupportedReason = "The evaluated solid volume is below tolerance."
             return nil
         }
@@ -1908,7 +1921,7 @@ public struct MeasurementService {
             sourceFeatureID: sourceFeatureID.description,
             sourceFeatureName: sourceFeatureName,
             linearDimensions: [],
-            volume: .init(value: volumeCubicMeters, method: .exactBRep),
+            volume: volume,
             surfaceArea: .init(
                 value: meshMeasurement.surfaceAreaSquareMeters,
                 method: .tessellatedMesh
@@ -1953,14 +1966,15 @@ public struct MeasurementService {
                 return nil
             }
             let meshMeasurement = try evaluatedMeshMeasurement(mesh)
-            guard let volumeCubicMeters = try evaluatedBRepVolume(
+            guard let volume = try solidVolume(
                 bodyID: bodyReference.bodyID,
                 in: evaluatedDocument.brep,
+                mesh: meshMeasurement,
                 unsupportedReason: &unsupportedReason
             ) else {
                 return nil
             }
-            guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+            guard volume.value > tolerance.distance * tolerance.distance * tolerance.distance else {
                 unsupportedReason = "An evaluated solid volume is below tolerance."
                 return nil
             }
@@ -1970,7 +1984,7 @@ public struct MeasurementService {
                 sourceFeatureID: sourceFeatureID.description,
                 sourceFeatureName: sourceFeatureName,
                 linearDimensions: [],
-                volume: .init(value: volumeCubicMeters, method: .exactBRep),
+                volume: volume,
                 surfaceArea: .init(
                     value: meshMeasurement.surfaceAreaSquareMeters,
                     method: .tessellatedMesh
@@ -2066,6 +2080,8 @@ public struct MeasurementService {
         }
 
         var surfaceArea = 0.0
+        // Six times the signed volume the triangles enclose about the origin.
+        var enclosedVolume = 0.0
         var index = 0
         while index + 2 < mesh.indices.count {
             let firstIndex = Int(mesh.indices[index])
@@ -2084,6 +2100,7 @@ public struct MeasurementService {
             let third = try transform.applied(to: mesh.positions[thirdIndex])
             let triangleNormal = (second - first).cross(third - first)
             surfaceArea += triangleNormal.length * 0.5
+            enclosedVolume += (first - .origin).dot((second - .origin).cross(third - .origin))
             index += 3
         }
 
@@ -2092,20 +2109,29 @@ public struct MeasurementService {
         }
         return EvaluatedMeshMeasurement(
             surfaceAreaSquareMeters: surfaceArea,
+            enclosedVolumeCubicMeters: abs(enclosedVolume) / 6,
             bounds: measuredBounds
         )
     }
 
-    private func evaluatedBRepVolume(
+    /// A solid's volume from the source the service was made with: the exact B-rep, or the
+    /// display mesh it encloses for a caller that needs only bounds.
+    private func solidVolume(
         bodyID: BodyID,
         in model: BRepModel,
+        mesh: EvaluatedMeshMeasurement,
         unsupportedReason: inout String?
-    ) throws -> Double? {
-        do {
-            return try model.volume(of: bodyID, tolerance: tolerance)
-        } catch let error as KernelError where error.code == .unsupportedCapability {
-            unsupportedReason = "Exact B-rep volume is unavailable: \(error.message)"
-            return nil
+    ) throws -> MeasurementResult.Measured<Double>? {
+        switch volumeSource {
+        case .tessellatedMesh:
+            return .init(value: mesh.enclosedVolumeCubicMeters, method: .tessellatedMesh)
+        case .exactBRep:
+            do {
+                return .init(value: try model.volume(of: bodyID, tolerance: tolerance), method: .exactBRep)
+            } catch let error as KernelError where error.code == .unsupportedCapability {
+                unsupportedReason = "Exact B-rep volume is unavailable: \(error.message)"
+                return nil
+            }
         }
     }
 
@@ -2581,6 +2607,7 @@ private struct MeasuredProfile {
 
 private struct EvaluatedMeshMeasurement {
     var surfaceAreaSquareMeters: Double
+    var enclosedVolumeCubicMeters: Double
     var bounds: MeasurementResult.Bounds
 }
 
