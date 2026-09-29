@@ -91,8 +91,8 @@ extension DesignDocument {
     /// Applies one world-space motion to `ids` and returns the nodes that moved.
     ///
     /// The selection moves as one body: the members hold their arrangement relative to one another
-    /// regardless of where they sit in the tree. With `compensatingInstances`, component instances of
-    /// a moved definition take the inverse motion, so they stay where they were.
+    /// regardless of where they sit in the tree. Component instances retain their definition-owned placements.
+    /// `compensatingInstances` is retained for source compatibility; both values hold instances fixed.
     @discardableResult
     public mutating func transformSceneNodes(
         ids: [SceneNodeID],
@@ -115,10 +115,8 @@ extension DesignDocument {
                 reason: "Pattern array output scene node transforms are controlled by the pattern source."
             )
         }
-        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        if compensatingInstances {
-            try compensateInstances(of: Set(plan.transformedIDs), worldDelta: worldDelta, hierarchy: hierarchy)
-        }
+        // Definition-owned root placements already hold instances fixed. The legacy
+        // compensatingInstances argument remains source-compatible and needs no correction.
         for id in plan.transformedIDs {
             try setSceneNodeLocalTransform(id, to: plan.localTransformsByID[id])
         }
@@ -127,44 +125,6 @@ extension DesignDocument {
         try synchronizeBoundaryOccurrences()
         committed = true
         return plan.transformedIDs
-    }
-
-    /// Gives every instance of a definition whose roots all moved the inverse of the roots' motion.
-    private mutating func compensateInstances(
-        of movedIDs: Set<SceneNodeID>,
-        worldDelta: Transform3D,
-        hierarchy: SceneNodeHierarchy
-    ) throws {
-        for definition in productMetadata.componentDefinitions.values {
-            let roots = definition.rootSceneNodeIDs
-            // An instance shows its roots through their local transforms only, so a root carried by a
-            // moved ancestor changes nothing an instance shows; only roots moved themselves count.
-            let moved = roots.filter(movedIDs.contains)
-            guard !moved.isEmpty else { continue }
-            guard moved.count == roots.count,
-                  Set(roots.map { hierarchy.parentID(of: $0) }).count == 1 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Instances stay in place only when every root of their component moves together under one parent."
-                )
-            }
-            guard !productMetadata.patternArrays.values.contains(where: { $0.definitionID == definition.id }) else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Pattern array outputs follow their pattern source and cannot be held in place."
-                )
-            }
-            // Roots move by the motion restated in their parent's frame; an instance shows its roots
-            // through its own transform, so undoing that restated motion there keeps it in place.
-            let parent = try hierarchy.parentWorldTransform(of: roots[0])
-            let localDelta = try parent.inverse().composed(with: worldDelta).composed(with: parent)
-            let inverseDelta = try localDelta.inverse()
-            for (id, instance) in productMetadata.componentInstances where instance.definitionID == definition.id {
-                let compensated = try instance.localTransform.composed(with: inverseDelta)
-                try compensated.validateAffinePlacement()
-                productMetadata.componentInstances[id]?.localTransform = compensated
-            }
-        }
     }
 
     private mutating func setSceneNodeLocalTransform(

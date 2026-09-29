@@ -11,9 +11,8 @@ struct SceneFragmentExtractor: Sendable {
         /// Placements relative to the first root's parent, for pattern outputs that reproduce a
         /// definition inside their own frame.
         case parentOfFirstRoot
-        /// Each root relative to its own parent, the frame a component instance shows its
-        /// definition's roots in: one instance placement reproduces them all, whatever their parents.
-        case definition
+        /// The definition-owned root placements, independent of live source placements.
+        case definition(ComponentDefinition)
     }
 
     func extract(
@@ -57,8 +56,8 @@ struct SceneFragmentExtractor: Sendable {
         }
         let inverseReference = try reference.inverse()
         func placement(of id: SceneNodeID) throws -> Transform3D {
-            if case .definition = frame {
-                return try hierarchy.parentWorldTransform(of: id).inverse().composed(with: try hierarchy.worldTransform(of: id))
+            if case let .definition(definition) = frame, definition.rootSceneNodeIDs.contains(id) {
+                return try definition.rootPlacement(for: id).transform
             }
             return try inverseReference.composed(with: try hierarchy.worldTransform(of: id))
         }
@@ -66,6 +65,11 @@ struct SceneFragmentExtractor: Sendable {
         var sceneNodes: [SceneNodeID: SceneNode] = [:]
         for id in subtreeIDs {
             sceneNodes[id] = metadata.sceneNodes[id]
+            if case let .definition(definition) = frame, rootIDs.contains(id) {
+                let placement = try definition.rootPlacement(for: id)
+                sceneNodes[id]?.localTransform = placement.transform
+                sceneNodes[id]?.isVisible = placement.isVisible
+            }
         }
         let features = try featureClosure(
             seededBy: subtreeIDs.compactMap { metadata.sceneNodes[$0] },
@@ -136,7 +140,7 @@ struct SceneFragmentExtractor: Sendable {
             }
         }
 
-        // Each copied instance's definition travels with its content, extracted in the world frame so
+        // Each copied instance's definition travels with its content in its owned frame so
         // it can be recreated where the destination lacks it.
         var componentDefinitions: [ComponentDefinitionID: SceneFragment.ComponentDefinitionContent] = [:]
         for instance in componentInstances.values where componentDefinitions[instance.definitionID] == nil {
@@ -147,7 +151,7 @@ struct SceneFragmentExtractor: Sendable {
                 name: definition.name,
                 properties: definition.properties,
                 content: try extract(
-                    rootSceneNodeIDs: definition.rootSceneNodeIDs, frame: .world,
+                    rootSceneNodeIDs: definition.rootSceneNodeIDs, frame: .definition(definition),
                     metadata: metadata, cadDocument: cadDocument, authoredMeshAssets: authoredMeshAssets
                 )
             )

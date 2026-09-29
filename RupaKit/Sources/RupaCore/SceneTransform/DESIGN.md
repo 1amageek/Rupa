@@ -5,8 +5,7 @@
 Child of [RupaCore](../DESIGN.md), no children. Owns what Move, Rotate, Scale
 and Duplicate's follow-up move mean as product placement: the transform frame
 (pivot point and axes) a selection is moved in, the world-space motion each
-kind of input produces, and applying that motion to the selection, optionally
-holding component instances in place.
+kind of input produces, and applying that motion to the selected placements.
 
 ## Responsibilities and Boundaries
 
@@ -54,14 +53,14 @@ world Transform3D ──transformSceneNodes(ids:worldDelta:compensatingInstances
   target direction, and scale along the line through two points by a ratio or
   to a length. Zero, non-finite or collapsing inputs are typed failures.
 - `transformSceneNodes` applies one world motion to the outermost selected
-  nodes (the relative planner). With `compensatingInstances`, every component
-  instance of a definition whose roots all moved is given the inverse motion
-  in its own frame, so its occurrences stay where they were; a definition only
-  partly moved, or whose roots sit under different parents, is refused.
+  nodes (the relative planner). Shared definitions own their root placements as specified in
+  [Scene Cloning](../SceneCloning/DESIGN.md); moving a source placement leaves other
+  instances unchanged. The legacy `compensatingInstances` argument is retained for
+  command compatibility and no longer changes placement semantics.
 
 ## Verification and Change Impact
 
 `SceneTransformTests` prove each pivot and orientation mode, every motion form
-including freestyle, typed failures, and instance compensation keeping
+including freestyle, typed failures, and independent placement keeping
 occurrences in place. A change re-checks the gizmo (RupaRendering) and the
 transform modes (RupaUI).

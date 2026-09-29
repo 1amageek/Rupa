@@ -154,7 +154,7 @@ Outliner projection tests verify this mapping and unchanged row identity/state.
 9. Component instances appear at their scene-tree positions rather than in a
    duplicate editable instance list; an instance of a group is placed by Core
    under the document's Instances group, which is how the Instances category
-   appears. Component definitions and assets may remain read-only reference
+   appears. Shared definitions select their usages in a separate section; assets remain read-only reference
    groups below the tree.
 10. Native drag/drop is scoped to one mounted Outliner. A drag stores the
     current selection, `DocumentGeneration`, and an in-memory per-drag nonce;
@@ -276,3 +276,18 @@ Workspace integration coverage is owned by
 Signed-App verification must exercise the actual sidebar, keyboard focus,
 menus, selection, tree expansion, failure feedback, undo, and fitted viewport
 without writing the user's project.
+
+### Shared definition selection
+
+Scene rows keep their assembly hierarchy and select individual placements.
+The separate Shared Definitions section is always discoverable when definitions
+exist; each row shows its usage count and selects all placements returned by
+Core's shared-definition projection. MainView owns the transient selected-definition
+ID and renders shared shape controls once against its content nodes. A scene or
+viewport selection exits that mode. Individual shared-source rows expose placement
+controls and an explicit Shared Attributes action, not implicit shared shape edits.
+Shared mode shows the affected count and names and omits placement controls.
+This replaces the earlier read-only Component Definitions reference group contract.
+
+Mixed selections of shared placements and independent scene objects keep their
+placement controls. Only definition-internal geometry withdraws placement editing.

@@ -95,8 +95,8 @@ extension DesignDocument {
     /// definition where the instance shows it, beside the instance, and the instance is removed.
     /// The definition and its other instances are untouched. Returns the copied roots.
     ///
-    /// An instance shows each definition root at W(instance node) ∘ L(instance) ∘ L(root), whatever
-    /// the root's parent; the roots are therefore copied in the definition frame, each at L(root),
+    /// An instance shows each definition root at W(instance node) ∘ L(instance) ∘ D(root), whatever
+    /// the root's parent; the roots are therefore copied in the definition frame, each at D(root),
     /// and placed together by W(instance node) ∘ L(instance).
     @discardableResult
     public mutating func realizeComponentInstances(
@@ -121,7 +121,7 @@ extension DesignDocument {
             let placement = try hierarchy.worldTransform(of: id).composed(with: instance.localTransform)
             let fragment = try SceneFragmentExtractor().extract(
                 rootSceneNodeIDs: definition.rootSceneNodeIDs,
-                frame: .definition,
+                frame: .definition(definition),
                 metadata: updated.productMetadata,
                 cadDocument: updated.cadDocument,
                 authoredMeshAssets: updated.authoredMeshAssets
@@ -174,10 +174,23 @@ extension DesignDocument {
 
         var updated = self
         let definitionID: ComponentDefinitionID
-        if let existing = updated.productMetadata.componentDefinitions.values.first(where: {
-            Set($0.rootSceneNodeIDs) == Set(roots)
+        var definitionFrame = parentWorld
+        // A single moved source can reuse its definition by moving the new instance frame.
+        // Multiple roots with changed relative placements define a new assembly arrangement.
+        if let existing = updated.productMetadata.componentDefinitions.values.sorted(by: {
+            $0.id.description < $1.id.description
+        }).first(where: { definition in
+            Set(definition.rootSceneNodeIDs) == Set(roots) &&
+                (roots.count == 1 || roots.allSatisfy {
+                    definition.rootPlacements?[$0]?.transform == productMetadata.sceneNodes[$0]?.localTransform
+                })
         }) {
             definitionID = existing.id
+            if roots.count == 1 {
+                definitionFrame = try hierarchy.worldTransform(of: roots[0]).composed(
+                    with: try existing.rootPlacement(for: roots[0]).transform.inverse()
+                )
+            }
         } else {
             let base = "\(productMetadata.sceneNodes[roots[0]]?.name ?? "Object") Source"
             let taken = Set(updated.productMetadata.componentDefinitions.values.map(\.name))
@@ -203,7 +216,7 @@ extension DesignDocument {
             let instanceID = try updated.createComponentInstance(
                 name: "\(definitionName) \(ordinal)",
                 definitionID: definitionID,
-                localTransform: try inverseInstanceParent.composed(with: try placement.composed(with: parentWorld)),
+                localTransform: try inverseInstanceParent.composed(with: try placement.composed(with: definitionFrame)),
                 objectRegistry: objectRegistry
             )
             guard let nodeID = updated.productMetadata.sceneNodes.values.first(where: {

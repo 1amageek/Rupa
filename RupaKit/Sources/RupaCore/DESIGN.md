@@ -531,8 +531,10 @@ IDs and do not mutate `ProductMetadata` directly.
    cycle, invalid anchor, locked selected subtree or destination, empty root
    result, non-finite/non-affine/singular placement matrix, and any source
    authority that cannot preserve its invariants. Pattern roots and generated
-   Pattern output subtrees, saved construction-plane nodes, and component
-   definition source subtrees are source-owned and cannot be moved. A normal
+   Pattern output subtrees and saved construction-plane nodes are source-owned
+   and cannot be moved. Complete definition roots are individual placements and
+   may be reparented; moving their internal children or inserting into a definition
+   is refused to preserve shared content. A normal
    Product scene node that references a ComponentInstance is an occurrence
    placement and is not rejected solely for being an instance; generated
    Pattern occurrences remain source-owned through the Pattern resolver.
@@ -2488,3 +2490,12 @@ Verification: focused SketchP1 regression tests exercise changed source paramete
 explicit knots and multiple degrees, translated/rotated/scaled/reflected sketches,
 parent placements, off-plane refusal, closed boundaries and atomic failures. Final
 integration uses the rebuilt application's linked implementation.
+
+### Shared definition selection and root placement ownership
+
+[SceneCloning](SceneCloning/DESIGN.md#shared-definition-content-and-individual-placements)
+owns the shared-definition/individual-placement contract. ComponentDefinition
+persists its root-content placements; ProductMetadata upgrades legacy definitions
+on construction/decoding, and SceneNodeHierarchy composes the owned baseline when
+expanding instances. Scene placement commands edit individual nodes. All consumers
+of definition content (copy, realization and array identity) use that baseline.

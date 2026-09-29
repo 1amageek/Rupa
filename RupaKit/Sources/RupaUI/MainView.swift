@@ -104,6 +104,7 @@ private struct ProjectMainViewContent: View {
     private let onViewportUnmount: @MainActor (ViewportInstanceID) -> Void
     @State private var viewportControlSession: ViewportControlSession
     @State private var isViewportShadingPresented = false
+    @State private var selectedSharedDefinitionID: ComponentDefinitionID?
     @State private var modelingDraft: ModelingOperationDraft?
     @State private var solidShape: WorkspaceSolidShape = .box
     @State private var modelingPreview = ModelingPreviewState()
@@ -843,6 +844,7 @@ private struct ProjectMainViewContent: View {
     private func clearSelection(
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
+        selectedSharedDefinitionID = nil
         let task = enqueueWorkspaceOperation {
             let published = try await workspace.applySelection(.clear)
             completion(published)
@@ -864,6 +866,7 @@ private struct ProjectMainViewContent: View {
         ) throws -> Void,
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
+        selectedSharedDefinitionID = nil
         reportFailure(of: selectionSubmitter.queue(mutation, completion: completion))
     }
 
@@ -927,6 +930,7 @@ private struct ProjectMainViewContent: View {
             DesignDocument
         ) throws -> Void
     ) -> Bool {
+        selectedSharedDefinitionID = nil
         do {
             reportFailure(of: try selectionSubmitter.submit(update))
             return true
@@ -1440,11 +1444,10 @@ private struct ProjectMainViewContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         if !filteredComponentDefinitionIDs.isEmpty {
-                            DisclosureGroup("Component Definitions") {
-                                ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
-                                    componentDefinitionRow(id)
-                                        .padding(.leading, 8)
-                                }
+                            Text("Shared Definitions")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
+                                componentDefinitionRow(id)
                             }
                         }
                         if hasVisibleAssetRows {
@@ -2151,6 +2154,15 @@ private struct ProjectMainViewContent: View {
             }
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
+            if let id = selectedSharedDefinitionID {
+                do {
+                    let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
+                    if Set(shared.placementNodeIDs) != Set(ids) { selectedSharedDefinitionID = nil }
+                } catch {
+                    selectedSharedDefinitionID = nil
+                    reportToolStatus(error.localizedDescription, severity: .warning)
+                }
+            }
             if let transformSession, transformSession.topologyTargets.isEmpty, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
             }
@@ -4222,13 +4234,6 @@ private struct ProjectMainViewContent: View {
         }
         .fixedSize()
         .accessibilityIdentifier("WorkspaceTransform.pivot")
-        Toggle("Instances inversely", isOn: Binding(
-            get: { transform.compensatesInstances },
-            set: { transformSession?.compensatesInstances = $0 }
-        ))
-        .toggleStyle(.checkbox)
-        .font(.caption)
-        .accessibilityIdentifier("WorkspaceTransform.instancesInversely")
         Toggle("Snap", isOn: Binding(
             get: { transform.snapsToIncrements },
             set: { transformSession?.snapsToIncrements = $0 }
@@ -9056,20 +9061,66 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func componentDefinitionRow(_ id: ComponentDefinitionID) -> some View {
-        if let definition = snapshot.document.document.productMetadata.componentDefinitions[id] {
-            Label {
-                HStack {
-                    Text(definition.name)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 8)
-                    Text("\(definition.rootSceneNodeIDs.count) roots")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
+        case .success(let shared):
+            Button { selectSharedDefinition(id) } label: {
+                Label {
+                    HStack {
+                        Text(shared.name)
+                        Spacer(minLength: 8)
+                        Text("\(shared.placementNodeIDs.count) objects")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    WorkspaceSidebarSymbol(systemName: "square.stack.3d.down.right")
                 }
-            } icon: {
-                WorkspaceSidebarSymbol(systemName: "square.stack.3d.down.right")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(6)
+                .background(selectedSharedDefinitionID == id ? Color.accentColor.opacity(0.18) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .disabled(shared.placementNodeIDs.isEmpty)
+            .accessibilityIdentifier("SharedDefinition.select.\(id.description)")
+            .help("Select every object using this shared shape")
+        case .failure(let error):
+            Text(error.localizedDescription).font(.caption).foregroundStyle(.red)
+        }
+    }
+
+    private func selectSharedDefinition(_ id: ComponentDefinitionID) {
+        submitSelectionMutation({ selection, document in
+            let shared = try SharedDefinitionSelection(definitionID: id, metadata: document.productMetadata)
+            try selection.selectSceneNodes(shared.placementNodeIDs, in: document)
+        }, completion: { _ in selectedSharedDefinitionID = id })
+    }
+
+    @ViewBuilder
+    private var sharedDefinitionInspector: some View {
+        if let id = selectedSharedDefinitionID {
+            switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
+            case .success(let shared):
+                inspectorSection("Shared Attributes") {
+                    Text(shared.name).font(.headline)
+                    Text("Applies to \(shared.placementNodeIDs.count) objects")
+                    Text(shared.placementNodeIDs.compactMap { snapshot.document.document.productMetadata.sceneNodes[$0]?.name }.joined(separator: ", "))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text("Position, rotation, scale and visibility remain individual.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                objectShapeSection(shared.contentNodeIDs.compactMap { snapshot.document.document.productMetadata.sceneNodes[$0] }, showsPlacement: false)
+            case .failure(let error):
+                Text(error.localizedDescription).foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func sharedDefinitions(for nodes: [SceneNode]) throws -> [SharedDefinitionSelection] {
+        let ids = Set(nodes.map(\.id))
+        return try componentDefinitionIDs.compactMap { id in
+            let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
+            return ids.isDisjoint(with: shared.placementNodeIDs) && ids.isDisjoint(with: shared.contentNodeIDs) ? nil : shared
         }
     }
 
@@ -10354,7 +10405,7 @@ private struct ProjectMainViewContent: View {
             "\(transformSession.title): \(transformSession.constraintName), orientation "
                 + transformSession.orientation.rawValue
                 + ", pivot " + (transformSession.pickedPivot == nil ? transformSession.pivotMode.rawValue : "picked")
-                + (transformSession.compensatesInstances ? ", instances held in place." : ".")
+                + "."
         )
     }
 
@@ -10979,15 +11030,19 @@ private struct ProjectMainViewContent: View {
     private var inspectorContent: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: WorkspaceInspectorLayout.sectionSpacing) {
-                switch selectedSketchEntityResult {
-                case .success(let sketchEntity):
-                    if let sketchEntity {
-                        sketchEntityInspectorSections(sketchEntity)
-                    } else {
-                        nonSketchInspectorSections
+                if selectedSharedDefinitionID != nil {
+                    sharedDefinitionInspector
+                } else {
+                    switch selectedSketchEntityResult {
+                    case .success(let sketchEntity):
+                        if let sketchEntity {
+                            sketchEntityInspectorSections(sketchEntity)
+                        } else {
+                            nonSketchInspectorSections
+                        }
+                    case .failure(let error):
+                        sketchEntityInspectorErrorSections(error)
                     }
-                case .failure(let error):
-                    sketchEntityInspectorErrorSections(error)
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
@@ -11110,6 +11165,40 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func objectInspectorSections(_ nodes: [SceneNode]) -> some View {
+        switch Result(catching: { try sharedDefinitions(for: nodes) }) {
+        case .success(let definitions) where !definitions.isEmpty:
+            let canEditPlacements = nodes.allSatisfy { node in
+                !definitions.contains { shared in
+                    shared.contentNodeIDs.contains(node.id) && !shared.placementNodeIDs.contains(node.id)
+                }
+            }
+            if canEditPlacements {
+                objectTransformInspectorSection(nodes)
+            }
+            inspectorSection("Shared Shape") {
+                Text(canEditPlacements
+                    ? "Placement changes affect only the selected objects."
+                    : "This geometry is inside a shared definition. Select its scene placement to move it.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(definitions, id: \.definitionID) { shared in
+                    Button { selectSharedDefinition(shared.definitionID) } label: {
+                        Label("Edit \(shared.name) · \(shared.placementNodeIDs.count) objects", systemImage: "square.stack.3d.down.right")
+                            .contentShape(Rectangle())
+                    }
+                }
+                if let realize = realizeInstancesAction {
+                    Button("Make Independent", action: realize).contentShape(Rectangle())
+                }
+            }
+        case .success:
+            independentObjectInspectorSections(nodes)
+        case .failure(let error):
+            Text(error.localizedDescription).foregroundStyle(.red)
+        }
+    }
+
+    @ViewBuilder
+    private func independentObjectInspectorSections(_ nodes: [SceneNode]) -> some View {
         let overviewState = workspaceObjectOverviewInspectorState(for: nodes)
         objectTransformInspectorSection(nodes)
         objectShapeSection(nodes)
@@ -12011,13 +12100,14 @@ private struct ProjectMainViewContent: View {
     }
 
     @ViewBuilder
-    private func objectShapeSection(_ nodes: [SceneNode]) -> some View {
+    private func objectShapeSection(_ nodes: [SceneNode], showsPlacement: Bool = true) -> some View {
         switch Result(catching: {
             try objectShapeBuilder(in: snapshot).shapes(for: nodes)
         }) {
         case .success(let shapes):
             WorkspaceObjectShapeInspectorView(
                 shapes: shapes,
+                showsPlacement: showsPlacement,
                 displayUnit: snapshot.workspaceState.displayUnit,
                 positionSliderMetersRange: transformPositionSliderMetersRange,
                 sizeSliderMetersRange: sizeSliderMetersRange,

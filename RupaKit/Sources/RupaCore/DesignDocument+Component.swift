@@ -79,13 +79,15 @@ extension DesignDocument {
                 message: "Component definition names must be unique."
             )
         }
+        var rootPlacements: [SceneNodeID: ComponentDefinition.RootPlacement] = [:]
         for rootSceneNodeID in rootSceneNodeIDs {
-            guard productMetadata.sceneNodes[rootSceneNodeID] != nil else {
+            guard let node = productMetadata.sceneNodes[rootSceneNodeID] else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Component definition root scene nodes must exist."
                 )
             }
+            rootPlacements[rootSceneNodeID] = .init(transform: node.localTransform, isVisible: node.isVisible)
             guard PatternArrayOwnershipResolver().sourceID(
                 containingOutputSceneNode: rootSceneNodeID,
                 in: productMetadata
@@ -99,10 +101,13 @@ extension DesignDocument {
 
         let definition = ComponentDefinition(
             name: trimmedName,
-            rootSceneNodeIDs: rootSceneNodeIDs
+            rootSceneNodeIDs: rootSceneNodeIDs,
+            rootPlacements: rootPlacements
         )
-        productMetadata.componentDefinitions[definition.id] = definition
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        var updatedMetadata = productMetadata
+        updatedMetadata.componentDefinitions[definition.id] = definition
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
         return definition.id
     }
 

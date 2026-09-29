@@ -1621,3 +1621,8 @@ WorkspaceCurveRefinementPlanner consumes Core's spline subdivision index plan.
 It offers open and closed source splines, keeps surface selection when no curve
 CVs are produced, and reports an invalid plan through the command action. It
 never derives control-point identities using a fixed degree.
+
+Shared-definition selection is owned by the
+[Outliner contract](Outliner/DESIGN.md#shared-definition-selection). MainView
+keeps the selected definition separate from the placement selection; shared
+shape editing never routes through the multi-placement transform inspector.
