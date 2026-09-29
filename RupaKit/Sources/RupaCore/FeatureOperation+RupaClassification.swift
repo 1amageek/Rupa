@@ -223,13 +223,11 @@ extension FeatureOperation {
             return Set(feature.targets.map(\.featureID))
         case .unjoinBody(let feature):
             return [feature.target.featureID]
-        // A component extraction publishes one piece of a body whose pieces are all extracted,
-        // so the source leaves the measurable set; extracted faces copy a body that stays.
-        case .extract(let feature):
-            switch feature.selection {
-            case .component: return [feature.target.featureID]
-            case .faces, .solidFaces: return []
-            }
+        // An extraction copies part of a body that stays: one extraction never replaces its
+        // source. A source every component of which is extracted is replaced by its pieces, which
+        // only the document's extractions together tell (`MeasurementService`).
+        case .extract:
+            return []
         // Mirror rebuilds the identity and reflected instances as one
         // replacement body, so the source body is no longer independently
         // measurable after evaluation.

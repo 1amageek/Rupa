@@ -121,8 +121,10 @@ feature consumed would fail it (`BooleanProjectEvaluationTests`). A slice, and a
 publishes each piece as an object of its own: the Boolean's multi-component result has no
 object, and one Swift-CAD `extract` feature per component (`.component(index:
 count:)`, the count read from the evaluated result) carries each piece's object
-beside the target. A component extraction supersedes its source in measurement;
-a face extraction does not. `PlacedBooleanTests` own placement and
+beside the target. Extraction copies, so a source is measured unless every one
+of its components is extracted, which only the document's extractions together
+tell (`MeasurementService`): then its pieces are measured instead; a single
+component or a face extraction leaves its source measured. `PlacedBooleanTests` own placement and
 `SheetBooleanCommandTests` sheet operands, materials, slice and region pieces.
 
 Alternative Duplicate on faces (`duplicateBodyFaces(name:targets:)`) copies the

@@ -101,6 +101,30 @@ import Testing
         try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
     }
 
+    /// Extraction copies: one extracted component of a two-piece slice leaves the slice measured,
+    /// the piece measured beside it.
+    @MainActor
+    @Test func aSingleExtractedComponentLeavesItsSourceMeasured() throws {
+        let (session, box, sheet) = try operands()
+        var document = session.document
+        let slice = try document.appendBooleanFeature(
+            name: "Slice", targets: [box], tools: [sheet], operation: .slice, keepTools: false,
+            targetMaterial: .default, toolMaterial: .default
+        )
+        let piece = FeatureID()
+        try document.appendFeature(FeatureNode(
+            id: piece, name: "Piece",
+            operation: .extract(ExtractFeature(
+                target: PatternTargetReference(featureID: slice.featureID),
+                selection: .component(index: 0, count: 2)
+            )),
+            inputs: [FeatureInput(featureID: slice.featureID, role: .target)],
+            outputs: [FeatureOutput(role: .body)]
+        ))
+        let extra = try volume(document) - cube
+        #expect(abs(extra - 0.25 * cube) < 1e-9 || abs(extra - 0.75 * cube) < 1e-9, "measured \(extra / cube) cubes beyond the slice")
+    }
+
     /// A region shows each cell the operands enclose as its own object; the sheet's parts outside
     /// the box enclose nothing and go.
     @MainActor

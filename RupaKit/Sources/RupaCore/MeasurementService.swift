@@ -1510,12 +1510,21 @@ public struct MeasurementService {
 
     private func bodyFeatureIDsSupersededByDirectEdits(in document: CADDocument) -> Set<FeatureID> {
         var result: Set<FeatureID> = []
+        // The component indices extracted from each source, by the component count they read.
+        var extractedComponents: [FeatureID: [Int: Set<Int>]] = [:]
         for featureID in document.designGraph.order {
             guard let node = document.designGraph.nodes[featureID],
                   !node.isSuppressed else {
                 continue
             }
             result.formUnion(node.operation.supersededBodyFeatureIDs)
+            if case let .extract(extract) = node.operation, case let .component(index, count) = extract.selection {
+                extractedComponents[extract.target.featureID, default: [:]][count, default: []].insert(index)
+            }
+        }
+        // A source whose every component is extracted is measured as its pieces.
+        for (source, byCount) in extractedComponents where byCount.contains(where: { $0.value.count == $0.key }) {
+            result.insert(source)
         }
         return result
     }
