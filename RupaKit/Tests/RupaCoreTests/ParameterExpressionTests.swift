@@ -3,6 +3,16 @@ import SwiftCAD
 import Testing
 @testable import RupaCore
 
+@Test func parameterExpressionFormatterPreservesFiniteValuesOutsideIntegerRange() throws {
+    let parameters = ParameterTable()
+    for value in [Double(Int.max), -1e20, 1e20, 0.125, 0, Double(Int.min)] {
+        let expression = CADExpression.constant(.length(value, unit: .meter))
+        let text = ParameterExpressionFormatter().format(expression, parameters: parameters)
+        let restored = try ParameterExpressionParser().parse(text, parameters: parameters, targetKind: .length)
+        #expect(try parameters.resolvedValue(for: restored).value == value)
+    }
+}
+
 @Test func parameterExpressionParserResolvesReferencesAndMixedUnits() throws {
     var document = DesignDocument.empty(named: "Parameters")
     try document.upsertParameter(

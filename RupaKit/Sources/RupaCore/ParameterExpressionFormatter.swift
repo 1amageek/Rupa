@@ -77,8 +77,8 @@ public struct ParameterExpressionFormatter {
     }
 
     private func formatNumber(_ value: Double) -> String {
-        if value.rounded() == value {
-            return String(Int(value))
+        if let integer = Int(exactly: value) {
+            return String(integer)
         }
         return String(value)
     }
