@@ -400,5 +400,5 @@
   - [ ] PF4 The overlay producer indexes scene items and topology once per snapshot instead of scanning them per target. `depends:PF3` `parallel:none`
   - [ ] PF5 Integration: whole package suite, app rebuild and restart. `depends:PF1,PF2,PF3,PF4` `parallel:none`
 
-- [x] UIE1 Preserve native replacement display continuity and measure edge treatments along their displayed normal; focused native camera/gesture and source-unit checks passed. `depends:none` `parallel:none`
-- [ ] UIE2 Build and restart the signed application, reopen the preserved document and verify native edge/surface editing and display continuity; report exact evidence and remaining limits. `depends:UIE1` `parallel:none`
+- [x] UIE1 Preserve native replacement display continuity and measure edge treatments along their displayed normal; focused native camera/gesture and source-unit checks passed (`fa22787f`). `depends:none` `parallel:none`
+- [x] UIE2 Signed app rebuilt and restarted with matching binary hashes; document 5C035F85 reopened, face thickness drag/Undo and normal-axis Chamfer/Fillet drag/Undo verified, original geometry restored and saved. `depends:UIE1` `parallel:none`
