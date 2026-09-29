@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Metal
 import RealityKit
+import _RealityKit_SwiftUI
 import RupaCoreTypes
 import RupaCore
 import RupaViewportScene

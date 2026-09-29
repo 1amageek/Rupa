@@ -1,6 +1,7 @@
 import AppKit
 import Metal
 import RealityKit
+import _RealityKit_SwiftUI
 import RupaCore
 import RupaGeometry
 import RupaViewportScene

@@ -1,4 +1,5 @@
 import RealityKit
+import _RealityKit_SwiftUI
 import RupaCore
 import RupaViewportScene
 import SwiftCAD

@@ -255,7 +255,10 @@ struct RealityViewportSpatialBatch: Sendable {
             let sum = bytes.addingReportingOverflow(product.partialValue)
             guard !product.overflow, !sum.overflow else { throw Self.exhausted() }
             bytes = sum.partialValue
-            guard bytes <= limits.maxRetainedByteCount else { throw Self.exhausted() }
+            guard bytes <= limits.maxRetainedByteCount else {
+                throw MeshSourcePresentationRenderError(code: .resourceExhausted,
+                    message: "Spatial overlay requires \(bytes) bytes; limit is \(limits.maxRetainedByteCount).")
+            }
         }
         func positions(_ count: Int) throws {
             let sum = positionCount.addingReportingOverflow(count)
@@ -264,7 +267,10 @@ struct RealityViewportSpatialBatch: Sendable {
         }
         try charge(retainedSemanticByteCount, stride: 1)
         func item() throws {
-            guard itemCount < limits.maxItemCount else { throw Self.exhausted() }
+            guard itemCount < limits.maxItemCount else {
+                throw MeshSourcePresentationRenderError(code: .resourceExhausted,
+                    message: "Spatial overlay exceeds \(limits.maxItemCount) items (meshes: \(meshes.count), paths: \(paths.count), labels: \(labels.count), markers: \(markers.count), camera lines: \(cameraLines.count), camera paths: \(cameraPaths.count)).")
+            }
             itemCount += 1
         }
         func validateHandle(_ index: UInt32?) throws {
@@ -731,7 +737,10 @@ struct RealityViewportSpatialBatch: Sendable {
             (triangleCount, surfacePlan?.triangleCount ?? 0, limits.maxTriangleCount)
         ] {
             let sum = spatial.addingReportingOverflow(surface)
-            guard !sum.overflow, sum.partialValue <= maximum else { throw Self.exhausted() }
+            guard !sum.overflow, sum.partialValue <= maximum else {
+                throw MeshSourcePresentationRenderError(code: .resourceExhausted,
+                    message: "Spatial overlay and surface exceed admission: \(spatial) + \(surface), limit \(maximum).")
+            }
         }
         guard admittedByteCount <= (surfacePlan?.nativePreparationByteLimit ?? limits.maxRetainedByteCount) else {
             throw Self.exhausted()
