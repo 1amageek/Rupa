@@ -38,6 +38,10 @@ final class WorkspaceDocumentAnalysisCache {
     let surfaceSourceSummary = MemoizedResults<SurfaceSourceSummaryKey, SurfaceSourceSummaryResult>()
     /// The command's section and the selected construction plane's section can show together.
     let sectionAnalysis = MemoizedResults<SectionAnalysisKey, SectionAnalysisResult>(capacity: 2)
+    /// Every shared definition's selection, read by each sidebar row and the inspector.
+    let sharedDefinitions = MemoizedResults<
+        DocumentGeneration, [ComponentDefinitionID: Result<SharedDefinitionSelection, any Error>]
+    >()
 }
 
 /// The results made for the most recent distinct keys, failures included, so a failing input is

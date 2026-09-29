@@ -1387,7 +1387,11 @@ and which rows. `WorkspaceDocumentAnalysisCache` (one per document lifetime)
 keeps each for the inputs it was made from, failures included, through
 `MemoizedResults`; the inspector builders read it (`analysisCache`), so an
 analysis is made once per generation and option set instead of up to three
-times per render (`WorkspaceDocumentAnalysisCacheTests`).
+times per render (`WorkspaceDocumentAnalysisCacheTests`). Every shared
+definition's selection is kept there too: `SharedDefinitionSelection.all`
+builds them from one scene hierarchy and one occurrence pass per generation,
+where each sidebar row and the inspector had rebuilt both for every definition
+on every render.
 
 ### Failure surfacing
 

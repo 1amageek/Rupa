@@ -176,7 +176,11 @@ An individual root placement change must neither move nor hide another use.
 Shared shape changes continue to reach every occurrence through the same CAD
 feature. UI shared-definition selection includes the direct source roots and
 all scene placements whose definition closure uses the selected definition;
-this is a selection projection, not a source mutation. Editing shared shape
+this is a selection projection, not a source mutation. `SharedDefinitionSelection.all(in:)`
+projects every definition from one scene hierarchy and one pass over its
+occurrences, in the order the one-definition initializer gives, and returns a
+per-definition result so a definition whose content cannot be walked fails
+alone. Editing shared shape
 uses the definition's geometry nodes once, independently of placement count.
 
 Verification: inspect root-state persistence, occurrence expansion, realization

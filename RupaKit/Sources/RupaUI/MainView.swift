@@ -2240,7 +2240,7 @@ private struct ProjectMainViewContent: View {
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
             if let id = selectedSharedDefinitionID {
                 do {
-                    let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
+                    let shared = try sharedDefinitionSelection(id).get()
                     if Set(shared.placementNodeIDs) != Set(ids) { selectedSharedDefinitionID = nil }
                 } catch {
                     selectedSharedDefinitionID = nil
@@ -9160,7 +9160,7 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func componentDefinitionRow(_ id: ComponentDefinitionID) -> some View {
-        switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
+        switch sharedDefinitionSelection(id) {
         case .success(let shared):
             Button { selectSharedDefinition(id) } label: {
                 Label {
@@ -9198,7 +9198,7 @@ private struct ProjectMainViewContent: View {
     @ViewBuilder
     private var sharedDefinitionInspector: some View {
         if let id = selectedSharedDefinitionID {
-            switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
+            switch sharedDefinitionSelection(id) {
             case .success(let shared):
                 inspectorSection("Shared Attributes") {
                     Text(shared.name).font(.headline)
@@ -9215,10 +9215,27 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// A shared definition's selection in the published document. Every definition's is made in
+    /// one pass per document generation and read by each sidebar row and the inspector, where each
+    /// read had rebuilt the scene hierarchy and its occurrences.
+    private func sharedDefinitionSelection(_ id: ComponentDefinitionID) -> Result<SharedDefinitionSelection, any Error> {
+        do {
+            let all = try documentAnalysisCache.sharedDefinitions.value(for: snapshot.documentGeneration) {
+                try SharedDefinitionSelection.all(in: snapshot.document.document.productMetadata)
+            }
+            guard let selection = all[id] else {
+                return .failure(EditorError(code: .referenceUnresolved, message: "The shared definition no longer exists."))
+            }
+            return selection
+        } catch {
+            return .failure(error)
+        }
+    }
+
     private func sharedDefinitions(for nodes: [SceneNode]) throws -> [SharedDefinitionSelection] {
         let ids = Set(nodes.map(\.id))
         return try componentDefinitionIDs.compactMap { id in
-            let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
+            let shared = try sharedDefinitionSelection(id).get()
             return ids.isDisjoint(with: shared.placementNodeIDs) && ids.isDisjoint(with: shared.contentNodeIDs) ? nil : shared
         }
     }

@@ -37,6 +37,35 @@ import Testing
             .totals.solidVolumeCubicMeters
     }
 
+    /// Every definition's selection made in one pass is the selection made for it alone, content
+    /// and placement order included, and a definition that cannot be walked fails alone.
+    @MainActor
+    @Test func allSharedSelectionsMatchEachMadeAlone() throws {
+        let (session, box, _) = try boxUnderMovedParent()
+        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [.identity], output: .componentInstance, boolean: nil))
+        let instanceNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .componentInstance
+        }).id
+        // A second definition whose root is the first definition's instance.
+        _ = try session.execute(.placeSceneNodes(ids: [instanceNode], placements: [.identity], output: .componentInstance, boolean: nil))
+        var metadata = session.document.productMetadata
+        #expect(metadata.componentDefinitions.count == 2)
+        let broken = ComponentDefinition(name: "Broken", rootSceneNodeIDs: [SceneNodeID()],
+            rootPlacements: [:])
+        metadata.componentDefinitions[broken.id] = broken
+
+        let all = try SharedDefinitionSelection.all(in: metadata)
+        #expect(all.count == 3)
+        for id in session.document.productMetadata.componentDefinitions.keys {
+            let alone = try SharedDefinitionSelection(definitionID: id, metadata: metadata)
+            let together = try #require(all[id]).get()
+            #expect(together.contentNodeIDs == alone.contentNodeIDs)
+            #expect(together.placementNodeIDs == alone.placementNodeIDs)
+            #expect(!together.placementNodeIDs.isEmpty)
+        }
+        #expect(throws: (any Error).self) { try #require(all[broken.id]).get() }
+    }
+
     @MainActor
     @Test func sharedShapeSelectionKeepsSourceAndInstancePlacementsIndependent() throws {
         let (session, box, _) = try boxUnderMovedParent()
