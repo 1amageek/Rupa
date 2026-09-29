@@ -4,6 +4,9 @@ import RupaCore
 /// D types the distance, C switches between Fillet and Chamfer, Return or right-click applies it
 /// and Escape ends it without a change.
 struct WorkspaceFilletSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     /// What the treatment takes: curve ends (Fillet Vertex, every corner once) or two curves
     /// (Fillet Curve, at the corner they share).
     enum Targets: Equatable {

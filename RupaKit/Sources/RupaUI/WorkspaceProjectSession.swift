@@ -6,6 +6,9 @@ import SwiftCAD
 /// direction, both ways when Bidirectional is on. OK, Return or right-click projects; Escape ends
 /// it without a change.
 struct WorkspaceProjectSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     enum Method: String, CaseIterable, Equatable {
         case normal
         case vector

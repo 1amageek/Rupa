@@ -10,6 +10,9 @@ import SwiftCAD
 /// instead of each curve's plane normal, E extends the curve cutters, Return or right-click cuts
 /// and Escape ends it.
 struct WorkspaceBodyCutSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     enum Role: Equatable {
         case targets
         case cutters

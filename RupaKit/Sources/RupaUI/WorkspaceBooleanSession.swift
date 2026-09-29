@@ -9,6 +9,9 @@ import SwiftCAD
 /// unions, W subtracts, Shift-E intersects, Shift-Q slices, T keeps the tools, G, R and S move,
 /// rotate and scale the tools, Return or right-click combines and Escape ends it.
 struct WorkspaceBooleanSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     enum Role: Equatable {
         case targets
         case tools

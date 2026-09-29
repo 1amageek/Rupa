@@ -5,6 +5,9 @@ import RupaCore
 /// ends), each end takes G0 to G3 and a tension, and OK, Return or right-click makes the bridge;
 /// Escape ends it without a change.
 struct WorkspaceBridgeEdgeSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     let first: SelectionTarget
     let second: SelectionTarget
     /// Side 1 and Side 2: the edge's end (true) or start (false).

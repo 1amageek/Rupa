@@ -6,6 +6,9 @@ import RupaRendering
 /// (where the curves or bodies lie), the next the target face, and a later click replaces the
 /// target. OK, Return or right-click deforms once both are picked; Escape ends it without a change.
 struct WorkspaceDeformSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     enum Subject: Equatable {
         case curves([SelectionTarget])
         case bodies([SceneNodeID])

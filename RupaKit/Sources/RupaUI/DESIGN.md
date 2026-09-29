@@ -319,6 +319,28 @@ each scope reaches exactly its rows, every picking command stands every row
 down except its own value handle and a running Move's gizmo, and a creation
 tool reaches none.
 
+### Dialog command lifetime
+
+The dialog commands whose OK submits one edit and ends the dialog (Fillet, Cut
+Curve, Boolean, Cut, Deform, Bridge Edge, Project, Rebuild) submit through one
+path, `submitDialogCommand`, owned by `WorkspaceDialogSubmissions`:
+
+```text
+start ──> editing ──OK──> submitting ──edit applied, same dialog──> ended
+             ▲                │  OK again: refused ("still applying")
+             └──── refused ───┘  (Core refused or nothing changed: another try)
+```
+
+Each session carries a `WorkspaceDialogInstance`, minted when the dialog starts
+and kept by every edited copy. While an instance is submitting its OK is
+refused, so one press makes one edit (Deform with Keep Tools kept its dialog,
+and a second OK before the first edit completed made a second edit). A
+completion ends the dialog only when the dialog running for the command is the
+instance that submitted: a dialog cancelled and started again while the first
+edit applied is left alone. An edit that committed while its view failed
+(`WorkspaceCommittedOperationError`) exists, so it ends the dialog like an
+applied one (`WorkspaceDialogSubmissionsTests`).
+
 ### The canvas header
 
 One home per concern. The selection scope, the snaps, the working plane, the

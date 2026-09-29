@@ -11,6 +11,9 @@ import SwiftCAD
 /// view the last click was made from) and Escape ends it. A face clicked while cutters are picked
 /// is a cutter too.
 struct WorkspaceCutCurveSession: Equatable {
+    /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
+    let instance = WorkspaceDialogInstance()
+
     enum Role: Equatable {
         case targets
         case cutters

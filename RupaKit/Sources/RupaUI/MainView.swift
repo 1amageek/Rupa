@@ -159,6 +159,9 @@ private struct ProjectMainViewContent: View {
     @State private var selectionMassMeasurement = SelectionMassMeasurement()
     /// Rebuilds the view after an edit that committed but whose view failed, or stops editing.
     @State private var committedOperationRecovery: WorkspaceCommittedOperationRecovery
+    /// Which dialog commands are submitting, so one OK makes one edit and a completion ends only
+    /// the dialog that submitted it.
+    @State private var dialogSubmissions = WorkspaceDialogSubmissions()
     @State private var measurementSeed: ViewportMeasurementSeed?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
@@ -1083,6 +1086,48 @@ private struct ProjectMainViewContent: View {
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
             }
+        }
+    }
+
+    /// Submits a dialog command's edit (`WorkspaceDialogSubmissions`): refused while the same
+    /// dialog's earlier edit is still applying; the dialog ends (`end`) only when the edit exists
+    /// and the dialog that submitted it (`instance`) is still the running one; a refused edit
+    /// leaves the dialog for another try.
+    private func submitDialogCommand(
+        _ commands: [EditorCommand],
+        name: String,
+        instance: WorkspaceDialogInstance,
+        running: @escaping @MainActor () -> WorkspaceDialogInstance?,
+        end: @escaping @MainActor () -> Void,
+        done: @escaping @MainActor () -> Void
+    ) {
+        guard dialogSubmissions.begin(instance) else {
+            reportToolStatus("\(name) is still applying the previous OK.", severity: .warning)
+            return
+        }
+        let submissions = dialogSubmissions
+        let task = enqueueWorkspaceOperation {
+            try await executeSource(name: name, commands: { _ in commands })
+        }
+        Task { @MainActor in
+            let outcome: WorkspaceDialogSubmissions.Outcome
+            do {
+                let results = try await task.value
+                outcome = results.last?.didMutate == true ? .applied : .refused
+            } catch let error as WorkspaceCommittedOperationError {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                if case .workspaceUnavailable = error {
+                    outcome = .refused
+                } else {
+                    outcome = .appliedWithViewFailure
+                }
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+                outcome = .refused
+            }
+            guard submissions.finish(instance, outcome: outcome, running: running()) else { return }
+            end()
+            if outcome == .applied { done() }
         }
     }
 
@@ -8637,11 +8682,9 @@ private struct ProjectMainViewContent: View {
                 target: target, adjacentTarget: adjacent, distance: distance, treatment: fillet.treatment
             )
         }
-        submitSource(command) { result in
-            guard result?.didMutate == true else { return }
-            filletSession = nil
-            reportToolStatus("\(fillet.title) done.")
-        }
+        submitDialogCommand([command], name: fillet.title, instance: fillet.instance,
+                            running: { filletSession?.instance }, end: { filletSession = nil },
+                            done: { reportToolStatus("\(fillet.title) done.") })
     }
 
     /// Fillet's radius handle while its dialog runs, at the corner Core resolves for the first
@@ -8770,17 +8813,12 @@ private struct ProjectMainViewContent: View {
             return
         }
         cutCurveExtendsCutter = cut.extendsCutter
-        submitSource(
-            .cutSketchCurves(
-                targets: cut.targets,
-                cutters: cut.cutters,
-                options: cut.options
-            )
-        ) { result in
-            guard result?.didMutate == true else { return }
-            cutCurveSession = nil
-            reportToolStatus("Cut Curve done.")
-        }
+        submitDialogCommand(
+            [.cutSketchCurves(targets: cut.targets, cutters: cut.cutters, options: cut.options)],
+            name: "Cut Curve", instance: cut.instance,
+            running: { cutCurveSession?.instance }, end: { cutCurveSession = nil },
+            done: { reportToolStatus("Cut Curve done.") }
+        )
     }
 
     /// Boolean or Cut from the palette or the Model menu, as Q or C starts it.
@@ -8881,11 +8919,9 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(error.localizedDescription, severity: .warning)
             return
         }
-        submitSource(command) { result in
-            guard result?.didMutate == true else { return }
-            booleanSession = nil
-            reportToolStatus("Boolean \(boolean.title) done.")
-        }
+        submitDialogCommand([command], name: "Boolean", instance: boolean.instance,
+                            running: { booleanSession?.instance }, end: { booleanSession = nil },
+                            done: { reportToolStatus("Boolean \(boolean.title) done.") })
     }
 
     /// Cut (C with bodies selected): the selected bodies are cut by the selected curve objects and
@@ -8963,11 +8999,9 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(error.localizedDescription, severity: .warning)
             return
         }
-        submitSource(command) { result in
-            guard result?.didMutate == true else { return }
-            bodyCutSession = nil
-            reportToolStatus("Cut done.")
-        }
+        submitDialogCommand([command], name: "Cut", instance: cut.instance,
+                            running: { bodyCutSession?.instance }, end: { bodyCutSession = nil },
+                            done: { reportToolStatus("Cut done.") })
     }
 
     /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
@@ -9619,22 +9653,18 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(deform.prompt, severity: .warning)
             return
         }
-        submitSource(command) { result in
-            guard result?.didMutate == true else { return }
-            deformSession = nil
-            reportToolStatus("Deform: \(deform.subjectDescription) deformed.")
-        }
+        submitDialogCommand([command], name: "Deform", instance: deform.instance,
+                            running: { deformSession?.instance }, end: { deformSession = nil },
+                            done: { reportToolStatus("Deform: \(deform.subjectDescription) deformed.") })
     }
 
     /// Makes the dialog's edge bridge as one step; the dialog stays for another try when Core
     /// refuses.
     private func confirmBridgeEdge() {
         guard let bridge = bridgeEdgeSession else { return }
-        submitSource(bridge.command) { result in
-            guard result?.didMutate == true else { return }
-            bridgeEdgeSession = nil
-            reportToolStatus("Bridge Edge done.")
-        }
+        submitDialogCommand([bridge.command], name: "Bridge Edge", instance: bridge.instance,
+                            running: { bridgeEdgeSession?.instance }, end: { bridgeEdgeSession = nil },
+                            done: { reportToolStatus("Bridge Edge done.") })
     }
 
     /// Bridge Edge's dialog: Side 1 and 2, each end's continuity and tension, and OK.
@@ -9683,11 +9713,10 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Project: the construction plane has no normal: \(error.localizedDescription)", severity: .warning)
             return
         }
-        submitSource(project.command(constructionPlaneNormal: normal)) { result in
-            guard result?.didMutate == true else { return }
-            projectSession = nil
-            reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.")
-        }
+        submitDialogCommand([project.command(constructionPlaneNormal: normal)], name: "Project",
+                            instance: project.instance,
+                            running: { projectSession?.instance }, end: { projectSession = nil },
+                            done: { reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.") })
     }
 
     /// Project Curve Body's dialog: Method, Vector's direction and Bidirectional, and OK.
@@ -9772,11 +9801,10 @@ private struct ProjectMainViewContent: View {
     /// when Core refuses.
     private func confirmRebuild() {
         guard let rebuild = rebuildSession else { return }
-        submitSource(rebuild.targets.map { .rebuildSketchCurve(target: $0, options: rebuild.options) }, name: "Rebuild") { results in
-            guard results.last?.didMutate == true else { return }
-            rebuildSession = nil
-            reportToolStatus("Rebuild: \(rebuild.targets.count) curve\(rebuild.targets.count == 1 ? "" : "s") rebuilt.")
-        }
+        submitDialogCommand(rebuild.targets.map { .rebuildSketchCurve(target: $0, options: rebuild.options) },
+                            name: "Rebuild", instance: rebuild.instance,
+                            running: { rebuildSession?.instance }, end: { rebuildSession = nil },
+                            done: { reportToolStatus("Rebuild: \(rebuild.targets.count) curve\(rebuild.targets.count == 1 ? "" : "s") rebuilt.") })
     }
 
     /// A double-click on a vertex a spline passes through converts it (Convert Vertex); a
