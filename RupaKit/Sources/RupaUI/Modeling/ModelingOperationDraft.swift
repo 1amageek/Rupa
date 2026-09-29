@@ -11,7 +11,6 @@ struct ModelingOperationDraft: Equatable {
         case revolve = "Revolve"
         case sweep = "Sweep"
         case loft = "Loft"
-        case boolean = "Boolean"
         case fillet = "Fillet"
         case chamfer = "Chamfer"
         case g2Blend = "G2 Blend"
@@ -43,7 +42,6 @@ struct ModelingOperationDraft: Equatable {
             case .revolve: "arrow.trianglehead.2.clockwise.rotate.90"
             case .sweep: "arrow.triangle.2.circlepath"
             case .loft: "square.stack.3d.up"
-            case .boolean: "square.on.square"
             case .fillet: "square.on.circle"
             case .chamfer: "cube.transparent"
             case .g2Blend: "point.topleft.down.to.point.bottomright.curvepath"
@@ -108,8 +106,6 @@ struct ModelingOperationDraft: Equatable {
         var id: Self { self }
     }
     var extrusionDirection = ExtrusionDirectionChoice.normal
-    var keepTools = false
-    var booleanOperation = BooleanOperation.difference
     var sheet = false
     var isSurfaceCreation = false
     var smooth = false
@@ -169,7 +165,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .boolean, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -329,12 +325,6 @@ struct ModelingOperationDraft: Equatable {
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"))
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
             return .createLoft(name: name, sections: sections, guides: guides, options: options)
-        case .boolean:
-            guard features.count >= 2, let tool = features.last,
-                  nodes.allSatisfy({ $0.reference?.kind == .body }) else {
-                throw invalid("Select target CAD bodies, then a separate tool body last.")
-            }
-            return .createBoolean(name: name, targets: features.dropLast().map { BooleanTargetReference(featureID: $0) }, tools: [BooleanToolReference(featureID: tool)], operation: booleanOperation, keepTools: keepTools)
         case .shell:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,
@@ -412,7 +402,6 @@ struct ModelingOperationDraft: Equatable {
         let name = document.productMetadata.sceneNodes[targets[index].sceneNodeID]?.name ?? "Missing source"
         let role: String
         switch kind {
-        case .boolean: role = index == targets.count - 1 ? "Tool" : "Target"
         case .loft:
             let isGuide = loftGuideNodeIDs.contains(targets[index].sceneNodeID)
             let ordinal = targets.prefix(index + 1).filter { loftGuideNodeIDs.contains($0.sceneNodeID) == isGuide }.count

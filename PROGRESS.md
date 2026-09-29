@@ -157,7 +157,7 @@
       - [x] SO1.4.2 Kernel ExtractFaces: chosen faces of a body copied as a sheet body. Kernel d3fb071 (one `extract` feature, `.faces`). `depends:SO1.4.1` `parallel:none`
       - [x] SO1.4.3 Rupa pieces: Boolean Slice and Cut publish one object per piece through ExtractBodyComponent, the multi-component source hidden. `depends:SO1.4.2` `parallel:none`
       - [x] SO1.4.4 Rupa Cut: face cutters and curve cutters extruded along the curve's plane normal or the view direction, Extend, sliced with the cutter as Inside. Kernel 32b33bb, 9287f50 (touching solids, tight cutters, slanted line planes); the dialog is SO1.5. `depends:SO1.4.3` `parallel:none`
-    - [ ] SO1.5 Boolean and Cut dialogs: target and tool pickers, Q/W/Shift-E/Shift-Q/T, tool G/R/S during the operation, palette entries. `depends:SO1.3,SO1.4` `parallel:none`
+    - [x] SO1.5 Boolean and Cut dialogs: target and tool pickers, Q/W/Shift-E/Shift-Q/T, tool G/R/S during the operation, materials, Cut C/S/E, palette and Model menu entries. `depends:SO1.3,SO1.4` `parallel:none`
   - [ ] SO2 Duplication and Instances: Alternative Duplicate, Create Instance, Create Solid and Sheet Instance, Realize Instances, Realize Solid and Sheet Instances. `depends:SO1` `parallel:none`
   - [ ] SO3 Deform and Slide: Deform, Deform Solid and Sheet, Slide, Slide Surface CV. `depends:SO2` `parallel:none`
   - [ ] SO4 Delete and Remove: Delete Face, Delete Redundant Topology, Remove Fillets from Shell, Remove Nominal Surface. `depends:SO3` `parallel:none`

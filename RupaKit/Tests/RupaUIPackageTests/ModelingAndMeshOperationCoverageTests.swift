@@ -48,7 +48,7 @@ struct ModelingAndMeshOperationCoverageTests {
         #expect(abs(sphereVolume - (4.0 * Double.pi * 0.006 * 0.006 * 0.006 / 3.0)) < 1.0e-12)
     }
 
-    @Test func booleanDraftReachesExistingCADCommandAndPreservesUnionVolume() throws {
+    @Test func booleanDialogReachesExistingCADCommandAndPreservesUnionVolume() throws {
         var booleanDocument = DesignDocument.empty()
         let targetFeature = try addBooleanBody(
             to: &booleanDocument,
@@ -72,17 +72,10 @@ struct ModelingAndMeshOperationCoverageTests {
         let toolNode = try #require(booleanDocument.productMetadata.sceneNodes.values.first {
             $0.reference == .body(toolFeature)
         })
-        var boolean = makeModelingDraft(
-            .boolean,
-            targets: [
-                SelectionTarget(sceneNodeID: targetNode.id),
-                SelectionTarget(sceneNodeID: toolNode.id),
-            ]
-        )
-        boolean.booleanOperation = .union
+        let boolean = WorkspaceBooleanSession(selectedBodies: [targetNode.id, toolNode.id], operation: .union)
         let booleanCommand = try boolean.command(in: booleanDocument)
         guard case .createBoolean(_, let targets, let tools, let operation, let keepTools, _, _) = booleanCommand else {
-            Issue.record("Boolean draft must use the existing Boolean command.")
+            Issue.record("The Boolean dialog must use the existing Boolean command.")
             return
         }
         #expect(targets.map(\.featureID) == [targetFeature])

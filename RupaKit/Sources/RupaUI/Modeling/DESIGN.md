@@ -261,8 +261,9 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   radius defaults and explicit input as planning. Box retains its rectangle and
   profile-extrusion routes. Selection never publishes source; click/release uses
   the existing snapshot-bound Workspace transaction.
-- Extrude, Revolve, Loft, Boolean, Fillet and Chamfer are exposed in the palette
-  through the existing draft entry point; Sweep retains its canvas route. One
+- Extrude, Revolve, Loft, Fillet and Chamfer are exposed in the palette
+  through the existing draft entry point (Boolean and Cut are viewport dialogs,
+  `WorkspaceBodyOperation`, not drafts); Sweep retains its canvas route. One
   button renderer owns metrics, colors, selection, accessibility and hover hints.
   Draft forms explain Preview-before-Apply and retain typed operand validation.
   Extrude and Revolve resolve whole-object sections through Core's shared section admission;
@@ -274,7 +275,7 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   Surface Creation as the operation family defined above. It retains the
   current ordered selection and the existing preview, Apply, typed validation
   and Cancel lifecycle. A Circle Sketch is a sketch result, not a surface.
-- Box, Cylinder, Sphere, Extrude, Revolve, Sweep, Loft, Boolean, Fillet and Chamfer use existing
+- Box, Cylinder, Sphere, Extrude, Revolve, Sweep, Loft, Fillet and Chamfer use existing
   Core commands. Source IDs are allocated by Core, never by this UI component.
 - Length text accepts explicit units and otherwise uses the displayed unit;
   angle fields use degrees. All numeric inputs must be finite; a zero revolve
@@ -305,7 +306,7 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   it never asks a spatial curve to fabricate a plane normal. UI and semantic API
   use the same native direction value and exact construction.
 - The form shows ordered operands and their roles. Loft section order can be
-  changed explicitly; Boolean's last operand is the tool. Selection replacement
+  changed explicitly. Selection replacement
   is explicit. Authored Mesh cannot masquerade as a CAD feature.
 - Feature-only operations other than native topology edits reject transformed occurrences, including transformed
   ancestors, instead of ignoring their world placement. Topology edits retain

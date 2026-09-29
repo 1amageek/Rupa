@@ -18,6 +18,8 @@ enum WorkspaceViewportContextPanelVisibility {
         case mirror
         case sectionAnalysis
         case cutCurve
+        case boolean
+        case bodyCut
         case fillet
         case rebuild
         case deform

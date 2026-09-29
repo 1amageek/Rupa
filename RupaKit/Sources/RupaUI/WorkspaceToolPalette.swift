@@ -9,6 +9,9 @@ struct WorkspaceToolPalette: View {
     var activate: (ModelingTool) -> Void
     var activateSolid: (WorkspaceSolidShape) -> Void
     var beginModelingOperation: (ModelingOperationDraft.Kind) -> Void
+    /// The running Boolean or Cut dialog, shown selected.
+    var activeBodyOperation: WorkspaceBodyOperation?
+    var beginBodyOperation: (WorkspaceBodyOperation) -> Void
     var accessibilityIdentifier: (ModelingTool) -> String
     @State private var isSolidPickerPresented = false
 
@@ -48,6 +51,15 @@ struct WorkspaceToolPalette: View {
                         isSelected: selectedOperation == kind,
                         identifier: "CanvasOperation.\(kind.rawValue)"
                     ) { beginModelingOperation(kind) }
+                }
+                ForEach(WorkspaceBodyOperation.allCases) { operation in
+                    paletteButton(
+                        title: operation.rawValue,
+                        hint: "\(operation.rawValue) (\(operation.shortcut))",
+                        symbol: operation.systemImage,
+                        isSelected: activeBodyOperation == operation,
+                        identifier: "CanvasOperation.\(operation.rawValue)"
+                    ) { beginBodyOperation(operation) }
                 }
             }
             .padding(WorkspaceToolPaletteMetrics.containerPadding)

@@ -50,7 +50,7 @@ func roundSolidsShareCanvasClickDragAndFailureContracts(shape: WorkspaceSolidSha
 
 @Test func paletteCoversExistingOperationsWithoutDuplicatingCanvasTools() {
     #expect(Set(ModelingOperationDraft.Kind.paletteOperations) == [
-        .extrude, .revolve, .loft, .boolean, .fillet, .chamfer, .g2Blend,
+        .extrude, .revolve, .loft, .fillet, .chamfer, .g2Blend,
         .surfaceOffset, .surfaceExtend, .shell, .thicken,
     ])
     // Surface-only creations open from the Surface tool, not from the palette.

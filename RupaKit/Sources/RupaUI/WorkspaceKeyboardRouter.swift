@@ -251,7 +251,7 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case projectCurvesOntoFace
     /// Escape ends Trim or Split Segment.
     case endCurvePickCommand
-    /// C with the select tool: Cut Curve on the selected sketch curves.
+    /// C with the select tool and no body selected: Cut Curve on the selected sketch curves.
     case beginCutCurve
     /// Tab with two alignable curve ends selected: Align Vertex's continuity G0 → G1 → G2 → G0.
     case cycleAlignContinuity
@@ -267,6 +267,30 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case confirmCutCurve
     /// Escape while Cut Curve runs: end it without cutting.
     case cancelCutCurve
+    /// Q with bodies selected: Boolean on them, the last one the tool.
+    case beginBoolean
+    /// Q, W, Shift-E or Shift-Q while Boolean runs: union, difference, intersect or slice.
+    case setBooleanOperation(BooleanOperation)
+    /// T while Boolean runs: Keep Tools on or off.
+    case toggleBooleanKeepTools
+    /// G, R or S while Boolean runs: move, rotate or scale its tools.
+    case transformBooleanTools(ViewportTransformGizmoConfiguration.Mode)
+    /// Return while Boolean runs: combine.
+    case confirmBoolean
+    /// Escape while Boolean runs: end it without combining.
+    case cancelBoolean
+    /// C with bodies selected: Cut them with the selected curves and faces.
+    case beginBodyCut
+    /// C while Cut runs: Cut Curve instead.
+    case switchBodyCutToCutCurve
+    /// S while Cut runs: curve cutters along the view, or along their planes' normals again.
+    case toggleBodyCutViewDirection
+    /// E while Cut runs: Extend on or off.
+    case toggleBodyCutExtend
+    /// Return while Cut runs: cut.
+    case confirmBodyCut
+    /// Escape while Cut runs: end it without cutting.
+    case cancelBodyCut
     case slideCurveControlVertices(SplineControlPointSlideDirection)
     case slideSurfaceControlVertices(PolySplineSurfaceVertexSlideDirection)
     case adjustPolygonSideCount(Int)
@@ -300,6 +324,12 @@ struct WorkspaceKeyboardContext: Sendable {
     var isCurvePickCommandActive: Bool = false
     /// Whether Cut Curve's dialog is picking targets and cutters.
     var isCutCurveSessionActive: Bool = false
+    /// Whether Boolean's dialog is picking targets and tools.
+    var isBooleanSessionActive: Bool = false
+    /// Whether Cut's dialog is picking bodies and cutters.
+    var isBodyCutSessionActive: Bool = false
+    /// Whether the selection holds whole body objects, which Q combines and C cuts.
+    var hasBodyObjectSelection: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletSessionActive: Bool = false
     /// Whether Rebuild Curve's dialog runs.
@@ -381,6 +411,12 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if context.isCutCurveSessionActive, let cutAction = cutCurveAction(for: input) {
             return cutAction
+        }
+        if context.isBooleanSessionActive, let booleanAction = booleanAction(for: input, context: context) {
+            return booleanAction
+        }
+        if context.isBodyCutSessionActive, let bodyCutAction = bodyCutAction(for: input) {
+            return bodyCutAction
         }
         if context.isFilletSessionActive, let filletAction = filletAction(for: input) {
             return filletAction
@@ -812,6 +848,47 @@ struct WorkspaceKeyboardRouter: Sendable {
         return nil
     }
 
+    /// The keys Boolean's dialog takes, which Plasticity's Boolean uses too. While its tools are
+    /// being moved, Escape and Return belong to the move.
+    private func booleanAction(
+        for input: WorkspaceKeyboardInput,
+        context: WorkspaceKeyboardContext
+    ) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), !context.ownsTextEditingKeys else { return nil }
+        if context.isTransformSessionActive, input.isReturn || input.isEscape { return nil }
+        let key = input.characters.lowercased()
+        if input.modifiers == [.shift] {
+            switch key {
+            case "e": return .setBooleanOperation(.intersect)
+            case "q": return .setBooleanOperation(.slice)
+            default: return nil
+            }
+        }
+        guard input.modifiers.isEmpty else { return nil }
+        if input.isReturn { return .confirmBoolean }
+        if input.isEscape { return .cancelBoolean }
+        if let mode = transformMode(for: key) { return .transformBooleanTools(mode) }
+        switch key {
+        case "q": return .setBooleanOperation(.union)
+        case "w": return .setBooleanOperation(.difference)
+        case "t": return .toggleBooleanKeepTools
+        default: return nil
+        }
+    }
+
+    /// The keys Cut's dialog takes, which Plasticity's Cut uses too.
+    private func bodyCutAction(for input: WorkspaceKeyboardInput) -> WorkspaceKeyboardAction? {
+        guard input.phases.contains(.down), input.modifiers.isEmpty else { return nil }
+        if input.isReturn { return .confirmBodyCut }
+        if input.isEscape { return .cancelBodyCut }
+        switch input.characters.lowercased() {
+        case "c": return .switchBodyCutToCutCurve
+        case "s": return .toggleBodyCutViewDirection
+        case "e": return .toggleBodyCutExtend
+        default: return nil
+        }
+    }
+
     private func trimAction(
         for input: WorkspaceKeyboardInput,
         context: WorkspaceKeyboardContext
@@ -846,7 +923,8 @@ struct WorkspaceKeyboardRouter: Sendable {
             if key == "d", !context.isSlotProfileCommandActive { return .focusBridgeTension }
         }
         switch key {
-        case "c": return .beginCutCurve
+        case "c": return context.hasBodyObjectSelection ? .beginBodyCut : .beginCutCurve
+        case "q": return context.hasBodyObjectSelection ? .beginBoolean : nil
         case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil

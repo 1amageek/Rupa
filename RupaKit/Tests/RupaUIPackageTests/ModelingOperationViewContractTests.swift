@@ -11,7 +11,6 @@ struct ModelingOperationViewContractTests {
         let document = DesignDocument.empty()
         let cases: [(ModelingOperationDraft.Kind, String?)] = [
             (ModelingOperationDraft.Kind.loft, "Select at least two ordered sections, separate from guides."),
-            (.boolean, "Select target CAD bodies, then a separate tool body last."),
             (.box, nil),
         ]
         for (kind, expected) in cases {

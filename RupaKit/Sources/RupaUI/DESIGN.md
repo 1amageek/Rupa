@@ -635,6 +635,28 @@ along the view direction of the session's latest click (a cut needs one), and a 
 clicked while cutters are picked joins the cutters; both go to Core in
 `CutCurveOptions` and the cutter list (`WorkspaceCutCurveSessionTests`).
 
+Boolean (Q, with bodies selected, or the palette and Model menu through
+`WorkspaceBodyOperation`) runs a `WorkspaceBooleanSession`: the selected bodies
+seed it (with several, the last selected is the tool and the others targets; with
+one, it is the target), the dialog's Targets/Tools choice says which list a
+clicked body joins or leaves (a body is never in both), Q, W, Shift-E and Shift-Q
+choose Union, Difference, Intersect and Slice (Region from the dialog), T toggles
+Keep Tools, the Material menu sets each side's `BooleanMaterial` (a Region takes
+none), and Return, right-click or the dialog's Combine submit one `createBoolean`
+whose operands combine where they are displayed; a refused Boolean keeps the
+dialog. G, R and S move, rotate or scale the tools with the ordinary transform,
+selecting the tools alone while they move (the pivot bounds the transform's own
+objects) and the dialog's bodies again after; the move owns X/Y/Z, Return and
+Escape while it runs. Cut (C, with bodies selected) runs a
+`WorkspaceBodyCutSession` instead of Cut Curve: selected bodies are its targets,
+selected curve objects (a sketch through any of its curves) and faces its
+cutters; clicks add to or remove from the list being picked, E toggles Extend, S
+cuts along the current view (`viewportProjectionBasis.viewNormal`; the cut
+reaches through the targets both ways) or back along each curve's plane normal,
+C switches to Cut Curve, and Return, right-click or Cut submit one `cut`. Escape,
+a tool change or another click-owning command ends either dialog
+(`WorkspaceBodyOperationSessionTests`, `WorkspaceKeyboardRouterTests`).
+
 Trim (T, with the select tool), Split Segment and Insert Knot (Edit menu) run a
 `WorkspaceCurvePickCommand` until Escape, a change of tool or the start of
 another command that takes clicks (Place, Move/Rotate/Scale, Mirror, an array,

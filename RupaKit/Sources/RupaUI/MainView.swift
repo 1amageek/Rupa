@@ -188,6 +188,9 @@ private struct ProjectMainViewContent: View {
     /// it, or splits the curve there.
     @State private var curvePickCommand: WorkspaceCurvePickCommand?
     @State private var cutCurveSession: WorkspaceCutCurveSession?
+    /// Boolean's and Cut's dialogs on bodies (Q and C).
+    @State private var booleanSession: WorkspaceBooleanSession?
+    @State private var bodyCutSession: WorkspaceBodyCutSession?
     @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var deformSession: WorkspaceDeformSession?
     @State private var projectSession: WorkspaceProjectSession?
@@ -476,6 +479,7 @@ private struct ProjectMainViewContent: View {
         curvePickCommand = nil
         cutCurveSession = nil
         filletSession = nil
+        endBodyOperationDialogs()
         modelingDraft = ModelingOperationDraft(
             kind: kind,
             selection: snapshot.selection,
@@ -1250,6 +1254,7 @@ private struct ProjectMainViewContent: View {
             curvePickCommand = nil
             cutCurveSession = nil
             filletSession = nil
+            endBodyOperationDialogs()
         }
         if !keepsSketchInputState(for: tool) {
             sketchInputState.clearTransientInput()
@@ -2139,6 +2144,12 @@ private struct ProjectMainViewContent: View {
         .onChange(of: snapshot.documentGeneration) { _, _ in
             refreshSelectionMass()
         }
+        // Boolean's tools are shown selected alone while they move, its bodies again after.
+        .onChange(of: transformSession == nil) { _, ended in
+            if ended, let booleanSession {
+                selectTargets(booleanSession.operands.map { SelectionTarget(sceneNodeID: $0) })
+            }
+        }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
             if let transformSession, transformSession.topologyTargets.isEmpty, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
@@ -2830,6 +2841,7 @@ private struct ProjectMainViewContent: View {
 
     private var hasActiveWorkspaceCommand: Bool {
         cutCurveSession != nil
+            || booleanSession != nil || bodyCutSession != nil
             || filletSession != nil
             || rebuildSession != nil
             || deformSession != nil
@@ -2846,6 +2858,14 @@ private struct ProjectMainViewContent: View {
     private func confirmActiveWorkspaceCommand() -> Bool {
         if cutCurveSession != nil {
             confirmCutCurve()
+            return true
+        }
+        if booleanSession != nil {
+            confirmBoolean()
+            return true
+        }
+        if bodyCutSession != nil {
+            confirmBodyCut()
             return true
         }
         if filletSession != nil {
@@ -3870,6 +3890,13 @@ private struct ProjectMainViewContent: View {
                 Button("Make Selected CAD Editable as Mesh…") { showsMakeEditableConfirmation = true }
                     .contentShape(Rectangle())
                     .disabled(snapshot.selection.selectedTargets.count != 1 || !selectedPresentationHasExactCADAffordanceContext)
+                // Boolean and Cut run as viewport dialogs.
+                Divider()
+                ForEach(WorkspaceBodyOperation.allCases) { operation in
+                    Button("\(operation.rawValue) (\(operation.shortcut))") { beginBodyOperation(operation) }
+                        .contentShape(Rectangle())
+                        .accessibilityIdentifier("Modeling.begin.\(operation.rawValue)")
+                }
             } label: {
                 Label("Model", systemImage: "cube")
                     .contentShape(Rectangle())
@@ -4001,6 +4028,8 @@ private struct ProjectMainViewContent: View {
             activate: { activateTool($0) },
             activateSolid: activateSolidShape,
             beginModelingOperation: beginModelingOperation,
+            activeBodyOperation: booleanSession != nil ? .boolean : bodyCutSession != nil ? .cut : nil,
+            beginBodyOperation: beginBodyOperation,
             accessibilityIdentifier: { canvasToolIdentifier(for: $0) }
         )
     }
@@ -4019,6 +4048,8 @@ private struct ProjectMainViewContent: View {
         var inputs: Set<WorkspaceViewportContextPanelVisibility.CommandInput> = []
         if viewAlignedConstructionPlaneRequest != nil { inputs.insert(.viewAlignedConstructionPlane) }
         if cutCurveSession != nil { inputs.insert(.cutCurve) }
+        if booleanSession != nil { inputs.insert(.boolean) }
+        if bodyCutSession != nil { inputs.insert(.bodyCut) }
         if filletSession != nil { inputs.insert(.fillet) }
         if rebuildSession != nil { inputs.insert(.rebuild) }
         if deformSession != nil { inputs.insert(.deform) }
@@ -4115,6 +4146,14 @@ private struct ProjectMainViewContent: View {
             if let cutCurveSession {
                 workspaceContextDivider
                 cutCurveContextPanelContent(cutCurveSession)
+            }
+            if let booleanSession {
+                workspaceContextDivider
+                booleanContextPanelContent(booleanSession)
+            }
+            if let bodyCutSession {
+                workspaceContextDivider
+                bodyCutContextPanelContent(bodyCutSession)
             }
             if let filletSession {
                 workspaceContextDivider
@@ -4985,6 +5024,103 @@ private struct ProjectMainViewContent: View {
         .disabled(!cut.canCut)
     }
 
+    /// Boolean's dialog: which list clicks pick, the operation (Q, W, Shift-E, Shift-Q), Keep Tools
+    /// (T), each side's material and Combine.
+    @ViewBuilder
+    private func booleanContextPanelContent(_ boolean: WorkspaceBooleanSession) -> some View {
+        workspaceStatusChip("Boolean", systemImage: "square.on.square", tint: .accentColor)
+        Picker("Pick", selection: Binding(
+            get: { boolean.picking },
+            set: { booleanSession?.picking = $0; if let prompt = booleanSession?.prompt { reportToolStatus(prompt) } }
+        )) {
+            Text("Targets \(boolean.targets.count)").tag(WorkspaceBooleanSession.Role.targets)
+            Text("Tools \(boolean.tools.count)").tag(WorkspaceBooleanSession.Role.tools)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceBoolean.picking")
+        Picker("Operation", selection: Binding(
+            get: { boolean.operation },
+            set: { booleanSession?.setOperation($0) }
+        )) {
+            Text("Union (Q)").tag(BooleanOperation.union)
+            Text("Difference (W)").tag(BooleanOperation.difference)
+            Text("Intersect (⇧E)").tag(BooleanOperation.intersect)
+            Text("Slice (⇧Q)").tag(BooleanOperation.slice)
+            Text("Region").tag(BooleanOperation.region)
+        }
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceBoolean.operation")
+        Toggle("Keep Tools (T)", isOn: Binding(
+            get: { boolean.keepTools },
+            set: { booleanSession?.keepTools = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceBoolean.keepTools")
+        Menu("Material") {
+            Picker("Target", selection: Binding(
+                get: { boolean.targetMaterial },
+                set: { booleanSession?.targetMaterial = $0 }
+            )) {
+                ForEach(WorkspaceBooleanSession.materials, id: \.self) { Text(WorkspaceBooleanSession.title(of: $0)).tag($0) }
+            }
+            Picker("Tool", selection: Binding(
+                get: { boolean.toolMaterial },
+                set: { booleanSession?.toolMaterial = $0 }
+            )) {
+                ForEach(WorkspaceBooleanSession.materials, id: \.self) { Text(WorkspaceBooleanSession.title(of: $0)).tag($0) }
+            }
+        }
+        .fixedSize()
+        .disabled(!boolean.takesMaterials)
+        .accessibilityIdentifier("WorkspaceBoolean.material")
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Combine",
+            accessibilityIdentifier: "WorkspaceBoolean.apply",
+            action: { confirmBoolean() }
+        )
+        .disabled(!boolean.canApply)
+    }
+
+    /// Cut's dialog: which list clicks pick, Extend (E), along the view (S) and Cut.
+    @ViewBuilder
+    private func bodyCutContextPanelContent(_ cut: WorkspaceBodyCutSession) -> some View {
+        workspaceStatusChip("Cut", systemImage: "scissors", tint: .accentColor)
+        Picker("Pick", selection: Binding(
+            get: { cut.picking },
+            set: { bodyCutSession?.picking = $0; if let prompt = bodyCutSession?.prompt { reportToolStatus(prompt) } }
+        )) {
+            Text("Targets \(cut.targets.count)").tag(WorkspaceBodyCutSession.Role.targets)
+            Text("Cutters \(cut.cutters.count)").tag(WorkspaceBodyCutSession.Role.cutters)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceBodyCut.picking")
+        Toggle("Extend (E)", isOn: Binding(
+            get: { cut.extendsCurves },
+            set: { bodyCutSession?.extendsCurves = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceBodyCut.extend")
+        Toggle("View (S)", isOn: Binding(
+            get: { cut.viewDirection != nil },
+            set: { if $0 != (bodyCutSession?.viewDirection != nil) { toggleBodyCutViewDirection() } }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceBodyCut.view")
+        workspaceIconButton(
+            systemImage: "scissors",
+            help: "Cut",
+            accessibilityIdentifier: "WorkspaceBodyCut.cut",
+            action: { confirmBodyCut() }
+        )
+        .disabled(!cut.canCut)
+    }
+
     /// Offset Vertex's dialog on the selected curve end: its distance, which D focuses, and Create.
     @ViewBuilder
     private func vertexOffsetContextPanelContent(_ entity: InspectorSketchEntity) -> some View {
@@ -5645,6 +5781,14 @@ private struct ProjectMainViewContent: View {
             pickCutCurve(at: target)
             return
         }
+        if booleanSession != nil, selectedTool == .select {
+            pickBooleanBody(at: target)
+            return
+        }
+        if bodyCutSession != nil, selectedTool == .select {
+            pickBodyCutOperand(at: target)
+            return
+        }
         if deformSession != nil, selectedTool == .select {
             pickDeformFace(at: target)
             return
@@ -5889,6 +6033,9 @@ private struct ProjectMainViewContent: View {
             isSectionAnalysisSessionActive: sectionAnalysisSession != nil,
             isCurvePickCommandActive: curvePickCommand != nil,
             isCutCurveSessionActive: cutCurveSession != nil,
+            isBooleanSessionActive: booleanSession != nil,
+            isBodyCutSessionActive: bodyCutSession != nil,
+            hasBodyObjectSelection: !selectedBodyObjectIDs.isEmpty,
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
@@ -6365,6 +6512,48 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .beginCutCurve:
             beginCutCurve()
+            return .handled
+        case .beginBoolean:
+            beginBoolean()
+            return .handled
+        case .setBooleanOperation(let operation):
+            booleanSession?.setOperation(operation)
+            if let prompt = booleanSession?.prompt { reportToolStatus(prompt) }
+            return .handled
+        case .toggleBooleanKeepTools:
+            booleanSession?.keepTools.toggle()
+            reportToolStatus("Boolean: Keep Tools \(booleanSession?.keepTools == true ? "on" : "off").")
+            return .handled
+        case .transformBooleanTools(let mode):
+            transformBooleanTools(mode)
+            return .handled
+        case .confirmBoolean:
+            confirmBoolean()
+            return .handled
+        case .cancelBoolean:
+            booleanSession = nil
+            reportToolStatus("Boolean ended.")
+            return .handled
+        case .beginBodyCut:
+            beginBodyCut()
+            return .handled
+        case .switchBodyCutToCutCurve:
+            bodyCutSession = nil
+            beginCutCurve()
+            return .handled
+        case .toggleBodyCutViewDirection:
+            toggleBodyCutViewDirection()
+            return .handled
+        case .toggleBodyCutExtend:
+            bodyCutSession?.extendsCurves.toggle()
+            reportToolStatus("Cut: Extend \(bodyCutSession?.extendsCurves == true ? "on" : "off").")
+            return .handled
+        case .confirmBodyCut:
+            confirmBodyCut()
+            return .handled
+        case .cancelBodyCut:
+            bodyCutSession = nil
+            reportToolStatus("Cut ended.")
             return .handled
         case .cycleAlignContinuity:
             sketchVertexAlignmentContinuity = sketchVertexAlignmentContinuity.next
@@ -8488,6 +8677,7 @@ private struct ProjectMainViewContent: View {
         arraySession = nil
         curvePickCommand = nil
         filletSession = nil
+        endBodyOperationDialogs()
         let cut = WorkspaceCutCurveSession(selectedCurves: curves, extendsCutter: cutCurveExtendsCutter)
         cutCurveSession = cut
         selectTargets(cut.curves)
@@ -8553,6 +8743,184 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// Boolean or Cut from the palette or the Model menu, as Q or C starts it.
+    private func beginBodyOperation(_ operation: WorkspaceBodyOperation) {
+        switch operation {
+        case .boolean: beginBoolean()
+        case .cut: beginBodyCut()
+        }
+    }
+
+    /// Ends Boolean's and Cut's dialogs on bodies, as another command starts.
+    private func endBodyOperationDialogs() {
+        booleanSession = nil
+        bodyCutSession = nil
+    }
+
+    /// The selected whole body objects, in selection order, which Boolean and Cut act on.
+    private var selectedBodyObjectIDs: [SceneNodeID] {
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        var seen = Set<SceneNodeID>()
+        return snapshot.selection.selectedTargets.compactMap { target in
+            guard target.component == .object, nodes[target.sceneNodeID]?.reference?.kind == .body,
+                  seen.insert(target.sceneNodeID).inserted else { return nil }
+            return target.sceneNodeID
+        }
+    }
+
+    /// Ends the commands holding clicks, so Boolean or Cut takes them.
+    private func clearCommandsForBodyOperation() {
+        cancelModelingOperation()
+        pointPickRequest = nil
+        placeSession = nil
+        transformSession = nil
+        mirrorSession = nil
+        arraySession = nil
+        curvePickCommand = nil
+        cutCurveSession = nil
+        filletSession = nil
+        endBodyOperationDialogs()
+        if selectedTool != .select { _ = setActiveTool(.select) }
+    }
+
+    /// Boolean (Q): the selected bodies become its targets and tool, and clicks on bodies add to
+    /// or remove from the list the dialog picks.
+    private func beginBoolean() {
+        let bodies = selectedBodyObjectIDs
+        clearCommandsForBodyOperation()
+        let boolean = WorkspaceBooleanSession(selectedBodies: bodies)
+        booleanSession = boolean
+        selectTargets(boolean.operands.map { SelectionTarget(sceneNodeID: $0) })
+        reportToolStatus(boolean.prompt)
+    }
+
+    /// A click while Boolean runs: the body under the pointer joins or leaves the list being picked.
+    private func pickBooleanBody(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .object
+        guard var boolean = booleanSession, let hit = target.hit,
+              let body = resolver.selectionTarget(for: hit),
+              snapshot.document.document.productMetadata.sceneNodes[body.sceneNodeID]?.reference?.kind == .body else {
+            reportToolStatus("Boolean: click on a body.", severity: .warning)
+            return
+        }
+        boolean.toggle(body.sceneNodeID)
+        booleanSession = boolean
+        selectTargets(boolean.operands.map { SelectionTarget(sceneNodeID: $0) })
+        reportToolStatus(boolean.prompt)
+    }
+
+    /// G, R or S while Boolean runs: moves the tools where they are displayed, which is where the
+    /// Boolean combines them; the dialog stays and shows its bodies again when the move ends.
+    private func transformBooleanTools(_ mode: WorkspaceTransformSession.Mode) {
+        guard let boolean = booleanSession, !boolean.tools.isEmpty else {
+            reportToolStatus("Boolean: pick a tool to move first.", severity: .warning)
+            return
+        }
+        selectTargets(boolean.tools.map { SelectionTarget(sceneNodeID: $0) })
+        beginTransformSession(mode, sceneNodeIDs: boolean.tools)
+    }
+
+    /// Return or right-click while Boolean runs: the Boolean of its bodies; the dialog stays when
+    /// the Boolean is refused.
+    private func confirmBoolean() {
+        guard let boolean = booleanSession else { return }
+        let command: EditorCommand
+        do {
+            command = try boolean.command(in: snapshot.document.document)
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return
+        }
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            booleanSession = nil
+            reportToolStatus("Boolean \(boolean.title) done.")
+        }
+    }
+
+    /// Cut (C with bodies selected): the selected bodies are cut by the selected curve objects and
+    /// faces; clicks add to or remove from the list the dialog picks.
+    private func beginBodyCut() {
+        let cut = WorkspaceBodyCutSession(
+            selection: snapshot.selection.selectedTargets, in: snapshot.document.document
+        )
+        clearCommandsForBodyOperation()
+        bodyCutSession = cut
+        reportToolStatus(cut.prompt)
+    }
+
+    /// A click while Cut runs: a body joins or leaves the targets; a face, or a curve object (a
+    /// sketch through any of its curves), joins or leaves the cutters.
+    private func pickBodyCutOperand(at target: ViewportCanvasTarget) {
+        guard var cut = bodyCutSession, let hit = target.hit else {
+            reportToolStatus("Cut: click on a body, a curve or a face.", severity: .warning)
+            return
+        }
+        let document = snapshot.document.document
+        var resolver = selectionTargetResolver
+        switch cut.picking {
+        case .targets:
+            resolver.selectionScope = .object
+            guard let body = resolver.selectionTarget(for: hit),
+                  document.productMetadata.sceneNodes[body.sceneNodeID]?.reference?.kind == .body else {
+                reportToolStatus("Cut: click on a body to cut.", severity: .warning)
+                return
+            }
+            cut.toggle(target: body.sceneNodeID)
+        case .cutters:
+            resolver.selectionScope = .sketchEntity
+            if let curve = resolver.selectionTarget(for: hit), case .sketchEntity = curve.component,
+               let node = document.productMetadata.sceneNodes[curve.sceneNodeID],
+               WorkspaceBodyCutSession.isCurveObject(node, in: document) {
+                cut.toggle(cutter: .curve(node.id))
+            } else {
+                resolver.selectionScope = .face
+                guard let face = resolver.selectionTarget(for: hit), case .face = face.component else {
+                    reportToolStatus("Cut: click on a curve or a face to cut with.", severity: .warning)
+                    return
+                }
+                cut.toggle(cutter: .face(face))
+            }
+        }
+        bodyCutSession = cut
+        reportToolStatus(cut.prompt)
+    }
+
+    /// S while Cut runs: curve cutters run along the current view, or along their planes' normals
+    /// again. The cut reaches through its targets both ways, so the view's sense does not matter.
+    private func toggleBodyCutViewDirection() {
+        guard var cut = bodyCutSession else { return }
+        if cut.viewDirection != nil {
+            cut.viewDirection = nil
+            reportToolStatus("Cut: along each curve's plane normal.")
+        } else if let view = viewportProjectionBasis.viewNormal {
+            cut.viewDirection = view
+            reportToolStatus("Cut: along the view.")
+        } else {
+            reportToolStatus("Cut: the view has no direction to cut along.", severity: .warning)
+            return
+        }
+        bodyCutSession = cut
+    }
+
+    /// Return or right-click while Cut runs: the cut; the dialog stays when the cut is refused.
+    private func confirmBodyCut() {
+        guard let cut = bodyCutSession else { return }
+        let command: EditorCommand
+        do {
+            command = try cut.command()
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return
+        }
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            bodyCutSession = nil
+            reportToolStatus("Cut done.")
+        }
+    }
+
     /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
     private func beginCurvePickCommand(_ command: WorkspaceCurvePickCommand) {
         cancelModelingOperation()
@@ -8563,6 +8931,7 @@ private struct ProjectMainViewContent: View {
         arraySession = nil
         cutCurveSession = nil
         filletSession = nil
+        endBodyOperationDialogs()
         if selectedTool != .select { _ = setActiveTool(.select) }
         curvePickCommand = command
         reportToolStatus(command.prompt)
@@ -9671,6 +10040,7 @@ private struct ProjectMainViewContent: View {
         curvePickCommand = nil
         cutCurveSession = nil
         filletSession = nil
+        endBodyOperationDialogs()
         let place = WorkspacePlaceSession(rootSceneNodeIDs: ids)
         placeSession = place
         reportToolStatus(place.prompt)
@@ -9707,6 +10077,7 @@ private struct ProjectMainViewContent: View {
             curvePickCommand = nil
             cutCurveSession = nil
             filletSession = nil
+            endBodyOperationDialogs()
             let mirror = try WorkspaceMirrorSession(sceneNodeIDs: ids, constructionPlane: mirrorConstructionPlane)
             mirrorSession = mirror
             reportToolStatus(mirror.prompt)
@@ -9907,9 +10278,16 @@ private struct ProjectMainViewContent: View {
             let document = snapshot.document.document
             let bounds: MeasurementResult.Bounds?
             if transform.pickedPivot == nil, transform.pivotMode == .boundingBox {
+                // The pivot bounds what the session moves: its own objects (a Boolean's tools
+                // move while its dialog holds other bodies), or the moved topology.
+                var moved = snapshot.selection
+                if transform.topologyTargets.isEmpty {
+                    moved = SelectionModel()
+                    try moved.selectTargets(transform.sceneNodeIDs.map { SelectionTarget(sceneNodeID: $0) }, in: document)
+                }
                 bounds = try MeasurementService().measure(
                     document: document,
-                    selection: snapshot.selection,
+                    selection: moved,
                     ruler: snapshot.workspaceState.ruler,
                     objectRegistry: objectRegistry,
                     currentEvaluation: snapshot.cadInteraction,

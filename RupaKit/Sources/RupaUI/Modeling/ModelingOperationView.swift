@@ -257,15 +257,6 @@ struct ModelingOperationView: View {
             .disabled(!draft.smooth).contentShape(Rectangle())
             .help("Positive dimensionless scale inherited by sections with blank tension. Applies to smooth connectors.")
             Toggle("Closed section loop", isOn: $draft.closesSectionLoop)
-        case .boolean:
-            Picker("Operation", selection: $draft.booleanOperation) {
-                Text("Union").tag(BooleanOperation.union)
-                Text("Subtract").tag(BooleanOperation.difference)
-                Text("Intersect").tag(BooleanOperation.intersect)
-                Text("Slice").tag(BooleanOperation.slice)
-                Text("Region").tag(BooleanOperation.region)
-            }
-            Toggle("Keep tool bodies", isOn: $draft.keepTools)
         case .fillet:
             lengthField("Radius", text: $draft.distance)
         case .chamfer, .g2Blend:

@@ -72,6 +72,8 @@ func workspaceCanvasToolbarPaletteKeepsNarrowScrollableHitRegion() async throws 
                 activate: { _ in },
                 activateSolid: { _ in },
                 beginModelingOperation: { _ in },
+                activeBodyOperation: nil,
+                beginBodyOperation: { _ in },
                 accessibilityIdentifier: { "CanvasTool.\($0.rawValue)" }
             )
         }

@@ -10,7 +10,8 @@ struct WorkspaceCommandPaletteTests {
     @Test func theSearchMatchesTitlesAndAliasesByEveryWord() {
         let catalog = WorkspacePaletteCatalog.standard
         #expect(catalog.matches("").count == catalog.commands.count)
-        #expect(catalog.matches("cut").map(\.title) == ["Cut Curve"])
+        #expect(catalog.matches("cut").map(\.title) == ["Cut", "Cut Curve"])
+        #expect(catalog.matches("slice").map(\.title) == ["Boolean"])
         #expect(catalog.matches("offset vertex").map(\.title) == ["Offset Curve"])
         #expect(catalog.matches("PROJECT outline").map(\.title) == ["Alternative Duplicate"])
         #expect(catalog.matches("no such command").isEmpty)
@@ -93,9 +94,9 @@ struct WorkspaceCommandPaletteTests {
         try await press("u", keyCode: 32, in: window, host: host)
         try await press("t", keyCode: 17, in: window, host: host)
         try await press("\r", keyCode: 36, in: window, host: host)
-        #expect(record.events == ["run:Cut Curve"])
+        #expect(record.events == ["run:Cut"])
 
         try await press("\u{1b}", keyCode: 53, in: window, host: host)
-        #expect(record.events == ["run:Cut Curve", "canvas:escape", "close"])
+        #expect(record.events == ["run:Cut", "canvas:escape", "close"])
     }
 }

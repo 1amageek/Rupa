@@ -714,3 +714,41 @@ private func keyboardContext(
     offset.isCurveOffsetCommandActive = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "v"), context: offset) == .cycleCurveOffsetGapFill)
 }
+
+@Test func workspaceKeyboardRouterRunsBooleanAndCutOnSelectedBodiesAndTheirDialogKeys() {
+    let router = WorkspaceKeyboardRouter()
+    var bodies = keyboardContext()
+    bodies.hasWholeObjectSelection = true
+    bodies.hasBodyObjectSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: bodies) == .beginBoolean)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "c"), context: bodies) == .beginBodyCut)
+    // Without bodies, Q does nothing and C is Cut Curve.
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: keyboardContext()) == nil)
+
+    var boolean = bodies
+    boolean.isBooleanSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "q"), context: boolean) == .setBooleanOperation(.union))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "w"), context: boolean) == .setBooleanOperation(.difference))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "E", modifiers: [.shift]), context: boolean) == .setBooleanOperation(.intersect))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "Q", modifiers: [.shift]), context: boolean) == .setBooleanOperation(.slice))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: boolean) == .toggleBooleanKeepTools)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "g"), context: boolean) == .transformBooleanTools(.move))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "r"), context: boolean) == .transformBooleanTools(.rotate))
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: boolean) == .transformBooleanTools(.scale))
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: boolean) == .confirmBoolean)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: boolean) == .cancelBoolean)
+    // While its tools move, the move takes X, Return and Escape.
+    var moving = boolean
+    moving.isTransformSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "x"), context: moving) == .constrainTransform(.x, plane: false))
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: moving) == .finishTransform)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: moving) != .cancelBoolean)
+
+    var cut = bodies
+    cut.isBodyCutSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "c"), context: cut) == .switchBodyCutToCutCurve)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "s"), context: cut) == .toggleBodyCutViewDirection)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "e"), context: cut) == .toggleBodyCutExtend)
+    #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: cut) == .confirmBodyCut)
+    #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: cut) == .cancelBodyCut)
+}

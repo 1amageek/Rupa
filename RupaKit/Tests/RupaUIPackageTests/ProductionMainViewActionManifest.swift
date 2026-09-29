@@ -78,6 +78,11 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspacePlaceSession.swift",
         "Sources/RupaUI/WorkspaceTransformSession.swift",
         "Sources/RupaUI/WorkspaceMirrorSession.swift",
+        "Sources/RupaUI/WorkspaceBooleanSession.swift",
+        "Sources/RupaUI/WorkspaceBodyCutSession.swift",
+        "Sources/RupaUI/WorkspaceBridgeEdgeSession.swift",
+        "Sources/RupaUI/WorkspaceDeformSession.swift",
+        "Sources/RupaUI/WorkspaceProjectSession.swift",
         "Sources/RupaUI/WorkspaceCurveRefinementPlanner.swift",
         "Sources/RupaUI/Modeling/FeatureLengthDraft.swift",
         "Sources/RupaUI/Modeling/LoftFeatureDraft.swift",
@@ -120,6 +125,7 @@ enum ProductionMainViewActionManifest {
         "createLoft",
         "createSavedView",
         "createViewAlignedConstructionPlane",
+        "cut",
         "cutSketchCurve",
         "cutSketchCurves",
         "deleteBodyFaces",
@@ -237,6 +243,12 @@ enum ProductionMainViewActionManifest {
         "updateSavedView",
         "upsertParameter",
         "validateDocument",
+        "createBodyOutlines",
+        "createBridgeCurveBetweenEnds",
+        "deformCurves",
+        "projectBodyIntersection",
+        "projectCurveIntersection",
+        "projectCurvesAlongDirection",
     ]
 
     static let canvasEditorCommandNames = [
@@ -502,11 +514,16 @@ enum ProductionMainViewActionManifest {
             ) else {
                 throw SourceAuditError.sourceDirectoryNotFound(relativeDirectory)
             }
+            // The enumerator may report the directory through a resolved symlink (a checkout
+            // under /tmp comes back under /private/tmp), so paths are compared resolved.
+            let directoryPath = directory.resolvingSymlinksInPath().path
+            let rootPath = root.resolvingSymlinksInPath().path
             for case let url as URL in enumerator where url.pathExtension == "swift" {
-                let fileName = String(url.path.dropFirst(directory.path.count + 1))
+                let path = url.resolvingSymlinksInPath().path
+                let fileName = String(path.dropFirst(directoryPath.count + 1))
                 let relativePath = relativeDirectory.hasPrefix("../")
                     ? "\(relativeDirectory)/\(fileName)"
-                    : String(url.path.dropFirst(root.path.count + 1))
+                    : String(path.dropFirst(rootPath.count + 1))
                 if legacyExcludedSourceFiles.contains(relativePath) == false {
                     result.append(relativePath)
                 }
