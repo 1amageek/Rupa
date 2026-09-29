@@ -228,7 +228,7 @@ extension FeatureOperation {
         case .extract(let feature):
             switch feature.selection {
             case .component: return [feature.target.featureID]
-            case .faces: return []
+            case .faces, .solidFaces: return []
             }
         // Mirror rebuilds the identity and reflected instances as one
         // replacement body, so the source body is no longer independently

@@ -52,7 +52,7 @@ struct WorkspacePaletteCatalog: Equatable {
         ),
         Command(
             title: "Alternative Duplicate",
-            aliases: ["Duplicate Curve and Project", "Project Outline"],
+            aliases: ["Duplicate Curve and Project", "Project Outline", "Duplicate Faces"],
             shortcut: "⌥D",
             invocation: .keyboard(.projectToConstructionPlane)
         ),
@@ -69,8 +69,8 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Rebuild", aliases: ["Rebuild Curve"], invocation: .edit(.rebuild)),
         Command(title: "Deform", aliases: ["Deform Curve"], invocation: .edit(.deform)),
         Command(title: "Create Outline", invocation: .edit(.createOutline)),
-        Command(title: "Create Instance", aliases: ["Create Curve Instance"], invocation: .edit(.createInstance)),
-        Command(title: "Realize Instances", aliases: ["Realize Curve Instances"], invocation: .edit(.realizeInstances)),
+        Command(title: "Create Instance", aliases: ["Create Curve Instance", "Create Solid and Sheet Instance"], invocation: .edit(.createInstance)),
+        Command(title: "Realize Instances", aliases: ["Realize Curve Instances", "Realize Solid and Sheet Instances"], invocation: .edit(.realizeInstances)),
         Command(title: "Measure Distance", aliases: ["Measure"], shortcut: "⌃=", invocation: .keyboard(.activateMeasure)),
         Command(title: "Dimension", shortcut: "=", invocation: .keyboard(.activateDimensionCommand)),
         Command(title: "Set Material", shortcut: "M", invocation: .keyboard(.setMaterial)),

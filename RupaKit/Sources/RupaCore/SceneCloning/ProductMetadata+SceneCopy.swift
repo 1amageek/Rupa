@@ -27,6 +27,27 @@ extension ProductMetadata {
         return nil
     }
 
+    /// Why Copy with Placement cannot copy `ids`: what copying refuses, and component instances,
+    /// which Copy with Placement does not copy (realize them first).
+    public func placementCopyRefusal(for ids: [SceneNodeID]) -> EditorError? {
+        if let refusal = sceneCopyRefusal(for: ids) {
+            return refusal
+        }
+        var pending = ids
+        var visited: Set<SceneNodeID> = []
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted, let node = sceneNodes[id] else { continue }
+            if node.reference?.kind == .componentInstance {
+                return EditorError(
+                    code: .commandInvalid,
+                    message: "Copy with Placement does not copy instances; realize them first."
+                )
+            }
+            pending.append(contentsOf: node.childIDs)
+        }
+        return nil
+    }
+
     /// Nodes whose sharing semantics are not a copy are refused rather than silently shared.
     func sceneCopyRefusal(forNode id: SceneNodeID) -> EditorError? {
         guard sceneNodes[id] != nil else {

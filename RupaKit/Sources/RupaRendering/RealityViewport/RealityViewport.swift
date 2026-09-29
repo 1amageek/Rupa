@@ -73,6 +73,7 @@ final class RealityViewport {
         let mode: ViewportDisplayMode
         let shading: ViewportShading
         let occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material]
+        let componentInstanceOccurrenceIDs: Set<SceneOccurrenceID>
         let selected: Set<SceneNodeID>
         let preview: Set<SceneNodeID>
         let hovered: SceneNodeID?
@@ -714,10 +715,12 @@ final class RealityViewport {
     func applyAppearance(
         displayMode: ViewportDisplayMode, shading: ViewportShading,
         occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material],
+        componentInstanceOccurrenceIDs: Set<SceneOccurrenceID> = [],
         interaction: MeshSourcePresentationInteractionStateResolver,
         sectionPlane: SectionAnalysisResult.Plane?, retainedSide: SectionAnalysisRetainedSide, sectionTolerance: Double
     ) throws {
-        let key = Appearance(mode: displayMode, shading: shading, occurrenceMaterials: occurrenceMaterials, selected: interaction.selectedSceneNodeIDs,
+        let key = Appearance(mode: displayMode, shading: shading, occurrenceMaterials: occurrenceMaterials,
+                             componentInstanceOccurrenceIDs: componentInstanceOccurrenceIDs, selected: interaction.selectedSceneNodeIDs,
                              preview: interaction.previewSceneNodeIDs, hovered: interaction.hoveredSceneNodeID,
                              plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)
         guard appearance != key else { return }
@@ -740,7 +743,10 @@ final class RealityViewport {
             // authored, so a selection says which body it is, not what it is
             // made of.
             let surface = ViewportSurface(color: Self.color(color), authoring: material)
-            let wire = shading.resolvedWireColor(for: occurrence.occurrenceID, objectColor: color)
+            let wire = shading.resolvedWireColor(
+                for: occurrence.occurrenceID, objectColor: color,
+                isComponentInstance: componentInstanceOccurrenceIDs.contains(occurrence.occurrenceID)
+            )
             prepared.append(try surfaceResources.materialVariants[index].resolve(
                 .init(mode: displayMode, shading: shading, surface: surface, wire: Self.color(wire)),
                 state: state, using: surfaceResources.materials))

@@ -114,10 +114,18 @@ public struct ViewportShading: Equatable, Hashable, Sendable {
         }
     }
 
+    /// The medium-light gray an instance's edges are drawn in, whatever the wire color, so an
+    /// instance reads as a copy of its source rather than an object of its own.
+    static let componentInstanceWireColor = SIMD4<Float>(0.74, 0.74, 0.76, 1)
+
     func resolvedWireColor(
         for occurrenceID: SceneOccurrenceID,
-        objectColor: SIMD4<Float>
+        objectColor: SIMD4<Float>,
+        isComponentInstance: Bool = false
     ) -> SIMD4<Float> {
+        if isComponentInstance {
+            return Self.componentInstanceWireColor
+        }
         switch wireColor {
         case .theme:
             return SIMD4<Float>(0.48, 0.56, 0.64, 1)

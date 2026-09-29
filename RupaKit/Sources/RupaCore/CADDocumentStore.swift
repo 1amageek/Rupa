@@ -2793,6 +2793,14 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .duplicateBodyFaces(name, targets):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.duplicateBodyFaces(
+                name: name, targets: targets, objectRegistry: objectRegistry
+            ).last
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createConstrainedSurface(name, source):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createConstrainedSurface(

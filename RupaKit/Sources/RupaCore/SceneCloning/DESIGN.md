@@ -77,6 +77,10 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   world positions, the label and the placement axis move with the copy.
   `ProductMetadata.sceneCopyRefusal` is the one statement of these refusals:
   extraction throws it and every UI control that offers copying reads it.
+  Copy with Placement also refuses component instances, as Plasticity's
+  instances cannot be copied with placement (realize them first):
+  `placementCopyRefusal` adds that to `sceneCopyRefusal`
+  (`AlternativeDuplicateTests.copyWithPlacementRefusesInstances`).
   Independent-copy pattern outputs copy authored meshes too: the synchronizer
   carries the document's mesh assets, a definition's identity includes the
   content of the meshes it presents, an output may copy meshes alone, and

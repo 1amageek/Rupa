@@ -165,6 +165,7 @@ enum PreparedAutomationSourceCommandValidation {
              .setLoft,
              .createBoolean,
              .cut,
+             .duplicateBodyFaces,
              .createConstrainedSurface,
              .setConstrainedSurface,
              .createBSplineSurface,

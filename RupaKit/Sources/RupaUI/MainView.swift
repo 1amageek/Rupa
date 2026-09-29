@@ -6429,6 +6429,17 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Bridge continuity: \(next.rawValue.uppercased()).")
             return .handled
         case .projectToConstructionPlane:
+            // Alternative Duplicate on faces: a solid of faces that close, else a sheet, then Move.
+            let faces = snapshot.selection.selectedTargets.filter { target in
+                if case .face = target.component { return true }
+                return false
+            }
+            if !faces.isEmpty, faces.count == snapshot.selection.selectedTargets.count {
+                submitSource(.duplicateBodyFaces(name: "Alternative Duplicate", targets: faces)) { result in
+                    moveCreatedObjects(of: result)
+                }
+                return .handled
+            }
             let curves = snapshot.selection.selectedTargets.filter { target in
                 switch target.component {
                 case .sketchEntity, .edge: return true
@@ -6449,7 +6460,7 @@ private struct ProjectMainViewContent: View {
             }
             let bodies = bodyOutlineProjectionTargets(from: selectedSceneNodes)
             guard !bodies.isEmpty else {
-                reportToolStatus("Option-D projects curves, edges or bodies onto the construction plane.", severity: .warning)
+                reportToolStatus("Option-D duplicates faces, or projects curves, edges or bodies onto the construction plane.", severity: .warning)
                 return .handled
             }
             projectSelectedBodyOutlinesToConstructionPlane(bodies)
@@ -9155,6 +9166,10 @@ private struct ProjectMainViewContent: View {
         let copyWithPlacement: (@MainActor () -> Void)?
         if let ids = duplicableSelectionIDs {
             copyWithPlacement = {
+                if let refusal = snapshot.document.document.productMetadata.placementCopyRefusal(for: ids) {
+                    reportToolStatus(refusal.message, severity: .warning)
+                    return
+                }
                 placeSession = nil
                 let request = WorkspacePointPickRequest.copyReferencePoint(rootSceneNodeIDs: ids)
                 pointPickRequest = request

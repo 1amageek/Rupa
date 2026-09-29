@@ -125,6 +125,14 @@ beside the target. A component extraction supersedes its source in measurement;
 a face extraction does not. `PlacedBooleanTests` own placement and
 `SheetBooleanCommandTests` sheet operands, materials, slice and region pieces.
 
+Alternative Duplicate on faces (`duplicateBodyFaces(name:targets:)`) copies the
+chosen faces of each body beside it as an object of its own, placed like the body,
+through one Swift-CAD `extract` per body; the body stays. Faces that close (every
+face of each shell they lie on, answered by Swift-CAD's `ExtractFaceClosure` before
+the output is declared) are copied as a solid (`.solidFaces`), others as a sheet
+(`.faces`). Faces of an instance are refused (realize it first).
+`AlternativeDuplicateTests` own the solid, the sheet and the refusal.
+
 Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
 face and curve cutters and shows every piece as an object of its own. Each
 cutter becomes a sheet kept by a hidden object placed where the cutter is: a face

@@ -625,6 +625,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             let selection = switch extract.selection {
             case let .component(index, count): "Piece \(index + 1) of \(count)"
             case let .faces(faces): "\(faces.count) faces"
+            case let .solidFaces(faces): "\(faces.count) faces as a solid"
             }
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Extract"),

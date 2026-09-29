@@ -702,7 +702,9 @@ both ends that first tension as one `setBridgeCurveParameters` (Core refuses one
 that is not positive and the typed value stays), and Escape drops it; the typed
 value belongs to the bridge selection it was typed for and is dropped unapplied
 once another selection replaces it, and a running Offset keeps D.
-Option-D projects the selected
+Option-D with only faces selected submits `.duplicateBodyFaces` (Alternative
+Duplicate on faces: a solid of faces that close, else a sheet) and moves the copy;
+otherwise it projects the selected
 sketch curves or edges onto the construction plane (Alternative Duplicate) or,
 with bodies selected, their outlines (Project Outline), then selects what it
 created with a Move running so it is placed, as Duplicate and Create Instance do

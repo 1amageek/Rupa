@@ -154,6 +154,8 @@ public struct Viewport: View {
     private let presentationScene: UniversalViewportScene?
     private let presentationSceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
     private let occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material]
+    /// The occurrences a component instance presents, whose edges are drawn gray.
+    private let componentInstanceOccurrenceIDs: Set<SceneOccurrenceID>
     private let workspaceRenderState: ViewportWorkspaceRenderState
     private let currentEvaluation: DocumentEvaluationContext?
     private let evaluationCache: EvaluatedDocumentCache?
@@ -476,14 +478,19 @@ public struct Viewport: View {
         // Resolve the document-owned appearance once per supplied View value,
         // not from the camera-driven body or the native scene's update callback.
         var occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material] = [:]
+        var componentInstanceOccurrenceIDs: Set<SceneOccurrenceID> = []
         if let presentationScene {
             for item in presentationScene.items {
-                guard let nodeID = presentationSceneNodeIDByOccurrenceID[item.id],
-                      let material = document.sceneNodeAppearance(id: nodeID) else { continue }
+                guard let nodeID = presentationSceneNodeIDByOccurrenceID[item.id] else { continue }
+                if document.productMetadata.sceneNodes[nodeID]?.reference?.kind == .componentInstance {
+                    componentInstanceOccurrenceIDs.insert(item.id)
+                }
+                guard let material = document.sceneNodeAppearance(id: nodeID) else { continue }
                 occurrenceMaterials[item.id] = material
             }
         }
         self.occurrenceMaterials = occurrenceMaterials
+        self.componentInstanceOccurrenceIDs = componentInstanceOccurrenceIDs
         self.workspaceRenderState = workspaceRenderState
         self.currentEvaluation = currentEvaluation
         self.evaluationCache = evaluationCache
@@ -669,6 +676,7 @@ public struct Viewport: View {
                         displayMode: displayMode,
                         shading: shading,
                         occurrenceMaterials: occurrenceMaterials,
+                        componentInstanceOccurrenceIDs: componentInstanceOccurrenceIDs,
                         layout: sceneContext.layout,
                         interaction: presentationInteractionStateResolver,
                         sectionPlane: sectionClippingPlan == nil ? nil : sectionAnalysis?.plane,

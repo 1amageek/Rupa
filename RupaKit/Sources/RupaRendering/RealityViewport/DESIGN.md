@@ -1446,7 +1446,12 @@ implementations; no WASM/Embedded alternative storage is introduced.
 Each surface occurrence owns at most three lazily resolved material pairs, one
 for each normal/hovered/selected visual state. A pair is reusable only when its
 display mode, shading, resolved surface and wire color match exactly. A changed
-key replaces that state's pair; failed validation never installs a pair.
+key replaces that state's pair; failed validation never installs a pair. The
+edges of a component instance's occurrences are drawn in
+`ViewportShading.componentInstanceWireColor`, a medium-light gray, whatever the
+wire color, so an instance reads as a copy of its source; `Viewport` collects
+those occurrences from the occurrence-to-scene-node map and the appearance key
+includes them (`componentInstanceEdgesAreGrayWhateverTheWireColor`).
 Same-snapshot overlay replacements share these immutable material values, not
 entities, applied appearance, section state or query authority. New surface plans
 start fresh variant owners, so removed occurrences and old appearance history

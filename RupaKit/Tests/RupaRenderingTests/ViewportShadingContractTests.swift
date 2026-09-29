@@ -46,6 +46,20 @@ func viewportShadingUsesStableOccurrenceAndMaterialColors() {
     ) == SIMD4<Float>(0.48, 0.56, 0.64, 1))
 }
 
+/// An instance's edges are gray in every wire color mode, so it reads as a copy of its source.
+@Test
+func componentInstanceEdgesAreGrayWhateverTheWireColor() {
+    let occurrence = SceneOccurrenceID(rawValue: "instance-occurrence")
+    let objectColor = SIMD4<Float>(0.9, 0.1, 0.1, 1)
+    for mode in [ViewportShading.WireColor.theme, .object, .random] {
+        let shading = ViewportShading(wireColor: mode)
+        #expect(shading.resolvedWireColor(for: occurrence, objectColor: objectColor, isComponentInstance: true)
+            == ViewportShading.componentInstanceWireColor)
+        #expect(shading.resolvedWireColor(for: occurrence, objectColor: objectColor)
+            != ViewportShading.componentInstanceWireColor)
+    }
+}
+
 @MainActor
 @Test
 func viewportShadingSessionMutationIsAtomicAndDoesNotChangeCameraOrDisplayMode() throws {
