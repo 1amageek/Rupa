@@ -18,7 +18,7 @@ public struct SelectionDimensionService: Sendable {
         currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionDimensionEvaluationResult {
         do {
-            try document.validate(objectRegistry: objectRegistry)
+            try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
         } catch {
             throw EditorError(
                 code: .evaluationFailed,

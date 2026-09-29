@@ -395,7 +395,7 @@
 
 - [ ] PF Hot-path efficiency: work already done for a document generation (validation, evaluation, hierarchy, analyses) is reused instead of repeated per hover, per render or per selected target. `depends:none` `parallel:none`
   - [x] PF1 Topology snapshots and generated-topology resolution reuse the current evaluation: no kernel evaluation or full validation per selected target, per edge or per hover. `depends:none` `parallel:none`
-  - [ ] PF2 The workspace view computes surface and section analyses once per document generation and selection, not several times per render, and without re-validating the document. `depends:PF1` `parallel:none`
+  - [x] PF2 The workspace view computes surface and section analyses once per document generation and selection, not several times per render, and without re-validating the document. `depends:PF1` `parallel:none`
   - [ ] PF3 Shared-definition selections are built for every definition in one hierarchy and occurrence pass per metadata, not per definition per render. `depends:PF2` `parallel:none`
   - [ ] PF4 The overlay producer indexes scene items and topology once per snapshot instead of scanning them per target. `depends:PF3` `parallel:none`
   - [ ] PF5 Integration: whole package suite, app rebuild and restart. `depends:PF1,PF2,PF3,PF4` `parallel:none`

@@ -39,7 +39,7 @@ public struct SectionAnalysisService: Sendable {
         currentGeneration: DocumentGeneration? = nil
     ) throws -> SectionAnalysisResult {
         do {
-            try document.validate(objectRegistry: objectRegistry)
+            try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
         } catch {
             throw EditorError(
                 code: .evaluationFailed,

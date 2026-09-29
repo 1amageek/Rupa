@@ -1368,6 +1368,19 @@ converted into empty successful views. MainActor work is bounded by admitted
 resources and spatial entities. Title projection performs no CAD, file, or
 transport reads.
 
+### Analyses the view reads
+
+The workspace view's body reads the surface analysis, surface continuity,
+surface source summary and section analysis several times per render (the
+viewport, the analysis panel and the inspector), and SwiftUI re-renders on
+every state change, hover included. They depend on the document generation and
+their own options, not on the selection, which only decides whether they show
+and which rows. `WorkspaceDocumentAnalysisCache` (one per document lifetime)
+keeps each for the inputs it was made from, failures included, through
+`MemoizedResults`; the inspector builders read it (`analysisCache`), so an
+analysis is made once per generation and option set instead of up to three
+times per render (`WorkspaceDocumentAnalysisCacheTests`).
+
 ### Failure surfacing
 
 An edit that committed but whose view could not be built

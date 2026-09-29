@@ -54,18 +54,13 @@ public struct TopologySnapshotService: Sendable {
         currentGeneration: DocumentGeneration? = nil,
         metricPolicy: MetricPolicy = .include
     ) throws -> TopologySnapshot {
-        // A current evaluation of this generation was made from this very document once it
-        // validated, so validating again would repeat the whole-document check on every call.
-        let evaluationMatches = currentEvaluation?.matches(document: document, generation: currentGeneration) == true
-        if !evaluationMatches {
-            do {
-                try document.validate(objectRegistry: objectRegistry)
-            } catch {
-                throw EditorError(
-                    code: .evaluationFailed,
-                    message: "Document must validate before topology snapshot: \(String(describing: error))"
-                )
-            }
+        do {
+            try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
+        } catch {
+            throw EditorError(
+                code: .evaluationFailed,
+                message: "Document must validate before topology snapshot: \(String(describing: error))"
+            )
         }
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {

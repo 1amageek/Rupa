@@ -347,13 +347,13 @@ import Testing
     #expect(state.statusTitle == "Supported direct B-spline trim edges required")
 }
 
-private struct WorkspaceSurfaceInspectorFixture {
+struct WorkspaceSurfaceInspectorFixture {
     var document: DesignDocument
     var featureID: FeatureID
     var sceneNode: SceneNode
 }
 
-private func workspaceSurfaceInspectorFixture() throws -> WorkspaceSurfaceInspectorFixture {
+func workspaceSurfaceInspectorFixture() throws -> WorkspaceSurfaceInspectorFixture {
     var document = DesignDocument.empty()
     let featureID = try document.createPolySplineSurface(
         name: "Inspector Surface",

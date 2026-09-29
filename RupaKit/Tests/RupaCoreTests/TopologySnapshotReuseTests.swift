@@ -69,4 +69,19 @@ import Testing
         #expect(shared == oneByOne)
         #expect(Set(shared) == Set(Self.corners))
     }
+
+    /// A read-only service handed a matching evaluation does not validate the document again:
+    /// a document altered after its evaluation (which no generation would allow) still passes, so
+    /// no validation ran, while without the evaluation the alteration is caught.
+    @Test func aMatchingEvaluationSparesTheValidation() throws {
+        let (session, _, _) = try box()
+        var altered = session.document
+        altered.productMetadata.rootSceneNodeIDs.append(SceneNodeID())
+        #expect(throws: (any Error).self) { try altered.validate() }
+        try altered.validate(objectRegistry: .builtIn,
+            unlessEvaluatedBy: session.currentEvaluation, generation: session.generation)
+        #expect(throws: (any Error).self) {
+            try altered.validate(objectRegistry: .builtIn, unlessEvaluatedBy: nil, generation: session.generation)
+        }
+    }
 }

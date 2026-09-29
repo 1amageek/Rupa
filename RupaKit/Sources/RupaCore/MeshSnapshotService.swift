@@ -16,7 +16,7 @@ public struct MeshSnapshotService: Sendable {
         currentGeneration: DocumentGeneration? = nil
     ) throws -> MeshSnapshot {
         do {
-            try document.validate(objectRegistry: objectRegistry)
+            try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
         } catch {
             throw EditorError(
                 code: .evaluationFailed,

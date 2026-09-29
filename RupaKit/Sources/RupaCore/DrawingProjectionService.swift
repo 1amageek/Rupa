@@ -167,7 +167,7 @@ public struct DrawingProjectionService: Sendable {
         currentGeneration: DocumentGeneration? = nil
     ) throws -> DrawingProjectionResult {
         do {
-            try document.validate(objectRegistry: objectRegistry)
+            try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
             try savedView.validate(
                 sceneNodes: document.productMetadata.sceneNodes,
                 constructionPlanes: document.productMetadata.constructionPlanes

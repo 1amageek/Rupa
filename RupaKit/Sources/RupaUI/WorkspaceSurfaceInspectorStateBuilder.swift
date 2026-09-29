@@ -8,6 +8,8 @@ struct WorkspaceSurfaceInspectorStateBuilder {
     var objectRegistry: ObjectTypeRegistry
     var surfaceAnalysisOptions: SurfaceAnalysisOptions
     var workspaceState: WorkspaceState
+    /// Whole-document analyses already made for these inputs; without one each is made anew.
+    var analysisCache: WorkspaceDocumentAnalysisCache?
 
     var surfaceControlPointReferences: [SelectionReference] {
         selection.selectedReferences.filter { reference in
@@ -356,13 +358,18 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return nil
         }
 
-        let result = try SurfaceAnalysisService(options: surfaceAnalysisOptions).analyze(
-            document: document,
-            displayUnit: workspaceState.displayUnit,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: documentGeneration
-        )
+        let make = {
+            try SurfaceAnalysisService(options: surfaceAnalysisOptions).analyze(
+                document: document,
+                displayUnit: workspaceState.displayUnit,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: documentGeneration
+            )
+        }
+        let result = try analysisCache?.surfaceAnalysis.value(for: .init(
+            generation: documentGeneration, displayUnit: workspaceState.displayUnit, options: surfaceAnalysisOptions
+        ), make: make) ?? make()
         guard result.counts.bSplineFaceCount > 0 else {
             return nil
         }
@@ -444,13 +451,18 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return nil
         }
 
-        let result = try SurfaceContinuityService().summarize(
-            document: document,
-            displayUnit: workspaceState.displayUnit,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: documentGeneration
-        )
+        let make = {
+            try SurfaceContinuityService().summarize(
+                document: document,
+                displayUnit: workspaceState.displayUnit,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: documentGeneration
+            )
+        }
+        let result = try analysisCache?.surfaceContinuity.value(for: .init(
+            generation: documentGeneration, displayUnit: workspaceState.displayUnit
+        ), make: make) ?? make()
         guard result.counts.bSplineFaceCount > 0 else {
             return nil
         }
@@ -458,15 +470,22 @@ struct WorkspaceSurfaceInspectorStateBuilder {
     }
 
     private func surfaceSourceSummary() throws -> SurfaceSourceSummaryResult {
-        try SurfaceSourceSummaryService().summarize(
-            document: document,
-            displayUnit: workspaceState.displayUnit,
-            surfaceControlPointDisplays: workspaceState.surfaceControlPointDisplays,
-            surfaceFrameDisplays: workspaceState.surfaceFrameDisplays,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: documentGeneration
-        )
+        let make = {
+            try SurfaceSourceSummaryService().summarize(
+                document: document,
+                displayUnit: workspaceState.displayUnit,
+                surfaceControlPointDisplays: workspaceState.surfaceControlPointDisplays,
+                surfaceFrameDisplays: workspaceState.surfaceFrameDisplays,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: documentGeneration
+            )
+        }
+        return try analysisCache?.surfaceSourceSummary.value(for: .init(
+            generation: documentGeneration, displayUnit: workspaceState.displayUnit,
+            controlPointDisplays: workspaceState.surfaceControlPointDisplays,
+            frameDisplays: workspaceState.surfaceFrameDisplays
+        ), make: make) ?? make()
     }
 
     private func surfaceAdjacency(

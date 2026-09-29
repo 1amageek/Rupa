@@ -6,6 +6,8 @@ struct WorkspaceSectionAnalysisStateBuilder {
     var documentGeneration: DocumentGeneration
     var displayUnit: LengthDisplayUnit
     var objectRegistry: ObjectTypeRegistry
+    /// Section analyses already made for these inputs; without one each is made anew.
+    var analysisCache: WorkspaceDocumentAnalysisCache?
 
     func analysisSummary(for nodes: [SceneNode]) -> SectionAnalysisResult? {
         switch analysisSummaryResult(for: nodes) {
@@ -26,30 +28,27 @@ struct WorkspaceSectionAnalysisStateBuilder {
 
     /// The analysis the Section Analysis command asks for.
     func analysis(for query: SectionAnalysisQuery) throws -> SectionAnalysisResult {
-        try SectionAnalysisService().analyze(
-            document: document,
-            query: query,
-            activeConstructionPlaneID: nil,
-            displayUnit: displayUnit,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: documentGeneration
-        )
+        let make = {
+            try SectionAnalysisService().analyze(
+                document: document,
+                query: query,
+                activeConstructionPlaneID: nil,
+                displayUnit: displayUnit,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: documentGeneration
+            )
+        }
+        return try analysisCache?.sectionAnalysis.value(for: .init(
+            generation: documentGeneration, displayUnit: displayUnit, query: query
+        ), make: make) ?? make()
     }
 
     private func resolveAnalysisSummary(for nodes: [SceneNode]) throws -> SectionAnalysisResult? {
         guard let query = sectionAnalysisQuery(for: nodes) else {
             return nil
         }
-        return try SectionAnalysisService().analyze(
-            document: document,
-            query: query,
-            activeConstructionPlaneID: nil,
-            displayUnit: displayUnit,
-            objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: documentGeneration
-        )
+        return try analysis(for: query)
     }
 
     private func sectionAnalysisQuery(for nodes: [SceneNode]) -> SectionAnalysisQuery? {

@@ -104,7 +104,6 @@ private struct ProjectMainViewContent: View {
     private let onViewportUnmount: @MainActor (ViewportInstanceID) -> Void
     @State private var viewportControlSession: ViewportControlSession
     @State private var isViewportShadingPresented = false
-    @State private var selectedSharedDefinitionID: ComponentDefinitionID?
     @State private var modelingDraft: ModelingOperationDraft?
     @State private var gearDraft: InvoluteGearDraft?
     @State private var solidShape: WorkspaceSolidShape = .box
@@ -159,11 +158,6 @@ private struct ProjectMainViewContent: View {
     @State private var arraySession: WorkspaceArrayCreationSession?
     @State private var selectionMass: SceneMass?
     @State private var selectionMassMeasurement = SelectionMassMeasurement()
-    /// Rebuilds the view after an edit that committed but whose view failed, or stops editing.
-    @State private var committedOperationRecovery: WorkspaceCommittedOperationRecovery
-    /// Which dialog commands are submitting, so one OK makes one edit and a completion ends only
-    /// the dialog that submitted it.
-    @State private var dialogSubmissions = WorkspaceDialogSubmissions()
     @State private var measurementSeed: ViewportMeasurementSeed?
     @State private var surfaceControlPointMoveOptions = SurfaceControlPointMoveOptions()
     @State private var patternArraySummaryCache: PatternArraySummaryCache
@@ -291,7 +285,6 @@ private struct ProjectMainViewContent: View {
         self.onViewportMount = onViewportMount
         self.onViewportUnmount = onViewportUnmount
         self._viewportControlSession = State(initialValue: viewportControlSession)
-        self._committedOperationRecovery = State(initialValue: WorkspaceCommittedOperationRecovery(workspace: workspace))
         self.operationSequencer = operationSequencer
         self.newProject = newProject
         self._selectedTool = State(initialValue: .select)
@@ -424,18 +417,6 @@ private struct ProjectMainViewContent: View {
         .onAppear {
             onViewportMount(snapshot.documentLifetimeID, viewportControlSession)
             reportRetiredObjectProperties()
-        }
-        .overlay {
-            if let reason = committedOperationRecovery.unavailableReason {
-                ContentUnavailableView(
-                    "Editing Unavailable",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text("An edit was applied, but the project view could not be rebuilt. "
-                        + "Reopen the project to continue. \(reason)")
-                )
-                .background(.background)
-                .accessibilityIdentifier("Workspace.editingUnavailable")
-            }
         }
         .onDisappear {
             modelingTask?.cancel()
@@ -848,7 +829,6 @@ private struct ProjectMainViewContent: View {
         _ operation: @escaping @MainActor @Sendable () async throws -> Result
     ) -> Task<Result, Error> {
         let expectedDocumentLifetimeID = snapshot.documentLifetimeID
-        let recovery = committedOperationRecovery
         return operationSequencer.enqueue(
             operationGuard: {
                 guard workspace.view?.documentLifetimeID == expectedDocumentLifetimeID else {
@@ -857,13 +837,8 @@ private struct ProjectMainViewContent: View {
                         message: "The queued UI operation belongs to a replaced project document."
                     )
                 }
-                try recovery.checkAvailable()
             },
-            {
-                // A committed edit whose view failed is recovered in this slot, before the next
-                // queued operation plans against the view.
-                try await recovery.run(operation)
-            }
+            operation
         )
     }
 
@@ -881,7 +856,6 @@ private struct ProjectMainViewContent: View {
     private func clearSelection(
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        selectedSharedDefinitionID = nil
         let task = enqueueWorkspaceOperation {
             let published = try await workspace.applySelection(.clear)
             completion(published)
@@ -903,7 +877,6 @@ private struct ProjectMainViewContent: View {
         ) throws -> Void,
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
-        selectedSharedDefinitionID = nil
         reportFailure(of: selectionSubmitter.queue(mutation, completion: completion))
     }
 
@@ -967,7 +940,6 @@ private struct ProjectMainViewContent: View {
             DesignDocument
         ) throws -> Void
     ) -> Bool {
-        selectedSharedDefinitionID = nil
         do {
             reportFailure(of: try selectionSubmitter.submit(update))
             return true
@@ -1104,48 +1076,6 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Submits a dialog command's edit (`WorkspaceDialogSubmissions`): refused while the same
-    /// dialog's earlier edit is still applying; the dialog ends (`end`) only when the edit exists
-    /// and the dialog that submitted it (`instance`) is still the running one; a refused edit
-    /// leaves the dialog for another try.
-    private func submitDialogCommand(
-        _ commands: [EditorCommand],
-        name: String,
-        instance: WorkspaceDialogInstance,
-        running: @escaping @MainActor () -> WorkspaceDialogInstance?,
-        end: @escaping @MainActor () -> Void,
-        done: @escaping @MainActor () -> Void
-    ) {
-        guard dialogSubmissions.begin(instance) else {
-            reportToolStatus("\(name) is still applying the previous OK.", severity: .warning)
-            return
-        }
-        let submissions = dialogSubmissions
-        let task = enqueueWorkspaceOperation {
-            try await executeSource(name: name, commands: { _ in commands })
-        }
-        Task { @MainActor in
-            let outcome: WorkspaceDialogSubmissions.Outcome
-            do {
-                let results = try await task.value
-                outcome = results.last?.didMutate == true ? .applied : .refused
-            } catch let error as WorkspaceCommittedOperationError {
-                reportToolStatus(error.localizedDescription, severity: .warning)
-                if case .workspaceUnavailable = error {
-                    outcome = .refused
-                } else {
-                    outcome = .appliedWithViewFailure
-                }
-            } catch {
-                reportToolStatus(error.localizedDescription, severity: .warning)
-                outcome = .refused
-            }
-            guard submissions.finish(instance, outcome: outcome, running: running()) else { return }
-            end()
-            if outcome == .applied { done() }
-        }
-    }
-
     /// The control context is synchronous; queued work never inherits it.
     private func submitNumericInput(
         _ operation: @escaping @MainActor @Sendable () async throws -> Void
@@ -1160,7 +1090,7 @@ private struct ProjectMainViewContent: View {
                             code: .documentLifetimeMismatch,
                             message: "The edited document is no longer active.")
                     }
-                    try await committedOperationRecovery.run(operation)
+                    try await operation()
                 } catch {
                     reportToolStatus(error.localizedDescription, severity: .warning)
                 }
@@ -1523,10 +1453,11 @@ private struct ProjectMainViewContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         if !filteredComponentDefinitionIDs.isEmpty {
-                            Text("Shared Definitions")
-                                .font(.caption).foregroundStyle(.secondary)
-                            ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
-                                componentDefinitionRow(id)
+                            DisclosureGroup("Component Definitions") {
+                                ForEach(filteredComponentDefinitionIDs, id: \.self) { id in
+                                    componentDefinitionRow(id)
+                                        .padding(.leading, 8)
+                                }
                             }
                         }
                         if hasVisibleAssetRows {
@@ -2234,15 +2165,6 @@ private struct ProjectMainViewContent: View {
             }
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs) { _, ids in
-            if let id = selectedSharedDefinitionID {
-                do {
-                    let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
-                    if Set(shared.placementNodeIDs) != Set(ids) { selectedSharedDefinitionID = nil }
-                } catch {
-                    selectedSharedDefinitionID = nil
-                    reportToolStatus(error.localizedDescription, severity: .warning)
-                }
-            }
             if let transformSession, transformSession.topologyTargets.isEmpty, transformSession.sceneNodeIDs != ids {
                 self.transformSession = nil
             }
@@ -4334,6 +4256,13 @@ private struct ProjectMainViewContent: View {
         }
         .fixedSize()
         .accessibilityIdentifier("WorkspaceTransform.pivot")
+        Toggle("Instances inversely", isOn: Binding(
+            get: { transform.compensatesInstances },
+            set: { transformSession?.compensatesInstances = $0 }
+        ))
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .accessibilityIdentifier("WorkspaceTransform.instancesInversely")
         Toggle("Snap", isOn: Binding(
             get: { transform.snapsToIncrements },
             set: { transformSession?.snapsToIncrements = $0 }
@@ -7681,8 +7610,8 @@ private struct ProjectMainViewContent: View {
                 message: "Body transforms commit only while the Select tool edits objects and no command takes the viewport's clicks."
             )
         }
-        // A running Move, Rotate or Scale commits its drag as the session's transform, the same
-        // command its typed and freestyle motions submit.
+        // A running Move, Rotate or Scale commits its drag as the session's transform, so the
+        // instance-inverse option applies to drags as it does to typed and freestyle motions.
         let transform = transformSession
         return try await runWorkspaceOperation {
             _ = try await executeSource(name: "transformBodyPlacements") { current in
@@ -8726,9 +8655,11 @@ private struct ProjectMainViewContent: View {
                 target: target, adjacentTarget: adjacent, distance: distance, treatment: fillet.treatment
             )
         }
-        submitDialogCommand([command], name: fillet.title, instance: fillet.instance,
-                            running: { filletSession?.instance }, end: { filletSession = nil },
-                            done: { reportToolStatus("\(fillet.title) done.") })
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            filletSession = nil
+            reportToolStatus("\(fillet.title) done.")
+        }
     }
 
     /// Fillet's radius handle while its dialog runs, at the corner Core resolves for the first
@@ -8857,12 +8788,17 @@ private struct ProjectMainViewContent: View {
             return
         }
         cutCurveExtendsCutter = cut.extendsCutter
-        submitDialogCommand(
-            [.cutSketchCurves(targets: cut.targets, cutters: cut.cutters, options: cut.options)],
-            name: "Cut Curve", instance: cut.instance,
-            running: { cutCurveSession?.instance }, end: { cutCurveSession = nil },
-            done: { reportToolStatus("Cut Curve done.") }
-        )
+        submitSource(
+            .cutSketchCurves(
+                targets: cut.targets,
+                cutters: cut.cutters,
+                options: cut.options
+            )
+        ) { result in
+            guard result?.didMutate == true else { return }
+            cutCurveSession = nil
+            reportToolStatus("Cut Curve done.")
+        }
     }
 
     /// Boolean or Cut from the palette or the Model menu, as Q or C starts it.
@@ -8963,9 +8899,11 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(error.localizedDescription, severity: .warning)
             return
         }
-        submitDialogCommand([command], name: "Boolean", instance: boolean.instance,
-                            running: { booleanSession?.instance }, end: { booleanSession = nil },
-                            done: { reportToolStatus("Boolean \(boolean.title) done.") })
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            booleanSession = nil
+            reportToolStatus("Boolean \(boolean.title) done.")
+        }
     }
 
     /// Cut (C with bodies selected): the selected bodies are cut by the selected curve objects and
@@ -9043,9 +8981,11 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(error.localizedDescription, severity: .warning)
             return
         }
-        submitDialogCommand([command], name: "Cut", instance: cut.instance,
-                            running: { bodyCutSession?.instance }, end: { bodyCutSession = nil },
-                            done: { reportToolStatus("Cut done.") })
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            bodyCutSession = nil
+            reportToolStatus("Cut done.")
+        }
     }
 
     /// Starts Trim, Split Segment or Insert Knot, ending the command that held the clicks before.
@@ -9154,66 +9094,20 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func componentDefinitionRow(_ id: ComponentDefinitionID) -> some View {
-        switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
-        case .success(let shared):
-            Button { selectSharedDefinition(id) } label: {
-                Label {
-                    HStack {
-                        Text(shared.name)
-                        Spacer(minLength: 8)
-                        Text("\(shared.placementNodeIDs.count) objects")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    WorkspaceSidebarSymbol(systemName: "square.stack.3d.down.right")
+        if let definition = snapshot.document.document.productMetadata.componentDefinitions[id] {
+            Label {
+                HStack {
+                    Text(definition.name)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Text("\(definition.rootSceneNodeIDs.count) roots")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(6)
-                .background(selectedSharedDefinitionID == id ? Color.accentColor.opacity(0.18) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 4))
-                .contentShape(Rectangle())
+            } icon: {
+                WorkspaceSidebarSymbol(systemName: "square.stack.3d.down.right")
             }
-            .buttonStyle(.plain)
-            .disabled(shared.placementNodeIDs.isEmpty)
-            .accessibilityIdentifier("SharedDefinition.select.\(id.description)")
-            .help("Select every object using this shared shape")
-        case .failure(let error):
-            Text(error.localizedDescription).font(.caption).foregroundStyle(.red)
-        }
-    }
-
-    private func selectSharedDefinition(_ id: ComponentDefinitionID) {
-        submitSelectionMutation({ selection, document in
-            let shared = try SharedDefinitionSelection(definitionID: id, metadata: document.productMetadata)
-            try selection.selectSceneNodes(shared.placementNodeIDs, in: document)
-        }, completion: { _ in selectedSharedDefinitionID = id })
-    }
-
-    @ViewBuilder
-    private var sharedDefinitionInspector: some View {
-        if let id = selectedSharedDefinitionID {
-            switch Result(catching: { try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata) }) {
-            case .success(let shared):
-                inspectorSection("Shared Attributes") {
-                    Text(shared.name).font(.headline)
-                    Text("Applies to \(shared.placementNodeIDs.count) objects")
-                    Text(shared.placementNodeIDs.compactMap { snapshot.document.document.productMetadata.sceneNodes[$0]?.name }.joined(separator: ", "))
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("Position, rotation, scale and visibility remain individual.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                objectShapeSection(shared.contentNodeIDs.compactMap { snapshot.document.document.productMetadata.sceneNodes[$0] }, showsPlacement: false)
-            case .failure(let error):
-                Text(error.localizedDescription).foregroundStyle(.red)
-            }
-        }
-    }
-
-    private func sharedDefinitions(for nodes: [SceneNode]) throws -> [SharedDefinitionSelection] {
-        let ids = Set(nodes.map(\.id))
-        return try componentDefinitionIDs.compactMap { id in
-            let shared = try SharedDefinitionSelection(definitionID: id, metadata: snapshot.document.document.productMetadata)
-            return ids.isDisjoint(with: shared.placementNodeIDs) && ids.isDisjoint(with: shared.contentNodeIDs) ? nil : shared
         }
     }
 
@@ -9743,18 +9637,22 @@ private struct ProjectMainViewContent: View {
             reportToolStatus(deform.prompt, severity: .warning)
             return
         }
-        submitDialogCommand([command], name: "Deform", instance: deform.instance,
-                            running: { deformSession?.instance }, end: { deformSession = nil },
-                            done: { reportToolStatus("Deform: \(deform.subjectDescription) deformed.") })
+        submitSource(command) { result in
+            guard result?.didMutate == true else { return }
+            deformSession = nil
+            reportToolStatus("Deform: \(deform.subjectDescription) deformed.")
+        }
     }
 
     /// Makes the dialog's edge bridge as one step; the dialog stays for another try when Core
     /// refuses.
     private func confirmBridgeEdge() {
         guard let bridge = bridgeEdgeSession else { return }
-        submitDialogCommand([bridge.command], name: "Bridge Edge", instance: bridge.instance,
-                            running: { bridgeEdgeSession?.instance }, end: { bridgeEdgeSession = nil },
-                            done: { reportToolStatus("Bridge Edge done.") })
+        submitSource(bridge.command) { result in
+            guard result?.didMutate == true else { return }
+            bridgeEdgeSession = nil
+            reportToolStatus("Bridge Edge done.")
+        }
     }
 
     /// Bridge Edge's dialog: Side 1 and 2, each end's continuity and tension, and OK.
@@ -9803,10 +9701,11 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Project: the construction plane has no normal: \(error.localizedDescription)", severity: .warning)
             return
         }
-        submitDialogCommand([project.command(constructionPlaneNormal: normal)], name: "Project",
-                            instance: project.instance,
-                            running: { projectSession?.instance }, end: { projectSession = nil },
-                            done: { reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.") })
+        submitSource(project.command(constructionPlaneNormal: normal)) { result in
+            guard result?.didMutate == true else { return }
+            projectSession = nil
+            reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.")
+        }
     }
 
     /// Project Curve Body's dialog: Method, Vector's direction and Bidirectional, and OK.
@@ -9891,10 +9790,11 @@ private struct ProjectMainViewContent: View {
     /// when Core refuses.
     private func confirmRebuild() {
         guard let rebuild = rebuildSession else { return }
-        submitDialogCommand(rebuild.targets.map { .rebuildSketchCurve(target: $0, options: rebuild.options) },
-                            name: "Rebuild", instance: rebuild.instance,
-                            running: { rebuildSession?.instance }, end: { rebuildSession = nil },
-                            done: { reportToolStatus("Rebuild: \(rebuild.targets.count) curve\(rebuild.targets.count == 1 ? "" : "s") rebuilt.") })
+        submitSource(rebuild.targets.map { .rebuildSketchCurve(target: $0, options: rebuild.options) }, name: "Rebuild") { results in
+            guard results.last?.didMutate == true else { return }
+            rebuildSession = nil
+            reportToolStatus("Rebuild: \(rebuild.targets.count) curve\(rebuild.targets.count == 1 ? "" : "s") rebuilt.")
+        }
     }
 
     /// A double-click on a vertex a spline passes through converts it (Convert Vertex); a
@@ -10500,7 +10400,7 @@ private struct ProjectMainViewContent: View {
             "\(transformSession.title): \(transformSession.constraintName), orientation "
                 + transformSession.orientation.rawValue
                 + ", pivot " + (transformSession.pickedPivot == nil ? transformSession.pivotMode.rawValue : "picked")
-                + "."
+                + (transformSession.compensatesInstances ? ", instances held in place." : ".")
         )
     }
 
@@ -11125,19 +11025,15 @@ private struct ProjectMainViewContent: View {
     private var inspectorContent: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: WorkspaceInspectorLayout.sectionSpacing) {
-                if selectedSharedDefinitionID != nil {
-                    sharedDefinitionInspector
-                } else {
-                    switch selectedSketchEntityResult {
-                    case .success(let sketchEntity):
-                        if let sketchEntity {
-                            sketchEntityInspectorSections(sketchEntity)
-                        } else {
-                            nonSketchInspectorSections
-                        }
-                    case .failure(let error):
-                        sketchEntityInspectorErrorSections(error)
+                switch selectedSketchEntityResult {
+                case .success(let sketchEntity):
+                    if let sketchEntity {
+                        sketchEntityInspectorSections(sketchEntity)
+                    } else {
+                        nonSketchInspectorSections
                     }
+                case .failure(let error):
+                    sketchEntityInspectorErrorSections(error)
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
@@ -11260,40 +11156,6 @@ private struct ProjectMainViewContent: View {
 
     @ViewBuilder
     private func objectInspectorSections(_ nodes: [SceneNode]) -> some View {
-        switch Result(catching: { try sharedDefinitions(for: nodes) }) {
-        case .success(let definitions) where !definitions.isEmpty:
-            let canEditPlacements = nodes.allSatisfy { node in
-                !definitions.contains { shared in
-                    shared.contentNodeIDs.contains(node.id) && !shared.placementNodeIDs.contains(node.id)
-                }
-            }
-            if canEditPlacements {
-                objectTransformInspectorSection(nodes)
-            }
-            inspectorSection("Shared Shape") {
-                Text(canEditPlacements
-                    ? "Placement changes affect only the selected objects."
-                    : "This geometry is inside a shared definition. Select its scene placement to move it.")
-                    .font(.caption).foregroundStyle(.secondary)
-                ForEach(definitions, id: \.definitionID) { shared in
-                    Button { selectSharedDefinition(shared.definitionID) } label: {
-                        Label("Edit \(shared.name) · \(shared.placementNodeIDs.count) objects", systemImage: "square.stack.3d.down.right")
-                            .contentShape(Rectangle())
-                    }
-                }
-                if let realize = realizeInstancesAction {
-                    Button("Make Independent", action: realize).contentShape(Rectangle())
-                }
-            }
-        case .success:
-            independentObjectInspectorSections(nodes)
-        case .failure(let error):
-            Text(error.localizedDescription).foregroundStyle(.red)
-        }
-    }
-
-    @ViewBuilder
-    private func independentObjectInspectorSections(_ nodes: [SceneNode]) -> some View {
         let overviewState = workspaceObjectOverviewInspectorState(for: nodes)
         objectTransformInspectorSection(nodes)
         objectShapeSection(nodes)
@@ -12195,14 +12057,13 @@ private struct ProjectMainViewContent: View {
     }
 
     @ViewBuilder
-    private func objectShapeSection(_ nodes: [SceneNode], showsPlacement: Bool = true) -> some View {
+    private func objectShapeSection(_ nodes: [SceneNode]) -> some View {
         switch Result(catching: {
             try objectShapeBuilder(in: snapshot).shapes(for: nodes)
         }) {
         case .success(let shapes):
             WorkspaceObjectShapeInspectorView(
                 shapes: shapes,
-                showsPlacement: showsPlacement,
                 displayUnit: snapshot.workspaceState.displayUnit,
                 positionSliderMetersRange: transformPositionSliderMetersRange,
                 sizeSliderMetersRange: sizeSliderMetersRange,
