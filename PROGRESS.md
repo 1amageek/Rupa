@@ -151,6 +151,9 @@
   - [x] SO1 Boolean and Cut: several and placed tools, sheet operands and materials, Region, Cut, Q/C viewport dialogs, consumed objects taken away. Rupa 7faa4dd9, 3c4db9a3, 965157a6, b98a873e, cd8cbc2f, 8fad82d3, 4c7aca49, 96309525; kernel 2b5ba3e, 29335a7, ec98cdf, d3fb071, 32b33bb, 9287f50, 539b762. `depends:none` `parallel:none`
   - [x] SO2 Duplication and Instances: Alternative Duplicate on faces (a solid of faces that close, else a sheet, then Move), Create Instance and Realize Instances for solids, sheets, curves and groups, instances' gray edges, Copy with Placement refusing instances. Kernel 4630363. `depends:SO1` `parallel:none`
   - [ ] SO3 Deform and Slide: Deform, Deform Solid and Sheet, Slide, Slide Surface CV. `depends:SO2` `parallel:none`
+    - [x] SO3.1 Slide Surface CV: one Core owner of slide directions that the gizmo reads for PolySpline and B-spline surface CVs alike, a gizmo on B-spline surface CVs, and an editable Distance in the dialog. `depends:none` `parallel:none`
+    - [ ] SO3.2 Kernel Wrap: bodies deformed from a reference face's UVN chart onto a target face's, every face refitted on its own parameters so trims and topology carry over, edges refitted, within a stated fit tolerance; Scale, Offset, Flip and Keep Tools. `depends:SO3.1` `parallel:none`
+    - [ ] SO3.3 Rupa Deform Solid and Sheet: the Deform dialog takes bodies as well as curves (unified Deform), submitting the kernel Wrap. `depends:SO3.2` `parallel:none`
   - [ ] SO4 Delete and Remove: Delete Face, Delete Redundant Topology, Remove Fillets from Shell, Remove Nominal Surface. `depends:SO3` `parallel:none`
   - [ ] SO5 Align, Draft and Extend: Align, Align Surface, Draft Face, Extend, Extend Sheet. `depends:SO4` `parallel:none`
   - [ ] SO6 Fillet, Hollow and Thicken: Fillet, Fillet Shell, Hollow, Thicken, Thicken Face. `depends:SO5` `parallel:none`

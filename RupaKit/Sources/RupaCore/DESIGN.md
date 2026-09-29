@@ -101,6 +101,14 @@ Swift-CAD mirror features, copies and instances they make.
 proportional falloff and construction-plane mirror for B-spline surface control
 points (`moveSurfaceControlPointsProportionally`).
 
+Slide Surface CV moves B-spline surface sources' control points and PolySpline
+patches' interior points along the control hull at the point
+(`SurfaceControlHullSlideFrame`: the difference of its neighbors along u and v,
+one-sided at a row's end, and their normal), and PolySpline boundary vertices along
+their patch's edges. `surfaceControlPointSlideDirection(for:direction:)` answers the
+direction the slide applies, which the viewport's handles read
+(`SurfaceControlPointSlideDirectionTests`).
+
 Booleans combine bodies where they are displayed: `createBoolean` takes one or
 more targets and one or more tools (which Swift-CAD combines as their union) and
 hands Swift-CAD every operand's rigid placement relative to the first target

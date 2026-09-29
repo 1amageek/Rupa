@@ -92,66 +92,48 @@ import Testing
     #expect(abs(geometry.modelDirection.z) < 1.0e-12)
 }
 
-@Test func viewportSurfaceControlPointSlideAffordanceUsesPatchHullFrame() throws {
+/// A control point's slide handle points along the direction Core's slide applies to it, which
+/// the input carries, not along a rule of the renderer's own.
+@Test func viewportSurfaceControlPointSlideAffordanceFollowsCoresDirections() throws {
     let layout = polySplineSurfaceVertexSlideLayout()
-    let featureID = FeatureID()
+    let skewed = try Vector3D(x: 1, y: 0, z: 0.5).normalized(tolerance: 1e-12)
     let input = surfaceControlPointSlideInput(
-        featureID: featureID,
+        featureID: FeatureID(),
         uIndex: 1,
         vIndex: 1,
-        point: Point3D(x: 0.002, y: 0.0, z: 0.002)
+        point: Point3D(x: 0.002, y: 0.0, z: 0.002),
+        directions: [.positiveU: skewed, .negativeU: -skewed, .positiveV: .unitZ, .negativeV: -Vector3D.unitZ, .normal: -Vector3D.unitY]
     )
-    let topologyVertices = polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID)
     let geometry = try #require(
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedControlPoints: [input],
-            topologyVertices: topologyVertices,
-            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveU,
             layout: layout
         )
     )
-
-    let start = layout.project(geometry.baseModelPoint)
-    let current = layout.project(Point3D(x: 0.003, y: 0.0, z: 0.002))
+    #expect((geometry.modelDirection - skewed).length < 1.0e-12)
     let preview = try #require(
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
             selectedControlPoints: [input],
-            topologyVertices: topologyVertices,
-            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .positiveV,
             distanceMeters: 0.001
         )?.first
     )
+    #expect(abs(preview.originalPoint.x - 0.002) < 1.0e-12)
+    #expect(abs(preview.movedPoint.x - 0.002) < 1.0e-12)
+    #expect(abs(preview.movedPoint.z - 0.003) < 1.0e-12)
     let normalGeometry = try #require(
         ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
             selectedControlPoints: [input],
-            topologyVertices: topologyVertices,
-            patches: polySplineSurfaceVertexSlidePatches(featureID: featureID),
             direction: .normal,
             layout: layout
         )
     )
-
-    let distance = try #require(geometry.slideDistance(start: start, current: current, layout: layout))
-    #expect(abs(distance - 0.001) < 1.0e-12)
-    #expect(abs(preview.originalPoint.x - 0.002) < 1.0e-12)
-    #expect(abs(preview.originalPoint.z - 0.002) < 1.0e-12)
-    #expect(abs(preview.movedPoint.x - 0.002) < 1.0e-12)
-    #expect(abs(preview.movedPoint.z - 0.003) < 1.0e-12)
-    let rawDirection = try #require(ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
-        featureID: featureID, patchID: input.patchID, direction: .positiveU,
-        topologyVertices: topologyVertices,
-        patches: polySplineSurfaceVertexSlidePatches(featureID: featureID)
-    ))
-    #expect(rawDirection == geometry.modelDirection)
-    #expect(ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
-        featureID: featureID, patchID: input.patchID, direction: .positiveU,
-        topologyVertices: [], patches: [:]
-    ) == nil)
-    #expect(abs(normalGeometry.modelDirection.x) < 1.0e-12)
     #expect(abs(normalGeometry.modelDirection.y + 1.0) < 1.0e-12)
-    #expect(abs(normalGeometry.modelDirection.z) < 1.0e-12)
+    // A control point without Core's direction for the way asked offers no handle.
+    var partial = input
+    partial.localDirections = [:]
+    #expect(ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(selectedControlPoints: [partial], direction: .positiveU, layout: layout) == nil)
 }
 
 @Test func viewportPolySplineSurfaceVertexSlideAffordanceAppliesModelTransformAndKeepsLocalDistance() throws {
@@ -417,6 +399,7 @@ private func surfaceControlPointSlideInput(
     uIndex: Int,
     vIndex: Int,
     point: Point3D,
+    directions: [PolySplineSurfaceVertexSlideDirection: Vector3D],
     modelTransform: ScenePlacement = .identity
 ) -> ViewportSurfaceControlPointSlideInput {
     ViewportSurfaceControlPointSlideInput(
@@ -436,8 +419,7 @@ private func surfaceControlPointSlideInput(
             uIndex: uIndex,
             vIndex: vIndex
         ))),
-        featureID: featureID,
-        patchID: 0,
+        localDirections: directions,
         point: point,
         modelTransform: modelTransform
     )

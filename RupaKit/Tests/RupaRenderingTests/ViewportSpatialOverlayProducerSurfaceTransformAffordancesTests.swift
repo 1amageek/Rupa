@@ -653,6 +653,59 @@ func unsupportedEdgeFilletSelectionProducesNoHandle() throws {
     #expect(source == nil)
 }
 
+/// A B-spline surface source's control point offers slide handles, each along the direction
+/// Core's slide applies to it.
+@Test
+func bSplineSurfaceControlPointsOfferSlideHandlesAlongCoresDirections() throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Slide Route Fixture",
+        surface: testSurfaceTransformBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
+    let controlPoint = try #require(summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let reference = try #require(controlPoint.selectionReference)
+    let builtScene = ViewportSceneBuilder().build(document: document, ruler: .standard(for: .millimeter))
+    var item = try #require(builtScene.items.first { $0.featureID == featureID })
+    guard case .body(var component) = item.kind else {
+        Issue.record("Expected a surface body scene item.")
+        return
+    }
+    component.surfaceControlPointDisplays = [
+        ViewportSurfaceControlPointDisplay(
+            selectionReference: reference,
+            point: Point3D(x: controlPoint.point.x, y: controlPoint.point.y, z: controlPoint.point.z),
+            uIndex: controlPoint.uIndex,
+            vIndex: controlPoint.vIndex,
+            isBoundary: controlPoint.isBoundary
+        ),
+    ]
+    item.kind = .body(component: component)
+    let raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: document,
+        scene: ViewportScene(items: [item]),
+        selection: SelectionModel(selectedReferences: [reference]),
+        ruler: .standard(for: .millimeter),
+        enabledRoutes: [.surfaceControlPointSlide],
+        interactiveRoutes: [.surfaceControlPointSlide]
+    )
+    var interactionRecords: [ViewportSpatialInteractionRecord] = []
+    _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+        from: raw,
+        interactionRecords: &interactionRecords,
+        checkpoint: { _, _, _ in }
+    )
+    var offered: Set<PolySplineSurfaceVertexSlideDirection> = []
+    for record in interactionRecords {
+        guard case let .surfaceControlPointSlide(targets, direction, axis) = record.target else { continue }
+        #expect(targets == [reference])
+        let expected = try document.surfaceControlPointSlideDirection(for: reference, direction: direction)
+        #expect((axis.direction - expected).length < 1e-9, "\(direction)")
+        offered.insert(direction)
+    }
+    #expect(offered == Set(PolySplineSurfaceVertexSlideDirection.allCases))
+}
+
 @Test
 func rawSurfaceTransformInputEmitsSelectedSurfaceControlTrimAndFrameRoles() throws {
     var document = DesignDocument.empty()

@@ -397,10 +397,11 @@ struct WorkspaceRegionOffsetContextPanel<DistanceInput: View>: View {
     }
 }
 
+/// Slide Curve CV's dialog: the distance each step slides, typed in `distanceInput`.
 @MainActor
-struct WorkspaceCurveControlPointSlideContextPanel: View {
+struct WorkspaceCurveControlPointSlideContextPanel<DistanceInput: View>: View {
     var controlPointCount: Int
-    var distanceTitle: String
+    var distanceInput: DistanceInput
     var routeTitle: String
     var slidePositiveU: () -> Void
     var slideNegativeU: () -> Void
@@ -418,11 +419,7 @@ struct WorkspaceCurveControlPointSlideContextPanel: View {
             "\(controlPointCount)",
             accessibilityIdentifier: "WorkspaceSlideCV.count"
         )
-        workspaceValuePill(
-            "Distance",
-            distanceTitle,
-            accessibilityIdentifier: "WorkspaceSlideCV.distance"
-        )
+        distanceInput
         workspaceValuePill(
             "Route",
             routeTitle,
@@ -455,10 +452,11 @@ struct WorkspaceCurveControlPointSlideContextPanel: View {
     }
 }
 
+/// Slide Surface CV's dialog: the distance each step slides, typed in `distanceInput`.
 @MainActor
-struct WorkspaceSurfaceControlPointSlideContextPanel: View {
+struct WorkspaceSurfaceControlPointSlideContextPanel<DistanceInput: View>: View {
     var controlPointCount: Int
-    var distanceTitle: String
+    var distanceInput: DistanceInput
     var routeTitle: String
     var slidePositiveU: () -> Void
     var slideNegativeU: () -> Void
@@ -478,11 +476,7 @@ struct WorkspaceSurfaceControlPointSlideContextPanel: View {
             "\(controlPointCount)",
             accessibilityIdentifier: "WorkspaceSlideSurfaceCV.count"
         )
-        workspaceValuePill(
-            "Distance",
-            distanceTitle,
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
-        )
+        distanceInput
         workspaceValuePill(
             "Route",
             routeTitle,

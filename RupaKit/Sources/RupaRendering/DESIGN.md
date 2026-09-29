@@ -704,6 +704,13 @@ as spheres elsewhere.
    through the same mounted, revision-checked camera-query owner; the chord is
    only a bounded presentation/input sample and cannot authorize the CAD
    distance by itself.
+   A surface control point's slide handles point along
+   `DesignDocument.surfaceControlPointSlideDirection`, the direction Core's slide
+   applies (the control hull, `SurfaceControlHullSlideFrame`), for B-spline surface
+   sources and PolySpline patches alike; the viewport keeps no direction rule of its
+   own for control points, and a selection Core cannot slide offers no handles
+   (`bSplineSurfaceControlPointsOfferSlideHandlesAlongCoresDirections`). PolySpline
+   boundary vertices keep the patch-edge rule, which Core's vertex slide applies too.
    The incremental native cutover for `splineControlPointSlide`,
    `polySplineSurfaceVertexSlide`, `surfaceControlPointSlide`, `surfaceFrame`,
    `regionOffset`, `edgeOffset`, `slotWidth`, `sketchVertexOffset`, and

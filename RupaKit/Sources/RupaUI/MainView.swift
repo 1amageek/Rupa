@@ -4856,7 +4856,10 @@ private struct ProjectMainViewContent: View {
     ) -> some View {
         WorkspaceCurveControlPointSlideContextPanel(
             controlPointCount: input.controlPointIndexes.count,
-            distanceTitle: formatted(sketchSplineControlPointSlideDistanceMeters),
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $sketchSplineControlPointSlideDistanceMeters,
+                field: .slideDistance, accessibilityIdentifier: "WorkspaceSlideCV.distance"
+            ),
             routeTitle: slideCommandState.routeTitle,
             slidePositiveU: {
                 slideSelectedSplineControlPoints(
@@ -4889,7 +4892,10 @@ private struct ProjectMainViewContent: View {
     ) -> some View {
         WorkspaceSurfaceControlPointSlideContextPanel(
             controlPointCount: targets.count,
-            distanceTitle: formatted(polySplineSurfaceVertexSlideDistanceMeters),
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $polySplineSurfaceVertexSlideDistanceMeters,
+                field: .slideDistance, accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
+            ),
             routeTitle: slideCommandState.routeTitle,
             slidePositiveU: {
                 slideSelectedPolySplineSurfaceVertices(targets, direction: .positiveU)
@@ -4953,7 +4959,10 @@ private struct ProjectMainViewContent: View {
     ) -> some View {
         WorkspaceSurfaceControlPointSlideContextPanel(
             controlPointCount: targets.count,
-            distanceTitle: formatted(polySplineSurfaceVertexSlideDistanceMeters),
+            distanceInput: commandDistanceInput(
+                "Distance", meters: $polySplineSurfaceVertexSlideDistanceMeters,
+                field: .slideDistance, accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
+            ),
             routeTitle: slideCommandState.routeTitle,
             slidePositiveU: {
                 slideSelectedSurfaceControlPoints(targets, direction: .positiveU)

@@ -13,6 +13,8 @@ enum WorkspaceCommandDistanceField: Hashable {
     case bridgeTension
     /// Deform Curve's N offset.
     case deformOffset
+    /// Slide's step distance, for curve and surface control points.
+    case slideDistance
 }
 
 /// A command dialog's typed distance, in the display unit. The value it holds is the command's own

@@ -2046,42 +2046,43 @@ private extension ViewportSpatialOverlayProducer {
             }
         }
 
+        // Each selected control point slides along what Core's slide applies to it, B-spline
+        // surface sources and PolySpline patches alike; a selection Core cannot slide as a whole
+        // offers no slide handles.
         var slideInputs: [ViewportSurfaceControlPointSlideInput] = []
-        for reference in input.selection.selectedReferences {
-            guard case .surface(.controlPoint) = reference,
-                  let patch = surfaceControlPointPatch(for: reference, document: input.document) else {
-                continue
-            }
+        collect: for reference in input.selection.selectedReferences {
+            guard case .surface(.controlPoint) = reference else { continue }
             for item in input.scene.items {
-                guard item.featureID == patch.featureID,
-                      case .body(let component) = item.kind,
+                guard case .body(let component) = item.kind,
                       let display = component.surfaceControlPointDisplays.first(where: {
                           $0.selectionReference == reference
                       }) else { continue }
-                slideInputs.append(
-                    .init(
-                        target: reference,
-                        featureID: patch.featureID,
-                        patchID: patch.patchID,
-                        point: display.point,
-                        modelTransform: item.modelTransform
-                    )
-                )
+                var directions: [PolySplineSurfaceVertexSlideDirection: Vector3D] = [:]
+                do {
+                    for direction in PolySplineSurfaceVertexSlideDirection.allCases {
+                        directions[direction] = try input.document.surfaceControlPointSlideDirection(
+                            for: reference, direction: direction
+                        )
+                    }
+                } catch {
+                    // Core refuses to slide this control point, so the selection offers no slide.
+                    slideInputs = []
+                    break collect
+                }
+                slideInputs.append(.init(
+                    target: reference,
+                    localDirections: directions,
+                    point: display.point,
+                    modelTransform: item.modelTransform
+                ))
                 break
             }
         }
         if input.interactiveRoutes.contains(.surfaceControlPointSlide), !slideInputs.isEmpty {
-            let patchValues = patches
             let addresses = slideInputs.map { ViewportSpatialReferenceAddress($0.target) }
             for direction in PolySplineSurfaceVertexSlideDirection.allCases {
                 let worldVectors = slideInputs.compactMap { controlPoint in
-                    ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.localDirection(
-                        featureID: controlPoint.featureID,
-                        patchID: controlPoint.patchID,
-                        direction: direction,
-                        topologyVertices: topologyVertices,
-                        patches: patchValues
-                    ).map { controlPoint.modelTransform.vector($0) }
+                    controlPoint.localDirections[direction].map { controlPoint.modelTransform.vector($0) }
                 }
                 guard worldVectors.count == slideInputs.count else {
                     throw RealityViewportSpatialBatch.invalid("A grouped surface source direction is missing.")
@@ -2140,8 +2141,6 @@ private extension ViewportSpatialOverlayProducer {
                    case .distance(let distance) = active.kind {
                     let previews = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
                         selectedControlPoints: slideInputs,
-                        topologyVertices: topologyVertices,
-                        patches: patchValues,
                         direction: direction,
                         distanceMeters: distance
                     ) ?? []
@@ -2160,8 +2159,6 @@ private extension ViewportSpatialOverlayProducer {
                    case .distance(let distance) = active.kind,
                    let previews = ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
                        selectedControlPoints: slideInputs,
-                       topologyVertices: topologyVertices,
-                       patches: patchValues,
                        direction: direction,
                        distanceMeters: distance
                    ) {
@@ -2273,22 +2270,6 @@ private extension ViewportSpatialOverlayProducer {
                 }
             }
         }
-    }
-
-    static func surfaceControlPointPatch(
-        for reference: SelectionReference,
-        document: DesignDocument
-    ) -> (featureID: FeatureID, patchID: Int)? {
-        guard case .surface(.controlPoint(let controlPoint)) = reference else { return nil }
-        let id = controlPoint.surface.subshape.subshapeID
-        let parts = id.role.split(separator: ".", maxSplits: 1).map(String.init)
-        guard parts.count == 2, parts[0] == "polySpline" else { return nil }
-        let patch = parts[1].split(separator: ":").map(String.init)
-        guard patch.count == 3, patch[0] == "patch", let patchID = Int(patch[1]), patch[2] == "face" else {
-            return nil
-        }
-        _ = document
-        return (id.featureID, patchID)
     }
 
     static func emitConstruction(

@@ -92,86 +92,9 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
             in: polySpline,
             owner: "PolySpline surface control point slide"
         )
-        let positiveU = try normalizedSlideVector(
-            hullDirection(
-                at: target,
-                in: controlPoints,
-                axis: .u,
-                owner: "Positive U"
-            ),
-            owner: "Positive U"
-        )
-        let positiveV = try normalizedSlideVector(
-            hullDirection(
-                at: target,
-                in: controlPoints,
-                axis: .v,
-                owner: "Positive V"
-            ),
-            owner: "Positive V"
-        )
-        let normal = try normalizedSlideVector(
-            positiveU.cross(positiveV),
-            owner: "Normal"
-        )
-
-        switch direction {
-        case .positiveU:
-            return positiveU
-        case .negativeU:
-            return -positiveU
-        case .normal:
-            return normal
-        case .positiveV:
-            return positiveV
-        case .negativeV:
-            return -positiveV
-        }
-    }
-
-    private enum ControlPointDirectionAxis {
-        case u
-        case v
-    }
-
-    private func hullDirection(
-        at target: PolySplineSurfaceControlPointEditTarget,
-        in controlPoints: [[Point3D]],
-        axis: ControlPointDirectionAxis,
-        owner: String
-    ) throws -> Vector3D {
-        guard controlPoints.indices.contains(target.vIndex),
-              controlPoints[target.vIndex].indices.contains(target.uIndex) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(owner) references a missing surface control point."
-            )
-        }
-
-        let count = axis == .u ? controlPoints[target.vIndex].count : controlPoints.count
-        let index = axis == .u ? target.uIndex : target.vIndex
-        guard count >= 2, (0 ..< count).contains(index) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(owner) cannot resolve a surface control hull direction."
-            )
-        }
-
-        let lowerIndex = max(index - 1, 0)
-        let upperIndex = min(index + 1, count - 1)
-        guard lowerIndex != upperIndex else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) control hull direction is collapsed for PolySpline surface control point slide."
-            )
-        }
-
-        switch axis {
-        case .u:
-            return controlPoints[target.vIndex][upperIndex] - controlPoints[target.vIndex][lowerIndex]
-        case .v:
-            return controlPoints[upperIndex][target.uIndex] - controlPoints[lowerIndex][target.uIndex]
-        }
+        return try SurfaceControlHullSlideFrame(
+            controlPoints: controlPoints, uIndex: target.uIndex, vIndex: target.vIndex, owner: "PolySpline surface control point slide"
+        ).vector(for: direction)
     }
 
     private func surface(
@@ -259,17 +182,4 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
         return patch
     }
 
-    private func normalizedSlideVector(
-        _ vector: Vector3D,
-        owner: String
-    ) throws -> Vector3D {
-        do {
-            return try vector.normalized(tolerance: ModelingTolerance.standard.distance)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) direction is collapsed for PolySpline surface control point slide."
-            )
-        }
-    }
 }

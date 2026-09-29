@@ -733,7 +733,10 @@ and purple when it does not (`viewportSketchJoinEndpointFeedback`, from Core's
 Slide runs, holding Control draws the project as it was when Slide started in place of
 the slid result (`WorkspaceSlideComparison`: its snapshot's document, evaluation and
 scene go to the viewport) and takes no slide drag; releasing Control or ending Slide
-returns to the current project (`WorkspaceSlideComparisonTests`). Deform in the palette,
+returns to the current project (`WorkspaceSlideComparisonTests`). Slide's dialogs, for
+curve and surface control points, take the step distance as a typed length
+(`WorkspaceCommandDistanceField.slideDistance`), the same value the keys and handles slide
+by. Deform in the palette,
 with sketch curves selected, starts Deform Curve's dialog (`WorkspaceDeformSession`): a
 click picks the reference face, the next the target face (a later click replaces the
 target), the dialog then takes U/V/N scale and offset, Mirror, UV, Normal and Keep Tools,
